@@ -1580,8 +1580,6 @@ obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash,
 
 	dc_pool2hdl_noref(pool, &ph);
 
-	D_INFO("calling ping task");
-
 	rc = create_ping_task(sched, ph, obj, dkey_hash, tgt_list, taskp);
 	if (rc != 0)
 		return rc;

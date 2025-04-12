@@ -3071,7 +3071,7 @@ dtx_42(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
+	oid        = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	/* Repeatedly insert different SV for the same obj, overwrite. */

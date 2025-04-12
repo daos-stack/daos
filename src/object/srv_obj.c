@@ -502,14 +502,16 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 	bool			async = true;
 	uint64_t		time = daos_get_ntime();
 
-	if (bulk_op == CRT_BULK_GET && dth != NULL && !(dth->dth_flags & DTE_LEADER) &&
-	    DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE)) {
-		/** Fault injection - client unreachable. */
-		firewall_blocking_flag = true;
-	}
+	if (bulk_op == CRT_BULK_GET) {
+		if (DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE) && dth != NULL &&
+		    !(dth->dth_flags & DTE_LEADER)) {
+			/** Fault injection - client unreachable. */
+			firewall_blocking_flag = true;
+		}
 
-	if (firewall_blocking_flag) {
-		return -DER_RECONNECT;
+		if (firewall_blocking_flag) {
+			return -DER_RECONNECT;
+		}
 	}
 
 	if (unlikely(sgl_nr > bulk_nr)) {
