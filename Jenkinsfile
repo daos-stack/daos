@@ -214,6 +214,9 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
+        booleanParam(name: 'CI_SKIP_CANCEL_PREV_BUILD',
+                     defaultValue: false,
+                     description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
@@ -252,18 +255,33 @@ pipeline {
         booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build DEB packages for Ubuntu 20')
+        booleanParam(name: 'CI_el8_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on EL 8')
+        booleanParam(name: 'CI_leap15_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit Test on EL 8 test stage')
+        booleanParam(name: 'CI_NLT_TEST',
+                     defaultValue: true,
+                     description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
+        booleanParam(name: 'CI_TEST_EL8_RPMs',
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on EL 8 test stage')
+        booleanParam(name: 'CI_TEST_LEAP15_RPMs',
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on Leap 15 test stage')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
@@ -401,7 +419,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !paramsValue('CI_SKIP_CANCEL_PREV_BUILD', false)  && !skipStage() }
             }
             steps {
                 cancelPreviousBuilds()
@@ -610,7 +628,7 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-			expression { !skipStage() && checkoutScm(withSubmodules: true) }
+                        expression { !params.CI_el8_NOBUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -648,7 +666,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -736,7 +754,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { params.CI_NLT_TEST && !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -997,7 +1015,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1017,7 +1035,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1099,7 +1117,6 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
@@ -1112,7 +1129,6 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
@@ -1126,7 +1142,6 @@ pipeline {
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw_vmd,medium',
@@ -1140,7 +1155,6 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
@@ -1154,7 +1168,6 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
@@ -1169,7 +1182,6 @@ pipeline {
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
@@ -1183,7 +1195,6 @@ pipeline {
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,large',
@@ -1196,7 +1207,6 @@ pipeline {
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,large',

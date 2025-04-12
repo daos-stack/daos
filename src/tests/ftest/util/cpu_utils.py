@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -451,7 +452,7 @@ class CpuInfo():
         for it in host_data:
             data = it['data']
             if data == DATA_ERROR:
-                self._log.error(f"Error issuing command '{cmd}' on hosts {it.hosts}")
+                self._log.error(f"Error issuing command '{cmd}' on hosts {it['hosts']}")
 
             key = str(it["hosts"])
             self._architectures[key] = CpuArchitecture(self._log, data)

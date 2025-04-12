@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -453,4 +454,64 @@ func (m *MockScmProvider) QueryFirmware(ScmFirmwareQueryRequest) (*ScmFirmwareQu
 
 func (m *MockScmProvider) UpdateFirmware(ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error) {
 	return m.FirmwareUpdateRes, m.FirmwareUpdateErr
+}
+
+type mockBdevProvider struct {
+	callCounts         map[string]int
+	PrepareErr         error
+	PrepareResp        *BdevPrepareResponse
+	ScanErr            error
+	ScanResp           *BdevScanResponse
+	FormatErr          error
+	FormatResp         *BdevFormatResponse
+	WriteConfigErr     error
+	WriteConfigResp    *BdevWriteConfigResponse
+	ReadConfigErr      error
+	ReadConfigResp     *BdevReadConfigResponse
+	QueryFirmwareErr   error
+	QueryFirmwareResp  *NVMeFirmwareQueryResponse
+	UpdateFirmwareErr  error
+	UpdateFirmwareResp *NVMeFirmwareUpdateResponse
+}
+
+func (m *mockBdevProvider) addCall(name string) {
+	if m.callCounts == nil {
+		m.callCounts = make(map[string]int)
+	}
+	m.callCounts[name]++
+}
+
+func (m *mockBdevProvider) Prepare(BdevPrepareRequest) (*BdevPrepareResponse, error) {
+	m.addCall("Prepare")
+	return m.PrepareResp, m.PrepareErr
+}
+
+func (m *mockBdevProvider) Scan(BdevScanRequest) (*BdevScanResponse, error) {
+	m.addCall("Scan")
+	return m.ScanResp, m.ScanErr
+}
+
+func (m *mockBdevProvider) Format(BdevFormatRequest) (*BdevFormatResponse, error) {
+	m.addCall("Format")
+	return m.FormatResp, m.FormatErr
+}
+
+func (m *mockBdevProvider) WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfigResponse, error) {
+	m.addCall("WriteConfig")
+	return m.WriteConfigResp, m.WriteConfigErr
+}
+
+func (m *mockBdevProvider) ReadConfig(BdevReadConfigRequest) (*BdevReadConfigResponse, error) {
+	m.addCall("ReadConfig")
+	return m.ReadConfigResp, m.ReadConfigErr
+}
+
+func (m *mockBdevProvider) QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
+	m.addCall("QueryFirmware")
+	return m.QueryFirmwareResp, m.QueryFirmwareErr
+}
+
+func (m *mockBdevProvider) UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
+	m.addCall("UpdateFirmware")
+	return m.UpdateFirmwareResp, m.UpdateFirmwareErr
 }

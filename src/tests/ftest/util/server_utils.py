@@ -17,10 +17,9 @@ from command_utils import SubprocessManager
 from command_utils_base import BasicParameter, CommonConfig
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
-                           pcmd, run_pcmd)
+from general_utils import get_default_config_file, get_display_size, get_log_file, list_to_str
 from host_utils import get_local_host
-from run_utils import run_remote, stop_processes
+from run_utils import command_as_user, run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
@@ -616,7 +615,7 @@ class DaosServerManager(SubprocessManager):
             )
 
         if cmd_list:
-            pcmd(self._hosts, "; ".join(cmd_list), verbose)
+            run_remote(self.log, self._hosts, "; ".join(cmd_list), verbose=verbose)
 
     def restart(self, hosts, wait=False):
         """Restart the specified servers after a stop.
@@ -1144,10 +1143,10 @@ class DaosServerManager(SubprocessManager):
             timeout (int, optional): pass timeout to each execution ofrun_pcmd. Defaults to 60.
 
         Returns:
-            list: list of pcmd results for each host. See general_utils.run_pcmd for details.
+            list: list of CommandResult results for each host. See run_utils.run_remote for details.
                 [
-                    general_utils.run_pcmd(), # engine 0
-                    general_utils.run_pcmd()  # engine 1
+                    run_utils.run_remote(), # engine 0
+                    run_utils.run_remote()  # engine 1
                 ]
 
         """
@@ -1155,8 +1154,7 @@ class DaosServerManager(SubprocessManager):
         engines = []
         daos_metrics_exe = os.path.join(self.manager.job.command_path, "daos_metrics")
         for engine in range(engines_per_host):
-            results = run_pcmd(
-                hosts=self._hosts, verbose=verbose, timeout=timeout,
-                command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
-            engines.append(results)
+            command = command_as_user(f"{daos_metrics_exe} -S {engine} --csv", "root")
+            result = run_remote(self.log, self._hosts, command, verbose=verbose, timeout=timeout)
+            engines.append(result)
         return engines
