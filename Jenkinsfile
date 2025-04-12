@@ -635,10 +635,9 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                                parallel_build: true,
+                                                                deps_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-el8"
                         }
                     }
                     steps {
