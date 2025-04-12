@@ -29,7 +29,7 @@ echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 
 # /scratch is needed on test nodes
 mkdir -p /scratch
-mount "${DAOS_CI_INFO_DIR}" /scratch
+retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /scratch
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
