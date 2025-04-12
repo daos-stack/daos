@@ -23,6 +23,11 @@ testfails=0
 myhost="${HOSTNAME%%.*}"
 : "${NODELIST:=$myhost}"
 mynodenum=0
+
+: "{JENKINS_URL:=https://jenkins.example.com}"
+domain1="${JENKINS_URL#https://}"
+mail_domain="${domain1%%/*}"
+: "{EMAIL_DOMAIN:=$mail_domain}"
 # in order for junit test names to be consistent between test runs
 # Need to use the position number of the host in the node list for
 # the junit report.
@@ -43,7 +48,7 @@ function do_mail {
     # shellcheck disable=SC2059
     build_info="BUILD_URL = $BUILD_URL$nl STAGE = $STAGE_NAME$nl$nl"
     mail -s "Hardware check failed after reboot!" \
-         -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL" \
+         -r "$HOSTNAME"@"$EMAIL_DOMAIN" "$OPERATIONS_EMAIL" \
          <<< "$build_info$mail_message"
     set -x
 }
@@ -87,7 +92,7 @@ if [ "$hdr_count" -gt 0 ] && [ "$opa_count" -gt 0 ]; then
 $hdr_count Mellanox HDR ConnectX adapters,
 and
 $opa_count Omni-Path adapters.
-The Onmi-Path adapters will not be used."
+The Omni-Path adapters will not be used."
     mail_message+="${nl}${ib_message}${nl}"
     echo "$ib_message"
 fi
@@ -108,16 +113,16 @@ function do_wait_for_ib {
     return 1
 }
 
-# First check for infinband devices
+# First check for InfiniBand devices
 working_ib=0
 ib_prefix="ib"
 ib_count=0
-if [ -e /sys/class/net/ib_cpu0_0 || -e /sys/class/net/ib_cpu1_1 ]; then
+if [ -e /sys/class/net/ib_cpu0_0 ] || [ -e /sys/class/net/ib_cpu1_1 ]; then
     ib_prefix="ib_cpu"
 fi
-for ib_dev in /sys/class/net/"ib_prefix"*; do
+for ib_dev in /sys/class/net/"$ib_prefix"*; do
     ((ib_count++))
-    iface="$(basename $ib_dev)"
+    iface="$(basename "$ib_dev")"
     ((testruns++)) || true
     testcases+="  <testcase name=\"Infiniband $iface Working Node $mynodenum\">${nl}"
     if do_wait_for_ib "$iface"; then

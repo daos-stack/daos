@@ -24,6 +24,7 @@ if [ -n "$repo_files_pr" ]; then
     REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
 fi
 
+# shellcheck disable=SC1091
 . /etc/os-release
 # shellcheck disable=SC2034
 EXCLUDE_UPGRADE=mercury,daos,daos-\*
