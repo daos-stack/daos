@@ -8,7 +8,7 @@ set -eux
 : "${BUILD_URL:=Not_in_jenkins}"
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
-: "{JENKINS_URL:=https://jenkins.example.com}"
+: "${JENKINS_URL:=https://jenkins.example.com}"
 domain1="${JENKINS_URL#https://}"
 mail_domain="${domain1%%/*}"
 : "{EMAIL_DOMAIN:=$mail_domain}"
