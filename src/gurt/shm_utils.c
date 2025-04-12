@@ -17,12 +17,12 @@
  * Normally robust mutex is always used. The write mutex by a reader is an exception.
  */
 #define NOT_ROBUST (0x20000000)
-/* the tid mask we actually use instead of 0x3FFFFFFF (FUTEX_TID_MASK) since NON_ROBUST takes one
+/* the tid mask we actually use instead of 0x3FFFFFFF (FUTEX_TID_MASK) since NOT_ROBUST takes one
  * bit.
  */
 #define TID_MASK   (0x1FFFFFFF)
 
-/* the address of head of robust mutex list maintained by pthread */
+/* the address of the head of robust mutex list maintained by pthread for current thread */
 static __thread struct robust_list_head *thread_robust_head;
 /* thread id of current thread */
 __thread pid_t                           d_tid;
@@ -31,7 +31,7 @@ __thread pid_t                           d_tid;
 static __thread bool                     thread_monitor_inited;
 /* pointer to the head of hash table tid which tracks thread exists or not */
 static __thread struct d_shm_ht_loc      ht_tid;
-/* pointer to the head of hash table tid record for tracking thread existence */
+/* pointer to the record in hash table tid for tracking thread existence */
 static __thread struct d_shm_ht_rec_loc  rec_tid_mon;
 
 /* the actual implementation of mutex locking */
@@ -93,7 +93,7 @@ shm_rwlock_fi_here(void)
 #endif /* FAULT_INJECTION */
 }
 
-/* only triggered one time */
+/* the fault injection that is only triggered one time */
 static inline void
 shm_rwlock_fi_here_uniqe(const char *file, int line)
 {
@@ -118,7 +118,10 @@ shm_rwlock_fi_here_uniqe(const char *file, int line)
 		shm_ht_rec_decref(&link);
 		return;
 	}
-	/* do not decrease ht record reference, so this record will be persistent */
+	/* Do not decrease ht record reference in creator, so this record will be persistent.
+	 * The records and ht are not freed currently. This function is only used in utest test_shm.
+	 * test_shm destroys shm once test is completed, so this should not be an issue.
+	 */
 
 	fi_counter = shm_fi_counter_inc();
 	if (fi_counter == d_shm_head->fi_point1 || fi_counter == d_shm_head->fi_point2)
@@ -127,7 +130,17 @@ shm_rwlock_fi_here_uniqe(const char *file, int line)
 #endif /* FAULT_INJECTION */
 }
 
-int
+/* This implements a fast mechanism to query whether a thread exists or not based on robust mutex.
+ * Every thread should call this function with shm_thread_data_init(). One record of (tid, mutex)
+ * is created. This robust mutex is set locked. Once this thread finishes its work, it should call
+ * thread_monitor_fini() with shm_thread_data_fini() to remove ht record (tid, mutex). In case a
+ * thread is killed unexpected, kernel will set bit FUTEX_OWNER_DIED in the lock int of robust
+ * mutex. Consequently, is_thread_ended() can efficiently query whether a thread exists or not
+ * without entering kernel space. In case of killed/crashing threads, the records of (tid, mutex)
+ * in shared memory would be leaked. Normally such leaks are small. We will tackle such leaks later.
+ */
+
+static int
 thread_monitor_init(void)
 {
 	int            rc;
@@ -163,6 +176,7 @@ thread_monitor_init(void)
 	return 0;
 }
 
+/* remove record of (tid, mutex) in ht */
 static int
 thread_monitor_fini(void)
 {
@@ -174,7 +188,14 @@ thread_monitor_fini(void)
 	rc = shm_ht_rec_decref(&rec_tid_mon);
 	if (rc)
 		return rc;
+
 	rc = shm_ht_rec_delete_at(&rec_tid_mon);
+	if (rc == SHM_HT_REC_BUSY) {
+		/* another thread/process is checking current thread exists or not */
+		while (rc == SHM_HT_REC_BUSY) {
+			rc = shm_ht_rec_delete_at(&rec_tid_mon);
+		}
+	}
 	if (rc)
 		return rc;
 	thread_monitor_inited = false;
@@ -193,6 +214,7 @@ shm_mutex_init(d_shm_mutex_t *mutex)
 	return 0;
 }
 
+/* wrapper for SYS_futex syscall */
 static int
 futex(unsigned int *uaddr, int futex_op, unsigned int val, const struct timespec *timeout,
       unsigned int *uaddr2, unsigned int val3)
@@ -212,7 +234,9 @@ futex_wake(unsigned int *futex_ptr)
 	return futex((unsigned int *)futex_ptr, FUTEX_WAKE, 1, NULL, NULL, 0);
 }
 
-static void insert_robust_futex_to_list(d_shm_mutex_t *mutex)
+/* insert a robust mutex into the doubely linked list of all robust mutexes in current thread */
+static void
+insert_robust_futex_to_list(d_shm_mutex_t *mutex)
 {
 	d_shm_mutex_t *next_mutex;
 
@@ -226,6 +250,7 @@ static void insert_robust_futex_to_list(d_shm_mutex_t *mutex)
 	((struct robust_list *)thread_robust_head)->next = (struct robust_list *)&mutex->next;
 }
 
+/* remove a robust mutex from the doubely linked list of all robust mutexes in current thread */
 static void
 remove_robust_futex_from_list(d_shm_mutex_t *mutex)
 {
@@ -251,7 +276,7 @@ remove_robust_futex_from_list(d_shm_mutex_t *mutex)
 	mutex->prev = NULL;
 }
 
-/* determine robust head in current thread */
+/* determine the robust head in current thread setup by pthread */
 static void
 query_thread_robust_head(void)
 {
@@ -277,6 +302,7 @@ query_thread_robust_head(void)
 	assert(-offsetof(d_shm_mutex_t, next) == thread_robust_head->futex_offset);
 }
 
+/* every thread should call this function at the beginning */
 int
 shm_thread_data_init(void)
 {
@@ -301,6 +327,7 @@ shm_thread_data_init(void)
 	return 0;
 }
 
+/* every thread should call this function at the end */
 int
 shm_thread_data_fini(void)
 {
@@ -354,7 +381,7 @@ shm_mutex_lock_ex(d_shm_mutex_t *mutex, const struct timespec *timeout, bool *pr
 		 */
 		if ((oldval & FUTEX_WAITERS) == 0) {
 			if (!__sync_bool_compare_and_swap((int *)&mutex->lock, oldval,
-			    oldval | FUTEX_WAITERS)) {
+							  oldval | FUTEX_WAITERS)) {
 				oldval = mutex->lock;
 				continue;
 			}
@@ -454,8 +481,11 @@ shm_rwlock_destroy(d_shm_rwlock_t *rwlock)
 	return 0;
 }
 
+/* the factor to expand reader list */
 #define EXPANSION_FACTOR  (1.6)
+/* the threshold value of low occupancy of reader list */
 #define LOW_OCCUPANCY     (0.3)
+/* the factor to shrink reader list */
 #define SHRINK_FACTOR     (0.625)
 #define SLOT_SAVED_CUTOFF (8)
 
@@ -538,6 +568,7 @@ shrink_rwlock_reader_list(d_shm_rwlock_t *rwlock)
 }
 #undef SMALL
 
+/* query a thread exists or not */
 static inline bool
 is_thread_ended(int tid_check)
 {
@@ -550,8 +581,11 @@ is_thread_ended(int tid_check)
 	pid_monitor = (d_shm_mutex_t *)shm_ht_rec_find(&ht_tid, (const char *)&tid_local,
 						       sizeof(int), &link, &err);
 	if (pid_monitor == NULL)
-		/* thread exits normally with removing the ht record */
+		/* thread exits normally with removing the ht record, so no record is found */
 		return true;
+	/* FUTEX_OWNER_DIED bit is set when the mutex owner is terminated without unlocking the
+	 * mutex.
+	 */
 	thread_ended = (pid_monitor->lock & FUTEX_OWNER_DIED) ? true : false;
 	shm_ht_rec_decref(&link);
 	return thread_ended;
@@ -610,7 +644,8 @@ shm_rwlock_refresh_reader_list(d_shm_rwlock_t *rwlock)
 	return 0;
 }
 
-/* time out to wait for acquiring write lock. If timeout, check read mutex owners exist or not.
+/*
+ * Timeout to wait for acquiring write lock. If timeout, check read mutex owners exist or not.
  * Unit is nano second.
  */
 #define WLOCK_TIMEOUT (50000)
@@ -641,7 +676,7 @@ shm_rwlock_rd_lock(d_shm_rwlock_t *rwlock)
 	num_reader = atomic_load(&rwlock->num_reader);
 	if (num_reader < rwlock->max_num_reader) {
 		reader_list             = (int *)(rwlock->off_tid_readers + (char *)d_shm_head);
-		reader_list[num_reader] = d_tid;
+		reader_list[num_reader] = d_tid & TID_MASK;
 		atomic_fetch_add(&rwlock->num_reader, 1);
 	} else if (num_reader == rwlock->max_num_reader) {
 		/* reader list is full, need to be expanded */
@@ -652,7 +687,7 @@ shm_rwlock_rd_lock(d_shm_rwlock_t *rwlock)
 		}
 		/* append the new tid */
 		reader_list             = (int *)(rwlock->off_tid_readers + (char *)d_shm_head);
-		reader_list[num_reader] = d_tid;
+		reader_list[num_reader] = d_tid & TID_MASK;
 		atomic_fetch_add(&rwlock->num_reader, 1);
 	}
 

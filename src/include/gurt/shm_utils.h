@@ -49,7 +49,7 @@ struct d_shm_rwlock {
 
 	/* the maximum number of reader tid can be stored */
 	int           max_num_reader;
-	/* current number of reader accessing rwlock */
+	/* current number of reader holding read lock */
 	_Atomic int   num_reader;
 	/* offset of the array of readers' tid */
 	long int      off_tid_readers;
@@ -63,15 +63,15 @@ struct d_shm_rwlock {
 typedef struct d_shm_rwlock d_shm_rwlock_t;
 
 /* the max length allowed for a hash table name */
-#define MAX_HT_NAME_LEN         16
+#define MAX_HT_NAME_LEN       16
 
 /* reserved string for d_shm_mutex_t as ht record value */
-#define INIT_KEY_VALUE_MUTEX    "INIT_MUTEX"
+#define INIT_KEY_VALUE_MUTEX  "INIT_MUTEX"
 
 /* reserved string for d_shm_rwlock_t as ht record value */
-#define INIT_KEY_VALUE_RWLOCK   "INIT_RWLOCK"
+#define INIT_KEY_VALUE_RWLOCK "INIT_RWLOCK"
 
-#define HT_NAME_TID_MUTEX       "TID_MUTEX"
+#define HT_NAME_TID_MUTEX     "TID_MUTEX"
 
 /* error code for hash table related functions */
 enum SHM_HT_ERROR {

@@ -676,7 +676,7 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 
 	if (created)
 		*created = false;
-	*err     = SHM_HT_SUCCESS;
+	*err = SHM_HT_SUCCESS;
 	if (!shm_ht_is_usable(shm_ht_loc)) {
 		/* immediately return error if ht is not usable */
 		*err = SHM_HT_INVALID_HT;

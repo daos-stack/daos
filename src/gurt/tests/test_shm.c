@@ -739,8 +739,7 @@ test_lock(void **state)
 	rc = shm_ht_create(ht_name, 8, 16, &ht_loc);
 	assert_true(rc == 0);
 
-	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(
-							&ht_loc, key, strlen(key),
+	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(&ht_loc, key, strlen(key),
 							INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t),
 							&rec_loc, &created, &err);
 	assert_true(mutex != NULL);
