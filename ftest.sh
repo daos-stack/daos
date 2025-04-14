@@ -44,6 +44,11 @@ pre_clean () {
         fi
         ((i-=1)) || true
     done
+    if [ $i -eq 0 ]; then
+        echo "All pre clean nodes attempts failed." >&2
+        return 1
+    fi
+    return 0
 }
 
 cleanup() {
@@ -57,6 +62,11 @@ cleanup() {
         fi
         ((i-=1)) || true
     done
+    if [ $i -eq 0 ]; then
+        echo "All cleanup attempts failed." >&2
+        return 1
+    fi
+    return 0
 }
 
 # shellcheck disable=SC1091

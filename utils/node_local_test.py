@@ -425,6 +425,11 @@ def get_base_env(clean=False):
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
 
+    # If set, retain the HTTPS_PROXY for valgrind
+    http_proxy = os.environ.get('HTTPS_PROXY')
+    if http_proxy:
+        env['HTTPS_PROXY'] = http_proxy
+
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
     # env['MALLOC_CHECK_'] = '3'
@@ -1253,6 +1258,9 @@ class ValgrindHelper():
                '--gen-suppressions=all',
                '--error-exitcode=42']
 
+        if self.conf.args.valgrind_verbose:
+            cmd.append('--verbose')
+
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
@@ -1426,6 +1434,9 @@ class DFuse():
                 pass
             total_time += 1
             if total_time > 60:
+                # Kill the unresponsive dfuse command
+                self._sp.send_signal(signal.SIGTERM)
+                self._sp = None
                 raise NLTestFail('Timeout starting dfuse')
 
         self._daos.add_fuse(self)
@@ -6510,6 +6521,7 @@ def main():
     parser.add_argument('--log-usage-save')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
+    parser.add_argument('--valgrind_verbose', action='store_true', help='Use --verbose w/ valgrind')
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
 
