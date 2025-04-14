@@ -795,15 +795,32 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			    : "non-DMA",
 			orw->orw_bulks.ca_count, DP_RC(ret));
 
+		/* Dump IODs */
 		if (orw->orw_iod_array.oia_iod_nr) {
-			daos_iod_t *iod;
+			unsigned int buf_len = 1024, left, used;
+			char        *buf, *tmp;
+			daos_iod_t  *iod;
 
-			D_ERROR("IODs: ");
+			D_ALLOC(buf, buf_len);
+			if (buf == NULL)
+				D_GOTO(out, ret);
+
+			tmp  = buf;
+			left = buf_len;
 			for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
 				iod = &orw->orw_iod_array.oia_iods[i];
-				D_ERROR("[%u, %lu] ", iod->iod_nr, iod->iod_size);
+				used =
+				    snprintf(tmp, left, "[%u, %lu] ", iod->iod_nr, iod->iod_size);
+				if (used >= left) {
+					buf[buf_len - 1] = '\0';
+					break;
+				} else {
+					left -= used;
+					tmp += used;
+				}
 			}
-			D_ERROR("\n");
+			D_ERROR("IODs: %s\n", buf);
+			D_FREE(buf);
 		}
 
 		D_GOTO(out, ret);
