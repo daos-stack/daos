@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -237,7 +238,7 @@ class DaosBuild(TestWithServers):
                 f'git clone https://github.com/daos-stack/daos.git {build_dir}',
                 f'git -C {build_dir} checkout {self._get_daos_build_checkout()}',
                 f'git -C {build_dir} submodule init',
-                f'git -C {build_dir} submodule update',
+                f'git -C {build_dir} submodule update --recursive',
                 'python3 -m pip install pip --upgrade',
                 f'python3 -m pip install -r {build_dir}/requirements-build.txt',
                 f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
