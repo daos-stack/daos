@@ -338,7 +338,8 @@ def define_components(reqs):
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'DESTDIR=$SANDBOX_PREFIX', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
                            'includedir=$SPDK_PREFIX/include/daos_internal', 'install'],
-                          [move_files, 'dpdk/build/lib', '$SANDBOX_PREFIX$SPDK_PREFIX/lib64/daos_srv'],
+                          [move_files, 'dpdk/build/lib',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/lib64/daos_srv'],
                           [move_files, 'dpdk/build/include',
                            '$SANDBOX_PREFIX$SPDK_PREFIX/include/daos_internal/dpdk'],
                           [move_files, 'include',
@@ -354,7 +355,6 @@ def define_components(reqs):
                           ['cp', 'build/examples/perf',
                            '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
-                extra_lib_path=['lib64/daos_srv'],
                 patch_rpath=['lib64/daos_srv', 'bin'])
 
     reqs.define('protobufc',
