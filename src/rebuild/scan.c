@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -127,6 +128,13 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		    rc != -DER_OVERLOAD_RETRY && rc != -DER_AGAIN &&
 		    !daos_crt_network_error(rc)))
 			break;
+
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			rc = -DER_SHUTDOWN;
+			DL_INFO(rc, DF_RB ": give up ds_object_migrate_send, shutdown rebuild",
+				DP_RB_RPT(rpt));
+			break;
+		}
 
 		/* otherwise let's retry */
 		D_DEBUG(DB_REBUILD, DF_UUID" retry send object to tgt_id %d\n",
@@ -1122,7 +1130,7 @@ void
 rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
-	struct rebuild_scan_out		*ro;
+	struct rebuild_scan_out         *rso;
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	int				 rc;
@@ -1273,9 +1281,9 @@ out:
 			rpt_delete(rpt);
 		rpt_put(rpt);
 	}
-	ro = crt_reply_get(rpc);
-	ro->rso_status = rc;
-	ro->rso_stable_epoch = d_hlc_get();
+	rso                   = crt_reply_get(rpc);
+	rso->rso_status       = rc;
+	rso->rso_stable_epoch = d_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
 
