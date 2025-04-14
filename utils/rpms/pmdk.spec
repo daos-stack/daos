@@ -31,16 +31,16 @@ Package providing libraries needed by DAOS
 
 %files pmdk-devel
 %defattr(-,root,root,-)
-%{_libdir}/libpmem.so
-%{_libdir}/libpmemobj.so
-%{_libdir}/libpmem2.so
-%{_libdir}/libpmempool.so
+%{_libdir}/daos_srv/libpmem.so
+%{_libdir}/daos_srv/libpmemobj.so
+%{_libdir}/daos_srv/libpmem2.so
+%{_libdir}/daos_srv/libpmempool.so
 %{_includedir}/daos_internal/libpmemobj.h
 %{_includedir}/daos_internal/libpmemobj/*.h
-%{_libdir}/pkgconfig/libpmemobj.pc
-%{_libdir}/pkgconfig/libpmem.pc
-%{_libdir}/pkgconfig/libpmempool.pc
-%{_libdir}/pkgconfig/libpmem2.pc
+%{_libdir}/daos_srv/pkgconfig/libpmemobj.pc
+%{_libdir}/daos_srv/pkgconfig/libpmem.pc
+%{_libdir}/daos_srv/pkgconfig/libpmempool.pc
+%{_libdir}/daos_srv/pkgconfig/libpmem2.pc
 %license deps/pmdk/LICENSE
 %doc deps/pmdk/ChangeLog deps/pmdk/CONTRIBUTING.md deps/pmdk/README.md
 %else

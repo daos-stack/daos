@@ -338,7 +338,7 @@ def define_components(reqs):
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'DESTDIR=$SANDBOX_PREFIX', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
                            'includedir=$SPDK_PREFIX/include/daos_internal', 'install'],
-                          [move_files, 'dpdk/build/lib', '$SANDBOX_PREFIX$SPDK_PREFIX/lib64'],
+                          [move_files, 'dpdk/build/lib', '$SANDBOX_PREFIX$SPDK_PREFIX/lib64/daos_srv'],
                           [move_files, 'dpdk/build/include',
                            '$SANDBOX_PREFIX$SPDK_PREFIX/include/daos_internal/dpdk'],
                           [move_files, 'include',

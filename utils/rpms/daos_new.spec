@@ -343,7 +343,7 @@ This is the package that bridges the difference between the MOFED openmpi
 utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{_prefix}" "remove-rpath"
 %if %{with build_deps}
 mkdir -p %{buildroot}/%{_sysconfdir}/bash_completion.d
-mv %{buildroot}/%{_prefix}/etc/bash_completion.d/daospmempool %{buildroot}/%{_sysconfdir}/bash_completion.d
+mv %{buildroot}/%{_prefix}/etc/bash_completion.d/pmempool %{buildroot}/%{_sysconfdir}/bash_completion.d
 %endif
 %if %{with build_daos}
 %if ("%{?compiler_args}" == "COMPILER=covc")

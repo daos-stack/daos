@@ -9,9 +9,9 @@ Prebuilt DAOS SPDK dependency
 
 %files spdk
 %license deps/spdk/LICENSE
-%{_libdir}/libspdk*.so.*
-%{_libdir}/librte*.so.*
-%{_libdir}/dpdk/*/librte*.so.*
+%{_libdir}/daos_srv/libspdk*.so.*
+%{_libdir}/daos_srv/librte*.so.*
+%{_libdir}/daos_srv/dpdk/*/librte*.so.*
 %{_bindir}/spdk*
 %{_datadir}/spdk/*
 
@@ -22,11 +22,11 @@ Summary: DAOS build of spdk
 Prebuilt DAOS SPDK dependency
 
 %files spdk-devel
-%{_libdir}/pkgconfig/spdk*.pc
-%{_libdir}/pkgconfig/libdpdk*.pc
-%{_libdir}/libspdk*.so
-%{_libdir}/librte*.so
-%{_libdir}/dpdk/*/librte*.so
+%{_libdir}/daos_srv/pkgconfig/spdk*.pc
+%{_libdir}/daos_srv/pkgconfig/libdpdk*.pc
+%{_libdir}/daos_srv/libspdk*.so
+%{_libdir}/daos_srv/librte*.so
+%{_libdir}/daos_srv/dpdk/*/librte*.so
 %{_includedir}/daos_internal/dpdk/*
 %{_includedir}/daos_internal/spdk/*
 
