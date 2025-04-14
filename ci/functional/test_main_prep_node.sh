@@ -24,7 +24,7 @@ myhost="${HOSTNAME%%.*}"
 : "${NODELIST:=$myhost}"
 mynodenum=0
 
-: "{JENKINS_URL:=https://jenkins.example.com}"
+: "${JENKINS_URL:=https://jenkins.example.com}"
 domain1="${JENKINS_URL#https://}"
 mail_domain="${domain1%%/*}"
 : "{EMAIL_DOMAIN:=$mail_domain}"
@@ -159,7 +159,7 @@ for ib_dev in /sys/class/net/"$ib_prefix"*; do
         testcases+="    <error message=\"$iface down\" type=\"error\">
       <![CDATA[ $ib_message ]]>
     </error>$nl"
-        result=1
+        result=2
     fi
     testcases+="  </testcase>$nl"
 done
@@ -199,7 +199,7 @@ if [ "$ib_count" -ge 2 ]; then
         testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $nvme_message ]]>
     </error>$nl"
-       result=1
+       result=3
     else
        echo "OK: Found $dimm_rcount DIMM PMEM regions."
     fi
@@ -226,7 +226,7 @@ if [ "$ib_count" -ge 2 ]; then
         testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $nvme_message$nl$nvme_devices ]]>
     </error>$nl"
-       result=1
+       result=4
     else
        echo "OK: Even number ($nvme_count) of NVMe devices seen."
     fi
@@ -253,7 +253,7 @@ if [ "$ib_count" -ge 2 ]; then
         testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $lsblk_nvme_msg ]]>
     </error>$nl"
-       result=1
+       result=5
     else
        echo "OK: All $nvme_count NVMe devices are in lsblk report."
     fi
@@ -268,7 +268,7 @@ if [ "$ib_count" -ge 2 ]; then
         testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $lsblk_pmem_msg ]]>
     </error>$nl"
-       result=1
+       result=6
     else
        echo "OK: All $dimm_rcount PMEM devices are in lsblk report."
     fi
@@ -309,5 +309,9 @@ $testcases</testsuite>$nl"
 echo "$junit_xml" > "./hardware_prep_node_results.xml"
 
 do_mail
+
+if [ "$result" -ne 0 ]; then
+    echo "Check failure $result"
+fi
 
 exit $result
