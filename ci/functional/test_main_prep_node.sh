@@ -69,6 +69,7 @@ set +x
 while IFS= read -r line; do
     ((opa_count++)) || true
 done < <(lspci -mm | grep "Omni-Path")
+echo "Found $opa_count Omni-Path adapters."
 if [ "$opa_count" -gt 0 ]; then
     ((ib_count=opa_count)) || true
 fi
@@ -81,6 +82,7 @@ while IFS= read -r line; do
         ((hdr_count++)) || true
     fi
 done < <(lspci -mm | grep "ConnectX")
+echo "Found $hdr_count Mellanox HDR adapters."
 if [ "$hdr_count" -gt 0 ]; then
     ((ib_count=hdr_count)) || true
 fi
@@ -165,7 +167,7 @@ for ib_dev in /sys/class/net/"$ib_prefix"*; do
 done
 
 # having -x just makes the console log harder to read.
-set +x
+# set +x
 if [ "$ib_count" -ge 2 ]; then
     # now check for pmem & NVMe drives when multiple ib are present.
     # ipmctl show -dimm should show an even number of drives, all healthy

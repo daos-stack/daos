@@ -59,7 +59,11 @@ if ! test_cluster; then
     if cluster_reboot; then
         if test_cluster; then
             hardware_ok=true
+        else
+            echo "Hardware test failed again after reboot"
         fi
+    else
+        echo "Cluster reboot failed"        
     fi
 else
     hardware_ok=true
