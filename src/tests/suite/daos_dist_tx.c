@@ -3277,7 +3277,7 @@ static const struct CMUnitTest dtx_tests[] = {
     {"DTX41: uncertain check - miss abort with delay", dtx_41, NULL, test_case_teardown},
     {"DTX42: client unreachable - retry - multiple SV update against the same obj", dtx_42, NULL,
      test_case_teardown},
-    {"DTX42: client unreachable - retry - multiple SV update against multiple objs", dtx_43, NULL,
+    {"DTX43: client unreachable - retry - multiple SV update against multiple objs", dtx_43, NULL,
      test_case_teardown},
 };
 
