@@ -240,6 +240,7 @@ def define_components(reqs):
                            'install',
                            'prefix=$PMDK_PREFIX']],
                 build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': "-lpthread"},
+                extra_lib_path=['lib64/daos_srv'],
                 libs=['pmemobj'])
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
@@ -353,6 +354,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/perf',
                            '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
+                extra_lib_path=['lib64/daos_srv'],
                 patch_rpath=['lib64/daos_srv', 'bin'])
 
     reqs.define('protobufc',
