@@ -11,13 +11,13 @@ def scons():
         tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
 
         tenv.d_test_program('btree', ['btree.c', utest_utils],
-                            LIBS=['daos_common_pmem', 'gurt', 'daospmemobj', 'cmocka'])
+                            LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
         tenv.d_test_program('umem_test_bmem', ['umem_test_bmem.c', utest_utils],
                             LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
         tenv.d_test_program('umem_test', ['umem_test.c', utest_utils],
-                            LIBS=['daos_common_pmem', 'gurt', 'daospmemobj', 'cmocka'])
+                            LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
         tenv.d_test_program('btree_direct', ['btree_direct.c', utest_utils],
-                            LIBS=['daos_common_pmem', 'gurt', 'daospmemobj', 'cmocka'])
+                            LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
         tenv.d_test_program('other', 'other.c',
                             LIBS=['daos_common_pmem', 'gurt', 'cart'])
         tenv.d_test_program('ad_mem_tests', 'ad_mem_tests.c',

@@ -31,7 +31,7 @@ def build_daos_common(denv, client):
                    'dav/util.c', 'dav/wal_tx.c']
         ad_mem_files = ['ad_mem.c', 'ad_tx.c']
         ult_files = ['ult_errno.c']
-        common_libs.extend(['daospmemobj', 'abt', 'dav_v2'])
+        common_libs.extend(['pmemobj', 'abt', 'dav_v2'])
         benv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
         benv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         benv.Append(OBJPREFIX="v_")

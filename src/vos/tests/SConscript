@@ -16,7 +16,7 @@ def scons():
 
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
                  'daos_tests', 'gurt', 'uuid', 'pthread',
-                 'daospmemobj', 'cmocka', 'gomp']
+                 'pmemobj', 'cmocka', 'gomp']
 
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
@@ -42,7 +42,7 @@ def scons():
     unit_env.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
     libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
-                 'vos', 'uuid', 'daospmemobj', 'bio', 'pthread', 'abt']
+                 'vos', 'uuid', 'pmemobj', 'bio', 'pthread', 'abt']
     unit_env.d_test_program('pool_scrubbing_tests', ['pool_scrubbing_tests.c',
                                                      '../vos_pool_scrub.c'],
                             LIBS=libraries)
