@@ -467,7 +467,7 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { !skipStage() && checkoutScm withSubmodules: true }
+                expression { !skipStage() }
             }
             parallel {
                 stage('Build RPM on EL 8') {
