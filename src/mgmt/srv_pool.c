@@ -197,16 +197,13 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 	if (!d_rank_list_identical(pg_targets, targets)) {
 		char *pg_str, *tgt_str;
 
-		pg_str = d_rank_list_to_str(pg_ranks);
-		if (pg_str == NULL) {
-			rc = -DER_NOMEM;
+		rc = d_rank_list_to_str(pg_ranks, &pg_str);
+		if (rc != 0)
 			D_GOTO(out, rc);
-		}
 
-		tgt_str = d_rank_list_to_str(targets);
-		if (tgt_str == NULL) {
+		rc = d_rank_list_to_str(targets, &tgt_str);
+		if (rc != 0) {
 			D_FREE(pg_str);
-			rc = -DER_NOMEM;
 			D_GOTO(out, rc);
 		}
 
