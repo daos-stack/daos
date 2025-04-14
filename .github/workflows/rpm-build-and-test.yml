@@ -54,7 +54,7 @@ on:
       - 'release/*'
 
 concurrency:
-  group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 defaults:
