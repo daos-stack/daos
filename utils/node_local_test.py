@@ -1311,7 +1311,7 @@ class DFuse():
 
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False, ro=False, logleaks=True):
+                 caching=True, wbcache=True, multi_user=False, ro=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1336,7 +1336,6 @@ class DFuse():
         self.log_mask = None
         self.log_file = None
         self._ro = ro
-        self.logleaks = logleaks
 
         self.valgrind = None
         if not os.path.exists(self.dir):
@@ -1490,7 +1489,7 @@ class DFuse():
             time.sleep(2)
             umount(self.dir)
 
-        run_leak_test = self.logleaks
+        run_leak_test = True
         try:
             ret = self._sp.wait(timeout=20)
             print(f'rc from dfuse {ret}')
@@ -2246,7 +2245,7 @@ class PosixTests():
                      ['container', 'query', self.pool.id(), container.id()],
                      show_stdout=True)
 
-        dfuse = DFuse(self.server, self.conf, container=container, logleaks=False)
+        dfuse = DFuse(self.server, self.conf, container=container)
         dfuse.start()
 
         tests = {}
