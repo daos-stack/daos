@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +32,8 @@ RDB_STRING_KEY(ds_pool_prop_, svc_ops_enabled);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_max);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_num);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_age);
+RDB_STRING_KEY(ds_pool_prop_, srv_handle);
+RDB_STRING_KEY(ds_pool_prop_, srv_cont_handle);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
