@@ -123,7 +123,7 @@ if [ -e /sys/class/net/ib_cpu0_0 ] || [ -e /sys/class/net/ib_cpu1_1 ]; then
     ib_prefix="ib_cpu"
 fi
 for ib_dev in /sys/class/net/"$ib_prefix"*; do
-    ((ib_count++))
+    ((ib_count++)) || true
     iface="$(basename "$ib_dev")"
     ((testruns++)) || true
     testcases+="  <testcase name=\"Infiniband $iface Working Node $mynodenum\">${nl}"
