@@ -11,9 +11,6 @@
 %endif
 %endif
 
-# disable check-buildroot (normally /usr/lib/rpm/check-buildroot) with:
-%define __arch_install_post %{nil}
-
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 %global openmpi openmpi
@@ -344,12 +341,17 @@ utils/rpms/fix_files.sh "%{buildroot}" "%{buildroot}%{_prefix}" "remove-rpath"
 %if %{with build_deps}
 mkdir -p %{buildroot}/%{_sysconfdir}/bash_completion.d
 mv %{buildroot}/%{_prefix}/etc/bash_completion.d/pmempool %{buildroot}/%{_sysconfdir}/bash_completion.d
+rm -f %{buildroot}/%{_libdir}/daos_srv/libspdk*.a
+rm -f %{buildroot}/%{_libdir}/daos_srv/libpmem*.a
+rm -f %{buildroot}/%{_libdir}/daos_srv/librte*.a
 %endif
 %if %{with build_daos}
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov %{buildroot}%{_prefix}/lib/daos/TESTING/ftest/test.cov
 %endif
 %if %{with server}
+mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
+echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
 %endif
