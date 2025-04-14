@@ -632,19 +632,33 @@ struct log_variables {
 static int
 d_log_var_parse_one(const char *name, char **ptr, const char *log_var, const char *value, int len)
 {
+	char *log_buf;
+
 	if (strncmp(name, log_var, len) == 0) {
 		if (*ptr != NULL) {
 			D_ERROR("Duplication definition not supported in log config\n");
 			return -DER_INVAL;
 		}
-		D_STRNDUP(*ptr, value, len);
-		if (value == NULL)
+		/** Free'd in d_log_var_free() to make leak detector happy */
+		D_STRNDUP(log_buf, value, len);
+		if (log_buf == NULL)
 			return -DER_NOMEM;
+
+		*ptr = log_buf;
 
 		return 1;
 	}
 
 	return 0;
+}
+
+static void
+d_log_var_free(char *log_buf)
+{
+	/** Allocated in d_log_var_parse_one.  Use same name to make parser
+	 * happy.
+	 */
+	D_FREE(log_buf);
 }
 
 static void
@@ -709,10 +723,10 @@ d_process_log_var(struct log_variables *lv, char *log_var, char *value, int len)
 }
 
 int
-d_log_parse_config(void *config, int len, d_log_copy_cb copy_cb)
+d_log_parse_config(void *data, int len, d_log_copy_cb copy_cb)
 {
 	struct log_variables lv      = {0};
-	char                *buf     = NULL;
+	char                *config  = NULL;
 	char                *log_var = NULL;
 	char                *value   = NULL;
 	int                  rc      = 0;
@@ -721,16 +735,16 @@ d_log_parse_config(void *config, int len, d_log_copy_cb copy_cb)
 	char                *str1;
 
 	/** Extra byte allocated for possible NUL character */
-	D_ALLOC_ARRAY(buf, len + 1);
-	if (buf == NULL)
+	D_ALLOC_ARRAY(config, len + 1);
+	if (config == NULL)
 		return -DER_NOMEM;
 
-	rc = copy_cb(buf, len, config);
+	rc = copy_cb(config, len, data);
 	if (rc != 0)
 		goto free_buf;
 
-	buf[len] = '\0';
-	for (str1 = buf;; str1 = NULL) {
+	config[len] = '\0';
+	for (str1 = config;; str1 = NULL) {
 		log_var = strtok_r(str1, "\n", &saveptr1);
 		if (log_var == NULL)
 			break;
@@ -757,9 +771,10 @@ d_log_parse_config(void *config, int len, d_log_copy_cb copy_cb)
 
 	d_log_sync_mask_ex(lv.mask, lv.streams);
 out:
-	D_FREE(lv.mask);
-	D_FREE(lv.streams);
+	/** Use a local variable to make allocation parser happy */
+	d_log_var_free(lv.mask);
+	d_log_var_free(lv.streams);
 free_buf:
-	D_FREE(buf);
+	D_FREE(config);
 	return rc;
 }
