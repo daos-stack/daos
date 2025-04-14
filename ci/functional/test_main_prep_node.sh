@@ -11,6 +11,11 @@ set -eux
 : "${OPERATIONS_EMAIL:=}"
 : "${STAGE_NAME:=Unknown}"
 : "${BUILD_URL:=Unknown}"
+: "${JENKINS_URL:=https://jenkins.example.com}"
+domain1="${JENKINS_URL#https://}"
+mail_domain="${domain1%%/*}"
+: "${EMAIL_DOMAIN:=$mail_domain}"
+: "${DAOS_DEVOPS_EMAIL:="$HOSTNAME"@"$EMAIL_DOMAIN"}"
 
 result=0
 mail_message=''
@@ -24,10 +29,6 @@ myhost="${HOSTNAME%%.*}"
 : "${NODELIST:=$myhost}"
 mynodenum=0
 
-: "${JENKINS_URL:=https://jenkins.example.com}"
-domain1="${JENKINS_URL#https://}"
-mail_domain="${domain1%%/*}"
-: "{EMAIL_DOMAIN:=$mail_domain}"
 # in order for junit test names to be consistent between test runs
 # Need to use the position number of the host in the node list for
 # the junit report.
@@ -48,7 +49,7 @@ function do_mail {
     # shellcheck disable=SC2059
     build_info="BUILD_URL = $BUILD_URL$nl STAGE = $STAGE_NAME$nl$nl"
     mail -s "Hardware check failed after reboot!" \
-         -r "$HOSTNAME"@"$EMAIL_DOMAIN" "$OPERATIONS_EMAIL" \
+         -r "$DAOS_DEVOPS_EMAIL" "$OPERATIONS_EMAIL" \
          <<< "$build_info$mail_message"
     set -x
 }
@@ -145,7 +146,7 @@ for ib_dev in /sys/class/net/"$ib_prefix"*; do
     </error>$nl"
             result=1
         else
-            ((working_ib++))
+            ((working_ib++)) || true
             echo "OK: Interface $iface is up."
         fi
         if [ -e "/sys/class/net/$iface/device/numa_node" ]; then

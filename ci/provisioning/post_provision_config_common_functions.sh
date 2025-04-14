@@ -11,7 +11,8 @@ set -eux
 : "${JENKINS_URL:=https://jenkins.example.com}"
 domain1="${JENKINS_URL#https://}"
 mail_domain="${domain1%%/*}"
-: "{EMAIL_DOMAIN:=$mail_domain}"
+: "${EMAIL_DOMAIN:=$mail_domain}"
+: "${DAOS_DEVOPS_EMAIL:="$HOSTNAME"@"$EMAIL_DOMAIN"}"
 
 # functions common to more than one distro specific provisioning
 url_to_repo() {
@@ -144,7 +145,7 @@ send_mail() {
         echo "Host:  $HOSTNAME"
         echo ""
         echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@"$EMAIL_DOMAIN" "$recipients"
+    } 2>&1 | mail -s "$subject" -r "DAOS_DEVOPS_EMAIL" "$recipients"
     set -x
 }
 
