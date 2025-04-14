@@ -325,6 +325,8 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 }
 
 #define MAX_BULK_IOVS	1024
+#define BULK_DELAY_MAX  3000
+#define BULK_DELAY_STEP 1000
 
 static int
 bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
@@ -369,6 +371,8 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		d_sg_list_t	sgl_sent;
 		size_t		length = 0;
 		unsigned int	start;
+		uint32_t        delay_tot = 0;
+		uint32_t        delay_cur;
 		bool		cached_bulk = false;
 
 		/*
@@ -433,8 +437,30 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			sgl_sent.sg_nr = sgl_sent.sg_nr_out = iov_idx - start;
 			bulk_iovs += sgl_sent.sg_nr;
 
+again:
 			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
 					     &local_bulk);
+			if (rc == -DER_NOMEM) {
+				if (delay_tot >= BULK_DELAY_MAX) {
+					D_ERROR("Too many in-flight bulk handles on %d\n", sgl_idx);
+					break;
+				}
+
+				/*
+				 * If there are too many in-flight bulk handles, then current
+				 * crt_bulk_create() may hit -DER_NOMEM failure. Let it sleep
+				 * for a while (at most 3 seconds) to give cart progress some
+				 * chance to complete some in-flight bulk transfers.
+				 */
+				delay_cur = BULK_DELAY_MAX - delay_tot;
+				if (delay_cur >= BULK_DELAY_STEP)
+					delay_cur = d_rand() % BULK_DELAY_STEP + 1;
+				dss_sleep(delay_cur);
+				delay_tot += delay_cur;
+				bulk_iovs = 0;
+				goto again;
+			}
+
 			if (rc != 0) {
 				D_ERROR("crt_bulk_create %d error " DF_RC "\n", sgl_idx, DP_RC(rc));
 				break;
@@ -494,7 +520,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
 		  uint64_t *remote_offs, uint8_t *skips, daos_handle_t ioh, d_sg_list_t **sgls,
-		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg, struct ds_cont_hdl *coh)
+		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg)
 {
 	struct obj_bulk_args	arg = { 0 };
 	int			i, rc, *status, ret;
@@ -602,13 +628,8 @@ done:
 	ABT_eventual_free(&p_arg->eventual);
 
 	if (rc == 0)
-		obj_update_latency(opc_get(rpc->cr_opc), BULK_LATENCY,
-				   daos_get_ntime() - time, arg.bulk_size);
-	if (rc == 0 && coh != NULL && unlikely(coh->sch_closed)) {
-		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
-			DP_UUID(coh->sch_uuid));
-		rc = -DER_IO;
-	}
+		obj_update_latency(opc_get(rpc->cr_opc), BULK_LATENCY, daos_get_ntime() - time,
+				   arg.bulk_size);
 
 	if (rc == 0 && p_arg->result != 0)
 		rc = p_arg->result;
@@ -849,8 +870,8 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *iod, uint64_t *off)
 
 	/* Only support 1 iod now */
 	bulk_bind = orw->orw_flags & ORF_BULK_BIND;
-	rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, off,
-			       NULL, DAOS_HDL_INVAL, &p_sgl, 1, 1, NULL, NULL);
+	rc        = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, off, NULL,
+				      DAOS_HDL_INVAL, &p_sgl, 1, 1, NULL);
 out:
 	orwo->orw_ret = rc;
 	orwo->orw_map_version = orw->orw_map_ver;
@@ -1647,8 +1668,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
-				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL,
-				       ioc->ioc_coh);
+				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL);
 		if (rc == 0) {
 			bio_iod_flush(biod);
 
@@ -2497,8 +2517,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 			DP_RC(rc));
 		goto end;
 	}
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL,
-			       ioh, NULL, 1, 1, NULL, ioc.ioc_coh);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL, ioh, NULL, 1, 1,
+			       NULL);
 	if (rc)
 		D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oer->er_oid),
 			DP_RC(rc));
@@ -2575,8 +2595,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 				DP_RC(rc));
 			goto end;
 		}
-		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk,
-				       NULL, NULL, ioh, NULL, 1, 1, NULL, ioc.ioc_coh);
+		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk, NULL, NULL, ioh,
+				       NULL, 1, 1, NULL);
 		if (rc)
 			D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 				DP_RC(rc));
@@ -3042,7 +3062,7 @@ again:
 		max_ver = dlh->dlh_rmt_ver;
 
 	/* Stop the distributed transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3330,8 +3350,8 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 	if (idx == 0)
 		return 0;
 
-	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, NULL, NULL,
-			       DAOS_HDL_INVAL, sgls, idx, idx, NULL, NULL);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, NULL, NULL, DAOS_HDL_INVAL, sgls,
+			       idx, idx, NULL);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
 		oeo->oeo_kds.ca_count = 0;
@@ -3973,7 +3993,7 @@ again:
 		max_ver = dlh->dlh_rmt_ver;
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/* Only standalone punches use this RPC. Retry with newer epoch. */
@@ -4664,7 +4684,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 			rc = obj_bulk_transfer(rpc, CRT_BULK_GET, dcu->dcu_flags & ORF_BULK_BIND,
 					       dcu->dcu_bulks, poffs[i], pskips[i], iohs[i], NULL,
-					       piod_nrs[i], dcsr->dcsr_nr, &bulks[i], ioc->ioc_coh);
+					       piod_nrs[i], dcsr->dcsr_nr, &bulks[i]);
 			if (rc != 0) {
 				D_ERROR("Bulk transfer failed for obj "
 					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
@@ -5210,7 +5230,7 @@ again:
 	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, 0, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, rc);
+	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART && rc != -DER_AGAIN,
@@ -5382,8 +5402,8 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 		sgls[i] = &dcbs[i]->dcb_sgl;
 	}
 
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL,
-			       DAOS_HDL_INVAL, sgls, count, count, NULL, ioc->ioc_coh);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL, DAOS_HDL_INVAL,
+			       sgls, count, count, NULL);
 	if (rc != 0)
 		goto out;
 
@@ -5789,7 +5809,7 @@ again:
 	if (max_ver < dlh->dlh_rmt_ver)
 		max_ver = dlh->dlh_rmt_ver;
 
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 	if (dtx_flags & DTX_RELAY)
 		goto out;
@@ -5964,7 +5984,7 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	if (version < dlh->dlh_rmt_ver)
 		version = dlh->dlh_rmt_ver;
 
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 out:
 	D_DEBUG(DB_IO, "Handled collective query RPC %p %s forwarding for obj "DF_UOID
