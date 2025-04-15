@@ -4486,8 +4486,8 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 }
 
 #define SMALL_IOV_THRESHOLD 64
-#define FRAGMENT_SIZE       4096
-#define FRAGMENT_COUNT      64
+#define FRAGMENT_SIZE       512
+#define FRAGMENT_COUNT      256
 #define MAX_MERGE_SIZE      (16 << 20)
 
 static inline bool
@@ -4917,10 +4917,6 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out;) {
 				iov     = &sg_orig->sg_iovs[j];
 				iov_dup = &sg_dup->sg_iovs[dup_sg_idx];
-				if (dup_buf_size == 0) {
-					dup_buf_size = iov_dup->iov_buf_len;
-					dup_buf      = (char *)iov_dup->iov_buf;
-				}
 
 				if (skip_sgl_iov(false, iov)) {
 					j++;
@@ -4934,6 +4930,10 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 					sg_nr_out++;
 					dup_sg_idx++;
 					continue;
+				}
+				if (dup_buf_size == 0) {
+					dup_buf_size = iov_dup->iov_buf_len;
+					dup_buf      = (char *)iov_dup->iov_buf;
 				}
 
 				/* Copy data from duplicate buffer to original buffer */
