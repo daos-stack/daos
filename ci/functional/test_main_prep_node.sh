@@ -172,7 +172,7 @@ done
 if [ "$ib_count" -ge 2 ]; then
     # now check for pmem & NVMe drives when multiple ib are present.
     # ipmctl show -dimm should show an even number of drives, all healthy
-    dimm_count=`ipmctl show -dimm | grep Healthy -c`
+    dimm_count=$(ipmctl show -dimm | grep Healthy -c)
     if [ "$dimm_count" -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
        # Not fatal, the PMEM DIMM should be replaced when downtime can be
        # scheduled for this system.
@@ -232,8 +232,8 @@ if [ "$ib_count" -ge 2 ]; then
     testcases+="  </testcase>$nl"
 
     # All storage found by lspci should also be in lsblk report
-    lsblk_nvme=`lsblk | grep nvme -c`
-    lsblk_pmem=`lsblk | grep pmem -c`
+    lsblk_nvme=$(lsblk | grep nvme -c)
+    lsblk_pmem=$(lsblk | grep pmem -c)
 
     ((testruns++)) || true
     testcases+="  <testcase name=\"NVMe lsblk Count Node $mynodenum\">${nl}"
