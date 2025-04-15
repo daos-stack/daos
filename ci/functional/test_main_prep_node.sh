@@ -102,15 +102,16 @@ fi
 set -x
 
 function do_wait_for_ib {
-    ib_timeout=300 # 5 minutes
+    ib_timeout=600 # 10 minutes
     retry_wait=10 # seconds
     timeout=$((SECONDS + ib_timeout))
     while [ "$SECONDS" -lt "$timeout" ]; do
       ip link set up "$1" || true
-      sleep 2
+      sleep 5
       if ip addr show "$1" | grep "inet "; then
         return 0
       fi
+      ip link set down "$1" || true
       sleep ${retry_wait}
     done
     return 1
