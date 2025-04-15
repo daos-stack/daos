@@ -2410,14 +2410,6 @@ rebuild_tgt_status_check_ult(void *arg)
 		if (!rpt->rt_global_done) {
 			struct ds_iv_ns *ns = rpt->rt_pool->sp_iv_ns;
 
-			if (ns->iv_master_rank != rpt->rt_leader_rank)
-				D_WARN(DF_RB ":iv_master_rank %d mismatch with rt_leader_rank %d\n",
-				       DP_RB_RPT(rpt), ns->iv_master_rank, rpt->rt_leader_rank);
-			/* master rank set as ns->iv_master_rank rather than rpt->rt_leader_rank,
-			 * same as usage in rebuild_leader_status_notify() and iv_op_internal().
-			 * also see rebuild_iv_ent_update(), ivc_on_hash().
-			 * It is safer in case of PS leader switch.
-			 */
 			iv.riv_master_rank       = ns->iv_master_rank;
 			iv.riv_rank = rpt->rt_rank;
 			iv.riv_ver = rpt->rt_rebuild_ver;

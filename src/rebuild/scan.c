@@ -399,14 +399,15 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 
 #define LOCAL_ARRAY_SIZE	128
 #define NUM_SHARDS_STEP_INCREASE	64
+
+#define SCAN_YIELD_CNT                  128
 /* The structure for scan per xstream */
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
 	struct cont_props		co_props;
 	int				snapshot_cnt;
-	uint32_t			yield_freq;
-	int32_t				obj_yield_cnt;
+	int32_t                          yield_cnt;
 	struct ds_cont_child		*cont_child;
 };
 
@@ -678,6 +679,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	unsigned int			*shards = NULL;
 	struct daos_oclass_attr		*oc_attr;
 	uint32_t			grp_size;
+	uint32_t                         grp_nr;
 	int				rebuild_nr = 0;
 	d_rank_t			myrank;
 	int				i;
@@ -706,6 +708,9 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	grp_size = daos_oclass_grp_size(oc_attr);
+	grp_nr   = daos_obj_id2grp_nr(oid.id_pub);
+	/* appropriate yield based on shard number */
+	arg->yield_cnt -= roundup(grp_size * grp_nr, 128) / 128;
 
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
@@ -772,7 +777,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		if (rc)
 			D_GOTO(out, rc);
 
-		arg->obj_yield_cnt--;
+		arg->yield_cnt--;
 	}
 
 out:
@@ -785,11 +790,10 @@ out:
 	if (map != NULL)
 		pl_map_decref(map);
 
-	if (--arg->yield_freq == 0 || arg->obj_yield_cnt <= 0) {
+	if (--arg->yield_cnt <= 0) {
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild yield: %d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
-		arg->yield_freq = SCAN_YIELD_FREQ;
-		arg->obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
+		arg->yield_cnt = SCAN_YIELD_CNT;
 		if (rc == 0)
 			dss_sleep(0);
 		*acts |= VOS_ITER_CB_YIELD;
@@ -1027,8 +1031,7 @@ rebuild_scanner(void *data)
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	arg.rpt = rpt;
-	arg.yield_freq = SCAN_YIELD_FREQ;
-	arg.obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
+	arg.yield_cnt  = SCAN_YIELD_CNT;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 rebuild_container_scan_cb, NULL, &arg, NULL);
 	if (rc < 0)
