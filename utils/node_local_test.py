@@ -1311,7 +1311,7 @@ class DFuse():
 
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False, ro=False):
+                 caching=True, wbcache=True, multi_user=False, ro=False, logleaks=True):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1336,6 +1336,7 @@ class DFuse():
         self.log_mask = None
         self.log_file = None
         self._ro = ro
+        self.logleaks = logleaks
 
         self.valgrind = None
         if not os.path.exists(self.dir):
@@ -1489,7 +1490,7 @@ class DFuse():
             time.sleep(2)
             umount(self.dir)
 
-        run_leak_test = True
+        run_leak_test = self.logleaks
         try:
             ret = self._sp.wait(timeout=20)
             print(f'rc from dfuse {ret}')
@@ -2237,6 +2238,99 @@ class PosixTests():
             self.fatal_errors = True
 
         container.destroy()
+
+    def test_dfuse_logctrl(self):
+        """Test .dfuse_ctrl feature"""
+        container = create_cont(self.conf, self.pool, ctype="POSIX")
+        run_daos_cmd(self.conf,
+                     ['container', 'query', self.pool.id(), container.id()],
+                     show_stdout=True)
+
+        dfuse = DFuse(self.server, self.conf, container=container, logleaks=False)
+        dfuse.start()
+
+        tests = {}
+
+        enable_debug = """log_mask=debug
+"""
+        tests["enable_debug"] = {"payload": enable_debug, "expect_pass": True}
+        enable_debug_all_streams = """log_mask=debug
+streams=all
+"""
+        tests["enable_debug_all_streams"] = {"payload": enable_debug_all_streams,
+                                             "expect_pass": True}
+        bogus_field = """xyz=debug
+"""
+        tests["bogus_field"] = {"payload": bogus_field, "expect_pass": False}
+        empty = ""
+        tests["empty"] = {"payload": empty, "expect_pass": True}
+        whitespace = """    log_mask=info
+streams=mem
+
+"""
+        tests["whitespace"] = {"payload": whitespace, "expect_pass": True}
+        duplicates = """log_mask=debug
+log_mask=info
+streams=all
+"""
+        tests["duplicates"] = {"payload": duplicates, "expect_pass": False}
+        warn = """log_mask=warn
+"""
+        tests["warn"] = {"payload": warn, "expect_pass": True}
+        ctrl = os.path.join(dfuse.dir, ".dfuse_ctrl")
+
+        for name, test in tests.items():
+            try:
+                with open(ctrl, "w") as log:
+                    log.write(test["payload"])
+                if not test["expect_pass"]:
+                    print(f"Test {name} should have failed but passed")
+                    self.fail()
+            except OSError:
+                if test["expect_pass"]:
+                    print(f"Test {name} should have passed but failed")
+                    self.fail()
+
+            fname = os.path.join(dfuse.dir, f"{name}")
+            with open(fname, "w") as testfile:
+                testfile.write(test["payload"])
+
+            print(f"Test {name} passed")
+
+        try:
+            os.mkdir(ctrl)
+            print("Should not be able to create a directory named .dfuse_ctrl")
+            self.fail()
+        except OSError:
+            print("mkdir correctly prevented for .dfuse_ctrl")
+
+        try:
+            os.unlink(ctrl)
+            print("Should not be able to remove .dfuse_ctrl")
+            self.fail()
+        except OSError:
+            print("mkdir correctly prevented for .dfuse_ctrl")
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        container.destroy(valgrind=False, log_check=False)
+
+        env = get_base_env()
+        dd_mask = env.get("DD_MASK", None)
+        log_mask = env.get("D_LOG_MASK", None)
+        if dd_mask and log_mask:
+            restore = f"""log_mask={log_mask}
+streams={dd_mask}
+"""
+            try:
+                with open(ctrl, "w") as log:
+                    log.write(restore)
+            except OSError:
+                print("Failed to restore log_mask")
+                self.fail()
+
+        print("Done with dfuse_ctrl test")
 
     def test_cache(self):
         """Test with caching enabled"""
