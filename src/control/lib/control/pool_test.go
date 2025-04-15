@@ -235,7 +235,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 	}
 }
 
-func TestControl_PoolRankseReq_Convert(t *testing.T) {
+func TestControl_PoolRanksReq_Convert(t *testing.T) {
 	req := &PoolRanksReq{
 		ID:        "foo",
 		Ranks:     []ranklist.Rank{1, 2, 3},
