@@ -1029,6 +1029,13 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
     Then restart DAOS Servers and format.
 
 
+### Storage Format Replace
+
+If storage metadata for a rank is lost, for example after losing PMem contents after NVDIMM failure.
+Storage for that rank will need to be formatted and rank metadata regenerated. If other hardware on
+the storage server has not changed the old rank can be "reused" by formatting using the
+`dmg storage format --replace` option.
+
 ### System Erase
 
 To erase the DAOS sorage configuration, the `dmg system erase`
