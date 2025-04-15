@@ -19,7 +19,7 @@ server_config:
   system_ram_reserved: 3
 
 pool:
-  size: 8G
+  size: 20G
 
 container:
   type: POSIX

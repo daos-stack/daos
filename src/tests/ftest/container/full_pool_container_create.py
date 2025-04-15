@@ -7,8 +7,36 @@
 import time
 
 from apricot import TestWithServers
-from general_utils import DaosTestError, get_random_bytes
-from test_utils_container import TestContainerData
+from general_utils import DaosTestError
+
+DER_NOSPACE = "-1007"
+
+
+def fill_container(self, container):
+    """Fill the container with decreasing amounts of data until full.
+
+    Args:
+        container (TestContainer): the container to fill with data
+
+    Returns:
+        int: amount of data written to the container
+    """
+    data_written = 0
+    while container.data_size.value > 0:
+        while True:
+            try:
+                container.write_objects(obj_class=container.oclass.value)
+                data_written += container.data_size.value
+            except DaosTestError as excep:
+                if DER_NOSPACE not in repr(excep):
+                    self.log.error("caught exception while writing object: %s", repr(excep))
+                    container.close()
+                    self.fail(f"caught exception while writing object: {repr(excep)}")
+                else:
+                    self.log.info("pool is too full for %s byte objects", container.data_size.value)
+                    break
+        container.data_size.update(container.data_size.value // 2, "data_size")
+    return data_written
 
 
 class FullPoolContainerCreate(TestWithServers):
@@ -40,9 +68,6 @@ class FullPoolContainerCreate(TestWithServers):
         :avocado: tags=container
         :avocado: tags=FullPoolContainerCreate,test_no_space_cont_create
         """
-        # full storage rc
-        err = "-1007"
-
         # test params
         threshold_percent = self.params.get("threshold_percent", "/run/pool/*")
 
@@ -64,29 +89,7 @@ class FullPoolContainerCreate(TestWithServers):
 
         # generate random dkey, akey each time
         # write 1M until no space, then 10K, etc. to fill pool quickly
-        obj_size = 1048576
-        while obj_size > 0:
-            write_count = 0
-            while True:
-                self.log.debug("writing obj %s sz %s to container", write_count, obj_size)
-                my_str = b"a" * obj_size
-                dkey = get_random_bytes(5)
-                akey = get_random_bytes(5)
-                try:
-                    self.container.written_data.append(TestContainerData(False))
-                    self.container.written_data[-1].write_record(
-                        self.container, akey, dkey, my_str, obj_class='OC_SX')
-                    self.log.debug("wrote obj %s, sz %s", write_count, obj_size)
-                    write_count += 1
-                except DaosTestError as excep:
-                    if err not in repr(excep):
-                        self.log.error("caught exception while writing object: %s", repr(excep))
-                        self.container.close()
-                        self.fail("caught exception while writing object: {}".format(repr(excep)))
-                    else:
-                        self.log.info("pool is too full for %s byte objects", obj_size)
-                        break
-            obj_size //= 2
+        fill_container(self, self.container)
 
         # query the pool
         self.log.info("Pool Query after filling")

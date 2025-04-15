@@ -1,12 +1,14 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 from apricot import TestWithServers
-from general_utils import DaosTestError, bytes_to_human, human_to_bytes
+from fill_pool_container_create import fill_container
+from general_utils import bytes_to_human, human_to_bytes
 from run_utils import run_remote
 
 
@@ -19,8 +21,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
     :avocado: recursive
     """
-
-    DER_NOSPACE = "-1007"
 
     def __init__(self, *args, **kwargs):
         """Initialize a BoundaryPoolContainerSpace object."""
@@ -86,25 +86,8 @@ class BoundaryPoolContainerSpace(TestWithServers):
         self.log.info("--%i.(3)Pool free space before writing data to container %s (%i bytes)",
                       test_loop, bytes_to_human(free_space_init), free_space_init)
 
-        # Write random data to container until pool out of space
-        base_data_size = container.data_size.value
-        data_written = 0
-        while True:
-            new_data_size = self.random.randint(base_data_size * 0.5, base_data_size * 1.5)  # nosec
-            container.data_size.update(new_data_size, "data_size")
-
-            try:
-                container.write_objects()
-            except DaosTestError as excep:
-                if self.DER_NOSPACE in str(excep):
-                    self.log.info(
-                        "--%i.(4)DER_NOSPACE %s detected, pool is unable for an additional"
-                        " %s (%i bytes) object", test_loop, self.DER_NOSPACE,
-                        bytes_to_human(container.data_size.value), container.data_size.value)
-                    break
-                self.fail("Test-loop {0} exception while writing object: {1}".format(
-                    test_loop, repr(excep)))
-            data_written += new_data_size
+        # Write decreasing amounts of data to container until pool out of space
+        data_written = fill_container(self, container, container.oclass.value)
 
         # display free space and data written
         free_space_before_destroy = self.pool.get_pool_free_space()
