@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +8,7 @@
 package bdev
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -45,7 +47,7 @@ func (_ SetOptionsParams) isSpdkSubsystemConfigParams() {}
 
 // NvmeSetOptionsParams specifies details for a storage.ConfBdevNvmeSetOptions method.
 type NvmeSetOptionsParams struct {
-	RetryCount               uint32 `json:"retry_count"`
+	TransportRetryCount      uint32 `json:"transport_retry_count"`
 	TimeoutUsec              uint64 `json:"timeout_us"`
 	NvmeAdminqPollPeriodUsec uint32 `json:"nvme_adminq_poll_period_us"`
 	ActionOnTimeout          string `json:"action_on_timeout"`
@@ -115,6 +117,36 @@ type SpdkSubsystemConfig struct {
 	Method string                    `json:"method"`
 }
 
+func (ssc *SpdkSubsystemConfig) UnmarshalJSON(data []byte) error {
+	var tmp struct {
+		Params json.RawMessage `json:"params"`
+		Method string          `json:"method"`
+	}
+	if err := strictJsonUnmarshalBuf(data, &tmp); err != nil {
+		return err
+	}
+	ssc.Method = tmp.Method
+
+	switch ssc.Method {
+	case storage.ConfBdevSetOptions:
+		ssc.Params = &SetOptionsParams{}
+	case storage.ConfBdevNvmeSetOptions:
+		ssc.Params = &NvmeSetOptionsParams{}
+	case storage.ConfBdevNvmeAttachController:
+		ssc.Params = &NvmeAttachControllerParams{}
+	case storage.ConfBdevNvmeSetHotplug:
+		ssc.Params = &NvmeSetHotplugParams{}
+	case storage.ConfVmdEnable:
+		ssc.Params = &VmdEnableParams{}
+	case storage.ConfBdevAioCreate:
+		ssc.Params = &AioCreateParams{}
+	default:
+		return errors.Errorf("unknown SPDK subsystem config method %q", ssc.Method)
+	}
+
+	return strictJsonUnmarshalBuf(tmp.Params, ssc.Params)
+}
+
 // SpdkSubsystem entries make up the Subsystems field of a SpdkConfig.
 type SpdkSubsystem struct {
 	Name    string                 `json:"subsystem"`
@@ -125,6 +157,32 @@ type SpdkSubsystem struct {
 type DaosConfig struct {
 	Params DaosConfigParams `json:"params"`
 	Method string           `json:"method"`
+}
+
+func (dc *DaosConfig) UnmarshalJSON(data []byte) error {
+	var tmp struct {
+		Params json.RawMessage `json:"params"`
+		Method string          `json:"method"`
+	}
+	if err := strictJsonUnmarshalBuf(data, &tmp); err != nil {
+		return err
+	}
+	dc.Method = tmp.Method
+
+	switch dc.Method {
+	case storage.ConfSetHotplugBusidRange:
+		dc.Params = &HotplugBusidRangeParams{}
+	case storage.ConfSetAccelProps:
+		dc.Params = &AccelPropsParams{}
+	case storage.ConfSetSpdkRpcServer:
+		dc.Params = &SpdkRpcServerParams{}
+	case storage.ConfSetAutoFaultyProps:
+		dc.Params = &AutoFaultyParams{}
+	default:
+		return errors.Errorf("unknown DAOS config method %q", dc.Method)
+	}
+
+	return strictJsonUnmarshalBuf(tmp.Params, dc.Params)
 }
 
 // DaosData entries contain a number of DaosConfig entries and make up
@@ -144,15 +202,15 @@ func defaultSpdkConfig() *SpdkConfig {
 	bdevSubsystemConfigs := []*SpdkSubsystemConfig{
 		{
 			Method: storage.ConfBdevSetOptions,
-			Params: SetOptionsParams{
+			Params: &SetOptionsParams{
 				BdevIoPoolSize:  humanize.KiByte * 64,
 				BdevIoCacheSize: 256,
 			},
 		},
 		{
 			Method: storage.ConfBdevNvmeSetOptions,
-			Params: NvmeSetOptionsParams{
-				RetryCount:               4,
+			Params: &NvmeSetOptionsParams{
+				TransportRetryCount:      4,
 				NvmeAdminqPollPeriodUsec: 100 * 1000,
 				ActionOnTimeout:          "none",
 			},
@@ -181,7 +239,7 @@ type configMethodGetter func(string, string) *SpdkSubsystemConfig
 func getNvmeAttachMethod(name, pci string) *SpdkSubsystemConfig {
 	return &SpdkSubsystemConfig{
 		Method: storage.ConfBdevNvmeAttachController,
-		Params: NvmeAttachControllerParams{
+		Params: &NvmeAttachControllerParams{
 			TransportType:    "PCIe",
 			DeviceName:       fmt.Sprintf("Nvme_%s", name),
 			TransportAddress: pci,
@@ -192,7 +250,7 @@ func getNvmeAttachMethod(name, pci string) *SpdkSubsystemConfig {
 func getAioFileCreateMethod(name, path string) *SpdkSubsystemConfig {
 	return &SpdkSubsystemConfig{
 		Method: storage.ConfBdevAioCreate,
-		Params: AioCreateParams{
+		Params: &AioCreateParams{
 			DeviceName: fmt.Sprintf("AIO_%s", name),
 			Filename:   path,
 			BlockSize:  aioBlockSize,
@@ -203,7 +261,7 @@ func getAioFileCreateMethod(name, path string) *SpdkSubsystemConfig {
 func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
 	return &SpdkSubsystemConfig{
 		Method: storage.ConfBdevAioCreate,
-		Params: AioCreateParams{
+		Params: &AioCreateParams{
 			DeviceName: fmt.Sprintf("AIO_%s", name),
 			Filename:   path,
 		},
@@ -241,7 +299,7 @@ func (sc *SpdkConfig) WithVMDEnabled() *SpdkConfig {
 		Configs: []*SpdkSubsystemConfig{
 			{
 				Method: storage.ConfVmdEnable,
-				Params: VmdEnableParams{},
+				Params: &VmdEnableParams{},
 			},
 		},
 	})
@@ -271,7 +329,7 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWrite
 func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	data.Configs = append(data.Configs, &DaosConfig{
 		Method: storage.ConfSetHotplugBusidRange,
-		Params: HotplugBusidRangeParams{
+		Params: &HotplugBusidRangeParams{
 			Begin: req.HotplugBusidBegin,
 			End:   req.HotplugBusidEnd,
 		},
@@ -286,7 +344,7 @@ func accelPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	if props.Engine != storage.AccelEngineNone && !props.Options.IsEmpty() {
 		data.Configs = append(data.Configs, &DaosConfig{
 			Method: storage.ConfSetAccelProps,
-			Params: AccelPropsParams(props),
+			Params: (*AccelPropsParams)(&props),
 		})
 	}
 }
@@ -298,7 +356,7 @@ func rpcSrvSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	if props.Enable {
 		data.Configs = append(data.Configs, &DaosConfig{
 			Method: storage.ConfSetSpdkRpcServer,
-			Params: SpdkRpcServerParams(props),
+			Params: (*SpdkRpcServerParams)(&props),
 		})
 	}
 }
@@ -309,7 +367,7 @@ func autoFaultySet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	if props.Enable {
 		data.Configs = append(data.Configs, &DaosConfig{
 			Method: storage.ConfSetAutoFaultyProps,
-			Params: AutoFaultyParams(props),
+			Params: (*AutoFaultyParams)(&props),
 		})
 	}
 }
@@ -333,7 +391,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 
 	// SPDK-3370: Ensure hotplug config appears after attach directives to avoid race when VMD
 	// with hotplug is enabled with multiple domains.
-	hpParams := NvmeSetHotplugParams{}
+	hpParams := &NvmeSetHotplugParams{}
 	if req.HotplugEnabled {
 		hpParams.Enable = true
 		hpParams.PeriodUsec = uint64(hotplugPeriod.Microseconds())
