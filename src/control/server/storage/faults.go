@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -271,6 +272,15 @@ func FaultPathAccessDenied(path string) *fault.Fault {
 		code.StoragePathAccessDenied,
 		fmt.Sprintf("path %q has incompatible access permissions", path),
 		"verify the path is accessible by the user running daos_server and try again",
+	)
+}
+
+// FaultInvalidSPDKConfig creates a Fault for the case where SPDK configuration is invalid.
+func FaultInvalidSPDKConfig(err error) *fault.Fault {
+	return storageFault(
+		code.SpdkInvalidConfiguration,
+		fmt.Sprintf("unable to parse SPDK configuration: %s", err),
+		"regenerate the configuration and restart daos_server",
 	)
 }
 
