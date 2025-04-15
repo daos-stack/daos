@@ -1072,6 +1072,7 @@ rebuild_scan_leader(void *data)
 			if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 				D_INFO(DF_RB " wait for global dtx %u\n", DP_RB_RPT(rpt),
 				       rpt->rt_global_dtx_resync_version);
+				wait = true;
 				ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
 			}
 			ABT_mutex_unlock(rpt->rt_lock);
@@ -1082,7 +1083,10 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
+	if (wait)
+		D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
+	else
+		D_DEBUG(DB_REBUILD, DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
@@ -1090,7 +1094,10 @@ rebuild_scan_leader(void *data)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+	if (wait)
+		D_INFO(DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+	else
+		D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
 
 	ABT_mutex_lock(rpt->rt_lock);
 	rc = ds_pool_task_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
