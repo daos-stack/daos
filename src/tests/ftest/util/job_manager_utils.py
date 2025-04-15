@@ -15,8 +15,7 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import BasicParameter, EnvironmentVariables, FormattedParameter
 from env_modules import load_mpi
 from exception_utils import CommandFailure, MPILoadError
-from general_utils import (get_job_manager_class, get_journalctl_command, journalctl_time, pcmd,
-                           run_pcmd)
+from general_utils import get_job_manager_class, get_journalctl_command, journalctl_time
 from run_utils import run_remote, stop_processes
 from write_host_file import write_host_file
 
@@ -181,6 +180,8 @@ class JobManager(ExecutableCommand):
                 parameters to keep them in sync with the hosts. Defaults to True.
         """
         # pylint: disable=unused-argument
+        if not isinstance(hosts, NodeSet):
+            raise ValueError(f'Expected hosts to be type {type(NodeSet)} but got {type(hosts)}')
         self._hosts = hosts.copy()
 
     def _setup_hostfile(self, path=None, slots=None, hostfile=True):
@@ -277,14 +278,9 @@ class JobManager(ExecutableCommand):
         self.log.debug(
             "%s processes still running remotely%s:", self.command,
             " {}".format(message) if message else "")
-        self.log.debug("Running (on %s): %s", self._hosts, command)
-        results = pcmd(self._hosts, command, True, 10, None)
-
-        # The pcmd method will return a dictionary with a single key, e.g.
-        # {1: <NodeSet>}, if there are no remote processes running on any of the
-        # hosts.  If this value is not returned, indicate there are remote
-        # processes running by returning a "R" state.
-        return "R" if 1 not in results or len(results) > 1 else None
+        result = run_remote(self.log, self._hosts, command, timeout=10)
+        # Return "R" if processes were found running on any hosts
+        return "R" if result.passed_hosts else None
 
     def run(self, raise_exception=None):
         """Run the command.
@@ -712,7 +708,6 @@ class Systemctl(JobManager):
         # Start the daos_server.service
         self.service_enable()
         result = self.service_start()
-        # result = self.service_status()
 
         # Determine if the command has launched correctly using its
         # check_subprocess_status() method.
@@ -816,25 +811,21 @@ class Systemctl(JobManager):
             CommandFailure: if there is an issue running the command
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         self._systemctl.unit_command.value = command
         self.timestamps[command] = journalctl_time()
-        result = pcmd(self._hosts, str(self), self.verbose, self.timeout)
-        if 255 in result:
+        cmd = str(self)
+        result = run_remote(
+            self.log, self._hosts, cmd, verbose=self.verbose, timeout=self.timeout)
+        if result.timeout:
             raise CommandFailure(
                 "Timeout detected running '{}' with a {}s timeout on {}".format(
-                    str(self), self.timeout, NodeSet.fromlist(result[255])))
-
-        if 0 not in result or len(result) > 1:
-            failed = []
-            for item, value in list(result.items()):
-                if item != 0:
-                    failed.extend(value)
+                    cmd, self.timeout, result.timeout_hosts))
+        if not result.passed:
             raise CommandFailure(
-                "Error occurred running '{}' on {}".format(str(self), NodeSet.fromlist(failed)))
+                "Error occurred running '{}' on {}".format(cmd, result.failed_hosts))
         return result
 
     def _report_unit_command(self, command):
@@ -847,8 +838,7 @@ class Systemctl(JobManager):
             CommandFailure: if there is an issue running the command
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         try:
@@ -867,8 +857,7 @@ class Systemctl(JobManager):
             CommandFailure: if unable to enable
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         return self._report_unit_command("enable")
@@ -880,8 +869,7 @@ class Systemctl(JobManager):
             CommandFailure: if unable to disable
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         return self._report_unit_command("disable")
@@ -893,8 +881,7 @@ class Systemctl(JobManager):
             CommandFailure: if unable to start
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         return self._report_unit_command("start")
@@ -906,8 +893,7 @@ class Systemctl(JobManager):
             CommandFailure: if unable to stop
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         return self._report_unit_command("stop")
@@ -919,8 +905,7 @@ class Systemctl(JobManager):
             CommandFailure: if unable to get the status
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         return self._report_unit_command("status")
@@ -941,17 +926,17 @@ class Systemctl(JobManager):
         states = {}
         valid_states = ["active", "activating"]
         self._systemctl.unit_command.value = "is-active"
-        results = run_pcmd(self._hosts, str(self), False, self.timeout, None)
-        for result in results:
-            if result["interrupted"]:
-                states["timeout"] = result["hosts"]
-                status = False
-            else:
-                output = result["stdout"][-1]
-                if output not in states:
-                    states[output] = NodeSet()
-                states[output].add(result["hosts"])
-                status &= output in valid_states
+        result = run_remote(self.log, self._hosts, str(self), verbose=False, timeout=self.timeout)
+        if result.timeout:
+            states["timeout"] = result.timeout_hosts
+        for data in result.output:
+            if data.timeout:
+                continue
+            output = data.stdout[-1]
+            if output not in states:
+                states[output] = NodeSet()
+            states[output].add(data.hosts)
+            status &= output in valid_states
         data = ["=".join([key, str(states[key])]) for key in sorted(states)]
         self.log.info(
             "  Detected %s states: %s",
@@ -988,49 +973,41 @@ class Systemctl(JobManager):
         self.log.info("Gathering log data on %s: %s", str(hosts), command)
 
         # Gather the log information per host
-        results = run_pcmd(hosts, command, False, timeout, None)
+        result = run_remote(self.log, hosts, command, verbose=False, timeout=timeout)
 
         # Determine if the command completed successfully without a timeout
-        status = True
-        for result in results:
-            if result["interrupted"]:
-                self.log.info("  Errors detected running \"%s\":", command)
-                self.log.info(
-                    "    %s: timeout detected after %s seconds",
-                    str(result["hosts"]), timeout)
-                status = False
-            elif result["exit_status"] != 0:
-                self.log.info("  Errors detected running \"%s\":", command)
-                status = False
-            if not status:
-                break
+        if not result.passed:
+            self.log.info('  Errors detected running "%s":', command)
+        if result.timeout:
+            self.log.info(
+                "    %s: timeout detected after %s seconds", str(result.timeout_hosts), timeout)
 
         # Display/return the command output
         log_data = []
-        for result in results:
-            if result["exit_status"] == 0 and not result["interrupted"]:
+        for data in result.output:
+            if data.returncode == 0:
                 # Add the successful output from each node to the dictionary
                 log_data.append(
-                    {"hosts": result["hosts"], "data": result["stdout"]})
+                    {"hosts": data.hosts, "data": data.stdout})
             else:
                 # Display all of the results in the case of an error
-                if len(result["stdout"]) > 1:
+                if len(data.stdout) > 1:
                     self.log.info(
                         "    %s: rc=%s, output:",
-                        str(result["hosts"]), result["exit_status"])
-                    for line in result["stdout"]:
+                        str(data.hosts), data.returncode)
+                    for line in data.stdout:
                         self.log.info("      %s", line)
                 else:
                     self.log.info(
                         "    %s: rc=%s, output: %s",
-                        str(result["hosts"]), result["exit_status"],
-                        result["stdout"][0])
+                        str(data.hosts), data.returncode,
+                        data.stdout[0])
 
         # Report any errors through an exception
-        if not status:
+        if not result.passed:
             raise CommandFailure(
-                "Error(s) detected gathering {} log data on {}".format(
-                    self._systemctl.service.value, NodeSet.fromlist(hosts)))
+                f"Error(s) detected gathering {self._systemctl.service.value} "
+                f"log data on {result.failed_hosts}")
 
         # Return the successful command output per set of hosts
         return log_data
