@@ -1,33 +1,41 @@
 #!/bin/bash
 
+read_value()
+{
+  comp_name=$1
+  field_name=$2
+
+  # shellcheck disable=SC1090,SC2283
+  source <(grep = <(grep -A10 "\[${field_name}\]" "${DAOS_ROOT}/utils/build.config"))
+  echo "${!comp_name}"
+}
+
 set -x
 COMP="$1"
 GIT_TAG=""
 DAOS_ROOT="$(realpath "$(realpath "$(dirname "${BASH_SOURCE[0]}")")/..")"
+export DAOS_ROOT
+export read_value
 
 get_tag()
 {
   pushd "${DAOS_ROOT}" || exit 1
   git submodule update --init --recursive
   submodule="${DAOS_ROOT}/deps/${COMP}"
-  # shellcheck disable=SC1090,SC2283
-  source <(grep = <(grep -A10 '\[commit_versions\]' "${DAOS_ROOT}/utils/build.config"))
-  GIT_TAG="${!COMP}"
+  GIT_TAG="$(read_value "${COMP}" commit_versions)"
 
   if [ -z "${GIT_TAG}" ]; then
     echo "Empty tag for ${COMP}"
     exit 1
   fi
+  echo "Tag is ${GIT_TAG}"
 
-  eval "${COMP}"=""
-  # shellcheck disable=SC1090,SC2283
-  source <(grep = <(grep -A10 '\[repos\]' "${DAOS_ROOT}/utils/build.config"))
-  REPO="${!COMP}"
-
+  REPO="$(read_value "${COMP}" repos)"
   if [ -z "${REPO}" ]; then
     echo "No repo defined for ${COMP}"
     exit 1
   fi
+  echo "Repo is ${REPO}"
 
   git submodule update --init --recursive
   if ! git submodule status "deps/${COMP}"; then
@@ -44,15 +52,16 @@ get_tag()
 
 copy_patches()
 {
-  eval "${COMP}"=""
-  # shellcheck disable=SC1090,SC2283
-  source <(grep = <(grep -A10 '\[patch_versions\]' "${DAOS_ROOT}/utils/build.config"))
-  if [ -z "${!COMP}" ]; then
+  if [ "${SKIP_PATCHES:-0}" = "1" ]; then
+    echo "Skipping patches"
+    return
+  fi
+  patches="$(read_value "${COMP}" patch_versions)"
+  if [ -z "${patches}" ]; then
     echo "No patches for ${COMP}"
     return
   fi
-  all_patches=${!COMP//,/ }
-
+  all_patches=${patches//,/ }
   patch_dir="${DAOS_ROOT}/deps/patches/${COMP}"
   git rm -rf "${patch_dir}"/*
   mkdir -p "${patch_dir}"
@@ -60,6 +69,7 @@ copy_patches()
   count=1
   new_patches=""
   for patch in $all_patches; do
+    echo "Preparing patch ${patch}"
     base="$(basename "${patch}")"
     patch_name=$(printf "%04d_%s" ${count} "${base}")
     if [[ "${patch}" =~ ^https ]]; then
