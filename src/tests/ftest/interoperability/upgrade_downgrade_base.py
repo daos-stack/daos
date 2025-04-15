@@ -287,6 +287,7 @@ class UpgradeDowngradeBase(IorTestBase):
         # Restart servers and/or agents
         if servers:
             self.log.info("Restarting servers after installing %s", version)
+            # TODO try DaosServerManager.restart
             errors = self.restart_servers(stop=False)
             if errors:
                 report_errors(self, errors)
