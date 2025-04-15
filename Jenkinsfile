@@ -173,6 +173,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
+	BUILD_FLAGS = cachedCommitPragma(pragma: 'RPM-new', def_val: '')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsArgs()
     }
