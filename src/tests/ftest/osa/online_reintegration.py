@@ -65,6 +65,8 @@ class OSAOnlineReintegration(OSAUtils):
 
         if multiple_ranks is True:
             rank = "0,3"
+            # For multiple rank testing, we need RP_3G1 for IOR to complete.
+            oclass = "RP_3G1"
         else:
             # Exclude one rank : other than rank 0.
             rank = random.randint(1, exclude_servers)  # nosec
