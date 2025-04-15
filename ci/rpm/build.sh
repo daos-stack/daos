@@ -19,6 +19,7 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+"${mydir}/../../utils/rpms/prepare_spec.py"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
   # shellcheck source=parse_ci_envs.sh disable=SC1091
