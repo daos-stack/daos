@@ -96,15 +96,15 @@ BuildRequires: libasan8
 Requires: openssl
 
 # Components using DAOS versioning
-%include pmdk.spec
-%include fused.spec
-%include spdk.spec
+%include %{_topdir}/utils/rpms/pmdk.spec
+%include %{_topdir}/utils/rpms/fused.spec
+%include %{_topdir}/utils/rpms/spdk.spec
 # Externally versioned components
-%include libfabric.spec
-%include mercury.spec
-%include isa-l.spec
-%include isa-l_crypto.spec
-%include argobots.spec
+%include %{_topdir}/utils/rpms/libfabric.spec
+%include %{_topdir}/utils/rpms/mercury.spec
+%include %{_topdir}/utils/rpms/isa-l.spec
+%include %{_topdir}/utils/rpms/isa-l_crypto.spec
+%include %{_topdir}/utils/rpms/argobots.spec
 
 %if %{with build_daos}
 %if %{with server}

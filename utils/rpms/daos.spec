@@ -68,7 +68,7 @@ BuildRequires: python3-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 
-%include %{buildspec}
+%include %{_topdir}/utils/rpms/%{buildspec}
 
 %changelog
 * Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8
