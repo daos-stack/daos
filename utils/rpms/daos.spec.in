@@ -35,12 +35,6 @@
 %define __find_requires %{SOURCE1}
 %endif
 
-%if %{with olddaos}
-%define buildspec daos_old.spec
-%else
-%define buildspec daos_new.spec
-%endif
-
 Name:          daos
 Version:       %{daos_version}
 Release:       %{daos_release}
@@ -68,7 +62,15 @@ BuildRequires: python3-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 
-%include %{_topdir}/utils/rpms/%{buildspec}
+%if %{with olddaos}
+# Old RPM build
+__include__ daos_old.spec
+# End old RPM build
+%else
+# New RPM build
+__include__ daos_new.spec
+# End new RPM build
+%endif
 
 %changelog
 * Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8

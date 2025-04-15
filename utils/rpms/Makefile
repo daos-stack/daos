@@ -34,4 +34,7 @@ $(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
 	rm -f $@
 	gzip $(basename $@)
 
+$(NAME).spec: $(NAME).spec.in
+	./process_spec.py
+
 tarball: $(NAME)-$(VERSION).tar.gz
