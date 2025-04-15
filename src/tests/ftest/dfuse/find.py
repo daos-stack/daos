@@ -1,5 +1,6 @@
 """
   (C) Copyright 2021-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,7 +53,6 @@ class DfuseFind(TestWithServers):
             challenger performance.
 
         :avocado: tags=all,manual
-        :avocado: tags=hw,medium
         :avocado: tags=DfuseFind,test_dfuse_find_perf
         """
         # Number of repetitions each test will run.
