@@ -123,9 +123,9 @@ ib_count=0
 if [ -e /sys/class/net/ib_cpu0_0 ] || [ -e /sys/class/net/ib_cpu1_1 ]; then
     ib_prefix="ib_cpu"
 fi
-for ib_dev in /sys/class/net/"$ib_prefix"*; do
+for ib_dev in `ls /sys/class/net | grep $ib_prefix`; do
     ((ib_count++)) || true
-    iface="$(basename "$ib_dev")"
+    iface="$ib_dev"
     ((testruns++)) || true
     testcases+="  <testcase name=\"Infiniband $iface Working Node $mynodenum\">${nl}"
     if do_wait_for_ib "$iface"; then
@@ -172,11 +172,7 @@ done
 if [ "$ib_count" -ge 2 ]; then
     # now check for pmem & NVMe drives when multiple ib are present.
     # ipmctl show -dimm should show an even number of drives, all healthy
-    dimm_count=0
-    while IFS= read -r line; do
-        if [[ "$line" != *"| Healthy "* ]]; then continue; fi
-        ((dimm_count++)) || true
-    done < <(ipmctl show -dimm)
+    dimm_count=`ipmctl show -dimm | grep Healthy -c`
     if [ "$dimm_count" -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
        # Not fatal, the PMEM DIMM should be replaced when downtime can be
        # scheduled for this system.
@@ -236,16 +232,8 @@ if [ "$ib_count" -ge 2 ]; then
     testcases+="  </testcase>$nl"
 
     # All storage found by lspci should also be in lsblk report
-    lsblk_nvme=0
-    lsblk_pmem=0
-    while IFS= read -r line; do
-        if [[ "$line" = nvme* ]];then
-            ((lsblk_nvme++)) || true
-        fi
-        if [[ "$line" = pmem* ]];then
-            ((lsblk_pmem++)) || true
-        fi
-    done < <(lsblk)
+    lsblk_nvme=`lsblk | grep nvme -c`
+    lsblk_pmem=`lsblk | grep pmem -c`
 
     ((testruns++)) || true
     testcases+="  <testcase name=\"NVMe lsblk Count Node $mynodenum\">${nl}"
