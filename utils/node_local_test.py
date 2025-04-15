@@ -2241,6 +2241,7 @@ class PosixTests():
 
     def test_dfuse_logctrl(self):
         """Test .dfuse_ctrl feature"""
+        failed = False
         container = create_cont(self.conf, self.pool, ctype="POSIX")
         run_daos_cmd(self.conf,
                      ['container', 'query', self.pool.id(), container.id()],
@@ -2279,56 +2280,59 @@ streams=all
         tests["warn"] = {"payload": warn, "expect_pass": True}
         ctrl = os.path.join(dfuse.dir, ".dfuse_ctrl")
 
-        for name, test in tests.items():
+        try:
+            for name, test in tests.items():
+                try:
+                    with open(ctrl, "w") as log:
+                        log.write(test["payload"])
+                    if not test["expect_pass"]:
+                        print(f"Test {name} should have failed but passed")
+                        self.fail()
+                except OSError:
+                    if test["expect_pass"]:
+                        print(f"Test {name} should have passed but failed")
+                        self.fail()
+
+                fname = os.path.join(dfuse.dir, f"{name}")
+                with open(fname, "w") as testfile:
+                    testfile.write(test["payload"])
+
+                print(f"Test {name} passed")
+
             try:
-                with open(ctrl, "w") as log:
-                    log.write(test["payload"])
-                if not test["expect_pass"]:
-                    print(f"Test {name} should have failed but passed")
-                    self.fail()
+                os.mkdir(ctrl)
+                print("Should not be able to create a directory named .dfuse_ctrl")
+                self.fail()
             except OSError:
-                if test["expect_pass"]:
-                    print(f"Test {name} should have passed but failed")
-                    self.fail()
+                print("mkdir correctly prevented for .dfuse_ctrl")
 
-            fname = os.path.join(dfuse.dir, f"{name}")
-            with open(fname, "w") as testfile:
-                testfile.write(test["payload"])
+            try:
+                os.unlink(ctrl)
+                print("Should not be able to remove .dfuse_ctrl")
+                self.fail()
+            except OSError:
+                print("mkdir correctly prevented for .dfuse_ctrl")
 
-            print(f"Test {name} passed")
-
-        try:
-            os.mkdir(ctrl)
-            print("Should not be able to create a directory named .dfuse_ctrl")
-            self.fail()
-        except OSError:
-            print("mkdir correctly prevented for .dfuse_ctrl")
+        except NLTestFail:
+            failed = True
 
         try:
-            os.unlink(ctrl)
-            print("Should not be able to remove .dfuse_ctrl")
-            self.fail()
+            revert = f"""log_mask={self.conf.args.client_debug}
+streams=all"""
+            with open(ctrl, "w") as log:
+                log.write(revert)
         except OSError:
-            print("mkdir correctly prevented for .dfuse_ctrl")
+            print("Failed to restore log_mask")
+            failed = True
+            self.fail()
 
         if dfuse.stop():
             self.fatal_errors = True
 
         container.destroy(valgrind=False, log_check=False)
 
-        env = get_base_env()
-        dd_mask = env.get("DD_MASK", None)
-        log_mask = env.get("D_LOG_MASK", None)
-        if dd_mask and log_mask:
-            restore = f"""log_mask={log_mask}
-streams={dd_mask}
-"""
-            try:
-                with open(ctrl, "w") as log:
-                    log.write(restore)
-            except OSError:
-                print("Failed to restore log_mask")
-                self.fail()
+        if failed:
+            self.fail()
 
         print("Done with dfuse_ctrl test")
 
