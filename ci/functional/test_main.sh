@@ -48,6 +48,8 @@ test_cluster() {
         NODELIST=${tnodes}                              \
         BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
         STAGE_NAME=\"$STAGE_NAME\"                      \
+        JENKINS_URL=\"${JENKINS_URL:-}\"                \
+        DAOS_DEVOPS_EMAIL=\"${DAOS_DEVOPS_EMAIL:-}\"    \
         $(cat ci/functional/test_main_prep_node.sh)"
 }
 
