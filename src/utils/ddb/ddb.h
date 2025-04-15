@@ -119,6 +119,8 @@ enum ddb_cmd {
 	DDB_CMD_FEATURE                 = 21,
 	DDB_CMD_RM_POOL                 = 22,
 	DDB_CMD_DTX_ACT_DISCARD_INVALID = 23,
+	DDB_CMD_DEV_LIST                = 24,
+	DDB_CMD_DEV_REPLACE             = 25,
 };
 
 /* option and argument structures for commands that need them */
@@ -197,6 +199,16 @@ struct rm_pool_options {
 	const char *path;
 };
 
+struct dev_list_options {
+	char *db_path;
+};
+
+struct dev_replace_options {
+	char *db_path;
+	char *old_devid;
+	char *new_devid;
+};
+
 struct ddb_cmd_info {
 	enum ddb_cmd dci_cmd;
 	union {
@@ -215,6 +227,8 @@ struct ddb_cmd_info {
 		struct feature_options        dci_feature;
 		struct rm_pool_options        dci_rm_pool;
 		struct dtx_act_options        dci_dtx_act;
+		struct dev_list_options       dci_dev_list;
+		struct dev_replace_options    dci_dev_replace;
 	} dci_cmd_option;
 };
 
@@ -256,6 +270,10 @@ int
 ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt);
 int
      ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt);
+int
+ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt);
+int
+     ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt);
 
 void ddb_program_help(struct ddb_ctx *ctx);
 void ddb_commands_help(struct ddb_ctx *ctx);

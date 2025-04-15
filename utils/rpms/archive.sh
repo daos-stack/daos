@@ -38,7 +38,7 @@ git archive --prefix "${name}-${version}/" -o "${tmp}/${file}" HEAD
 # Add all submodules to the archive.
 # shellcheck disable=SC2086,SC2016
 git submodule --quiet foreach --recursive \
-    'tarfile='${tmp}/${sm_file_prefix}'-$name.'${ext}' && \
+    'tarfile='${tmp}/${sm_file_prefix}'-${name//\//}.'${ext}' && \
      git archive --prefix '${name}-${version}'/$displaypath/ -o ${tarfile} $sha1 && \
      tar -Af '"${tmp}/${file}"' ${tarfile}'
 
