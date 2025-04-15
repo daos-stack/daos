@@ -200,10 +200,16 @@ def gen_commit_pragmas(target):
     def __pragma_config(pragma_key, default):
         """Return the configs for a single pragma key.
 
+        Args:
+            pragma_key (str): key to get for each path. E.g. 'test-tag'
+            default (obj): default value if a path does not have the key
+
+        Returns:
+            dict: each path mapping to its pragma_key value
+
         For example:
-            {path: test-tag: tag_config}
-        For pragma_key == 'test-tag' returns:
-            {path: tag_config}
+            config = {path: {test-tag: tag_config}}
+            __pragma_config('test-tag', default) -> {path: tag_config}
         """
         return {
             path_match: path_config.get(pragma_key, default)
