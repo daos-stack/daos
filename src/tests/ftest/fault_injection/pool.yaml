@@ -26,7 +26,7 @@ server_config:
       storage: auto
 
 pool:
-  size: 12G
+  size: 18G
   nranks: 4
   rebuild_timeout: 120
   pool_query_timeout: 60

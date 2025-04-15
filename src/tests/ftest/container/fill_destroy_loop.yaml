@@ -12,7 +12,7 @@ server_config:
       storage: auto
 
 pool:
-  size: 2G
+  size: 5G
   test_loop: 5
   delta: 1MiB
   reclaim_props:
@@ -25,6 +25,6 @@ container:
   type: POSIX
   object_qty: 1
   record_qty: 1
-  data_size: 4194304 # 4MiB
+  data_size: 8388608 # 8MiB
   akey_size: 5
   dkey_size: 5
