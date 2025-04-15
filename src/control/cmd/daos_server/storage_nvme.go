@@ -73,10 +73,9 @@ func nvmeBdevsFromCfg(cfg *config.Server) *storage.BdevDeviceList {
 	return bds
 }
 
-func updateNVMePreqReqAllowedFromCfg(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
+func updateNVMePrepReqAllowedFromCfg(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
 	if cfg == nil {
-		log.Debugf("skip updating request from config")
-		return nil
+		return errors.Errorf("nil %T", cfg)
 	}
 	if req == nil {
 		return errors.Errorf("nil %T", req)
@@ -93,10 +92,9 @@ func updateNVMePreqReqAllowedFromCfg(log logging.Logger, cfg *config.Server, req
 	return nil
 }
 
-func updateNVMePreqReqBlockedFromCfg(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
+func updateNVMePrepReqBlockedFromCfg(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
 	if cfg == nil {
-		log.Debugf("skip updating request from config")
-		return nil
+		return errors.Errorf("nil %T", cfg)
 	}
 	if req == nil {
 		return errors.Errorf("nil %T", req)
@@ -118,8 +116,7 @@ func updateNVMePreqReqBlockedFromCfg(log logging.Logger, cfg *config.Server, req
 
 func updateNVMePrepReqFromCfg(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
 	if cfg == nil {
-		log.Debugf("skip updating request from config")
-		return nil
+		return errors.Errorf("nil %T", cfg)
 	}
 	if req == nil {
 		return errors.Errorf("nil %T", req)
@@ -131,10 +128,10 @@ func updateNVMePrepReqFromCfg(log logging.Logger, cfg *config.Server, req *stora
 		req.HugepageCount = cfg.NrHugepages
 	}
 
-	if err := updateNVMePreqReqAllowedFromCfg(log, cfg, req); err != nil {
+	if err := updateNVMePrepReqAllowedFromCfg(log, cfg, req); err != nil {
 		return err
 	}
-	if err := updateNVMePreqReqBlockedFromCfg(log, cfg, req); err != nil {
+	if err := updateNVMePrepReqBlockedFromCfg(log, cfg, req); err != nil {
 		return err
 	}
 
@@ -202,8 +199,10 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 		return errors.Wrap(err, "sanitizing cli input pci address lists")
 	}
 
-	if err := updateNVMePrepReqFromCfg(log, cfg, req); err != nil {
-		return errors.Wrap(err, "updating request parameters with config file settings")
+	if cfg != nil {
+		if err := updateNVMePrepReqFromCfg(log, cfg, req); err != nil {
+			return errors.Wrap(err, "updating request parameters with config file settings")
+		}
 	}
 
 	iommuEnabled, err := iommuChecker.IsIOMMUEnabled()
@@ -321,11 +320,13 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	if err := sanitizePCIAddrLists(&cleanReq); err != nil {
 		return errors.Wrap(err, "sanitizing cli input pci address lists")
 	}
-	if err := updateNVMePreqReqAllowedFromCfg(cmd, cmd.config, &cleanReq); err != nil {
-		return err
-	}
-	if err := updateNVMePreqReqBlockedFromCfg(cmd, cmd.config, &cleanReq); err != nil {
-		return err
+	if cmd.config != nil {
+		if err := updateNVMePrepReqAllowedFromCfg(cmd, cmd.config, &cleanReq); err != nil {
+			return err
+		}
+		if err := updateNVMePrepReqBlockedFromCfg(cmd, cmd.config, &cleanReq); err != nil {
+			return err
+		}
 	}
 
 	msg := "cleanup hugepages before nvme reset"
