@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
@@ -37,7 +38,8 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 		expErr            error
 	}{
 		"no pciAddrs": {
-			addrCheckMap: make(map[string]bool),
+			addrCheckMap:   make(map[string]bool),
+			expRemoveCalls: []string{},
 		},
 		"single pciAddr": {
 			pciAddrs: []string{"0000:81:00.0"},
@@ -45,7 +47,7 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 				"0000:81:00.0": true,
 			},
 			expRemoveCalls: []string{
-				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:81:00.0"),
 			},
 		},
 		"multiple pciAddrs; partial selection": {
@@ -56,8 +58,8 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 				"0000:83:00.0": true,
 			},
 			expRemoveCalls: []string{
-				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
-				filepath.Join(testDir, lockfilePrefix+"0000:83:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:83:00.0"),
 			},
 		},
 		"error on remove": {
@@ -68,13 +70,14 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 			},
 			removeErr: sampleErr1,
 			expRemoveCalls: []string{
-				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
-				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:81:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
 			},
+			expNoFilesRemoved: true,
 			expErr: errors.Errorf("%s: %s: %s: %s",
-				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
 				sampleErr1.Error(),
-				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:81:00.0"),
 				sampleErr1.Error()),
 		},
 		"not-exist error on remove": {
@@ -85,8 +88,8 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 			},
 			removeErr: os.ErrNotExist,
 			expRemoveCalls: []string{
-				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
-				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:81:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
 			},
 			expNoFilesRemoved: true,
 		},
@@ -94,14 +97,15 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 			pciAddrs:     []string{"0000:81:00.0", "0000:82:00.0"},
 			addrCheckErr: sampleErr2,
 			expErr: errors.Errorf("%s: %s: %s: %s",
-				filepath.Join(testDir, lockfilePrefix+"0000:82:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
 				sampleErr2.Error(),
-				filepath.Join(testDir, lockfilePrefix+"0000:81:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:81:00.0"),
 				sampleErr2.Error()),
+			expRemoveCalls: []string{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var removeCalls []string
+			removeCalls := []string{}
 
 			mockAddrCheck := func(addr string) (bool, error) {
 				return tc.addrCheckMap[addr], tc.addrCheckErr
@@ -114,7 +118,7 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 
 			// Create lockfiles in test directory.
 			for _, addrStr := range tc.pciAddrs {
-				fName := filepath.Join(testDir, lockfilePrefix+addrStr)
+				fName := filepath.Join(testDir, LockfilePrefix+addrStr)
 				if _, err := os.Create(fName); err != nil {
 					t.Fatalf("error creating %s", fName)
 				}
@@ -128,10 +132,125 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 			}
 			expRemoved := tc.expRemoveCalls
 			if tc.expNoFilesRemoved {
-				expRemoved = nil
+				expRemoved = []string{}
 			}
 			if diff := cmp.Diff(expRemoved, removedLocks); diff != "" {
 				t.Fatalf("unexpected list of files removed (-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestSpdk_cleanKnownLockfiles(t *testing.T) {
+	testDir, clean := test.CreateTestDir(t)
+	defer clean()
+
+	for name, tc := range map[string]struct {
+		addrsToClean []string
+		lfAddrsInDir []string
+		expRemoved   []string
+		expRemaining []string
+		expErr       error
+	}{
+		"no lockflles; no addresses to clean": {
+			expRemoved:   []string{},
+			expRemaining: []string{},
+		},
+		"no lockfiles": {
+			addrsToClean: []string{
+				"0000:81:00.0",
+				"0000:82:00.0",
+				"0000:83:00.0",
+			},
+			lfAddrsInDir: []string{},
+			expRemoved:   []string{},
+			expRemaining: []string{},
+		},
+		"no addresses to clean": {
+			lfAddrsInDir: []string{
+				"0000:81:00.0",
+				"0000:82:00.0",
+				"0000:83:00.0",
+			},
+			addrsToClean: []string{},
+			expRemoved:   []string{},
+			expRemaining: []string{
+				LockfilePrefix + "0000:81:00.0",
+				LockfilePrefix + "0000:82:00.0",
+				LockfilePrefix + "0000:83:00.0",
+			},
+		},
+		"clean some addresses": {
+			lfAddrsInDir: []string{
+				"0000:81:00.0",
+				"0000:82:00.0",
+				"0000:83:00.0",
+			},
+			addrsToClean: []string{
+				"0000:82:00.0",
+				"0000:83:00.0",
+			},
+			expRemoved: []string{
+				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:83:00.0"),
+			},
+			expRemaining: []string{
+				LockfilePrefix + "0000:81:00.0",
+			},
+		},
+		"clean all addresses": {
+			lfAddrsInDir: []string{
+				"0000:81:00.0",
+				"0000:82:00.0",
+				"0000:83:00.0",
+			},
+			addrsToClean: []string{
+				"0000:84:00.0",
+				"0000:82:00.0",
+				"0000:83:00.0",
+				"0000:81:00.0",
+			},
+			expRemoved: []string{
+				filepath.Join(testDir, LockfilePrefix+"0000:81:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
+				filepath.Join(testDir, LockfilePrefix+"0000:83:00.0"),
+			},
+			expRemaining: []string{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := test.RemoveContents(t, testDir); err != nil {
+				t.Fatal(err)
+			}
+
+			mnc := MockNvmeCfg{
+				LockfileDir: testDir,
+				RemoveFn:    os.Remove,
+			}
+			mockImpl := MockNvmeImpl{Cfg: mnc}
+
+			// Create lockfiles in test directory.
+			for _, addrStr := range tc.lfAddrsInDir {
+				fName := filepath.Join(testDir, LockfilePrefix+addrStr)
+				t.Logf("creating %s", fName)
+				if _, err := os.Create(fName); err != nil {
+					t.Fatalf("error creating %s", fName)
+				}
+			}
+
+			removed, gotErr := cleanKnownLockfiles(mockImpl, tc.addrsToClean...)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if diff := cmp.Diff(tc.expRemoved, removed); diff != "" {
+				t.Fatalf("unexpected list of removed locks (-want, +got): %s", diff)
+			}
+
+			remaining, err := common.GetFilenames(testDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expRemaining, remaining); diff != "" {
+				t.Fatalf("unexpected list of locks remaining (-want, +got): %s", diff)
 			}
 		})
 	}

@@ -61,8 +61,8 @@ func cleanLockfiles(dir string, pciAddrChecker LockfileAddrCheckFn, remove remov
 		return nil, errors.Wrapf(err, "reading spdk lockfile directory %q", dir)
 	}
 
-	var removed []string
 	var outErr error
+	removed := []string{}
 	for _, v := range entries {
 		if v.IsDir() {
 			continue
@@ -82,16 +82,24 @@ func cleanLockfiles(dir string, pciAddrChecker LockfileAddrCheckFn, remove remov
 		}
 
 		if err := remove(lfName); err != nil {
-			// In case lockfile is removed between time of read-dir and remove.
-			if os.IsNotExist(err) {
-				continue
+			if !os.IsNotExist(err) {
+				outErr = wrapCleanError(outErr, errors.Wrap(err, lfName))
 			}
-			outErr = wrapCleanError(outErr, errors.Wrap(err, lfName))
+			continue
 		}
 		removed = append(removed, lfName)
 	}
 
 	return removed, outErr
+}
+
+// Helper to clean lockfiles with known PCI addresses after implicit SPDK-binding calls.
+// Generated LockfileAddrCheckFn compares an input found-lockfile-address with the outer clean
+// function input-address-list.
+func cleanKnownLockfiles(n Nvme, addrs ...string) ([]string, error) {
+	return n.Clean(func(s string) (bool, error) {
+		return common.Includes(addrs, s), nil
+	})
 }
 
 // wrapCleanError encapsulates inErr inside any cleanErr.

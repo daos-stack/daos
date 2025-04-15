@@ -47,13 +47,13 @@ func realRemove(name string) error {
 	return os.Remove(name)
 }
 
-// Clean removes SPDK lockfiles associated with NVMe SSDs/controllers at given PCI addresses.
+// Clean implements the method of the same name for the Nvme interface on the NvmeImpl struct.
 func (n *NvmeImpl) Clean(pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
 	if n == nil {
 		return nil, errors.New("nil NvmeImpl")
 	}
 
-	return cleanLockfiles(lockflleDir, realRemove, pciAddrChecker)
+	return cleanLockfiles(lockflleDir, pciAddrChecker, realRemove)
 }
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
@@ -76,7 +76,7 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 		pciAddrs = append(pciAddrs, c.PciAddr)
 	}
 
-	removedLocks, errRemLocks := n.Clean(pciAddrs...)
+	removedLocks, errRemLocks := cleanKnownLockfiles(n, pciAddrs...)
 	log.Debugf("removed lockfiles: %v", removedLocks)
 
 	return ctrlrs, wrapCleanError(errCollect, errRemLocks)
@@ -97,7 +97,7 @@ func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	pciAddrs := resultPCIAddresses(results)
 	log.Debugf("formatted nvme ssds: %v", pciAddrs)
 
-	removedLocks, errRemLocks := n.Clean(pciAddrs...)
+	removedLocks, errRemLocks := cleanKnownLockfiles(n, pciAddrs...)
 	log.Debugf("removed lockfiles: %v", removedLocks)
 
 	return results, wrapCleanError(errCollect, errRemLocks)
@@ -120,7 +120,7 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 	_, errCollect := collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
 		"NVMe Update(): C.nvme_fwupdate")
 
-	removedLocks, errRemLocks := n.Clean(ctrlrPciAddr)
+	removedLocks, errRemLocks := cleanKnownLockfiles(n, ctrlrPciAddr)
 	log.Debugf("removed lockfiles: %v", removedLocks)
 
 	return wrapCleanError(errCollect, errRemLocks)

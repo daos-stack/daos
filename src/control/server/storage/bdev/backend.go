@@ -203,12 +203,14 @@ func createSpdkLockfileAddrCheckFunc(allowed *hardware.PCIAddressSet) spdk.Lockf
 		if err != nil {
 			return false, errors.Wrap(err, "controller pci address invalid")
 		}
+
 		addr, err := addrOrig.BackingToVMDAddress()
 		if err != nil {
-			if err == hardware.ErrNotVMDBackingAddress {
-				addr = addrOrig
+			if err != hardware.ErrNotVMDBackingAddress {
+				return false, err
 			}
-			return false, err
+			fmt.Printf("%s not backing \n", addrOrig.String())
+			addr = addrOrig
 		}
 
 		return allowed.Contains(addr), nil
@@ -228,6 +230,8 @@ func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp 
 	}
 	// Remove blocked VMD addresses from allow list.
 	allowedAddresses := inAllowList.Difference(inBlockList)
+
+	sb.log.Tracef("attempting to remove spdk lockfiles for SSDs %v", allowedAddresses)
 
 	lfAddrCheckFn := createSpdkLockfileAddrCheckFunc(allowedAddresses)
 
