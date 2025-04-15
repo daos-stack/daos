@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -541,8 +542,36 @@ func (sb *spdkBackend) writeNvmeConfig(req storage.BdevWriteConfigRequest, confW
 	return errors.Wrap(confWriter(sb.log, &req), "write spdk nvme config")
 }
 
+// WriteConfig writes the SPDK configuration file.
 func (sb *spdkBackend) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
 	return &storage.BdevWriteConfigResponse{}, sb.writeNvmeConfig(req, writeJsonConfig)
+}
+
+// ReadConfig reads the SPDK configuration file.
+// NB: Currently returns an empty response struct if the file is read
+// and parsed successfully, but may be extended to return the
+// parsed configuration.
+func (sb *spdkBackend) ReadConfig(req storage.BdevReadConfigRequest) (*storage.BdevReadConfigResponse, error) {
+	if req.ConfigPath == "" {
+		return nil, errors.New("empty SPDK config path")
+	}
+
+	r, err := os.Open(req.ConfigPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to open SPDK config at %q", req.ConfigPath)
+	}
+	defer r.Close()
+
+	_, err = readSpdkConfig(r)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Reconstruct the WriteConfig request params? At the moment, all we care about is
+	// that we can read and parse the config file, but in the future it might be useful to
+	// be able to inspect its contents.
+	resp := &storage.BdevReadConfigResponse{}
+	return resp, nil
 }
 
 // UpdateFirmware uses the SPDK bindings to update an NVMe controller's firmware.
