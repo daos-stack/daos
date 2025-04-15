@@ -56,9 +56,9 @@ if ipmctl show -dimm; then
     fi
 else
     counter=0
-    for ib in /sys/class/net/ib*; do
+    for ib in `ls /sys/class/net | grep ib`; do
         ((counter++)) || true
-        ip addr show "$(basename "$ib")"
+        ip addr show "$ib"
     done
     if "$counter" -ge 2; then
         # All of our CI nodes with two ib adapters should have PMEM DIMMs
