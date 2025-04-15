@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2642,7 +2643,7 @@ chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bo
 	struct chk_pending_rec	*cpr = NULL;
 	int			 rc;
 
-	rc = chk_pending_del(ins, seq, locked, &cpr);
+	rc = chk_pending_del(ins, seq, act, locked, &cpr);
 	if (rc == 0) {
 		/* The cpr will be destroyed by the waiter via chk_engine_report(). */
 		D_ASSERT(cpr->cpr_busy);
@@ -2674,12 +2675,13 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t 
 	struct chk_pool_rec	*pool_tmp = NULL;
 	struct chk_pending_rec	*cpr = NULL;
 	struct chk_pending_rec	*cpr_tmp = NULL;
-	int			 rc;
+	int                      rc       = 0;
+	int                      rc1;
 
 	if (ins->ci_bk.cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
-	if (unlikely(cla >= CHK_POLICY_MAX)) {
+	if (unlikely(cla >= CHK_CLASS_MAX)) {
 		D_ERROR("Invalid DAOS inconsistency class %u\n", cla);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -2690,12 +2692,12 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t 
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = chk_engine_act_internal(ins, seq, act, false);
-	if (rc == -DER_NONEXIST || rc == -DER_NO_HDL)
-		rc = 0;
-
-	if (rc != 0 || !(flags & CAF_FOR_ALL))
+	if (!(flags & CAF_FOR_ALL)) {
+		rc = chk_engine_act_internal(ins, seq, act, false);
+		if (rc == -DER_NONEXIST || rc == -DER_NO_HDL)
+			rc = 0;
 		goto out;
+	}
 
 	if (likely(prop->cp_policies[cla] != act)) {
 		prop->cp_policies[cla] = act;
@@ -2709,23 +2711,20 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t 
 	d_list_for_each_entry(pool, &ins->ci_pool_list, cpr_link)
 		chk_pool_get(pool);
 
+	ABT_rwlock_wrlock(ins->ci_abt_lock);
 	d_list_for_each_entry_safe(pool, pool_tmp, &ins->ci_pool_list, cpr_link) {
-		if (rc == 0) {
-			ABT_rwlock_wrlock(ins->ci_abt_lock);
-			d_list_for_each_entry_safe(cpr, cpr_tmp, &pool->cpr_pending_list,
-						   cpr_pool_link) {
-				if (cpr->cpr_class != cla ||
-				    cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)
-					continue;
+		d_list_for_each_entry_safe(cpr, cpr_tmp, &pool->cpr_pending_list, cpr_pool_link) {
+			if (cpr->cpr_class != cla ||
+			    cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)
+				continue;
 
-				rc = chk_engine_act_internal(ins, cpr->cpr_seq, act, true);
-				if (rc != 0)
-					break;
-			}
-			ABT_rwlock_unlock(ins->ci_abt_lock);
+			rc1 = chk_engine_act_internal(ins, cpr->cpr_seq, act, true);
+			if (rc1 != 0 && rc == 0)
+				rc = rc1;
 		}
 		chk_pool_put(pool);
 	}
+	ABT_rwlock_unlock(ins->ci_abt_lock);
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
@@ -3148,8 +3147,7 @@ new_seq:
 
 		pool = (struct chk_pool_rec *)riov.iov_buf;
 
-		rc = chk_pending_add(ins, &pool->cpr_pending_list, NULL, *cru->cru_pool, *seq,
-				     cru->cru_rank, cru->cru_cla, &cpr);
+		rc = chk_pending_add(ins, &pool->cpr_pending_list, NULL, cru, *seq, &cpr);
 		if (unlikely(rc == -DER_AGAIN))
 			goto new_seq;
 
@@ -3166,9 +3164,9 @@ new_seq:
 	if (unlikely(rc == -DER_AGAIN)) {
 		D_ASSERT(cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT);
 
-		rc = chk_pending_del(ins, *seq, false, &tmp);
+		rc = chk_pending_del(ins, *seq, cru->cru_options[0], false, &tmp);
 		if (rc == 0)
-			D_ASSERT(tmp == NULL);
+			D_ASSERT(tmp == cpr);
 		else if (rc != -DER_NONEXIST)
 			goto log;
 
