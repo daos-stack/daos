@@ -1324,13 +1324,13 @@ mgmt_svc_replicas: ["wolf-71"] # <----- updated
 <snip>
 engines:
 -
-  pinned_numa_node: 0                         # run 1st engine on CPU 0
-  targets: 16                                 # number of I/O service threads per-engine
-  nr_xs_helpers: 4                            # count of I/O offload threads
-  fabric_iface: eth0                          # network interface to use for this engine
-  fabric_iface_port: 31416                    # network port
-  log_mask: ERR                               # debug level to start with the engine with
-  log_file: /var/log/daos_server/server1.log  # where to store engine logs
+  pinned_numa_node: 0                             # run 1st engine on CPU 0
+  targets: 16                                     # number of I/O service threads per-engine
+  nr_xs_helpers: 4                                # count of I/O offload threads
+  fabric_iface: eth0                              # network interface to use for this engine
+  fabric_iface_port: 31416                        # network port
+  log_mask: ERR                                   # debug level to start with the engine with
+  log_file: /var/log/daos_server/daos_engine0.log # where to store engine logs
   storage:
   -
     class: dcpm               # type of first storage tier (SCM)
