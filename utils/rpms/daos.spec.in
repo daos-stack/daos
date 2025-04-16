@@ -56,7 +56,6 @@ data protection with self healing on top of commodity hardware, end-
 to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost.
 %if (0%{?rhel} >= 8)
-
 BuildRequires: python3-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
