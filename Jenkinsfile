@@ -3,7 +3,6 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
-/* Copyright 2025 Google LLC
  * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
@@ -636,9 +635,10 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8"
+                                                                deps_build: true,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-el8 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
