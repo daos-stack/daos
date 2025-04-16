@@ -3,6 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+/* Copyright 2025 Google LLC
  * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
@@ -150,6 +151,13 @@ String sconsArgs() {
     return sconsFaultsArgs() + ' ' + params.CI_SCONS_ARGS
 }
 
+String buildFlags() {
+    if (cachedCommitPragma(pragma: 'RPM-new', def_val: false)) {
+        return '--without olddaos'
+    }
+    return ''
+}
+
 /**
  * Update default commit pragmas based on files modified.
  */
@@ -172,7 +180,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
-	BUILD_FLAGS = cachedCommitPragma(pragma: 'RPM-new', def_val: '')
+	BUILD_FLAGS = buildFlags()
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsArgs()
     }
