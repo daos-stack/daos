@@ -971,7 +971,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
-	fReq, fResp, err := svc.getFanout(req)
+	fReq, fResp, err := svc.getFanoutNoAdminExcluded(req, req.IgnoreAdminExcluded)
 	if err != nil {
 		return nil, err
 	}

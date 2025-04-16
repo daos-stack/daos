@@ -228,6 +228,16 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New(`may not be mixed`),
 		},
 		{
+			"system stop with ignore-admin-excluded option",
+			"system stop --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStopReq{
+					IgnoreAdminExcluded: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{

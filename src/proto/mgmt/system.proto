@@ -40,6 +40,7 @@ message SystemStopReq {
 	bool force = 4;
 	string ranks = 5; // rankset to query
 	string hosts = 6; // hostset to query
+	bool ignore_admin_excluded = 7;  // ignore AdminExcluded ranks specified in rank/host lists
 }
 
 // SystemStopResp returns status of shutdown attempt and results
