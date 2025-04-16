@@ -2242,7 +2242,7 @@ class PosixTests():
     def test_dfuse_logctrl(self):
         """Test .dfuse_ctrl feature"""
         failed = False
-        container = create_cont(self.conf, self.pool, ctype="POSIX")
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label="logctrl")
         run_daos_cmd(self.conf,
                      ['container', 'query', self.pool.id(), container.id()],
                      show_stdout=True)
