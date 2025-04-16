@@ -503,7 +503,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 	uint64_t		time = daos_get_ntime();
 
 	if (bulk_op == CRT_BULK_GET) {
-		if (DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE) && dth != NULL &&
+		if (dth != NULL && DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE) &&
 		    !(dth->dth_flags & DTE_LEADER)) {
 			/** Fault injection - client unreachable. */
 			firewall_blocking_flag = true;
