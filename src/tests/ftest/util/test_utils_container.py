@@ -1198,10 +1198,11 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         """
         data_written = 0
         original_data_size = self.data_size.value
+        pydaos_object_class = f"OC_{self.oclass.value}" if self.oclass.value else None
         while self.data_size.value > 0:
             while True:
                 try:
-                    self.write_objects(obj_class=self.oclass.value)
+                    self.write_objects(obj_class=pydaos_object_class)
                     data_written += self.data_size.value
                 except DaosTestError as excep:
                     if "-1007" not in repr(excep):

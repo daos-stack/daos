@@ -17,7 +17,7 @@ pool:
 
 container:
   control_method: daos
-  oclass: OC_SX
+  oclass: SX
   type: POSIX
   object_qty: 1
   record_qty: 1
