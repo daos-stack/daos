@@ -104,29 +104,29 @@ def main():
         rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
         commit_hash = rc.stdout.decode('utf-8').strip()
 
-        key = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}-{{hash}}'
+        key = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}-{commit_hash}'
         set_output('key', key)
 
-        restore = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}'
+        restore = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}-{commit_hash}'
         set_output('restore', restore)
 
-        restore_prev = 'bc-{target_branch}-{base_distro}-{build_hash}'
+        restore_prev = 'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}'
         set_output('restore_prev', restore_prev)
 
     else:
         # PR builds.  Do not embed the current commit in the hash name, load the most recent build
         # scripts, and fall back to the most recent version of the build script from the last week
         # or anything if that isn't found.
-        key = f'bc-{target_branch}-{base_distro}-{build_hash}-{{hash}}'
+        key = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}'
         set_output('key', key)
 
-        restore = f'bc-{target_branch}-{base_distro}-{build_hash}'
+        restore = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}'
         set_output('restore', restore)
 
         if len(lines):
-            restore_prev = f'bc-{target_branch}-{base_distro}-{lines[0]}'
+            restore_prev = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{lines[0]}'
         else:
-            restore_prev = f'bc-{target_branch}-{base_distro}-'
+            restore_prev = f'bc-{target_branch}-{base_distro.replace(":", "-")}-'
         set_output('restore_prev', restore_prev)
 
 

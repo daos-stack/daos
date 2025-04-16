@@ -8,15 +8,7 @@ on:
       - 'release/*'
   pull_request:
     paths:
-      - .github/workflows/landing-builds.yml
-      - 'utils/docker/Dockerfile.*'
-      - 'utils/scripts/install-*.sh'
-      - 'utils/scripts/helpers/*'
-      - utils/ci/**
-      - ci/**
-      - requirements-build.txt
-      - requirements-utest.txt
-      - utils/build.config
+      - fake.foo
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}

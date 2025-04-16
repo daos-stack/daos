@@ -8,6 +8,8 @@ on:
       - 'feature/*'
       - 'release/*'
   pull_request:
+    paths:
+      - fake.foo
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
