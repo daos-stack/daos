@@ -5977,7 +5977,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	struct rdb_tx			tx;
 	d_iov_t				value;
 	uint32_t			upgrade_status;
-	uint32_t			global_version;
+	uint32_t			global_version = DAOS_POOL_GLOBAL_VERSION;
 	uint32_t			obj_version;
 	int				rc1;
 	daos_prop_t			*prop = NULL;
@@ -5998,12 +5998,25 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	if (rc1)
 		D_GOTO(out_tx, rc1);
 
+	if (rc != 0) {
+		/*
+		 * Currently, the upgrade global version may have not been updated yet, if
+		 * pool_upgrade_props has encountered an error.
+		 */
+		d_iov_set(&value, &global_version, sizeof(global_version));
+		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_upgrade_global_version,
+				    &value);
+		if (rc1) {
+			DL_ERROR(rc1, "failed to write upgrade global version prop");
+			D_GOTO(out_tx, rc1);
+		}
+	}
+
 	/*
 	 * only bump global version and connectable properties
 	 * if upgrade succeed.
 	 */
 	if (rc == 0) {
-		global_version = DAOS_POOL_GLOBAL_VERSION;
 		d_iov_set(&value, &global_version, sizeof(global_version));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root,
 				    &ds_pool_prop_global_version, &value);
@@ -6951,15 +6964,13 @@ pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map)
  *				initialized to empty and freed by the caller)
  */
 static int
-pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
-			     bool exclude_rank, d_rank_list_t *extend_rank_list,
-			     uint32_t extend_domains_nr, uint32_t *extend_domains,
-			     struct pool_target_id_list *tgts,
-			     struct pool_target_addr_list *tgt_addrs,
-			     struct rsvc_hint *hint, bool *p_updated,
-			     uint32_t *map_version_p, uint32_t *tgt_map_ver,
+pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclude_rank,
+			     d_rank_list_t *extend_rank_list, uint32_t extend_domains_nr,
+			     uint32_t *extend_domains, struct pool_target_id_list *tgts,
+			     struct pool_target_addr_list *tgt_addrs, struct rsvc_hint *hint,
+			     bool *p_updated, uint32_t *map_version_p, uint32_t *tgt_map_ver,
 			     struct pool_target_addr_list *inval_tgt_addrs,
-			     enum map_update_source src)
+			     enum map_update_source src, bool skip_rf_check)
 {
 	struct rdb_tx		tx;
 	struct pool_map	       *map;
@@ -7080,10 +7091,16 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		goto out_map;
 	}
 
-	/* For SWIM exclude, don't change pool map if the pw_rf is broken or is going to be broken,
-	 * with CRIT log message to ask administrator to bring back the engine.
+	/*
+	 * For SWIM exclude:
+	 * Do not change pool map if the pw_rf is broken or is going to be broken,
+	 * With CRIT log message to ask administrator to bring back the engine.
+	 *
+	 * For DMG exclude:
+	 * Do not change the pool map if the `pw_rf` is broken or is about to break,
+	 * unless the force option is given.
 	 */
-	if (src == MUS_SWIM && opc == MAP_EXCLUDE) {
+	if (!skip_rf_check && opc == MAP_EXCLUDE) {
 		int failed_cnt;
 
 		rc = pool_map_update_failed_cnt(map);
@@ -7094,8 +7111,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		}
 
 		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
-		D_INFO(DF_UUID": SWIM exclude %d ranks, failed NODE %d\n",
-		       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, failed_cnt);
+		D_INFO(DF_UUID ": Exclude %d ranks, failed NODE %d\n", DP_UUID(svc->ps_uuid),
+		       tgt_addrs->pta_number, failed_cnt);
 		if (failed_cnt > pw_rf) {
 			D_CRIT(DF_UUID": exclude %d ranks will break pool RF %d, failed_cnt %d\n",
 			       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, pw_rf, failed_cnt);
@@ -7268,10 +7285,9 @@ pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
 	if (rc != 0)
 		return rc;
 
-	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, NULL, 0,
-					  NULL, tgts, tgt_addrs, hint, p_updated,
-					  map_version_p, tgt_map_ver,
-					  inval_tgt_addrs, MUS_DMG);
+	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, NULL, 0, NULL, tgts, tgt_addrs,
+					  hint, p_updated, map_version_p, tgt_map_ver,
+					  inval_tgt_addrs, MUS_DMG, true);
 
 	pool_svc_put_leader(svc);
 	return rc;
@@ -7282,13 +7298,6 @@ ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return pool_update_map_internal(pool_uuid, pool_opc_2map_opc(POOL_EXCLUDE_OUT), false,
 					list, NULL, NULL, NULL, NULL, NULL, NULL);
-}
-
-int
-ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
-{
-	return pool_update_map_internal(pool_uuid, pool_opc_2map_opc(POOL_EXCLUDE), false, list,
-					NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 int
@@ -7322,7 +7331,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		    d_rank_list_t *extend_rank_list, uint32_t *extend_domains,
 		    uint32_t extend_domains_nr, struct pool_target_addr_list *list,
 		    struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
-		    struct rsvc_hint *hint, enum map_update_source src)
+		    struct rsvc_hint *hint, enum map_update_source src, bool skip_rf_check)
 {
 	struct pool_target_id_list	target_list = { 0 };
 	daos_prop_t			prop = { 0 };
@@ -7335,9 +7344,9 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	uint64_t			delay = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
-					  extend_domains_nr, extend_domains,
-					  &target_list, list, hint, &updated,
-					  map_version, &tgt_map_ver, inval_list_out, src);
+					  extend_domains_nr, extend_domains, &target_list, list,
+					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
+					  src, skip_rf_check);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -7424,10 +7433,10 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
-				 false /* exclude_rank */, &rank_list, domains, ndomains,
-				 NULL, NULL, &out->peo_op.po_map_version,
-				 &out->peo_op.po_hint, MUS_DMG);
+	rc =
+	    pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
+				false /* exclude_rank */, &rank_list, domains, ndomains, NULL, NULL,
+				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, true);
 
 	pool_svc_put_leader(svc);
 out:
@@ -7505,8 +7514,9 @@ ds_pool_update_handler(crt_rpc_t *rpc, int handler_version)
 	struct pool_target_addr_list	list = { 0 };
 	struct pool_target_addr_list	inval_list_out = { 0 };
 	int				rc;
+	uint32_t                        flags = 0;
 
-	pool_tgt_update_in_get_data(rpc, &list.pta_addrs, &list.pta_number);
+	pool_tgt_update_in_get_data(rpc, &list.pta_addrs, &list.pta_number, &flags);
 
 	if (list.pta_addrs == NULL || list.pta_number == 0)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -7527,9 +7537,9 @@ ds_pool_update_handler(crt_rpc_t *rpc, int handler_version)
 	}
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
-				 false /* exclude_rank */, NULL, NULL, 0, &list,
-				 &inval_list_out, &out->pto_op.po_map_version,
-				 &out->pto_op.po_hint, MUS_DMG);
+				 false /* exclude_rank */, NULL, NULL, 0, &list, &inval_list_out,
+				 &out->pto_op.po_map_version, &out->pto_op.po_hint, MUS_DMG,
+				 flags & POOL_TGT_UPDATE_SKIP_RF_CHECK);
 	if (rc != 0)
 		goto out_svc;
 
@@ -7596,7 +7606,7 @@ pool_svc_exclude_ranks(struct pool_svc *svc, struct pool_svc_event_set *event_se
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(POOL_EXCLUDE), true /* exclude_rank */,
 				 NULL, NULL, 0, &list, &inval_list_out, &map_version,
-				 NULL /* hint */, MUS_SWIM);
+				 NULL /* hint */, MUS_SWIM, false);
 
 	D_DEBUG(DB_MD, DF_UUID ": exclude %u ranks: map_version=%u: " DF_RC "\n",
 		DP_UUID(svc->ps_uuid), n, rc == 0 ? map_version : 0, DP_RC(rc));

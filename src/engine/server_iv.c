@@ -1099,9 +1099,9 @@ retry:
 		 * reply IVCB_FORWARD.
 		 */
 		if (total_ms % 10000 == 0)
-			D_INFO("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n",
-			       ns->iv_ns_id, key->class_id, opc, key->rank, ns->iv_master_rank,
-			       DP_RC(rc));
+			D_DEBUG(DB_TRACE, "ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n",
+				ns->iv_ns_id, key->class_id, opc, key->rank, ns->iv_master_rank,
+				DP_RC(rc));
 
 		dss_sleep(sleep_ms);
 		total_ms += sleep_ms;

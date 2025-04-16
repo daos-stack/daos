@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -457,7 +458,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool drain command object."""
                 super().__init__("/run/dmg/pool/drain/*", "drain")
                 self.pool = BasicParameter(None, position=1)
-                self.rank = FormattedParameter("--rank={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
         class EvictSubCommand(CommandWithParameters):
@@ -475,8 +476,9 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool exclude command object."""
                 super().__init__("/run/dmg/pool/exclude/*", "exclude")
                 self.pool = BasicParameter(None, position=1)
-                self.rank = FormattedParameter("--rank={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
+                self.force = FormattedParameter("--force", False)
 
         class ExtendSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool extend command."""
@@ -552,7 +554,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool reintegrate command object."""
                 super().__init__("/run/dmg/pool/reintegrate/*", "reintegrate")
                 self.pool = BasicParameter(None, position=1)
-                self.rank = FormattedParameter("--rank={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
         class SetPropSubCommand(CommandWithParameters):

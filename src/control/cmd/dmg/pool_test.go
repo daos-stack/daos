@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -527,49 +528,54 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
+		// Exclude testing with multiple ranks is verified at the control API layer.
 		{
 			"Exclude a target with single target idx",
-			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{1},
+					Force:     false,
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Exclude a target with multiple idx",
-			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{1, 2, 3},
+					Force:     true,
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Exclude a target with no idx given",
-			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{},
+					Force:     true,
 				}),
 			}, " "),
 			nil,
 		},
+		// Drain testing with multiple ranks is verified at the control API layer.
 		{
 			"Drain a target with single target idx",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{1},
 				}),
 			}, " "),
@@ -577,11 +583,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Drain a target with multiple idx",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{1, 2, 3},
 				}),
 			}, " "),
@@ -589,11 +595,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Drain a target with no idx given",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{},
 				}),
 			}, " "),
@@ -628,13 +634,14 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
+		// Reintegrate testing with multiple ranks is verified at the control API layer.
 		{
 			"Reintegrate a target with single target idx",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{1},
 				}),
 			}, " "),
@@ -642,11 +649,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Reintegrate a target with multiple idx",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{1, 2, 3},
 				}),
 			}, " "),
@@ -654,11 +661,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Reintegrate a target with no idx given",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					Targetidx: []uint32{},
 				}),
 			}, " "),
@@ -1186,12 +1193,12 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 				UnaryResponseSet: responses,
 			})
 
-			PoolListCmd := new(PoolListCmd)
-			PoolListCmd.setInvoker(mi)
-			PoolListCmd.SetLog(log)
-			PoolListCmd.setConfig(tc.ctlCfg)
+			cmd := new(poolListCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.setConfig(tc.ctlCfg)
 
-			gotErr := PoolListCmd.Execute(nil)
+			gotErr := cmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

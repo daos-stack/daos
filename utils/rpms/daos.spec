@@ -13,6 +13,7 @@
 %global mercury_version   2.4
 %global libfabric_version 1.15.1-1
 %global argobots_version 1.2
+%global argobots_version 1.2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -23,7 +24,7 @@
 
 Name:          daos
 Version:       2.6.3
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -81,9 +82,6 @@ BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
-%endif
-%if %{with server}
-BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -629,6 +627,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Apr 11 2025 Jeff Olivier  <jeffolivier@google.com> 2.6.3-7
+- Remove raft as external dependency
+
 * Tue Apr 08 2025 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.6.3-6
 - Update BR: argobots to 1.2
 
