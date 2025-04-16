@@ -450,7 +450,7 @@ engines:
 - targets: 16
   nr_xs_helpers: 4
   first_core: 0
-  log_file: /var/log/daos-server/daos_engine.0.log
+  log_file: /var/log/daos_server/daos_engine.0.log
   storage:
   - class: ram
     scm_mount: /mnt/daos0
@@ -472,7 +472,7 @@ engines:
 - targets: 16
   nr_xs_helpers: 4
   first_core: 0
-  log_file: /var/log/daos-server/daos_engine.1.log
+  log_file: /var/log/daos_server/daos_engine.1.log
   storage:
   - class: ram
     scm_mount: /mnt/daos1
@@ -497,7 +497,7 @@ enable_hotplug: false
 nr_hugepages: 16384
 disable_hugepages: false
 control_log_mask: INFO
-control_log_file: /var/log/daos-server/daos_server.log
+control_log_file: /var/log/daos_server/daos_server.log
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
@@ -1330,7 +1330,7 @@ engines:
   fabric_iface: eth0                          # network interface to use for this engine
   fabric_iface_port: 31416                    # network port
   log_mask: ERR                               # debug level to start with the engine with
-  log_file: /var/log/daos-server/server1.log  # where to store engine logs
+  log_file: /var/log/daos_server/server1.log  # where to store engine logs
   storage:
   -
     class: dcpm               # type of first storage tier (SCM)
@@ -1346,7 +1346,7 @@ engines:
   fabric_iface: eth0
   fabric_iface_port: 32416
   log_mask: ERR
-  log_file: /var/log/daos-server/server2.log
+  log_file: /var/log/daos_server/server2.log
   storage:
   -
     class: dcpm               # type of first storage tier (SCM)

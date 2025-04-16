@@ -98,8 +98,8 @@
 #runtime_dir: /var/run/daos_agent
 
 # Full path and name of the DAOS agent logfile.
-# default: /var/log/daos-server/daos_agent.log
-#log_file: /var/log/daos-server/daos_agent.log
+# default: /var/log/daos_server/daos_agent.log
+#log_file: /var/log/daos_server/daos_agent.log
 
 ## Force specific debug mask for daos_agent (control plane).
 ## Mask specifies minimum level of message significance to pass to logger.

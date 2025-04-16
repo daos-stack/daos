@@ -5,7 +5,7 @@ access_points: ['daos-server']
 port: 10001
 
 runtime_dir: /var/run/daos_agent
-log_file: /var/log/daos-client/daos_agent.log
+log_file: /var/log/daos_client/daos_agent.log
 control_log_mask: info
 
 transport_config:

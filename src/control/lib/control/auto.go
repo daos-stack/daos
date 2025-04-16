@@ -33,8 +33,8 @@ const (
 	defaultFiPort         = 31416
 	defaultFiPortInterval = 1000
 	defaultTargetCount    = 16
-	defaultEngineLogFile  = "/var/log/daos-server/daos_engine"
-	defaultControlLogFile = "/var/log/daos-server/daos_server.log"
+	defaultEngineLogFile  = "/var/log/daos_server/daos_engine"
+	defaultControlLogFile = "/var/log/daos_server/daos_server.log"
 	minNrSSDs             = 1
 	minDMABuffer          = 1024
 	numaCoreUsage         = 0.8 // fraction of numa cores to use for targets
