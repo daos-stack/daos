@@ -5,8 +5,8 @@ read_value()
   comp_name=$1
   field_name=$2
 
-  # shellcheck disable=SC1090,SC2283
-  source <(grep = <(grep -A10 "\[${field_name}\]" "${DAOS_ROOT}/utils/build.config"))
+  # shellcheck disable=SC1090
+  source <(awk -v RS= "/\[${field_name}\]/" "${DAOS_ROOT}/utils/build.config" | tail -n+2)
   echo "${!comp_name}"
 }
 
