@@ -1678,6 +1678,31 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			},
 			expFanoutRanks: ranklist.MustCreateRankSet("3"),
 		},
+		"requested only admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks: "1-2",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.MustCreateRankSet("1-2").Ranks()),
+		},
+		"requested only admin-excluded ranks with ignore": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks:               "1-2",
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: errors.New("all requested ranks are administratively excluded"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

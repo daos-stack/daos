@@ -927,6 +927,9 @@ func (svc *mgmtSvc) getFanoutNoAdminExcluded(req systemReq, ignoreAdminExcluded 
 	// If ranks not explicitly requested, or the caller wants to ignore admin-excluded ranks in the range, we can filter them out.
 	if ignoreAdminExcluded || (req.GetRanks() == "" && req.GetHosts() == "") {
 		svc.filterAdminExcludedRanks(fReq)
+		if fReq.Ranks.Count() == 0 {
+			return nil, nil, errors.New("all requested ranks are administratively excluded")
+		}
 	} else if err := svc.checkRanksAdminExcluded(fReq.Ranks.Ranks()); err != nil {
 		// The user explicitly requested admin-excluded ranks
 		return nil, nil, err
