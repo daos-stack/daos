@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -909,7 +908,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 	for name, tc := range map[string]struct {
 		reset             bool
 		req               storage.BdevPrepareRequest
-		mnc               *spdk.MockNvmeCfg
+		nvme              spdk.Nvme
 		mbc               *MockBackendConfig
 		vmdDetectRet      *hardware.PCIAddressSet
 		vmdDetectErr      error
@@ -1307,9 +1306,8 @@ func TestBackend_prepare_reset(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				CleanSpdkLockfiles: true,
 			},
-			mnc: &spdk.MockNvmeCfg{
-				LockfileDir: testDir,
-				RemoveErr:   errors.New("remove lockfile failed"),
+			nvme: &spdk.NvmeImpl{
+				LocksDir: testDir,
 			},
 			expResp: &storage.BdevPrepareResponse{
 				LockfilesRemoved: []string{},
@@ -1321,11 +1319,10 @@ func TestBackend_prepare_reset(t *testing.T) {
 				PCIAllowList:       mockAddrListStr(1, 2, 3),
 				PCIBlockList:       mockAddrListStr(1),
 			},
-			lockfileAddrs: mockAddrList(1, 2, 3),
-			mnc: &spdk.MockNvmeCfg{
-				LockfileDir: testDir,
-				RemoveFn:    os.Remove,
+			nvme: &spdk.NvmeImpl{
+				LocksDir: testDir,
 			},
+			lockfileAddrs: mockAddrList(1, 2, 3),
 			expResp: &storage.BdevPrepareResponse{
 				LockfilesRemoved: []string{
 					filepath.Join(testDir, spdk.LockfilePrefix+"0000:02:00.0"),
@@ -1342,18 +1339,15 @@ func TestBackend_prepare_reset(t *testing.T) {
 				PCIAllowList:       mockAddrListStr(1, 2, 3),
 			},
 			lockfileAddrs: mockAddrList(1, 2, 3),
-			mnc: &spdk.MockNvmeCfg{
-				LockfileDir: testDir,
-				RemoveErr:   errors.New(msgRemFail),
+			nvme: &spdk.MockNvmeImpl{
+				Cfg: spdk.MockNvmeCfg{
+					CleanErr: errors.New(msgRemFail),
+				},
 			},
 			expResp: &storage.BdevPrepareResponse{
 				LockfilesRemoved: []string{},
 			},
-			expErr: errors.New("clean spdk lockfiles: " + strings.Join([]string{
-				filepath.Join(testDir, spdk.LockfilePrefix+"0000:03:00.0") + ": " + msgRemFail,
-				filepath.Join(testDir, spdk.LockfilePrefix+"0000:02:00.0") + ": " + msgRemFail,
-				filepath.Join(testDir, spdk.LockfilePrefix+"0000:01:00.0") + ": " + msgRemFail,
-			}, ": ")),
+			expErr: errors.New("clean spdk lockfiles: " + msgRemFail),
 			expLocksRemaining: []string{
 				spdk.LockfilePrefix + "0000:01:00.0",
 				spdk.LockfilePrefix + "0000:02:00.0",
@@ -1370,9 +1364,8 @@ func TestBackend_prepare_reset(t *testing.T) {
 				"050505:07:00.0", "050505:09:00.0", "050505:11:00.0", "050505:14:00.0",
 				"5d0505:03:00.0", "d50505:01:00.0",
 			),
-			mnc: &spdk.MockNvmeCfg{
-				LockfileDir: testDir,
-				RemoveFn:    os.Remove,
+			nvme: &spdk.NvmeImpl{
+				LocksDir: testDir,
 			},
 			expResp: &storage.BdevPrepareResponse{
 				LockfilesRemoved: []string{
@@ -1397,17 +1390,15 @@ func TestBackend_prepare_reset(t *testing.T) {
 			}
 
 			sss, calls := mockScriptRunner(t, log, tc.mbc)
-			if tc.mnc == nil {
-				tc.mnc = &spdk.MockNvmeCfg{
-					LockfileDir: testDir,
+			if tc.nvme == nil {
+				tc.nvme = &spdk.MockNvmeImpl{
+					Cfg: spdk.MockNvmeCfg{},
 				}
 			}
 			sb := &spdkBackend{
 				log: log,
 				binding: &spdkWrapper{
-					Nvme: &spdk.MockNvmeImpl{
-						Cfg: *tc.mnc,
-					},
+					Nvme: tc.nvme,
 				},
 				script: sss,
 			}

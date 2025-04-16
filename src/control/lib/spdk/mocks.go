@@ -51,16 +51,13 @@ func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 
 // MockNvmeCfg controls the behavior of the MockNvmeImpl.
 type MockNvmeCfg struct {
-	DiscoverCtrlrs  storage.NvmeControllers
-	DiscoverErr     error
-	FormatRes       []*FormatResult
-	FormatErr       error
-	UpdateErr       error
-	LockfileDir     string
-	RemoveFn        removeFn
-	RemoveErr       error
-	PciAddrCheckMap map[string]bool
-	PciAddrCheckErr error
+	DiscoverCtrlrs storage.NvmeControllers
+	DiscoverErr    error
+	FormatRes      []*FormatResult
+	FormatErr      error
+	UpdateErr      error
+	CleanErr       error
+	CleanRes       []string
 }
 
 // MockNvmeImpl is an implementation of the Nvme interface.
@@ -106,24 +103,12 @@ func (n MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path strin
 }
 
 // Clean removes SPDK lockfiles associated with NVMe SSDs/controllers at given PCI addresses.
-// Mock avoid making any changes to the filesystem by mocking remove function.
-func (n MockNvmeImpl) Clean(pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
-	mockLocksRemove := func(fName string) error {
-		if n.Cfg.RemoveFn == nil {
-			return n.Cfg.RemoveErr
-		}
-		return n.Cfg.RemoveFn(fName)
+func (n MockNvmeImpl) Clean(log logging.Logger, pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
+	log.Debug("MockNvme.Clean()")
+
+	if n.Cfg.CleanRes == nil {
+		n.Cfg.CleanRes = []string{}
 	}
 
-	mockPciAddrChecker := func(a string) (bool, error) {
-		if pciAddrChecker != nil {
-			return pciAddrChecker(a)
-		}
-		if n.Cfg.PciAddrCheckMap == nil {
-			n.Cfg.PciAddrCheckMap = make(map[string]bool)
-		}
-		return n.Cfg.PciAddrCheckMap[a], n.Cfg.PciAddrCheckErr
-	}
-
-	return cleanLockfiles(n.Cfg.LockfileDir, mockPciAddrChecker, mockLocksRemove)
+	return n.Cfg.CleanRes, n.Cfg.CleanErr
 }

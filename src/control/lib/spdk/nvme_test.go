@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 var (
@@ -105,6 +106,9 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
 			removeCalls := []string{}
 
 			mockAddrCheck := func(addr string) (bool, error) {
@@ -124,7 +128,7 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 				}
 			}
 
-			removedLocks, gotErr := cleanLockfiles(testDir, mockAddrCheck, mockRemove)
+			removedLocks, gotErr := cleanLockfiles(log, testDir, mockAddrCheck, mockRemove)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			if diff := cmp.Diff(tc.expRemoveCalls, removeCalls); diff != "" {
@@ -219,15 +223,16 @@ func TestSpdk_cleanKnownLockfiles(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
 			if err := test.RemoveContents(t, testDir); err != nil {
 				t.Fatal(err)
 			}
 
-			mnc := MockNvmeCfg{
-				LockfileDir: testDir,
-				RemoveFn:    os.Remove,
+			nvme := &NvmeImpl{
+				LocksDir: testDir,
 			}
-			mockImpl := MockNvmeImpl{Cfg: mnc}
 
 			// Create lockfiles in test directory.
 			for _, addrStr := range tc.lfAddrsInDir {
@@ -238,7 +243,7 @@ func TestSpdk_cleanKnownLockfiles(t *testing.T) {
 				}
 			}
 
-			removed, gotErr := cleanKnownLockfiles(mockImpl, tc.addrsToClean...)
+			removed, gotErr := cleanKnownLockfiles(log, nvme, tc.addrsToClean...)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			if diff := cmp.Diff(tc.expRemoved, removed); diff != "" {

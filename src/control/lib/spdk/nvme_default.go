@@ -40,20 +40,18 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// Static base-dir for SPDK generated lockfiles.
-const lockflleDir = "/var/tmp/"
-
 func realRemove(name string) error {
 	return os.Remove(name)
 }
 
 // Clean implements the method of the same name for the Nvme interface on the NvmeImpl struct.
-func (n *NvmeImpl) Clean(pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
+func (n *NvmeImpl) Clean(log logging.Logger, pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
 	if n == nil {
 		return nil, errors.New("nil NvmeImpl")
 	}
 
-	return cleanLockfiles(lockflleDir, pciAddrChecker, realRemove)
+	log.Tracef("Nvme.Clean()")
+	return cleanLockfiles(log, n.LocksDir, pciAddrChecker, realRemove)
 }
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
@@ -76,7 +74,7 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 		pciAddrs = append(pciAddrs, c.PciAddr)
 	}
 
-	removedLocks, errRemLocks := cleanKnownLockfiles(n, pciAddrs...)
+	removedLocks, errRemLocks := cleanKnownLockfiles(log, n, pciAddrs...)
 	log.Debugf("removed lockfiles: %v", removedLocks)
 
 	return ctrlrs, wrapCleanError(errCollect, errRemLocks)
@@ -97,7 +95,7 @@ func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	pciAddrs := resultPCIAddresses(results)
 	log.Debugf("formatted nvme ssds: %v", pciAddrs)
 
-	removedLocks, errRemLocks := cleanKnownLockfiles(n, pciAddrs...)
+	removedLocks, errRemLocks := cleanKnownLockfiles(log, n, pciAddrs...)
 	log.Debugf("removed lockfiles: %v", removedLocks)
 
 	return results, wrapCleanError(errCollect, errRemLocks)
@@ -120,7 +118,7 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 	_, errCollect := collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
 		"NVMe Update(): C.nvme_fwupdate")
 
-	removedLocks, errRemLocks := cleanKnownLockfiles(n, ctrlrPciAddr)
+	removedLocks, errRemLocks := cleanKnownLockfiles(log, n, ctrlrPciAddr)
 	log.Debugf("removed lockfiles: %v", removedLocks)
 
 	return wrapCleanError(errCollect, errRemLocks)

@@ -42,11 +42,23 @@ type Nvme interface {
 	Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error
 	// Clean removes lockfiles associated with NVMe controllers. Decisions regarding which
 	// lockfiles to remove made using supplied address check function.
-	Clean(LockfileAddrCheckFn) ([]string, error)
+	Clean(logging.Logger, LockfileAddrCheckFn) ([]string, error)
 }
 
 // NvmeImpl is an implementation of the Nvme interface.
-type NvmeImpl struct{}
+type NvmeImpl struct {
+	LocksDir string
+}
+
+// Static base-dir for SPDK generated lockfiles.
+const locksDir = "/var/tmp/"
+
+// NewNvmeImpl is a constructor for the NvmeImpl implementation of the Nvme interface.
+func NewNvmeImpl() *NvmeImpl {
+	return &NvmeImpl{
+		LocksDir: locksDir,
+	}
+}
 
 // Static prefix for SPDK generated lockfiles.
 const LockfilePrefix = "spdk_pci_lock_"
@@ -55,14 +67,13 @@ type removeFn func(name string) error
 
 // cleanLockfiles removes SPDK lockfiles after binding operations. Takes function which decides
 // which of the found lock files to remove based on the address appended to the filename.
-func cleanLockfiles(dir string, pciAddrChecker LockfileAddrCheckFn, remove removeFn) ([]string, error) {
+func cleanLockfiles(log logging.Logger, dir string, pciAddrChecker LockfileAddrCheckFn, remove removeFn) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, errors.Wrapf(err, "reading spdk lockfile directory %q", dir)
 	}
 
-	var outErr error
-	removed := []string{}
+	found := []string{}
 	for _, v := range entries {
 		if v.IsDir() {
 			continue
@@ -70,9 +81,16 @@ func cleanLockfiles(dir string, pciAddrChecker LockfileAddrCheckFn, remove remov
 		if !strings.HasPrefix(v.Name(), LockfilePrefix) {
 			continue
 		}
+		found = append(found, v.Name())
+	}
 
-		lfAddr := strings.Replace(v.Name(), LockfilePrefix, "", 1)
-		lfName := filepath.Join(dir, v.Name())
+	log.Tracef("clean lockfiles: found %v", found)
+
+	var outErr error
+	removed := []string{}
+	for _, name := range found {
+		lfAddr := strings.Replace(name, LockfilePrefix, "", 1)
+		lfName := filepath.Join(dir, name)
 
 		if shouldRemove, err := pciAddrChecker(lfAddr); err != nil {
 			outErr = wrapCleanError(outErr, errors.Wrap(err, lfName))
@@ -90,14 +108,18 @@ func cleanLockfiles(dir string, pciAddrChecker LockfileAddrCheckFn, remove remov
 		removed = append(removed, lfName)
 	}
 
+	log.Tracef("clean lockfiles: removed %v", removed)
+
 	return removed, outErr
 }
 
 // Helper to clean lockfiles with known PCI addresses after implicit SPDK-binding calls.
 // Generated LockfileAddrCheckFn compares an input found-lockfile-address with the outer clean
 // function input-address-list.
-func cleanKnownLockfiles(n Nvme, addrs ...string) ([]string, error) {
-	return n.Clean(func(s string) (bool, error) {
+func cleanKnownLockfiles(log logging.Logger, n Nvme, addrs ...string) ([]string, error) {
+	log.Debugf("cleanKnownLockFiles(): %v\n", addrs)
+	return n.Clean(log, func(s string) (bool, error) {
+		log.Debugf("address check: %s in %v?\n", s, addrs)
 		return common.Includes(addrs, s), nil
 	})
 }

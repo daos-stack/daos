@@ -105,9 +105,12 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts *spdk.EnvOptions) (resto
 
 func newBackend(log logging.Logger, sr *spdkSetupScript) *spdkBackend {
 	return &spdkBackend{
-		log:     log,
-		binding: &spdkWrapper{Env: &spdk.EnvImpl{}, Nvme: &spdk.NvmeImpl{}},
-		script:  sr,
+		log: log,
+		binding: &spdkWrapper{
+			Env:  spdk.NewEnvImpl(),
+			Nvme: spdk.NewNvmeImpl(),
+		},
+		script: sr,
 	}
 }
 
@@ -236,7 +239,7 @@ func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp 
 
 	lfAddrCheckFn := createSpdkLockfileAddrCheckFunc(allowedAddresses)
 
-	resp.LockfilesRemoved, err = sb.binding.Clean(lfAddrCheckFn)
+	resp.LockfilesRemoved, err = sb.binding.Clean(sb.log, lfAddrCheckFn)
 	if err != nil {
 		return err
 	}

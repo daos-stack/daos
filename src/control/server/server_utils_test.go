@@ -849,8 +849,10 @@ func TestServer_cleanEngineSpdkResources(t *testing.T) {
 
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner, nil)
+			storageCfg := ei.runner.GetConfig().Storage
+			pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
 
-			test.CmpErr(t, tc.expErr, cleanEngineSpdkResources(srv, ei))
+			test.CmpErr(t, tc.expErr, cleanSpdkResources(srv, pciAddrs))
 
 			mbb.RLock()
 			if tc.expPrepCall != nil {

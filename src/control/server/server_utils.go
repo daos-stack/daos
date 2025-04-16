@@ -326,13 +326,19 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		}
 	}
 
+	// Clean leftover SPDK hugepages and lockfiles for relevant NVMe SSDs before prepare.
+	pciAddrs := bdevCfgs.NVMeBdevs().Devices()
+	if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+		srv.log.Error(errors.Wrap(err, "prepBdevStorage").Error())
+	}
+
 	// When requesting to prepare NVMe drives during service start-up, use all addresses
 	// specified in engine config BdevList parameters as the PCIAllowList and the server
 	// config BdevExclude parameter as the PCIBlockList.
 
 	prepReq := storage.BdevPrepareRequest{
 		TargetUser:   srv.runningUser.Username,
-		PCIAllowList: strings.Join(bdevCfgs.NVMeBdevs().Devices(), storage.BdevPciAddrSep),
+		PCIAllowList: strings.Join(pciAddrs, storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
@@ -464,24 +470,21 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	return nil
 }
 
-func cleanEngineSpdkResources(srv *server, engine *EngineInstance) error {
+func cleanSpdkResources(srv *server, pciAddrs []string) error {
 	// For the moment assume that both lockfile and hugepage cleanup should be skipped if
 	// hugepages have been disabled in the server config.
 	if srv.cfg.DisableHugepages {
 		return nil
 	}
 
-	storageCfg := engine.runner.GetConfig().Storage
-	bdevs := storageCfg.Tiers.Bdevs().Devices()
-
-	if len(bdevs) == 0 {
+	if len(pciAddrs) == 0 {
 		return nil
 	}
 
 	req := storage.BdevPrepareRequest{
 		CleanSpdkHugepages: true,
 		CleanSpdkLockfiles: true,
-		PCIAllowList:       strings.Join(bdevs, storage.BdevPciAddrSep),
+		PCIAllowList:       strings.Join(pciAddrs, storage.BdevPciAddrSep),
 	}
 
 	msg := "cleanup spdk resources"
@@ -584,7 +587,10 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 			return engine.storage.UnmountTmpfs()
 		}
 
-		if err := cleanEngineSpdkResources(srv, engine); err != nil {
+		storageCfg := engine.runner.GetConfig().Storage
+		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
+
+		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
 			srv.log.Error(
 				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
 		}
@@ -609,7 +615,10 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	engine.OnStorageReady(func(_ context.Context) error {
 		srv.log.Debugf("engine %d: storage ready", engine.Index())
 
-		if err := cleanEngineSpdkResources(srv, engine); err != nil {
+		storageCfg := engine.runner.GetConfig().Storage
+		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
+
+		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
 			srv.log.Error(
 				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
 		}

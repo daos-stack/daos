@@ -30,6 +30,7 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 }
 
 // Clean removes SPDK lockfiles.
-func (n *NvmeImpl) Clean(pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
+func (n *NvmeImpl) Clean(log logging.Logger, pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
+	log.Debugf("StubNvme.Clean()")
 	return []string{}, nil
 }
