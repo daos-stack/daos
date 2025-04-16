@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -440,6 +441,9 @@ typedef enum {
 typedef enum {
 	/** Limit of number of inflight rpcs */
 	CRT_QUOTA_RPCS,
+
+	/** Limit of number of registered bulk handles */
+	CRT_QUOTA_BULKS,
 
 	/** Total count of supported quotas */
 	CRT_QUOTA_COUNT,

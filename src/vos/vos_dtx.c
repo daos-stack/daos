@@ -1254,8 +1254,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		  DF_U64 ", boundary " DF_U64 "\n", entry, epoch, cont->vc_solo_dtx_epoch);
 
 	if (intent == DAOS_INTENT_PURGE) {
-		uint32_t	age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
-		uint64_t	now;
+		uint32_t age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
+		uint64_t now;
 
 		/*
 		 * Don't print warning message for fresh record, since INTENT_PURGE could
@@ -1270,7 +1270,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			return ALB_AVAILABLE_DIRTY;
 
 		/* VOS aggregation is trying to reclaim data record being referenced by DTX */
-		D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u, type:%u) is still inuse!\n",
+		D_WARN("DTX " DF_DTI " (state:%u, flags:%x, age:%u, type:%u) is still inuse!\n",
 		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae), age, type);
 
 		cont->vc_agg_busy_ts = now;
