@@ -7,7 +7,6 @@
 import os
 
 from apricot import TestWithServers
-from fill_pool_container_create import fill_container
 from general_utils import bytes_to_human, human_to_bytes
 from run_utils import run_remote
 
@@ -87,7 +86,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                       test_loop, bytes_to_human(free_space_init), free_space_init)
 
         # Write decreasing amounts of data to container until pool out of space
-        data_written = fill_container(self, container, container.oclass.value)
+        data_written = container.fill()
 
         # display free space and data written
         free_space_before_destroy = self.pool.get_pool_free_space()

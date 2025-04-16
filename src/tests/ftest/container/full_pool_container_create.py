@@ -7,36 +7,6 @@
 import time
 
 from apricot import TestWithServers
-from general_utils import DaosTestError
-
-DER_NOSPACE = "-1007"
-
-
-def fill_container(self, container):
-    """Fill the container with decreasing amounts of data until full.
-
-    Args:
-        container (TestContainer): the container to fill with data
-
-    Returns:
-        int: amount of data written to the container
-    """
-    data_written = 0
-    while container.data_size.value > 0:
-        while True:
-            try:
-                container.write_objects(obj_class=container.oclass.value)
-                data_written += container.data_size.value
-            except DaosTestError as excep:
-                if DER_NOSPACE not in repr(excep):
-                    self.log.error("caught exception while writing object: %s", repr(excep))
-                    container.close()
-                    self.fail(f"caught exception while writing object: {repr(excep)}")
-                else:
-                    self.log.info("pool is too full for %s byte objects", container.data_size.value)
-                    break
-        container.data_size.update(container.data_size.value // 2, "data_size")
-    return data_written
 
 
 class FullPoolContainerCreate(TestWithServers):
@@ -89,7 +59,7 @@ class FullPoolContainerCreate(TestWithServers):
 
         # generate random dkey, akey each time
         # write 1M until no space, then 10K, etc. to fill pool quickly
-        fill_container(self, self.container)
+        self.container.fill()
 
         # query the pool
         self.log.info("Pool Query after filling")

@@ -1183,3 +1183,31 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         """
         return self.daos.container_update_acl(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def fill(self):
+        """Fill the container with decreasing amounts of data until full.
+
+        Args:
+            container (TestContainer): the container to fill with data
+
+        Returns:
+            int: amount of data written to the container
+        """
+        data_written = 0
+        original_data_size = self.data_size.value
+        while self.data_size.value > 0:
+            while True:
+                try:
+                    self.write_objects(obj_class=self.oclass.value)
+                    data_written += self.data_size.value
+                except DaosTestError as excep:
+                    if "-1007" not in repr(excep):
+                        self.log.error("caught exception while writing object: %s", repr(excep))
+                        self.close()
+                        self.fail(f"caught exception while writing object: {repr(excep)}")
+                    else:
+                        self.log.info("pool is too full for %s byte objects", self.data_size.value)
+                        break
+            self.data_size.update(self.data_size.value // 2, "data_size")
+        self.data_size.update(original_data_size)
+        return data_written
