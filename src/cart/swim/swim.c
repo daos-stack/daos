@@ -2,6 +2,7 @@
  * Copyright (c) 2016 UChicago Argonne, LLC
  * (C) Copyright 2018-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +21,7 @@ static const char *SWIM_STATUS_STR[] = {
 static uint64_t swim_prot_period_len;
 static uint64_t swim_suspect_timeout;
 static uint64_t swim_ping_timeout;
+static int      swim_subgroup_size;
 
 static inline uint64_t
 swim_prot_period_len_default(void)
@@ -45,6 +47,15 @@ swim_ping_timeout_default(void)
 	unsigned int val = SWIM_PING_TIMEOUT;
 
 	d_getenv_uint("SWIM_PING_TIMEOUT", &val);
+	return val;
+}
+
+static inline int
+swim_subgroup_size_default(void)
+{
+	unsigned int val = SWIM_SUBGROUP_SIZE;
+
+	d_getenv_uint("SWIM_SUBGROUP_SIZE", &val);
 	return val;
 }
 
@@ -112,9 +123,8 @@ swim_dump_updates(swim_id_t self_id, swim_id_t from_id, swim_id_t to_id,
 		fclose(fp);
 		/* msg and msg_size will be set after fclose(fp) only */
 		if (msg_size > 0)
-			SWIM_INFO("%lu %s %lu:%s\n", self_id,
-				  self_id == from_id ? "=>" : "<=",
-				  self_id == from_id ? to_id : from_id, msg);
+			SWIM_DEBUG("%lu %s %lu:%s\n", self_id, self_id == from_id ? "=>" : "<=",
+				   self_id == from_id ? to_id : from_id, msg);
 		free(msg); /* allocated by open_memstream() */
 	}
 }
@@ -149,7 +159,7 @@ swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
 	rc = ctx->sc_ops->get_member_state(ctx, id, &upds[n].smu_state);
 	if (rc) {
 		if (rc == -DER_NONEXIST)
-			SWIM_INFO("%lu: not bootstrapped yet with %lu\n", self_id, id);
+			SWIM_DEBUG("%lu: not bootstrapped yet with %lu\n", self_id, id);
 		else
 			SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
 		D_GOTO(out_unlock, rc);
@@ -171,7 +181,7 @@ swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
 		rc = ctx->sc_ops->get_member_state(ctx, to, &upds[n].smu_state);
 		if (rc) {
 			if (rc == -DER_NONEXIST)
-				SWIM_INFO("%lu: not bootstrapped yet with %lu\n", self_id, to);
+				SWIM_DEBUG("%lu: not bootstrapped yet with %lu\n", self_id, to);
 			else
 				SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", to, DP_RC(rc));
 			D_GOTO(out_unlock, rc);
@@ -295,7 +305,7 @@ swim_member_alive(struct swim_context *ctx, swim_id_t from, swim_id_t id, uint64
 		swim_id_t self_id = swim_self_get(ctx);
 
 		if (rc == -DER_NONEXIST)
-			SWIM_INFO("%lu: not bootstrapped yet with %lu\n", self_id, id);
+			SWIM_DEBUG("%lu: not bootstrapped yet with %lu\n", self_id, id);
 		else
 			SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
 		D_GOTO(out, rc);
@@ -327,7 +337,7 @@ update:
 		}
 	}
 
-	SWIM_INFO("member %lu %lu is ALIVE\n", id, nr);
+	SWIM_INFO("%lu: member %lu %lu is ALIVE from %lu\n", ctx->sc_self, id, nr, from);
 	id_state.sms_incarnation = nr;
 	id_state.sms_status = SWIM_MEMBER_ALIVE;
 	rc = swim_updates_notify(ctx, from, id, &id_state, count);
@@ -374,7 +384,8 @@ update:
 		}
 	}
 
-	SWIM_ERROR("member %lu %lu is DEAD\n", id, nr);
+	SWIM_ERROR("%lu: member %lu %lu is DEAD from %lu%s\n", ctx->sc_self, id, nr, from,
+		   from == ctx->sc_self ? " (self)" : "");
 	id_state.sms_incarnation = nr;
 	id_state.sms_status = SWIM_MEMBER_DEAD;
 	rc = swim_updates_notify(ctx, from, id, &id_state, 0);
@@ -437,7 +448,8 @@ search:
 	TAILQ_INSERT_TAIL(&ctx->sc_suspects, item, si_link);
 
 update:
-	SWIM_INFO("member %lu %lu is SUSPECT\n", id, nr);
+	SWIM_INFO("%lu: member %lu %lu is SUSPECT from %lu%s\n", ctx->sc_self, id, nr, from,
+		  from == ctx->sc_self ? " (self)" : "");
 	id_state.sms_incarnation = nr;
 	id_state.sms_status = SWIM_MEMBER_SUSPECT;
 	rc = swim_updates_notify(ctx, from, id, &id_state, 0);
@@ -472,8 +484,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now, uint64_t ne
 				D_GOTO(next_item, rc = 0);
 			}
 
-			SWIM_INFO("%lu: suspect timeout %lu\n",
-				  self_id, item->si_id);
+			SWIM_DEBUG("%lu: suspect timeout %lu\n", self_id, item->si_id);
 			if (item->si_from != self_id) {
 				/* let's try to confirm from gossip origin */
 				id      = item->si_id;
@@ -512,8 +523,8 @@ next_item:
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
 
-		SWIM_INFO("try to confirm from source. %lu: %lu <= %lu\n",
-			  self_id, item->si_id, item->si_from);
+		SWIM_DEBUG("try to confirm from source. %lu: %lu <= %lu\n", self_id, item->si_id,
+			   item->si_from);
 
 		rc = swim_updates_send(ctx, item->si_id, item->si_from);
 		if (rc)
@@ -556,8 +567,8 @@ swim_ipings_update(struct swim_context *ctx, uint64_t now, uint64_t net_glitch_d
 	item = TAILQ_FIRST(&targets);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
-		SWIM_INFO("reply IREQ expired. %lu: %lu => %lu\n",
-			  self_id, item->si_from, item->si_id);
+		SWIM_DEBUG("reply IREQ expired. %lu: %lu => %lu\n", self_id, item->si_from,
+			   item->si_id);
 
 		rc = ctx->sc_ops->send_reply(ctx, item->si_id, item->si_from,
 					     -DER_TIMEDOUT, item->si_args);
@@ -596,8 +607,7 @@ swim_ipings_reply(struct swim_context *ctx, swim_id_t to_id, int ret_rc)
 	item = TAILQ_FIRST(&targets);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
-		SWIM_INFO("reply IREQ. %lu: %lu <= %lu\n",
-			  self_id, item->si_id, item->si_from);
+		SWIM_DEBUG("reply IREQ. %lu: %lu <= %lu\n", self_id, item->si_id, item->si_from);
 
 		rc = ctx->sc_ops->send_reply(ctx, item->si_id, item->si_from,
 					     ret_rc, item->si_args);
@@ -649,7 +659,7 @@ swim_subgroup_init(struct swim_context *ctx)
 	swim_id_t		 id;
 	int			 i, rc = 0;
 
-	for (i = 0; i < SWIM_SUBGROUP_SIZE; i++) {
+	for (i = 0; i < swim_subgroup_size; i++) {
 		id = ctx->sc_ops->get_iping_target(ctx);
 		if (id == SWIM_ID_INVALID)
 			D_GOTO(out, rc = 0);
@@ -736,6 +746,7 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	swim_prot_period_len = swim_prot_period_len_default();
 	swim_suspect_timeout = swim_suspect_timeout_default();
 	swim_ping_timeout    = swim_ping_timeout_default();
+	swim_subgroup_size   = swim_subgroup_size_default();
 
 	ctx->sc_default_ping_timeout = swim_ping_timeout;
 
@@ -911,12 +922,12 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 				target_id = ctx->sc_target;
 				sendto_id = ctx->sc_target;
 				send_updates = true;
-				SWIM_INFO("%lu: dping %lu => {%lu %c %lu} "
-					  "delay: %u ms, timeout: %lu ms\n",
-					  ctx->sc_self, ctx->sc_self, sendto_id,
-					  SWIM_STATUS_CHARS[target_state.sms_status],
-					  target_state.sms_incarnation,
-					  target_state.sms_delay, delay);
+				SWIM_DEBUG("%lu: dping %lu => {%lu %c %lu} "
+					   "delay: %u ms, timeout: %lu ms\n",
+					   ctx->sc_self, ctx->sc_self, sendto_id,
+					   SWIM_STATUS_CHARS[target_state.sms_status],
+					   target_state.sms_incarnation, target_state.sms_delay,
+					   delay);
 
 				ctx->sc_next_tick_time = now + swim_period_get();
 				ctx->sc_deadline = now + delay;
@@ -992,23 +1003,22 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 						goto done_item;
 
 					delay *= 2;
-					SWIM_INFO("%lu: ireq  %lu => {%lu %c %lu} "
-						  "delay: %u ms, timeout: %lu ms\n",
-						  ctx->sc_self, sendto_id, target_id,
-						  SWIM_STATUS_CHARS[target_state.sms_status],
-								    target_state.sms_incarnation,
-								    target_state.sms_delay, delay);
+					SWIM_DEBUG("%lu: ireq  %lu => {%lu %c %lu} "
+						   "delay: %u ms, timeout: %lu ms\n",
+						   ctx->sc_self, sendto_id, target_id,
+						   SWIM_STATUS_CHARS[target_state.sms_status],
+						   target_state.sms_incarnation,
+						   target_state.sms_delay, delay);
 				} else {
 					/* Send ping only if this member is not respond yet */
 					if (state.sms_status != SWIM_MEMBER_INACTIVE)
 						goto done_item;
 
-					SWIM_INFO("%lu: dping  %lu => {%lu %c %lu} "
-						  "delay: %u ms, timeout: %lu ms\n",
-						  ctx->sc_self, ctx->sc_self, sendto_id,
-						  SWIM_STATUS_CHARS[state.sms_status],
-								    state.sms_incarnation,
-								    state.sms_delay, delay);
+					SWIM_DEBUG("%lu: dping  %lu => {%lu %c %lu} "
+						   "delay: %u ms, timeout: %lu ms\n",
+						   ctx->sc_self, ctx->sc_self, sendto_id,
+						   SWIM_STATUS_CHARS[state.sms_status],
+						   state.sms_incarnation, state.sms_delay, delay);
 				}
 
 				send_updates = true;
@@ -1097,7 +1107,8 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id, swim_id_t id,
 	rc = ctx->sc_ops->get_member_state(ctx, from_id, &id_state);
 	if (rc == -DER_NONEXIST || id_state.sms_status == SWIM_MEMBER_DEAD) {
 		swim_ctx_unlock(ctx);
-		SWIM_INFO("%lu: skip untrustable update from %lu, rc = %d\n", self_id, from_id, rc);
+		SWIM_DEBUG("%lu: skip untrustable update from %lu, rc = %d\n", self_id, from_id,
+			   rc);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	} else if (rc != 0) {
 		swim_ctx_unlock(ctx);
@@ -1108,8 +1119,8 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id, swim_id_t id,
 	if ((from_id == ctx->sc_target || id == ctx->sc_target) &&
 	    (ctx_state == SCS_BEGIN || ctx_state == SCS_PINGED || ctx_state == SCS_IPINGED)) {
 		ctx_state = SCS_SELECT;
-		SWIM_INFO("target %lu %s okay\n", ctx->sc_target,
-			  from_id == id ? "dping" : "iping");
+		SWIM_DEBUG("target %lu %s okay\n", ctx->sc_target,
+			   from_id == id ? "dping" : "iping");
 	}
 
 	for (i = 0; i < nupds; i++) {
