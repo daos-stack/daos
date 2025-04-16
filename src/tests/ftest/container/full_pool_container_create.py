@@ -57,8 +57,7 @@ class FullPoolContainerCreate(TestWithServers):
         free_space_before = self.pool.get_pool_free_space()
         self.log.info("Pool free space before write: %s", free_space_before)
 
-        # generate random dkey, akey each time
-        # write 1M until no space, then 10K, etc. to fill pool quickly
+        # Write decreasing amounts of data to container until pool out of space
         self.container.fill()
 
         # query the pool

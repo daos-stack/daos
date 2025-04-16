@@ -1209,9 +1209,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                         self.log.error("caught exception while writing object: %s", repr(excep))
                         self.close()
                         raise DaosTestError("Unexpected error filling container") from excep
-                    else:
-                        self.log.info("pool is too full for %s byte objects", self.data_size.value)
-                        break
+                    self.log.info("pool is too full for %s byte objects", self.data_size.value)
+                    break
             self.data_size.update(self.data_size.value // 2, "data_size")
         self.data_size.update(original_data_size)
         return data_written
