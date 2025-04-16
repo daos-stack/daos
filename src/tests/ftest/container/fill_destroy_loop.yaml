@@ -9,10 +9,13 @@ server_config:
   engines:
     0:
       targets: 4
-      storage: auto
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
 
 pool:
-  size: 5G
+  size: 410M
   test_loop: 5
   delta: 1MiB
   reclaim_props:
@@ -25,6 +28,6 @@ container:
   type: POSIX
   object_qty: 1
   record_qty: 1
-  data_size: 8388608 # 8MiB
+  data_size: 2097152 # 2MiB
   akey_size: 5
   dkey_size: 5

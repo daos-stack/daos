@@ -7,6 +7,8 @@
 import time
 
 from apricot import TestWithServers
+from general_utils import DaosTestError, get_random_bytes
+from test_utils_container import TestContainerData
 
 
 class FullPoolContainerCreate(TestWithServers):
@@ -38,6 +40,9 @@ class FullPoolContainerCreate(TestWithServers):
         :avocado: tags=container
         :avocado: tags=FullPoolContainerCreate,test_no_space_cont_create
         """
+        # full storage rc
+        err = "-1007"
+
         # test params
         threshold_percent = self.params.get("threshold_percent", "/run/pool/*")
 
@@ -57,8 +62,29 @@ class FullPoolContainerCreate(TestWithServers):
         free_space_before = self.pool.get_pool_free_space()
         self.log.info("Pool free space before write: %s", free_space_before)
 
-        # Write decreasing amounts of data to container until pool out of space
-        self.container.fill()
+        # generate random dkey, akey each time
+        # write 1M until no space, then 10K, etc. to fill pool quickly
+        for obj_sz in [1048576, 10240, 10, 1]:
+            write_count = 0
+            while True:
+                self.log.debug("writing obj %s sz %s to container", write_count, obj_sz)
+                my_str = b"a" * obj_sz
+                dkey = get_random_bytes(5)
+                akey = get_random_bytes(5)
+                try:
+                    self.container.written_data.append(TestContainerData(False))
+                    self.container.written_data[-1].write_record(
+                        self.container, akey, dkey, my_str, obj_class='OC_SX')
+                    self.log.debug("wrote obj %s, sz %s", write_count, obj_sz)
+                    write_count += 1
+                except DaosTestError as excep:
+                    if err not in repr(excep):
+                        self.log.error("caught exception while writing object: %s", repr(excep))
+                        self.container.close()
+                        self.fail("caught exception while writing object: {}".format(repr(excep)))
+                    else:
+                        self.log.info("pool is too full for %s byte objects", obj_sz)
+                        break
 
         # query the pool
         self.log.info("Pool Query after filling")
