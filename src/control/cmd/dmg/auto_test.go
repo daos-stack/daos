@@ -378,7 +378,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos-server/daos_server.log"),
 		},
 		"dcpm scm; MS replicas set": {
 			msReplicas: "moon-111,mars-115,jupiter-119",
@@ -388,7 +388,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithMgmtSvcReplicas("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos-server/daos_server.log"),
 		},
 		"dcpm scm; unmet min nr ssds": {
 			hostResponsesSet: [][]*control.HostResponse{
@@ -425,7 +425,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos-server/daos_server.log"),
 		},
 		"dcpm scm; control_metadata path set": {
 			extMetadataPath: metadataMountPath,
@@ -443,7 +443,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
-				WithControlLogFile("/tmp/daos_server.log").
+				WithControlLogFile("/var/log/daos-server/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
 		"tmpfs scm; md-on-ssd; no logging to stdout": {
@@ -454,7 +454,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
-				WithControlLogFile("/tmp/daos_server.log").
+				WithControlLogFile("/var/log/daos-server/daos_server.log").
 				WithControlMetadata(controlMetadata),
 			expOutPrefix: "port: 10001",
 		},
@@ -542,8 +542,8 @@ func TestAuto_ConfigWrite(t *testing.T) {
 		defaultFiPort         = 31416
 		defaultFiPortInterval = 1000
 		defaultTargetCount    = 16
-		defaultEngineLogFile  = "/tmp/daos_engine"
-		defaultControlLogFile = "/tmp/daos_server.log"
+		defaultEngineLogFile  = "/var/log/daos-server/daos_engine"
+		defaultControlLogFile = "/var/log/daos-server/daos_server.log"
 
 		expOut = `port: 10001
 transport_config:
