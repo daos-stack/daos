@@ -199,6 +199,7 @@ const (
 	ServerConfigScmDiffClass
 	ServerConfigEngineBdevRolesMismatch
 	ServerConfigSysRsvdZero
+	ServerConfigEnableHotplugDeprecated
 )
 
 // SPDK library bindings codes

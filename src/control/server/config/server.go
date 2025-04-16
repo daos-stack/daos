@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,6 +34,8 @@ const (
 	defaultConfigPath   = "../etc/daos_server.yml"
 	ConfigOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
+
+	msgAPsMSReps = "access_points is deprecated; please use mgmt_svc_replicas instead"
 )
 
 // SupportConfig is defined here to avoid a import cycle
@@ -41,7 +44,8 @@ type SupportConfig struct {
 }
 
 type deprecatedParams struct {
-	AccessPoints []string `yaml:"access_points,omitempty"` // deprecated in 2.8
+	AccessPoints  []string `yaml:"access_points,omitempty"`  // deprecated in 2.8
+	EnableHotplug *bool    `yaml:"enable_hotplug,omitempty"` // deprecated in 2.8
 }
 
 // Server describes configuration options for DAOS control plane.
@@ -54,7 +58,7 @@ type Server struct {
 	BdevExclude       []string                  `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO       bool                      `yaml:"disable_vfio"`
 	DisableVMD        *bool                     `yaml:"disable_vmd"`
-	EnableHotplug     bool                      `yaml:"enable_hotplug"`
+	DisableHotplug    *bool                     `yaml:"disable_hotplug"`
 	NrHugepages       int                       `yaml:"nr_hugepages"`        // total for all engines
 	SystemRamReserved int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages  bool                      `yaml:"disable_hugepages"`
@@ -193,7 +197,10 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	engineCfg.SystemName = cfg.SystemName
 	engineCfg.SocketDir = cfg.SocketDir
 	engineCfg.Modules = cfg.Modules
-	engineCfg.Storage.EnableHotplug = cfg.EnableHotplug
+	engineCfg.Storage.EnableHotplug = true
+	if cfg.DisableHotplug != nil && *cfg.DisableHotplug {
+		engineCfg.Storage.EnableHotplug = false
+	}
 }
 
 // WithEngines sets the list of engine configurations.
@@ -256,9 +263,9 @@ func (cfg *Server) WithDisableVMD(disabled bool) *Server {
 	return cfg
 }
 
-// WithEnableHotplug can be used to enable hotplug
-func (cfg *Server) WithEnableHotplug(enabled bool) *Server {
-	cfg.EnableHotplug = enabled
+// WithDisableHotplug can be used to disable hotplug.
+func (cfg *Server) WithDisableHotplug(disabled bool) *Server {
+	cfg.DisableHotplug = &disabled
 	return cfg
 }
 
@@ -329,14 +336,12 @@ func DefaultServer() *Server {
 	return &Server{
 		SystemName:        build.DefaultSystemName,
 		SocketDir:         defaultRuntimeDir,
-		MgmtSvcReplicas:   []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:       build.DefaultControlPort,
 		TransportConfig:   security.DefaultServerTransportConfig(),
 		Hyperthreads:      false,
 		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
 		Path:              defaultConfigPath,
 		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
-		EnableHotplug:     false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}
@@ -378,9 +383,15 @@ func (cfg *Server) Load(log logging.Logger) error {
 	}
 
 	if len(cfg.deprecatedParams.AccessPoints) > 0 {
-		log.Notice("access_points is deprecated; please use mgmt_svc_replicas instead")
+		if len(cfg.MgmtSvcReplicas) > 0 {
+			return errors.New(msgAPsMSReps)
+		}
+		log.Notice(msgAPsMSReps)
 		cfg.MgmtSvcReplicas = cfg.deprecatedParams.AccessPoints
 		cfg.deprecatedParams.AccessPoints = nil
+	}
+	if len(cfg.MgmtSvcReplicas) == 0 {
+		cfg.MgmtSvcReplicas = []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)}
 	}
 
 	return nil
@@ -656,13 +667,30 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
+	if cfg.deprecatedParams.EnableHotplug != nil {
+		// Fail if conflicting EnableHotplug and DisableHotplug both set.
+		if cfg.DisableHotplug != nil {
+			return FaultConfigEnableHotplugDeprecated
+		}
+		// Fail if deprecated EnableHotplug setting is explicitly set to false.
+		if *cfg.deprecatedParams.EnableHotplug == false {
+			return FaultConfigEnableHotplugDeprecated
+		}
+		log.Notice("enable_hotplug is deprecated; please use disable_hotplug instead " +
+			"(false by default)")
+	}
+	// Set DisableHotplug reference if unset in config file.
+	if cfg.DisableHotplug == nil {
+		cfg.WithDisableHotplug(false)
+	}
+
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
 	}
 
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
-		cfg.EnableHotplug, !(*cfg.DisableVMD))
+		!(*cfg.DisableHotplug), !(*cfg.DisableVMD))
 
 	// Update MS replica addresses with control port if port is not supplied.
 	newReps := make([]string, 0, len(cfg.MgmtSvcReplicas))
