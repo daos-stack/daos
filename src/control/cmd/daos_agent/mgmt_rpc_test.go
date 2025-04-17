@@ -8,7 +8,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"os"
 	"sync"
 	"testing"
 
@@ -94,6 +96,15 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return out
 	}
 
+	cfgRe := func(in string) *ConfigRegexp {
+		t.Helper()
+		cr := new(ConfigRegexp)
+		if err := cr.FromString(in); err != nil {
+			t.Fatal(err)
+		}
+		return cr
+	}
+
 	for name, tc := range map[string]struct {
 		sysName           string
 		mockGetAttachInfo getAttachInfoFn
@@ -101,6 +112,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		mockGetNetIfaces  func() ([]net.Interface, error)
 		numaGetter        *mockNUMAProvider
 		fabricCfg         []*NUMAFabricConfig
+		tmCfg             *TelemetryConfig
 		reqBytes          []byte
 		expResp           *mgmtpb.GetAttachInfoResp
 		expErr            error
@@ -186,6 +198,48 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{Status: int32(daos.Unreachable)},
 		},
+		"client telemetry enabled": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
+			tmCfg: &TelemetryConfig{
+				Port:    1234,
+				Enabled: true,
+			},
+			expResp: func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
+				resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+					fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+					fmt.Sprintf("%s=1", telemetry.ClientMetricsRegisterEnv),
+				)
+				return resp
+			}(respWith(testResp, "test1", "dev1")),
+		},
+		"client telemetry enabled; self not in register pattern": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
+			tmCfg: &TelemetryConfig{
+				Port:       1234,
+				Enabled:    true,
+				RegPattern: cfgRe("moo"),
+			},
+			expResp: func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
+				resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+					fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+				)
+				return resp
+			}(respWith(testResp, "test1", "dev1")),
+		},
+		"client telemetry enabled; self in ignore pattern": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
+			tmCfg: &TelemetryConfig{
+				Port:       1234,
+				Enabled:    true,
+				IgnPattern: cfgRe(`.*\.test`),
+			},
+			expResp: func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
+				resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+					fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+				)
+				return resp
+			}(respWith(testResp, "test1", "dev1")),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -235,14 +289,20 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				nf := NUMAFabricFromConfig(log, tc.fabricCfg)
 				ic.EnableStaticFabricCache(test.Context(t), nf)
 			}
+			if tc.tmCfg != nil {
+				if err := tc.tmCfg.Validate(); err != nil {
+					t.Fatal(err)
+				}
+			}
 			mod := &mgmtModule{
 				log:        log,
 				sys:        testSys,
 				cache:      ic,
 				numaGetter: tc.numaGetter,
+				tmCfg:      tc.tmCfg,
 			}
 
-			respBytes, err := mod.handleGetAttachInfo(test.Context(t), tc.reqBytes, 123)
+			respBytes, err := mod.handleGetAttachInfo(test.Context(t), tc.reqBytes, int32(os.Getpid()))
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -320,7 +380,8 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 
-			_, err := mod.getAttachInfo(test.Context(t), 0,
+			_, err := mod.getAttachInfo(test.Context(t),
+				&procInfo{pid: 0},
 				&mgmtpb.GetAttachInfoReq{
 					Sys: sysName,
 				})

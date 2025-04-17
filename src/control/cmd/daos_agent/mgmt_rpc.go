@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,6 +43,7 @@ type mgmtModule struct {
 	cache          *InfoCache
 	monitor        *procMon
 	cliMetricsSrc  *promexp.ClientSource
+	tmCfg          *TelemetryConfig
 	useDefaultNUMA atm.Bool
 
 	numaGetter  hardware.ProcessNUMAProvider
@@ -132,14 +134,14 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return respb, err
 	}
 
-	numaNode, err := mod.getNUMANode(ctx, pid)
+	client.numaNode, err = mod.getNUMANode(ctx, pid)
 	if err != nil {
 		mod.log.Errorf("%s: unable to get NUMA node: %s", client, err)
 		return nil, err
 	}
-	mod.log.Tracef("%s: detected numa %d", client, numaNode)
+	mod.log.Tracef("%s: detected numa %d", client, client.numaNode)
 
-	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq)
+	resp, err := mod.getAttachInfo(ctx, client, pbReq)
 	switch {
 	case fault.IsFaultCode(err, code.ServerWrongSystem):
 		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)}
@@ -152,7 +154,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	}
 
 	if resp.ClientNetHint != nil {
-		mod.log.Infof("%s: numa:%d iface:%s dom:%s prov:%s srx:%d", client, numaNode,
+		mod.log.Infof("%s: numa:%d iface:%s dom:%s prov:%s srx:%d", client, client.numaNode,
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain,
 			resp.ClientNetHint.Provider, resp.ClientNetHint.SrvSrxSet)
 	}
@@ -177,7 +179,7 @@ func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error)
 	return numaNode, nil
 }
 
-func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
+func (mod *mgmtModule) getAttachInfo(ctx context.Context, client *procInfo, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 	rawResp, err := mod.getAttachInfoResp(ctx, req.Sys)
 	if err != nil {
 		mod.log.Errorf("failed to fetch AttachInfo: %s", err.Error())
@@ -196,7 +198,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	domain := req.Domain
 	if req.Interface == "" {
 		fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
-			NUMANode: numaNode,
+			NUMANode: int(client.numaNode),
 			DevClass: hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
 			Provider: resp.ClientNetHint.Provider,
 		})
@@ -218,7 +220,32 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 	}
 
+	mod.addTelemetrySettings(ctx, client, resp)
+
 	return resp, nil
+}
+
+// addTelemetrySettings modifies the response by adding telemetry settings
+// before returning it.
+func (mod *mgmtModule) addTelemetrySettings(ctx context.Context, client *procInfo, resp *mgmtpb.GetAttachInfoResp) {
+	if resp == nil || mod == nil || mod.tmCfg == nil || !mod.tmCfg.Enabled {
+		return
+	}
+
+	resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+		fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+	)
+
+	if mod.tmCfg.IgnPattern != nil && mod.tmCfg.IgnPattern.MatchString(client.name) {
+		return
+	}
+	if mod.tmCfg.RegPattern != nil && !mod.tmCfg.RegPattern.MatchString(client.name) {
+		return
+	}
+
+	resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+		fmt.Sprintf("%s=1", telemetry.ClientMetricsRegisterEnv),
+	)
 }
 
 func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, sys string) (*mgmtpb.GetAttachInfoResp, error) {
