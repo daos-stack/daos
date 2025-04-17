@@ -2517,6 +2517,8 @@ test_d_rank_list_to_str(void **state)
 	d_rank_list_t *ranks;
 	char          *ranks_str = NULL;
 	int            i;
+	char          *line;
+	char          *buf;
 	int            rc;
 
 	// Test with null list
@@ -2562,16 +2564,31 @@ test_d_rank_list_to_str(void **state)
 	D_FREE(ranks_str);
 	d_rank_list_free(ranks);
 
-	// Test truncate error
+	// Test with long list
 	ranks = d_rank_list_alloc(1024);
 	assert_non_null(ranks);
-	for (i = 0; i < 1024; ++i)
+	D_ALLOC(line, 1024 * 5);
+	assert_non_null(line);
+	buf    = line;
+	buf[0] = '[';
+	buf++;
+	for (i = 0; i < 1024; ++i) {
+		int len;
+
 		ranks->rl_ranks[i] = 2 * i + 1;
+		len                = sprintf(buf, "%d,", ranks->rl_ranks[i]);
+		assert_true(len > 0);
+		buf += len;
+	}
+	memcpy(buf - 1, "]", sizeof("]"));
 
 	rc = d_rank_list_to_str(ranks, &ranks_str);
-	assert_int_equal(rc, -DER_TRUNC);
-	assert_null(ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_non_null(ranks_str);
+	assert_string_equal(ranks_str, line);
 
+	D_FREE(line);
+	D_FREE(ranks_str);
 	d_rank_list_free(ranks);
 }
 
@@ -2639,6 +2656,8 @@ test_d_rank_range_list_str(void **state)
 	d_rank_range_list_t *range_list;
 	char                *ranks_str = NULL;
 	int                  i;
+	char                *line;
+	char                *buf;
 	int                  rc;
 
 	// Test with empty list
@@ -2680,18 +2699,32 @@ test_d_rank_range_list_str(void **state)
 	D_FREE(ranks_str);
 	d_rank_range_list_free(range_list);
 
-	// Test truncate error
+	// Test with lot of ranks
 	range_list = d_rank_range_list_alloc(1024);
 	assert_non_null(range_list);
+	D_ALLOC(line, 1024 * 5);
+	assert_non_null(line);
+	buf    = line;
+	buf[0] = '[';
+	buf++;
 	for (i = 0; i < 1024; ++i) {
+		int len;
+
 		range_list->rrl_ranges[i].lo = i;
 		range_list->rrl_ranges[i].hi = i;
+		len                          = sprintf(buf, "%d,", i);
+		assert_true(len > 0);
+		buf += len;
 	}
+	memcpy(buf - 1, "]", sizeof("]"));
 
 	rc = d_rank_range_list_str(range_list, &ranks_str);
-	assert_int_equal(rc, -DER_TRUNC);
-	assert_null(ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_non_null(ranks_str);
+	assert_string_equal(ranks_str, line);
 
+	D_FREE(line);
+	D_FREE(ranks_str);
 	d_rank_range_list_free(range_list);
 }
 
