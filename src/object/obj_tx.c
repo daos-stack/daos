@@ -982,7 +982,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	uint32_t                  start;
 	uint32_t                  req_cnt;
 	int                       i;
-	tse_sched_t              *sched         = tse_task2sched(task);
+	tse_sched_t              *sched = tse_task2sched(task);
 
 	if (rc == 0) {
 		rc = oco->oco_ret;
