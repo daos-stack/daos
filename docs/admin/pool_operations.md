@@ -1257,9 +1257,10 @@ to restore redundancy on the remaining engines.
 #### System Exclude
 
 To exclude ranks or hosts from all pools that they belong to, the 'dmg system exclude'
-command can be used. The command takes either a host-set or rank-set:
+command can be used. The command takes either a host-set or rank-set. Requesting a
+host-set excludes all ranks on selected hosts.
 
-To exclude a set of hosts from all pools (excludes all ranks on selected hosts):
+To exclude a set of hosts from all pools:
 
 ```Bash
 $ dmg system exclude --rank-hosts foo-[001-100]
