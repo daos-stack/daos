@@ -1310,7 +1310,7 @@ $ dmg pool drain --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3}
 
 The pool target reintegrate command accepts 3 parameters:
 
-* The label or UUID of the pool that the targets will be reintegrated into.
+* The label or UUID of the pool that the targets to be drained.
 * The engine rank(s) of the target(s) to be drained. This can be a single integer or a list of
   comma-separated ranges e.g. "1" or "1-9,10,12-19".
 * The target indices of the targets to be drained from each specified engine rank (optional).
