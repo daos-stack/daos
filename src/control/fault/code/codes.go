@@ -199,6 +199,7 @@ const (
 	ServerConfigScmDiffClass
 	ServerConfigEngineBdevRolesMismatch
 	ServerConfigSysRsvdZero
+	ServerConfigBdevExcludeClash
 )
 
 // SPDK library bindings codes

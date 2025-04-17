@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -639,6 +640,16 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 	return nil
 }
 
+// GetBdevCfgs retrieves bdev tier configs from all engine components of the server config.
+func (cfg *Server) GetBdevCfgs() storage.TierConfigs {
+	var bdevCfgs storage.TierConfigs
+	for _, engineCfg := range cfg.Engines {
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
+	}
+
+	return bdevCfgs
+}
+
 // Validate asserts that config meets minimum requirements.
 func (cfg *Server) Validate(log logging.Logger) (err error) {
 	msg := "validating config file"
@@ -733,6 +744,14 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
+	}
+
+	// Verify bdev_exclude doesn't clash with any configured bdev.
+	pciAddrs := cfg.GetBdevCfgs().NVMeBdevs().Devices()
+	for _, a := range pciAddrs {
+		if common.Includes(cfg.BdevExclude, a) {
+			return FaultConfigBdevExcludeClash
+		}
 	}
 
 	return nil

@@ -102,15 +102,6 @@ func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
 	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
 }
 
-func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
-	var bdevCfgs storage.TierConfigs
-	for _, engineCfg := range cfg.Engines {
-		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
-	}
-
-	return bdevCfgs
-}
-
 func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, rep := range cfg.MgmtSvcReplicas {
@@ -314,7 +305,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		return nil
 	}
 
-	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)
+	bdevCfgs := srv.cfg.GetBdevCfgs()
 
 	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
 	if bdevCfgs.HaveRealNVMe() && srv.runningUser.Username != "root" {
@@ -326,7 +317,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		}
 	}
 
-	// Clean leftover SPDK hugepages and lockfiles for relevant NVMe SSDs before prepare.
+	// Clean leftover SPDK hugepages and lockfiles for configured NVMe SSDs before prepare.
 	pciAddrs := bdevCfgs.NVMeBdevs().Devices()
 	if err := cleanSpdkResources(srv, pciAddrs); err != nil {
 		srv.log.Error(errors.Wrap(err, "prepBdevStorage").Error())
