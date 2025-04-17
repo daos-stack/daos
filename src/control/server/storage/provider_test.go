@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -263,6 +264,92 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expReq, gotReq, defBdevCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected generated request (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_ProviderUpgradeBdevConfig(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg      *Config
+		ctrlrs   NvmeControllers
+		bdevProv *mockBdevProvider
+		expCalls map[string]int
+		expErr   error
+	}{
+		"one bdev: read fails, write fails": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					NewTierConfig().WithStorageClass(ClassNvme.String()).WithBdevDeviceList("/dev/loop0"),
+				},
+			},
+			ctrlrs: MockNvmeControllers(1),
+			bdevProv: &mockBdevProvider{
+				ReadConfigErr:  FaultInvalidSPDKConfig(errors.New("whoops")),
+				WriteConfigErr: errors.New("write config failed"),
+			},
+			expErr: errors.New("write config failed"),
+		},
+		"one bdev: read fails for something other than invalid spdk config": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					NewTierConfig().WithStorageClass(ClassNvme.String()).WithBdevDeviceList("/dev/loop0"),
+				},
+			},
+			ctrlrs: MockNvmeControllers(1),
+			bdevProv: &mockBdevProvider{
+				ReadConfigErr:  errors.New("read config failed"),
+				WriteConfigErr: errors.New("write config failed"),
+			},
+			expErr: errors.New("read config failed"),
+		},
+		"one bdev: read fails, successful write": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					NewTierConfig().WithStorageClass(ClassNvme.String()).WithBdevDeviceList("/dev/loop0"),
+				},
+			},
+			ctrlrs: MockNvmeControllers(1),
+			bdevProv: &mockBdevProvider{
+				ReadConfigErr: FaultInvalidSPDKConfig(errors.New("whoops")),
+			},
+			expCalls: map[string]int{
+				"ReadConfig":  1,
+				"WriteConfig": 1,
+			},
+		},
+		"one bdev: no update needed": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					NewTierConfig().WithStorageClass(ClassNvme.String()).WithBdevDeviceList("/dev/loop0"),
+				},
+			},
+			ctrlrs:   MockNvmeControllers(1),
+			bdevProv: &mockBdevProvider{},
+			expCalls: map[string]int{
+				"ReadConfig": 1,
+			},
+		},
+		"no bdevs: success": {
+			cfg: &Config{
+				Tiers: TierConfigs{},
+			},
+			ctrlrs:   NvmeControllers{},
+			bdevProv: &mockBdevProvider{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t, test.Context(t))
+
+			p := NewProvider(logging.FromContext(ctx), 0, tc.cfg, nil, nil, tc.bdevProv, nil)
+			gotErr := p.UpgradeBdevConfig(ctx, tc.ctrlrs)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expCalls, tc.bdevProv.callCounts); diff != "" {
+				t.Fatalf("\nunexpected calls (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

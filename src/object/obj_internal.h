@@ -486,6 +486,8 @@ struct obj_auxi_args {
 	uint32_t			 flags;
 	uint16_t			 retry_cnt;
 	uint16_t			 inprogress_cnt;
+	/* Last timestamp (in second) when report retry warning message. */
+	uint32_t                         retry_warn_ts;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;

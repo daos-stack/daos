@@ -471,8 +471,7 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		/*
 		 * Sleep 2 seconds before next round when:
 		 * - Aggregation isn't runnable yet, or;
-		 * - Last round of aggregation failed, or;
-		 * - There is no space pressure;
+		 * - Last round of aggregation failed;
 		 */
 		uint64_t msecs = 2000;
 
@@ -499,8 +498,8 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				  param->ap_vos_agg ? "VOS" : "EC");
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
-			/* Don't sleep too long when there is space pressure */
-			msecs = 2ULL * 100;
+			/* Don't sleep when there is space pressure */
+			msecs = 0;
 		}
 
 		if (param->ap_vos_agg)
@@ -515,10 +514,13 @@ next:
 		/* sleep 18 seconds for EC aggregation ULT if the pool is in rebuilding,
 		 * if no space pressure.
 		 */
-		if (cont->sc_pool->spc_pool->sp_rebuilding && !param->ap_vos_agg && msecs != 200)
+		if (cont->sc_pool->spc_pool->sp_rebuilding && !param->ap_vos_agg && msecs != 0)
 			msecs = 18000;
 
-		sched_req_sleep(req, msecs);
+		if (msecs != 0)
+			sched_req_sleep(req, msecs);
+		else
+			sched_req_yield(req);
 	}
 out:
 	D_DEBUG(DB_EPC, DF_CONT "[%d]: %s Aggregation ULT stopped\n",

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,7 +27,8 @@
 #include <gurt/common.h>
 
 /* Use debug capability from CaRT */
-#define SWIM_INFO(fmt, ...)	D_DEBUG(DLOG_DBG, fmt, ##__VA_ARGS__)
+#define SWIM_DEBUG(fmt, ...)    D_DEBUG(DLOG_DBG, fmt, ##__VA_ARGS__)
+#define SWIM_INFO(fmt, ...)     D_DEBUG(DLOG_INFO, fmt, ##__VA_ARGS__)
 #define SWIM_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ##__VA_ARGS__)
 
 #ifdef _USE_ABT_SYNC_
