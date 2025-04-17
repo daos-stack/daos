@@ -1275,7 +1275,6 @@ class _Component():
         self._add_sandbox_paths(env)
 
         if GetOption('help'):
-            print('help set')
             return True
 
         self._print(f"Checking targets for component '{self.name}'")
