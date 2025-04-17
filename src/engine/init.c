@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -616,11 +617,18 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		if (rank == dss_self_rank()) {
 			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
 			       self_rank);
+
 			/*
-			 * For now, we just raise a SIGKILL to ourselves; we could
-			 * inform daos_server, who would initiate a termination and
-			 * decide whether to restart us.
+			 * Send RAS event to inform local server of intentional suicide before
+			 * raisin a SIGKILL to ourselves. Local daos_server can then decide
+			 * whether to restart rank.
 			 */
+			ds_notify_ras_eventf(RAS_ENGINE_EVICT_SUICIDE, RAS_TYPE_INFO,
+				RAS_SEV_NOTICE, NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				NULL /* jobid */, NULL /* pool */, NULL /* cont */,
+				NULL /* objid */, NULL /* ctlop */, NULL /* data */,
+				"evicted engine suicide detected");
+
 			rc = kill(getpid(), SIGKILL);
 			if (rc != 0)
 				D_ERROR("failed to raise SIGKILL: %d\n", errno);
