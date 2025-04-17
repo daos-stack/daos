@@ -1237,7 +1237,7 @@ $ dmg pool exclude --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx
 
 The pool target exclude command accepts 4 parameters:
 
-* The label or UUID of the pool that the targets will be reintegrated into.
+* The label or UUID of the pool that the targets will be excluded.
 * The engine rank(s) of the target(s) to be excluded. This can be a single integer or a list of
   comma-separated ranges e.g. "1" or "1-9,10,12-19".
 * The target indices of the targets to be excluded from each specified engine rank (optional).
