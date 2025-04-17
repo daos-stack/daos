@@ -1567,6 +1567,8 @@ obj_create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, d_list_t *tgt_l
 		a->pool_hdl = pool_hdl;
 		a->tgt_id   = entry->tgt_id;
 
+		D_DEBUG(DB_TRACE, "after making args");
+
 		rc = dc_task_depend(*task, 1, &ping_task);
 		if (rc != 0) {
 			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
@@ -1580,6 +1582,8 @@ obj_create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, d_list_t *tgt_l
 
 		tse_task_list_add(ping_task, &ping_task_list);
 	}
+
+	tse_task_list_sched(&ping_task_list, false);
 
 cleanup:
 	while ((entry = d_list_pop_entry(tgt_list, struct tgt_list_entry, link))) {
