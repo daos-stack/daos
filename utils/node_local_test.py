@@ -2313,15 +2313,6 @@ streams=all
         except OSError:
             print("mkdir correctly prevented for .dfuse_ctrl")
 
-        restore = f"""log_mask={self.conf.args.client_debug}
-streams=all"""
-        try:
-            with open(ctrl, "w") as log:
-                log.write(restore)
-        except OSError:
-            print("Error restoring log mask")
-            self.fail()
-
         # Skip the log test due to errors and fake leaks from changing levels
         if dfuse.stop(run_log_test=False):
             self.fatal_errors = True
