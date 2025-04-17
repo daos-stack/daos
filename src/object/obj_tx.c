@@ -1092,48 +1092,98 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		int                      ping_task_rc;
 		start   = dc_tx_leftmost_req(tx, false);
 		req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
+		int           tgt_ids_rc;
+		daos_handle_t ph;
+		d_list_t      tgt_list_head;
+		D_INIT_LIST_HEAD(&tgt_list_head);
+
+		// New
 		for (i = 0; i < req_cnt; i++) {
 			dcsr = &tx->tx_req_cache[i + start];
 			if (dcsr->dcsr_opc == DCSO_UPDATE) {
-				int      tgt_ids_rc;
-				d_list_t tgt_list_head;
-				D_INIT_LIST_HEAD(&tgt_list_head);
-
 				obj = dcsr->dcsr_obj;
-
 				tgt_ids_rc =
 				    obj_gather_tgt_ids(&tgt_list_head, obj, dcsr->dcsr_dkey_hash);
 				if (tgt_ids_rc != 0) {
 					DL_ERROR(tgt_ids_rc, "Failed to gather target IDs");
 				}
-				ping_task_rc = obj_tgt_ping_task(sched, obj, dcsr->dcsr_dkey_hash,
-								 &tgt_list_head, &required_task);
-				if (ping_task_rc != 0) {
-					D_ERROR("Failed to create ping task %p: %d, %d\n",
-						required_task, ping_task_rc, rc);
-					tx->tx_status = TX_ABORTED;
-				}
-
-				if (required_task != NULL) {
-					D_INFO("Adding %p as dependency on %p", required_task,
-					       task);
-					ping_task_rc = dc_task_depend(task, 1, &required_task);
-					if (ping_task_rc != 0) {
-						D_ERROR("Failed to add dependency on ping task "
-							"(%p)\n",
-							required_task);
-						tx->tx_status = TX_ABORTED;
-					}
-
-					ping_task_rc = tse_task_schedule(required_task, false);
-					if (ping_task_rc != 0) {
-						D_ERROR("Failed to schedule ping task %p: %d, %d\n",
-							required_task, ping_task_rc, rc);
-						tx->tx_status = TX_ABORTED;
-					}
-				}
 			}
 		}
+
+		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
+		D_ASSERT(dcsr != NULL);
+		obj = dcsr->dcsr_obj;
+		D_ASSERT(obj != NULL);
+		D_ASSERT(obj->cob_pool != NULL);
+		dc_pool2hdl_noref(obj->cob_pool, &ph);
+
+		ping_task_rc = obj_create_ping_task(sched, ph, &tgt_list_head, &required_task);
+		if (ping_task_rc != 0) {
+			D_ERROR("Failed to create ping task %p: %d, %d\n", required_task,
+				ping_task_rc, rc);
+			tx->tx_status = TX_ABORTED;
+		}
+
+		if (required_task != NULL) {
+			D_INFO("Adding %p as dependency on %p", required_task, task);
+			ping_task_rc = dc_task_depend(task, 1, &required_task);
+			if (ping_task_rc != 0) {
+				D_ERROR("Failed to add dependency on ping task "
+					"(%p)\n",
+					required_task);
+				tx->tx_status = TX_ABORTED;
+			}
+
+			ping_task_rc = tse_task_schedule(required_task, false);
+			if (ping_task_rc != 0) {
+				D_ERROR("Failed to schedule ping task %p: %d, %d\n", required_task,
+					ping_task_rc, rc);
+				tx->tx_status = TX_ABORTED;
+			}
+		}
+
+		// for (i = 0; i < req_cnt; i++) {
+		// 	dcsr = &tx->tx_req_cache[i + start];
+		// 	if (dcsr->dcsr_opc == DCSO_UPDATE) {
+		// 		int      tgt_ids_rc;
+		// 		d_list_t tgt_list_head;
+		// 		D_INIT_LIST_HEAD(&tgt_list_head);
+
+		// 		obj = dcsr->dcsr_obj;
+
+		// 		tgt_ids_rc =
+		// 		    obj_gather_tgt_ids(&tgt_list_head, obj, dcsr->dcsr_dkey_hash);
+		// 		if (tgt_ids_rc != 0) {
+		// 			DL_ERROR(tgt_ids_rc, "Failed to gather target IDs");
+		// 		}
+		// 		ping_task_rc = obj_tgt_ping_task(sched, obj, dcsr->dcsr_dkey_hash,
+		// 						 &tgt_list_head, &required_task);
+		// 		if (ping_task_rc != 0) {
+		// 			D_ERROR("Failed to create ping task %p: %d, %d\n",
+		// 				required_task, ping_task_rc, rc);
+		// 			tx->tx_status = TX_ABORTED;
+		// 		}
+
+		// 		if (required_task != NULL) {
+		// 			D_INFO("Adding %p as dependency on %p", required_task,
+		// 			       task);
+		// 			ping_task_rc = dc_task_depend(task, 1, &required_task);
+		// 			if (ping_task_rc != 0) {
+		// 				D_ERROR("Failed to add dependency on ping task "
+		// 					"(%p)\n",
+		// 					required_task);
+		// 				tx->tx_status = TX_ABORTED;
+		// 			}
+
+		// 			ping_task_rc = tse_task_schedule(required_task, false);
+		// 			if (ping_task_rc != 0) {
+		// 				D_ERROR("Failed to schedule ping task %p: %d, %d\n",
+		// 					required_task, ping_task_rc, rc);
+		// 				tx->tx_status = TX_ABORTED;
+		// 			}
+		// 		}
+		// 	}
+		// }
 		tx->tx_status = TX_FAILED;
 		rc            = -DER_TX_RESTART;
 	}
