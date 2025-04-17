@@ -281,6 +281,9 @@ pipeline {
         booleanParam(name: 'CI_TEST_LEAP15_RPMs',
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
+                     defaultValue: false,
+                     description: 'Skip all functional test stages (Test)')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
@@ -844,7 +847,7 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
