@@ -1308,7 +1308,7 @@ To drain multiple targets on multiple ranks from a pool:
 $ dmg pool drain --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool target reintegrate command accepts 3 parameters:
+The pool target drain command accepts 3 parameters:
 
 * The label or UUID of the pool that the targets to be drained.
 * The engine rank(s) of the target(s) to be drained. This can be a single integer or a list of
