@@ -1,12 +1,13 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import itertools
+import os
 import random
-import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
@@ -61,8 +62,10 @@ class BoundaryTest(TestWithServers):
             container_num (int): container number to create.
 
         """
+        daos = self.get_daos_command()
+        daos.verbose = False
         try:
-            container = self.get_container(pool)
+            container = self.get_container(pool, daos=daos)
         except (DaosTestError, TestFail) as err:
             self.fail(
                 "#(3.{}.{}) container create failed. err={}".format(pool.label, cont_num, err))
@@ -73,7 +76,6 @@ class BoundaryTest(TestWithServers):
             except (DaosTestError, TestFail) as err:
                 self.fail(
                     "#(3.{}.{}) container IO failed, err: {}".format(pool.label, cont_num, err))
-        time.sleep(2)  # to sync containers before close
 
         try:
             container.close()
@@ -105,8 +107,10 @@ class BoundaryTest(TestWithServers):
         self.log.info('Created %d pools', num_pools)
 
         # Create all containers for all pools in parallel
+        # Use 10 threads per CPU
         container_manager = ThreadManager(
-            self.create_container_and_test, self.get_remaining_time() - 30)
+            self.create_container_and_test, self.get_remaining_time() - 60,
+            max_workers=os.cpu_count() * 5)
         all_pool_cont_args = list(itertools.product(self.pool, range(num_containers)))
         random.shuffle(all_pool_cont_args)
         for pool, cont_num in all_pool_cont_args:

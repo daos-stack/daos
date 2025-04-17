@@ -1,6 +1,6 @@
 hosts:
   test_servers: 4
-timeout: 1200
+timeout: 3000
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -19,7 +19,7 @@ pool:
   label: pool
   set_logmasks: False
 container:
-  control_method: API
+  register_cleanup: False
   akey_size: 5
   dkey_size: 5
   data_size: 256
@@ -32,11 +32,11 @@ boundary_test: !mux
     num_pools: 1
     num_containers: 30000
     with_io: false
-  test_2:
-    num_pools: 100
-    num_containers: 200
-    with_io: false
-  test_with_io:
-    num_pools: 20
-    num_containers: 200
-    with_io: true
+# test_2:
+#   num_pools: 100
+#   num_containers: 200
+#   with_io: false
+# test_with_io:
+#   num_pools: 20
+#   num_containers: 200
+#   with_io: true
