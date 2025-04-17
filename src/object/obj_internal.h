@@ -914,8 +914,7 @@ dc_sgl_out_set(d_sg_list_t *sgl, daos_size_t data_size)
 int
 obj_gather_tgt_ids(d_list_t *head, struct dc_object *obj, uint64_t dkey_hash);
 int
-obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash, d_list_t *tgt_list,
-		  tse_task_t **taskp);
+obj_create_ping_task(tse_sched_t *sched, daos_handle_t ph, d_list_t *tgt_list, tse_task_t **taskp);
 void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
 struct dc_object *obj_addref(struct dc_object *obj);
