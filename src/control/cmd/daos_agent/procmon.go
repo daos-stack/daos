@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -64,6 +65,7 @@ func (phm poolHandleMap) add(poolUUID, handleUUID string) {
 type procInfo struct {
 	log       logging.Logger
 	pid       int32
+	numaNode  uint
 	name      string
 	cancelCtx func()
 	response  chan *procMonResponse
