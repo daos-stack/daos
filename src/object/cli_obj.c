@@ -1471,7 +1471,7 @@ int
 obj_create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, d_list_t *tgt_list,
 		     tse_task_t **task)
 {
-	int                    rc;
+	int                    rc = 0;
 	d_list_t               ping_task_list;
 	struct tgt_list_entry *entry;
 
