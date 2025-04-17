@@ -1393,9 +1393,9 @@ $ dmg pool reintegrate $DAOS_POOL --ranks=5 --target-idx=0,1
 #### System Reintegrate
 
 To reintegrate ranks or hosts from all pools that they belong to, the 'dmg system reintegrate'
-command can be used. The command takes either a host-set or rank-set:
+command can be used. The command takes either a host-set or rank-set. Selecting a host-set reintegrates all ranks on selected hosts.
 
-To reintegrate a set of hosts from all pools (reintegrates all ranks on selected hosts):
+To reintegrate a set of hosts from all pools:
 
 ```Bash
 $ dmg system reintegrate --rank-hosts foo-[001-100]
