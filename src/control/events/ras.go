@@ -59,6 +59,7 @@ const (
 	RASNVMeLinkSpeedChanged    RASID = C.RAS_DEVICE_LINK_SPEED_CHANGED  // warning|notice
 	RASNVMeLinkWidthChanged    RASID = C.RAS_DEVICE_LINK_WIDTH_CHANGED  // warning|notice
 	RASDeviceLEDSet            RASID = C.RAS_DEVICE_LED_SET             // info
+	RASEngineEvictSuicide      RASID = C.RAS_ENGINE_EVICT_SUICIDE       // notice
 )
 
 func (id RASID) String() string {
