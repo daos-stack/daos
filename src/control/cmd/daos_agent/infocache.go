@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +9,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -23,7 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
-	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -48,9 +47,6 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 		devClassGetter:  hwprov.DefaultNetDevClassProvider(log),
 		devStateGetter:  hwprov.DefaultNetDevStateProvider(log),
 	}
-
-	ic.clientTelemetryEnabled.Store(cfg.TelemetryEnabled)
-	ic.clientTelemetryRetain.Store(cfg.TelemetryRetain > 0)
 
 	if cfg.DisableCache {
 		ic.DisableAttachInfoCache()
@@ -250,8 +246,6 @@ type InfoCache struct {
 	cache                   *cache.ItemCache
 	fabricCacheDisabled     atm.Bool
 	attachInfoCacheDisabled atm.Bool
-	clientTelemetryEnabled  atm.Bool
-	clientTelemetryRetain   atm.Bool
 
 	getAttachInfoCb getAttachInfoFn
 	fabricScan      fabricScanFn
@@ -357,27 +351,7 @@ func (c *InfoCache) getAttachInfo(ctx context.Context, rpcClient control.UnaryIn
 	if err != nil {
 		return nil, err
 	}
-	c.addTelemetrySettings(resp)
 	return resp, nil
-}
-
-// addTelemetrySettings modifies the response by adding telemetry settings
-// before returning it.
-func (c *InfoCache) addTelemetrySettings(resp *control.GetAttachInfoResp) {
-	if c == nil || resp == nil {
-		return
-	}
-
-	if c.clientTelemetryEnabled.IsTrue() {
-		resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
-			fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
-		)
-		if c.clientTelemetryRetain.IsTrue() {
-			resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
-				fmt.Sprintf("%s=1", telemetry.ClientMetricsRetainEnv),
-			)
-		}
-	}
 }
 
 // GetAttachInfo fetches the attach info from the cache, and refreshes if necessary.
