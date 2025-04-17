@@ -15,11 +15,14 @@ server_config:
     0:
       targets: 4
       nr_xs_helpers: 0
-      storage: auto
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
   system_ram_reserved: 3
 
 pool:
-  size: 20G
+  size: 5GiB
 
 container:
   type: POSIX
