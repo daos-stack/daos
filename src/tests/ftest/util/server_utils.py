@@ -1144,8 +1144,8 @@ class DaosServerManager(SubprocessManager):
         """Get daos_metrics for the server.
 
         Args:
-            verbose (bool, optional): pass verbose to run_pcmd. Defaults to False.
-            timeout (int, optional): pass timeout to each execution ofrun_pcmd. Defaults to 60.
+            verbose (bool, optional): pass verbose to run_remote. Defaults to False.
+            timeout (int, optional): pass timeout to each execution of run_remote. Defaults to 60.
 
         Returns:
             list: list of CommandResult results for each host. See run_utils.run_remote for details.
