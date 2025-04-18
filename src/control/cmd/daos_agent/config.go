@@ -42,23 +42,24 @@ func (rm refreshMinutes) Duration() time.Duration {
 
 // Config defines the agent configuration.
 type Config struct {
-	SystemName          string                    `yaml:"name"`
-	AccessPoints        []string                  `yaml:"access_points"`
-	ControlPort         int                       `yaml:"port"`
-	RuntimeDir          string                    `yaml:"runtime_dir"`
-	LogFile             string                    `yaml:"log_file"`
-	LogLevel            common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
-	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
-	DisableCache        bool                      `yaml:"disable_caching,omitempty"`
-	CacheExpiration     refreshMinutes            `yaml:"cache_expiration,omitempty"`
-	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
-	EvictOnStart        bool                      `yaml:"enable_evict_on_start,omitempty"`
-	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
-	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
-	ProviderIdx         uint                      // TODO SRS-31: Enable with multiprovider functionality
-	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
-	TelemetryEnabled    bool                      `yaml:"telemetry_enabled,omitempty"`
-	TelemetryRetain     time.Duration             `yaml:"telemetry_retain,omitempty"`
+	SystemName          string                     `yaml:"name"`
+	AccessPoints        []string                   `yaml:"access_points"`
+	ControlPort         int                        `yaml:"port"`
+	RuntimeDir          string                     `yaml:"runtime_dir"`
+	LogFile             string                     `yaml:"log_file"`
+	LogLevel            common.ControlLogLevel     `yaml:"control_log_mask,omitempty"`
+	CredentialConfig    *security.CredentialConfig `yaml:"credential_config"`
+	TransportConfig     *security.TransportConfig  `yaml:"transport_config"`
+	DisableCache        bool                       `yaml:"disable_caching,omitempty"`
+	CacheExpiration     refreshMinutes             `yaml:"cache_expiration,omitempty"`
+	DisableAutoEvict    bool                       `yaml:"disable_auto_evict,omitempty"`
+	EvictOnStart        bool                       `yaml:"enable_evict_on_start,omitempty"`
+	ExcludeFabricIfaces common.StringSet           `yaml:"exclude_fabric_ifaces,omitempty"`
+	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
+	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
+	TelemetryPort       int                        `yaml:"telemetry_port,omitempty"`
+	TelemetryEnabled    bool                       `yaml:"telemetry_enabled,omitempty"`
+	TelemetryRetain     time.Duration              `yaml:"telemetry_retain,omitempty"`
 }
 
 // TelemetryExportEnabled returns true if client telemetry export is enabled.
@@ -113,11 +114,12 @@ func LoadConfig(cfgPath string) (*Config, error) {
 func DefaultConfig() *Config {
 	localServer := fmt.Sprintf("localhost:%d", build.DefaultControlPort)
 	return &Config{
-		SystemName:      build.DefaultSystemName,
-		ControlPort:     build.DefaultControlPort,
-		AccessPoints:    []string{localServer},
-		RuntimeDir:      defaultRuntimeDir,
-		LogLevel:        common.DefaultControlLogLevel,
-		TransportConfig: security.DefaultAgentTransportConfig(),
+		SystemName:       build.DefaultSystemName,
+		ControlPort:      build.DefaultControlPort,
+		AccessPoints:     []string{localServer},
+		RuntimeDir:       defaultRuntimeDir,
+		LogLevel:         common.DefaultControlLogLevel,
+		TransportConfig:  security.DefaultAgentTransportConfig(),
+		CredentialConfig: &security.CredentialConfig{},
 	}
 }
