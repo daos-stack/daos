@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -361,39 +362,46 @@ type checkRepairCmd struct {
 	ForAll bool `short:"f" long:"for-all" description:"Take the same action for all inconsistencies with the same class."`
 
 	Args struct {
-		SeqNum         repairSeqNum `positional-arg-name:"[seq-num]" required:"1"`
-		SelectedAction int          `positional-arg-name:"[action]" required:"1"`
+		SeqNum         repairSeqNum `positional-arg-name:"seq-num|inconsistency-class" required:"1"`
+		SelectedAction int          `positional-arg-name:"interact-opt|action" required:"1"`
 	} `positional-args:"yes"`
 }
 
 func (cmd *checkRepairCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
-	qReq := new(control.SystemCheckQueryReq)
-	qReq.Seqs = []uint64{uint64(cmd.Args.SeqNum)}
-	qResp, err := control.SystemCheckQuery(ctx, cmd.ctlInvoker, qReq)
-	if err != nil {
-		return err
-	}
-
-	if len(qResp.Reports) == 0 {
-		return errors.Errorf("no report found for seq %s", cmd.Args.SeqNum)
-	}
-
-	report := qResp.Reports[0]
-	if !report.IsInteractive() {
-		return errors.Errorf("finding %s is already resolved: %s", cmd.Args.SeqNum, report.Resolution())
-	}
-	choices := report.RepairChoices()
-	if cmd.Args.SelectedAction < 0 || cmd.Args.SelectedAction >= len(choices) {
-		return errors.Errorf("invalid action %d for seq %s", cmd.Args.SelectedAction, cmd.Args.SeqNum)
-	}
-
 	req := new(control.SystemCheckRepairReq)
 	req.Seq = uint64(cmd.Args.SeqNum)
 	req.ForAll = cmd.ForAll
-	if err := req.SetAction(int32(choices[cmd.Args.SelectedAction].Action)); err != nil {
-		return err
+
+	if cmd.ForAll {
+		if err := req.SetAction(int32(cmd.Args.SelectedAction)); err != nil {
+			return err
+		}
+	} else {
+		qReq := new(control.SystemCheckQueryReq)
+		qReq.Seqs = []uint64{uint64(cmd.Args.SeqNum)}
+		qResp, err := control.SystemCheckQuery(ctx, cmd.ctlInvoker, qReq)
+		if err != nil {
+			return err
+		}
+
+		if len(qResp.Reports) == 0 {
+			return errors.Errorf("no report found for seq %s", cmd.Args.SeqNum)
+		}
+
+		report := qResp.Reports[0]
+		if !report.IsInteractive() {
+			return errors.Errorf("finding %s is already resolved: %s", cmd.Args.SeqNum, report.Resolution())
+		}
+		choices := report.RepairChoices()
+		if cmd.Args.SelectedAction < 0 || cmd.Args.SelectedAction >= len(choices) {
+			return errors.Errorf("invalid action %d for seq %s", cmd.Args.SelectedAction, cmd.Args.SeqNum)
+		}
+
+		if err := req.SetAction(int32(choices[cmd.Args.SelectedAction].Action)); err != nil {
+			return err
+		}
 	}
 
 	if err := control.SystemCheckRepair(ctx, cmd.ctlInvoker, req); err != nil {

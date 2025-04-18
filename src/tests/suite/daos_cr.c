@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -242,7 +243,7 @@ cr_system_stop(bool force)
 }
 
 static inline int
-cr_rank_reint(uint32_t rank, bool start)
+cr_rank_reint(uint32_t rank)
 {
 	int	rc;
 
@@ -251,10 +252,8 @@ cr_rank_reint(uint32_t rank, bool start)
 	if (rc != 0)
 		return rc;
 
-	if (start) {
-		print_message("CR: starting the rank %u ...\n", rank);
-		rc = dmg_system_start_rank(dmg_config_file, rank);
-	}
+	print_message("CR: starting the rank %u ...\n", rank);
+	rc = dmg_system_start_rank(dmg_config_file, rank);
 
 	return rc;
 }
@@ -1338,8 +1337,7 @@ cr_repair_forall_leader(void **state)
 {
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
-	struct daos_check_info		 dci = { 0 };
-	struct daos_check_report_info	*dcri;
+	struct daos_check_info           dci      = {0};
 	char				*ps_label = NULL;
 	char				*ptr;
 	char				 ms_label[DAOS_PROP_LABEL_MAX_LEN];
@@ -1375,16 +1373,8 @@ cr_repair_forall_leader(void **state)
 	rc = cr_pool_verify(&dci, pools[0].pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	dcri = cr_locate_dcri(&dci, NULL, pools[0].pool_uuid);
 	action = TCA_TRUST_PS;
-	rc = -DER_MISC;
-
-	for (i = 0; i < dcri->dcri_option_nr; i++) {
-		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
-			break;
-		}
-	}
+	rc     = cr_check_repair(class, action, true);
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
@@ -1444,8 +1434,7 @@ cr_repair_forall_engine(void **state)
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct test_cont		 conts[2] = { 0 };
-	struct daos_check_info		 dci = { 0 };
-	struct daos_check_report_info	*dcri;
+	struct daos_check_info           dci          = {0};
 	char				*target_label = NULL;
 	char				*ptr;
 	char				 ps_label[DAOS_PROP_LABEL_MAX_LEN];
@@ -1484,16 +1473,8 @@ cr_repair_forall_engine(void **state)
 	rc = cr_pool_verify(&dci, pools[0].pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	dcri = cr_locate_dcri(&dci, NULL, pools[0].pool_uuid);
 	action = TCA_TRUST_TARGET;
-	rc = -DER_MISC;
-
-	for (i = 0; i < dcri->dcri_option_nr; i++) {
-		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
-			break;
-		}
-	}
+	rc     = cr_check_repair(class, action, true);
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
@@ -2858,7 +2839,7 @@ cr_engine_death(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Reint the rank for subsequent test. */
-	rc = cr_rank_reint(rank, false);
+	rc = cr_rank_reint(rank);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_mode_switch(false);
@@ -2941,7 +2922,7 @@ cr_engine_rejoin_succ(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Reint the rank immediately before the rank death event being detected. */
-	rc = cr_rank_reint(rank, true);
+	rc = cr_rank_reint(rank);
 	assert_rc_equal(rc, 0);
 
 	cr_pool_wait(1, &pool.pool_uuid, &dci);
@@ -3084,7 +3065,7 @@ cr_engine_rejoin_fail(void **state)
 		  "Unexpected pool " DF_UUID " fail result: %d\n", DP_UUID(pool.pool_uuid), result);
 
 	/* Reint the rank, rejoin will fail but not affect the rank start. */
-	rc = cr_rank_reint(rank, true);
+	rc = cr_rank_reint(rank);
 	assert_rc_equal(rc, 0);
 
 	/* Wait for a while until the control plane to be ready for new check start. */
@@ -3106,10 +3087,6 @@ cr_engine_rejoin_fail(void **state)
 		class = TCC_POOL_NONEXIST_ON_MS;
 		rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 1, &class, &action, NULL);
 	}
-	assert_rc_equal(rc, 0);
-
-	/* The former excluded rank is not in the check ranks set, stop it explicitly. */
-	rc = dmg_system_stop_rank(dmg_config_file, rank, false);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_mode_switch(false);
@@ -3409,8 +3386,7 @@ cr_inherit_policy(void **state)
 {
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
-	struct daos_check_info		 dci = { 0 };
-	struct daos_check_report_info	*dcri;
+	struct daos_check_info           dci      = {0};
 	char				*ps_label = NULL;
 	char				*ptr;
 	char				 ms_label[DAOS_PROP_LABEL_MAX_LEN];
@@ -3449,16 +3425,8 @@ cr_inherit_policy(void **state)
 		assert_rc_equal(rc, 0);
 	}
 
-	dcri = cr_locate_dcri(&dci, NULL, pools[1].pool_uuid);
 	action = TCA_TRUST_PS;
-	rc = -DER_MISC;
-
-	for (i = 0; i < dcri->dcri_option_nr; i++) {
-		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
-			break;
-		}
-	}
+	rc     = cr_check_repair(class, action, true);
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
