@@ -47,6 +47,76 @@ if lspci | grep -i nvme; then
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 
+# FOR now limit to 2 devices per CPU NUMA node
+: "${DAOS_CI_NVME_NUMA_LIMIT:=1}"
+
+function mount_nvme_drive {
+    local drive="$1"
+    file_system=$(file -sL "/dev/$drive")
+    if  [[ "$file_system" != *"ext4 filesystem"* ]]; then
+        yes | mkfs -t ext4 "/dev/$drive"
+    fi
+    mkdir -p "/mnt/$drive"
+    mount "/dev/$drive" "/mnt/$drive"
+}
+
+
+nvme_class="/sys/class/nvme/"
+function nvme_limit {
+    set +x
+    local numa0_devices=()
+    local numa1_devices=()
+    for nvme_path in "$nvme_class"*; do
+        nvme="$(basename "$nvme_path")n1"
+        numa_node="$(cat "${nvme_path}/numa_node")"
+        if mount | grep "$nvme"; then
+            continue
+        fi
+        if [ "$numa_node" -eq 0 ]; then
+            numa0_devices+=("$nvme")
+        else
+            numa1_devices+=("$nvme")
+        fi
+    done
+    echo numa0 "${numa0_devices[@]}"
+    echo numa1 "${numa1_devices[@]}"
+    if [ "${#numa0_devices[@]}" -gt 0 ] && [ "${#numa1_devices[@]}" -gt 0 ]; then
+        echo "balanced configuration possible"
+        nvme_count=0
+        for nvme in "${numa0_devices[@]}"; do
+            if [ "$nvme_count" -ge "${DAOS_CI_NVME_NUMA_LIMIT}" ]; then
+                mount_nvme_drive "$nvme"
+            else
+                ((nvme_count++)) || true
+            fi
+        done
+        nvme_count=0
+        for nvme in "${numa1_devices[@]}"; do
+            if [ "$nvme_count" -ge "${DAOS_CI_NVME_NUMA_LIMIT}" ]; then
+                mount_nvme_drive "$nvme"
+            else
+                ((nvme_count++)) || true
+            fi
+        done
+    else
+        echo "balanced configuration not possible"
+        for nvme in "${numa0_devices[@]}" "${numa1_devices[@]}"; do
+            ((needed = "$DAOS_CI_NVME_NUMA_LIMIT" + 1)) || true
+            nvme_count=0
+            if [ "$nvme_count" -ge "$needed" ]; then
+                mount_nvme_drive "$nvme"
+            else
+                ((nvme_count++)) || true
+            fi
+        done
+    fi
+    set -x
+}
+
+# Force only the desired number of NVMe devices to be seen by DAOS tests
+# by mounting the extra ones.
+nvme_limit
+
 systemctl enable nfs-server.service
 systemctl start nfs-server.service
 sync
