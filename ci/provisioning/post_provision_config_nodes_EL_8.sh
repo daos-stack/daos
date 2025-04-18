@@ -8,6 +8,8 @@
 bootstrap_dnf() {
     systemctl enable postfix.service
     systemctl start postfix.service
+    # Seems to be needed to fix some issues.
+    dnf -y reinstall sssd-common
 }
 
 group_repo_post() {

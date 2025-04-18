@@ -8,6 +8,11 @@ set -eux
 : "${BUILD_URL:=Not_in_jenkins}"
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
+: "${JENKINS_URL:=https://jenkins.example.com}"
+domain1="${JENKINS_URL#https://}"
+mail_domain="${domain1%%/*}"
+: "${EMAIL_DOMAIN:=$mail_domain}"
+: "${DAOS_DEVOPS_EMAIL:="$HOSTNAME"@"$EMAIL_DOMAIN"}"
 
 # functions common to more than one distro specific provisioning
 url_to_repo() {
@@ -47,17 +52,6 @@ add_repo() {
         fi
         DNF_REPO_ARGS+=" --enablerepo=$repo_name"
     fi
-}
-
-add_group_repo() {
-    local match="$1"
-
-    add_repo "$match" "$DAOS_STACK_GROUP_REPO"
-    group_repo_post
-}
-
-add_local_repo() {
-    add_repo 'argobots' "$DAOS_STACK_LOCAL_REPO" false
 }
 
 disable_gpg_check() {
@@ -107,9 +101,6 @@ retry_dnf() {
                 # non-experimental one after trying twice with the experimental one
                 set_local_repo "${repo_servers[1]}"
                 dnf -y makecache
-                if [ -n "${POWERTOOLSREPO:-}" ]; then
-                    POWERTOOLSREPO=${POWERTOOLSREPO/${repo_servers[0]}/${repo_servers[1]}}
-                fi
             fi
             sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
         fi
@@ -140,7 +131,7 @@ send_mail() {
         echo "Host:  $HOSTNAME"
         echo ""
         echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$recipients"
+    } 2>&1 | mail -s "$subject" -r "$DAOS_DEVOPS_EMAIL" "$recipients"
     set -x
 }
 
@@ -274,8 +265,13 @@ set_local_repo() {
             # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
             # used for daos packages
             dnf -y config-manager \
-                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
+        else
+            dnf -y config-manager \
+                --enable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
         fi
+        dnf -y config-manager \
+            --enable daos-stack-deps-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
     fi
 
     dnf repolist
@@ -306,9 +302,13 @@ update_repos() {
 
     # successfully grabbed them all, so replace the entire $REPOS_DIR
     # content with them
+
+    # This is not working right on a second run.
+    # using a quick hack to stop deleting a critical repo
     local file
     for file in "$REPOS_DIR"/*.repo; do
-        [ -e "$file" ] || break
+        [[ $file == *"artifactory"* ]] && continue
+        [ -e "$file" ] || breaki
         # empty the file but keep it around so that updates don't recreate it
         true > "$file"
     done
