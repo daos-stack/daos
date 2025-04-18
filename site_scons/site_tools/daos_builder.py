@@ -64,6 +64,9 @@ def _add_build_rpath(env, pathin="."):
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
     env.AppendENVPath('CGO_LDFLAGS', f'-Wl,-rpath-link={path}', sep=' ')
+    # DH
+    if GetOption("test_coverage"):
+        env.AppendUnique(LIBS=['gcov'])
 
 
 def _enable_ld_path(env, part_list):
@@ -73,6 +76,9 @@ def _enable_ld_path(env, part_list):
     # the dependencies
     for part in part_list:
         env.AppendENVPath("LD_LIBRARY_PATH", os.path.join(env["BUILD_DIR"], "src", part))
+    # DH
+    if GetOption("test_coverage"):
+        env.AppendUnique(LIBS=['gcov'])
 
 
 def _known_deps(env, **kwargs):
@@ -86,6 +92,9 @@ def _known_deps(env, **kwargs):
         libs = set(kwargs['LIBS'])
     else:
         libs = set(env.get('LIBS', []))
+    # DH
+    if GetOption("test_coverage"):
+        libs += ['gcov']
 
     known_libs = libs.intersection(set(libraries.keys()))
     missing.update(libs - known_libs)
@@ -121,6 +130,10 @@ def _add_lib(libtype, libname, target):
 
 def _run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
+    # DH
+    if GetOption("test_coverage"):
+        daos_libs += ['gcov']
+
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
     return result
@@ -147,6 +160,10 @@ def _static_library(env, *args, **kwargs):
     static_deps, shared_deps = _known_deps(env, **kwargs)
     Depends(lib, static_deps)
     env.Requires(lib, shared_deps)
+    # DH
+    if GetOption("test_coverage"):
+        lib += ['gcov']
+
     return lib
 
 
@@ -161,6 +178,10 @@ def _library(env, *args, **kwargs):
     static_deps, shared_deps = _known_deps(denv, **kwargs)
     Depends(lib, static_deps)
     env.Requires(lib, shared_deps)
+    # DH
+    if GetOption("test_coverage"):
+        lib += ['gcov']
+
     return lib
 
 
@@ -168,6 +189,10 @@ def _program(env, *args, **kwargs):
     """Build Program with relative RPATH"""
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
+    # DH
+    if GetOption("test_coverage"):
+        denv.AppendUnique(LIBS=['gcov'])
+
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     prog = denv.Program(*args, **kwargs)
@@ -181,6 +206,10 @@ def _test_program(env, *args, **kwargs):
     """Build Program with fixed RPATH"""
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
+    # DH
+    if GetOption("test_coverage"):
+        denv.AppendUnique(LIBS=['gcov'])
+
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get("install_off", None), False, True)
     testbuild = denv.Program(*args, **kwargs)
