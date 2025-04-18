@@ -189,7 +189,7 @@ with the following information for each pool:
   the difference storage targets is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
   by some storage targets while space is still available on others.
-- the number of disabled targets (0 here) and the number of targets that
+- The number of disabled targets (0 here) and the number of targets that
   the pool was originally configured with (total).
 
 The --verbose option provides more detailed information including the
@@ -823,6 +823,13 @@ The pool target exclude command accepts 2 parameters:
 Upon successful manual exclusion, the self-healing mechanism will be triggered
 to restore redundancy on the remaining engines.
 
+!!! note
+    Exclusion may compromise the Pool Redundancy Factor (RF), potentially leading
+    to data loss. If this is the case, the command will refuse to perform the exclusion
+    and return the error code -DER_RF. You can proceed with the exclusion by specifying
+    the --force option. Please note that forcing the operation may result in data loss,
+    and it is strongly recommended to verify the RF status before proceeding.
+
 ### Drain
 
 Alternatively, when an operator would like to remove one or more engines or
@@ -847,6 +854,23 @@ The pool target drain command accepts 2 parameters:
 
 * The engine rank of the target(s) to be drained.
 * The target indices of the targets to be drained from that engine rank (optional).
+
+#### System Drain
+
+To drain ranks or hosts from all pools that they belong to, the 'dmg system drain'
+command can be used. The command takes either a host-set or rank-set:
+
+To drain a set of hosts from all pools (drains all ranks on selected hosts):
+
+```Bash
+$ dmg system drain --rank-hosts foo-[001-100]
+```
+
+To drain a set of ranks from all pools:
+
+```Bash
+$ dmg system drain --ranks 1-100
+```
 
 ### Reintegration
 

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -749,8 +750,10 @@ run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_cou
 
 		/* Clean up this size iteration's handles */
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
-			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL)
+			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL) {
 				crt_bulk_free(latencies_bulk_hdl[m_idx]);
+				latencies_bulk_hdl[m_idx] = CRT_BULK_NULL;
+			}
 	}
 
 cleanup:
@@ -765,8 +768,10 @@ cleanup:
 cleanup_nothread:
 	if (latencies_bulk_hdl != NULL) {
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
-			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL)
+			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL) {
 				crt_bulk_free(latencies_bulk_hdl[m_idx]);
+				latencies_bulk_hdl[m_idx] = CRT_BULK_NULL;
+			}
 		D_FREE(latencies_bulk_hdl);
 	}
 	if (latencies_sg_list != NULL)
