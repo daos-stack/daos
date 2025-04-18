@@ -1,47 +1,75 @@
 hosts:
   test_servers: 3
   test_clients: 1
-timeout: 950
+
+timeout: 2000
+
+setup:
+  start_agents_once: false
+  start_servers_once: false
+
 server_config:
   name: daos_server
   engines_per_host: 1
-  servers:
+  engines:
     0:
-      targets: 1
-      log_mask: DEBUG
+      targets: 2
+      nr_xs_helpers: 0
+      log_mask: INFO
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
       env_vars:
-        - DD_MASK=mgmt,md,dsms,any
-        - D_LOG_FLUSH=DEBUG
+        - DD_MASK=all
+        - D_LOG_MASK=INFO
+        - PMEMOBJ_CONF=sds.at_create=0  # Needed for v2.6.1 with SCM
+  system_ram_reserved: 1
+
 pool:
-  scm_size: 5G
+  size: 1G
   name: daos_server
+
 container:
-  control_method: daos
   type: POSIX
-  properties: rf:0
+  properties: rf:0,rd_lvl:1
+
 attrtests:
   num_attributes: 20
+
 dfuse:
   mount_dir: "/tmp/daos_dfuse1/"
   disable_caching: True
+
 ior:
   ior_timeout: 180
   client_processes:
-    np: 2
+    np: 4
   test_file: daos:/testFile
-  api: DFS   # POSIX HDF5
-  dfs_oclass: "SX"  # "RP_2GX"
+  api: DFS  # TODO need to test various APIs
+  dfs_oclass: EC_2P1GX  # TODO need to test various object classes
   transfer_size: '1M'
-  block_size: '128M'
-  iorflags:
-    write_flg: "-w -W -k -G 1 -i 1"
-    read_flg: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
+  block_size: '16M'
+  write_flags: "-w -W -k -G 1 -i 1"
+  read_flags: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
+
 hdf5_vol:
-  plugin_path: "/usr/lib64/mpich/lib"
+  # Update depending on where libhdf5_vol_daos.so is installed
+  # E.g. EL8
+  #plugin_path: "/usr/lib64/mpich/lib"
+  # E.g. Leap 15.6
+  plugin_path: /usr/lib64/mpi/gcc/mpich/lib
+
 interop:
-  # Example of upgrade/downgrade RPMs from local tar file
-  # upgrade_rpms: ["/home/dinghwah/RPM/2.1.104/daos-2.1.104-1.el8.x86_64.rpm"]
-  # downgrade_rpms: ["/home/dinghwah/RPM/2.0.3.rc4.signed/daos-2.0.3-5.el8.x86_64.rpm"]
-  # upgrade_repo: "/etc/yum.repos.d/test23-101.repo"
-  downgrade_repo: "/etc/yum.repos.d/test22-1.repo"
-  upgrade_repo: "/etc/yum.repos.d/test23-101.repo"
+  # old_version: "2.6.1-3.el8"
+  # new_version: "2.6.2-2.el8"
+  old_version: "2.6.2-2.el8"
+  new_version: "2.7.101-3.11010.ga94ac881.el8"
+
+client:
+  env_vars:
+    - DD_MASK=all
+    - D_LOG_MASK=INFO
+
+skip_add_log_msg: True
