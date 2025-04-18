@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -50,11 +51,16 @@ func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 
 // MockNvmeCfg controls the behavior of the MockNvmeImpl.
 type MockNvmeCfg struct {
-	DiscoverCtrlrs storage.NvmeControllers
-	DiscoverErr    error
-	FormatRes      []*FormatResult
-	FormatErr      error
-	UpdateErr      error
+	DiscoverCtrlrs  storage.NvmeControllers
+	DiscoverErr     error
+	FormatRes       []*FormatResult
+	FormatErr       error
+	UpdateErr       error
+	LockfileDir     string
+	RemoveFn        removeFn
+	RemoveErr       error
+	PciAddrCheckMap map[string]bool
+	PciAddrCheckErr error
 }
 
 // MockNvmeImpl is an implementation of the Nvme interface.
@@ -64,7 +70,7 @@ type MockNvmeImpl struct {
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
 // accessible by SPDK on a given host.
-func (n *MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
+func (n MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
 	if n.Cfg.DiscoverErr != nil {
 		return nil, n.Cfg.DiscoverErr
 	}
@@ -74,7 +80,7 @@ func (n *MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, er
 }
 
 // Format device at given pci address, destructive operation!
-func (n *MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
+func (n MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	log.Debug("mock format nvme ssds")
 
 	if n.Cfg.FormatErr != nil {
@@ -89,7 +95,7 @@ func (n *MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 }
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
-func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
+func (n MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
 	if n.Cfg.UpdateErr != nil {
 		return n.Cfg.UpdateErr
 	}
@@ -97,4 +103,27 @@ func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path stri
 		ctrlrPciAddr, path, slot)
 
 	return nil
+}
+
+// Clean removes SPDK lockfiles associated with NVMe SSDs/controllers at given PCI addresses.
+// Mock avoid making any changes to the filesystem by mocking remove function.
+func (n MockNvmeImpl) Clean(pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
+	mockLocksRemove := func(fName string) error {
+		if n.Cfg.RemoveFn == nil {
+			return n.Cfg.RemoveErr
+		}
+		return n.Cfg.RemoveFn(fName)
+	}
+
+	mockPciAddrChecker := func(a string) (bool, error) {
+		if pciAddrChecker != nil {
+			return pciAddrChecker(a)
+		}
+		if n.Cfg.PciAddrCheckMap == nil {
+			n.Cfg.PciAddrCheckMap = make(map[string]bool)
+		}
+		return n.Cfg.PciAddrCheckMap[a], n.Cfg.PciAddrCheckErr
+	}
+
+	return cleanLockfiles(n.Cfg.LockfileDir, mockPciAddrChecker, mockLocksRemove)
 }
