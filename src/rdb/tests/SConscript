@@ -12,10 +12,12 @@ def scons():
     librdbt = tenv.d_library('rdbt', ['rdb_test.c', 'rpc.c'], install_off='../..')
     tenv.Install('$PREFIX/lib64/daos_srv', librdbt)
 
+    libs = ['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c', 'pthread', 'numa']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
+
     # rdbt client
-    rdbt = tenv.d_program('rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
-                          LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c',
-                                'pthread', 'numa'])
+    rdbt = tenv.d_program('rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts, LIBS=libs)
     tenv.Install('$PREFIX/bin', rdbt)
 
 

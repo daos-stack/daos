@@ -15,6 +15,8 @@ def scons():
     libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal', 'numa']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
 
     denv.require('argobots', 'protobufc', 'pmdk', 'isal')
 

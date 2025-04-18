@@ -7,6 +7,8 @@ def scons():
 
     libraries = ['daos_common', 'daos', 'dfs', 'daos_tests', 'gurt', 'cart', 'uuid']
     libraries += ['cmocka', 'json-c', 'dpar']
+    if GetOption("test_coverage"):
+        libraries += ['gcov']
 
     iogen = denv.SharedObject('daos_generate_io_conf.c')
     daos_gen_io_conf = denv.d_test_program('daos_gen_io_conf',

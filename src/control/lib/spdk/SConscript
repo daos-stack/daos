@@ -23,6 +23,8 @@ def scons():
 
     # Other libs
     libs += ['numa', 'dl']
+    if GetOption("test_coverage"):
+        libs += ['gcov']
 
     nc_obj = senv.Object("src/nvme_control.c")
     ncc_obj = senv.Object("src/nvme_control_common.c")

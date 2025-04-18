@@ -10,16 +10,19 @@ def scons():
     unit_env.require('argobots')
     unit_env.require('pmdk', headers_only=True)
 
+    lib_srv = ['daos_common_pmem', 'gurt', 'cmocka', 'vos', 'bio', 'abt']
+    lib_cli = ['daos_common', 'cmocka', 'gurt']
+    if GetOption("test_coverage"):
+        lib_srv += ['gcov']
+        lib_cli += ['gcov']
+
     unit_env.Append(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     unit_env.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    unit_env.d_test_program(['srv_checksum_tests.c', '../srv_csum.c'],
-                            LIBS=['daos_common_pmem', 'gurt', 'cmocka',
-                                  'vos', 'bio', 'abt'])
+    unit_env.d_test_program(['srv_checksum_tests.c', '../srv_csum.c'], LIBS=lib_srv)
 
     unit_env.d_test_program(['cli_checksum_tests.c',
                              '../cli_csum.c',
-                             '../../common/tests_lib.c'],
-                            LIBS=['daos_common', 'cmocka', 'gurt', ])
+                             '../../common/tests_lib.c'], LIBS=lib_cli)
 
 
 if __name__ == "SCons.Script":
