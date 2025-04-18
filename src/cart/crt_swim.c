@@ -859,11 +859,8 @@ out_unlock:
 	crt_swim_csm_unlock(csm);
 out:
 	if (cst.cst_id != SWIM_ID_INVALID)
-		D_DEBUG(DB_TRACE, "select dping target: %lu => {%lu %c %lu}\n",
-			self_id, cst.cst_id, SWIM_STATUS_CHARS[cst.cst_state.sms_status],
-			cst.cst_state.sms_incarnation);
-	else
-		D_DEBUG(DB_TRACE, "there is no dping target\n");
+		D_DEBUG(DB_TRACE, "select dping target: %lu => {%lu %c %lu}\n", self_id, cst.cst_id,
+			SWIM_STATUS_CHARS[cst.cst_state.sms_status], cst.cst_state.sms_incarnation);
 	return cst.cst_id;
 }
 
