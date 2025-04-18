@@ -27,8 +27,8 @@ typedef struct _Mgmt__PoolDrainReq Mgmt__PoolDrainReq;
 typedef struct _Mgmt__PoolDrainResp Mgmt__PoolDrainResp;
 typedef struct _Mgmt__PoolExtendReq Mgmt__PoolExtendReq;
 typedef struct _Mgmt__PoolExtendResp Mgmt__PoolExtendResp;
-typedef struct _Mgmt__PoolReintReq        Mgmt__PoolReintReq;
-typedef struct _Mgmt__PoolReintResp       Mgmt__PoolReintResp;
+typedef struct _Mgmt__PoolReintReq Mgmt__PoolReintReq;
+typedef struct _Mgmt__PoolReintResp Mgmt__PoolReintResp;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
 typedef struct _Mgmt__ListPoolsResp Mgmt__ListPoolsResp;
 typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
@@ -402,16 +402,10 @@ struct  _Mgmt__PoolExcludeReq
    */
   protobuf_c_boolean force;
 };
-#define MGMT__POOL_EXCLUDE_REQ__INIT                                                               \
-	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_exclude_req__descriptor),                             \
-	 (char *)protobuf_c_empty_string,                                                          \
-	 (char *)protobuf_c_empty_string,                                                          \
-	 0,                                                                                        \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0}
+#define MGMT__POOL_EXCLUDE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0 }
+
 
 /*
  * PoolExcludeResp returns resultant state of Exclude operation.
@@ -539,62 +533,61 @@ struct  _Mgmt__PoolExtendResp
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
     , 0, 0,NULL }
 
+
 /*
  * PoolReintReq supplies pool identifier, rank, and target_idxs.
  */
-struct _Mgmt__PoolReintReq {
-	ProtobufCMessage base;
-	/*
-	 * DAOS system identifier
-	 */
-	char            *sys;
-	/*
-	 * uuid or label of pool to add target up to
-	 */
-	char            *id;
-	/*
-	 * target to move to the up state
-	 */
-	uint32_t         rank;
-	/*
-	 * target ranks
-	 */
-	size_t           n_targetidx;
-	uint32_t        *targetidx;
-	/*
-	 * List of pool service ranks
-	 */
-	size_t           n_svc_ranks;
-	uint32_t        *svc_ranks;
-	/*
-	 * Size in bytes of storage tiers
-	 */
-	size_t           n_tierbytes;
-	uint64_t        *tierbytes;
+struct  _Mgmt__PoolReintReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * uuid or label of pool to add target up to
+   */
+  char *id;
+  /*
+   * target to move to the up state
+   */
+  uint32_t rank;
+  /*
+   * target ranks
+   */
+  size_t n_targetidx;
+  uint32_t *targetidx;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+  /*
+   * Size in bytes of storage tiers
+   */
+  size_t n_tierbytes;
+  uint64_t *tierbytes;
 };
-#define MGMT__POOL_REINT_REQ__INIT                                                                 \
-	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_reint_req__descriptor),                               \
-	 (char *)protobuf_c_empty_string,                                                          \
-	 (char *)protobuf_c_empty_string,                                                          \
-	 0,                                                                                        \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0,                                                                                        \
-	 NULL,                                                                                     \
-	 0,                                                                                        \
-	 NULL}
+#define MGMT__POOL_REINT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reint_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL }
+
 
 /*
  * PoolReintResp returns resultant state of reintegrate operation.
  */
-struct _Mgmt__PoolReintResp {
-	ProtobufCMessage base;
-	/*
-	 * DAOS error code
-	 */
-	int32_t          status;
+struct  _Mgmt__PoolReintResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
 };
-#define MGMT__POOL_REINT_RESP__INIT {PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_reint_resp__descriptor), 0}
+#define MGMT__POOL_REINT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reint_resp__descriptor) \
+    , 0 }
+
 
 /*
  * ListPoolsReq represents a request to list pools on a given DAOS system.
@@ -875,7 +868,7 @@ struct  _Mgmt__PoolQueryResp
   /*
    * optional set of dead ranks
    */
-  char                     *dead_ranks;
+  char *dead_ranks;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
@@ -1377,31 +1370,43 @@ void   mgmt__pool_extend_resp__free_unpacked
                      (Mgmt__PoolExtendResp *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__PoolReintReq methods */
-void
-mgmt__pool_reint_req__init(Mgmt__PoolReintReq *message);
-size_t
-mgmt__pool_reint_req__get_packed_size(const Mgmt__PoolReintReq *message);
-size_t
-mgmt__pool_reint_req__pack(const Mgmt__PoolReintReq *message, uint8_t *out);
-size_t
-mgmt__pool_reint_req__pack_to_buffer(const Mgmt__PoolReintReq *message, ProtobufCBuffer *buffer);
+void   mgmt__pool_reint_req__init
+                     (Mgmt__PoolReintReq         *message);
+size_t mgmt__pool_reint_req__get_packed_size
+                     (const Mgmt__PoolReintReq   *message);
+size_t mgmt__pool_reint_req__pack
+                     (const Mgmt__PoolReintReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_reint_req__pack_to_buffer
+                     (const Mgmt__PoolReintReq   *message,
+                      ProtobufCBuffer     *buffer);
 Mgmt__PoolReintReq *
-mgmt__pool_reint_req__unpack(ProtobufCAllocator *allocator, size_t len, const uint8_t *data);
-void
-mgmt__pool_reint_req__free_unpacked(Mgmt__PoolReintReq *message, ProtobufCAllocator *allocator);
+       mgmt__pool_reint_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_reint_req__free_unpacked
+                     (Mgmt__PoolReintReq *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__PoolReintResp methods */
-void
-mgmt__pool_reint_resp__init(Mgmt__PoolReintResp *message);
-size_t
-mgmt__pool_reint_resp__get_packed_size(const Mgmt__PoolReintResp *message);
-size_t
-mgmt__pool_reint_resp__pack(const Mgmt__PoolReintResp *message, uint8_t *out);
-size_t
-mgmt__pool_reint_resp__pack_to_buffer(const Mgmt__PoolReintResp *message, ProtobufCBuffer *buffer);
+void   mgmt__pool_reint_resp__init
+                     (Mgmt__PoolReintResp         *message);
+size_t mgmt__pool_reint_resp__get_packed_size
+                     (const Mgmt__PoolReintResp   *message);
+size_t mgmt__pool_reint_resp__pack
+                     (const Mgmt__PoolReintResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_reint_resp__pack_to_buffer
+                     (const Mgmt__PoolReintResp   *message,
+                      ProtobufCBuffer     *buffer);
 Mgmt__PoolReintResp *
-mgmt__pool_reint_resp__unpack(ProtobufCAllocator *allocator, size_t len, const uint8_t *data);
-void
-mgmt__pool_reint_resp__free_unpacked(Mgmt__PoolReintResp *message, ProtobufCAllocator *allocator);
+       mgmt__pool_reint_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_reint_resp__free_unpacked
+                     (Mgmt__PoolReintResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__ListPoolsReq methods */
 void   mgmt__list_pools_req__init
                      (Mgmt__ListPoolsReq         *message);
@@ -1807,8 +1812,12 @@ typedef void (*Mgmt__PoolExtendReq_Closure)
 typedef void (*Mgmt__PoolExtendResp_Closure)
                  (const Mgmt__PoolExtendResp *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolReintReq_Closure)(const Mgmt__PoolReintReq *message, void *closure_data);
-typedef void (*Mgmt__PoolReintResp_Closure)(const Mgmt__PoolReintResp *message, void *closure_data);
+typedef void (*Mgmt__PoolReintReq_Closure)
+                 (const Mgmt__PoolReintReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolReintResp_Closure)
+                 (const Mgmt__PoolReintResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__ListPoolsReq_Closure)
                  (const Mgmt__ListPoolsReq *message,
                   void *closure_data);
