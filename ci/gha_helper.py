@@ -82,14 +82,22 @@ def main():
         cmd.append('utils/docker')
         args.base_distro = ''
 
+    # Imbed the SHA of the latest build changes in the image name.
     rc = subprocess.run(cmd, check=True, capture_output=True)
-    latest_commit = rc.stdout.decode('utf-8').strip() or 'unknown'
-
-    # Imbed the latest commit in the image name.
-    # For PRs this will be from the base branch.
-    # For landing runs it will be either the current commit or latest commit with build changes
-    image_name = f'bc-{args.base_distro.replace(":", "-")}-{latest_commit}'
+    build_sha = rc.stdout.decode('utf-8').strip() or 'unknown'
+    image_name = f'bc-{args.base_distro}-{build_sha}'
+    image_name = image_name.replace(":", "-").replace("/", "-")
     set_output('image_name', image_name)
+
+    if args.base_ref:
+        # Assume this is a PR if we have a base reference.
+        # Use the latest tag for PRs
+        set_output('image_tag', 'latest')
+    else:
+        # Using the current SHA as the tag for landing runs
+        rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
+        commit_hash = rc.stdout.decode('utf-8').strip()
+        set_output('image_tag', commit_hash)
 
 
 if __name__ == '__main__':
