@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -471,14 +472,20 @@ again:
 				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_DEBUG(DB_MD, "create cont snap iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				/* convert to more specific errno */
+				if (rc == -DER_NONEXIST)
+					rc = -DER_CONT_NONEXIST;
+				DL_ERROR(rc, DF_CONT " create IV_CONT_SNAP iv entry failed",
+					 DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_PROP) {
 				rc = cont_iv_prop_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont prop iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				/* convert to more specific errno */
+				if (rc == -DER_NONEXIST)
+					rc = -DER_CONT_NONEXIST;
+				DL_ERROR(rc, DF_CONT " create IV_CONT_PROP iv entry failed",
+					 DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_CAPA) {
 				struct container_hdl	chdl = { 0 };
 				int			rc1;
@@ -541,7 +548,8 @@ again:
 				}
 			}
 		}
-		D_DEBUG(DB_MGMT, "lookup cont: rc "DF_RC"\n", DP_RC(rc));
+		D_DEBUG(DB_MGMT, DF_CONT "lookup cont: rc " DF_RC "\n",
+			DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
