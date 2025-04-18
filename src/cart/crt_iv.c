@@ -2210,15 +2210,13 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		     crt_iv_comp_cb_t update_comp_cb, void *cb_arg,
 		     void *user_priv, int update_rc)
 {
-	crt_rpc_t               *corpc_req = NULL;
-	struct crt_iv_sync_in	*input;
-	int			rc = 0;
-	bool			delay_completion = false;
-	struct iv_sync_cb_info	*iv_sync_cb = NULL;
-	struct crt_iv_ops	*iv_ops;
-	crt_bulk_t		local_bulk = CRT_BULK_NULL;
-	d_rank_list_t		excluded_list;
-	d_rank_t		excluded_ranks[1]; /* Excluding self */
+	struct crt_iv_sync_in  *input;
+	struct crt_iv_ops      *iv_ops;
+	crt_rpc_t              *corpc_req        = NULL;
+	struct iv_sync_cb_info *iv_sync_cb       = NULL;
+	crt_bulk_t              local_bulk       = CRT_BULK_NULL;
+	int                     rc               = 0;
+	bool                    delay_completion = false;
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -2243,10 +2241,6 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 
-	/* Exclude self from corpc */
-	excluded_list.rl_nr = 1;
-	excluded_list.rl_ranks = excluded_ranks;
-	excluded_ranks[0] = ivns_internal->cii_grp_priv->gp_self;
 	/* Perform refresh on local node */
 	if (sync_type->ivs_event == CRT_IV_SYNC_EVENT_UPDATE)
 		rc = iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
@@ -2273,13 +2267,9 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		}
 	}
 
-	rc = crt_corpc_req_create(ivns_internal->cii_ctx,
-				  &ivns_internal->cii_grp_priv->gp_pub,
-				  &excluded_list,
-				  CRT_OPC_IV_SYNC,
-				  local_bulk, NULL, 0,
-				  ivns_internal->cii_gns.gn_tree_topo,
-				  &corpc_req);
+	rc = crt_corpc_req_create(ivns_internal->cii_ctx, &ivns_internal->cii_grp_priv->gp_pub,
+				  NULL, CRT_OPC_IV_SYNC, local_bulk, NULL, 0,
+				  ivns_internal->cii_gns.gn_tree_topo, &corpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_corpc_req_create(): "DF_RC"\n", DP_RC(rc));
 		D_GOTO(exit, rc);
