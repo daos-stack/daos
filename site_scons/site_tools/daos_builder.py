@@ -21,29 +21,28 @@ class DaosLiteral(Literal):
 
 def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
     """Add relative rpath entries"""
-    if GetOption('no_rpath'):
-        if set_cgo_ld:
-            env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS "), sep=" ")
-        return
+    rpath_enabled = env.subst('$SANDBOX_PREFIX') == ''
     env.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
     rpaths = env.subst("$RPATH_FULL").split()
     prefix = env.get("PREFIX")
-    if not is_bin:
+    if rpath_enabled and not is_bin:
         path = r'\$$ORIGIN'
         env.AppendUnique(RPATH=[DaosLiteral(path)])
     for rpath in rpaths:
         if rpath.startswith('/usr'):
-            env.AppendUnique(RPATH=[rpath])
+            if rpath_enabled:
+                env.AppendUnique(RPATH=[rpath])
             continue
         if install_off is None:
-            env.AppendUnique(RPATH=[os.path.join(prefix, rpath)])
+            if rpath_enabled:
+                env.AppendUnique(RPATH=[os.path.join(prefix, rpath)])
             continue
         relpath = os.path.relpath(rpath, prefix)
         if relpath != rpath:
             if set_cgo_ld:
                 env.AppendENVPath("CGO_LDFLAGS", f'-Wl,-rpath=$ORIGIN/{install_off}/{relpath}',
                                   sep=" ")
-            else:
+            elif rpath_enabled:
                 joined = os.path.normpath(os.path.join(install_off, relpath))
                 env.AppendUnique(RPATH=[DaosLiteral(fr'\$$ORIGIN/{joined}')])
     for rpath in rpaths:
@@ -51,9 +50,13 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
         if is_bin:
             # NB: Also use full path so intermediate linking works
             env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
-        else:
+        elif rpath_enabled:
             # NB: Also use full path so intermediate linking works
             env.AppendUnique(RPATH=[path])
+        with_sandbox = env.subst(f"$SANDBOX_PREFIX{path}")
+        if with_sandbox != path:
+            env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={with_sandbox}'])
+            env.AppendENVPath("CGO_LDFLAGS", f'-Wl,-rpath={with_sandbox}', sep=" ")
 
     if set_cgo_ld:
         env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS $_RPATH"), sep=" ")
@@ -72,7 +75,7 @@ def _enable_ld_path(env, part_list):
     # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
     # the dependencies
     for part in part_list:
-        env.AppendENVPath("LD_LIBRARY_PATH", os.path.join(env["BUILD_DIR"], "src", part))
+        env.AppendENVPath("LD_LIBRARY_PATH", os.path.join(env["BUILD_DIR"], "src", env.subst(part)))
 
 
 def _known_deps(env, **kwargs):

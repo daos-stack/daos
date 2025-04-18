@@ -19,7 +19,7 @@ ifeq ($(ON_TAG),false)
 BUILD_DEFINES     := --define "relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
 endif
 
-RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
+RPM_BUILD_OPTIONS := $(BUILD_DEFINES) $(BUILD_FLAGS)
 
 dist: $(SOURCES)
 
@@ -33,5 +33,8 @@ $(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
 	cd ../../ && utils/rpms/archive.sh utils/rpms "$(NAME)" "$(VERSION)" tar
 	rm -f $@
 	gzip $(basename $@)
+
+$(NAME).spec: $(NAME).spec.in
+	./process_spec.py
 
 tarball: $(NAME)-$(VERSION).tar.gz

@@ -109,7 +109,7 @@ def _base_setup(env):
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
-    if compiler == 'icx' and not GetOption('no_rpath'):
+    if compiler == 'icx':
         # Hack to add rpaths
         for path in env['ENV']['LD_LIBRARY_PATH'].split(':'):
             if 'oneapi' in path:

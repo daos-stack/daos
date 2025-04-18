@@ -22,11 +22,12 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
+import os
 import platform
 
 import distro
 from prereq_tools import CopyRetriever, GitRepoRetriever
-from SCons.Script import GetOption
+from SCons.Script import Dir, GetOption
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -34,61 +35,6 @@ ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
 ARM_PLATFORM = False
 if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
-
-
-class InstalledComps():
-    """Checks for installed components and keeps track of prior checks"""
-
-    installed = []
-    not_installed = []
-
-    def __init__(self, reqs):
-        """Class for checking installed components"""
-        self.reqs = reqs
-
-    def inst(self, name):
-        """Return True if name is in list of possible installed packages"""
-        return set([name, 'all']).intersection(set(self.reqs.installed))
-
-    def check(self, name):
-        """Returns True if installed"""
-        if name in self.installed:
-            return True
-        if name in self.not_installed:
-            return False
-        if self.inst(name) and self.reqs.is_installed(name):
-            print(f'Using installed version of {name}')
-            self.installed.append(name)
-            return True
-
-        if not GetOption('help') and not GetOption('silent'):
-            print(f'Using build version of {name}')
-        self.not_installed.append(name)
-        return False
-
-
-def include(reqs, name, use_value, exclude_value):
-    """Return True if in include list"""
-    if reqs.included(name):
-        print(f'Including {name} optional component from build')
-        return use_value
-    if not GetOption('help'):
-        print(f'Excluding {name} optional component from build')
-    return exclude_value
-
-
-def inst(reqs, name):
-    """Return True if name is in list of installed packages"""
-    installed = InstalledComps(reqs)
-    return installed.check(name)
-
-
-def check(reqs, name, built_str, installed_str=""):
-    """Return a different string based on whether a component is installed or not"""
-    installed = InstalledComps(reqs)
-    if installed.check(name):
-        return installed_str
-    return built_str
 
 
 def ofi_config(config):
@@ -117,9 +63,11 @@ def define_mercury(reqs):
     # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
+                 '--libdir=$OFI_PREFIX/lib64',
                  '--disable-efa',
                  '--disable-psm2',
                  '--disable-psm3',
+                 '--enable-static=no',
                  '--disable-opx',
                  '--without-gdrcopy']
 
@@ -138,9 +86,9 @@ def define_mercury(reqs):
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 pkgconfig='libfabric',
-                package='libfabric-devel' if inst(reqs, 'ofi') else None,
-                patch_rpath=['lib'],
-                build_env={'CFLAGS': "-fstack-usage"})
+                patch_rpath=['lib64'],
+                build_env={'CFLAGS': "-fstack-usage",
+                           'DESTDIR': '$SANDBOX_PREFIX'})
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
@@ -165,22 +113,27 @@ def define_mercury(reqs):
                           ['make', 'install'],
                           ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
                           ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
-                build_env={'CFLAGS': '-Wno-error'},
-                package='ucx-devel' if inst(reqs, 'ucx') else None)
+                build_env={'CFLAGS': '-Wno-error',
+                           'DESTDIR': '$SANDBOX_PREFIX'})
 
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
                      '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
                      '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
+                     '-DMERCURY_INSTALL_LIB_DIR:PATH=$MERCURY_PREFIX/lib64',
+                     '-DMERCURY_INSTALL_DATA_DIR:PATH=$MERCURY_PREFIX/lib64',
                      '-DBUILD_DOCUMENTATION:BOOL=OFF',
                      '-DBUILD_EXAMPLES:BOOL=OFF',
                      '-DBUILD_TESTING:BOOL=ON',
                      '-DBUILD_TESTING_PERF:BOOL=ON',
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
+                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
+                     '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
+                     '-DNA_INSTALL_PLUGIN_DIR:PATH=$MERCURY_PREFIX/lib64/mercury',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
@@ -200,8 +153,11 @@ def define_mercury(reqs):
                 pkgconfig='mercury',
                 requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None,
-                build_env={'CFLAGS': '-fstack-usage'})
+                build_env={'CFLAGS': '-fstack-usage -I$SANDBOX_PREFIX$OFI_PREFIX/include '
+                                     '-I$SANDBOX_PREFIX$UCX_PREFIX/include',
+                           'LDFLAGS': '-L$SANDBOX_PREFIX$OFI_PREFIX/lib64 '
+                                      '-L$SANDBOX_PREFIX$UCX_PREFIX/lib64',
+                           'DESTDIR': '$SANDBOX_PREFIX'})
 
 
 def define_common(reqs):
@@ -251,33 +207,44 @@ def define_components(reqs):
     reqs.define('isal',
                 retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
+                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib64',
+                           '--enable-static=no'],
                           ['make'],
                           ['make', 'install']],
-                libs=['isal'])
+                libs=['isal'],
+                pkgconfig='libisal',
+                build_env={'DESTDIR': '$SANDBOX_PREFIX'})
     reqs.define('isal_crypto',
                 retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
-                           '--libdir=$ISAL_CRYPTO_PREFIX/lib'],
+                           '--libdir=$ISAL_CRYPTO_PREFIX/lib64',
+                           '--enable-static=no'],
                           ['make'],
                           ['make', 'install']],
-                libs=['isal_crypto'])
-
+                libs=['isal_crypto'],
+                pkgconfig='libisal_crypto',
+                build_env={'DESTDIR': '$SANDBOX_PREFIX'})
+    patch_files = os.path.join(Dir('#').abspath, 'utils/scripts/patch_files.sh')
     reqs.define('pmdk',
                 retriever=CopyRetriever(),
                 commands=[['make',
                            'all',
+                           'libdir=$PMDK_PREFIX/lib64/daos_srv',
+                           'includedir=$PMDK_PREFIX/include/daos_internal',
                            'BUILD_EXAMPLES=n',
                            'BUILD_BENCHMARKS=n',
                            'DOC=n',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
                            'prefix=$PMDK_PREFIX']],
+                build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': "-lpthread"},
+                extra_lib_path=['lib64/daos_srv'],
                 libs=['pmemobj'])
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
+                 '--libdir=$ARGOBOTS_PREFIX/lib64',
                  'CC=gcc',
                  '--enable-stack-unwind=yes']
     try:
@@ -294,8 +261,7 @@ def define_components(reqs):
     else:
         abt_build.append('--disable-debug')
 
-    if inst(reqs, 'valgrind_devel'):
-        abt_build.append('--enable-valgrind')
+    abt_build.append('--enable-valgrind')
 
     reqs.define('argobots',
                 retriever=CopyRetriever(),
@@ -305,7 +271,8 @@ def define_components(reqs):
                           ['make', 'install']],
                 requires=['libunwind'],
                 libs=['abt'],
-                headers=['abt.h'])
+                headers=['abt.h'],
+                build_env={'DESTDIR': '$SANDBOX_PREFIX', 'LIBS': '-lpthread'})
 
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever(),
@@ -313,6 +280,7 @@ def define_components(reqs):
                            '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
                            '--default-library', 'both', '../fuse'],
                           ['ninja', 'install']],
+                build_env={'DESTDIR': "$SANDBOX_PREFIX"},
                 headers=['fuse3/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
@@ -321,10 +289,12 @@ def define_components(reqs):
                 retriever=CopyRetriever(),
                 commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
-                           '--default-library', 'static', '../fused'],
+                           '--default-library', 'static', '-Dlibdir=$FUSED_PREFIX/lib64',
+                           '../fused'],
                           ['meson', 'setup', '--reconfigure', '../fused'],
                           ['ninja', 'install']],
                 pkgconfig='fused',
+                build_env={'DESTDIR': "$SANDBOX_PREFIX"},
                 headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
@@ -338,6 +308,7 @@ def define_components(reqs):
     # Ubuntu systems seem to fail more often, there may be something different going on here,
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+    move_files = os.path.join(Dir('#').abspath, 'utils/scripts/move_files.sh')
     dist = distro.linux_distribution()
     if ARM_PLATFORM:
         spdk_arch = 'native'
@@ -365,27 +336,38 @@ def define_components(reqs):
                            '--with-shared',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
-                          ['make', 'install'],
-                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
-                          ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
-                          ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
-                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
-                          ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
-                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
+                          ['make', 'DESTDIR=$SANDBOX_PREFIX', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
+                           'includedir=$SPDK_PREFIX/include/daos_internal', 'install'],
+                          [move_files, 'dpdk/build/lib',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/lib64/daos_srv'],
+                          [move_files, 'dpdk/build/include',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/include/daos_internal/dpdk'],
+                          [move_files, 'include',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/share/spdk/include'],
+                          [move_files, 'scripts',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/share/spdk/scripts'],
+                          ['cp', 'build/examples/lsvmd',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
+                          ['cp', 'build/examples/nvme_manage',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_manage'],
+                          ['cp', 'build/examples/identify',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_identify'],
+                          ['cp', 'build/examples/perf',
+                           '$SANDBOX_PREFIX$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
-                patch_rpath=['lib', 'bin'])
+                extra_lib_path=['lib64/daos_srv'],
+                patch_rpath=['lib64/daos_srv', 'bin'])
 
     reqs.define('protobufc',
                 retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
+                          ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc',
+                           '--libdir=$PROTOBUFC_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'],
-                package='protobuf-c-devel')
+                build_env={'DESTDIR': "$SANDBOX_PREFIX"})
 
     os_name = dist[0].split()[0]
     if os_name == 'Ubuntu':

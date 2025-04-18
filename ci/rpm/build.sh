@@ -19,6 +19,7 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+"${mydir}/../../utils/rpms/process_spec.py"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
   # shellcheck source=parse_ci_envs.sh disable=SC1091
@@ -34,6 +35,7 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 : "${COVFN_DISABLED:=true}"
 : "${JOB_REPOS:=}"
+: "${BUILD_FLAGS:=}"
 EXTERNAL_COMPILER_OPT=""
 
 if ! $COVFN_DISABLED && [[ $REPO_SPEC == el-* ]]; then
@@ -54,6 +56,7 @@ fi
 
 # shellcheck disable=SC2086
 DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME"               \
+export BUILD_FLAGS
 TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" ${JOB_REPOS}        \
     EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_RPM_BUILD_OPTIONS}"    \
     SCONS_ARGS="${SCONS_ARGS}" DISTRO_VERSION="${DISTRO_VERSION}" \
