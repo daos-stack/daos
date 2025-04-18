@@ -43,22 +43,24 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py
         id: commit-hash
-      - name: Fetch docker image and update deps (with -foo)
+      - name: Fetch docker image and update deps (with tag foo)
         uses: whoan/docker-build-with-cache-action@v8.1
         continue-on-error: false
         with:
           image_name: bc-ubuntu-oracular-f3906e4-foo # ${{ steps.commit-hash.outputs.image_name }} # daltonbohning-testimage
+          image_tag: foo
           username: "${{ github.repository_owner }}"
           password: "${{ secrets.GITHUB_TOKEN }}"
           registry: ghcr.io
           push_image_and_stages: false # true
           dockerfile: utils/docker/Dockerfile.${{ matrix.distro }}
           build_extra_args: '{"--build-arg": ["DAOS_BUILD=no", "DEPS_JOBS", "BASE_DISTRO", "DAOS_KEEP_SRC=yes"], "--tag": "build-image"}'
-      - name: Fetch docker image and update deps (without -foo)
+      - name: Fetch docker image and update deps (with tag latest)
         uses: whoan/docker-build-with-cache-action@v8.1
         continue-on-error: false
         with:
           image_name: bc-ubuntu-oracular-f3906e4 # ${{ steps.commit-hash.outputs.image_name }} # daltonbohning-testimage
+          image_tag: latest
           username: "${{ github.repository_owner }}"
           password: "${{ secrets.GITHUB_TOKEN }}"
           registry: ghcr.io
