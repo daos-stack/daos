@@ -47,14 +47,14 @@ jobs:
         uses: whoan/docker-build-with-cache-action@v8.1
         continue-on-error: false
         with:
-          image_name: bc-ubuntu-oracular-f3906e4-foo # ${{ steps.commit-hash.outputs.image_name }} # daltonbohning-testimage
+          image_name: bc-ubuntu-oracular-f3906e4 # ${{ steps.commit-hash.outputs.image_name }} # daltonbohning-testimage
           image_tag: foo
           username: "${{ github.repository_owner }}"
           password: "${{ secrets.GITHUB_TOKEN }}"
           registry: ghcr.io
-          push_image_and_stages: false # true
+          push_image_and_stages: true
           dockerfile: utils/docker/Dockerfile.${{ matrix.distro }}
-          build_extra_args: '{"--build-arg": ["DAOS_BUILD=no", "DEPS_JOBS", "BASE_DISTRO", "DAOS_KEEP_SRC=yes"], "--tag": "build-image"}'
+          build_extra_args: '{"--build-arg": ["DAOS_DEPS_BUILD=no", "DAOS_BUILD=no", "DEPS_JOBS", "BASE_DISTRO", "DAOS_KEEP_SRC=yes"], "--tag": "build-image"}'
       - name: Fetch docker image and update deps (with tag latest)
         uses: whoan/docker-build-with-cache-action@v8.1
         continue-on-error: false
@@ -66,7 +66,7 @@ jobs:
           registry: ghcr.io
           push_image_and_stages: false # true
           dockerfile: utils/docker/Dockerfile.${{ matrix.distro }}
-          build_extra_args: '{"--build-arg": ["DAOS_BUILD=no", "DEPS_JOBS", "BASE_DISTRO", "DAOS_KEEP_SRC=yes"], "--tag": "build-image"}'
+          build_extra_args: '{"--build-arg": ["DAOS_DEPS_BUILD=no", "DAOS_BUILD=no", "DEPS_JOBS", "BASE_DISTRO", "DAOS_KEEP_SRC=yes"], "--tag": "build-image"}'
       # - name: Build and Test
       #   run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
       #         --env COMPILER --env DEPS_JOBS --user root:root build-image
