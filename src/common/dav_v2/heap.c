@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ */
 
 /*
  * heap.c -- heap implementation
@@ -2607,18 +2609,23 @@ heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size, uint32_t nemb_pct)
 		zd.nzones_heap = heap_max_zone(heap_size);
 
 	zd.nzones_cache = cache_size / ZONE_MAX_SIZE;
-	if (zd.nzones_cache <= UMEM_CACHE_MIN_EVICTABLE_PAGES)
+
+	if (!zd.nzones_heap || !zd.nzones_cache)
 		return zd;
 
-	if (zd.nzones_heap > zd.nzones_cache) {
-		if (zd.nzones_heap < (zd.nzones_cache + UMEM_CACHE_MIN_EVICTABLE_PAGES))
-			zd.nzones_ne_max = zd.nzones_cache - UMEM_CACHE_MIN_EVICTABLE_PAGES;
-		else
-			zd.nzones_ne_max = ((unsigned long)zd.nzones_cache * nemb_pct) / 100;
-		if (zd.nzones_cache < (zd.nzones_ne_max + UMEM_CACHE_MIN_EVICTABLE_PAGES))
-			zd.nzones_ne_max = zd.nzones_cache - UMEM_CACHE_MIN_EVICTABLE_PAGES;
-	} else
+	if (zd.nzones_heap <= zd.nzones_cache) {
 		zd.nzones_ne_max = zd.nzones_heap;
+		return zd;
+	}
+
+	if (zd.nzones_cache <= UMEM_CACHE_MIN_PAGES) {
+		zd.nzones_ne_max = zd.nzones_cache;
+		return zd;
+	}
+
+	zd.nzones_ne_max = (((unsigned long)zd.nzones_cache * nemb_pct) / 100);
+	if (!zd.nzones_ne_max)
+		zd.nzones_ne_max = UMEM_CACHE_MIN_PAGES;
 
 	zd.nzones_e_max = zd.nzones_heap - zd.nzones_ne_max;
 
