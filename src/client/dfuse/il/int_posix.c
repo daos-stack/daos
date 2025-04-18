@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,6 +61,7 @@ struct ioil_global {
 	bool            iog_initialized;
 	bool            iog_no_daos;
 	bool            iog_daos_init;
+	bool            iog_dfs_metrics;
 
 	bool            iog_show_summary; /**< Should a summary be shown at teardown */
 	unsigned        iog_report_count; /**< Number of operations that should be logged */
@@ -127,6 +129,9 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 		return 0;
 
 	if (cont->ioc_dfs != NULL) {
+		if (ioil_iog.iog_dfs_metrics)
+			dfs_metrics_fini(cont->ioc_dfs);
+
 		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		rc = dfs_umount(cont->ioc_dfs);
 		if (rc != 0) {
@@ -305,6 +310,9 @@ ioil_init(void)
 				", disabling kernel bypass");
 		return;
 	}
+
+	if (d_getenv_bool("D_IL_DFS_METRICS", &ioil_iog.iog_dfs_metrics) != 0)
+		ioil_iog.iog_dfs_metrics = false;
 
 	/* Check what progress to report on.  If the env is set but could not be
 	 * parsed then just show the summary (report_count will be 0).
@@ -672,6 +680,9 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
+
+	if (ioil_iog.iog_dfs_metrics)
+		dfs_metrics_init(cont->ioc_dfs);
 
 	DFUSE_TRA_UP(cont->ioc_dfs, &ioil_iog, "dfs");
 	D_FREE(iov.iov_buf);

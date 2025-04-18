@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,13 +82,14 @@ static struct d_tm_shmem {
 	uint32_t                 retain : 1, /** retain shmem region during exit */
 	    sync_access                 : 1, /** enable sync access to shmem */
 	    retain_non_empty            : 1, /** retain shmem region if it is not empty */
-	    multiple_writer_lock        : 1; /** lock for multiple writer */
+	    multiple_writer_lock        : 1, /** lock for multiple writer */
+	    use_non_shared_mem          : 1; /** use non-shared memory for allocs */
 	int			 id; /** Instance ID */
 } tm_shmem;
 
 /* Internal helper functions */
-static int allocate_shared_memory(int srv_idx, size_t mem_size,
-				  struct d_tm_shmem_hdr **shmem);
+static int
+allocate_memory_segment(int srv_idx, size_t mem_size, bool shared, struct d_tm_shmem_hdr **shmem);
 static void *shmalloc(struct d_tm_shmem_hdr *region, int length);
 static bool validate_shmem_ptr(struct d_tm_shmem_hdr *shmem_root,
 			       void *ptr);
@@ -253,15 +256,37 @@ attach_shmem(key_t key, size_t size, int flags, struct d_tm_shmem_hdr **shmem)
 }
 
 static int
-new_shmem(key_t key, size_t size, struct d_tm_shmem_hdr **shmem)
+alloc_nsmem(size_t size, struct d_tm_shmem_hdr **shmem)
 {
-	int rc;
-	D_INFO("creating new shared memory segment, key=0x%x, size=%lu\n",
-	       key, size);
-	rc = attach_shmem(key, size, IPC_CREAT | 0660, shmem);
+	void *addr;
+
+	D_ASSERT(shmem != NULL);
+
+	D_ALLOC(addr, size);
+	if (addr == NULL)
+		return -DER_NOMEM;
+
+	*shmem = addr;
+	return 0;
+}
+
+static int
+new_mem_seg(key_t key, size_t size, bool shared, struct d_tm_shmem_hdr **shmem)
+{
+	const char *mem_type = "";
+	int         rc;
+
+	if (shared)
+		mem_type = "shared ";
+
+	D_INFO("creating new %smemory segment, key=0x%x, size=%lu\n", mem_type, key, size);
+
+	if (shared)
+		rc = attach_shmem(key, size, IPC_CREAT | 0660, shmem);
+	else
+		rc = alloc_nsmem(size, shmem);
 	if (rc < 0)
-		D_ERROR("failed to create shared memory segment, key=0x%x: "DF_RC"\n", key,
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create %smemory segment, key=0x%x", mem_type, key);
 
 	return rc;
 }
@@ -370,6 +395,11 @@ get_shmem_for_key(struct d_tm_context *ctx, key_t key)
 	if (entry != NULL)
 		return entry->region;
 
+	if (tm_shmem.use_non_shared_mem) {
+		D_ERROR("couldn't find shmem key 0x%x in non-shared mode\n", key);
+		return NULL;
+	}
+
 	return open_shmem_for_key(ctx, key);
 }
 
@@ -377,12 +407,18 @@ static void
 close_local_shmem_entry(struct local_shmem_list *entry, bool destroy)
 {
 	d_list_del(&entry->link);
-	if (destroy)
-		entry->region->sh_deleted = 1;
-	close_shmem(entry->region);
 
-	if (destroy)
-		destroy_shmem(entry->shmid);
+	if (tm_shmem.use_non_shared_mem) {
+		D_FREE(entry->region);
+	} else {
+		if (destroy)
+			entry->region->sh_deleted = 1;
+
+		close_shmem(entry->region);
+
+		if (destroy)
+			destroy_shmem(entry->shmid);
+	}
 
 	D_FREE(entry);
 }
@@ -411,10 +447,15 @@ close_all_shmem(struct d_tm_context *ctx, bool destroy)
 		close_local_shmem_entry(current, destroy);
 	}
 
-	close_shmem(ctx->shmem_root);
+	if (tm_shmem.use_non_shared_mem) {
+		D_FREE(ctx->shmem_root);
+	} else {
+		close_shmem(ctx->shmem_root);
+		if (destroy)
+			destroy_shmem(ctx->shmid_root);
+	}
+
 	ctx->shmem_root = NULL;
-	if (destroy)
-		destroy_shmem(ctx->shmid_root);
 }
 
 static void *
@@ -740,10 +781,11 @@ alloc_ctx(struct d_tm_context **ctx, struct d_tm_shmem_hdr *shmem, int shmid)
 }
 
 static int
-create_shmem(const char *root_path, key_t key, size_t size_bytes,
-	     int *new_shmid, struct d_tm_shmem_hdr **new_shmem)
+create_mem_seg(const char *root_path, key_t key, size_t size_bytes, int *new_shmid,
+	       struct d_tm_shmem_hdr **new_shmem)
 {
 	struct d_tm_shmem_hdr	*shmem;
+	bool                     shared = tm_shmem.use_non_shared_mem ? false : true;
 	int			 rc;
 
 	D_ASSERT(root_path != NULL);
@@ -751,14 +793,15 @@ create_shmem(const char *root_path, key_t key, size_t size_bytes,
 	D_ASSERT(new_shmid != NULL);
 	D_ASSERT(new_shmem != NULL);
 
-	rc = allocate_shared_memory(key, size_bytes, &shmem);
+	rc = allocate_memory_segment(key, size_bytes, shared, &shmem);
 	if (rc < 0)
 		return rc;
 
 	*new_shmid = rc;
 	rc = alloc_node(shmem, &shmem->sh_root, root_path);
 	if (rc != 0) {
-		destroy_shmem(*new_shmid);
+		if (shared)
+			destroy_shmem(*new_shmid);
 		return rc;
 	}
 
@@ -855,10 +898,22 @@ d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 	memset(&tm_shmem, 0, sizeof(tm_shmem));
 
 	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM | D_TM_RETAIN_SHMEM_IF_NON_EMPTY |
-		       D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK)) != 0) {
+		       D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK | D_TM_NO_SHMEM)) != 0) {
 		D_ERROR("Invalid flags 0x%x\n", flags);
 		rc = -DER_INVAL;
 		goto failure;
+	}
+
+	if ((flags & D_TM_NO_SHMEM) != 0) {
+		if ((flags & (D_TM_RETAIN_SHMEM | D_TM_RETAIN_SHMEM_IF_NON_EMPTY |
+			      D_TM_NO_SHMEM)) != D_TM_NO_SHMEM) {
+			D_ERROR("Cannot set no_shmem with retain_shmem flags\n");
+			rc = -DER_INVAL;
+			goto failure;
+		}
+		/* TODO: Guard against non-client use of this flag */
+		D_INFO("Using non-shared memory segments for telemetry\n");
+		tm_shmem.use_non_shared_mem = 1;
 	}
 
 	if (flags & D_TM_SERIALIZATION) {
@@ -882,22 +937,29 @@ d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 	}
 
 	tm_shmem.id = id;
-	key = d_tm_get_srv_key(id);
-	if (flags & D_TM_OPEN_OR_CREATE) {
-		rc = open_shmem(key, &new_shmem);
-		if (rc > 0) {
-			D_ASSERT(new_shmem != NULL);
-			shmid = rc;
-		}
-	}
+	key         = d_tm_get_srv_key(id);
 
-	if (new_shmem == NULL) {
-		rc = destroy_shmem_with_key(key);
+	if (tm_shmem.use_non_shared_mem) {
+		rc = create_mem_seg(root_name, key, mem_size, &shmid, &new_shmem);
 		if (rc != 0)
 			goto failure;
-		rc = create_shmem(root_name, key, mem_size, &shmid, &new_shmem);
-		if (rc != 0)
-			goto failure;
+	} else {
+		if (flags & D_TM_OPEN_OR_CREATE) {
+			rc = open_shmem(key, &new_shmem);
+			if (rc > 0) {
+				D_ASSERT(new_shmem != NULL);
+				shmid = rc;
+			}
+		}
+
+		if (new_shmem == NULL) {
+			rc = destroy_shmem_with_key(key);
+			if (rc != 0)
+				goto failure;
+			rc = create_mem_seg(root_name, key, mem_size, &shmid, &new_shmem);
+			if (rc != 0)
+				goto failure;
+		}
 	}
 
 	rc = alloc_ctx(&tm_shmem.ctx, new_shmem, shmid);
@@ -2885,8 +2947,7 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	}
 
 	key = get_unique_shmem_key(path, tm_shmem.id);
-	rc = create_shmem(get_last_token(path), key, size_bytes, &new_shmid,
-			  &new_shmem);
+	rc  = create_mem_seg(get_last_token(path), key, size_bytes, &new_shmid, &new_shmem);
 	if (unlikely(rc != 0)) {
 		DL_ERROR(rc, "failed to create shmem for %s", path);
 		D_GOTO(fail_unlock, rc);
@@ -2906,10 +2967,12 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		D_GOTO(fail_attach, rc);
 	}
 
-	rc = sync_attached_segment_uid(path, key);
-	if (unlikely(rc != 0)) {
-		DL_ERROR(rc, "failed to sync %s permissions", path);
-		D_GOTO(fail_sync, rc);
+	if (!tm_shmem.use_non_shared_mem) {
+		rc = sync_attached_segment_uid(path, key);
+		if (unlikely(rc != 0)) {
+			DL_ERROR(rc, "failed to sync %s permissions", path);
+			D_GOTO(fail_sync, rc);
+		}
 	}
 
 	if (node != NULL)
@@ -4020,10 +4083,11 @@ d_tm_cli_pid_key(pid_t pid)
 }
 
 /**
- * Allocates a shared memory segment for a given key.
+ * Allocates a memory segment for a given key.
  *
  * \param[in]	key		Key for the shmem region
  * \param[in]	mem_size	Size in bytes of the shared memory region
+ * \param[in]   shared          Use shared memory
  * \param[out]	shmem		Address of new shmem region
  *
  * \return	Shmid of new shmem region
@@ -4031,16 +4095,19 @@ d_tm_cli_pid_key(pid_t pid)
  *		-DER_SHMEM_PERMS	Failed to attach to new shmem
  */
 static int
-allocate_shared_memory(key_t key, size_t mem_size,
-		       struct d_tm_shmem_hdr **shmem)
+allocate_memory_segment(key_t key, size_t mem_size, bool shared, struct d_tm_shmem_hdr **shmem)
 {
 	int			 shmid;
+	const char              *mem_type = "";
 	struct d_tm_shmem_hdr	*header;
 	int                      rc;
 
 	D_ASSERT(shmem != NULL);
 
-	shmid = new_shmem(key, mem_size, &header);
+	if (shared)
+		mem_type = "shared ";
+
+	shmid = new_mem_seg(key, mem_size, shared, &header);
 	if (shmid < 0)
 		return shmid;
 
@@ -4067,8 +4134,9 @@ allocate_shared_memory(key_t key, size_t mem_size,
 	}
 
 	D_DEBUG(DB_MEM,
-		"Created shared memory region for key 0x%x, size=%lu header %p base %p free %p\n",
-		key, mem_size, header, (void *)header->sh_base_addr, (void *)header->sh_free_addr);
+		"Created %smemory region for key 0x%x, size=%lu header %p base %p free %p\n",
+		mem_type, key, mem_size, header, (void *)header->sh_base_addr,
+		(void *)header->sh_free_addr);
 
 	*shmem = header;
 
@@ -4091,13 +4159,17 @@ d_tm_open(int id)
 	key_t			key;
 	int			shmid;
 
-	key = d_tm_get_srv_key(id);
-	shmid = open_shmem(key, &addr);
-	if (shmid < 0)
-		return NULL;
+	if (tm_shmem.use_non_shared_mem) {
+		new_ctx = tm_shmem.ctx;
+	} else {
+		key   = d_tm_get_srv_key(id);
+		shmid = open_shmem(key, &addr);
+		if (shmid < 0)
+			return NULL;
 
-	if (alloc_ctx(&new_ctx, addr, shmid) != 0)
-		return NULL;
+		if (alloc_ctx(&new_ctx, addr, shmid) != 0)
+			return NULL;
+	}
 
 	return new_ctx;
 }
