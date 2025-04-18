@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,6 +99,7 @@ struct cache_entry {
 struct d_log_xstate       d_log_xst;
 
 static struct d_log_state mst;
+static struct d_log_state *dbg_mst;
 static d_list_t           d_log_caches;
 
 /* default name for facility 0 */
@@ -109,7 +111,8 @@ static bool               merge_stderr;
 #define clog_lock()   (void)pthread_mutex_lock(&clogmux)
 #define clog_unlock() (void)pthread_mutex_unlock(&clogmux)
 
-static int d_log_write(char *buf, int len, bool flush);
+static int
+			  d_log_write(char *buf, int len, struct d_log_state *dls, bool flush);
 static const char *clog_pristr(int);
 static int clog_setnfac(int);
 
@@ -260,6 +263,34 @@ d_log_add_cache(int *cache, int nr)
 	clog_unlock();
 }
 
+static void
+_dls_cleanout(struct d_log_state *dls)
+{
+	if (dls->log_file) {
+		if (dls->log_fd >= 0) {
+			d_log_write(NULL, 0, &mst, true);
+			close(dls->log_fd);
+		}
+		dls->log_fd = -1;
+		free(dls->log_file);
+		dls->log_file = NULL;
+	}
+
+	if (dls->log_old) {
+		if (dls->log_old_fd >= 0)
+			close(dls->log_old_fd);
+		dls->log_old_fd = -1;
+		free(dls->log_old);
+		dls->log_old = NULL;
+	}
+
+	if (dls->log_buf) {
+		free(dls->log_buf);
+		dls->log_buf     = NULL;
+		dls->log_buf_nob = 0;
+	}
+}
+
 /**
  * dlog_cleanout: release previously allocated resources (e.g. from a
  * close or during a failed open).
@@ -272,28 +303,11 @@ static void dlog_cleanout(void)
 	int			 lcv;
 
 	clog_lock();
-	if (mst.log_file) {
-		if (mst.log_fd >= 0) {
-			d_log_write(NULL, 0, true);
-			close(mst.log_fd);
-		}
-		mst.log_fd = -1;
-		free(mst.log_file);
-		mst.log_file = NULL;
-	}
-
-	if (mst.log_old) {
-		if (mst.log_old_fd >= 0)
-			close(mst.log_old_fd);
-		mst.log_old_fd = -1;
-		free(mst.log_old);
-		mst.log_old = NULL;
-	}
-
-	if (mst.log_buf) {
-		free(mst.log_buf);
-		mst.log_buf = NULL;
-		mst.log_buf_nob = 0;
+	_dls_cleanout(&mst);
+	if (dbg_mst) {
+		_dls_cleanout(dbg_mst);
+		free(dbg_mst);
+		dbg_mst = NULL;
 	}
 
 	if (d_log_xst.dlog_facs) {
@@ -342,7 +356,7 @@ static __thread uint64_t pre_err_time;
 #define LOG_BUF_SIZE	(16 << 10)
 
 static bool
-log_exceed_threshold(void)
+log_exceed_threshold(struct d_log_state *dls)
 {
 	struct stat	st;
 	int		rc;
@@ -356,77 +370,76 @@ log_exceed_threshold(void)
 	 * too much, log_size will be updated with fstat if log
 	 * size increased by 2% of max size every time.
 	 */
-	if ((mst.log_size - mst.log_last_check_size) < (mst.log_size_max / 50))
+	if ((dls->log_size - mst.log_last_check_size) < (mst.log_size_max / 50))
 		goto out;
 
-	rc = fstat(mst.log_fd, &st);
+	rc = fstat(dls->log_fd, &st);
 	if (!rc)
-		mst.log_size = st.st_size;
+		dls->log_size = st.st_size;
 
-	mst.log_last_check_size = mst.log_size;
+	dls->log_last_check_size = mst.log_size;
 out:
-	return mst.log_size + mst.log_buf_nob >= mst.log_size_max;
+	return dls->log_size + mst.log_buf_nob >= mst.log_size_max;
 }
 
 /* exceeds the size threshold, rename the current log file
  * as backup, create a new log file.
  */
 static int
-log_rotate(void)
+log_rotate(struct d_log_state *dls)
 {
 	int rc = 0;
 
-	if (!mst.log_old) {
-		rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
+	if (!dls->log_old) {
+		rc = asprintf(&dls->log_old, "%s.old", dls->log_file);
 		if (rc < 0) {
 			dlog_print_err(errno, "failed to alloc name\n");
 			return -1;
 		}
 	}
 
-	if (mst.log_old_fd >= 0) {
-		close(mst.log_old_fd);
-		mst.log_old_fd = -1;
+	if (dls->log_old_fd >= 0) {
+		close(dls->log_old_fd);
+		dls->log_old_fd = -1;
 	}
 
 	/* rename the current log file as a backup */
-	rc = rename(mst.log_file, mst.log_old);
+	rc = rename(dls->log_file, dls->log_old);
 	if (rc) {
 		dlog_print_err(errno, "failed to rename log file\n");
 		return -1;
 	}
-	mst.log_old_fd = mst.log_fd;
+	dls->log_old_fd = dls->log_fd;
 
 	/* create a new log file */
 	if (merge_stderr) {
-		if (freopen(mst.log_file, "w", stderr) == NULL) {
-			fprintf(stderr, "d_log_write(): cannot open new %s: %s\n",
-				mst.log_file, strerror(errno));
+		if (freopen(dls->log_file, "w", stderr) == NULL) {
+			fprintf(stderr, "d_log_write(): cannot open new %s: %s\n", dls->log_file,
+				strerror(errno));
 			return -1;
 		}
 
-		mst.log_fd = fileno(stderr);
+		dls->log_fd = fileno(stderr);
 	} else {
-		mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT, 0644);
-		if (mst.log_fd < 0) {
+		dls->log_fd = open(dls->log_file, O_RDWR | O_CREAT, 0644);
+		if (dls->log_fd < 0) {
 			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
-				mst.log_file, strerror(errno));
+				dls->log_file, strerror(errno));
 			return -1;
 		}
-		rc = fcntl(mst.log_fd, F_DUPFD, 128);
+		rc = fcntl(dls->log_fd, F_DUPFD, 128);
 		if (rc < 0) {
-			fprintf(stderr,
-				"d_log_write(): failed to recreate log file %s: %s\n",
-				mst.log_file, strerror(errno));
-			close(mst.log_fd);
+			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
+				dls->log_file, strerror(errno));
+			close(dls->log_fd);
 			return -1;
 		}
-		close(mst.log_fd);
-		mst.log_fd = rc;
+		close(dls->log_fd);
+		dls->log_fd = rc;
 	}
 
-	mst.log_size = 0;
-	mst.log_last_check_size = 0;
+	dls->log_size            = 0;
+	dls->log_last_check_size = 0;
 
 	return rc;
 }
@@ -442,11 +455,11 @@ log_rotate(void)
  * If @flush is true, it writes log buffer to log file immediately.
  */
 static int
-d_log_write(char *msg, int len, bool flush)
+d_log_write(char *msg, int len, struct d_log_state *dls, bool flush)
 {
 	int	 rc;
 
-	if (mst.log_fd < 0)
+	if (!dls || dls->log_fd < 0)
 		return 0;
 
 	if (len >= LOG_BUF_SIZE) {
@@ -455,19 +468,19 @@ d_log_write(char *msg, int len, bool flush)
 		return 0;
 	}
 
-	if (!mst.log_buf) {
-		mst.log_buf = malloc(LOG_BUF_SIZE);
-		if (!mst.log_buf) {
+	if (!dls->log_buf) {
+		dls->log_buf = malloc(LOG_BUF_SIZE);
+		if (!dls->log_buf) {
 			dlog_print_err(ENOMEM, "failed to alloc log buffer\n");
 			return -1;
 		}
 	}
 	D_ASSERT(!msg || len);
  again:
-	if (msg && (len <= LOG_BUF_SIZE - mst.log_buf_nob)) {
+	if (msg && (len <= LOG_BUF_SIZE - dls->log_buf_nob)) {
 		/* the current buffer is not full */
-		strncpy(&mst.log_buf[mst.log_buf_nob], msg, len);
-		mst.log_buf_nob += len;
+		strncpy(&dls->log_buf[dls->log_buf_nob], msg, len);
+		dls->log_buf_nob += len;
 		if (!flush)
 			return 0; /* short path done */
 
@@ -476,63 +489,71 @@ d_log_write(char *msg, int len, bool flush)
 	}
 	/* write log buffer to log file */
 
-	if (mst.log_buf_nob == 0)
+	if (dls->log_buf_nob == 0)
 		return 0; /* nothing to write */
 
 	/* rotate the log if it exceeds the threshold */
-	if (log_exceed_threshold()) {
-		rc = log_rotate();
+	if (log_exceed_threshold(dls)) {
+		rc = log_rotate(dls);
 		if (rc != 0)
 			return rc;
 	}
 
 	/* flush the cached log messages */
-	rc = write(mst.log_fd, mst.log_buf, mst.log_buf_nob);
+	rc = write(dls->log_fd, dls->log_buf, dls->log_buf_nob);
 	if (rc < 0) {
 		int err = errno;
 
-		dlog_print_err(err, "failed to write log %d\n", mst.log_fd);
+		dlog_print_err(err, "failed to write log %d\n", dls->log_fd);
 		if (err == EBADF)
-			mst.log_fd = -1;
+			dls->log_fd = -1;
 		return -1;
 	}
-	mst.log_size += mst.log_buf_nob;
-	mst.log_buf_nob = 0;
+	dls->log_size += dls->log_buf_nob;
+	dls->log_buf_nob = 0;
 	if (msg) /* the current message is not processed yet */
 		goto again;
 
 	return 0;
 }
 
-void
-d_log_sync(void)
+static void
+_dls_sync(struct d_log_state *dls)
 {
 	int rc = 0;
 
-	clog_lock();
-	if (mst.log_buf_nob > 0) /* write back the in-flight buffer */
-		rc = d_log_write(NULL, 0, true);
+	if (dls->log_buf_nob > 0) /* write back the in-flight buffer */
+		rc = d_log_write(NULL, 0, &mst, true);
 
 	/* Skip flush if there was a problem on write */
-	if (mst.log_fd >= 0 && rc == 0) {
-		rc = fsync(mst.log_fd);
+	if (dls->log_fd >= 0 && rc == 0) {
+		rc = fsync(dls->log_fd);
 		if (rc < 0) {
 			int err = errno;
 
-			dlog_print_err(err, "failed to sync log file %d\n", mst.log_fd);
+			dlog_print_err(err, "failed to sync log file %d\n", dls->log_fd);
 			if (err == EBADF)
-				mst.log_fd = -1;
+				dls->log_fd = -1;
 		}
 	}
 
-	if (mst.log_old_fd >= 0) {
-		rc = fsync(mst.log_old_fd);
+	if (dls->log_old_fd >= 0) {
+		rc = fsync(dls->log_old_fd);
 		if (rc < 0)
-			dlog_print_err(errno, "failed to sync log backup %d\n", mst.log_old_fd);
+			dlog_print_err(errno, "failed to sync log backup %d\n", dls->log_old_fd);
 
-		close(mst.log_old_fd);
-		mst.log_old_fd = -1; /* nobody is going to write it again */
+		close(dls->log_old_fd);
+		dls->log_old_fd = -1; /* nobody is going to write it again */
 	}
+}
+
+void
+d_log_sync(void)
+{
+	clog_lock();
+	_dls_sync(&mst);
+	if (dbg_mst)
+		_dls_sync(dbg_mst);
 	clog_unlock();
 }
 
@@ -541,6 +562,10 @@ d_log_disable_logging(void)
 {
 	mst.log_fd     = -1;
 	mst.log_old_fd = -1;
+	if (dbg_mst) {
+		dbg_mst->log_fd     = -1;
+		dbg_mst->log_old_fd = -1;
+	}
 }
 
 /**
@@ -714,7 +739,10 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (flush)
 		last_flush = tv.tv_sec;
 
-	rc = d_log_write(b, tlen, flush);
+	if (dbg_mst && lvl <= DLOG_DBG)
+		rc = d_log_write(b, tlen, dbg_mst, flush);
+	else
+		rc = d_log_write(b, tlen, &mst, flush);
 	if (rc < 0)
 		errno = save_errno;
 
@@ -842,6 +870,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	char		*env;
 	char		*buffer = NULL;
 	uint64_t	log_size = LOG_SIZE_DEF;
+	int              log_flags = O_RDWR | O_CREAT;
 	int		pri;
 
 	memset(&mst, 0, sizeof(mst));
@@ -890,27 +919,55 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	d_freeenv_str(&env);
 
 	/* quick sanity check (mst.tag is non-null if already open) */
-	if (d_log_xst.tag || !tag ||
-	    (maxfac_hint < 0) || (default_mask & ~DLOG_PRIMASK) ||
+	if (d_log_xst.tag || !tag || (maxfac_hint < 0) || (default_mask & ~DLOG_PRIMASK) ||
 	    (stderr_mask & ~DLOG_PRIMASK)) {
 		fprintf(stderr, "d_log_open invalid parameter.\n");
 		goto early_error;
 	}
 	/* init working area so we can use dlog_cleanout to bail out */
-	mst.log_fd = -1;
+	mst.log_fd     = -1;
 	mst.log_old_fd = -1;
 	/* start filling it in */
-	tagblen = strlen(tag) + DLOG_TAGPAD;	/* add a bit for pid */
-	newtag = calloc(1, tagblen);
+	tagblen = strlen(tag) + DLOG_TAGPAD; /* add a bit for pid */
+	newtag  = calloc(1, tagblen);
 	if (!newtag) {
 		fprintf(stderr, "d_log_open calloc failed.\n");
 		goto early_error;
 	}
-	/* it is now safe to use dlog_cleanout() for error handling */
 
-	clog_lock();		/* now locked */
+	clog_lock(); /* now locked */
 
 	D_INIT_LIST_HEAD(&d_log_caches);
+
+	/* it is now safe to use dlog_cleanout() for error handling */
+
+	/* set up the optional debug log file */
+	d_agetenv_str(&env, D_LOG_DEBUG_FILE_ENV);
+	if (env != NULL) {
+		dbg_mst = calloc(1, sizeof(struct d_log_state));
+		if (!dbg_mst) {
+			fprintf(stderr, "calloc failed for debug logger.\n");
+			d_freeenv_str(&env);
+			goto error;
+		}
+
+		dbg_mst->log_size_max = log_size;
+		dbg_mst->log_file     = strdup(env);
+		if (!dbg_mst->log_file) {
+			fprintf(stderr, "strdup failed for debug logger.\n");
+			d_freeenv_str(&env);
+			goto error;
+		}
+		d_freeenv_str(&env);
+
+		dbg_mst->log_old_fd = -1;
+		dbg_mst->log_fd     = open(dbg_mst->log_file, log_flags, 0644);
+		if (dbg_mst->log_fd < 0) {
+			fprintf(stderr, "d_log_open: cannot open %s: %s\n", dbg_mst->log_file,
+				strerror(errno));
+			goto error;
+		}
+	}
 
 	if (flags & DLOG_FLV_LOGPID)
 		snprintf(newtag, tagblen, "%s[", tag);
@@ -919,7 +976,6 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.def_mask = default_mask;
 	mst.stderr_mask = stderr_mask;
 	if (logfile) {
-		int         log_flags = O_RDWR | O_CREAT;
 		struct stat st;
 
 		d_agetenv_str(&env, D_LOG_STDERR_IN_LOG_ENV);
@@ -1023,6 +1079,8 @@ early_error:
 		free(buffer);
 	if (newtag)
 		free(newtag);           /* was never installed */
+	if (dbg_mst)
+		free(dbg_mst);
 	return -1;
 }
 
@@ -1340,6 +1398,13 @@ int d_log_setmasks(const char *mstr, int mlen0)
 		else {
 			/* apply to all facilities */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
+				/* don't include external when setting blanket DEBUG -- must be
+				 * enabled explicitly */
+				if (prino == DLOG_DBG &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].fac_aname, "external",
+						8) == 0)
+					continue;
+
 				tmp = d_log_setlogmask(facno, prino);
 				if (rv != -1)
 					rv = tmp;
