@@ -3,6 +3,14 @@
 set -eux
 
 env > /root/last_run-env.txt
+
+# Need this fix earlier
+# For some reason sssd_common must be reinstalled
+# to fix up the restored image.
+if command -v dnf; then
+    bootstrap_dnf
+fi
+
 if ! grep ":$MY_UID:" /etc/group; then
   groupadd -g "$MY_UID" jenkins
 fi
@@ -64,6 +72,10 @@ function mount_nvme_drive {
 nvme_class="/sys/class/nvme/"
 function nvme_limit {
     set +x
+    if [ ! -d /sys/class/nvme ]; then
+        echo "No NVMe devices found"
+        return
+    fi
     local numa0_devices=()
     local numa1_devices=()
     for nvme_path in "$nvme_class"*; do
@@ -81,7 +93,7 @@ function nvme_limit {
     echo numa0 "${numa0_devices[@]}"
     echo numa1 "${numa1_devices[@]}"
     if [ "${#numa0_devices[@]}" -gt 0 ] && [ "${#numa1_devices[@]}" -gt 0 ]; then
-        echo "balanced configuration possible"
+        echo "balanced NVMe configuration possible"
         nvme_count=0
         for nvme in "${numa0_devices[@]}"; do
             if [ "$nvme_count" -ge "${DAOS_CI_NVME_NUMA_LIMIT}" ]; then
@@ -99,7 +111,7 @@ function nvme_limit {
             fi
         done
     else
-        echo "balanced configuration not possible"
+        echo "balanced NVMe configuration not possible"
         for nvme in "${numa0_devices[@]}" "${numa1_devices[@]}"; do
             ((needed = "$DAOS_CI_NVME_NUMA_LIMIT" + 1)) || true
             nvme_count=0

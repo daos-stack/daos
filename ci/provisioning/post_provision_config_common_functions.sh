@@ -54,17 +54,6 @@ add_repo() {
     fi
 }
 
-add_group_repo() {
-    local match="$1"
-
-    add_repo "$match" "$DAOS_STACK_GROUP_REPO"
-    group_repo_post
-}
-
-add_local_repo() {
-    add_repo 'argobots' "$DAOS_STACK_LOCAL_REPO" false
-}
-
 disable_gpg_check() {
     local url="$1"
 
@@ -112,9 +101,6 @@ retry_dnf() {
                 # non-experimental one after trying twice with the experimental one
                 set_local_repo "${repo_servers[1]}"
                 dnf -y makecache
-                if [ -n "${POWERTOOLSREPO:-}" ]; then
-                    POWERTOOLSREPO=${POWERTOOLSREPO/${repo_servers[0]}/${repo_servers[1]}}
-                fi
             fi
             sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
         fi
@@ -145,7 +131,7 @@ send_mail() {
         echo "Host:  $HOSTNAME"
         echo ""
         echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "DAOS_DEVOPS_EMAIL" "$recipients"
+    } 2>&1 | mail -s "$subject" -r "$DAOS_DEVOPS_EMAIL" "$recipients"
     set -x
 }
 
@@ -316,9 +302,13 @@ update_repos() {
 
     # successfully grabbed them all, so replace the entire $REPOS_DIR
     # content with them
+
+    # This is not working right on a second run.
+    # using a quick hack to stop deleting a critical repo
     local file
     for file in "$REPOS_DIR"/*.repo; do
-        [ -e "$file" ] || break
+        [[ $file == *"artifactory"* ]] && continue
+        [ -e "$file" ] || breaki
         # empty the file but keep it around so that updates don't recreate it
         true > "$file"
     done

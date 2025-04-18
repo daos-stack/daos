@@ -24,9 +24,6 @@ source ci/junit.sh
 : "${MLNX_VER_NUM:=24.04-0.6.6.0}"
 
 : "${DISTRO:=EL_7}"
-DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
-DSG_REPO_var="DAOS_STACK_${DISTRO}_GROUP_REPO"
-DSA_REPO_var="DAOS_STACK_${DISTRO}_APPSTREAM_REPO"
 
 retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 
@@ -42,9 +39,6 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            GPG_KEY_URLS=\"${GPG_KEY_URLS:-}\"
            REPOSITORY_URL=\"${REPOSITORY_URL:-}\"
            JENKINS_URL=\"${JENKINS_URL:-}\"
-           DAOS_STACK_LOCAL_REPO=\"${!DSL_REPO_var}\"
-           DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var:-}\"
-           DAOS_STACK_EL_8_APPSTREAM_REPO=\"${!DSA_REPO_var:-}\"
            DISTRO=\"$DISTRO\"
            DAOS_STACK_RETRY_DELAY_SECONDS=\"$DAOS_STACK_RETRY_DELAY_SECONDS\"
            DAOS_STACK_RETRY_COUNT=\"$DAOS_STACK_RETRY_COUNT\"
