@@ -49,29 +49,16 @@ def main():
         type=str,
         default=os.getenv('GITHUB_BASE_REF'),
         help='base reference default=%(default)s')
-    parser.add_argument(
-        '--single',
-        action='store_true',
-        help='TODO')
     args = parser.parse_args()
 
+    cmd = ['git', 'rev-list', '--abbrev-commit', '--max-count=1']
 
-    if not args.base_ref:
-        # Assume this is a landing build, so just use the branch name
-        target_branch = os.getenv('GITHUB_REF_NAME')
-    elif args.base_ref.startswith('release/'):
-        # Use either a release branch
-        target_branch = args.base_ref
-    else:
-        # Or master
-        target_branch = 'master'
+    if args.base_ref:
+        # Assume this is a PR if we have a base reference.
+        # For non-landing builds, filter out anything older than 1 hour
+        # to reduce the chance of a cache miss if the latest is not pushed yet
+        cmd.append('--until="$(date --date "- 1 hour" +"%D %T")"')
 
-    cmd = ['git', 'rev-list', '--abbrev-commit']
-
-    if args.single:
-        cmd.append('--max-count=1')
-    else:
-        cmd.append('--max-count=2')
     cmd.extend(['HEAD', '--'])
     cmd.extend(BUILD_FILES)
 
@@ -96,49 +83,13 @@ def main():
         args.base_distro = ''
 
     rc = subprocess.run(cmd, check=True, capture_output=True)
-    commits = rc.stdout.decode('utf-8').strip()
+    latest_commit = rc.stdout.decode('utf-8').strip() or 'unknown'
 
-    if args.single:
-        build_hash = commits
-    else:
-        lines = commits.splitlines()
-        if len(lines):
-            build_hash = lines.pop(0)
-        else:
-            build_hash = 'unknown'
-
-    if args.single:
-        print('single')
-        # Landings builds, embed the current commit in the hash name, load either the exact commit
-        # or the most recent build with the same build scripts.
-        rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
-        commit_hash = rc.stdout.decode('utf-8').strip()
-
-        key = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}-{commit_hash}'
-        set_output('key', key)
-
-        restore = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}-{commit_hash}'
-        set_output('restore', restore)
-
-        restore_prev = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}'
-        set_output('restore_prev', restore_prev)
-
-    else:
-        print('not single')
-        # PR builds.  Do not embed the current commit in the hash name, load the most recent build
-        # scripts, and fall back to the most recent version of the build script from the last week
-        # or anything if that isn't found.
-        key = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}'
-        set_output('key', key)
-
-        restore = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}'
-        set_output('restore', restore)
-
-        if len(lines):
-            restore_prev = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{lines[0]}'
-        else:
-            restore_prev = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-'
-        set_output('restore_prev', restore_prev)
+    # Imbed the latest commit in the image name.
+    # For PRs this will be from the base branch.
+    # For landing runs it will be either the current commit or latest commit with build changes
+    image_name = f'bc-{args.base_distro.replace(":", "-")}-{latest_commit}'
+    set_output('image_name', image_name)
 
 
 if __name__ == '__main__':
