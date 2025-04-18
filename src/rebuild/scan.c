@@ -869,6 +869,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc) {
 		D_ERROR("Container "DF_UUID", ds_cont_fetch_snaps failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		if (rc == -DER_CONT_NONEXIST) {
+			DL_ERROR(rc, DF_CONT " skip orphan container",
+				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+			rc = 0;
+		}
 		D_GOTO(close, rc);
 	}
 
@@ -876,6 +881,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc) {
 		D_ERROR("Container "DF_UUID", ds_cont_get_props failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		if (rc == -DER_CONT_NONEXIST) {
+			DL_ERROR(rc, DF_CONT " skip orphan container",
+				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+			rc = 0;
+		}
 		D_GOTO(close, rc);
 	}
 
