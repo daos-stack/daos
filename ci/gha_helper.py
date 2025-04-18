@@ -7,6 +7,7 @@ import random
 import string
 import subprocess  # nosec
 import sys
+from argparse import ArgumentParser
 from os.path import join
 
 BUILD_FILES = ['site_scons/prereq_tools',
@@ -37,29 +38,37 @@ def set_output(key, value):
 
 def main():
     """Parse git history to load caches for GHA"""
-    # Try and use the right hash key.  For chained PRs on release branches this won't be correct
-    # however most of the time it should be right, and the build should still work on cache miss
-    # although it will take longer.
-    base_ref = os.getenv('GITHUB_BASE_REF', None)
-    if base_ref:
-        # If it's a PR check if it's against a release, if so use it else use master.
-        if base_ref.startswith('release/'):
-            target_branch = base_ref
-        else:
-            target_branch = 'master'
-    else:
-        # If this isn't a PR then it must be a landing build, so simply use the branch name.
+    parser = ArgumentParser()
+    parser.add_argument(
+        '--base-distro',
+        type=str,
+        default=os.getenv('BASE_DISTRO'),
+        help='name of the distro being build default=%(default)s')
+    parser.add_argument(
+        '--base-ref',
+        type=str,
+        default=os.getenv('GITHUB_BASE_REF'),
+        help='base reference default=%(default)s')
+    parser.add_argument(
+        '--single',
+        action='store_true',
+        help='TODO')
+    args = parser.parse_args()
+
+
+    if not args.base_ref:
+        # Assume this is a landing build, so just use the branch name
         target_branch = os.getenv('GITHUB_REF_NAME')
-
-    single = '--single' in sys.argv
-
-    # The base distro, this is the name of the distro being built, and therefore the name of the
-    # hash key, but it may not be the name of the dockerfile.
-    base_distro = os.getenv('BASE_DISTRO', None)
+    elif args.base_ref.startswith('release/'):
+        # Use either a release branch
+        target_branch = args.base_ref
+    else:
+        # Or master
+        target_branch = 'master'
 
     cmd = ['git', 'rev-list', '--abbrev-commit']
 
-    if single:
+    if args.single:
         cmd.append('--max-count=1')
     else:
         cmd.append('--max-count=2')
@@ -70,8 +79,8 @@ def main():
     for fname in BUILD_FILES:
         assert os.path.exists(fname)
 
-    if base_distro:
-        docker_distro = os.getenv('DOCKER_BASE', base_distro)
+    if args.base_distro:
+        docker_distro = os.getenv('DOCKER_BASE', args.base_distro)
 
         dockerfile = f'utils/docker/Dockerfile.{docker_distro}'
         assert os.path.exists(dockerfile)
@@ -84,12 +93,12 @@ def main():
         cmd.append(dockerfile)
     else:
         cmd.append('utils/docker')
-        base_distro = ''
+        args.base_distro = ''
 
     rc = subprocess.run(cmd, check=True, capture_output=True)
     commits = rc.stdout.decode('utf-8').strip()
 
-    if single:
+    if args.single:
         build_hash = commits
     else:
         lines = commits.splitlines()
@@ -98,35 +107,37 @@ def main():
         else:
             build_hash = 'unknown'
 
-    if single:
+    if args.single:
+        print('single')
         # Landings builds, embed the current commit in the hash name, load either the exact commit
         # or the most recent build with the same build scripts.
         rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
         commit_hash = rc.stdout.decode('utf-8').strip()
 
-        key = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}-{commit_hash}'
+        key = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}-{commit_hash}'
         set_output('key', key)
 
-        restore = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}-{commit_hash}'
+        restore = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}-{commit_hash}'
         set_output('restore', restore)
 
-        restore_prev = 'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}'
+        restore_prev = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}'
         set_output('restore_prev', restore_prev)
 
     else:
+        print('not single')
         # PR builds.  Do not embed the current commit in the hash name, load the most recent build
         # scripts, and fall back to the most recent version of the build script from the last week
         # or anything if that isn't found.
-        key = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}'
+        key = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}'
         set_output('key', key)
 
-        restore = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{build_hash}'
+        restore = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{build_hash}'
         set_output('restore', restore)
 
         if len(lines):
-            restore_prev = f'bc-{target_branch}-{base_distro.replace(":", "-")}-{lines[0]}'
+            restore_prev = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-{lines[0]}'
         else:
-            restore_prev = f'bc-{target_branch}-{base_distro.replace(":", "-")}-'
+            restore_prev = f'bc-{target_branch}-{args.base_distro.replace(":", "-")}-'
         set_output('restore_prev', restore_prev)
 
 
