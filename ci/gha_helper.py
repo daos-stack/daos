@@ -88,7 +88,7 @@ def main():
     # Imbed the latest commit in the image name.
     # For PRs this will be from the base branch.
     # For landing runs it will be either the current commit or latest commit with build changes
-    image_name = f'bc-{args.base_distro.replace(":", "-")}-{latest_commit}'
+    image_name = f'bc-{args.base_distro.replace(":", "-")}-{latest_commit}-{{hash}}'
     set_output('image_name', image_name)
 
 
