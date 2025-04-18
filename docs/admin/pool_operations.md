@@ -1278,6 +1278,12 @@ unusable in pools until `dmg system clear-exclude --ranks=${rank_range_list}` is
 ranks to the previous (normally `Excluded`) state. Then the engine can be restarted to rejoin the
 system and will enter the `Joined` state and ready to be reintegrated into pools.
 
+Engine state can be queryed via the system membership using:
+
+```bash
+$ dmg system query
+```
+
 ### Drain
 
 Alternatively, when an operator would like to remove one or more engines or
