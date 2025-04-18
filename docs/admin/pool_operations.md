@@ -1,11 +1,9 @@
 # Pool Operations
 
-A DAOS pool is a storage reservation that can span any number of storage engines in a
-DAOS system. Pools are managed by the administrator. The amount of space allocated
-to a pool is decided at creation time with the `dmg pool create` command.
-Pools can be expanded at a later time with the `dmg pool expand` command
-that adds additional engine ranks to the existing pool's storage allocation.
-The DAOS management API also provides these capabilities.
+DAOS pool is a storage reservation that can span multiple storage engines within a DAOS system.
+Pools are managed by the administrator using the dmg utility. The size of a pool is defined at
+creation time, and it can be expanded later by adding additional engine ranks. These management
+operations are also supported through the DAOS management API.
 
 
 ## Pool Basics
@@ -40,64 +38,50 @@ The maximum length of a pool label is 127 characters.
 Labels that can be parsed as a UUID (e.g. 123e4567-e89b-12d3-a456-426614174000)
 are forbidden. Pool labels must be unique across the DAOS system.
 
-A pool's size is determined by two factors: How many storage engines are
-participating in the storage allocation, and how much capacity in each
-storage tier is allocated (the latter can be specified either on a per-engine
-basis, or as the total for the pool across all participating engines).
-The same amount of storage will be allocated on each of the participating
-storage engines. If one or more of those engines do not have sufficient free
-space for the requested capacity, the pool creation will fail.
+A pool’s size is determined by two factors: the number of storage engines participating
+in the allocation, and the amount of capacity allocated from each storage tier.
+The capacity can be specified either per engine or as a total across all participating engines.
+DAOS allocates the same amount of storage on each participating engine. If any of the selected
+engines lack sufficient free space to meet the requested allocation, the pool creation will fail.
 
-If neither the `--nranks` nor the `--ranks` option is used,
-then the pool will span all storage engines of the DAOS system.
-To limit the pool to only a subset of the engines, those two options
-can be used to specify either the desired number of engines,
-or an explicit list of engine ranks to be used for this pool.
+If neither the --nranks nor --ranks option is specified, the pool will span all storage engines
+in the DAOS system by default. To restrict the pool to a subset of engines, these options can be
+used to either specify the desired number of engines (--nranks) or provide an explicit list of
+engine ranks (--ranks) to be used for the pool.
 
-The capacity of the pool can be specified in three different ways:
+DAOS provides multiple ways to define the capacity of a pool, offering flexibility depending on
+whether you want to specify an absolute size, use available capacity percentages, or manually set tier-specific values:
 
-1. The `--size` option can be used to specify the _total_ pool
-   capacity in **Bytes**. This value denotes the sum of the SCM
-   and NVMe capacities. The relative contributions of the SCM and
-   NVMe storage tiers to the total pool size are determined by the
-   `--tier-ratio` parameter.
-   By default this ratio is `6,94`, so for a pool of size 100TB
-   there will be 6TB of SCM and 94 TB of NVMe storage.
-   An SCM-only pool can be created by using `--tier-ratio 100,0`.
+- **Set total size with tier ratio (`--size` + `--tier-ratio`)**
+  - Use `--size` (`-z`) to define the **total pool capacity** in **bytes**.
+  - Use `--tier-ratio` (`-t`) to control the split between **SCM** and **NVMe**.
+    - Format: `scm,nvme` (as percentages).
+    - Default: `6,94` → 6% SCM, 94% NVMe.
+    - Examples:
+      - `-z=100TB -t=6,94` → 6 TB SCM, 94 TB NVMe.
+      - `-z=10TB -t=100,0` → SCM-only pool.
+  - Good for: specifying total pool size while controlling SCM/NVMe balance.
 
-2. The `--size` option can be used to specify the _total_ pool
-   capacity as a **percentage of the currently free capacity**.
-   In this case, the tier ratio will be ignored. For example,
-   requesting `--size=100%` will allocate 100% of the free SCM
-   capacity and 100% of the free NVMe capacity to the pool,
-   regardless of the ratio of those two free capacity values.
+- **Use percentage of free space (`--size` as %)**
+  - Define pool size as a **percentage** of available free space.
+  - `--tier-ratio` is **ignored**.
+  - Example: `--size=100%` allocates all currently free space on both tiers.
+  - Notes:
+    - Cannot be used to create SCM-only pools (unless there's no NVMe).
+    - Uses the **minimum free space** across all engines.
+    - Pool size can vary depending on system state.
+    - Command output shows **actual allocated sizes**.
 
-   * This implies that it is not possible to create an SCM-only
-     pool by using a percentage size (unless there is no NVMe
-     storage in the system at all, and all pools are SCM-only).
-
-   * If the amount of free space is different across the
-     participating engines, then the _minimum_ free space is
-     used to calculate the space that is allocated per engine.
-
-   * Because the percentage numbers refer to currently free
-     space and not total space, the absolute size of a pool
-     created with `--size=percentage%` will be impacted by other
-     concurrent pool create operations. The command output will
-     always list the total capacities in addition to the
-     requested percentage.
-
-3. The `--scm-size` parameter (and optionally `--nvme-size`) can
-   be used to specify the SCM capacity (and optionally the NVMe
-   capacity) _per storage engine_ in **Bytes**.
-   The minimum SCM size is 16 MiB per **target**, so for a storage
-   engine with 16 targets the minimum is `--scm-size=256MiB`.
-   The NVMe size can be zero. If it is non-zero then the minimum
-   NVMe size is 1 GiB per **target**, so for a storage engine
-   with 16 targets the minimum non-zero NVMe size is
-   `--nvme-size=16GiB`.
-   To derive the total pool capacity, these per-engine capacities
-   have to be multiplied by the number of participating engines.
+- **Manually set SCM and NVMe sizes (`--scm-size` and `--nvme-size`)**
+  - Use `--scm-size` (`-s`) and optionally `--nvme-size` (`-n`) to define **per-engine** sizes in **bytes**.
+  - **Minimums:**
+    - SCM: **16 MiB per target** (e.g., `--scm-size=256MiB` for 16 targets).
+    - NVMe: Optional, but if set must be **≥ 1 GiB per target** (e.g., `--nvme-size=16GiB`).
+  - Total pool size is calculated as:  
+    ```
+    total_size = (scm_size + nvme_size) × number_of_engines
+    ```
+  - Good for: precise control over storage allocation per engine.
 
 !!! note
     The suffixes "M", "MB", "G", "GB", "T" or "TB" denote base-10
@@ -117,6 +101,12 @@ Examples:
 To create a pool labeled `tank`:
 ```bash
 $ dmg pool create --size=${N}TB tank
+```
+
+or with the short option:
+
+```bash
+$ dmg pool create -z=${N}TB tank
 ```
 
 This command creates a pool labeled `tank` distributed across the DAOS servers
@@ -149,6 +139,7 @@ The typical output of this command is as follows:
 
 ```bash
 $ dmg pool create --size 50GB tank
+
 Creating DAOS pool with automatic storage allocation: 50 GB total, 6,94 tier ratio
 Pool created with 6.00% SCM/NVMe ratio
 -----------------------------------------
@@ -165,11 +156,11 @@ with pool service redundancy enabled by default (pool service replicas on ranks
 1-5). If no redundancy is desired, use `--properties=svc_rf:0` to set the pool
 service redundancy property to 0 (or `--nsvc=1`).
 
-Note that it is difficult to determine the usable space by the user, and
-currently we cannot provide the precise value. The usable space depends not only
-on pool size, but also on number of targets, target size, object class,
-storage redundancy factor, etc.
-
+!!! note
+    It is difficult to determine the usable space by the user, and currently we
+    cannot provide the precise value. The usable space depends not only on pool
+    size, but also on number of targets, target size, object class, storage
+    redundancy factor, etc.
 
 #### Creating a pool in MD-on-SSD mode
 
@@ -585,6 +576,7 @@ tank     47 GB  0%   0%        0/32
 
 This returns a table of pool labels (or UUIDs if no label was specified)
 with the following information for each pool:
+
 - The total pool size (NVMe or DATA tier, not including Metadata tier).
 - The percentage of used space (i.e., 100 * used space  / total space)
   for the NVMe or DATA tier.
@@ -613,6 +605,15 @@ $ dmg pool list --verbose
 Label UUID                                 SvcReps Meta Size Meta Used Meta Imbalance DATA Size DATA Used DATA Imbalance Disabled
 ----- ----                                 ------- --------- --------- -------------- --------- --------- -------------- --------
 tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB      10 kB     0%             47 GB     0 B       0%             0/32
+```
+
+### Renaming a Pool
+
+To rename a pool labeled `tank` to `neo`:
+
+```bash
+$ dmg pool set-prop tank label:neo
+pool set-prop succeeded
 ```
 
 ### Destroying a Pool
