@@ -3064,6 +3064,8 @@ dtx_42(void **state)
 	int           subrequests = 2;
 	char         *write_bufs[subrequests];
 
+	par_barrier(PAR_COMM_WORLD);
+
 	FAULT_INJECTION_REQUIRED();
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
@@ -3201,6 +3203,8 @@ dtx_44(void **state)
 	int           rc;
 	int           subrequests = 1000;
 	char         *write_bufs[subrequests];
+
+	par_barrier(PAR_COMM_WORLD);
 
 	FAULT_INJECTION_REQUIRED();
 
