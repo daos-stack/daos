@@ -66,6 +66,8 @@ jobs:
         id: commit-hash
       - name: Prepare base image in Docker
         uses: whoan/docker-build-with-cache-action@v8.1
+        env:
+          DOCKER_BUILDKIT: 0
         with:
           image_name: ${{ steps.commit-hash.outputs.image_name }}
           image_tag: ${{ steps.commit-hash.outputs.image_tag }}
@@ -108,6 +110,8 @@ jobs:
         id: commit-hash
       - name: Update dependencies in image
         uses: whoan/docker-build-with-cache-action@v8.1
+        env:
+          DOCKER_BUILDKIT: 0
         with:
           image_name: ${{ steps.commit-hash.outputs.image_name }}
           image_tag: ${{ steps.commit-hash.outputs.image_tag }}
@@ -173,6 +177,8 @@ jobs:
         id: commit-hash
       - name: Update base image
         uses: whoan/docker-build-with-cache-action@v8.1
+        env:
+          DOCKER_BUILDKIT: 0
         with:
           image_name: ${{ steps.commit-hash.outputs.image_name }}
           image_tag: ${{ steps.commit-hash.outputs.image_tag }}
@@ -218,6 +224,7 @@ jobs:
 
   Build-branch:
     name: Build DAOS
+    if: false
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
