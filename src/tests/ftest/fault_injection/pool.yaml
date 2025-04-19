@@ -1,7 +1,9 @@
 hosts:
   test_servers: 2
   test_clients: 1
+
 timeout: 1200
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -13,10 +15,7 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos0
+      storage: auto
     1:
       pinned_numa_node: 1
       targets: 4
@@ -24,15 +23,14 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos1
+      storage: auto
+
 pool:
-  size: 12G
+  size: 20G
   nranks: 4
   rebuild_timeout: 120
   pool_query_timeout: 60
+
 container:
   object_qty: 100
   record_qty: 100
@@ -41,8 +39,11 @@ container:
   dkey_size: 10
   data_array: 10
   control_method: daos
+
 object_class: OC_RP_3G1
+
 number_pools: 5
+
 faults:
   fault_list:
     - DAOS_POOL_CREATE_FAIL_CORPC

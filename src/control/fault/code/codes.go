@@ -160,6 +160,7 @@ const (
 	ServerPoolMemRatioNoRoles
 	ServerBadFaultDomainLabels
 	ServerJoinReplaceEnabledPoolRank
+	ServerRankAdminExcluded
 )
 
 // server config fault codes

@@ -2,7 +2,9 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers: 1
+
 timeout: 180
+
 server_config:
   name: daos_server
   port: 10001
@@ -10,7 +12,4 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
