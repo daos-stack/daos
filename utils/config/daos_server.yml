@@ -115,6 +115,18 @@
 #
 #disable_srx: false
 #
+#
+## CART: Enable TCP Firewall Addr
+## This gets shared with the client. It is used for TCP connections between
+## the client and server. If enabled, it will tell the client
+## to tell the server that it is behind a firewall and servers will no longer
+## attempt to make TCP connections to clients on bulk transfer. Instead, clients
+## will receive a special error message and ping servers that they don't have
+## TCP connections established with.
+#
+#enable_tcp_firewall_adr: false
+#
+#
 ## CART: Fabric authorization key
 ## If the fabric requires an authorization key, set it here to
 ## be used on the server and clients.

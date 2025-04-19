@@ -7,6 +7,8 @@ mgmt_svc_replicas: ['example1', 'example2', 'example3']
 # control listen port, default 10001
 # port: 10001
 provider: ofi+tcp
+enable_tcp_firewall_adr: true
+
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
 

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -238,6 +239,7 @@ struct crt_event_cb_priv {
 	ENV(D_QUOTA_RPCS)                                                                          \
 	ENV(D_QUOTA_BULKS)                                                                         \
 	ENV(FI_OFI_RXM_USE_SRX)                                                                    \
+	ENV(FI_TCP_FIREWALL_ADDR)                                                                  \
 	ENV(FI_UNIVERSE_SIZE)                                                                      \
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
 	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \
