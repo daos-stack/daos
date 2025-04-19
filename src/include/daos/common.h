@@ -930,6 +930,7 @@ enum {
 
 /* Fault for when the server cannot reach the client */
 #define DAOS_CLIENT_UNREACHABLE         (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x103)
+#define DAOS_CLIENT_UNREACHABLE_CPD_BODY (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x104)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
