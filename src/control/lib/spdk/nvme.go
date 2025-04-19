@@ -84,7 +84,7 @@ func cleanLockfiles(log logging.Logger, dir string, pciAddrChecker LockfileAddrC
 		found = append(found, v.Name())
 	}
 
-	log.Tracef("clean lockfiles: found %v", found)
+	log.Debugf("clean spdk lockfiles: found %v", found)
 
 	var outErr error
 	removed := []string{}
@@ -108,7 +108,7 @@ func cleanLockfiles(log logging.Logger, dir string, pciAddrChecker LockfileAddrC
 		removed = append(removed, lfName)
 	}
 
-	log.Tracef("clean lockfiles: removed %v", removed)
+	log.Debugf("clean spdk lockfiles: removed %v", removed)
 
 	return removed, outErr
 }
@@ -117,9 +117,7 @@ func cleanLockfiles(log logging.Logger, dir string, pciAddrChecker LockfileAddrC
 // Generated LockfileAddrCheckFn compares an input found-lockfile-address with the outer clean
 // function input-address-list.
 func cleanKnownLockfiles(log logging.Logger, n Nvme, addrs ...string) ([]string, error) {
-	log.Debugf("cleanKnownLockFiles(): %v\n", addrs)
 	return n.Clean(log, func(s string) (bool, error) {
-		log.Debugf("address check: %s in %v?\n", s, addrs)
 		return common.Includes(addrs, s), nil
 	})
 }

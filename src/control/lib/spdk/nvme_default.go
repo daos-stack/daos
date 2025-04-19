@@ -50,7 +50,6 @@ func (n *NvmeImpl) Clean(log logging.Logger, pciAddrChecker LockfileAddrCheckFn)
 		return nil, errors.New("nil NvmeImpl")
 	}
 
-	log.Tracef("Nvme.Clean()")
 	return cleanLockfiles(log, n.LocksDir, pciAddrChecker, realRemove)
 }
 
@@ -74,8 +73,7 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 		pciAddrs = append(pciAddrs, c.PciAddr)
 	}
 
-	removedLocks, errRemLocks := cleanKnownLockfiles(log, n, pciAddrs...)
-	log.Debugf("removed lockfiles: %v", removedLocks)
+	_, errRemLocks := cleanKnownLockfiles(log, n, pciAddrs...)
 
 	return ctrlrs, wrapCleanError(errCollect, errRemLocks)
 }
@@ -95,8 +93,7 @@ func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	pciAddrs := resultPCIAddresses(results)
 	log.Debugf("formatted nvme ssds: %v", pciAddrs)
 
-	removedLocks, errRemLocks := cleanKnownLockfiles(log, n, pciAddrs...)
-	log.Debugf("removed lockfiles: %v", removedLocks)
+	_, errRemLocks := cleanKnownLockfiles(log, n, pciAddrs...)
 
 	return results, wrapCleanError(errCollect, errRemLocks)
 }
@@ -118,8 +115,7 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 	_, errCollect := collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
 		"NVMe Update(): C.nvme_fwupdate")
 
-	removedLocks, errRemLocks := cleanKnownLockfiles(log, n, ctrlrPciAddr)
-	log.Debugf("removed lockfiles: %v", removedLocks)
+	_, errRemLocks := cleanKnownLockfiles(log, n, ctrlrPciAddr)
 
 	return wrapCleanError(errCollect, errRemLocks)
 }

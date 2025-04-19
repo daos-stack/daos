@@ -104,8 +104,6 @@ func (n MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path strin
 
 // Clean removes SPDK lockfiles associated with NVMe SSDs/controllers at given PCI addresses.
 func (n MockNvmeImpl) Clean(log logging.Logger, pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
-	log.Debug("MockNvme.Clean()")
-
 	if n.Cfg.CleanRes == nil {
 		n.Cfg.CleanRes = []string{}
 	}

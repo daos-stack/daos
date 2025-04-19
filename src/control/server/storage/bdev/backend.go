@@ -213,7 +213,6 @@ func createSpdkLockfileAddrCheckFunc(allowed *hardware.PCIAddressSet) spdk.Lockf
 			if err != hardware.ErrNotVMDBackingAddress {
 				return false, err
 			}
-			fmt.Printf("%s not backing \n", addrOrig.String())
 			addr = addrOrig
 		}
 
@@ -235,7 +234,7 @@ func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp 
 	// Remove blocked VMD addresses from allow list.
 	allowedAddresses := inAllowList.Difference(inBlockList)
 
-	sb.log.Tracef("attempting to remove spdk lockfiles for SSDs %v", allowedAddresses)
+	sb.log.Debugf("clean spdk lockfiles for devices %v", allowedAddresses)
 
 	lfAddrCheckFn := createSpdkLockfileAddrCheckFunc(allowedAddresses)
 
