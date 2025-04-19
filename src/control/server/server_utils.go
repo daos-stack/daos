@@ -375,7 +375,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 			prepReq.HugepageCount += extraPages
 			prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
-			srv.log.Infof("allocating %d hugepages on each of these numa nodes: %v",
+			srv.log.Infof("Allocating %d hugepages on each of these numa nodes: %v",
 				prepReq.HugepageCount, numaNodes)
 		} else {
 			srv.log.Debugf("skip allocating hugepages, no change is required")
@@ -386,7 +386,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		// discovery mode for an unusually large number of SSDs).
 		prepReq.HugepageCount = srv.cfg.NrHugepages
 
-		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugepageCount)
+		srv.log.Infof("Allocating %d hugepages on numa node 0", prepReq.HugepageCount)
 	}
 
 	// Run prepare to bind devices to user-space driver and allocate hugepages.
