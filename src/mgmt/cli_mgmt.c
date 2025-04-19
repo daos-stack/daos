@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -563,22 +564,69 @@ dc_mgmt_net_get_srv_rank(int idx)
 	return g_serv_ranks[idx];
 }
 
+#define HINT_ENV_MAX_LEN 1024
+
 static int
-_split_env(char *env, char **name, char **value)
+split_env(const char *in_env, char **name, char **value)
 {
 	char *sep;
+	char *env = NULL;
 
-	if (strnlen(env, 1024) == 1024)
+	if (strnlen(in_env, HINT_ENV_MAX_LEN) == HINT_ENV_MAX_LEN)
 		return -DER_INVAL;
+
+	D_STRNDUP(env, in_env, HINT_ENV_MAX_LEN);
+	if (env == NULL)
+		return -DER_NOMEM;
 
 	sep = strchr(env, '=');
-	if (sep == NULL)
+	if (sep == NULL) {
+		D_FREE(env);
 		return -DER_INVAL;
+	}
 	*sep = '\0';
 	*name = env;
 	*value = sep + 1;
 
 	return 0;
+}
+
+static int
+set_client_env_vars(char **vars, int nvars)
+{
+	int   i;
+	char *env     = NULL;
+	char *v_name  = NULL;
+	char *v_value = NULL;
+	int   rc      = 0;
+
+	for (i = 0; i < nvars; i++) {
+		env = vars[i];
+		if (env == NULL)
+			continue;
+
+		rc = split_env(env, &v_name, &v_value);
+		if (rc != 0) {
+			D_ERROR("invalid client env var: %s\n", env);
+			continue;
+		}
+
+		if (d_isenv_def(v_name)) {
+			D_INFO("client env var %s is already defined; not overriding\n", v_name);
+			D_FREE(v_name);
+			continue;
+		}
+
+		rc = d_setenv(v_name, v_value, 0);
+		D_FREE(v_name);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to set server-supplied client env: %s", env);
+			return rc;
+		}
+		D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
+	}
+
+	return rc;
 }
 
 /*
@@ -599,27 +647,10 @@ dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info)
 	d_rank_t                *serv_ranks_tmp;
 
 	if (resp->client_net_hint != NULL && resp->client_net_hint->n_env_vars > 0) {
-		int i;
-		char *env = NULL;
-		char *v_name = NULL;
-		char *v_value = NULL;
-
-		for (i = 0; i < resp->client_net_hint->n_env_vars; i++) {
-			env = resp->client_net_hint->env_vars[i];
-			if (env == NULL)
-				continue;
-
-			rc = _split_env(env, &v_name, &v_value);
-			if (rc != 0) {
-				D_ERROR("invalid client env var: %s\n", env);
-				continue;
-			}
-
-			rc = d_setenv(v_name, v_value, 0);
-			if (rc != 0)
-				D_GOTO(cleanup, rc = d_errno2der(errno));
-			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
-		}
+		rc = set_client_env_vars(resp->client_net_hint->env_vars,
+					 resp->client_net_hint->n_env_vars);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
 	}
 
 	/* If the server has set this, the client must use the same value. */
