@@ -1120,9 +1120,10 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_ERROR("Failed to create ping task for task %p: %d, %d\n", task,
 				ping_task_rc, rc);
 			tx->tx_status = TX_ABORTED;
+			rc            = -DER_RECONNECT;
 		} else {
-			tx->tx_status = TX_FAILED;
-			rc            = -DER_TX_RESTART;
+			tx->tx_retry = 1;
+			rc           = 0;
 		}
 	}
 

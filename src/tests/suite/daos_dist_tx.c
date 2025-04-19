@@ -3060,7 +3060,6 @@ dtx_42(void **state)
 	daos_obj_id_t oid;
 	struct ioreq  req;
 	int           i;
-	int           rc;
 	int           subrequests = 2;
 	char         *write_bufs[subrequests];
 
@@ -3081,20 +3080,6 @@ dtx_42(void **state)
 	/* Repeatedly insert different SV for the same obj, overwrite. */
 	for (i = 0; i < subrequests; i++) {
 		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		assert_non_null(write_bufs[i]);
-
-		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &req);
-	}
-
-	rc = daos_tx_commit(th, NULL);
-	assert_rc_equal(rc, -DER_TX_RESTART);
-
-	// The first attempt at committing the transaction fails due to DER_RECONNECT.
-	MUST(daos_tx_restart(th, NULL));
-
-	/* Repeatedly insert different SV for the same obj, overwrite. */
-	for (i = 0; i < subrequests; i++) {
 		assert_non_null(write_bufs[i]);
 
 		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
@@ -3131,7 +3116,6 @@ dtx_43(void **state)
 	daos_obj_id_t oids[DTX_TEST_SUB_REQS];
 	struct ioreq  reqs[DTX_TEST_SUB_REQS];
 	int           i;
-	int           rc;
 
 	par_barrier(PAR_COMM_WORLD);
 
@@ -3149,21 +3133,6 @@ dtx_43(void **state)
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_SINGLE, arg);
 
 		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		assert_non_null(write_bufs[i]);
-
-		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &reqs[i]);
-	}
-
-	rc = daos_tx_commit(th, NULL);
-	assert_rc_equal(rc, -DER_TX_RESTART);
-
-	// The first attempt at committing the transaction fails due to DER_RECONNECT.
-	MUST(daos_tx_restart(th, NULL));
-
-	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
-		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_SINGLE, arg);
-
 		assert_non_null(write_bufs[i]);
 
 		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
@@ -3200,7 +3169,6 @@ dtx_44(void **state)
 	daos_obj_id_t oid;
 	struct ioreq  req;
 	int           i;
-	int           rc;
 	int           subrequests = 1000;
 	char         *write_bufs[subrequests];
 
@@ -3222,20 +3190,6 @@ dtx_44(void **state)
 	/* Repeatedly insert different SV for the same obj, overwrite. */
 	for (i = 0; i < subrequests; i++) {
 		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		assert_non_null(write_bufs[i]);
-
-		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &req);
-	}
-
-	rc = daos_tx_commit(th, NULL);
-	assert_rc_equal(rc, -DER_TX_RESTART);
-
-	// The first attempt at committing the transaction fails due to DER_RECONNECT.
-	MUST(daos_tx_restart(th, NULL));
-
-	/* Repeatedly insert different SV for the same obj, overwrite. */
-	for (i = 0; i < subrequests; i++) {
 		assert_non_null(write_bufs[i]);
 
 		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
