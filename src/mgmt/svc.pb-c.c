@@ -1065,164 +1065,75 @@ const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor =
   (ProtobufCMessageInit) mgmt__group_update_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[13] =
-{
-  {
-    "sys",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, sys),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "uuid",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "rank",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, rank),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "uri",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, uri),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "nctxs",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, nctxs),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "addr",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, addr),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "srvFaultDomain",
-    7,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, srvfaultdomain),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "idx",
-    8,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, idx),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "incarnation",
-    9,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, incarnation),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "secondary_uris",
-    10,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_STRING,
-    offsetof(Mgmt__JoinReq, n_secondary_uris),
-    offsetof(Mgmt__JoinReq, secondary_uris),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "secondary_nctxs",
-    11,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__JoinReq, n_secondary_nctxs),
-    offsetof(Mgmt__JoinReq, secondary_nctxs),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "check_mode",
-    12,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, check_mode),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "replace",
-    13,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinReq, replace),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[13] = {
+    {
+	"sys", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0,      /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, sys), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"uuid", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0,      /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, uuid), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"rank", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, rank), NULL, NULL, 0,                /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"uri", 4, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0,      /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, uri), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"nctxs", 5, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, nctxs), NULL, NULL, 0,                /* flags */
+	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
+    },
+    {
+	"addr", 6, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0,      /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, addr), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"srvFaultDomain", 7, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING,
+	0, /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, srvfaultdomain), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"idx", 8, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, idx), NULL, NULL, 0,                /* flags */
+	0, NULL, NULL                                               /* reserved1,reserved2, etc */
+    },
+    {
+	"incarnation", 9, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, incarnation), NULL, NULL, 0,                /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"secondary_uris", 10, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_STRING,
+	offsetof(Mgmt__JoinReq, n_secondary_uris), offsetof(Mgmt__JoinReq, secondary_uris), NULL,
+	&protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL                /* reserved1,reserved2, etc */
+    },
+    {
+	"secondary_nctxs", 11, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__JoinReq, n_secondary_nctxs), offsetof(Mgmt__JoinReq, secondary_nctxs), NULL,
+	NULL, PROTOBUF_C_FIELD_FLAG_PACKED, /* flags */
+	0, NULL, NULL                       /* reserved1,reserved2, etc */
+    },
+    {
+	"check_mode", 12, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, check_mode), NULL, NULL, 0,               /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"replace", 13, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinReq, replace), NULL, NULL, 0,               /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__join_req__field_indices_by_name[] = {
   5,   /* field[5] = addr */
@@ -1584,135 +1495,85 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[8] =
-{
-  {
-    "provider",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, provider),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "interface",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, interface),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "domain",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, domain),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "crt_timeout",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, crt_timeout),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "net_dev_class",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, net_dev_class),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "srv_srx_set",
-    7,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, srv_srx_set),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "env_vars",
-    8,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_STRING,
-    offsetof(Mgmt__ClientNetHint, n_env_vars),
-    offsetof(Mgmt__ClientNetHint, env_vars),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "provider_idx",
-    9,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, provider_idx),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9] = {
+    {
+	"provider", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__ClientNetHint, provider), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"interface", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__ClientNetHint, interface), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"domain", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__ClientNetHint, domain), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"crt_timeout", 5, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__ClientNetHint, crt_timeout), NULL, NULL, 0,          /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"net_dev_class", 6, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Mgmt__ClientNetHint, net_dev_class), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"srv_srx_set", 7, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_INT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__ClientNetHint, srv_srx_set), NULL, NULL, 0,         /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"env_vars", 8, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_STRING,
+	offsetof(Mgmt__ClientNetHint, n_env_vars), offsetof(Mgmt__ClientNetHint, env_vars), NULL,
+	&protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL                /* reserved1,reserved2, etc */
+    },
+    {
+	"provider_idx", 9, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__ClientNetHint, provider_idx), NULL, NULL, 0,          /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"client_firewall_mode", 10, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL,
+	0,                                                                  /* quantifier_offset */
+	offsetof(Mgmt__ClientNetHint, client_firewall_mode), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__client_net_hint__field_indices_by_name[] = {
-  3,   /* field[3] = crt_timeout */
-  2,   /* field[2] = domain */
-  6,   /* field[6] = env_vars */
-  1,   /* field[1] = interface */
-  4,   /* field[4] = net_dev_class */
-  0,   /* field[0] = provider */
-  7,   /* field[7] = provider_idx */
-  5,   /* field[5] = srv_srx_set */
+    8, /* field[8] = client_firewall_mode */
+    3, /* field[3] = crt_timeout */
+    2, /* field[2] = domain */
+    6, /* field[6] = env_vars */
+    1, /* field[1] = interface */
+    4, /* field[4] = net_dev_class */
+    0, /* field[0] = provider */
+    7, /* field[7] = provider_idx */
+    5, /* field[5] = srv_srx_set */
 };
-static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[2 + 1] =
-{
-  { 1, 0 },
-  { 5, 3 },
-  { 0, 8 }
-};
-const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.ClientNetHint",
-  "ClientNetHint",
-  "Mgmt__ClientNetHint",
-  "mgmt",
-  sizeof(Mgmt__ClientNetHint),
-  8,
-  mgmt__client_net_hint__field_descriptors,
-  mgmt__client_net_hint__field_indices_by_name,
-  2,  mgmt__client_net_hint__number_ranges,
-  (ProtobufCMessageInit) mgmt__client_net_hint__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[2 + 1] = {
+    {1, 0}, {5, 3}, {0, 9}};
+const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.ClientNetHint",
+    "ClientNetHint",
+    "Mgmt__ClientNetHint",
+    "mgmt",
+    sizeof(Mgmt__ClientNetHint),
+    9,
+    mgmt__client_net_hint__field_descriptors,
+    mgmt__client_net_hint__field_indices_by_name,
+    2,
+    mgmt__client_net_hint__number_ranges,
+    (ProtobufCMessageInit)mgmt__client_net_hint__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__fabric_interface__field_descriptors[4] =
 {
@@ -1996,128 +1857,69 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descripto
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__rank_uri__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[10] =
-{
-  {
-    "status",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "rank_uris",
-    2,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__GetAttachInfoResp, n_rank_uris),
-    offsetof(Mgmt__GetAttachInfoResp, rank_uris),
-    &mgmt__get_attach_info_resp__rank_uri__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "ms_ranks",
-    3,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__GetAttachInfoResp, n_ms_ranks),
-    offsetof(Mgmt__GetAttachInfoResp, ms_ranks),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "client_net_hint",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, client_net_hint),
-    &mgmt__client_net_hint__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "data_version",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, data_version),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "sys",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, sys),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "secondary_rank_uris",
-    7,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__GetAttachInfoResp, n_secondary_rank_uris),
-    offsetof(Mgmt__GetAttachInfoResp, secondary_rank_uris),
-    &mgmt__get_attach_info_resp__rank_uri__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "secondary_client_net_hints",
-    8,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__GetAttachInfoResp, n_secondary_client_net_hints),
-    offsetof(Mgmt__GetAttachInfoResp, secondary_client_net_hints),
-    &mgmt__client_net_hint__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "build_info",
-    9,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, build_info),
-    &mgmt__build_info__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "numa_fabric_interfaces",
-    10,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__GetAttachInfoResp, n_numa_fabric_interfaces),
-    offsetof(Mgmt__GetAttachInfoResp, numa_fabric_interfaces),
-    &mgmt__fabric_interfaces__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[10] = {
+    {
+	"status", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_INT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__GetAttachInfoResp, status), NULL, NULL, 0,     /* flags */
+	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
+    },
+    {
+	"rank_uris", 2, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_MESSAGE,
+	offsetof(Mgmt__GetAttachInfoResp, n_rank_uris),
+	offsetof(Mgmt__GetAttachInfoResp, rank_uris),
+	&mgmt__get_attach_info_resp__rank_uri__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL                                               /* reserved1,reserved2, etc */
+    },
+    {
+	"ms_ranks", 3, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__GetAttachInfoResp, n_ms_ranks), offsetof(Mgmt__GetAttachInfoResp, ms_ranks),
+	NULL, NULL, PROTOBUF_C_FIELD_FLAG_PACKED, /* flags */
+	0, NULL, NULL                             /* reserved1,reserved2, etc */
+    },
+    {
+	"client_net_hint", 4, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_MESSAGE,
+	0, /* quantifier_offset */
+	offsetof(Mgmt__GetAttachInfoResp, client_net_hint), &mgmt__client_net_hint__descriptor,
+	NULL, 0,      /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"data_version", 5, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
+	offsetof(Mgmt__GetAttachInfoResp, data_version), NULL, NULL, 0,      /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"sys", 6, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__GetAttachInfoResp, sys), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"secondary_rank_uris", 7, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_MESSAGE,
+	offsetof(Mgmt__GetAttachInfoResp, n_secondary_rank_uris),
+	offsetof(Mgmt__GetAttachInfoResp, secondary_rank_uris),
+	&mgmt__get_attach_info_resp__rank_uri__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL                                               /* reserved1,reserved2, etc */
+    },
+    {
+	"secondary_client_net_hints", 8, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_MESSAGE,
+	offsetof(Mgmt__GetAttachInfoResp, n_secondary_client_net_hints),
+	offsetof(Mgmt__GetAttachInfoResp, secondary_client_net_hints),
+	&mgmt__client_net_hint__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL                                /* reserved1,reserved2, etc */
+    },
+    {
+	"build_info", 9, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_MESSAGE, 0, /* quantifier_offset */
+	offsetof(Mgmt__GetAttachInfoResp, build_info), &mgmt__build_info__descriptor, NULL,
+	0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"numa_fabric_interfaces", 10, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_MESSAGE,
+	offsetof(Mgmt__GetAttachInfoResp, n_numa_fabric_interfaces),
+	offsetof(Mgmt__GetAttachInfoResp, numa_fabric_interfaces),
+	&mgmt__fabric_interfaces__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL                                  /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__get_attach_info_resp__field_indices_by_name[] = {
   8,   /* field[8] = build_info */

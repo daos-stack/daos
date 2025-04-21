@@ -115,6 +115,19 @@
 #
 #disable_srx: false
 #
+#
+## CART: Disable Client Firewall Mode
+## This gets shared with the client. When this mode is enabled, which
+## means this boolean is set to false, it will prevent servers from trying to
+## establish a TCP connection to clients because the client is behind a firewall
+## and may not have a firewall rule that allows incoming TCP traffic. Instead,
+## a server that already has a TCP connection with a client will return a special
+## error code that tells the clients to establish connections with the servers that
+## it needs to. The clients will then ping those servers to establish a connection.
+#
+#disable_client_firewall_mode: true
+#
+#
 ## CART: Fabric authorization key
 ## If the fabric requires an authorization key, set it here to
 ## be used on the server and clients.

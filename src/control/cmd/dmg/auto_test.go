@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -569,6 +570,7 @@ engines:
   provider: ofi+verbs
   fabric_iface: ib0
   fabric_iface_port: 31416
+  disable_client_firewall_mode: true
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
@@ -586,6 +588,7 @@ engines:
   provider: ofi+verbs
   fabric_iface: ib1
   fabric_iface_port: 32416
+  disable_client_firewall_mode: true
   pinned_numa_node: 1
 disable_vfio: false
 disable_vmd: false
@@ -599,6 +602,7 @@ core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+verbs
+disable_client_firewall_mode: true
 mgmt_svc_replicas:
 - hostX:10002
 fault_cb: ""

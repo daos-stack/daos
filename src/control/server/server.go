@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -417,12 +418,13 @@ func (srv *server) setupGrpc() error {
 	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
 	for i, p := range providers {
 		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
-			Provider:    p,
-			CrtTimeout:  srv.cfg.Fabric.CrtTimeout,
-			NetDevClass: uint32(srv.netDevClass[i]),
-			SrvSrxSet:   srxSetting,
-			ProviderIdx: uint32(i),
-			EnvVars:     srv.cfg.ClientEnvVars,
+			Provider:           p,
+			CrtTimeout:         srv.cfg.Fabric.CrtTimeout,
+			NetDevClass:        uint32(srv.netDevClass[i]),
+			SrvSrxSet:          srxSetting,
+			ProviderIdx:        uint32(i),
+			EnvVars:            srv.cfg.ClientEnvVars,
+			ClientFirewallMode: !srv.cfg.Fabric.DisableClientFirewallMode,
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints
