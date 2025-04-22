@@ -35,6 +35,7 @@ this README.md file:
 
 ```bash
 python3 -m pip install --user --requirement requirements.txt
+ansible-galaxy collection install --upgrade community.general
 ```
 
 ### Ssh Authorization
