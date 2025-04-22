@@ -2,9 +2,10 @@
 
 - name: Add Powertools repository
   become: yes
-  dnf_config_manager:
+  community.general.dnf_config_manager:
     name: powertools
     state: enabled
+  ignore_errors: true
 
 - name: Install rpms development dependencies
   become: true
