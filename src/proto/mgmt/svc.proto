@@ -92,7 +92,7 @@ message ClientNetHint {
 	int32 srv_srx_set = 7;		// Server SRX setting (-1, 0, 1; -1 == unset)
 	repeated string env_vars = 8;	// Client-side environment variables to set
 	uint32 provider_idx = 9;	// Provider index - anything > 0 is a secondary provider
-	int32 tcp_firewall_addr = 10; // Flag for client to tell server that it is behind a firewall
+	bool client_firewall_mode = 10; // Client is behind a firewall
 }
 
 message FabricInterface {

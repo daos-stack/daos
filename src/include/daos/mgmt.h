@@ -47,7 +47,7 @@ struct dc_mgmt_sys_info {
 	uint32_t        provider_idx; /* Provider index (if more than one available) */
 	daos_size_t     numa_entries_nr;
 	daos_size_t    *numa_iface_idx_rr;
-	int32_t         tcp_firewall_addr;
+	bool            client_firewall_mode;
 };
 
 /** Client system handle */

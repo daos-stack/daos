@@ -162,7 +162,6 @@ struct Mgmt__JoinReq {
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,NULL, 0,NULL, 0, 0 }
 
-
 struct Mgmt__JoinResp {
 	ProtobufCMessage      base;
 	/*
@@ -245,47 +244,47 @@ struct Mgmt__GetAttachInfoReq {
     , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 struct Mgmt__ClientNetHint {
-	ProtobufCMessage base;
+	ProtobufCMessage   base;
 	/*
 	 * CaRT provider
 	 */
-	char            *provider;
+	char              *provider;
 	/*
 	 * CaRT D_INTERFACE
 	 */
-	char            *interface;
+	char              *interface;
 	/*
 	 * CaRT D_DOMAIN for given D_INTERFACE
 	 */
-	char            *domain;
+	char              *domain;
 	/*
 	 * CaRT CRT_TIMEOUT
 	 */
-	uint32_t         crt_timeout;
+	uint32_t           crt_timeout;
 	/*
 	 * ARP protocol hardware identifier of the
 	 */
-	uint32_t         net_dev_class;
+	uint32_t           net_dev_class;
 	/*
 	 * I/O Engine network interface
 	 */
 	/*
 	 * Server SRX setting (-1, 0, 1; -1 == unset)
 	 */
-	int32_t          srv_srx_set;
+	int32_t            srv_srx_set;
 	/*
 	 * Client-side environment variables to set
 	 */
-	size_t           n_env_vars;
-	char           **env_vars;
+	size_t             n_env_vars;
+	char             **env_vars;
 	/*
 	 * Provider index - anything > 0 is a secondary provider
 	 */
-	uint32_t         provider_idx;
+	uint32_t           provider_idx;
 	/*
-	 * Flag for client to tell server that it is behind a firewall
+	 * Client is behind a firewall
 	 */
-	int32_t          tcp_firewall_addr;
+	protobuf_c_boolean client_firewall_mode;
 };
 #define MGMT__CLIENT_NET_HINT__INIT                                                                \
 	{PROTOBUF_C_MESSAGE_INIT(&mgmt__client_net_hint__descriptor),                              \

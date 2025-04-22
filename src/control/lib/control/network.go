@@ -217,15 +217,15 @@ type (
 	ClientNetworkHint struct {
 		// These CaRT settings are shared with the
 		// libdaos client to aid in CaRT initialization.
-		Provider              string   `json:"provider"`
-		Interface             string   `json:"interface"`
-		Domain                string   `json:"domain"`
-		CrtTimeout            uint32   `json:"crt_timeout"`
-		NetDevClass           uint32   `json:"net_dev_class"`
-		SrvSrxSet             int32    `json:"srv_srx_set"`
-		EnvVars               []string `json:"env_vars"`
-		ProviderIdx           uint32   `json:"provider_idx"`
-		EnableTCPFirewallAddr int32    `json:"tcp_firewall_addr"`
+		Provider           string   `json:"provider"`
+		Interface          string   `json:"interface"`
+		Domain             string   `json:"domain"`
+		CrtTimeout         uint32   `json:"crt_timeout"`
+		NetDevClass        uint32   `json:"net_dev_class"`
+		SrvSrxSet          int32    `json:"srv_srx_set"`
+		EnvVars            []string `json:"env_vars"`
+		ProviderIdx        uint32   `json:"provider_idx"`
+		ClientFirewallMode bool     `json:"client_firewall_mode"`
 	}
 
 	BuildInfo struct {
@@ -277,11 +277,11 @@ func (gair *GetAttachInfoResp) String() string {
 
 	// Condensed format for debugging...
 	ch := gair.ClientNetHint
-	return fmt.Sprintf("p=%s i=%s d=%s t=%d c=%d x=%d, rus(%d)=%s, mss=%v, e=%d",
+	return fmt.Sprintf("p=%s i=%s d=%s t=%d c=%d x=%d, rus(%d)=%s, mss=%v, fw=%d",
 		ch.Provider, ch.Interface, ch.Domain,
 		ch.CrtTimeout, ch.NetDevClass, ch.SrvSrxSet,
 		len(gair.ServiceRanks), rankURI, gair.MSRanks,
-		ch.EnableTCPFirewallAddr,
+		ch.ClientFirewallMode,
 	)
 }
 

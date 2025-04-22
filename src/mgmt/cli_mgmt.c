@@ -203,7 +203,7 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 
 	info->crt_timeout = hint->crt_timeout;
 	info->srv_srx_set = hint->srv_srx_set;
-	info->tcp_firewall_addr = hint->tcp_firewall_addr;
+	info->client_firewall_mode = hint->client_firewall_mode;
 
 	/* Fill info->ms_ranks. */
 	if (resp->n_ms_ranks == 0) {
@@ -226,7 +226,7 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		"CRT_TIMEOUT: %u, "
 		"FI_OFI_RXM_USE_SRX: %d, CRT_SECONDARY_PROVIDER: %d, FI_TCP_FIREWALL_ADDR: %d\n",
 		info->provider, info->interface, info->domain, info->crt_timeout, info->srv_srx_set,
-		info->provider_idx, info->tcp_firewall_addr);
+		info->provider_idx, info->client_firewall_mode);
 
 	return 0;
 }
@@ -641,7 +641,7 @@ dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info)
 	int                      rc;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
-	char                    *tcp_firewall_addr  = NULL;
+	char                    *client_firewall_mode = NULL;
 	char                     buf[SYS_INFO_BUF_SIZE];
 	struct dc_mgmt_sys_info *info = &info_g;
 	Mgmt__GetAttachInfoResp *resp = resp_g;
@@ -655,16 +655,16 @@ dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	}
 
-	if (info->tcp_firewall_addr != -1) {
-		rc = asprintf(&tcp_firewall_addr, "%d", info->tcp_firewall_addr);
+	if (info->client_firewall_mode) {
+		rc = asprintf(&client_firewall_mode, "%d", info->client_firewall_mode);
 		if (rc < 0) {
-			tcp_firewall_addr = NULL;
+			client_firewall_mode = NULL;
 			D_GOTO(cleanup, rc = -DER_NOMEM);
 		}
-		rc = d_setenv("FI_TCP_FIREWALL_ADDR", tcp_firewall_addr, 1);
+		rc = d_setenv("FI_TCP_FIREWALL_ADDR", client_firewall_mode, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
-		D_INFO("Using server's value for FI_TCP_FIREWALL_ADDR: %s\n", tcp_firewall_addr);
+		D_INFO("Using server's value for FI_TCP_FIREWALL_ADDR: %s\n", client_firewall_mode);
 	}
 
 	/* If the server has set this, the client must use the same value. */

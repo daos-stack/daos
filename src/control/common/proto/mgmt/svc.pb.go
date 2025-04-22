@@ -631,12 +631,12 @@ type ClientNetHint struct {
 	CrtTimeout  uint32                 `protobuf:"varint,5,opt,name=crt_timeout,json=crtTimeout,proto3" json:"crt_timeout,omitempty"`      // CaRT CRT_TIMEOUT
 	NetDevClass uint32                 `protobuf:"varint,6,opt,name=net_dev_class,json=netDevClass,proto3" json:"net_dev_class,omitempty"` // ARP protocol hardware identifier of the
 	// I/O Engine network interface
-	SrvSrxSet       int32    `protobuf:"varint,7,opt,name=srv_srx_set,json=srvSrxSet,proto3" json:"srv_srx_set,omitempty"`                    // Server SRX setting (-1, 0, 1; -1 == unset)
-	EnvVars         []string `protobuf:"bytes,8,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty"`                             // Client-side environment variables to set
-	ProviderIdx     uint32   `protobuf:"varint,9,opt,name=provider_idx,json=providerIdx,proto3" json:"provider_idx,omitempty"`                // Provider index - anything > 0 is a secondary provider
-	TcpFirewallAddr int32    `protobuf:"varint,10,opt,name=tcp_firewall_addr,json=tcpFirewallAddr,proto3" json:"tcp_firewall_addr,omitempty"` // Flag for client to tell server that it is behind a firewall
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	SrvSrxSet          int32    `protobuf:"varint,7,opt,name=srv_srx_set,json=srvSrxSet,proto3" json:"srv_srx_set,omitempty"`                             // Server SRX setting (-1, 0, 1; -1 == unset)
+	EnvVars            []string `protobuf:"bytes,8,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty"`                                      // Client-side environment variables to set
+	ProviderIdx        uint32   `protobuf:"varint,9,opt,name=provider_idx,json=providerIdx,proto3" json:"provider_idx,omitempty"`                         // Provider index - anything > 0 is a secondary provider
+	ClientFirewallMode bool     `protobuf:"varint,10,opt,name=client_firewall_mode,json=clientFirewallMode,proto3" json:"client_firewall_mode,omitempty"` // Client is behind a firewall
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ClientNetHint) Reset() {
@@ -725,11 +725,11 @@ func (x *ClientNetHint) GetProviderIdx() uint32 {
 	return 0
 }
 
-func (x *ClientNetHint) GetTcpFirewallAddr() int32 {
+func (x *ClientNetHint) GetClientFirewallMode() bool {
 	if x != nil {
-		return x.TcpFirewallAddr
+		return x.ClientFirewallMode
 	}
-	return 0
+	return false
 }
 
 type FabricInterface struct {
@@ -1542,7 +1542,7 @@ const file_mgmt_svc_proto_rawDesc = "" +
 	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x1b\n" +
 	"\tall_ranks\x18\x02 \x01(\bR\ballRanks\x12\x1c\n" +
 	"\tinterface\x18\x03 \x01(\tR\tinterface\x12\x16\n" +
-	"\x06domain\x18\x04 \x01(\tR\x06domain\"\xb6\x02\n" +
+	"\x06domain\x18\x04 \x01(\tR\x06domain\"\xbc\x02\n" +
 	"\rClientNetHint\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x1c\n" +
 	"\tinterface\x18\x02 \x01(\tR\tinterface\x12\x16\n" +
@@ -1552,9 +1552,9 @@ const file_mgmt_svc_proto_rawDesc = "" +
 	"\rnet_dev_class\x18\x06 \x01(\rR\vnetDevClass\x12\x1e\n" +
 	"\vsrv_srx_set\x18\a \x01(\x05R\tsrvSrxSet\x12\x19\n" +
 	"\benv_vars\x18\b \x03(\tR\aenvVars\x12!\n" +
-	"\fprovider_idx\x18\t \x01(\rR\vproviderIdx\x12*\n" +
-	"\x11tcp_firewall_addr\x18\n" +
-	" \x01(\x05R\x0ftcpFirewallAddrJ\x04\b\x04\x10\x05\"\x80\x01\n" +
+	"\fprovider_idx\x18\t \x01(\rR\vproviderIdx\x120\n" +
+	"\x14client_firewall_mode\x18\n" +
+	" \x01(\bR\x12clientFirewallModeJ\x04\b\x04\x10\x05\"\x80\x01\n" +
 	"\x0fFabricInterface\x12\x1b\n" +
 	"\tnuma_node\x18\x01 \x01(\rR\bnumaNode\x12\x1c\n" +
 	"\tinterface\x18\x02 \x01(\tR\tinterface\x12\x16\n" +
