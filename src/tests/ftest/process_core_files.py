@@ -123,8 +123,11 @@ class CoreFileProcessing():
         # Install the debug information needed for stacktrace generation
         if core_files:
             try:
+                self.log.info("Install debuginfo packages STARTED")
                 self.install_debuginfo_packages()
+
             except RunException as error:
+                self.log.info("Install debuginfo packages ERROR")
                 self.log.error(error)
                 self.log.debug("Stacktrace", exc_info=True)
                 errors += 1
