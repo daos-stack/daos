@@ -69,6 +69,7 @@ type (
 		cfg              MockInvokerConfig
 		invokeCount      int
 		invokeCountMutex sync.RWMutex
+		SentReqs         []UnaryRequest
 	}
 )
 
@@ -157,6 +158,7 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	mi.invokeCountMutex.Lock()
 	mi.invokeCount++
 	invokeCount = mi.invokeCount
+	mi.SentReqs = append(mi.SentReqs, uReq)
 	mi.invokeCountMutex.Unlock()
 	go func(invokeCount int) {
 		mi.log.Debugf("returning mock responses, invokeCount=%d", invokeCount)
