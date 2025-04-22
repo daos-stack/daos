@@ -504,6 +504,8 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 	uint64_t		time = daos_get_ntime();
 
 	if (bulk_op == CRT_BULK_GET) {
+		bool trigger = false;
+
 		if (dth == NULL) {
 			/* Fault injection for the case where the compound RPC body bulk transfer
 			 * may throw a DER_RECONNECT. dth will be NULL in this test case.
@@ -511,7 +513,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 			if (DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE_CPD_BODY) &&
 			    fi_leader_value == FOLLOWER) {
 				/** Fault injection - client unreachable. */
-				daos_fail_loc_set_private(DAOS_FIREWALL_ERROR | DAOS_FAIL_ALWAYS);
+				trigger = true;
 			}
 		} else {
 			/* Fault injection for the case where the actual update throws a
@@ -520,8 +522,12 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 			if (DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE) &&
 			    fi_leader_value == FOLLOWER) {
 				/** Fault injection - client unreachable. */
-				daos_fail_loc_set_private(DAOS_FIREWALL_ERROR | DAOS_FAIL_ALWAYS);
+				trigger = true;
 			}
+		}
+
+		if (trigger) {
+			daos_fail_loc_set_private(DAOS_FIREWALL_ERROR | DAOS_FAIL_ALWAYS);
 		}
 
 		if (DAOS_FAIL_CHECK(DAOS_FIREWALL_ERROR)) {
