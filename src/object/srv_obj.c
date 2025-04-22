@@ -2031,6 +2031,7 @@ obj_local_rw_internal_wrap(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dt
 static int
 obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 {
+	struct obj_rw_in        *orw = crt_req_get(rpc);
 	struct dtx_share_peer	*dsp;
 	uint32_t		 retry = 0;
 	int			 rc;
@@ -2038,18 +2039,16 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 again:
 	rc = obj_local_rw_internal_wrap(rpc, ioc, dth);
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
-			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
-					   dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d times, "
-			       "maybe starve\n", DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
-			       dth->dth_share_tbd_count, retry);
-		}
-
-		if (!obj_rpc_is_fetch(rpc) || retry < 30) {
+		if (++retry < 3) {
 			rc = dtx_refresh(dth, ioc->ioc_coc);
 			if (rc == -DER_AGAIN)
 				goto again;
+		} else if (orw->orw_flags & ORF_MAYBE_STARVE) {
+			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
+					   dsp_link);
+			D_WARN(
+			    "DTX refresh for " DF_DTI " because of " DF_DTI " (%d), maybe starve\n",
+			    DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count);
 		}
 	}
 
@@ -2982,8 +2981,8 @@ again:
 			e = orw->orw_epoch;
 		else
 			e = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
-				       &e, &version);
+		version = orw->orw_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &e, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);
@@ -3565,12 +3564,16 @@ again:
 	}
 
 	if (obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
-			dsp = d_list_entry(dth->dth_share_tbd_list.next,
-					   struct dtx_share_peer, dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
-			       "times, maybe starve\n", DP_DTI(&dth->dth_xid),
-			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
+		if (++retry >= 3) {
+			if (opi->opi_flags & ORF_MAYBE_STARVE) {
+				dsp = d_list_entry(dth->dth_share_tbd_list.next,
+						   struct dtx_share_peer, dsp_link);
+				D_WARN("DTX refresh for " DF_DTI " because of " DF_DTI
+				       " (%d), maybe starve\n",
+				       DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
+				       dth->dth_share_tbd_count);
+			}
+			goto out;
 		}
 
 		rc = dtx_refresh(dth, ioc->ioc_coc);
@@ -3910,8 +3913,8 @@ again:
 			e = opi->opi_epoch;
 		else
 			e = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
-				       &e, &version);
+		version = opi->opi_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &e, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);
@@ -4955,6 +4958,7 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		       struct daos_cpd_disp_ent *dcde, struct daos_cpd_sub_req *dcsrs,
 		       struct obj_io_context *ioc, struct dtx_handle *dth)
 {
+	struct obj_cpd_in       *oci = crt_req_get(rpc);
 	struct dtx_share_peer	*dsp;
 	uint32_t		 retry = 0;
 	int			 rc;
@@ -4962,17 +4966,17 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 again:
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
+		if (++retry < 3) {
+			rc = dtx_refresh(dth, ioc->ioc_coc);
+			if (rc == -DER_AGAIN)
+				goto again;
+		} else if (oci->oci_flags & ORF_MAYBE_STARVE) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next,
 					   struct dtx_share_peer, dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
-			       "times, maybe starve\n", DP_DTI(&dth->dth_xid),
-			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
+			D_WARN(
+			    "DTX refresh for " DF_DTI " because of " DF_DTI " (%d), maybe starve\n",
+			    DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count);
 		}
-
-		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN)
-			goto again;
 	}
 
 	return rc;
@@ -5749,7 +5753,8 @@ again:
 			tmp = ocpi->ocpi_epoch;
 		else
 			tmp = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
+		version = ocpi->ocpi_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);

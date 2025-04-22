@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,14 +81,10 @@ struct dc_tx {
 	tse_task_t		*tx_orig_task;
 	/** Transaction flags (DAOS_TF_RDONLY, DAOS_TF_ZERO_COPY, etc.) */
 	uint64_t		 tx_flags;
-	uint32_t		 tx_fixed_epoch:1, /** epoch is specified. */
-				 tx_retry:1, /** Retry the commit RPC. */
-				 tx_set_resend:1, /** Set 'resend' flag. */
-				 tx_for_convert:1,
-				 tx_has_cond:1,
-				 tx_renew:1,
-				 tx_closed:1,
-				 tx_reintegrating:1;
+	uint32_t                 tx_fixed_epoch : 1,                      /** epoch is specified. */
+	    tx_retry : 1, /** Retry the commit RPC. */ tx_set_resend : 1, /** Set 'resend' flag. */
+	    tx_for_convert : 1, tx_has_cond : 1, tx_renew : 1, tx_closed : 1, tx_reintegrating : 1,
+	    tx_maybe_starve : 1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
 	/** The rank for the server on which the TX leader resides. */
@@ -106,6 +103,8 @@ struct dc_tx {
 
 	uint16_t		 tx_retry_cnt;
 	uint16_t		 tx_inprogress_cnt;
+	/* Last timestamp (in second) when report retry warning message. */
+	uint32_t                 tx_retry_warn_ts;
 	/** Pool map version when trigger first IO. */
 	uint32_t		 tx_pm_ver;
 	/** Reference the pool. */
@@ -994,6 +993,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 
 	D_MUTEX_LOCK(&tx->tx_lock);
 
+	tx->tx_maybe_starve = 0;
+
 	if (rc == 0) {
 		uint64_t	*sub_epochs = oco->oco_sub_epochs.ca_arrays;
 
@@ -1091,7 +1092,18 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	locked = false;
 
 	if (rc != -DER_TX_RESTART) {
+		uint32_t now = daos_gettime_coarse();
+
 		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt, 0);
+		if (rc == -DER_INPROGRESS &&
+		    ((tx->tx_retry_warn_ts == 0 && tx->tx_inprogress_cnt >= 10) ||
+		     (tx->tx_retry_warn_ts > 0 && tx->tx_retry_warn_ts + 10 < now))) {
+			tx->tx_retry_warn_ts = now;
+			tx->tx_maybe_starve  = 1;
+			D_WARN("The dist TX task %p has been retried for %u times, maybe starve\n",
+			       task, tx->tx_inprogress_cnt);
+		}
+
 		rc1 = tse_task_reinit_with_delay(task, delay);
 		if (rc1 != 0) {
 			D_ERROR("Failed to reinit task %p: %d, %d\n", task, rc1, rc);
@@ -2308,6 +2320,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	oci->oci_flags = ORF_LEADER;
 	if (tx->tx_set_resend && !tx->tx_renew)
 		oci->oci_flags |= ORF_RESEND;
+	if (tx->tx_maybe_starve)
+		oci->oci_flags |= ORF_MAYBE_STARVE;
 	tx->tx_renew = 0;
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;
