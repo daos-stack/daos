@@ -106,6 +106,7 @@ func reset_daos_cont_stubs() {
 	reset_daos_cont_get_attr()
 	reset_daos_cont_set_attr()
 	reset_daos_cont_del_attr()
+	reset_daos_cont_set_prop()
 }
 
 var (
@@ -288,4 +289,16 @@ func reset_daos_cont_del_attr() {
 
 func daos_cont_del_attr(contHdl C.daos_handle_t, n C.int, name **C.char, ev *C.struct_daos_event) C.int {
 	return del_attr(n, name, daos_cont_del_attr_RC, &daos_cont_del_attr_AttrNames)
+}
+
+var (
+	daos_cont_set_prop_RC C.int = 0
+)
+
+func reset_daos_cont_set_prop() {
+	daos_cont_set_prop_RC = 0
+}
+
+func daos_cont_set_prop(contHdl C.daos_handle_t, prop *C.daos_prop_t, ev *C.struct_daos_event) C.int {
+	return daos_cont_set_prop_RC
 }

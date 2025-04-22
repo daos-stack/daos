@@ -1,24 +1,25 @@
 hosts:
   test_servers: 3
   test_clients: 1
+
 timeout: 600
+
 server_config:
   name: daos_server
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
+      storage: auto
+
 pool:
   scm_size: 1000000000
   pool_count: 10
+
 container:
   type: POSIX
   control_method: daos
   cont_count: 10
+
 fio:
   names:
     - global
@@ -35,6 +36,7 @@ fio:
     rw: 'rw'
   test:
     numjobs: 1
+
 ior:
   client_processes:
     np_1:

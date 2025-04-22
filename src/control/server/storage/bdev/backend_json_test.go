@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +8,8 @@
 package bdev
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -41,7 +44,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 	bdevCfg := func(idx, roleBits int) *SpdkSubsystemConfig {
 		return &SpdkSubsystemConfig{
 			Method: storage.ConfBdevNvmeAttachController,
-			Params: NvmeAttachControllerParams{
+			Params: &NvmeAttachControllerParams{
 				TransportType:    "PCIe",
 				DeviceName:       nvmeName(idx, roleBits),
 				TransportAddress: test.MockPCIAddr(int32(idx + 1)),
@@ -49,9 +52,9 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		}
 	}
 	multiCtrlrConfs := func(roleBits int, hotplug bool) []*SpdkSubsystemConfig {
-		hpParams := NvmeSetHotplugParams{}
+		hpParams := &NvmeSetHotplugParams{}
 		if hotplug {
-			hpParams = NvmeSetHotplugParams{
+			hpParams = &NvmeSetHotplugParams{
 				Enable:     true,
 				PeriodUsec: uint64((5 * time.Second).Microseconds()),
 			}
@@ -111,7 +114,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Configs: []*SpdkSubsystemConfig{
 						{
 							Method: storage.ConfVmdEnable,
-							Params: VmdEnableParams{},
+							Params: &VmdEnableParams{},
 						},
 					},
 				},
@@ -126,7 +129,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetHotplugBusidRange,
-					Params: HotplugBusidRangeParams{
+					Params: &HotplugBusidRangeParams{
 						Begin: 138, End: 143,
 					},
 				},
@@ -146,7 +149,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				[]*SpdkSubsystemConfig{
 					{
 						Method: storage.ConfBdevAioCreate,
-						Params: AioCreateParams{
+						Params: &AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
 							DeviceName: aioName(0, storage.BdevRoleAll),
 							Filename:   "/path/to/myfile",
@@ -154,7 +157,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					},
 					{
 						Method: storage.ConfBdevAioCreate,
-						Params: AioCreateParams{
+						Params: &AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
 							DeviceName: aioName(1, storage.BdevRoleAll),
 							Filename:   "/path/to/myotherfile",
@@ -162,7 +165,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					},
 					{
 						Method: storage.ConfBdevNvmeSetHotplug,
-						Params: NvmeSetHotplugParams{},
+						Params: &NvmeSetHotplugParams{},
 					},
 				}...),
 			vosEnv: "AIO",
@@ -174,21 +177,21 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				[]*SpdkSubsystemConfig{
 					{
 						Method: storage.ConfBdevAioCreate,
-						Params: AioCreateParams{
+						Params: &AioCreateParams{
 							DeviceName: aioName(0, disabledRoleBits),
 							Filename:   "/dev/sdb",
 						},
 					},
 					{
 						Method: storage.ConfBdevAioCreate,
-						Params: AioCreateParams{
+						Params: &AioCreateParams{
 							DeviceName: aioName(1, disabledRoleBits),
 							Filename:   "/dev/sdc",
 						},
 					},
 					{
 						Method: storage.ConfBdevNvmeSetHotplug,
-						Params: NvmeSetHotplugParams{},
+						Params: &NvmeSetHotplugParams{},
 					},
 				}...),
 			vosEnv: "AIO",
@@ -207,21 +210,21 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetAccelProps,
-					Params: AccelPropsParams{
+					Params: &AccelPropsParams{
 						Engine:  storage.AccelEngineSPDK,
 						Options: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 					},
 				},
 				{
 					Method: storage.ConfSetSpdkRpcServer,
-					Params: SpdkRpcServerParams{
+					Params: &SpdkRpcServerParams{
 						Enable:   true,
 						SockAddr: "/tmp/spdk.sock",
 					},
 				},
 				{
 					Method: storage.ConfSetAutoFaultyProps,
-					Params: AutoFaultyParams{
+					Params: &AutoFaultyParams{
 						Enable:      true,
 						MaxIoErrs:   100,
 						MaxCsumErrs: 200,
@@ -313,5 +316,19 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					engineConfig.Storage.VosEnv)
 			}
 		})
+	}
+}
+
+func TestBackend_unreadableSpdkConfig(t *testing.T) {
+	testCfg := defaultSpdkConfig()
+
+	buf, err := json.Marshal(testCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf = bytes.Replace(buf, []byte("config"), []byte("bedazzle"), 1)
+
+	if _, err := readSpdkConfig(bytes.NewReader(buf)); err == nil {
+		t.Fatal("expected error")
 	}
 }
