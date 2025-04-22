@@ -1587,10 +1587,15 @@ func TestServerConfig_Parsing(t *testing.T) {
 			outTxt:         "enable_hotplug: true",
 			expValidateErr: FaultConfigEnableHotplugDeprecated,
 		},
-		"enable_hotplug false setting rejected": {
-			inTxt:          "disable_hotplug: true",
-			outTxt:         "enable_hotplug: false",
-			expValidateErr: FaultConfigEnableHotplugDeprecated,
+		"enable_hotplug false setting allowed": {
+			inTxt:  "disable_hotplug: true",
+			outTxt: "enable_hotplug: false",
+			expCheck: func(c *Server) error {
+				if c.Engines[0].Storage.EnableHotplug {
+					return errors.New("expecting hotplug to be disabled")
+				}
+				return nil
+			},
 		},
 		"enable_hotplug true setting allowed": {
 			inTxt:  "disable_hotplug: true",

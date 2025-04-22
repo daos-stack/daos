@@ -672,12 +672,14 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		if cfg.DisableHotplug != nil {
 			return FaultConfigEnableHotplugDeprecated
 		}
-		// Fail if deprecated EnableHotplug setting is explicitly set to false.
-		if *cfg.deprecatedParams.EnableHotplug == false {
-			return FaultConfigEnableHotplugDeprecated
-		}
 		log.Notice("enable_hotplug is deprecated; please use disable_hotplug instead " +
 			"(false by default)")
+
+		// Apply deprecated parameter updates.
+		eh := !*cfg.deprecatedParams.EnableHotplug
+		cfg.DisableHotplug = &eh
+		log.Debugf("deprecated param update: enable_hotplug: %v -> disable_hotplug: %v",
+			*cfg.deprecatedParams.EnableHotplug, *cfg.DisableHotplug)
 	}
 	// Set DisableHotplug reference if unset in config file.
 	if cfg.DisableHotplug == nil {
@@ -687,6 +689,10 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
+	}
+
+	for i := range cfg.Engines {
+		cfg.updateServerConfig(&cfg.Engines[i])
 	}
 
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
