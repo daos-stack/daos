@@ -554,17 +554,32 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 			return FaultConfigHugepagesDisabledWithNvmeBdevs
 		}
 		if minHugepages != 0 {
-			log.Noticef("hugepages disabled but targets will be assigned to bdevs, " +
-				"this is an atypical situation and caution is advised")
+			log.Notice("Hugepages have been disabled but DAOS targets will still be " +
+				"assigned to bdevs. This usage model is experimental so caution " +
+				"is advised!")
+		} else {
+			log.Noticef("Hugepages have been disabled, NVMe operations will be limited!")
 		}
 
 		// Hugepages disabled and so zero requested in config.
 		return nil
 	} else if minHugepages == 0 {
+		msg := fmt.Sprintf("configured nr_hugepages (%d) meets minimum required for scan (%d)",
+			cfg.NrHugepages, scanMinHugepageCount)
 		// Enable minimum needed for scanning NVMe on host in discovery mode.
-		if cfg.NrHugepages < scanMinHugepageCount && mi.HugepagesTotal < scanMinHugepageCount {
-			cfg.NrHugepages = scanMinHugepageCount
+		if cfg.NrHugepages < scanMinHugepageCount {
+			if mi.HugepagesTotal < scanMinHugepageCount {
+				cfg.NrHugepages = scanMinHugepageCount
+				msg = fmt.Sprintf("setting minimum (%d) in config to enable NVMe "+
+					"device discovery", scanMinHugepageCount)
+			} else {
+				msg = fmt.Sprintf("total system hugepage count (%d) meets "+
+					"minimum required for scan (%d)", mi.HugepagesTotal,
+					scanMinHugepageCount)
+			}
 		}
+
+		log.Infof("No hugepages required for configured engines, %s", msg)
 
 		// Zero tgts on bdevs and min allocation for discovery mode has either been met or
 		// is being applied.
