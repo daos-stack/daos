@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -296,11 +297,11 @@ wal_tst_pool_cont(void **state)
 
 	/* Create pool: Create meta & WAL blobs, write meta & WAL header */
 	rc = vos_pool_create(pool_name, pool_id, 0 /* scm_sz */, VPOOL_1G, 0 /* meta_sz */,
-			     0 /* flags */, 0 /* version */, NULL);
+			     VOS_POF_EXTERNAL_CHKPT, 0 /* version */, NULL);
 	assert_int_equal(rc, 0);
 
 	/* Create cont: write WAL */
-	rc = vos_pool_open(pool_name, pool_id, 0, &poh);
+	rc = vos_pool_open(pool_name, pool_id, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_int_equal(rc, 0);
 
 	rc = vos_cont_create(poh, cont_id);
@@ -333,7 +334,7 @@ wal_tst_pool_cont(void **state)
 		daos_fail_loc_set(DAOS_WAL_NO_REPLAY | DAOS_FAIL_ALWAYS);
 
 	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
-	rc = vos_pool_open(pool_name, pool_id, 0, &poh);
+	rc = vos_pool_open(pool_name, pool_id, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_int_equal(rc, 0);
 
 	/* Open cont */
@@ -417,14 +418,14 @@ wal_pool_refill(struct io_test_args *arg)
 		daos_fail_loc_set(DAOS_WAL_FAIL_REPLAY | DAOS_FAIL_ALWAYS);
 		daos_fail_value_set(1000);
 		poh = DAOS_HDL_INVAL;
-		rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
+		rc  = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, VOS_POF_EXTERNAL_CHKPT, &poh);
 		assert_rc_equal(rc, -DER_AGAIN);
 		daos_fail_loc_set(0);
 	}
 
 	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
 	poh = DAOS_HDL_INVAL;
-	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
+	rc  = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_rc_equal(rc, 0);
 	tcx->tc_po_hdl = poh;
 	tcx->tc_step = TCX_CO_CREATE;
@@ -622,7 +623,8 @@ setup_wal_io(void **state)
 	if (rc == -1)
 		return rc;
 
-	test_args_reset((struct io_test_args *)*state, VPOOL_2G);
+	test_args_reset((struct io_test_args *)*state, VPOOL_2G, 0, VPOOL_2G,
+			VOS_POF_EXTERNAL_CHKPT);
 	wal_args_reset((struct io_test_args *)*state);
 	return 0;
 }
@@ -636,6 +638,7 @@ static struct io_test_args test_args;
 #define MDTEST_META_BLOB_SIZE                                                                      \
 	((MDTEST_MIN_SOEMB_CNT + MDTEST_MAX_NEMB_CNT + MDTEST_MAX_EMB_CNT) * MDTEST_MB_SIZE)
 #define MDTEST_VOS_SIZE   ((MDTEST_MIN_SOEMB_CNT + MDTEST_MAX_NEMB_CNT) * 10 / 8 * MDTEST_MB_SIZE)
+#define MDTEST_DATA_BLOB_SIZE MDTEST_VOS_SIZE
 #define MDTEST_MB_VOS_CNT ((int)(MDTEST_VOS_SIZE / MDTEST_MB_SIZE))
 #define MDTEST_MB_CNT     ((int)(MDTEST_META_BLOB_SIZE / MDTEST_MB_SIZE))
 
@@ -646,7 +649,8 @@ setup_mb_io(void **state)
 
 	d_setenv("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", "2", true);
 	memset(&test_args, 0, sizeof(test_args));
-	rc     = vts_ctx_init_ex(&test_args.ctx, MDTEST_VOS_SIZE, MDTEST_META_BLOB_SIZE);
+	rc     = vts_ctx_init(&test_args.ctx, MDTEST_VOS_SIZE, MDTEST_META_BLOB_SIZE,
+			      MDTEST_DATA_BLOB_SIZE, VOS_POF_EXTERNAL_CHKPT);
 	*state = (void *)&test_args;
 	return rc;
 }
