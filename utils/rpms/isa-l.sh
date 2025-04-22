@@ -1,0 +1,79 @@
+#!/bin/bash
+# (C) Copyright 2025 Google LLC
+set -eEuo pipefail
+root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
+. "${root}/fpm_common.sh"
+
+if [ -z "${SL_ISAL_PREFIX}" ]; then
+  echo "isa-l must be installed or never built"
+  exit 0
+fi
+
+bins=()
+dbg=()
+files=()
+includes=()
+internal_includes=()
+libs=()
+mans=()
+pkgcfgs=()
+
+VERSION="2.30.0"
+RELEASE="3"
+LICENSE="BSD-3-Clause"
+ARCH=${isa}
+DESCRIPTION="Intelligent Storage Acceleration Library.
+Provides various algorithms for erasure coding, crc, raid, compression and
+decompression"
+URL="https://github.com/intel/isa-l"
+
+if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
+  isal_libname="libisal2"
+  isal_devname="libisal-devel"
+else
+  isal_libname="libisa-l"
+  isal_devname="libisa-l-devel"
+fi
+
+TARGET_PATH="${bindir}"
+list_files files "${SL_ISAL_PREFIX}/bin/igzip"
+clean_bin dbg "${files[@]}"
+create_install_list bins "${files[@]}"
+
+TARGET_PATH="${mandir}/man1"
+list_files files "${SL_ISAL_PREFIX}/share/man/man1/igzip.*"
+create_install_list mans "${files[@]}"
+
+ARCH="${isa}"
+build_package "isa-l" "${bins[@]}" "${mans[@]}"
+build_debug_package "isa-l" "${dbg[@]}"
+
+TARGET_PATH="${libdir}"
+list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so.*"
+clean_bin dbg "${files[@]}"
+create_install_list libs "${files[@]}"
+
+DEPENDS=("isa-l")
+build_package "${isal_libname}" "${libs[@]}"
+build_debug_package "${isal_libname}" "${dbg[@]}"
+
+TARGET_PATH="${libdir}"
+list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so"
+create_install_list libs "${files[@]}"
+
+TARGET_PATH="${libdir/pkgconfig}"
+list_files files "${SL_ISAL_PREFIX}/lib64/pkgconfig/libisal.pc"
+replace_paths "${SL_ISAL_PREFIX}" "${files[@]}"
+create_install_list pkgcfgs "${files[@]}"
+
+TARGET_PATH="${includedir}"
+list_files files "${SL_ISAL_PREFIX}/include/isa-l.h"
+create_install_list includes "${files[@]}"
+
+TARGET_PATH="${includedir}/isa-l"
+list_files files "${SL_ISAL_PREFIX}/include/isa-l/*"
+create_install_list internal_includes "${files[@]}"
+
+DEPENDS=("${isal_libname}")
+build_package "${isal_devname}" \
+  "${libs[@]}" "${includes[@]}" "${internal_includes[@]}" "${pkgcfgs[@]}"

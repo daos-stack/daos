@@ -21,6 +21,7 @@ dnf --nodocs install \
     daxctl-devel \
     diffutils \
     e2fsprogs \
+    fdupes \
     file \
     flex \
     fuse3 \
@@ -54,6 +55,7 @@ dnf --nodocs install \
     numactl-devel \
     openmpi-devel \
     openssl-devel \
+    pandoc \
     patch \
     patchelf \
     pciutils \

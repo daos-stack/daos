@@ -19,6 +19,7 @@ dnf --nodocs install \
     clang \
     cmake \
     cunit-devel \
+    fdupes \
     flex \
     fuse3 \
     gcc \
@@ -52,6 +53,7 @@ dnf --nodocs install \
     maven \
     numactl \
     openmpi3-devel \
+    pandoc \
     patch \
     patchelf \
     pciutils \

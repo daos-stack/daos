@@ -4,6 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %bcond_without server
+%bcond_without olddaos
 
 %if %{with server}
 %global daos_build_args FIRMWARE_MGMT=yes
@@ -30,6 +31,8 @@ License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
+# only use for source rpm with new build
+if %{with olddaos}
 %if (0%{?rhel} >= 8)
 BuildRequires: python3-scons >= 2.4
 %else
@@ -138,8 +141,8 @@ Requires: openssl
 # suffice
 Requires: mercury >= %{mercury_version}
 
-
-%description
+%endif
+%
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
 software-defined object store designed from the ground up for
 massively distributed Non Volatile Memory (NVM). DAOS takes advantage
@@ -150,6 +153,7 @@ data protection with self healing on top of commodity hardware, end-
 to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost.
 
+%if %{with olddaos}
 %if %{with server}
 %package server
 Summary: The DAOS server
@@ -635,6 +639,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files mofed-shim
 %doc README.md
 # No files in a shim package
+%endif
 
 %changelog
 * Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8

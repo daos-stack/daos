@@ -21,6 +21,7 @@ apt-get install \
     clang-format \
     cmake \
     curl \
+    fdupes \
     git \
     golang-go \
     kmod \
@@ -50,6 +51,7 @@ apt-get install \
     maven \
     numactl \
     openjdk-8-jdk \
+    pandoc \
     patchelf \
     pciutils \
     pkg-config \
