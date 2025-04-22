@@ -116,10 +116,12 @@ func cleanLockfiles(log logging.Logger, dir string, pciAddrChecker LockfileAddrC
 // Helper to clean lockfiles with known PCI addresses after implicit SPDK-binding calls.
 // Generated LockfileAddrCheckFn compares an input found-lockfile-address with the outer clean
 // function input-address-list.
-func cleanKnownLockfiles(log logging.Logger, n Nvme, addrs ...string) ([]string, error) {
-	return n.Clean(log, func(s string) (bool, error) {
+func cleanKnownLockfiles(log logging.Logger, n Nvme, addrs ...string) error {
+	_, err := n.Clean(log, func(s string) (bool, error) {
 		return common.Includes(addrs, s), nil
 	})
+
+	return err
 }
 
 // wrapCleanError encapsulates inErr inside any cleanErr.

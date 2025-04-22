@@ -152,12 +152,10 @@ func TestSpdk_cleanKnownLockfiles(t *testing.T) {
 	for name, tc := range map[string]struct {
 		addrsToClean []string
 		lfAddrsInDir []string
-		expRemoved   []string
 		expRemaining []string
 		expErr       error
 	}{
 		"no lockflles; no addresses to clean": {
-			expRemoved:   []string{},
 			expRemaining: []string{},
 		},
 		"no lockfiles": {
@@ -167,7 +165,6 @@ func TestSpdk_cleanKnownLockfiles(t *testing.T) {
 				"0000:83:00.0",
 			},
 			lfAddrsInDir: []string{},
-			expRemoved:   []string{},
 			expRemaining: []string{},
 		},
 		"no addresses to clean": {
@@ -177,7 +174,6 @@ func TestSpdk_cleanKnownLockfiles(t *testing.T) {
 				"0000:83:00.0",
 			},
 			addrsToClean: []string{},
-			expRemoved:   []string{},
 			expRemaining: []string{
 				LockfilePrefix + "0000:81:00.0",
 				LockfilePrefix + "0000:82:00.0",
@@ -194,10 +190,6 @@ func TestSpdk_cleanKnownLockfiles(t *testing.T) {
 				"0000:82:00.0",
 				"0000:83:00.0",
 			},
-			expRemoved: []string{
-				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
-				filepath.Join(testDir, LockfilePrefix+"0000:83:00.0"),
-			},
 			expRemaining: []string{
 				LockfilePrefix + "0000:81:00.0",
 			},
@@ -213,11 +205,6 @@ func TestSpdk_cleanKnownLockfiles(t *testing.T) {
 				"0000:82:00.0",
 				"0000:83:00.0",
 				"0000:81:00.0",
-			},
-			expRemoved: []string{
-				filepath.Join(testDir, LockfilePrefix+"0000:81:00.0"),
-				filepath.Join(testDir, LockfilePrefix+"0000:82:00.0"),
-				filepath.Join(testDir, LockfilePrefix+"0000:83:00.0"),
 			},
 			expRemaining: []string{},
 		},
@@ -243,12 +230,8 @@ func TestSpdk_cleanKnownLockfiles(t *testing.T) {
 				}
 			}
 
-			removed, gotErr := cleanKnownLockfiles(log, nvme, tc.addrsToClean...)
+			gotErr := cleanKnownLockfiles(log, nvme, tc.addrsToClean...)
 			test.CmpErr(t, tc.expErr, gotErr)
-
-			if diff := cmp.Diff(tc.expRemoved, removed); diff != "" {
-				t.Fatalf("unexpected list of removed locks (-want, +got): %s", diff)
-			}
 
 			remaining, err := common.GetFilenames(testDir)
 			if err != nil {
