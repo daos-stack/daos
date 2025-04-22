@@ -197,10 +197,10 @@ func logNUMAStats(log logging.Logger) {
 	log.Debugf("run cmd numastat -m: %s", toLog)
 }
 
-// For nontrivial VM case; remove lockfiles with backing device addresses by parsing file names to
+// For nontrivial VMD case remove lockfiles with backing device addresses by parsing file names to
 // evaluate whether they refer to a given VMD address supplied in resultant allowed list. Do this by
-// creating a address check function which will verify if a given backing device PCI address matches
-// any VMD address contained in the input allowed list set.
+// creating an address check function which will verify if a given backing device PCI address matches
+// any VMD domain address contained in the input allowed list set.
 func createSpdkLockfileAddrCheckFunc(allowed *hardware.PCIAddressSet) spdk.LockfileAddrCheckFn {
 	return func(pciAddr string) (bool, error) {
 		addrOrig, err := hardware.NewPCIAddress(pciAddr)
@@ -220,8 +220,8 @@ func createSpdkLockfileAddrCheckFunc(allowed *hardware.PCIAddressSet) spdk.Lockf
 	}
 }
 
-// Skip addresses in block list if present then expand to include both VMD and VMD backing device
-// addresses in search filter.
+// Skip addresses in block list if present then supply address check function that can detect VMD
+// backing device addresses during clean operation.
 func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) (err error) {
 	inAllowList, err := hardware.NewPCIAddressSetFromString(req.PCIAllowList)
 	if err != nil {

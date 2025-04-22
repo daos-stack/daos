@@ -427,7 +427,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	// Perform sanity check before enabling VMD on storage provider.
+	// Perform sanity check on call details before enabling VMD on storage provider.
 	if err == nil && resp != nil && !(req.CleanSpdkHugepages || req.CleanSpdkLockfiles) {
 		p.vmdEnabled = resp.VMDPrepared
 		p.log.Debugf("setting vmd=%v on storage provider", p.vmdEnabled)
