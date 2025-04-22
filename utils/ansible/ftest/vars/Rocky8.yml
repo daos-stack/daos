@@ -10,6 +10,7 @@ daos_common_deps:
     - capstone
     - createrepo
     - dnf-plugins-core
+    - environment-modules
     - gdb
     - glibc
     - iproute
