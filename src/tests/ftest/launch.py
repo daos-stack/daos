@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -154,7 +155,7 @@ class Launch():
         logger.addHandler(get_file_handler(self.logfile, LOG_FILE_FORMAT, logging.DEBUG))
 
         # Update the console logger to handle info messages
-        logger.handlers[0].setLevel(logging.INFO)
+        logger.handlers[0].setLevel(logging.DEBUG)
 
         logger.info("-" * 80)
         logger.info("DAOS functional test launcher")

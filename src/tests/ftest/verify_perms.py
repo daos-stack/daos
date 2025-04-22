@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +24,7 @@ from util.user_utils import get_user_uid_gid
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.INFO))
+logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 
 class VerifyPermsError(Exception):
