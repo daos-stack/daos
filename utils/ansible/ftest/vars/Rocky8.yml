@@ -41,6 +41,7 @@ daos_dev_deps:
     - python3.11
     - python3.11-devel
     - python3-clustershell
+    - python3-dnf
     - python3-pip
     - python3-wheel
     - rpmdevtools
