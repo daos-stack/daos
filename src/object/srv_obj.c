@@ -494,7 +494,8 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
 		  uint64_t *remote_offs, uint8_t *skips, daos_handle_t ioh, d_sg_list_t **sgls,
-		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg, struct dtx_handle *dth)
+		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg, struct dtx_handle *dth,
+		  enum fi_leader fi_leader_value)
 {
 	struct obj_bulk_args	arg = { 0 };
 	int			i, rc, *status, ret;
@@ -502,9 +503,12 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 	bool			async = true;
 	uint64_t		time = daos_get_ntime();
 
-	if (bulk_op == CRT_BULK_GET) {
-		if (dth != NULL && DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE) &&
-		    !(dth->dth_flags & DTE_LEADER)) {
+	// Fault injection for the case where the compound RPC body bulk transfer may throw a
+	// DER_RECONNECT. dth will be NULL in this test case.
+	if (dth == NULL && bulk_op == CRT_BULK_GET) {
+		if ((DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE_CPD_BODY) ||
+		     DAOS_FAIL_CHECK(DAOS_CLIENT_UNREACHABLE)) &&
+		    fi_leader_value == FOLLOWER) {
 			/** Fault injection - client unreachable. */
 			daos_fail_loc_set_private(DAOS_FIREWALL_ERROR | DAOS_FAIL_ALWAYS);
 		}
@@ -857,7 +861,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *iod, uint64_t *off)
 	/* Only support 1 iod now */
 	bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 	rc        = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, off, NULL,
-				      DAOS_HDL_INVAL, &p_sgl, 1, 1, NULL, NULL);
+				      DAOS_HDL_INVAL, &p_sgl, 1, 1, NULL, NULL, UNSPECIFIED);
 out:
 	orwo->orw_ret = rc;
 	orwo->orw_map_version = orw->orw_map_ver;
@@ -1655,7 +1659,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
 				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL,
-				       dth);
+				       dth, dth->dth_flags & DTE_LEADER ? LEADER : FOLLOWER);
 		if (rc == 0) {
 			bio_iod_flush(biod);
 
@@ -2505,7 +2509,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		goto end;
 	}
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL, ioh, NULL, 1, 1,
-			       NULL, NULL);
+			       NULL, NULL, UNSPECIFIED);
 	if (rc)
 		D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oer->er_oid),
 			DP_RC(rc));
@@ -2583,7 +2587,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto end;
 		}
 		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk, NULL, NULL, ioh,
-				       NULL, 1, 1, NULL, NULL);
+				       NULL, 1, 1, NULL, NULL, UNSPECIFIED);
 		if (rc)
 			D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 				DP_RC(rc));
@@ -3338,7 +3342,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 		return 0;
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, NULL, NULL, DAOS_HDL_INVAL, sgls,
-			       idx, idx, NULL, NULL);
+			       idx, idx, NULL, NULL, UNSPECIFIED);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
 		oeo->oeo_kds.ca_count = 0;
@@ -4671,7 +4675,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 			rc = obj_bulk_transfer(rpc, CRT_BULK_GET, dcu->dcu_flags & ORF_BULK_BIND,
 					       dcu->dcu_bulks, poffs[i], pskips[i], iohs[i], NULL,
-					       piod_nrs[i], dcsr->dcsr_nr, &bulks[i], dth);
+					       piod_nrs[i], dcsr->dcsr_nr, &bulks[i], dth,
+					       dth->dth_flags & DTE_LEADER ? LEADER : FOLLOWER);
 			if (rc != 0) {
 				D_ERROR("Bulk transfer failed for obj "
 					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
@@ -5390,7 +5395,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	}
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL, DAOS_HDL_INVAL,
-			       sgls, count, count, NULL, NULL);
+			       sgls, count, count, NULL, NULL, leader ? LEADER : FOLLOWER);
 	if (rc != 0)
 		goto out;
 

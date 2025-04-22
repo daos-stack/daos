@@ -3055,19 +3055,22 @@ dtx_42(void **state)
 	test_arg_t   *arg  = *state;
 	const char   *dkey = dts_dtx_dkey;
 	const char   *akey = dts_dtx_akey;
-	char          write_bufs[DTX_TEST_SUB_REQS][DTX_IO_BULK_TRANSFER];
-	char          fetch_buf[DTX_IO_BULK_TRANSFER];
+	char         *fetch_buf;
 	daos_handle_t th = {0};
 	daos_obj_id_t oid;
 	struct ioreq  req;
 	int           i;
-	int           rc;
+	int           subrequests = 2;
+	char         *write_bufs[subrequests];
+
+	par_barrier(PAR_COMM_WORLD);
 
 	FAULT_INJECTION_REQUIRED();
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
 
-	print_message("DTX42: multiple SV update against the same obj with fault injection\n");
+	print_message("DTX42: client unreachable - retry - multiple SV update against the same obj "
+		      "with fault injection\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -3075,30 +3078,29 @@ dtx_42(void **state)
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	/* Repeatedly insert different SV for the same obj, overwrite. */
-	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
-		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &req);
-	}
+	for (i = 0; i < subrequests; i++) {
+		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		assert_non_null(write_bufs[i]);
 
-	rc = daos_tx_commit(th, NULL);
-	assert_rc_equal(rc, -DER_TX_RESTART);
-
-	// The first attempt at committing the transaction fails due to DER_RECONNECT.
-	MUST(daos_tx_restart(th, NULL));
-
-	/* Repeatedly insert different SV for the same obj, overwrite. */
-	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
 		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &req);
 	}
 
 	MUST(daos_tx_commit(th, NULL));
 
+	D_ALLOC(fetch_buf, DTX_IO_BULK_TRANSFER);
+	assert_non_null(fetch_buf);
+
 	lookup_single(dkey, akey, 0, fetch_buf, DTX_IO_BULK_TRANSFER, DAOS_TX_NONE, &req);
 	/* The last value will be fetched. */
-	assert_memory_equal(write_bufs[DTX_TEST_SUB_REQS - 1], fetch_buf, DTX_IO_BULK_TRANSFER);
+	assert_memory_equal(write_bufs[subrequests - 1], fetch_buf, DTX_IO_BULK_TRANSFER);
 
+	for (i = 0; i < subrequests; i++) {
+		D_FREE(write_bufs[i]);
+	}
 	ioreq_fini(&req);
+	D_FREE(fetch_buf);
+
 	MUST(daos_tx_close(th, NULL));
 }
 
@@ -3114,31 +3116,17 @@ dtx_43(void **state)
 	daos_obj_id_t oids[DTX_TEST_SUB_REQS];
 	struct ioreq  reqs[DTX_TEST_SUB_REQS];
 	int           i;
-	int           rc;
+
+	par_barrier(PAR_COMM_WORLD);
 
 	FAULT_INJECTION_REQUIRED();
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
 
+	print_message("DTX43: client unreachable - retry - multiple SV update against multiple "
+		      "objs with fault injection\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 	arg->async = 0;
-
-	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
-		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
-		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_SINGLE, arg);
-
-		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		assert_non_null(write_bufs[i]);
-
-		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &reqs[i]);
-	}
-
-	rc = daos_tx_commit(th, NULL);
-	assert_rc_equal(rc, -DER_TX_RESTART);
-
-	// The first attempt at committing the transaction fails due to DER_RECONNECT.
-	MUST(daos_tx_restart(th, NULL));
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
@@ -3167,6 +3155,62 @@ dtx_43(void **state)
 		ioreq_fini(&reqs[i]);
 	}
 	D_FREE(fetch_buf);
+	MUST(daos_tx_close(th, NULL));
+}
+
+static void
+dtx_44(void **state)
+{
+	test_arg_t   *arg  = *state;
+	const char   *dkey = dts_dtx_dkey;
+	const char   *akey = dts_dtx_akey;
+	char         *fetch_buf;
+	daos_handle_t th = {0};
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	int           i;
+	int           subrequests = 1000;
+	char         *write_bufs[subrequests];
+
+	par_barrier(PAR_COMM_WORLD);
+
+	FAULT_INJECTION_REQUIRED();
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_CLIENT_UNREACHABLE_CPD_BODY | DAOS_FAIL_ONCE);
+
+	print_message("DTX44: client unreachable - retry - multiple SV update against the same obj "
+		      "with fault injection and bulk transfer of large body\n");
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	arg->async = 0;
+	oid        = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	/* Repeatedly insert different SV for the same obj, overwrite. */
+	for (i = 0; i < subrequests; i++) {
+		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		assert_non_null(write_bufs[i]);
+
+		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &req);
+	}
+
+	MUST(daos_tx_commit(th, NULL));
+
+	D_ALLOC(fetch_buf, DTX_IO_BULK_TRANSFER);
+	assert_non_null(fetch_buf);
+
+	lookup_single(dkey, akey, 0, fetch_buf, DTX_IO_BULK_TRANSFER, DAOS_TX_NONE, &req);
+	/* The last value will be fetched. */
+	assert_memory_equal(write_bufs[subrequests - 1], fetch_buf, DTX_IO_BULK_TRANSFER);
+
+	for (i = 0; i < subrequests; i++) {
+		D_FREE(write_bufs[i]);
+	}
+	ioreq_fini(&req);
+	D_FREE(fetch_buf);
+
 	MUST(daos_tx_close(th, NULL));
 }
 
@@ -3275,10 +3319,15 @@ static const struct CMUnitTest dtx_tests[] = {
 
     {"DTX40: uncertain check - miss commit with delay", dtx_40, NULL, test_case_teardown},
     {"DTX41: uncertain check - miss abort with delay", dtx_41, NULL, test_case_teardown},
-    {"DTX42: client unreachable - retry - multiple SV update against the same obj", dtx_42, NULL,
-     test_case_teardown},
-    {"DTX43: client unreachable - retry - multiple SV update against multiple objs", dtx_43, NULL,
-     test_case_teardown},
+    {"DTX42: client unreachable - retry - multiple SV update against the same obj with fault "
+     "injection",
+     dtx_42, NULL, test_case_teardown},
+    {"DTX43: client unreachable - retry - multiple SV update against multiple objs with fault "
+     "injection",
+     dtx_43, NULL, test_case_teardown},
+    {"DTX44: client unreachable - retry - multiple SV update against the same obj "
+     "with fault injection and bulk transfer of large body",
+     dtx_44, NULL, test_case_teardown},
 };
 
 static int
