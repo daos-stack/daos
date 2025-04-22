@@ -89,18 +89,6 @@
     name: epel-release
     state: present
 
-- name: Add DAOS repository
-  become: true
-  yum_repository:
-    name: daos-packages
-    description: DAOS v2.6.1 Packages Packages
-    baseurl: https://packages.daos.io/v2.6.1/EL8/packages/x86_64
-    enabled: true
-    gpgcheck: true
-    protect: true
-    gpgkey: https://packages.daos.io/RPM-GPG-KEY-2023
-    state: present
-
 - name: Install rpms DAOS base dependencies
   become: true
   dnf:
