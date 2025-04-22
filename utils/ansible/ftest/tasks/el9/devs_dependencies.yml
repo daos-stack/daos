@@ -1,5 +1,11 @@
 # Install dependencies of a development node
 
+- name: Add CodeReady Linux Builder repository
+  become: yes
+  dnf_config_manager:
+    name: crb
+    state: enabled
+
 - name: Install rpms development dependencies
   become: true
   dnf:
