@@ -1090,10 +1090,9 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		struct daos_cpd_sub_req *dcsr;
 		struct dc_object        *obj;
 		int                      ping_task_rc;
-		start   = dc_tx_leftmost_req(tx, false);
-		req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
+		start   = dc_tx_leftmost_req(tx, true);
+		req_cnt = tx->tx_write_cnt;
 		int           tgt_ids_rc;
-		daos_handle_t ph;
 		d_list_t      tgt_list_head;
 		D_INIT_LIST_HEAD(&tgt_list_head);
 
@@ -1109,14 +1108,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			}
 		}
 
-		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
-		D_ASSERT(dcsr != NULL);
-		obj = dcsr->dcsr_obj;
-		D_ASSERT(obj != NULL);
-		D_ASSERT(obj->cob_pool != NULL);
-		dc_pool2hdl_noref(obj->cob_pool, &ph);
-
-		ping_task_rc = obj_create_ping_task(sched, ph, &tgt_list_head, &task);
+		ping_task_rc =
+		    obj_create_ping_task(sched, tx->tx_co->dc_pool_hdl, &tgt_list_head, &task);
 		if (ping_task_rc != 0) {
 			D_ERROR("Failed to create ping task for task %p: %d, %d\n", task,
 				ping_task_rc, rc);

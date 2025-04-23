@@ -3063,14 +3063,15 @@ dtx_42(void **state)
 	int           subrequests = 2;
 	char         *write_bufs[subrequests];
 
-	par_barrier(PAR_COMM_WORLD);
-
 	FAULT_INJECTION_REQUIRED();
-
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("DTX42: client unreachable - retry - multiple SV update against the same obj "
 		      "with fault injection\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
+
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -3102,6 +3103,10 @@ dtx_42(void **state)
 	D_FREE(fetch_buf);
 
 	MUST(daos_tx_close(th, NULL));
+
+	par_barrier(PAR_COMM_WORLD);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -3114,29 +3119,31 @@ dtx_43(void **state)
 	char         *fetch_buf;
 	daos_handle_t th = {0};
 	daos_obj_id_t oids[DTX_TEST_SUB_REQS];
-	struct ioreq  reqs[DTX_TEST_SUB_REQS];
+	struct ioreq *reqs[DTX_TEST_SUB_REQS];
 	int           i;
 
-	par_barrier(PAR_COMM_WORLD);
-
 	FAULT_INJECTION_REQUIRED();
-
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("DTX43: client unreachable - retry - multiple SV update against multiple "
 		      "objs with fault injection\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
+
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 	arg->async = 0;
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
-		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_SINGLE, arg);
+		D_ALLOC(reqs[i], sizeof(struct ioreq));
+		ioreq_init(reqs[i], arg->coh, oids[i], DAOS_IOD_SINGLE, arg);
 
 		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
 		assert_non_null(write_bufs[i]);
 
 		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
-		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &reqs[i]);
+		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, reqs[i]);
 	}
 
 	MUST(daos_tx_commit(th, NULL));
@@ -3146,16 +3153,21 @@ dtx_43(void **state)
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		lookup_single(dkey, akey, 0, fetch_buf, DTX_IO_BULK_TRANSFER, DAOS_TX_NONE,
-			      &reqs[i]);
+			      reqs[i]);
 		assert_memory_equal(write_bufs[i], fetch_buf, DTX_IO_BULK_TRANSFER);
 	}
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		D_FREE(write_bufs[i]);
-		ioreq_fini(&reqs[i]);
+		ioreq_fini(reqs[i]);
+		D_FREE(reqs[i]);
 	}
 	D_FREE(fetch_buf);
 	MUST(daos_tx_close(th, NULL));
+
+	par_barrier(PAR_COMM_WORLD);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -3172,15 +3184,16 @@ dtx_44(void **state)
 	int           subrequests = 1000;
 	char         *write_bufs[subrequests];
 
-	par_barrier(PAR_COMM_WORLD);
-
 	FAULT_INJECTION_REQUIRED();
-
-	test_set_engine_fail_loc(arg, CRT_NO_RANK,
-				 DAOS_CLIENT_UNREACHABLE_CPD_BODY | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("DTX44: client unreachable - retry - multiple SV update against the same obj "
 		      "with fault injection and bulk transfer of large body\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_CLIENT_UNREACHABLE_CPD_BODY | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
+
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -3212,6 +3225,10 @@ dtx_44(void **state)
 	D_FREE(fetch_buf);
 
 	MUST(daos_tx_close(th, NULL));
+
+	par_barrier(PAR_COMM_WORLD);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static test_arg_t *saved_dtx_arg;

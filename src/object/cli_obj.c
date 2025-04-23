@@ -1489,7 +1489,6 @@ obj_create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, d_list_t *tgt_l
 			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
 
 			DL_ERROR(rc, "failed to create task");
-			tse_task_complete(ping_task, rc);
 			goto cleanup;
 		}
 
@@ -1884,7 +1883,7 @@ obj_gather_tgt_ids(d_list_t *head, struct dc_object *obj, uint64_t dkey_hash)
 	for (i = 0, target = first_target; i < obj->cob_grp_size; i++, target++) {
 		D_ALLOC_PTR(entry);
 		if (entry == NULL)
-			D_GOTO(err, rc = -1);
+			D_GOTO(err, rc = -DER_NOMEM);
 
 		tgt_id        = obj->cob_shards->do_shards[target].do_pl_shard.po_target;
 		entry->tgt_id = tgt_id;
