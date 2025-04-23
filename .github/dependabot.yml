@@ -8,16 +8,23 @@ updates:
     ignore:
       - dependency-name: "avocado-framework*"
     schedule:
-      interval: daily
+      interval: "cron"
+      cronjob: "0 0 1-7,15-21 * 0"  # first and third Sunday
     groups:
       python-packages:
         patterns:
           - "*"
+    assignees:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Test-tag: pr,vm \n"
+
   - package-ecosystem: github-actions
     target-branch: master
     directory: /
     schedule:
-      interval: weekly
+      interval: "cron"
+      cronjob: "0 0 1-7,15-21 * 0"  # first and third Sunday
     groups:
       gha-versions:
         patterns:
@@ -31,7 +38,8 @@ updates:
     target-branch: release/2.6
     directory: /
     schedule:
-      interval: weekly
+      interval: "cron"
+      cronjob: "0 0 1-7,15-21 * 0"  # first and third Sunday
     groups:
       gha-versions:
         patterns:
