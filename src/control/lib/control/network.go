@@ -277,7 +277,7 @@ func (gair *GetAttachInfoResp) String() string {
 
 	// Condensed format for debugging...
 	ch := gair.ClientNetHint
-	return fmt.Sprintf("p=%s i=%s d=%s t=%d c=%d x=%d, rus(%d)=%s, mss=%v, fw=%d",
+	return fmt.Sprintf("p=%s i=%s d=%s t=%d c=%d x=%d, rus(%d)=%s, mss=%v, fw=%t",
 		ch.Provider, ch.Interface, ch.Domain,
 		ch.CrtTimeout, ch.NetDevClass, ch.SrvSrxSet,
 		len(gair.ServiceRanks), rankURI, gair.MSRanks,

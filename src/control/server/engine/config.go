@@ -46,7 +46,7 @@ type FabricConfig struct {
 	NumSecondaryEndpoints     []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
 	DisableSRX                bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
 	AuthKey                   string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
-	DisableClientFirewallMode bool   `yaml:"disable_client_firewall_mode"`
+	DisableClientFirewallMode bool   `yaml:"-"`
 }
 
 // GetPrimaryProvider parses the primary provider from the Provider string.
@@ -152,6 +152,9 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	}
 	if fc.DisableSRX == false {
 		fc.DisableSRX = other.DisableSRX
+	}
+	if fc.DisableClientFirewallMode == true {
+		fc.DisableClientFirewallMode = other.DisableClientFirewallMode
 	}
 	if fc.AuthKey == "" {
 		fc.AuthKey = other.AuthKey
@@ -612,6 +615,11 @@ func (c *Config) WithStorageControlMetadataDevice(device string) *Config {
 // WithSocketDir sets the path to the instance's dRPC socket directory.
 func (c *Config) WithSocketDir(dir string) *Config {
 	c.SocketDir = dir
+	return c
+}
+
+func (c *Config) WithDisableClientFirewallMode(disableClientFirewallMode bool) *Config {
+	c.Fabric.DisableClientFirewallMode = disableClientFirewallMode
 	return c
 }
 

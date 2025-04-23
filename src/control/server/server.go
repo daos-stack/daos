@@ -417,6 +417,8 @@ func (srv *server) setupGrpc() error {
 
 	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
 	for i, p := range providers {
+		srv.log.Infof("DisableClientFirewallMode", srv.cfg.Fabric.DisableClientFirewallMode)
+
 		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
 			Provider:           p,
 			CrtTimeout:         srv.cfg.Fabric.CrtTimeout,

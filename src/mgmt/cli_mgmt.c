@@ -656,6 +656,7 @@ dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info)
 	}
 
 	if (info->client_firewall_mode) {
+		D_INFO("client_firewall_mode: %d\n", info->client_firewall_mode);
 		rc = asprintf(&client_firewall_mode, "%d", info->client_firewall_mode);
 		if (rc < 0) {
 			client_firewall_mode = NULL;
