@@ -563,14 +563,6 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		// Hugepages disabled and so zero nr_hugepages requested in config.
 		return nil
 	} else if minHugepages == 0 {
-		if cfg.NrHugepages == 0 && len(cfg.Engines) != 0 && !cfg.GetBdevConfigs().HaveBdevs() {
-			log.Noticef("Hugepages have been disabled for SCM-only config")
-			cfg.DisableHugepages = true
-
-			// Engine config storage only has SCM so disable hugepages.
-			return nil
-		}
-
 		// Enable minimum nr_hugepages needed for scanning NVMe on host in discovery mode.
 		msg := fmt.Sprintf("configured nr_hugepages (%d) meets minimum required for scan (%d)",
 			cfg.NrHugepages, scanMinHugepageCount)

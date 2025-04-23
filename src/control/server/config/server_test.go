@@ -1176,11 +1176,10 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 	uncommentServerConfig(t, testFile)
 
 	for name, tc := range map[string]struct {
-		extraConfig             func(c *Server) *Server
-		hugepagesTotal          int
-		expErr                  error
-		expCfgNrHugepages       int
-		expCfgHugepagesDisabled bool
+		extraConfig       func(c *Server) *Server
+		hugepagesTotal    int
+		expErr            error
+		expCfgNrHugepages int
 	}{
 		"disabled hugepages; nr_hugepages requested": {
 			extraConfig: func(c *Server) *Server {
@@ -1223,7 +1222,6 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expCfgHugepagesDisabled: true,
 		},
 		"disabled hugepages; no bdevs in scm-only config": {
 			extraConfig: func(c *Server) *Server {
@@ -1236,9 +1234,8 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expCfgHugepagesDisabled: true,
 		},
-		"unset in config; no bdevs in scm-only config; hugepages_disabled set": {
+		"unset in config; no bdevs in scm-only config": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithStorage(
@@ -1248,7 +1245,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 					),
 				)
 			},
-			expCfgHugepagesDisabled: true,
+			expCfgNrHugepages: scanMinHugepageCount,
 		},
 		"insufficient hugepages set in config; no engines configured": {
 			extraConfig: func(c *Server) *Server {
@@ -1357,8 +1354,6 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 
 			test.AssertEqual(t, tc.expCfgNrHugepages, cfg.NrHugepages,
 				"unexpected number of hugepages set in config")
-			test.AssertEqual(t, tc.expCfgHugepagesDisabled, cfg.DisableHugepages,
-				"unexpected hugepages_disabled flag set in config")
 		})
 	}
 }

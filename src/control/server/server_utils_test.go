@@ -428,7 +428,11 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithNrHugepages(0).
 					WithEngines(pmemOnlyEngine(0), pmemOnlyEngine(1))
 			},
-			expNotice: true,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugepageCount: 128,
+				TargetUser:    username,
+				EnableVMD:     true,
+			},
 		},
 		"no bdevs configured; nr_hugepages set": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
