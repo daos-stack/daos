@@ -21,6 +21,7 @@
 
 #include "dfuse.h"
 
+#include <daos/job.h>
 #include <daos_fs.h>
 #include <daos_api.h>
 #include <daos_uns.h>
@@ -405,6 +406,8 @@ check_fd_mountpoint(const char *mountpoint)
 	return fd;
 }
 
+#define DEFAULT_DFUSE_JOBID "dfuse"
+
 int
 main(int argc, char **argv)
 {
@@ -446,6 +449,9 @@ main(int argc, char **argv)
 					     {0, 0, 0, 0}};
 
 	d_signal_stack_enable(true);
+	rc = dc_set_default_jobid(DEFAULT_DFUSE_JOBID);
+	if (rc != 0)
+		DL_ERROR(rc, "failed to set default jobid");
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
