@@ -1176,10 +1176,11 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 	uncommentServerConfig(t, testFile)
 
 	for name, tc := range map[string]struct {
-		extraConfig       func(c *Server) *Server
-		hugepagesTotal    int
-		expCfgNrHugepages int
-		expErr            error
+		extraConfig             func(c *Server) *Server
+		hugepagesTotal          int
+		expErr                  error
+		expCfgNrHugepages       int
+		expCfgHugepagesDisabled bool
 	}{
 		"disabled hugepages; nr_hugepages requested": {
 			extraConfig: func(c *Server) *Server {
@@ -1222,8 +1223,9 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
+			expCfgHugepagesDisabled: true,
 		},
-		"disabled hugepages; no bdevs configured": {
+		"disabled hugepages; no bdevs in scm-only config": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithDisableHugepages(true).
 					WithEngines(defaultEngineCfg().
@@ -1234,8 +1236,9 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
+			expCfgHugepagesDisabled: true,
 		},
-		"unset in config; no bdevs configured": {
+		"unset in config; no bdevs in scm-only config; hugepages_disabled set": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(defaultEngineCfg().
 					WithStorage(
@@ -1245,54 +1248,30 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 					),
 				)
 			},
-			expCfgNrHugepages: scanMinHugepageCount,
+			expCfgHugepagesDisabled: true,
 		},
-		"insufficient hugepages set in config; no bdevs configured": {
+		"insufficient hugepages set in config; no engines configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							WithScmMountPoint("/foo"),
-					),
-				).WithNrHugepages(scanMinHugepageCount - 1)
+				return c.WithEngines().WithNrHugepages(scanMinHugepageCount - 1)
 			},
 			expCfgNrHugepages: scanMinHugepageCount,
 		},
-		"sufficient hugepages set in config; no bdevs configured": {
+		"sufficient hugepages set in config; no engines configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							WithScmMountPoint("/foo"),
-					),
-				).WithNrHugepages(scanMinHugepageCount + 1)
+				return c.WithEngines().WithNrHugepages(scanMinHugepageCount + 1)
 			},
 			expCfgNrHugepages: scanMinHugepageCount + 1,
 		},
-		"unset in cfg; insufficient total system hugepages; no bdevs configured": {
+		"unset in cfg; insufficient total system hugepages; no engines configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							WithScmMountPoint("/foo"),
-					),
-				)
+				return c.WithEngines()
 			},
 			hugepagesTotal:    scanMinHugepageCount - 1,
 			expCfgNrHugepages: scanMinHugepageCount,
 		},
-		"unset in cfg; sufficient total system hugepages; no bdevs configured": {
+		"unset in cfg; sufficient total system hugepages; no engines configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							WithScmMountPoint("/foo"),
-					),
-				)
+				return c.WithEngines()
 			},
 			hugepagesTotal: scanMinHugepageCount + 1,
 		},
@@ -1378,6 +1357,8 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 
 			test.AssertEqual(t, tc.expCfgNrHugepages, cfg.NrHugepages,
 				"unexpected number of hugepages set in config")
+			test.AssertEqual(t, tc.expCfgHugepagesDisabled, cfg.DisableHugepages,
+				"unexpected hugepages_disabled flag set in config")
 		})
 	}
 }
@@ -1493,7 +1474,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			// 80gib total - (8gib huge + 5gib sys + 1gib engine)
 			expRamdiskSize: 66,
 		},
-		"emulated bdevs configured": {
+		"emulated engines configured": {
 			memTotBytes: humanize.GiByte * 80,
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugepages(4096).

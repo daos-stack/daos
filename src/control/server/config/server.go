@@ -38,10 +38,6 @@ const (
 	// scanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
 	// SPDK memory requirements when performing a NVMe device scan.
 	scanMinHugepageCount = 128
-	// largeTargetCount is a large number of targets intended to satisfy most typical hugemem
-	// requirements based on a usual number of targets (16 per-engine on dual engine host).
-	largeTargetCount = 16 * 2
-	largeSysXSCount  = 2
 )
 
 // SupportConfig is defined here to avoid a import cycle
@@ -537,7 +533,7 @@ func (cfg *Server) getMinNrHugepages(log logging.Logger, hpSizeKiB int) (int, er
 
 // SetNrHugepages calculates minimum based on total target count if using nvme. If cfg.NrHugepages
 // is set to zero, no hugepage allocation requests will be made to the kernel during service
-// start-up in prepBdevStorage(). Only set non-zero here if a change is required.
+// start-up in prepBdevStorage(). Only set non-zero here if a nr_hugepage change is required.
 func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error {
 	minHugepages, err := cfg.getMinNrHugepages(log, mi.HugepageSizeKiB)
 	if err != nil {
@@ -548,25 +544,36 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 
 	if cfg.DisableHugepages {
 		if cfg.NrHugepages != 0 {
+			// Number of hugepages set in config and hugepages disabled.
 			return FaultConfigHugepagesDisabledWithNrSet
 		}
 		if cfg.GetBdevConfigs().HaveRealNVMe() {
+			// Real NVMe SSDs assigned in config but hugepages disabled.
 			return FaultConfigHugepagesDisabledWithNvmeBdevs
 		}
+
 		if minHugepages != 0 {
 			log.Notice("Hugepages have been disabled but DAOS targets will still be " +
 				"assigned to bdevs. This usage model is experimental so caution " +
 				"is advised!")
 		} else {
-			log.Noticef("Hugepages have been disabled, NVMe operations will be limited!")
+			log.Noticef("Hugepages have been disabled, NVMe operations may not succeed")
 		}
 
-		// Hugepages disabled and so zero requested in config.
+		// Hugepages disabled and so zero nr_hugepages requested in config.
 		return nil
 	} else if minHugepages == 0 {
+		if cfg.NrHugepages == 0 && len(cfg.Engines) != 0 && !cfg.GetBdevConfigs().HaveBdevs() {
+			log.Noticef("Hugepages have been disabled for SCM-only config")
+			cfg.DisableHugepages = true
+
+			// Engine config storage only has SCM so disable hugepages.
+			return nil
+		}
+
+		// Enable minimum nr_hugepages needed for scanning NVMe on host in discovery mode.
 		msg := fmt.Sprintf("configured nr_hugepages (%d) meets minimum required for scan (%d)",
 			cfg.NrHugepages, scanMinHugepageCount)
-		// Enable minimum needed for scanning NVMe on host in discovery mode.
 		if cfg.NrHugepages < scanMinHugepageCount {
 			if mi.HugepagesTotal < scanMinHugepageCount {
 				cfg.NrHugepages = scanMinHugepageCount
@@ -579,7 +586,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 			}
 		}
 
-		log.Infof("No hugepages required for configured engines, %s", msg)
+		log.Infof("No hugepages required as zero configured engine targets, %s", msg)
 
 		// Zero tgts on bdevs and min allocation for discovery mode has either been met or
 		// is being applied.

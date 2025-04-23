@@ -350,12 +350,13 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		prepReq.EnableVMD = enableVMD
 	}
 
-	if bdevCfgs.HaveBdevs() {
-		if srv.cfg.NrHugepages > 0 {
+	if srv.cfg.NrHugepages > 0 {
+		if bdevCfgs.HaveBdevs() {
 			// The NrHugepages config value is a total for all engines. Distribute
 			// allocation of hugepages across each engine's numa node (as validation
 			// ensures that TargetsCount is equal for each engine). Assumes an equal
 			// number of engine's per numa node.
+
 			numaNodes, err := getEngineNUMANodes(srv.log, srv.cfg.Engines)
 			if err != nil {
 				return err
@@ -365,28 +366,21 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 				return errors.New("invalid number of numa nodes detected (0)")
 			}
 
-			// Request a few more hugepages than actually required for each NUMA node
-			// allocation as some overhead may result in one or two being unavailable.
 			prepReq.HugepageCount = srv.cfg.NrHugepages / len(numaNodes)
-
-			// Extra pages to be allocated per engine but take into account the page
-			// count will be issued on each NUMA node.
-			extraPages := (extraHugepages * len(srv.cfg.Engines)) / len(numaNodes)
-			prepReq.HugepageCount += extraPages
 			prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 			srv.log.Infof("Allocating %d hugepages on each of these numa nodes: %v",
 				prepReq.HugepageCount, numaNodes)
 		} else {
-			srv.log.Debugf("skip allocating hugepages, no change is required")
+			// If nr_hugepages has been set manually but no bdevs in config then
+			// allocate on numa node 0 (the normal case is to allocate a minimum number
+			// to enable NVMe device discovery through SPDK).
+			prepReq.HugepageCount = srv.cfg.NrHugepages
+
+			srv.log.Infof("Allocating %d hugepages on numa node 0", prepReq.HugepageCount)
 		}
 	} else {
-		// If nr_hugepages has been set manually but no bdevs in config then allocate on
-		// numa node 0 (for example if a bigger number of hugepages are required in
-		// discovery mode for an unusually large number of SSDs).
-		prepReq.HugepageCount = srv.cfg.NrHugepages
-
-		srv.log.Infof("Allocating %d hugepages on numa node 0", prepReq.HugepageCount)
+		srv.log.Debugf("skip allocating hugepages, no change is required")
 	}
 
 	// Run prepare to bind devices to user-space driver and allocate hugepages.
