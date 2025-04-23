@@ -1092,8 +1092,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		int                      ping_task_rc;
 		start   = dc_tx_leftmost_req(tx, true);
 		req_cnt = tx->tx_write_cnt;
-		int           tgt_ids_rc;
-		d_list_t      tgt_list_head;
+		int      tgt_ids_rc;
+		d_list_t tgt_list_head;
 		D_INIT_LIST_HEAD(&tgt_list_head);
 
 		for (i = 0; i < req_cnt; i++) {
