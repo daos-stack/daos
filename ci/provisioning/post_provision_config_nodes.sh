@@ -42,8 +42,9 @@ retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /scratch
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
 if ! post_provision_config_nodes; then
-  rc=${PIPESTATUS[0]}
-  exit "$rc"
+    rc=${PIPESTATUS[0]}
+    echo "post_provision_config_nodes failed with rc=$rc"
+    exit "$rc"
 fi
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
