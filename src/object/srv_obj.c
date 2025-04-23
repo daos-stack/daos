@@ -512,10 +512,6 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 				/** Fault injection - client unreachable. */
 				firewall_blocking_flag = true;
 			}
-
-			if (firewall_blocking_flag) {
-				return -DER_RECONNECT;
-			}
 		} else {
 			// Fault injection for the case where the actual update throws a
 			// DER_RECONNECT. The dth will not be NULL in this test case.
@@ -525,11 +521,11 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 					/** Fault injection - client unreachable. */
 					firewall_blocking_flag = true;
 				}
-
-				if (firewall_blocking_flag) {
-					return -DER_RECONNECT;
-				}
 			}
+		}
+
+		if (firewall_blocking_flag) {
+			return -DER_RECONNECT;
 		}
 	}
 
