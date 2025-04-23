@@ -235,6 +235,55 @@ func TestControl_PoolUpgrade(t *testing.T) {
 	}
 }
 
+func TestControl_PoolRanksReq_Convert(t *testing.T) {
+	req := &PoolRanksReq{
+		ID:        "foo",
+		Ranks:     []ranklist.Rank{1, 2, 3},
+		TargetIdx: []uint32{1, 2},
+		Force:     true,
+	}
+
+	cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolDrainReq{}, mgmtpb.PoolReintReq{},
+		mgmtpb.PoolExcludeReq{})
+
+	drainPB := new(mgmtpb.PoolDrainReq)
+	if err := convert.Types(req, drainPB); err != nil {
+		t.Fatal(err)
+	}
+	expDrainPB := &mgmtpb.PoolDrainReq{
+		Id:        "foo",
+		TargetIdx: []uint32{1, 2},
+	}
+	if diff := cmp.Diff(expDrainPB, drainPB, cmpOpt); diff != "" {
+		t.Fatalf("Unexpected drain request (-want, +got):\n%s\n", diff)
+	}
+
+	reintPB := new(mgmtpb.PoolReintReq)
+	if err := convert.Types(req, reintPB); err != nil {
+		t.Fatal(err)
+	}
+	expReintPB := &mgmtpb.PoolReintReq{
+		Id:        "foo",
+		TargetIdx: []uint32{1, 2},
+	}
+	if diff := cmp.Diff(expReintPB, reintPB, cmpOpt); diff != "" {
+		t.Fatalf("Unexpected reint request (-want, +got):\n%s\n", diff)
+	}
+
+	excludePB := new(mgmtpb.PoolExcludeReq)
+	if err := convert.Types(req, excludePB); err != nil {
+		t.Fatal(err)
+	}
+	expExcludePB := &mgmtpb.PoolExcludeReq{
+		Id:        "foo",
+		TargetIdx: []uint32{1, 2},
+		Force:     true,
+	}
+	if diff := cmp.Diff(expExcludePB, excludePB, cmpOpt); diff != "" {
+		t.Fatalf("Unexpected exclude request (-want, +got):\n%s\n", diff)
+	}
+}
+
 func TestControl_PoolRanksResp_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp   *PoolRanksResp

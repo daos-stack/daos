@@ -1,10 +1,10 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import queue
-import random
 import threading
 import time
 
@@ -61,7 +61,7 @@ class OSAOnlineReintegration(OSAUtils):
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude one rank : other than rank 0.
-        rank = random.randint(1, exclude_servers)  # nosec
+        rank = self.random.randint(1, exclude_servers)
 
         # Start the daos_racer thread
         if racer is True:

@@ -1,9 +1,9 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import re
 import threading
 import time
@@ -115,9 +115,9 @@ class NvmePoolExclude(OSAUtils):
                 self.pool.display_pool_daos_space("Pool space: Before Exclude")
                 pver_begin = self.pool.get_version(True)
 
-                index = random.randint(1, len(rank_list))  # nosec
+                index = self.random.randint(1, len(rank_list))
                 rank = rank_list.pop(index - 1)
-                tgt_exclude = random.randint(1, 6)  # nosec
+                tgt_exclude = self.random.randint(1, 6)
                 self.log.info("Removing rank %d, target %d", rank, tgt_exclude)
 
                 self.log.info("Pool Version at the beginning %s", pver_begin)

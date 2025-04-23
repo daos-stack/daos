@@ -57,12 +57,16 @@ enum dtx_operation {
 #undef X
 
 /* DTX RPC input fields */
+/* clang-format off */
 #define DAOS_ISEQ_DTX							\
 	((uuid_t)		(di_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(di_co_uuid)		CRT_VAR)	\
 	((uint64_t)		(di_epoch)		CRT_VAR)	\
+	((uint32_t)		(di_version)		CRT_VAR)	\
+	((uint32_t)		(di_padding)		CRT_VAR)	\
 	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)	\
 	((uint32_t)		(di_flags)		CRT_ARRAY)
+/* clang-format on */
 
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
