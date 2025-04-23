@@ -108,6 +108,8 @@ retry_dnf() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
+             "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
     fi
     return 1
 
@@ -177,6 +179,8 @@ retry_cmd() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command retry failed in $STAGE_NAME after $attempt attempts" \
+             "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
     fi
     return 1
 }
@@ -208,6 +212,8 @@ timeout_cmd() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command timeout failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command timeout failed in $STAGE_NAME after $attempt attempts" \
+             "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
     fi
     return "$rc"
 }
@@ -220,6 +226,7 @@ fetch_repo_config() {
     local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
     local repopath="${REPOS_DIR}/$repo_file"
     if ! curl -f -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
+        echo "Failed to fetch repo file $REPO_FILE_URL$repo_file.repo"
         return 1
     fi
 
@@ -286,6 +293,7 @@ update_repos() {
         if ! fetch_repo_config "$repo_server"; then
             # leave the existing on-image repo config alone if the repo fetch fails
             send_mail "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
+            echo "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
             return 1
         fi
     done
@@ -395,6 +403,7 @@ post_provision_config_nodes() {
     fi
     if ! "${cmd[@]}"; then
         dump_repos
+        echo "Failed to upgrade packages"
         return 1
     fi
 
@@ -413,6 +422,7 @@ post_provision_config_nodes() {
         if ! retry_dnf 360 install "${inst_rpms[@]/%/${DAOS_VERSION:-}}"; then
             rc=${PIPESTATUS[0]}
             dump_repos
+            echo "Failed to install packages"
             return "$rc"
         fi
     fi
