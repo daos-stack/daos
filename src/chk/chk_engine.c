@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2460,6 +2461,7 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	struct dss_coll_ops		 coll_ops = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	int				 rc = 0;
+	int                              i;
 
 	if (cqpa->cqpa_idx == cqpa->cqpa_cap) {
 		D_REALLOC_ARRAY(new_shards, cqpa->cqpa_shards, cqpa->cqpa_cap, cqpa->cqpa_cap << 1);
@@ -2474,6 +2476,14 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	uuid_copy(shard->cqps_uuid, uuid);
 	shard->cqps_rank = dss_self_rank();
 
+	/*
+	 * NOTE: Set cqps_target_nr as zero, then cqps_targets will not be transferred to leader,
+	 *       and then will not be replied to control plane. That will much reduce the query
+	 *       buffer usage to avoid dRPC overflow. In the future, when we supports arbitrary
+	 *       sized dRPC, then we can return per target based query results as required.
+	 */
+	shard->cqps_target_nr = 0;
+
 	uuid_unparse_lower(uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc == -DER_NONEXIST) {
@@ -2481,7 +2491,6 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 		shard->cqps_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 		memset(&shard->cqps_statistics, 0, sizeof(shard->cqps_statistics));
 		memset(&shard->cqps_time, 0, sizeof(shard->cqps_time));
-		shard->cqps_target_nr = 0;
 		shard->cqps_targets = NULL;
 
 		D_GOTO(out, rc = 0);
@@ -2498,12 +2507,36 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	shard->cqps_phase = cbk.cb_phase;
 	memcpy(&shard->cqps_statistics, &cbk.cb_statistics, sizeof(shard->cqps_statistics));
 	memcpy(&shard->cqps_time, &cbk.cb_time, sizeof(shard->cqps_time));
-	shard->cqps_target_nr = dss_tgt_nr;
 
 	coll_ops.co_func = chk_engine_query_one;
 	coll_args.ca_func_args = shard;
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	if (rc == 0) {
+		if (shard->cqps_status == CHK__CHECK_POOL_STATUS__CPS_UNCHECKED)
+			goto out;
+
+		/* Merge pool targets information before we can support arbitrary sized dRPC. */
+		for (i = 0; i < dss_tgt_nr; i++) {
+			struct chk_query_target *target = &shard->cqps_targets[i];
+
+			if (shard->cqps_status != CHK__CHECK_POOL_STATUS__CPS_CHECKING &&
+			    shard->cqps_status != CHK__CHECK_POOL_STATUS__CPS_PENDING) {
+				if (shard->cqps_time.ct_stop_time < target->cqt_time.ct_stop_time)
+					shard->cqps_time.ct_stop_time =
+					    target->cqt_time.ct_stop_time;
+			} else if (target->cqt_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
+				if (shard->cqps_time.ct_left_time < target->cqt_time.ct_left_time)
+					shard->cqps_time.ct_left_time =
+					    target->cqt_time.ct_left_time;
+			}
+
+			shard->cqps_statistics.cs_repaired += target->cqt_statistics.cs_repaired;
+			shard->cqps_statistics.cs_ignored += target->cqt_statistics.cs_ignored;
+			shard->cqps_statistics.cs_failed += target->cqt_statistics.cs_failed;
+			shard->cqps_statistics.cs_total += target->cqt_statistics.cs_total;
+		}
+	}
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
