@@ -1,9 +1,9 @@
 """
   (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import time
 
 from apricot import TestWithServers
@@ -91,7 +91,7 @@ class ReplayTests(TestWithServers):
             6) Verify the previously written data matches with an ior read
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_restart
         """
@@ -123,7 +123,7 @@ class ReplayTests(TestWithServers):
             9) Verify more data can be written
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_posix
         """
@@ -173,7 +173,7 @@ class ReplayTests(TestWithServers):
             13) Verify no snapshots exist (daos container list-snaps)
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_snapshots
         """
@@ -225,7 +225,7 @@ class ReplayTests(TestWithServers):
             6) Verify each modified pool and container attribute is still set
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_attributes
         """
@@ -251,13 +251,13 @@ class ReplayTests(TestWithServers):
         for container in containers:
             for index, item in enumerate((container.pool, container)):
                 # Modify a random pool/container property value
-                name = random.choice(list(modify_attributes[index].keys()))  # nosec
+                name = self.random.choice(list(modify_attributes[index].keys()))
                 modified = False
                 for entry in expected[item.identifier]:
                     if entry['name'] == name:
                         original = entry['value']
                         while entry['value'] == original:
-                            entry['value'] = random.choice(modify_attributes[index][name])  # nosec
+                            entry['value'] = self.random.choice(modify_attributes[index][name])
                         self.log.info(
                             'Modifying %s property: %s -> %s',
                             item.identifier, entry['name'], entry['value'])
@@ -310,7 +310,7 @@ class ReplayTests(TestWithServers):
             6) Verify the previously written data matches with an ior read
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_no_check_pointing
         """
@@ -353,7 +353,7 @@ class ReplayTests(TestWithServers):
             7) Verify the previously written data matches with an ior read
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_check_pointing
         """
