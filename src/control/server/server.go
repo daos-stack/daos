@@ -424,7 +424,7 @@ func (srv *server) setupGrpc() error {
 			SrvSrxSet:          srxSetting,
 			ProviderIdx:        uint32(i),
 			EnvVars:            srv.cfg.ClientEnvVars,
-			ClientFirewallMode: !srv.cfg.Fabric.DisableClientFirewallMode,
+			ClientFirewallMode: !srv.cfg.DisableClientFirewallMode,
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints

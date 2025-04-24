@@ -124,7 +124,7 @@
 ## will receive a special error message and ping servers that they don't have
 ## TCP connections established with.
 #
-#enable_tcp_firewall_adr: false
+#disable_client_firewall_mode: true
 #
 #
 ## CART: Fabric authorization key

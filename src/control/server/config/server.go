@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -70,10 +71,11 @@ type Server struct {
 	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
-	SystemName string              `yaml:"name"`
-	SocketDir  string              `yaml:"socket_dir"`
-	Fabric     engine.FabricConfig `yaml:",inline"`
-	Modules    string              `yaml:"-"`
+	SystemName                string              `yaml:"name"`
+	SocketDir                 string              `yaml:"socket_dir"`
+	Fabric                    engine.FabricConfig `yaml:",inline"`
+	Modules                   string              `yaml:"-"`
+	DisableClientFirewallMode bool                `yaml:"disable_client_firewall_mode"`
 
 	MgmtSvcReplicas []string `yaml:"mgmt_svc_replicas"`
 
@@ -338,7 +340,8 @@ func DefaultServer() *Server {
 		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
 		EnableHotplug:     false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
-		CoreDumpFilter: 0b00010011, // private, shared, ELF
+		CoreDumpFilter:            0b00010011, // private, shared, ELF
+		DisableClientFirewallMode: true,
 	}
 }
 
