@@ -783,6 +783,7 @@ cleanup:
 	}
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
+	d_freeenv_str(&client_firewall_mode);
 
 	return rc;
 }
