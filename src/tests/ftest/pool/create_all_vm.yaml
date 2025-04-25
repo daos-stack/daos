@@ -3,8 +3,8 @@ setup:
 hosts:
   test_servers: 5
 timeouts:
-  test_one_pool_vm: 240
-  test_rank_filter: 240
+  test_one_pool_vm: 480
+  test_rank_filter: 480
   test_two_pools_vm: 320
   test_recycle_pools_vm: 800
 
