@@ -2762,11 +2762,14 @@ ds_chk_query_pool_cb(struct chk_query_pool_shard *shard, uint32_t idx, void *buf
 	if (pool->time == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	pool->n_targets = shard->cqps_target_nr;
+	if (pool->n_targets == 0)
+		goto out;
+
 	D_ALLOC_ARRAY(pool->targets, shard->cqps_target_nr);
 	if (pool->targets == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	pool->n_targets = shard->cqps_target_nr;
 	for (i = 0; i < shard->cqps_target_nr; i++) {
 		D_ALLOC_PTR(target);
 		if (target == NULL)
@@ -2842,6 +2845,10 @@ ds_mgmt_drpc_check_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	resp.req_status = rc;
 	len = mgmt__check_query_resp__get_packed_size(&resp);
+	if (unlikely(len >= (1 << 20)))
+		D_WARN("Too large CHK query reply buffer (%ld) for %ld pools, maybe overflow\n",
+		       len, resp.n_pools);
+
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		D_ERROR("Failed to allocate response body (query check)\n");

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3376,10 +3377,10 @@ again:
 		}
 	}
 out:
-	chk_cqa_free(cqa);
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Leader query check with gen "DF_X64" for %d pools: "DF_RC"\n",
-		 gen, pool_nr, DP_RC(rc));
+		 "Leader query check with gen "DF_X64" for %d pools: "DF_RC"\n", gen,
+		 rc != 0 ? pool_nr : cqa->cqa_count, DP_RC(rc));
+	chk_cqa_free(cqa);
 
 	return rc;
 }
