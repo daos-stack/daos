@@ -214,7 +214,7 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
-        booleanParam(name: 'CI_SKIP_CANCEL_PREV_BUILD',
+        booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
                      defaultValue: false,
                      description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
@@ -305,6 +305,9 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+        booleanParam(name: 'CI_medium_large_TEST_SKIP',
+                     defaultValue: false,
+                     description: 'Skip Functional Hardware (Test Hardware) stage')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
@@ -422,7 +425,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_SKIP_CANCEL_PREV_BUILD', false)  && !skipStage() }
+                expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
             }
             steps {
                 cancelPreviousBuilds()
@@ -1114,7 +1117,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !paramsValue('CI_medium_large_TEST_SKIP', false)  && !skipStage() }
             }
             steps {
                 script {
