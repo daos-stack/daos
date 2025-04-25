@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,7 +54,6 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 
 		fi, err := fis.GetInterfaceOnNetDevice(iface, prov)
 		if err != nil {
-			return 0, err
 		}
 		return fi.NUMANode, nil
 	}
@@ -350,6 +350,13 @@ func (srv *server) addEngines(ctx context.Context) error {
 	iommuEnabled, err := topology.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
 	if err != nil {
 		return err
+	}
+
+	// Fail to start if transparent hugepages are enabled. DAOS SPDK use needs feature disabled.
+	if thpEnabled, err := topology.DefaultTHPDetector(srv.log).IsTHPEnabled(); err != nil {
+		return err
+	} else if thpEnabled {
+		return FaultThpEnabled
 	}
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.

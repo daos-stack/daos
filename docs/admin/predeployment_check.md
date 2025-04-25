@@ -530,3 +530,30 @@ Current LBA Format:          LBA Format #03
 Displayed details for controller show LBA format is now "#03".
 
 Perform the above process for all SSDs that will be used by DAOS.
+
+
+## Hugepage allocation and memory fragmentation
+
+DAOS uses linux hugepages for DMA buffer allocation. If hugepage memory becomes fragmented, DMA
+buffer allocations may fail because of insufficient contiguous memory availability.
+
+By default DAOS will allocate necessary hugepages at runtime based on supplied server file
+configuration details (mainly the number of engine targets). Runtime allocation of hugepages
+may cause fragmentation over time.
+
+To reduce the chance of memory fragmentation, hugepages can be allocated on the kernel boot
+command line by specifying the "hugepages=N" parameter, where 'N' = the number of huge pages
+requested.
+
+[See here for details of allocating hugepages at
+boot](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/performance_tuning_guide/sect-red_hat_enterprise_linux-performance_tuning_guide-memory-configuring-huge-pages)
+
+
+## Disabling transparent hugepages (THB) at boot-time
+
+Linux transparent hugepages feature also increases the likelihood of hugepage memory fragmentation
+and should be disabled for optimal performance of DAOS.
+
+[See here for details of how to disable THP on
+boot](https://docs.kernel.org/admin-guide/mm/transhuge.html#boot-parameters)
+

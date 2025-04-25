@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,5 +41,11 @@ func DefaultProcessNUMAProvider(log logging.Logger) hardware.ProcessNUMAProvider
 
 // DefaultIOMMUDetector gets the default provider for the IOMMU detector.
 func DefaultIOMMUDetector(log logging.Logger) hardware.IOMMUDetector {
+	return sysfs.NewProvider(log)
+}
+
+// DefaultTHPDetector gets the default provider for the transparent hugepage
+// detector.
+func DefaultTHPDetector(log logging.Logger) hardware.THPDetector {
 	return sysfs.NewProvider(log)
 }
