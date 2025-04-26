@@ -446,7 +446,7 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
     return results
 
 
-def run_remote(log, hosts, command, verbose=True, timeout=240, task_debug=False, stderr=False,
+def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False,
                fanout=None):
     """Run the command on the remote hosts.
 
@@ -456,7 +456,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=240, task_debug=False,
         command (str): command from which to obtain the output
         verbose (bool, optional): log the command output. Defaults to True.
         timeout (int, optional): number of seconds to wait for the command to complete.
-            Defaults to 480 seconds.
+            Defaults to 120 seconds.
         task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
         stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
         fanout (int, optional): fanout to use. Default uses the max of the
@@ -465,8 +465,6 @@ def run_remote(log, hosts, command, verbose=True, timeout=240, task_debug=False,
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
-    if timeout < 240:
-        timeout = 240
     task = task_self()
     task.set_info('debug', task_debug)
     task.set_default("stderr", stderr)
