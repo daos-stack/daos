@@ -5,7 +5,7 @@ hosts:
 timeouts:
   test_one_pool_vm: 240
   test_rank_filter: 240
-  test_two_pools_vm: 320
+  test_two_pools_vm: 160
   test_recycle_pools_vm: 800
 
 # DAOS-12750 NOTE External tools used by DAOS are creating sparse files (e.g. daos_system.db) which
