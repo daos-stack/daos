@@ -456,7 +456,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=240, task_debug=False,
         command (str): command from which to obtain the output
         verbose (bool, optional): log the command output. Defaults to True.
         timeout (int, optional): number of seconds to wait for the command to complete.
-            Defaults to 240 seconds.
+            Defaults to 480 seconds.
         task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
         stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
         fanout (int, optional): fanout to use. Default uses the max of the
