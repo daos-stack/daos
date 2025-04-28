@@ -56,7 +56,7 @@ if ipmctl show -dimm; then
     fi
 else
     counter=0
-    for ib in `ls /sys/class/net | grep ib`; do
+    for ib in /sys/class/net/ib*; do
         ((counter++)) || true
         ip addr show "$ib"
     done
