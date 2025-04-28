@@ -108,8 +108,10 @@ retry_dnf() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-        echo "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
-             "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server "
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return 1
 
@@ -179,8 +181,10 @@ retry_cmd() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-        echo "Command retry failed in $STAGE_NAME after $attempt attempts" \
-             "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command retry failed in $STAGE_NAME after $attempt attempts"
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return 1
 }
@@ -212,8 +216,10 @@ timeout_cmd() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command timeout failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-        echo "Command timeout failed in $STAGE_NAME after $attempt attempts" \
-             "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command timeout failed in $STAGE_NAME after $attempt attempts"
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return "$rc"
 }
