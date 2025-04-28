@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2018-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1009,7 +1009,8 @@ int bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	     struct bio_csum_desc *csum_desc);
 
 enum bio_mc_flags {
-	BIO_MC_FL_RDB		= (1UL << 0),	/* for RDB */
+	BIO_MC_FL_RDB      = (1UL << 0), /* for RDB */
+	BIO_MC_FL_RECREATE = (1UL << 1), /* to identify recreate (e.g., in replace op) */
 };
 
 /*
@@ -1017,15 +1018,18 @@ enum bio_mc_flags {
  *
  * \param[in]	xs_ctxt		Per-xstream NVMe context
  * \param[in]	pool_id		Pool UUID
+ * \param[in]	scm_sz		VOS file size in bytes
  * \param[in]	meta_sz		Meta blob size in bytes
  * \param[in]	wal_sz		WAL blob in bytes
  * \param[in]	data_sz		Data blob in bytes
  * \param[in]	flags		bio_mc_flags
+ * \param[in]	backend_type	Backend allocator type
  *
  * \return			Zero on success, negative value on error.
  */
-int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
-		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags);
+int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_sz,
+		  uint64_t meta_sz, uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags,
+		  uint8_t backend_type);
 
 /*
  * Destroy Meta/Data/WAL blobs
@@ -1151,10 +1155,10 @@ int bio_wal_flush_header(struct bio_meta_context *mc);
 int bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purge_size);
 
 /*
- * Query meta capacity & meta block size & meta blob header blocks.
+ * Query the attributes of umem_store
  */
 void bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz,
-		       uint32_t *hdr_blks);
+		       uint32_t *hdr_blks, uint8_t *backend_type, bool *evictable);
 
 struct bio_wal_info {
 	uint32_t	wi_tot_blks;	/* Total blocks */

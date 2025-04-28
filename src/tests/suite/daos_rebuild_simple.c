@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -224,7 +225,7 @@ rebuild_snap_update_recs(void **state)
 	struct ioreq	req;
 	daos_recx_t	recx;
 	int		tgt = DEFAULT_FAIL_TGT;
-	char		string[100] = { 0 };
+	char		string[100 * SNAP_CNT] = { 0 };
 	daos_epoch_t	snap_epoch[SNAP_CNT];
 	int		i;
 	int		rc;
@@ -927,12 +928,9 @@ rebuild_small_pool_n4_setup(void **state)
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SMALL_POOL_SIZE, 4, NULL);
 	if (rc) {
-		/* Let's skip for this case, since it is possible there
-		 * is not enough ranks here.
-		 */
 		print_message("It can not create the pool with 4 ranks"
 			      " probably due to not enough ranks %d\n", rc);
-		return 0;
+		return rc;
 	}
 
 	arg = *state;
@@ -1376,7 +1374,8 @@ rebuild_object_with_csum_error(void **state)
 	int		 rc = 0;
 	int		 i, j;
 	daos_handle_t	 poh = arg->pool.poh;
-	int		 ranks = 3; /* will inject corruption to ranks 0-2 */
+	/* only injection to rank 0, increase to 3 when rebuild could handle checksum error */
+	int              ranks = 1;
 	daos_key_t	 dkey, akey;
 	uint64_t	 dkey_val;
 	char		*akey_val = "0";

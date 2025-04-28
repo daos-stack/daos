@@ -13,8 +13,8 @@ timeouts:
   test_daos_container: 700
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
-  test_daos_io: 290
-  test_daos_ec_io: 450
+  test_daos_io: 350
+  test_daos_ec_io: 510
   test_daos_ec_obj: 750
   test_daos_object_array: 105
   test_daos_array: 106

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2022, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
@@ -23,17 +23,23 @@
 #define DAV_FLAG_TX_NO_ABORT		(((uint64_t)1) << 4)
 
 #define DAV_CLASS_ID(id)		(((uint64_t)(id)) << 48)
-#define DAV_ARENA_ID(id)		(((uint64_t)(id)) << 32)
+#ifdef	DAV_V2_BUILD
+#define DAV_EZONE_ID(id)		(((uint64_t)(id)) << 16)
+#endif	/* DAV_V2_BUILD */
 
 #define DAV_XALLOC_CLASS_MASK		((((uint64_t)1 << 16) - 1) << 48)
-#define DAV_XALLOC_ARENA_MASK		((((uint64_t)1 << 16) - 1) << 32)
+#ifdef	DAV_V2_BUILD
+#define DAV_XALLOC_EZONE_MASK		((((uint64_t)1 << 32) - 1) << 16)
+#else	/* DAV_V2_BUILD */
+#define DAV_XALLOC_EZONE_MASK		0
+#endif	/* DAV_V2_BUILD */
 #define DAV_XALLOC_ZERO			DAV_FLAG_ZERO
 #define DAV_XALLOC_NO_FLUSH		DAV_FLAG_NO_FLUSH
 #define DAV_XALLOC_NO_ABORT		DAV_FLAG_TX_NO_ABORT
 
 #define DAV_TX_XALLOC_VALID_FLAGS	(DAV_XALLOC_ZERO |\
 					DAV_XALLOC_NO_FLUSH |\
-					DAV_XALLOC_ARENA_MASK |\
+					DAV_XALLOC_EZONE_MASK |\
 					DAV_XALLOC_CLASS_MASK |\
 					DAV_XALLOC_NO_ABORT)
 

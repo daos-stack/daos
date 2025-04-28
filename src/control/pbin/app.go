@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -69,7 +68,7 @@ func (a *App) WithLogFile(path string) *App {
 // is empty, non-error messages are not logged.
 func (a *App) configureLogging(logPath string) {
 	logLevel := logging.LogLevelError
-	combinedOut := ioutil.Discard
+	combinedOut := io.Discard
 	if logPath != "" {
 		lf, err := common.AppendFile(logPath)
 		if err == nil {

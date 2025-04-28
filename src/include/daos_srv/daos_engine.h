@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +32,9 @@
 
 /* Standard max length of addresses e.g. URI, PCI */
 #define ADDR_STR_MAX_LEN 128
+
+#define AF_RC            "%s(%d): '%s'"
+#define AP_RC(rc)        dss_abterr2str(rc), rc, dss_abterr2desc(rc)
 
 /** DAOS system name (corresponds to crt group ID) */
 extern char             *daos_sysname;
@@ -404,7 +408,18 @@ struct dss_module {
 /**
  * Stack size used for ULTs with deep stack
  */
-#define DSS_DEEP_STACK_SZ	65536
+#if defined(__clang__)
+#if defined(__has_feature) && __has_feature(address_sanitizer)
+#define DSS_DEEP_STACK_SZ 98304
+#endif
+#elif defined(__GNUC__)
+#ifdef __SANITIZE_ADDRESS__
+#define DSS_DEEP_STACK_SZ 98304
+#endif
+#endif
+#ifndef DSS_DEEP_STACK_SZ
+#define DSS_DEEP_STACK_SZ 65536
+#endif
 
 enum dss_xs_type {
 	/** current xstream */
@@ -547,11 +562,36 @@ static inline int
 dss_abterr2der(int abt_errno)
 {
 	switch (abt_errno) {
-	case ABT_SUCCESS:	return 0;
-	case ABT_ERR_MEM:	return -DER_NOMEM;
-	default:		return -DER_INVAL;
+	case ABT_SUCCESS:
+		return 0;
+	case ABT_ERR_MEM:
+		return -DER_NOMEM;
+	default:
+		return -DER_INVAL;
 	}
 }
+
+/* Convert DAOS errno to Argobots ones. */
+static inline int
+dss_der2abterr(int der)
+{
+	switch (der) {
+	case -DER_SUCCESS:
+		return ABT_SUCCESS;
+	case -DER_NOMEM:
+		return ABT_ERR_MEM;
+	default:
+		return ABT_ERR_OTHER;
+	}
+}
+
+/** Helper converting ABT error code into human readable string */
+const char *
+dss_abterr2str(int rc);
+
+/** Helper converting ABT error code into meaningful message */
+const char *
+dss_abterr2desc(int rc);
 
 /** RPC counter types */
 enum dss_rpc_cntr_id {
@@ -666,9 +706,9 @@ unsigned int dss_ctx_nr_get(void);
 
 /* Cache for container root */
 struct tree_cache_root {
-	struct btr_root	btr_root;
-	daos_handle_t	root_hdl;
-	unsigned int	count;
+	struct btr_root	tcr_btr_root;
+	daos_handle_t	tcr_root_hdl;
+	unsigned int	tcr_count;
 };
 
 int
@@ -740,23 +780,27 @@ struct dss_chore;
 typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool is_reentrance);
 
 /**
- * Chore (opaque)
- *
  * A simple task (e.g., an I/O forwarding task) that yields by returning
  * DSS_CHORE_YIELD instead of calling ABT_thread_yield. This data structure
  * shall be embedded in the user's own task data structure, which typically
- * also includes arguments and internal state variables for \a cho_func. All
- * fields are private. See dtx_chore for an example.
+ * also includes arguments and internal state variables for \a cho_func.
  */
 struct dss_chore {
 	d_list_t              cho_link;
 	enum dss_chore_status cho_status;
 	dss_chore_func_t      cho_func;
+	uint32_t              cho_priority : 1;
+	int32_t               cho_credits;
+	void                 *cho_hint;
 };
 
-int dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func);
-void dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func);
-
-bool engine_in_check(void);
+int
+dss_chore_register(struct dss_chore *chore);
+void
+dss_chore_deregister(struct dss_chore *chore);
+void
+dss_chore_diy(struct dss_chore *chore);
+bool
+engine_in_check(void);
 
 #endif /* __DSS_API_H__ */

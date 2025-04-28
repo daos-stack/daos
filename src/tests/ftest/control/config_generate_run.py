@@ -4,6 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
+import os
+
 import yaml
 from apricot import TestWithServers
 from server_utils import ServerFailed
@@ -45,16 +47,17 @@ class ConfigGenerateRun(TestWithServers):
 
         # use_tmpfs_scm specifies that a MD-on-SSD conf should be generated and control metadata
         # path needs to be set in that case.
-        ext_md_path = ""
+        control_metadata = None
         if use_tmpfs_scm:
-            ext_md_path = self.test_env.log_dir
+            control_metadata = os.path.join(self.test_env.log_dir, 'control_metadata')
 
         # Call dmg config generate. AP is always the first server host.
+        self.log_step("Generating server configuration")
         server_host = self.hostlist_servers[0]
         result = self.get_dmg_command().config_generate(
-            access_points=server_host, num_engines=num_engines, scm_only=scm_only,
+            mgmt_svc_replicas=server_host, num_engines=num_engines, scm_only=scm_only,
             net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
-            control_metadata_path=ext_md_path)
+            control_metadata_path=control_metadata)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
@@ -64,25 +67,20 @@ class ConfigGenerateRun(TestWithServers):
         # Stop and restart daos_server. self.start_server_managers() has the
         # server start-up check built into it, so if there's something wrong,
         # it'll throw an error.
-        self.log.info("Stopping servers")
+        self.log_step("Stopping servers")
         self.stop_servers()
 
         # Create a new server config from generated_yaml and update SCM-related
         # data in engine_params so that the cleanup before the server start
         # works.
-        self.log.info("Copy config to /etc/daos and update engine_params")
+        self.log_step(f"Copy config to {self.test_env.server_config} and update engine_params")
         self.server_managers[0].update_config_file_from_file(generated_yaml)
 
         # Start server with the generated config.
-        self.log.info("Restarting server with the generated config")
+        self.log_step("Restarting server with the generated config")
         try:
-            agent_force = self.start_server_managers(force=True)
+            self.start_server_managers(force=True)
         except ServerFailed as error:
             self.fail(f"Restarting server failed! {error}")
 
-        # We don't need agent for this test. However, when we stop the server,
-        # agent is also stopped. Then the harness checks that the agent is
-        # running during the teardown. If agent isn't running at that point, it
-        # would cause an error, so start it here.
-        self.log.info("Restarting agents")
-        self.start_agent_managers(force=agent_force)
+        self.log.info("Test passed")

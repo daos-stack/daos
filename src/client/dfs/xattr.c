@@ -122,6 +122,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, da
 		}
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_SETXATTR);
 out:
 	daos_obj_close(oh, NULL);
 free:
@@ -194,6 +195,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 	}
 
 	*size = iod.iod_size;
+	DFS_OP_STAT_INCR(dfs, DOS_GETXATTR);
 
 close:
 	daos_obj_close(oh, NULL);
@@ -277,6 +279,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_RMXATTR);
 out:
 	daos_obj_close(oh, NULL);
 free:
@@ -354,6 +357,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	}
 
 	*size = ret_size;
+	DFS_OP_STAT_INCR(dfs, DOS_LSXATTR);
 out:
 	daos_obj_close(oh, NULL);
 	return rc;

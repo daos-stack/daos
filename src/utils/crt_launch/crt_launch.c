@@ -280,13 +280,13 @@ int main(int argc, char **argv)
 	par_rank(PAR_COMM_WORLD, &my_rank);
 	par_size(PAR_COMM_WORLD, &world_size);
 
-	hostbuf = calloc(sizeof(*hostbuf), 1);
+	hostbuf = calloc(1, sizeof(*hostbuf));
 	if (!hostbuf) {
 		D_ERROR("Failed to allocate hostbuf\n");
 		D_GOTO(exit, rc = -1);
 	}
 
-	recv_buf = calloc(sizeof(struct host), world_size);
+	recv_buf = calloc(world_size, sizeof(*recv_buf));
 	if (!recv_buf) {
 		D_ERROR("Failed to allocate recv_buf\n");
 		D_GOTO(exit, rc = -1);

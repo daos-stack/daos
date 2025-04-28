@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1563,98 +1564,152 @@ rebuild_cont_destroy_and_reintegrate(void **state)
 	reintegrate_single_pool_rank(arg, 5, true);
 }
 
+static void
+rebuild_incr_reint_basic(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	daos_obj_id_t	update_oids[OBJ_NR];
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration", "incremental");
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], 5);
+	}
+
+	dt_no_punch = true;
+	rebuild_io(arg, oids, OBJ_NR);
+	arg->no_rebuild = 0;
+	rebuild_single_pool_rank(arg, 5, true);
+
+	for (i = 0; i < OBJ_NR; i++)
+		update_oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0, 0, arg->myrank);
+	rebuild_io(arg, update_oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, 5, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+	rebuild_io_verify(arg, update_oids, OBJ_NR);
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration", "data_sync");
+	assert_rc_equal(rc, 0);
+	dt_no_punch = false;
+}
+
+static void
+rebuild_long_scan_hang(void **state)
+{
+	test_arg_t *arg        = *state;
+	d_rank_t    fault_rank = 1;
+	d_rank_t    excl_rank  = 0;
+	int         rc;
+
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
+		print_message("need at least 5 svcs, -s5\n");
+		return;
+	}
+
+	print_message("inject DAOS_REBUILD_TGT_SCAN_HANG fault into engine rank %u\n", fault_rank);
+	test_set_engine_fail_loc(arg, fault_rank, DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_ALWAYS);
+
+	print_message("exclude engine rank %u to cause rebuild, and delay > 2 minutes\n",
+		      excl_rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, excl_rank, -1);
+	assert_success(rc);
+
+	/* wait a long time, cause PS leader engine logic to warn about "almost done" rebuild
+	 * see update_and_warn_for_slow_engines()
+	 */
+	sleep(130);
+	print_message("delay done, clear fault on engine rank %u and wait for rebuild\n",
+		      fault_rank);
+	test_set_engine_fail_loc(arg, fault_rank, 0);
+	test_rebuild_wait(&arg, 1);
+	print_message("rebuild done\n");
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
-	{"REBUILD0: drop rebuild scan reply",
-	rebuild_drop_scan, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD1: retry rebuild for not ready",
-	rebuild_retry_rebuild, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD2: drop rebuild obj reply",
-	rebuild_drop_obj, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD3: rebuild multiple pools",
-	rebuild_multiple_pools, rebuild_sub_setup, rebuild_sub_teardown},
-	{"REBUILD4: rebuild update failed",
-	rebuild_update_failed, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD5: retry rebuild for pool stale",
-	rebuild_retry_for_stale_pool, rebuild_small_sub_setup,
-	rebuild_sub_teardown},
-	{"REBUILD6: rebuild with container destroy",
-	rebuild_destroy_container, rebuild_sub_setup, rebuild_sub_teardown},
-	{"REBUILD7: rebuild with container close",
-	rebuild_close_container, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD8: rebuild with pool destroy during scan",
-	rebuild_destroy_pool_during_scan, rebuild_sub_setup,
-	rebuild_sub_teardown},
-	{"REBUILD9: rebuild with pool destroy during rebuild",
-	rebuild_destroy_pool_during_rebuild, rebuild_sub_setup,
-	rebuild_sub_teardown},
-	{"REBUILD10: rebuild iv tgt fail",
-	rebuild_iv_tgt_fail, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD11: rebuild tgt start fail",
-	rebuild_tgt_start_fail, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD12: rebuild send objects failed",
-	 rebuild_send_objects_fail, rebuild_small_sub_setup,
-	rebuild_sub_teardown},
-	{"REBUILD13: rebuild empty pool offline",
-	rebuild_offline_empty, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD14: rebuild no space failure",
-	rebuild_nospace, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD15: rebuild multiple tgts",
-	rebuild_multiple_tgts, rebuild_small_sub_setup, rebuild_sub_teardown},
-	{"REBUILD16: disconnect pool during scan",
-	 rebuild_tgt_pool_disconnect_in_scan, rebuild_small_sub_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD17: disconnect pool during rebuild",
-	 rebuild_tgt_pool_disconnect_in_rebuild, rebuild_small_sub_setup,
-	rebuild_sub_teardown},
-	{"REBUILD18: multi-pools rebuild concurrently",
-	 multi_pools_rebuild_concurrently, rebuild_sub_setup,
-	rebuild_sub_teardown},
-	{"REBUILD19: rebuild with master change during scan",
-	rebuild_master_change_during_scan, rebuild_sub_setup,
-	rebuild_sub_teardown},
-	{"REBUILD20: rebuild with master change during rebuild",
-	rebuild_master_change_during_rebuild, rebuild_sub_setup,
-	rebuild_sub_teardown},
-	{"REBUILD21: rebuild with master failure",
-	 rebuild_master_failure, rebuild_sub_setup, rebuild_sub_teardown},
-	{"REBUILD22: connect pool during scan for offline rebuild",
-	 rebuild_offline_pool_connect_in_scan, rebuild_sub_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD23: connect pool during rebuild for offline rebuild",
-	 rebuild_offline_pool_connect_in_rebuild, rebuild_sub_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD24: offline rebuild",
-	rebuild_offline, rebuild_sub_setup, rebuild_sub_teardown},
-	{"REBUILD25: rebuild with two failures",
-	 rebuild_multiple_failures, rebuild_sub_setup, rebuild_sub_teardown},
-	{"REBUILD26: rebuild fail all replicas before rebuild",
-	 rebuild_fail_all_replicas_before_rebuild, rebuild_sub_rf1_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD27: rebuild fail all replicas",
-	 rebuild_fail_all_replicas, rebuild_sub_setup, rebuild_sub_teardown},
-	{"REBUILD28: rebuild kill rank during rebuild",
-	 rebuild_kill_rank_during_rebuild, rebuild_sub_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD29: rebuild kill PS leader during rebuild",
-	 rebuild_kill_PS_leader_during_rebuild, rebuild_sub_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD30: destroy pool during rebuild failure and retry",
-	  rebuild_pool_destroy_during_rebuild_failure, rebuild_sub_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD31: reintegrate failure and retry",
-	  reintegrate_failure_and_retry, rebuild_sub_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD32: kill more ranks than RF, then reintegrate",
-	  rebuild_kill_more_RF_ranks, rebuild_sub_setup,
-	 rebuild_sub_teardown},
-	{"REBUILD33: delay rebuild and extend",
-	  rebuild_delay_and_reintegrate, rebuild_sub_setup, rebuild_sub_teardown},
-	{"REBUILD34: delay rebuild and extend",
-	  rebuild_delay_and_extend, rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
-	{"REBUILD35: destroy container then reintegrate",
-	  rebuild_cont_destroy_and_reintegrate, rebuild_sub_6nodes_rf1_setup,
-	  rebuild_sub_teardown},
+    {"REBUILD0: drop rebuild scan reply", rebuild_drop_scan, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD1: retry rebuild for not ready", rebuild_retry_rebuild, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD2: drop rebuild obj reply", rebuild_drop_obj, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD3: rebuild multiple pools", rebuild_multiple_pools, rebuild_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD4: rebuild update failed", rebuild_update_failed, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD5: retry rebuild for pool stale", rebuild_retry_for_stale_pool,
+     rebuild_small_sub_setup, rebuild_sub_teardown},
+    {"REBUILD6: rebuild with container destroy", rebuild_destroy_container, rebuild_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD7: rebuild with container close", rebuild_close_container, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD8: rebuild with pool destroy during scan", rebuild_destroy_pool_during_scan,
+     rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD9: rebuild with pool destroy during rebuild", rebuild_destroy_pool_during_rebuild,
+     rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD10: rebuild iv tgt fail", rebuild_iv_tgt_fail, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD11: rebuild tgt start fail", rebuild_tgt_start_fail, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD12: rebuild send objects failed", rebuild_send_objects_fail, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD13: rebuild empty pool offline", rebuild_offline_empty, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD14: rebuild no space failure", rebuild_nospace, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD15: rebuild multiple tgts", rebuild_multiple_tgts, rebuild_small_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD16: disconnect pool during scan", rebuild_tgt_pool_disconnect_in_scan,
+     rebuild_small_sub_setup, rebuild_sub_teardown},
+    {"REBUILD17: disconnect pool during rebuild", rebuild_tgt_pool_disconnect_in_rebuild,
+     rebuild_small_sub_setup, rebuild_sub_teardown},
+    {"REBUILD18: multi-pools rebuild concurrently", multi_pools_rebuild_concurrently,
+     rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD19: rebuild with master change during scan", rebuild_master_change_during_scan,
+     rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD20: rebuild with master change during rebuild", rebuild_master_change_during_rebuild,
+     rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD21: rebuild with master failure", rebuild_master_failure, rebuild_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD22: connect pool during scan for offline rebuild",
+     rebuild_offline_pool_connect_in_scan, rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD23: connect pool during rebuild for offline rebuild",
+     rebuild_offline_pool_connect_in_rebuild, rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD24: offline rebuild", rebuild_offline, rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD25: rebuild with two failures", rebuild_multiple_failures, rebuild_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD26: rebuild fail all replicas before rebuild",
+     rebuild_fail_all_replicas_before_rebuild, rebuild_sub_rf1_setup, rebuild_sub_teardown},
+    {"REBUILD27: rebuild fail all replicas", rebuild_fail_all_replicas, rebuild_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD28: rebuild kill rank during rebuild", rebuild_kill_rank_during_rebuild,
+     rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD29: rebuild kill PS leader during rebuild", rebuild_kill_PS_leader_during_rebuild,
+     rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD30: destroy pool during rebuild failure and retry",
+     rebuild_pool_destroy_during_rebuild_failure, rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD31: reintegrate failure and retry", reintegrate_failure_and_retry, rebuild_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD32: kill more ranks than RF, then reintegrate", rebuild_kill_more_RF_ranks,
+     rebuild_sub_setup, rebuild_sub_teardown},
+    {"REBUILD33: delay rebuild and extend", rebuild_delay_and_reintegrate, rebuild_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD34: delay rebuild and extend", rebuild_delay_and_extend, rebuild_sub_6nodes_rf1_setup,
+     rebuild_sub_teardown},
+    {"REBUILD35: destroy container then reintegrate", rebuild_cont_destroy_and_reintegrate,
+     rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
+    {"REBUILD36: basic incremental reintegration", rebuild_incr_reint_basic,
+     rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
+    {"REBUILD37: single engine scan lengthy hang", rebuild_long_scan_hang, rebuild_sub_setup,
+     rebuild_sub_teardown},
 };
 
 /* TODO: Enable aggregation once stable view rebuild is done. */

@@ -20,7 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -48,15 +47,15 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	SCM      scmStorageCmd          `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
-	NVMe     nvmeStorageCmd         `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
-	Start    startCmd               `command:"start" description:"Start daos_server"`
-	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
-	Version  versionCmd             `command:"version" description:"Print daos_server version"`
-	MgmtSvc  msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
-	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	Support  supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
-	Config   configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
+	SCM      scmStorageCmd           `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
+	NVMe     nvmeStorageCmd          `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
+	Start    startCmd                `command:"start" description:"Start daos_server"`
+	Network  networkCmd              `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version  versionCmd              `command:"version" description:"Print daos_server version"`
+	MgmtSvc  msCmdRoot               `command:"ms" description:"Perform tasks related to management service replicas"`
+	DumpTopo cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Support  supportCmd              `command:"support" description:"Perform debug tasks to help support team"`
+	Config   configCmd               `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn
@@ -169,7 +168,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 				optCfgCmd.setOptional()
 			}
 
-			if err := cfgCmd.loadConfig(); err != nil {
+			if err := cfgCmd.loadConfig(log); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s",
 					cfgCmd.configPath())
 			} else if cfgCmd.configPath() != "" {

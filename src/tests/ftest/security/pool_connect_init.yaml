@@ -25,7 +25,6 @@ server_config:
 #     allow_insecure: False
 pool:
   scm_size: 186777216
-  control_method: dmg
   tests: !mux
     user_root:
       ids:

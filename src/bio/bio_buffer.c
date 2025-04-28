@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,6 +43,18 @@ dma_alloc_chunk(unsigned int cnt)
 	if (bio_spdk_inited) {
 		chunk->bdc_ptr = spdk_dma_malloc_socket(bytes, BIO_DMA_PAGE_SZ, NULL,
 							bio_numa_node);
+		/*
+		 * If it failed to allocate contiguous hugepages on specified numa node,
+		 * let's try to allocate from any numa node to satisfy the contiguity.
+		 *
+		 * This could mitigate the fragmentation issue at the cost of cross
+		 * NUMA memory accessing for certain chunks.
+		 */
+		if (chunk->bdc_ptr == NULL && bio_numa_node != SPDK_ENV_SOCKET_ID_ANY) {
+			chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
+			if (chunk->bdc_ptr != NULL)
+				D_DEBUG(DB_IO, "Allocate chunk from ANY NUMA node\n");
+		}
 	} else {
 		rc = posix_memalign(&chunk->bdc_ptr, BIO_DMA_PAGE_SZ, bytes);
 		if (rc)
@@ -231,6 +244,7 @@ dma_buffer_create(unsigned int init_cnt, int tgt_id)
 
 	rc = dma_buffer_grow(buf, init_cnt);
 	if (rc != 0) {
+		D_ERROR("Failed to grow DMA buffer (%u chunks)\n", buf->bdb_tot_cnt);
 		dma_buffer_destroy(buf);
 		return NULL;
 	}
@@ -867,8 +881,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	 */
 	if (pg_cnt > bio_chk_sz) {
 		chk = dma_alloc_chunk(pg_cnt);
-		if (chk == NULL)
+		if (chk == NULL) {
+			D_ERROR("Failed to allocate %u pages DMA buffer\n", pg_cnt);
 			return -DER_NOMEM;
+		}
 
 		chk->bdc_type = biod->bd_chk_type;
 		rc = iod_add_chunk(biod, chk);
@@ -1038,10 +1054,7 @@ rw_completion(void *cb_arg, int err)
 		if (biod->bd_result != 0)
 			goto done;
 
-		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
-			biod->bd_result = -DER_NVME_IO;
-		else
-			biod->bd_result = -DER_IO;
+		biod->bd_result = -DER_NVME_IO;
 
 		D_ALLOC_PTR(mem);
 		if (mem == NULL) {
@@ -1141,17 +1154,19 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	/* No locking for BS state query here is tolerable */
 	if (bxb->bxb_blobstore->bb_state == BIO_BS_STATE_FAULTY) {
 		D_ERROR("Blobstore is marked as FAULTY.\n");
-		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
-			biod->bd_result = -DER_NVME_IO;
-		else
-			biod->bd_result = -DER_IO;
+		biod->bd_result = -DER_NVME_IO;
 		return;
 	}
 
+	/*
+	 * When a normal device is unplugged, blob could be closed on teardown before the
+	 * device is marked as faulty, so we need to return retry-able DER_NVME_IO to avoid
+	 * a premature application error.
+	 */
 	if (!is_blob_valid(biod->bd_ctxt)) {
 		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
 			blob, biod->bd_ctxt->bic_closing);
-		biod->bd_result = -DER_NO_HDL;
+		biod->bd_result = -DER_NVME_IO;
 		return;
 	}
 

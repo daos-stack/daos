@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -84,7 +85,7 @@ class PoolServiceMetrics(TestWithTelemetry):
 
         restart_rank = initial_metrics[SVC_LEADER_METRIC]
         self.log_step(f"Stop pool service leader rank: {restart_rank}")
-        self.server_managers[0].stop_ranks(ranks=[restart_rank], daos_log=self.d_log)
+        self.server_managers[0].stop_ranks(ranks=[restart_rank])
 
         self.log_step("Verify the pool service leader rank has stopped successfully.")
         failed_ranks = self.server_managers[0].check_rank_state(
@@ -113,7 +114,7 @@ class PoolServiceMetrics(TestWithTelemetry):
                         "pool service degraded rank count should be 1")
 
         self.log_step("Restart the stopped rank.")
-        self.server_managers[0].start_ranks(ranks=[restart_rank], daos_log=self.d_log)
+        self.server_managers[0].start_ranks(ranks=[restart_rank])
 
         self.log_step("Verify the desired rank restarted successfully.")
         failed_ranks = self.server_managers[0].check_rank_state(

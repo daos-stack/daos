@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -43,7 +43,7 @@ class DmvrSerialLargePosix(DataMoverTestBase):
         file_size = self.params.get("bytes", "/run/mdtest/*")
 
         # Create pool1 and cont1
-        pool1 = self.create_pool()
+        pool1 = self.get_pool()
         cont1 = self.get_container(pool1)
 
         # Create a large directory in cont1
@@ -51,7 +51,7 @@ class DmvrSerialLargePosix(DataMoverTestBase):
         self.run_mdtest_with_params("DAOS", "/", pool1, cont1, flags=mdtest_flags[0])
 
         # Create pool2
-        pool2 = self.create_pool()
+        pool2 = self.get_pool()
 
         # Use dfuse as a shared intermediate for serialize + deserialize
         dfuse_cont = self.get_container(pool1)

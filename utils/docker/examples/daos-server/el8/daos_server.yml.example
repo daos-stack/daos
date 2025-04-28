@@ -6,7 +6,7 @@
 # https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml
 
 name: daos_server
-access_points: ['localhost']
+mgmt_svc_replicas: ['localhost']
 port: 10001
 
 provider: ofi+tcp;ofi_rxm

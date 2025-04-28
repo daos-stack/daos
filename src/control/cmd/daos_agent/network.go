@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
 )
 
 type netScanCmd struct {
@@ -29,7 +29,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		prov = cmd.FabricProvider
 	}
 
-	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
+	fabricScanner := network.DefaultFabricScanner(cmd.Logger)
 
 	results, err := fabricScanner.Scan(cmd.MustLogCtx(), prov)
 	if err != nil {

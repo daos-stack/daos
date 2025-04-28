@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,6 +49,10 @@
 
 /** Server crt group ID */
 extern const char *server_group;
+
+/** pool incremental reintegration */
+extern int dt_incr_reint;
+extern bool dt_no_punch;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;

@@ -636,7 +636,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 
 			cfg := config.DefaultServer().
 				WithFabricProvider("ofi+verbs").
-				WithAccessPoints("foo", "bar", "baz") // Suppress redundancy NOTICE log msg
+				WithMgmtSvcReplicas("foo", "bar", "baz") // Suppress redundancy NOTICE log msg
 			if tc.srvCfgExtra != nil {
 				cfg = tc.srvCfgExtra(cfg)
 			}

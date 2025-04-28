@@ -84,18 +84,18 @@ class OSAOnlineDrain(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            # Get initial total free space (scm+nvme)
-            initial_free_space = self.pool.get_total_free_space(refresh=True)
+            # Get initial total space (scm+nvme)
+            initial_total_space = self.pool.get_total_space(refresh=True)
             output = self.pool.drain(rank, t_string)
             self.print_and_assert_on_rebuild_failure(output)
-            free_space_after_drain = self.pool.get_total_free_space(refresh=True)
+            total_space_after_drain = self.pool.get_total_space(refresh=True)
 
             pver_drain = self.pool.get_version(True)
             self.log.info("Pool Version after drain %s", pver_drain)
             # Check pool version incremented after pool exclude
             self.assertGreater(pver_drain, pver_begin, "Pool Version Error:  After drain")
-            self.assertGreater(initial_free_space, free_space_after_drain,
-                               "Expected free space after drain is less than initial")
+            self.assertGreater(initial_total_space, total_space_after_drain,
+                               "Expected total space after drain is more than initial")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,8 +55,9 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
 	    .dr_corpc_ops = e,                                                                     \
 	},
 
-static struct daos_rpc_handler mgmt_handlers_v2[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST_V2};
 static struct daos_rpc_handler mgmt_handlers_v3[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
+static struct daos_rpc_handler mgmt_handlers_v4[] = {
+    MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
 
 #undef X
 
@@ -72,6 +74,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_PING_RANK:
 		ds_mgmt_drpc_ping_rank(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_SET_UP:
+		ds_mgmt_drpc_set_up(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_SET_LOG_MASKS:
 		ds_mgmt_drpc_set_log_masks(drpc_req, drpc_resp);
@@ -91,19 +96,16 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_EVICT:
 		ds_mgmt_drpc_pool_evict(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_SET_UP:
-		ds_mgmt_drpc_set_up(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_EXCLUDE:
+	case DRPC_METHOD_MGMT_POOL_EXCLUDE:
 		ds_mgmt_drpc_pool_exclude(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_DRAIN:
+	case DRPC_METHOD_MGMT_POOL_DRAIN:
 		ds_mgmt_drpc_pool_drain(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_REINTEGRATE:
+	case DRPC_METHOD_MGMT_POOL_REINT:
 		ds_mgmt_drpc_pool_reintegrate(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_EXTEND:
+	case DRPC_METHOD_MGMT_POOL_EXTEND:
 		ds_mgmt_drpc_pool_extend(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
@@ -611,16 +613,16 @@ ds_mgmt_cleanup()
 }
 
 struct dss_module mgmt_module = {
-	.sm_name          = "mgmt",
-	.sm_mod_id        = DAOS_MGMT_MODULE,
-	.sm_ver           = DAOS_MGMT_VERSION,
-	.sm_proto_count   = 2,
-	.sm_init          = ds_mgmt_init,
-	.sm_fini          = ds_mgmt_fini,
-	.sm_setup         = ds_mgmt_setup,
-	.sm_cleanup       = ds_mgmt_cleanup,
-	.sm_proto_fmt     = {&mgmt_proto_fmt_v2, &mgmt_proto_fmt_v3},
-	.sm_cli_count     = {MGMT_PROTO_CLI_COUNT, MGMT_PROTO_CLI_COUNT},
-	.sm_handlers      = {mgmt_handlers_v2, mgmt_handlers_v3},
-	.sm_drpc_handlers = mgmt_drpc_handlers,
+    .sm_name          = "mgmt",
+    .sm_mod_id        = DAOS_MGMT_MODULE,
+    .sm_ver           = DAOS_MGMT_VERSION,
+    .sm_proto_count   = 2,
+    .sm_init          = ds_mgmt_init,
+    .sm_fini          = ds_mgmt_fini,
+    .sm_setup         = ds_mgmt_setup,
+    .sm_cleanup       = ds_mgmt_cleanup,
+    .sm_proto_fmt     = {&mgmt_proto_fmt_v3, &mgmt_proto_fmt_v4},
+    .sm_cli_count     = {MGMT_PROTO_CLI_COUNT, MGMT_PROTO_CLI_COUNT},
+    .sm_handlers      = {mgmt_handlers_v3, mgmt_handlers_v4},
+    .sm_drpc_handlers = mgmt_drpc_handlers,
 };

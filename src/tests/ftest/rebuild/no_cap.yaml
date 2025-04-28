@@ -32,7 +32,6 @@ container:
   properties: "rd_fac:1"
 pool:
   scm_size: 1G
-  control_method: dmg
   pool_query_timeout: 30
   pool_query_interval: 1
   test_data_list: [1048576]

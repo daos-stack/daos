@@ -33,7 +33,6 @@ server_config:
 pool:
   size: 80%
   svcn: 4
-  control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
 container:

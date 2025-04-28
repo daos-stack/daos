@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -204,7 +205,7 @@ func ddbVeaUpdate(ctx *DdbContext, offset string, blk_cnt string) error {
 
 func ddbDtxActCommit(ctx *DdbContext, path string, dtx_id string) error {
 	/* Set up the options */
-	options := C.struct_dtx_act_commit_options{}
+	options := C.struct_dtx_act_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	options.dtx_id = C.CString(dtx_id)
@@ -215,11 +216,77 @@ func ddbDtxActCommit(ctx *DdbContext, path string, dtx_id string) error {
 
 func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	/* Set up the options */
-	options := C.struct_dtx_act_abort_options{}
+	options := C.struct_dtx_act_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	options.dtx_id = C.CString(dtx_id)
 	defer freeString(options.dtx_id)
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
+}
+
+func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error {
+	/* Set up the options */
+	options := C.struct_feature_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	if enable != "" {
+		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(enable),
+			&options.set_compat_flags, &options.set_incompat_flags))
+		if err != nil {
+			return err
+		}
+	}
+	if disable != "" {
+		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(disable),
+			&options.clear_compat_flags, &options.clear_incompat_flags))
+		if err != nil {
+			return err
+		}
+	}
+	options.show_features = C.bool(show)
+	/* Run the c code command */
+	return daosError(C.ddb_run_feature(&ctx.ctx, &options))
+}
+
+func ddbRmPool(ctx *DdbContext, path string) error {
+	/* Set up the options */
+	options := C.struct_rm_pool_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	/* Run the c code command */
+	return daosError(C.ddb_run_rm_pool(&ctx.ctx, &options))
+}
+
+func ddbDtxActDiscardInvalid(ctx *DdbContext, path string, dtx_id string) error {
+	/* Set up the options */
+	options := C.struct_dtx_act_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	options.dtx_id = C.CString(dtx_id)
+	defer freeString(options.dtx_id)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dtx_act_discard_invalid(&ctx.ctx, &options))
+}
+
+func ddbDevList(ctx *DdbContext, db_path string) error {
+	/* Set up the options */
+	options := C.struct_dev_list_options{}
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dev_list(&ctx.ctx, &options))
+}
+
+func ddbDevReplace(ctx *DdbContext, db_path string, old_devid string, new_devid string) error {
+	/* Set up the options */
+	options := C.struct_dev_replace_options{}
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
+	options.old_devid = C.CString(old_devid)
+	defer freeString(options.old_devid)
+	options.new_devid = C.CString(new_devid)
+	defer freeString(options.new_devid)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dev_replace(&ctx.ctx, &options))
 }

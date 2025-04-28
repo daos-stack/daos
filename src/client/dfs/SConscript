@@ -18,7 +18,7 @@ def configure_lustre(denv):
         _print("No installed Lustre version detected")
     else:
         _print("Installed Lustre version detected")
-        if not conf.CheckFunc('llapi_unlink_foreign'):
+        if not denv.CheckFunc('llapi_unlink_foreign'):
             _print("Lustre version is not compatible")
         else:
             _print("Lustre version is compatible")
@@ -44,7 +44,7 @@ def scons():
     libraries = ['daos_common', 'daos', 'uuid', 'gurt']
 
     dfs_src = ['common.c', 'cont.c', 'dir.c', 'file.c', 'io.c', 'lookup.c', 'mnt.c', 'obj.c',
-               'pipeline.c', 'readdir.c', 'rename.c', 'xattr.c', 'dfs_sys.c']
+               'pipeline.c', 'readdir.c', 'rename.c', 'xattr.c', 'dfs_sys.c', 'metrics.c']
     dfs = denv.d_library('dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
 

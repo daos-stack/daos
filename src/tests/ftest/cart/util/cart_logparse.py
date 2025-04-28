@@ -1,5 +1,6 @@
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -104,7 +105,8 @@ class LogLine():
         except KeyError as error:
             raise InvalidLogFile(fields[4]) from error
 
-        # self.time_stamp = fields[0]
+        self.time_stamp = fields[0]
+        self.hostname = fields[1]
         self._fields = fields[5:]
         try:
             if self._fields[1][-2:] == '()':

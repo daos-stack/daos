@@ -1,21 +1,27 @@
 hosts:
-  test_servers: 3
+  test_servers: 5
 timeouts:
   test_pool_query_ranks_basic: 120
   test_pool_query_ranks_error: 120
   test_pool_query_ranks_mgmt: 480
 server_config:
   name: daos_server
+  crt_timeout: 5
   engines_per_host: 1
   engines:
     0:
       targets: 4
       nr_xs_helpers: 0
+      env_vars:
+        - SWIM_SUSPECT_TIMEOUT=10000
+        - DAOS_POOL_RF=1
+        - DD_MASK=io,epc,rebuild
       storage:
         0:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  control_method: dmg
   size: 4GB
+  svcn: 5
+  properties: rd_fac:1

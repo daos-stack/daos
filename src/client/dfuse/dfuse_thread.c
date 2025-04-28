@@ -1,12 +1,12 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <pthread.h>
 
-#include <fuse3/fuse_lowlevel.h>
+#include <fused/fuse_lowlevel.h>
 #define D_LOGFAC DD_FAC(dfuse)
 #include "dfuse.h"
 

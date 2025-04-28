@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -208,6 +209,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 			return rc;
 		} else {
 			D_ASSERT(rc == 0);
+			DFS_OP_STAT_INCR(dfs, DOS_CREATE);
 			return 0;
 		}
 	}
@@ -261,6 +263,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		}
 	}
 	oid_cp(&file->oid, entry->oid);
+	DFS_OP_STAT_INCR(dfs, DOS_OPEN);
 	return 0;
 }
 
@@ -320,6 +323,8 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, con
 			D_FREE(sym->value);
 			D_ERROR("Inserting entry '%s' failed: %d (%s)\n", sym->name, rc,
 				strerror(rc));
+		} else if (rc == 0) {
+			DFS_OP_STAT_INCR(dfs, DOS_SYMLINK);
 		}
 		return rc;
 	}
@@ -506,7 +511,8 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		D_GOTO(err, rc = EINVAL);
 	}
 
-	strncpy(new_obj->name, obj->name, DFS_MAX_NAME + 1);
+	strncpy(new_obj->name, obj->name, DFS_MAX_NAME);
+	new_obj->name[DFS_MAX_NAME] = '\0';
 	new_obj->dfs   = dfs;
 	new_obj->mode  = obj->mode;
 	new_obj->flags = flags;
@@ -612,8 +618,8 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	oid_cp(&obj_glob->parent_oid, obj->parent_oid);
 	uuid_copy(obj_glob->coh_uuid, coh_uuid);
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
-	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME + 1);
-	obj_glob->name[DFS_MAX_NAME] = 0;
+	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME);
+	obj_glob->name[DFS_MAX_NAME] = '\0';
 	if (S_ISDIR(obj_glob->mode))
 		return 0;
 	rc = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
@@ -670,7 +676,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 
 	oid_cp(&obj->oid, obj_glob->oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
-	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME + 1);
+	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME);
 	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode               = obj_glob->mode;
 	obj->dfs                = dfs;
@@ -882,6 +888,8 @@ out:
 	rc2 = daos_obj_close(args->parent_oh, NULL);
 	if (rc == 0)
 		rc = rc2;
+	if (rc == 0)
+		DFS_OP_STAT_INCR(args->dfs, DOS_STAT);
 	return rc;
 }
 
@@ -1013,6 +1021,7 @@ err2_out:
 err1_out:
 	D_FREE(op_args);
 	daos_obj_close(args->parent_oh, NULL);
+
 	return rc;
 }
 
@@ -1243,6 +1252,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_CHMOD);
 out:
 	if (S_ISLNK(entry.mode)) {
 		dfs_release(sym);
@@ -1378,6 +1388,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_CHOWN);
 out:
 	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
 		dfs_release(sym);
@@ -1598,6 +1609,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_SETATTR);
 out_stat:
 	*stbuf = rstat;
 out_obj:
@@ -1662,6 +1674,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		return daos_der2errno(rc);
 	}
 
+	DFS_OP_STAT_INCR(dfs, DOS_TRUNCATE);
 	return rc;
 }
 
@@ -1697,6 +1710,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 		strcpy(buf, obj->value);
 
 	*size = val_size;
+	DFS_OP_STAT_INCR(obj->dfs, DOS_READLINK);
 	return 0;
 }
 
@@ -1709,6 +1723,7 @@ dfs_sync(dfs_t *dfs)
 		return EPERM;
 
 	/** Take a snapshot here and allow rollover to that when supported. */
+	/** Uncomment this when supported. DFS_OP_STAT_INCR(dfs, DOS_SYNC); */
 
 	return 0;
 }

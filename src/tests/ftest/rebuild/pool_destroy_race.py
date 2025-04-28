@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,7 +35,7 @@ class RbldPoolDestroyWithIO(TestWithServers):
           Re-create pool on remaining ranks.
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild,ior
         :avocado: tags=RbldPoolDestroyWithIO,test_pool_destroy_with_io
         """
@@ -72,16 +73,16 @@ class RbldPoolDestroyWithIO(TestWithServers):
 
         # Kill the server and trigger rebuild
         self.log_step(f'Starting rebuild by killing rank {rank}')
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([rank], force=True)
 
         # Wait for rebuild to start.
         self.log_step('Wait for rebuild to start')
         pool.wait_for_rebuild_to_start(interval=1)
 
         rebuild_state = pool.get_rebuild_state(True)
-        self.log.info("Pool %s rebuild status:%s", pool.uuid, rebuild_state)
+        self.log.info("%s rebuild status:%s", str(pool), rebuild_state)
 
-        self.log_step(f'Destroy pool {pool.uuid} while rebuild is {rebuild_state}')
+        self.log_step(f'Destroy {str(pool)} while rebuild is {rebuild_state}')
         pool.destroy()
 
         # Disable cleanup for all containers under the destroyed pool
@@ -95,4 +96,4 @@ class RbldPoolDestroyWithIO(TestWithServers):
         self.log_step('Verify the space was reclaimed')
         pool.query()
 
-        self.test_log.debug("Test Passed.")
+        self.log.debug("Test Passed.")

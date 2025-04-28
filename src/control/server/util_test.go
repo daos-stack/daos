@@ -234,15 +234,13 @@ func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
 	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001}, nil
 }
 
-// newTestMgmtSvc creates a mgmtSvc that contains an EngineInstance
-// properly set up as an MS.
-func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
+// newTestMgmtSvcWithProvider creates a mgmtSvc that contains an EngineInstance
+// properly set up as an MS using an input storage provider.
+func newTestMgmtSvcWithProvider(t *testing.T, log logging.Logger, provider *storage.Provider) *mgmtSvc {
 	harness := NewEngineHarness(log)
-	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)
 
-	srv := newTestEngine(log, true, provider)
-
-	if err := harness.AddInstance(srv); err != nil {
+	e := newTestEngine(log, true, provider)
+	if err := harness.AddInstance(e); err != nil {
 		t.Fatal(err)
 	}
 	harness.started.SetTrue()
@@ -254,12 +252,20 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	svc.batchInterval = 100 * time.Microsecond // Speed up tests
 	svc.startAsyncLoops(ctx)
 	svc.startLeaderLoops(ctx)
+
 	return svc
+}
+
+// newTestMgmtSvc creates a mgmtSvc that contains an EngineInstance
+// properly set up as an MS.
+func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
+	return newTestMgmtSvcWithProvider(t, log,
+		storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
 // number of EngineInstances. If requested, the first instance is
-// configured as an access point.
+// configured as a MS replica.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
 	harness := NewEngineHarness(log)
 	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)

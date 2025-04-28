@@ -25,5 +25,9 @@ if ! merge_base="$(git merge-base "FETCH_HEAD" HEAD)"; then
     # nothing to do here except exit as if it's not a doc-only change
     exit 0
 fi
+if ! git diff --no-commit-id --name-only "$merge_base" HEAD | grep -q -e ".*"; then
+    echo "No changes detected, full validation is expected"
+    exit 0
+fi
 git diff --no-commit-id --name-only "$merge_base" HEAD | \
-  grep -v -e "^docs/" -e "\.md$"
+  grep -v -e "^docs/" -e "\.md$" -e "^.*LICENSE.*$"

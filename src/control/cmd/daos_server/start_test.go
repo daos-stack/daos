@@ -261,6 +261,7 @@ func TestStartOptions(t *testing.T) {
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
 					security.CertificateConfig{},
+					config.Server{},
 				),
 				cmpopts.SortSlices(func(a, b string) bool { return a < b }),
 			}

@@ -1,10 +1,22 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef DAOS_DDB_TEST_DRIVER_H
 #define DAOS_DDB_TEST_DRIVER_H
+
+#include "ddb_cmocka.h"
+#include "ddb_vos.h"
+#include <daos/tests_lib.h>
+#include <daos_srv/dtx_srv.h>
+#include <daos_srv/vos.h>
+#include <ddb_common.h>
+#include <ddb_main.h>
+#include <fcntl.h>
+#include <gurt/debug.h>
+#include <libgen.h>
+#include <sys/stat.h>
 
 extern bool		 g_verbose;
 extern const char	*g_uuids_str[10];
@@ -29,6 +41,7 @@ struct dt_vos_pool_ctx {
 	uint32_t	dvt_obj_count;
 	uint32_t	dvt_dkey_count;
 	uint32_t	dvt_akey_count;
+	bool            dvt_special_pool_destroy;
 };
 
 daos_unit_oid_t dvt_gen_uoid(uint32_t i);

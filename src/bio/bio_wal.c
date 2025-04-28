@@ -1861,13 +1861,15 @@ out:
 
 void
 bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz,
-		  uint32_t *hdr_blks)
+		  uint32_t *hdr_blks, uint8_t *backend_type, bool *evictable)
 {
 	/* The mc could be NULL when md on SSD not enabled & data blob not existing */
 	if (mc != NULL) {
 		*blk_sz = mc->mc_meta_hdr.mh_blk_bytes;
 		*capacity = mc->mc_meta_hdr.mh_tot_blks * (*blk_sz);
 		*hdr_blks = mc->mc_meta_hdr.mh_hdr_blks;
+		*backend_type = mc->mc_meta_hdr.mh_backend_type;
+		*evictable = mc->mc_meta_hdr.mh_flags & META_HDR_FL_EVICTABLE;
 	}
 }
 
@@ -2022,7 +2024,7 @@ get_wal_gen(uuid_t pool_id, uint32_t tgt_id)
 }
 
 int
-meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
+meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, uint32_t flags, bool force)
 {
 	struct meta_header	*meta_hdr = &mc->mc_meta_hdr;
 	struct wal_super_info	*si = &mc->mc_wal_info;
@@ -2068,7 +2070,8 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	meta_hdr->mh_hdr_blks = META_HDR_BLKS;
 	meta_hdr->mh_tot_blks = (fi->fi_meta_size / META_BLK_SZ) - META_HDR_BLKS;
 	meta_hdr->mh_vos_id = fi->fi_vos_id;
-	meta_hdr->mh_flags = META_HDR_FL_EMPTY;
+	meta_hdr->mh_flags = (flags | META_HDR_FL_EMPTY);
+	meta_hdr->mh_backend_type = fi->fi_backend_type;
 
 	rc = write_header(mc, mc->mc_meta, meta_hdr, sizeof(*meta_hdr), &meta_hdr->mh_csum);
 	if (rc) {

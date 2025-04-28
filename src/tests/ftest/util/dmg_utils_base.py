@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +9,7 @@ from socket import gethostname
 from ClusterShell.NodeSet import NodeSet
 from command_utils import CommandWithSubCommand, YamlCommand
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
+from environment_utils import TestEnvironment
 from general_utils import nodeset_append_suffix
 
 
@@ -30,7 +32,7 @@ class DmgCommandBase(YamlCommand):
         self.temporary_file_hosts = NodeSet(gethostname().split(".")[0])
 
         # If specified use the configuration file from the YamlParameters object
-        default_yaml_file = None
+        default_yaml_file = TestEnvironment().control_config
         if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
 
@@ -234,7 +236,7 @@ class DmgCommandBase(YamlCommand):
                 super(
                     DmgCommandBase.ConfigSubCommand.GenerateSubCommand,
                     self).__init__("/run/dmg/config/generate/*", "generate")
-                self.access_points = FormattedParameter("--access-points={}", None)
+                self.mgmt_svc_replicas = FormattedParameter("--ms-replicas={}", None)
                 self.num_engines = FormattedParameter("--num-engines={}", None)
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.net_class = FormattedParameter("--net-class={}", None)
@@ -456,7 +458,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool drain command object."""
                 super().__init__("/run/dmg/pool/drain/*", "drain")
                 self.pool = BasicParameter(None, position=1)
-                self.rank = FormattedParameter("--rank={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
         class EvictSubCommand(CommandWithParameters):
@@ -474,8 +476,9 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool exclude command object."""
                 super().__init__("/run/dmg/pool/exclude/*", "exclude")
                 self.pool = BasicParameter(None, position=1)
-                self.rank = FormattedParameter("--rank={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
+                self.force = FormattedParameter("--force", False)
 
         class ExtendSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool extend command."""
@@ -532,7 +535,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/pool/query/*", "query")
                 self.pool = BasicParameter(None, position=1)
                 self.show_enabled = FormattedParameter("--show-enabled", False)
-                self.show_disabled = FormattedParameter("--show-disabled", False)
+                self.health_only = FormattedParameter("--health-only", False)
 
         class QueryTargetsSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool query-targets command."""
@@ -551,7 +554,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool reintegrate command object."""
                 super().__init__("/run/dmg/pool/reintegrate/*", "reintegrate")
                 self.pool = BasicParameter(None, position=1)
-                self.rank = FormattedParameter("--rank={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
         class SetPropSubCommand(CommandWithParameters):
@@ -685,7 +688,7 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/replace/nvme/*", "nvme")
                     self.old_uuid = FormattedParameter("--old-uuid {}", None)
                     self.new_uuid = FormattedParameter("--new-uuid {}", None)
-                    self.no_reint = FormattedParameter("--no-reint", False)
+                    self.host = FormattedParameter("--host {}", None)
 
         class LedSubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage LED command"""
@@ -809,6 +812,7 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/query/device-state/*", "nvme-faulty")
                     self.uuid = FormattedParameter("-u {}", None)
                     self.force = FormattedParameter("--force", False)
+                    self.host = FormattedParameter("--host {}", None)
 
     class SystemSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg system sub command."""
@@ -906,6 +910,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/system/start/*", "start")
                 self.ranks = FormattedParameter("--ranks={}")
                 self.rank_hosts = FormattedParameter("--rank-hosts={}")
+                self.ignore_admin_excluded = FormattedParameter("--ignore-admin-excluded", False)
 
         class StopSubCommand(CommandWithParameters):
             """Defines an object for the dmg system stop command."""
@@ -954,7 +959,7 @@ class DmgCommandBase(YamlCommand):
                 def __init__(self):
                     """Create a dmg telemetry metrics list object."""
                     super().__init__("/run/dmg/telemetry/metrics/list/*", "list")
-                    self.host = FormattedParameter("--host-list={}", None)
+                    self.host = FormattedParameter("--host={}", None)
                     self.port = FormattedParameter("--port={}", None)
 
             class QuerySubCommand(CommandWithParameters):
@@ -963,7 +968,7 @@ class DmgCommandBase(YamlCommand):
                 def __init__(self):
                     """Create a dmg telemetry metrics query object."""
                     super().__init__("/run/dmg/telemetry/metrics/query/*", "query")
-                    self.host = FormattedParameter("--host-list={}", None)
+                    self.host = FormattedParameter("--host={}", None)
                     self.port = FormattedParameter("--port={}", None)
                     self.metrics = FormattedParameter("--metrics={}", None)
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,7 +27,7 @@ struct vos_dtx_iter {
 };
 
 static struct vos_dtx_iter *
-iter2oiter(struct vos_iterator *iter)
+iter2dtxiter(struct vos_iterator *iter)
 {
 	return container_of(iter, struct vos_dtx_iter, oit_iter);
 }
@@ -35,7 +35,7 @@ iter2oiter(struct vos_iterator *iter)
 static int
 dtx_iter_fini(struct vos_iterator *iter)
 {
-	struct vos_dtx_iter	*oiter = iter2oiter(iter);
+	struct vos_dtx_iter	*oiter = iter2dtxiter(iter);
 	int			 rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
@@ -96,7 +96,7 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 static int
 dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t next /* Unimplemented */)
 {
-	struct vos_dtx_iter	*oiter = iter2oiter(iter);
+	struct vos_dtx_iter	*oiter = iter2dtxiter(iter);
 	struct vos_dtx_act_ent	*dae;
 	d_iov_t			 rec_iov;
 	int			 rc = 0;
@@ -168,7 +168,7 @@ out:
 static int
 dtx_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
-	struct vos_dtx_iter	*oiter = iter2oiter(iter);
+	struct vos_dtx_iter	*oiter = iter2dtxiter(iter);
 	struct vos_dtx_act_ent	*dae;
 	d_iov_t			 rec_iov;
 	int			 rc = 0;
@@ -215,7 +215,7 @@ static int
 dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	       daos_anchor_t *anchor)
 {
-	struct vos_dtx_iter	*oiter = iter2oiter(iter);
+	struct vos_dtx_iter	*oiter = iter2dtxiter(iter);
 	struct vos_dtx_act_ent	*dae;
 	d_iov_t			 rec_iov;
 	int			 rc;

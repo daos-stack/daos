@@ -25,15 +25,18 @@ apt-get install \
     golang-go \
     kmod \
     libaio-dev \
+    libasan6 \
     libboost-dev \
     libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \
+    libdaxctl-dev \
     libfuse3-dev \
     libhwloc-dev \
     libibverbs-dev \
     libjson-c-dev \
     liblz4-dev \
+    libndctl-dev \
     libnuma-dev \
     libopenmpi-dev \
     libpci-dev \

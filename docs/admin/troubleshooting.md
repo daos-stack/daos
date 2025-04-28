@@ -313,7 +313,7 @@ sudo ipcrm -M 0x10242049
 1. Format the SCMs defined in the config file.
 1. Generate the config file using `dmg config generate`. The various requirements will be populated without a syntax error.
 1. Try starting with `allow_insecure: true`. This will rule out the credential certificate issue.
-1. Verify that the `access_points` host is accessible and the port is not used.
+1. Verify that the `mgmt_svc_replicas` host is accessible and the port is not used.
 1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
 1. Check `fabric_iface` in `engines`. They should be available and enabled.
 1. Check that `socket_dir` is writable by the daos_server.
@@ -327,7 +327,7 @@ sudo ipcrm -M 0x10242049
 1. When the server configuration is changed, it's necessary to restart the agent.
 1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server nvme scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
 1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
-1. Check the access_points of the agent config points to the correct server host.
+1. Check the `access_points` of the agent config points to the correct server hosts.
 1. Call `daos pool query` and check that the pool exists and has free space.
 
 ### Applications run slow
@@ -512,7 +512,7 @@ fabric providers.
 
 After starting `daos_server`, ranks will be unable to join if their configuration's fabric provider
 does not match that of the system. The system configuration is determined by the management service
-(MS) leader node, which may be arbitrarily chosen from the configured access points.
+(MS) leader node, which may be arbitrarily chosen from the configured MS replicas.
 
 The error message will include the string: `fabric provider <provider1> does not match system provider <provider2>`
 
@@ -553,6 +553,21 @@ To resolve the issue:
 - Verify that all ranks were able to re-join via `dmg system query`.
 
 Alternately, the administrator may erase and re-format the DAOS system to start over fresh using the new addresses.
+
+### Engines become unavailable
+
+Engines may become unavailable due to server power losses and reboots, network switch failures, etc. After staying unavailable for a certain period of time, these engines may become "excluded" or "errored" in `dmg system query` output. Once the states of all engines stabilize (see [`CRT_EVENT_DELAY`](env_variables.md)), each pool will check whether there is enough redundancy (see [Pool RF](pool_operations.md#pool-redundancy-factor)) to tolerate the unavailability of the "excluded" or "errored" engines. If there is enough redundancy, these engines will be excluded from the pool ("Disabled ranks" in `dmg pool query --health-only` output); otherwise, the pool will perform no exclusion ("Dead ranks" in `dmg pool query --health-only` output as described in [Querying a Pool](pool_operations.md#querying-a-pool)) and may become temporarily unavailable (as seen by timeouts of `dmg pool query`, `dmg pool list`, etc.). Similarly, when engines become available, whenever the states of all engines stabilize, each pool will perform the aforementioned check for any unavailable engines that remain.
+
+To restore availability as well as capacity and performance, try to start all "excluded" or "errored" engines. Starting all of them at the same time minimizes the chance of triggering rebuild jobs. In many cases, the following command suffices:
+```
+$ dmg system start
+```
+If some pools remain unavailable (e.g., `dmg pool list` keeps timing out) after the previous step, restart the whole system:
+```
+$ dmg system stop --force
+$ dmg system start
+```
+If some engines have been excluded from certain pools, and they are available again, reintegrate them to the pools.
 
 ## Diagnostic and Recovery Tools
 

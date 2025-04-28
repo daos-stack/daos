@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -65,21 +65,18 @@ class BasicCheckout(PerformanceTestBase):
         # local param
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        dfuse_mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
-        transfer_block_size = self.params.get("transfer_block_size",
-                                              '/run/ior/iorflags/*')
+        transfer_block_size = self.params.get("transfer_block_size", '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
         ec_obj_class = self.params.get("ec_oclass", '/run/ior/*')
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
 
         # run ior
-        results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
-                                                 flags, dfuse_mount_dir)
+        results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size, flags)
 
         # run ior with different ec oclass
         results_ec = self.run_ior_multiple_variants(ec_obj_class, [apis[0]],
                                                     [transfer_block_size[1]],
-                                                    [flags[0]], dfuse_mount_dir)
+                                                    [flags[0]])
         results = results + results_ec
         self.log.info("Summary of IOR small test results:")
         errors = False
@@ -120,7 +117,7 @@ class BasicCheckoutDm(DataMoverTestBase):
         self.ior_ppn = self.ppn
 
         # create pool and container
-        pool = self.create_pool()
+        pool = self.get_pool()
         cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
         # run datamover

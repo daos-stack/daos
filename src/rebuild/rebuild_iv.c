@@ -167,6 +167,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct rebuild_tgt_pool_tracker *rpt;
 	struct rebuild_iv *dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
+	uint32_t old_ver;
 	int rc = 0;
 
 	rpt = rpt_lookup(src_iv->riv_pool_uuid, -1, src_iv->riv_ver,
@@ -200,16 +201,18 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			       dst_iv->riv_stable_epoch);
 		rpt->rt_global_done = dst_iv->riv_global_done;
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
-		if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver &&
+		old_ver = rpt->rt_global_dtx_resync_version;
+		if (rpt->rt_global_dtx_resync_version < dst_iv->riv_global_dtx_resyc_version)
+			rpt->rt_global_dtx_resync_version = dst_iv->riv_global_dtx_resyc_version;
+		if (old_ver < rpt->rt_rebuild_ver &&
 		    dst_iv->riv_global_dtx_resyc_version >= rpt->rt_rebuild_ver) {
 			D_INFO(DF_UUID " global/iv/rebuild_ver %u/%u/%u signal wait cond\n",
-			       DP_UUID(src_iv->riv_pool_uuid), rpt->rt_global_dtx_resync_version,
+			       DP_UUID(src_iv->riv_pool_uuid), old_ver,
 			       dst_iv->riv_global_dtx_resyc_version, rpt->rt_rebuild_ver);
 			ABT_mutex_lock(rpt->rt_lock);
 			ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
 			ABT_mutex_unlock(rpt->rt_lock);
 		}
-		rpt->rt_global_dtx_resync_version = dst_iv->riv_global_dtx_resyc_version;
 	}
 
 out:

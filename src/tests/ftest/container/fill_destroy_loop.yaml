@@ -15,7 +15,6 @@ server_config:
           scm_mount: /mnt/daos
 
 pool:
-  control_method: dmg
   size: 410M
   test_loop: 5
   delta: 1MiB

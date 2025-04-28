@@ -292,7 +292,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 	An example of the daos_server.yml is presented below.  Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
 		name: daos_server
-		access_points:
+		mgmt_svc_replicas:
 		- node-4
 		port: 10001
 

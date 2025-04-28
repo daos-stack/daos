@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -76,10 +77,11 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr(), "-e", "0")
 			case "storage set nvme-faulty":
-				testArgs = append(testArgs, "--force", "-u", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--force", "-u",
+					test.MockUUID())
 			case "storage replace nvme":
-				testArgs = append(testArgs, "--old-uuid", test.MockUUID(),
-					"--new-uuid", test.MockUUID())
+				testArgs = append(testArgs, "--host", "foo.com", "--old-uuid",
+					test.MockUUID(), "--new-uuid", test.MockUUID())
 			case "storage led identify", "storage led check", "storage led clear":
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
@@ -94,10 +96,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, test.MockUUID(), "label:foo")
 			case "pool get-prop":
 				testArgs = append(testArgs, test.MockUUID(), "label")
-			case "pool extend":
+			case "pool extend", "pool exclude", "pool drain", "pool reintegrate":
 				testArgs = append(testArgs, test.MockUUID(), "--ranks", "0")
-			case "pool exclude", "pool drain", "pool reintegrate":
-				testArgs = append(testArgs, test.MockUUID(), "--rank", "0")
 			case "pool query-targets":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":
@@ -112,9 +112,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":
 				testArgs = append(testArgs, "foo")
-			case "system exclude":
-				testArgs = append(testArgs, "--ranks", "0")
-			case "system clear-exclude":
+			case "system exclude", "system clear-exclude", "system drain",
+				"system reintegrate":
 				testArgs = append(testArgs, "--ranks", "0")
 			}
 

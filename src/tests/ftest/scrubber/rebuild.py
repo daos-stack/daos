@@ -33,7 +33,7 @@ class TestScrubberEvictWithRebuild(TestWithScrubber):
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
         self.pool.query()
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         # Exclude Rank 5 to start the rebuild operation.
         self.pool.exclude("5")
         # Wait for a minute for the scrubber to take action and evict target

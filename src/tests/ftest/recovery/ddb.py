@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -90,12 +91,12 @@ def copy_remote_to_local(remote_file_path, test_dir, remote):
     # Use clush --rcopy to copy the file from the remote server node to the local test
     # node. clush will append .<server_hostname> to the file when copying.
     args = "--rcopy {} --dest {}".format(remote_file_path, test_dir)
-    clush_command = get_clush_command(hosts=remote, args=args)
+    clush_command = get_clush_command(hosts=remote, args=args, timeout=60)
     try:
-        run_command(command=clush_command)
+        run_command(command=clush_command, timeout=None)
     except DaosTestError as error:
-        print("ERROR: Copying {} from {}: {}".format(remote_file_path, remote, error))
-        raise error
+        raise DaosTestError(
+            f"ERROR: Copying {remote_file_path} from {remote}: {error}") from error
 
     # Remove the appended .<server_hostname> from the copied file.
     current_file_path = "".join([remote_file_path, ".", remote])
@@ -103,10 +104,8 @@ def copy_remote_to_local(remote_file_path, test_dir, remote):
     try:
         run_command(command=mv_command)
     except DaosTestError as error:
-        print(
-            "ERROR: Moving {} to {}: {}".format(
-                current_file_path, remote_file_path, error))
-        raise error
+        raise DaosTestError(
+            f"ERROR: Moving {current_file_path} to {remote_file_path}: {error}") from error
 
 
 class DdbTest(RecoveryTestBase):
@@ -178,10 +177,9 @@ class DdbTest(RecoveryTestBase):
         #   CONT: (/[0]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f
         # stdout is a list which contains each line as separate element. Concatenate them
         # to single string so that we can apply regex.
-        ls_out = "\n".join(cmd_result[0]["stdout"])
         # Matches the container uuid
         uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
-        match = re.search(uuid_regex, ls_out)
+        match = re.search(uuid_regex, cmd_result.joined_stdout)
         if match is None:
             self.fail("Unexpected output from ddb command, unable to parse.")
         self.log.info("Container UUID from ddb ls = %s", match.group(1))
@@ -200,10 +198,9 @@ class DdbTest(RecoveryTestBase):
         #   OBJ: (/[0]/[0]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f/937030214649643008.1.0.1
         #   OBJ: (/[0]/[1]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f/937030214649643009.1.0.1
         #   OBJ: (/[0]/[2]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f/937030214649643016.1.0.1
-        ls_out = "\n".join(cmd_result[0]["stdout"])
         # Matches an object id. (4 digits separated by a period '.')
         object_id_regex = r"\d+\.\d+\.\d+\.\d+"
-        match = re.findall(object_id_regex, ls_out)
+        match = re.findall(object_id_regex, cmd_result.joined_stdout)
         self.log.info("List objects match = %s", match)
 
         actual_object_count = len(match)
@@ -219,12 +216,11 @@ class DdbTest(RecoveryTestBase):
         for obj_index in range(object_count):
             component_path = "[0]/[{}]".format(obj_index)
             cmd_result = ddb_command.list_component(component_path=component_path)
-            ls_out = "\n".join(cmd_result[0]["stdout"])
             # Sample output.
             # /d4e0c836-17bd-4df3-b255-929732486bab/281479271677953.0.0/
             # [0] 'Sample dkey 0 0' (15)
             # [1] 'Sample dkey 0 1' (15)
-            match = re.findall(dkey_regex, ls_out)
+            match = re.findall(dkey_regex, cmd_result.joined_stdout)
 
             actual_dkey_count += len(match)
 
@@ -250,7 +246,7 @@ class DdbTest(RecoveryTestBase):
             for dkey_index in range(dkey_count):
                 component_path = "[0]/[{}]/[{}]".format(obj_index, dkey_index)
                 cmd_result = ddb_command.list_component(component_path=component_path)
-                ls_out = "\n".join(cmd_result[0]["stdout"])
+                ls_out = cmd_result.joined_stdout
                 msg = "List akeys obj_index = {}, dkey_index = {}, stdout = {}".format(
                     obj_index, dkey_index, ls_out)
                 self.log.info(msg)
@@ -358,7 +354,7 @@ class DdbTest(RecoveryTestBase):
 
         # 4. Call ddb rm to remove the akey.
         cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]/[0]")
-        self.log.info("rm akey stdout = %s", cmd_result[0]["stdout"])
+        self.log.info("rm akey stdout = %s", cmd_result.joined_stdout)
 
         # 5. Restart the server to use the API.
         dmg_command.system_start()
@@ -388,7 +384,7 @@ class DdbTest(RecoveryTestBase):
 
         # 9. Call ddb rm to remove the dkey.
         cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]")
-        self.log.info("rm dkey stdout = %s", cmd_result[0]["stdout"])
+        self.log.info("rm dkey stdout = %s", cmd_result.joined_stdout)
 
         # 10. Restart the server to use the API.
         dmg_command.system_start()
@@ -417,7 +413,7 @@ class DdbTest(RecoveryTestBase):
 
         # 14. Call ddb rm to remove the object.
         cmd_result = ddb_command.remove_component(component_path="[0]/[0]")
-        self.log.info("rm object stdout = %s", cmd_result[0]["stdout"])
+        self.log.info("rm object stdout = %s", cmd_result.joined_stdout)
 
         # 15. Restart the server to use daos command.
         dmg_command.system_start()

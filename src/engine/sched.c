@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -197,17 +198,6 @@ enum {
 
 static int	sched_policy;
 
-/*
- * Time threshold for giving IO up throttling. If space pressure stays in the
- * highest level for enough long time, we assume that no more space can be
- * reclaimed and choose to give up IO throttling, so that ENOSPACE error could
- * be returned to client earlier.
- *
- * To make time for aggregation reclaiming overwriteen space, this threshold
- * should be longer than the DAOS_AGG_THRESHOLD.
- */
-#define SCHED_DELAY_THRESH	40000	/* msecs */
-
 struct pressure_ratio {
 	unsigned int	pr_free;	/* free space ratio */
 	unsigned int	pr_gc_ratio;	/* CPU percentage for GC & Aggregation */
@@ -216,42 +206,48 @@ struct pressure_ratio {
 };
 
 static struct pressure_ratio pressure_gauge[] = {
-	{	/* free space > 40%, no space pressure */
-		.pr_free	= 40,
-		.pr_gc_ratio	= 10,
-		.pr_delay	= 0,
-		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
-	},
-	{	/* free space > 30% */
-		.pr_free	= 30,
-		.pr_gc_ratio	= 20,
-		.pr_delay	= 4000, /* msecs */
-		.pr_pressure	= 1,
-	},
-	{	/* free space > 20% */
-		.pr_free	= 20,
-		.pr_gc_ratio	= 30,
-		.pr_delay	= 6000, /* msecs */
-		.pr_pressure	= 2,
-	},
-	{	/* free space > 10% */
-		.pr_free	= 10,
-		.pr_gc_ratio	= 40,
-		.pr_delay	= 8000, /* msecs */
-		.pr_pressure	= 3,
-	},
-	{	/* free space > 5% */
-		.pr_free	= 5,
-		.pr_gc_ratio	= 50,
-		.pr_delay	= 10000, /* msecs */
-		.pr_pressure	= 4,
-	},
-	{	/* free space <= 5% */
-		.pr_free	= 0,
-		.pr_gc_ratio	= 60,
-		.pr_delay	= 12000, /* msecs */
-		.pr_pressure	= 5,
-	},
+    {
+	/* free space > 40%, no space pressure */
+	.pr_free     = 40,
+	.pr_gc_ratio = 10,
+	.pr_delay    = 0,
+	.pr_pressure = SCHED_SPACE_PRESS_NONE,
+    },
+    {
+	/* free space > 30% */
+	.pr_free     = 30,
+	.pr_gc_ratio = 30,
+	.pr_delay    = 4000, /* msecs */
+	.pr_pressure = 1,
+    },
+    {
+	/* free space > 20% */
+	.pr_free     = 20,
+	.pr_gc_ratio = 45,
+	.pr_delay    = 6000, /* msecs */
+	.pr_pressure = 2,
+    },
+    {
+	/* free space > 10% */
+	.pr_free     = 10,
+	.pr_gc_ratio = 60,
+	.pr_delay    = 8000, /* msecs */
+	.pr_pressure = 3,
+    },
+    {
+	/* free space > 5% */
+	.pr_free     = 5,
+	.pr_gc_ratio = 75,
+	.pr_delay    = 10000, /* msecs */
+	.pr_pressure = 4,
+    },
+    {
+	/* free space <= 5% */
+	.pr_free     = 0,
+	.pr_gc_ratio = 90,
+	.pr_delay    = 12000, /* msecs */
+	.pr_pressure = 5,
+    },
 };
 
 static inline unsigned int
@@ -781,7 +777,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left, nvme_left;
+	uint64_t                 scm_left, nvme_left, ne_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -814,6 +810,13 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	else
 		scm_left = 0;
 
+	if (vps.vps_ne_total == 0) {
+		ne_left = UINT64_MAX;
+	} else {
+		ne_left = vps.vps_ne_free;
+		D_ASSERT(ne_left <= vps.vps_ne_total);
+	}
+
 	if (NVME_TOTAL(&vps) == 0)      /* NVMe not enabled */
 		nvme_left = UINT64_MAX;
 	else if (NVME_FREE(&vps) > NVME_SYS(&vps))
@@ -824,7 +827,8 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	orig_pressure = spi->spi_space_pressure;
 	for (pr = &pressure_gauge[0]; pr->pr_free != 0; pr++) {
 		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100) &&
-		    nvme_left > (NVME_TOTAL(&vps) * pr->pr_free / 100))
+		    nvme_left > (NVME_TOTAL(&vps) * pr->pr_free / 100) &&
+		    ne_left > (vps.vps_ne_total * pr->pr_free / 100))
 			break;
 	}
 	spi->spi_space_pressure = pr->pr_pressure;
@@ -832,10 +836,11 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	if (spi->spi_space_pressure != SCHED_SPACE_PRESS_NONE &&
 	    spi->spi_space_pressure != orig_pressure) {
 		D_INFO("Pool:"DF_UUID" is under %d pressure, "
-		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"] "
+		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"], ne["DF_U64"/"DF_U64"] "
 		       "NVMe: tot["DF_U64"], sys["DF_U64"], free["DF_U64"]\n",
 		       DP_UUID(spi->spi_pool_id), spi->spi_space_pressure,
 		       SCM_TOTAL(&vps), SCM_SYS(&vps), SCM_FREE(&vps),
+		       vps.vps_ne_free, vps.vps_ne_total,
 		       NVME_TOTAL(&vps), NVME_SYS(&vps), NVME_FREE(&vps));
 
 		spi->spi_pressure_ts = info->si_cur_ts;
@@ -930,12 +935,22 @@ is_gc_pending(struct sched_pool_info *spi)
 	return spi->spi_gc_ults && (spi->spi_gc_ults > spi->spi_gc_sleeping);
 }
 
-/* Just run into this space pressure situation recently? */
+/*
+ * Just run into this space pressure situation recently?
+ *
+ * If space pressure stays in the highest level for enough long time, we assume
+ * that no more space can be reclaimed and choose to give up IO throttling, so
+ * that ENOSPACE error could be returned to client earlier.
+ *
+ * To make time for aggregation reclaiming overwriteen space, this threshold
+ * should be longer than VOS aggregation epoch gap against current HLC.
+ */
 static inline bool
 is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
 {
 	D_ASSERT(info->si_cur_ts >= spi->spi_pressure_ts);
-	return (info->si_cur_ts - spi->spi_pressure_ts) < SCHED_DELAY_THRESH;
+	return (info->si_cur_ts - spi->spi_pressure_ts) <
+	       (vos_get_agg_gap() + 10) * 1000; /* msecs */
 }
 
 static inline uint64_t
@@ -2148,10 +2163,7 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	ABT_thread		 thread;
-	void			 (*thread_func)(void *);
-#ifdef ULT_MMAP_STACK
-	mmap_stack_desc_t		*desc;
-#endif
+	void (*thread_func)(void *);
 	int			 rc;
 
 	if (!watchdog_enabled(dx))
@@ -2162,18 +2174,6 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	D_ASSERT(rc == ABT_SUCCESS);
 	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
-#ifdef ULT_MMAP_STACK
-	/* has ULT stack been allocated using mmap() or using
-	 * Argobots standard way ? With the later case the ULT
-	 * argument could not be used to address the mmap()'ed
-	 * stack descriptor !
-	 */
-	if (likely(thread_func == mmap_stack_wrapper)) {
-		rc = ABT_thread_get_arg(thread, (void **)&desc);
-		D_ASSERT(rc == ABT_SUCCESS);
-		thread_func = desc->thread_func;
-	}
-#endif
 	info->si_ult_func = thread_func;
 }
 

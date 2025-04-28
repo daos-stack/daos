@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +19,10 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);
 
+	rc = active_ie_init(ie, NULL);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(free, rc = daos_der2errno(rc));
+
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
 	dfuse_open_handle_init(dfuse_info, oh, ie);
@@ -35,12 +39,11 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 			fi_out.keep_cache = 1;
 	}
 
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-
 	DFUSE_REPLY_OPEN_DIR(oh, req, &fi_out);
 	return;
-err:
+free:
 	D_FREE(oh);
+err:
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
@@ -57,7 +60,8 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 
 	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
-	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
+
+	active_oh_decref(dfuse_info, oh);
 
 	DFUSE_TRA_DEBUG(oh, "Kernel cache flags invalid %d started %d finished %d",
 			oh->doh_kreaddir_invalid, oh->doh_kreaddir_started,

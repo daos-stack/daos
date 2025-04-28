@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,8 +49,18 @@ struct ddb_array {
 };
 
 /* Open and close a pool for a ddb_ctx */
-int dv_pool_open(char *path, daos_handle_t *poh);
+int
+    dv_pool_open(const char *path, daos_handle_t *poh, uint32_t flags);
 int dv_pool_close(daos_handle_t poh);
+int
+dv_pool_destroy(const char *path);
+
+/* Update vos pool flags */
+int
+dv_pool_update_flags(daos_handle_t poh, uint64_t compat_flags, uint64_t incompat_flags);
+/* Get vos pool flags */
+int
+    dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_flags);
 
 /* Open and close a cont for a ddb_ctx */
 int dv_cont_open(daos_handle_t poh, uuid_t uuid, daos_handle_t *coh);
@@ -111,6 +122,8 @@ struct ddb_superblock {
 	uint64_t	dsb_cont_nr;
 	uint64_t	dsb_nvme_sz;
 	uint64_t	dsb_scm_sz;
+	uint64_t        dsb_compat_flags;
+	uint64_t        dsb_incompat_flags;
 	uint64_t	dsb_tot_blks; /* vea: Block device capacity */
 	uint32_t	dsb_durable_format_version;
 	uint32_t	dsb_blk_sz; /* vea: Block size, 4k bytes by default */
@@ -178,6 +191,8 @@ int dv_dtx_get_act_table(daos_handle_t coh, dv_dtx_act_handler handler_cb, void 
 int dv_dtx_clear_cmt_table(daos_handle_t coh);
 int dv_dtx_commit_active_entry(daos_handle_t coh, struct dtx_id *dti);
 int dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti);
+int
+dv_dtx_active_entry_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *discarded);
 
 /* Sync the smd table with information saved in blobs */
 typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_id,
@@ -194,5 +209,10 @@ int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov);
 void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
 
 int ddb_vtp_verify(daos_handle_t poh, struct dv_tree_path *vtp);
+
+int
+dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt);
+int
+dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid);
 
 #endif /* DAOS_DDB_VOS_H */

@@ -8,7 +8,6 @@ package support
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -662,7 +661,7 @@ func TestSupport_copyServerConfig(t *testing.T) {
 			if tc.createFile {
 				data := []byte("hello\nDAOS\n")
 				if err := os.WriteFile(defaultSeverConfig, data, 0644); err != nil {
-					t.Fatalf(err.Error())
+					t.Fatal(err.Error())
 				}
 			}
 			collLogParams.TargetFolder = tc.targetFolder
@@ -672,7 +671,7 @@ func TestSupport_copyServerConfig(t *testing.T) {
 
 			if tc.createFile {
 				if err := os.Remove(defaultSeverConfig); err != nil {
-					t.Fatalf(err.Error())
+					t.Fatal(err.Error())
 				}
 			}
 		})
@@ -1194,9 +1193,9 @@ INFO 2023/12/12 23:59:59.441241 LOG LINE 12
 
 			if tc.verifyLog != "" {
 				readFile := filepath.Join(tc.destFile, filepath.Base(tc.srcFile))
-				b, err := ioutil.ReadFile(readFile)
+				b, err := os.ReadFile(readFile)
 				if err != nil {
-					t.Fatalf(err.Error())
+					t.Fatal(err.Error())
 				}
 
 				if strings.Contains(string(b), tc.verifyLog) == false {

@@ -1,5 +1,6 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,6 +9,7 @@ from daos_core_base import DaosCoreBase
 
 
 class DaosCoreTestRebuild(DaosCoreBase):
+    # pylint: disable=too-many-public-methods
     """Run just the daos_test rebuild tests.
 
     :avocado: recursive
@@ -285,6 +287,70 @@ class DaosCoreTestRebuild(DaosCoreBase):
         """
         self.run_subtest()
 
+    def test_rebuild_31(self):
+        """Jira ID: DAOS-16027
+
+        Test Description:
+            Run daos_test -r -s5 -u subtests=31
+
+        Use cases:
+            Core tests for daos_test rebuild
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=unittest,rebuild
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_31
+        """
+        self.run_subtest()
+
+    def test_rebuild_32(self):
+        """Jira ID: DAOS-16027
+
+        Test Description:
+            Run daos_test -r -s5 -u subtests=32
+
+        Use cases:
+            Core tests for daos_test rebuild
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=unittest,rebuild
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_32
+        """
+        self.run_subtest()
+
+    def test_rebuild_33(self):
+        """Jira ID: DAOS-16027
+
+        Test Description:
+            Run daos_test -r -s5 -u subtests=33
+
+        Use cases:
+            Core tests for daos_test rebuild
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=unittest,rebuild
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_33
+        """
+        self.run_subtest()
+
+    def test_rebuild_34(self):
+        """Jira ID: DAOS-16027
+
+        Test Description:
+            Run daos_test -r -s5 -u subtests=34
+
+        Use cases:
+            Core tests for daos_test rebuild
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=unittest,rebuild
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_34
+        """
+        self.run_subtest()
+
     def test_rebuild_35(self):
         """Jira ID: DAOS-16027
 
@@ -298,5 +364,37 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=hw,medium
         :avocado: tags=unittest,rebuild
         :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_35
+        """
+        self.run_subtest()
+
+    def test_rebuild_36(self):
+        """Jira ID: DAOS-14013
+
+        Test Description:
+            Run daos_test -r -s5 -u subtests=36
+
+        Use cases:
+            Core tests for daos_test rebuild
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=unittest,rebuild
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_36
+        """
+        self.run_subtest()
+
+    def test_rebuild_37(self):
+        """Jira ID: DAOS-16111
+
+        Test Description:
+            Run daos_test -r -s5 -u subtests=37
+
+        Use cases:
+            Core tests for daos_test rebuild
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=unittest,rebuild
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_37
         """
         self.run_subtest()

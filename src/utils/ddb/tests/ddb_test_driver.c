@@ -1,19 +1,10 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <fcntl.h>
-#include <libgen.h>
-#include <daos/tests_lib.h>
-#include <daos_srv/dtx_srv.h>
-#include <daos_srv/vos.h>
-#include <gurt/debug.h>
-#include <ddb_common.h>
-#include <ddb_main.h>
-#include <sys/stat.h>
-#include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
 #define DEFINE_IOV(str) {.iov_buf = str, .iov_buf_len = strlen(str), .iov_len = strlen(str)}
@@ -243,7 +234,9 @@ ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx)
 		return rc;
 	}
 
-	rc = vos_pool_create(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, 0, 0, 0, NULL);
+	rc = vos_pool_create(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0 /* scm_sz */,
+			     0 /* data_sz */, 0 /* meta_sz */, 0 /* flags */, 0 /* version */,
+			     NULL);
 	if (rc) {
 		close(tctx->dvt_fd);
 		return rc;
@@ -313,19 +306,25 @@ int
 ddb_teardown_vos(void **state)
 {
 	struct dt_vos_pool_ctx		*tctx = *state;
+	int                              rc   = 0;
 
 	if (tctx == NULL) {
 		fail_msg("Test context not setup correctly");
 		return -DER_UNKNOWN;
 	}
 
-	vos_self_init("/mnt/daos", false, 0);
-	assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
-	vos_self_fini();
+	if (tctx->dvt_special_pool_destroy) {
+		rc = dv_pool_destroy(tctx->dvt_pmem_file);
+	} else {
+		vos_self_init("/mnt/daos", false, 0);
+		assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
+		vos_self_fini();
+	}
+
 	close(tctx->dvt_fd);
 	D_FREE(tctx);
 
-	return 0;
+	return rc;
 }
 
 void
@@ -412,6 +411,7 @@ dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t
 	struct dtx_handle	*dth;
 	struct dtx_memberships	*mbs;
 	size_t			 size;
+	int			 rc;
 
 	D_ALLOC_PTR(dth);
 	assert_non_null(dth);
@@ -451,7 +451,8 @@ dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
-	vos_dtx_attach(dth, false, false);
+	rc = vos_dtx_attach(dth, false, false);
+	assert_rc_equal(rc, 0);
 
 	*dthp = dth;
 }
@@ -480,7 +481,7 @@ dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr
 	daos_recx_t		 recxs[recxs_nr];
 	daos_iod_t		 iod = {0};
 	d_sg_list_t		 sgl = {0};
-	daos_epoch_t		 epoch = 1;
+	daos_epoch_t		 epoch = d_hlc_get();
 	uint64_t		 dkey_hash = 0x123;
 	int			 i;
 
@@ -511,7 +512,7 @@ dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr
 
 	/* commit */
 	for (i = 0; i < committed_nr; i++)
-		assert_int_equal(1, vos_dtx_commit(coh, &dth[i]->dth_xid, 1, NULL));
+		assert_int_equal(1, vos_dtx_commit(coh, &dth[i]->dth_xid, 1, false, NULL));
 
 	/* end each dtx */
 	for (i = 0; i < nr; i++)

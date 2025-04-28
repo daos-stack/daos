@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -146,7 +145,7 @@ func RestoreLocalReplica(log logging.Logger, cfg *DatabaseConfig, snapPath strin
 	}
 
 	if strings.HasPrefix(snapPath, cfg.RaftDir) {
-		tmpDir, err := ioutil.TempDir("", "daos-raft-restore")
+		tmpDir, err := os.MkdirTemp("", "daos-raft-restore")
 		if err != nil {
 			return errors.Wrap(err, "failed to create temporary directory")
 		}
@@ -455,7 +454,7 @@ func GetLatestSnapshot(log logging.Logger, cfg *DatabaseConfig) (*SnapshotDetail
 
 func readSnapshotMeta(path string, meta *raft.SnapshotMeta) error {
 	metaPath := filepath.Join(path, snapshotMetaFile)
-	data, err := ioutil.ReadFile(metaPath)
+	data, err := os.ReadFile(metaPath)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read snapshot metadata from %q", metaPath)
 	}
@@ -465,7 +464,7 @@ func readSnapshotMeta(path string, meta *raft.SnapshotMeta) error {
 
 func readSnapshotData(path string) ([]byte, error) {
 	dataPath := filepath.Join(path, snapshotDataFile)
-	data, err := ioutil.ReadFile(dataPath)
+	data, err := os.ReadFile(dataPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read snapshot data from %q", dataPath)
 	}

@@ -84,6 +84,7 @@ ior:
   block_size: '1Mib'
 dfuse:
   disable_caching: True
+  enable_local_flock: true
 
 mdtest:
   client_processes:
@@ -104,3 +105,11 @@ dcp:
     np: 16
 hdf5_vol:
   plugin_path: /usr/lib64/mpich/lib
+
+io_sys_admin:
+  steps_to_run:
+    pool_create_ownership: True
+    storage_system_query: True
+    io: True
+    snapshot: True
+    datamover: True

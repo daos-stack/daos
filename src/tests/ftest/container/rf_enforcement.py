@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,11 +12,6 @@ class ContRfEnforce(ContRedundancyFactor):
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a Rebuild Container RF with ObjClass Write object."""
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
 
     def test_container_redundancy_factor_oclass_enforcement(self):
         """Jira ID:
@@ -40,7 +35,7 @@ class ContRfEnforce(ContRedundancyFactor):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container,container_rf,cont_rf_oclass_enforcement
+        :avocado: tags=container
         :avocado: tags=ContRfEnforce,test_container_redundancy_factor_oclass_enforcement
         """
         self.execute_cont_rf_test(mode="cont_rf_enforcement")

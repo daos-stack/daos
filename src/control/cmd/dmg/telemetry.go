@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -61,7 +60,7 @@ func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
 		return nil, err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +105,7 @@ func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
 	}
 	defer resp.Body.Close()
 
-	outFile, err := ioutil.TempFile("", dlName)
+	outFile, err := os.CreateTemp("", dlName)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +212,7 @@ type (
 )
 
 func (cmd *telemConfigCmd) loadPromCfg(cfgPath string) (*promCfg, error) {
-	data, err := ioutil.ReadFile(cfgPath)
+	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return nil, err
 	}
@@ -254,13 +253,11 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 	}
 
 	sc := &staticConfig{}
-	for _, h := range cmd.config.HostList {
-		host, _, err := common.SplitPort(h, 0)
-		if err != nil {
-			return nil, err
-		}
-		sc.Targets = append(sc.Targets, host+":9191")
+	sc.Targets, err = common.ParseHostList(cmd.config.HostList, 9191)
+	if err != nil {
+		return nil, err
 	}
+
 	cfg.ScrapeConfigs = []*scrapeConfig{
 		{
 			JobName:        "daos",
@@ -274,7 +271,7 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 		return nil, err
 	}
 
-	if err := ioutil.WriteFile(promInfo.cfgPath, data, 0644); err != nil {
+	if err := os.WriteFile(promInfo.cfgPath, data, 0644); err != nil {
 		return nil, errors.Wrapf(err, "failed to write %s", promInfo.cfgPath)
 	}
 	cmd.Infof("Wrote DAOS monitoring config to %s)", promInfo.cfgPath)
@@ -310,7 +307,7 @@ type metricsListCmd struct {
 
 // Execute runs the command to list metrics from the DAOS storage nodes.
 func (cmd *metricsListCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.getHostList())
+	host, err := getMetricsHost(cmd.Host.Slice())
 	if err != nil {
 		return err
 	}
@@ -365,7 +362,7 @@ type metricsQueryCmd struct {
 
 // Execute runs the command to query metrics from the DAOS storage nodes.
 func (cmd *metricsQueryCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.getHostList())
+	host, err := getMetricsHost(cmd.Host.Slice())
 	if err != nil {
 		return err
 	}

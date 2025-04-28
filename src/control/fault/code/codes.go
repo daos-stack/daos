@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -114,6 +116,7 @@ const (
 	SystemUnknown Code = iota + 400
 	SystemBadFaultDomainDepth
 	SystemPoolLocked
+	SystemJoinReplaceRankNotFound
 )
 
 // client fault codes
@@ -154,6 +157,10 @@ const (
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
 	ServerHugepagesDisabled
+	ServerPoolMemRatioNoRoles
+	ServerBadFaultDomainLabels
+	ServerJoinReplaceEnabledPoolRank
+	ServerRankAdminExcluded
 )
 
 // server config fault codes
@@ -163,8 +170,8 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadTelemetryPort
-	ServerConfigBadAccessPoints
-	ServerConfigEvenAccessPoints
+	ServerConfigBadMgmtSvcReplicas
+	ServerConfigEvenMgmtSvcReplicas
 	ServerConfigBadProvider
 	ServerConfigNoEngines
 	ServerConfigDuplicateFabric
@@ -201,6 +208,7 @@ const (
 	SpdkCtrlrNoHealth
 	SpdkBindingRetNull
 	SpdkBindingFailed
+	SpdkInvalidConfiguration
 )
 
 // security fault codes

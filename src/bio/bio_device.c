@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -575,15 +576,8 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 
 	/*
 	 * Scan remaining SMD devices not present bio_bdev list.
-	 *
-	 * As for current implementation, there won't be any device
-	 * present in SMD but not in bio_bdev list, here we just do
-	 * it for sanity check.
 	 */
 	d_list_for_each_entry(s_info, &s_dev_list, sdi_link) {
-		D_ERROR("Found unexpected device "DF_UUID" in SMD\n",
-			DP_UUID(s_info->sdi_id));
-
 		b_info = alloc_dev_info(s_info->sdi_id, NULL, s_info);
 		if (b_info == NULL) {
 			D_ERROR("Failed to allocate device info\n");
@@ -794,11 +788,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 		if (dev_info->bdi_traddr == NULL) {
 			D_ERROR("No transport address for dev:"DF_UUID", unable to verify state\n",
 				DP_UUID(dev_info->bdi_dev_id));
-			rc = -DER_INVAL;
-			goto out;
-		}
-
-		if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
+		} else if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
 			if ((is_faulty != NULL) && (dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
 				*is_faulty = true;
 

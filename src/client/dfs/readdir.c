@@ -81,6 +81,7 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, str
 			break;
 	}
 	*nr = key_nr;
+	DFS_OP_STAT_INCR(dfs, DOS_READDIR);
 
 out:
 	D_FREE(enum_buf);
@@ -180,6 +181,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, siz
 	}
 
 	*nr = keys_nr;
+	DFS_OP_STAT_INCR(dfs, DOS_READDIR);
 out:
 	D_FREE(kds);
 	D_FREE(enum_buf);

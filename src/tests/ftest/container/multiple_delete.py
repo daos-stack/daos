@@ -1,14 +1,12 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
-from general_utils import DaosTestError
 from ior_test_base import IorTestBase
-
-SCM_THRESHOLD = 400000
 
 
 class MultipleContainerDelete(IorTestBase):
@@ -62,11 +60,8 @@ class MultipleContainerDelete(IorTestBase):
         self.log.info("SCM = %d, NVMe = %d", final_scm_fs, final_ssd_fs)
 
         self.log.info("Verifying NVMe space is recovered")
-        try:
-            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
-        except DaosTestError as error:
-            self.fail("NVMe space is not recovered after 50 "
-                      "create-write-destroy iterations {}".format(error))
+        if not self.pool.check_free_space(expected_nvme=initial_ssd_fs):
+            self.fail("NVMe space is not recovered after 50 create-write-destroy iterations")
 
         # Verify SCM space recovery. About 198KB of the SCM free space isn't recovered
         # even after waiting for 180 sec, so apply the threshold. Considered not a bug.
@@ -77,13 +72,14 @@ class MultipleContainerDelete(IorTestBase):
         # since 50 is not divisible by 8, some data would remain in the disk right after
         # the 50th iteration. If we wait for several seconds, that remaining data will be
         # deleted (and we have 198KB left as mentioned above).
+        scm_threshold = self.params.get("scm_threshold", "/run/*")
         for _ in range(5):
             final_scm_fs, _ = self.get_pool_space()
             scm_diff = initial_scm_fs - final_scm_fs
-            if scm_diff <= SCM_THRESHOLD:
+            if scm_diff <= scm_threshold:
                 msg = ("SCM space was recovered. Initial = {}; Final = {}; "
                        "Threshold = {}; (Unit is in byte)").format(
-                           initial_scm_fs, final_scm_fs, SCM_THRESHOLD)
+                           initial_scm_fs, final_scm_fs, scm_threshold)
                 self.log.info(msg)
                 scm_recovered = True
                 break
@@ -92,7 +88,7 @@ class MultipleContainerDelete(IorTestBase):
         if not scm_recovered:
             msg = ("SCM space wasn't recovered! Initial = {}, Final = {}, "
                    "Threshold = {}; (Unit is in byte.)".format(
-                       initial_scm_fs, final_scm_fs, SCM_THRESHOLD))
+                       initial_scm_fs, final_scm_fs, scm_threshold))
             self.fail(msg)
 
     def get_pool_space(self):

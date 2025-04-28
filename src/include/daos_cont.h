@@ -79,6 +79,9 @@ extern "C" {
 /** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
+/** The basic IO mode: read-only, read-write or exclusively read-write. */
+#define DAOS_COO_IO_BASE_MASK   (DAOS_COO_RO | DAOS_COO_RW | DAOS_COO_EX)
+
 /** Maximum length for container hints */
 #define DAOS_CONT_HINT_MAX_LEN	128
 

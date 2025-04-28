@@ -18,6 +18,7 @@ dnf --nodocs install \
     clang-tools-extra \
     cmake \
     CUnit-devel \
+    daxctl-devel \
     diffutils \
     e2fsprogs \
     file \
@@ -35,6 +36,7 @@ dnf --nodocs install \
     java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
+    libasan \
     libcmocka-devel \
     libevent-devel \
     libipmctl-devel \
@@ -47,6 +49,7 @@ dnf --nodocs install \
     lz4-devel \
     make \
     ndctl \
+    ndctl-devel \
     numactl \
     numactl-devel \
     openmpi-devel \

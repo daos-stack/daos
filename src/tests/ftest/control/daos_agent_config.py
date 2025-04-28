@@ -36,6 +36,7 @@ class DaosAgentConfigTest(TestWithServers):
         :avocado: tags=DaosAgentConfigTest,test_daos_agent_config_basic
         """
         # Setup the agents
+        self.log_step("Setting up daos agent")
         self.add_agent_manager()
         self.configure_manager(
             "agent",
@@ -48,16 +49,13 @@ class DaosAgentConfigTest(TestWithServers):
         c_val = self.params.get("config_val", "/run/agent_config_val/*/")
 
         # Identify the attribute and modify its value to test value
+        self.log_step(f"Configuring the daos agent {c_val[0]} attribute with the {c_val[1]} value")
         self.assertTrue(
             self.agent_managers[-1].set_config_value(c_val[0], c_val[1]),
-            "Error setting the '{}' config file parameter to '{}'".format(
-                c_val[0], c_val[1]))
+            f"Error setting the '{c_val[0]}' config file parameter to '{c_val[1]}'")
 
         # Setup the access points with the server hosts
-        self.log.info(
-            "Starting agent with %s = %s, expecting it to %s",
-            c_val[0], c_val[1], c_val[2])
-
+        self.log_step(f"Starting agent with {c_val[0]} = {c_val[1]}, expecting it to {c_val[2]}")
         try:
             self.agent_managers[-1].start()
             exception = None
@@ -67,16 +65,13 @@ class DaosAgentConfigTest(TestWithServers):
         # Verify
         if c_val[2] == "FAIL" and exception is None:
             self.log.error("Agent was expected to fail")
-            self.fail(
-                "Starting agent completed successfully when it was expected to "
-                "fail with {} = {}".format(c_val[0], c_val[1]))
+            self.register_cleanup(self.stop_agents)
+            self.fail(f"Agent started successfully with {c_val[0]} = {c_val[1]}; expected to fail")
         elif c_val[2] == "PASS" and exception is not None:
             self.log.error("Agent was expected to start")
-            self.fail(
-                "Starting agent failed when it was expected to complete "
-                "successfully with {} = {}: {}".format(
-                    c_val[0], c_val[1], exception))
+            self.fail(f"Agent failed to start with {c_val[0]} = {c_val[1]}; expected to pass")
 
         self.log.info(
             "Test passed - starting the agent with %s = %s %sed",
             c_val[0], c_val[1], c_val[2].lower())
+        self.register_cleanup(self.stop_agents)

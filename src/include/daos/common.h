@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -605,6 +606,8 @@ daos_errno2der(int err)
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
 	case EIO:		return -DER_IO;
+	case ENOTSUP:
+		return -DER_NOTSUPPORTED;
 	case EFAULT:
 	case ENXIO:
 	case ENODEV:
@@ -661,6 +664,8 @@ daos_der2errno(int err)
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
 	case -DER_TX_RESTART:	return ERESTART;
+	case -DER_NOTSUPPORTED:
+		return ENOTSUP;
 	default:		return EIO;
 	}
 };
@@ -958,6 +963,10 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define daos_hhash_hlink_init(hlink, ops)	d_hhash_hlink_init(hlink, ops)
 #define daos_hhash_link_empty(hlink)		d_hhash_link_empty(hlink)
 #define daos_hhash_link_key(hlink, key)		d_hhash_link_key(hlink, key)
+
+typedef int (*daos_hhash_traverse_cb_t)(struct d_hlink *link, void *arg);
+int
+daos_hhash_traverse(int type, daos_hhash_traverse_cb_t cb, void *arg);
 
 /* daos_recx_t overlap detector */
 #define DAOS_RECX_OVERLAP(recx_1, recx_2)				\

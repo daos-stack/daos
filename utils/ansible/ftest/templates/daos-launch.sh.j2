@@ -131,9 +131,9 @@ function cleanup
 
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 	info "Clean up of clients $CLIENTS_LIST"
-	$CLUSH_EXE -l root -w $CLIENTS_LIST sudo systemctl stop daos_agent
-	$CLUSH_EXE -l root -w $CLIENTS_LIST rm -rf /var/run/daos_agent
-	$CLUSH_EXE -l root -w $CLIENTS_LIST mkdir -p /var/run/daos_agent
+	$CLUSH_EXE -w $CLIENTS_LIST sudo systemctl stop daos_agent
+	$CLUSH_EXE -w $CLIENTS_LIST sudo rm -rf /var/run/daos_agent
+	$CLUSH_EXE -w $CLIENTS_LIST sudo mkdir -p /var/run/daos_agent
 	{
 		cat <<- EOF
 		# set -x
@@ -151,13 +151,13 @@ function cleanup
 			rmdir "\$target"
 		done
 		EOF
-	} | run $CLUSH_EXE -l root -w $CLIENTS_LIST bash
+	} | run $CLUSH_EXE -w $CLIENTS_LIST sudo bash -s
 {% endif %}
 
 	info "Clean up of servers $SERVERS_LIST"
-	run $CLUSH_EXE -l root -w $SERVERS_LIST sudo systemctl stop daos_server
-	run $CLUSH_EXE -l root -w $SERVERS_LIST rm -rf /var/run/daos_server
-	run $CLUSH_EXE -l root -w $SERVERS_LIST mkdir -p /var/run/daos_server
+	run $CLUSH_EXE -w $SERVERS_LIST sudo systemctl stop daos_server
+	run $CLUSH_EXE -w $SERVERS_LIST sudo rm -rf /var/run/daos_server
+	run $CLUSH_EXE -w $SERVERS_LIST sudo mkdir -p /var/run/daos_server
 
 	info "Stopping all DAOS processes"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
@@ -165,7 +165,7 @@ function cleanup
 {% else %}
 	CLUSH_NODESET="-w $SERVERS_LIST"
 {% endif %}
-	run $CLUSH_EXE -l root $CLUSH_NODESET 'bash -c "killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent || true"'
+	run $CLUSH_EXE $CLUSH_NODESET 'sudo bash -c "killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent || true"'
 
 	info "Cleaning mount points of servers"
 	for host in {{ groups["daos_servers"] | join(' ') }}
@@ -173,26 +173,26 @@ function cleanup
 		for index in {0..3}
 		do
 			mountpoint="/mnt/daos$index"
-			if run ssh root@$host mountpoint -q "$mountpoint" ; then
+			if run ssh $host sudo mountpoint -q "$mountpoint" ; then
 				info "Cleaning mount points $mountpoint of host $host"
-				run ssh root@$host rm -fr $mountpoint/*
-				run ssh root@$host umount $mountpoint
+				run ssh $host sudo rm -fr $mountpoint/*
+				run ssh $host sudo umount $mountpoint
 			fi
 		done
 
 		for index in {0..1}
 		do
 			bdev="/dev/pmem$index"
-			if run ssh root@$host test -b "$bdev" ; then
+			if run ssh $host sudo test -b "$bdev" ; then
 				info "Cleaning persistent memory $bdev of host $host"
-				run ssh root@$host wipefs -a "$bdev"
+				run ssh $host sudo wipefs -a "$bdev"
 			fi
 		done
 	done
 
 	info "Cleaning huge pages"
-	run $CLUSH_EXE -l root -w $SERVERS_LIST ipcrm --all=shm
-	run $CLUSH_EXE -l root -w $SERVERS_LIST /bin/rm -f "/dev/hugepages/spdk_*"
+	run $CLUSH_EXE -w $SERVERS_LIST sudo ipcrm --all=shm
+	run $CLUSH_EXE -w $SERVERS_LIST sudo /bin/rm -f "/dev/hugepages/spdk_*"
 }
 
 {% raw %}
@@ -239,8 +239,8 @@ if [[ ${PYTHONPATH:+x} ]] ; then
 else
 	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
 fi
-cd "$DAOS_SOURCE_DIR/utils/sl"
-source setup_local.sh
+cd "$DAOS_SOURCE_DIR"
+source utils/sl/setup_local.sh
 
 info "Setting MPI simulation environment"
 if run $MODULE_EXE is-avail mpi/mpich-x86_64 ; then

@@ -1,10 +1,12 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <daos/common.h>
+#include <daos_srv/vos.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb.h"
@@ -56,7 +58,7 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 		return -DER_EXIST;
 	}
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, &ctx->dc_poh);
+	return dv_pool_open(opt->path, &ctx->dc_poh, 0);
 }
 
 int
@@ -725,12 +727,15 @@ sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id,
 	return 0;
 }
 
+#define DEFAULT_NVME_CONF "/mnt/daos/daos_nvme.conf"
+#define DEFAULT_DB_PATH   "/mnt/daos"
+#define DDB_PATH_MAX      256
+
 int
 ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 {
-	/* Some defaults */
-	char	nvme_conf[256] = "/mnt/daos/daos_nvme.conf";
-	char	db_path[256] = "/mnt/daos";
+	char    nvme_conf[DDB_PATH_MAX] = DEFAULT_NVME_CONF;
+	char    db_path[DDB_PATH_MAX]   = DEFAULT_DB_PATH;
 	int	rc;
 
 	if (daos_handle_is_valid(ctx->dc_poh)) {
@@ -738,10 +743,20 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 		return -DER_INVAL;
 	}
 
-	if (opt->nvme_conf != NULL && strlen(opt->nvme_conf) > 0)
+	if (opt->nvme_conf != NULL) {
+		if (strlen(opt->nvme_conf) == 0 || strlen(opt->nvme_conf) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid nvme_conf '%s'\n", opt->nvme_conf);
+			return -DER_INVAL;
+		}
 		strncpy(nvme_conf, opt->nvme_conf, ARRAY_SIZE(nvme_conf) - 1);
-	if (opt->db_path != NULL && strlen(opt->db_path) > 0)
+	}
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
 
 	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
 	rc = dv_sync_smd(nvme_conf, db_path, sync_smd_cb, ctx);
@@ -885,6 +900,7 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 struct dtx_modify_args {
 	struct dv_indexed_tree_path	 itp;
 	struct dtx_id			 dti;
+	bool                             dti_all;
 	daos_handle_t			 coh;
 };
 
@@ -913,10 +929,12 @@ dtx_modify_init(struct ddb_ctx *ctx, char *path, char *dtx_id_str, struct dtx_mo
 		D_GOTO(error, rc);
 	}
 
-	rc = ddb_parse_dtx_id(dtx_id_str, &args->dti);
-	if (!SUCCESS(rc)) {
-		ddb_errorf(ctx, "Invalid dtx_id: %s\n", dtx_id_str);
-		D_GOTO(error, rc);
+	if (!args->dti_all) {
+		rc = ddb_parse_dtx_id(dtx_id_str, &args->dti);
+		if (!SUCCESS(rc)) {
+			ddb_errorf(ctx, "Invalid dtx_id: %s\n", dtx_id_str);
+			D_GOTO(error, rc);
+		}
 	}
 	return 0;
 
@@ -934,7 +952,7 @@ dtx_modify_fini(struct dtx_modify_args *args)
 }
 
 int
-ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_commit_options *opt)
+ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
@@ -963,7 +981,8 @@ ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_commit_options *opt)
 	return rc;
 }
 
-int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt)
+int
+ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
@@ -988,5 +1007,254 @@ int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt
 	}
 
 	dtx_modify_fini(&args);
+	return rc;
+}
+
+static inline bool
+feature_write_action(struct feature_options *opt)
+{
+	return opt->set_compat_flags || opt->set_incompat_flags || opt->clear_compat_flags ||
+	       opt->clear_incompat_flags;
+}
+
+int
+ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
+{
+	int      rc;
+	uint64_t new_compat_flags;
+	uint64_t new_incompat_flags;
+	bool     close = false;
+
+	if (!opt->show_features && !feature_write_action(opt))
+		return -DER_INVAL;
+
+	if (ddb_pool_is_open(ctx)) {
+		if (feature_write_action(opt) && !ctx->dc_write_mode)
+			return -DER_NO_PERM;
+		goto skip;
+	}
+
+	ctx->dc_write_mode = feature_write_action(opt);
+	if (feature_write_action(opt) && !ctx->dc_write_mode)
+		return -DER_NO_PERM;
+
+	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
+		opt->path = ctx->dc_pool_path;
+
+	rc = dv_pool_open(opt->path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
+	if (rc)
+		return rc;
+	close = true;
+
+skip:
+	rc = dv_pool_get_flags(ctx->dc_poh, &new_compat_flags, &new_incompat_flags);
+	if (rc) {
+		ddb_error(ctx, "Error with pool superblock");
+		goto out;
+	}
+
+	if (ctx->dc_write_mode) {
+		if (opt->set_compat_flags || opt->clear_compat_flags) {
+			new_compat_flags |= (opt->set_compat_flags & VOS_POOL_COMPAT_FLAG_SUPP);
+			new_compat_flags &= ~(opt->clear_compat_flags & VOS_POOL_COMPAT_FLAG_SUPP);
+		}
+		if (opt->set_incompat_flags || opt->clear_incompat_flags) {
+			new_incompat_flags |=
+			    (opt->set_incompat_flags & VOS_POOL_INCOMPAT_FLAG_SUPP);
+			new_incompat_flags &=
+			    ~(opt->clear_incompat_flags & VOS_POOL_INCOMPAT_FLAG_SUPP);
+		}
+		rc = dv_pool_update_flags(ctx->dc_poh, new_compat_flags, new_incompat_flags);
+		if (rc) {
+			ddb_printf(ctx, "Failed to update flags: %d\n", rc);
+			goto out;
+		}
+	}
+	if (opt->show_features) {
+		ddb_printf(ctx, "Compat Flags: %lu\n", new_compat_flags);
+		ddb_printf(ctx, "Incompat Flags: %lu\n", new_incompat_flags);
+	}
+out:
+	if (close)
+		rc = dv_pool_close(ctx->dc_poh);
+	ctx->dc_poh        = DAOS_HDL_INVAL;
+	ctx->dc_write_mode = false;
+
+	return rc;
+}
+
+int
+ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
+{
+	if (ddb_pool_is_open(ctx)) {
+		ddb_error(ctx, "Must close pool before can open another\n");
+		return -DER_BUSY;
+	}
+
+	return dv_pool_destroy(opt->path);
+}
+
+#define DTI_ALL "all"
+
+struct dtx_active_entry_discard_invalid_cb_arg {
+	struct ddb_ctx         *ctx;
+	struct dtx_modify_args *args;
+};
+
+static int
+dtx_active_entry_discard_invalid(struct dv_dtx_active_entry *entry, void *cb_arg)
+{
+	struct dtx_active_entry_discard_invalid_cb_arg *bundle    = cb_arg;
+	struct ddb_ctx                                 *ctx       = bundle->ctx;
+	struct dtx_modify_args                         *args      = bundle->args;
+	int                                             discarded = 0;
+	int                                             rc;
+
+	ddb_printf(ctx, "ID: " DF_DTIF "\n", DP_DTI(&entry->ddtx_id));
+
+	rc = dv_dtx_active_entry_discard_invalid(args->coh, &entry->ddtx_id, &discarded);
+	if (SUCCESS(rc)) {
+		ddb_printf(ctx, "Entry's record(s) discarded: %d\n", discarded);
+	} else if (rc == -DER_NONEXIST) {
+		ddb_print(ctx, "No entry found\n");
+		rc = 0;
+	} else {
+		ddb_errorf(ctx, "Error: " DF_RC "\n", DP_RC(rc));
+	}
+
+	return 0;
+}
+
+int
+ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt)
+{
+	struct dtx_modify_args                         args   = {0};
+	struct dtx_active_entry_discard_invalid_cb_arg bundle = {.ctx = ctx, .args = &args};
+	int                                            rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
+	if (opt->dtx_id != NULL && strcmp(opt->dtx_id, DTI_ALL) == 0) {
+		args.dti_all = true;
+	}
+
+	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
+	if (!SUCCESS(rc)) {
+		return rc;
+	}
+
+	if (args.dti_all) {
+		rc = dv_dtx_get_act_table(args.coh, dtx_active_entry_discard_invalid, &bundle);
+		if (!SUCCESS(rc)) {
+			return rc;
+		}
+	} else {
+		struct dv_dtx_active_entry entry = {.ddtx_id = args.dti};
+		dtx_active_entry_discard_invalid(&entry, &bundle);
+	}
+
+	dtx_modify_fini(&args);
+	return rc;
+}
+
+int
+ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
+{
+	char                 db_path[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+	struct bio_dev_info *dev_info              = NULL, *tmp;
+	d_list_t             dev_list;
+	int                  rc, dev_cnt = 0;
+
+	if (daos_handle_is_valid(ctx->dc_poh)) {
+		ddb_print(ctx, "Close pool connection before attempting to list devices\n");
+		return -DER_INVAL;
+	}
+
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
+
+	ddb_printf(ctx, "List devices, db_path='%s'\n", db_path);
+	D_INIT_LIST_HEAD(&dev_list);
+	rc = dv_dev_list(db_path, &dev_list, &dev_cnt);
+	if (rc) {
+		ddb_errorf(ctx, "List device failed. " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+
+	ddb_printf(ctx, "%d SSD devices in total\n", dev_cnt);
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
+		ddb_printf(ctx, "Device:" DF_UUIDF " [inuse:%s, faulty:%s, plugged:%s]\n",
+			   DP_UUID(dev_info->bdi_dev_id),
+			   dev_info->bdi_flags & NVME_DEV_FL_INUSE ? "yes" : "no ",
+			   dev_info->bdi_flags & NVME_DEV_FL_FAULTY ? "yes" : "no ",
+			   dev_info->bdi_flags & NVME_DEV_FL_PLUGGED ? "yes" : "no ");
+
+		d_list_del_init(&dev_info->bdi_link);
+		bio_free_dev_info(dev_info);
+	}
+
+	return 0;
+}
+
+int
+ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
+{
+	char   db_path[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+	uuid_t old_devid, new_devid;
+	int    rc;
+
+	if (daos_handle_is_valid(ctx->dc_poh)) {
+		ddb_print(ctx, "Close pool connection before attempting to replace device\n");
+		return -DER_INVAL;
+	}
+
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
+
+	if (opt->old_devid == NULL || opt->new_devid == NULL) {
+		ddb_error(ctx, "Must specify both old and new device ID\n");
+		return -DER_INVAL;
+	}
+
+	rc = uuid_parse(opt->old_devid, old_devid);
+	if (rc) {
+		ddb_errorf(ctx, "Invalid UUID string '%s' for old device\n", opt->old_devid);
+		return -DER_INVAL;
+	}
+
+	rc = uuid_parse(opt->new_devid, new_devid);
+	if (rc) {
+		ddb_errorf(ctx, "Invalid UUID string '%s' for new device\n", opt->new_devid);
+		return -DER_INVAL;
+	}
+
+	if (uuid_compare(old_devid, new_devid) == 0) {
+		ddb_error(ctx, "Doesn't support replacing device by itself\n");
+		return -DER_INVAL;
+	}
+
+	ddb_printf(ctx,
+		   "Replace old device " DF_UUID " with new device " DF_UUID ", db_path='%s'\n",
+		   DP_UUID(old_devid), DP_UUID(new_devid), db_path);
+
+	rc = dv_dev_replace(db_path, old_devid, new_devid);
+	if (rc)
+		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
+	else
+		ddb_print(ctx, "Device replacing succeeded\n");
+
 	return rc;
 }

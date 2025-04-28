@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +9,6 @@ package sysfs
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -45,7 +44,7 @@ func isNetvscDevice(path string, subsystem string) bool {
 		return false
 	}
 
-	content, err := ioutil.ReadFile(filepath.Join(path, "device", "uevent"))
+	content, err := os.ReadFile(filepath.Join(path, "device", "uevent"))
 	if err != nil {
 		return false
 	}
@@ -87,7 +86,7 @@ func (s *Provider) GetNetDevClass(dev string) (hardware.NetDevClass, error) {
 		return 0, errors.New("device name required")
 	}
 
-	devClass, err := ioutil.ReadFile(s.sysPath("class", "net", dev, "type"))
+	devClass, err := os.ReadFile(s.sysPath("class", "net", dev, "type"))
 	if err != nil {
 		return 0, err
 	}
@@ -189,7 +188,7 @@ func (s *Provider) addPCIDevice(topo *hardware.Topology, subsystem string, path 
 
 func (s *Provider) getNetworkDevice(path, subsystem string) (*hardware.PCIDevice, error) {
 	// Network devices will have the device/net subdirectory structure
-	netDev, err := ioutil.ReadDir(filepath.Join(path, "device", "net"))
+	netDev, err := os.ReadDir(filepath.Join(path, "device", "net"))
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read net device")
 	}
@@ -215,7 +214,7 @@ func (s *Provider) getNetworkDevice(path, subsystem string) (*hardware.PCIDevice
 
 func (s *Provider) getNUMANode(path string) (uint, error) {
 	numaPath := filepath.Join(path, "device", "numa_node")
-	numaBytes, err := ioutil.ReadFile(numaPath)
+	numaBytes, err := os.ReadFile(numaPath)
 	if err != nil {
 		return 0, err
 	}
@@ -277,7 +276,7 @@ func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 	addedDevices := topo.AllDevices()
 
 	netPath := s.sysPath("devices", "virtual", "net")
-	netIfaces, err := ioutil.ReadDir(netPath)
+	netIfaces, err := os.ReadDir(netPath)
 	if err != nil {
 		s.log.Tracef("unable to read any virtual net interfaces: %s", err.Error())
 		return nil
@@ -325,7 +324,7 @@ func (s *Provider) getBackingDevice(ifacePath string, devices map[string]hardwar
 		}
 	}
 
-	ifaceFiles, err := ioutil.ReadDir(ifacePath)
+	ifaceFiles, err := os.ReadDir(ifacePath)
 	if err != nil {
 		s.log.Tracef("unable to read contents of %s", ifacePath)
 		return nil, err
@@ -355,7 +354,7 @@ func (s *Provider) getBackingDevice(ifacePath string, devices map[string]hardwar
 }
 
 func (s *Provider) getParentDevName(iface string) (string, error) {
-	parentBytes, err := ioutil.ReadFile(s.sysPath("class", "net", iface, "parent"))
+	parentBytes, err := os.ReadFile(s.sysPath("class", "net", iface, "parent"))
 	if err != nil {
 		return "", err
 	}
@@ -381,7 +380,7 @@ func (s *Provider) GetFabricInterfaces(ctx context.Context, provider string) (*h
 }
 
 func (s *Provider) getCXIFabricInterfaces() ([]*hardware.FabricInterface, error) {
-	cxiDevs, err := ioutil.ReadDir(s.sysPath("class", "cxi"))
+	cxiDevs, err := os.ReadDir(s.sysPath("class", "cxi"))
 	if os.IsNotExist(err) {
 		s.log.Tracef("no cxi subsystem in sysfs")
 		return []*hardware.FabricInterface{}, nil
@@ -446,7 +445,7 @@ func (s *Provider) getLoopbackDevState(iface string) (hardware.NetDevState, erro
 
 func (s *Provider) getNetOperState(iface string) (hardware.NetDevState, error) {
 	statePath := s.sysPath("class", "net", iface, "operstate")
-	stateBytes, err := ioutil.ReadFile(statePath)
+	stateBytes, err := os.ReadFile(statePath)
 	if err != nil {
 		return hardware.NetDevStateUnknown, errors.Wrapf(err, "failed to get %q operational state", iface)
 	}
@@ -491,7 +490,7 @@ func (s *Provider) getInfinibandDevState(iface string) (hardware.NetDevState, er
 	// The best way to determine that an Infiniband interface is ready is to check the state
 	// of its ports. Ports in the "ACTIVE" state are either fully ready or will be very soon.
 	ibPath := s.sysPath("class", "net", iface, "device", "infiniband")
-	ibDevs, err := ioutil.ReadDir(ibPath)
+	ibDevs, err := os.ReadDir(ibPath)
 	if err != nil {
 		return hardware.NetDevStateUnknown, errors.Wrapf(err, "can't access Infiniband details for %q", iface)
 	}
@@ -499,7 +498,7 @@ func (s *Provider) getInfinibandDevState(iface string) (hardware.NetDevState, er
 	ibDevState := make([]hardware.NetDevState, 0)
 	for _, dev := range ibDevs {
 		portPath := filepath.Join(ibPath, dev.Name(), "ports")
-		ports, err := ioutil.ReadDir(portPath)
+		ports, err := os.ReadDir(portPath)
 		if err != nil {
 			return hardware.NetDevStateUnknown, errors.Wrapf(err, "unable to get ports for %s/%s", iface, dev.Name())
 		}
@@ -507,7 +506,7 @@ func (s *Provider) getInfinibandDevState(iface string) (hardware.NetDevState, er
 		portState := make([]hardware.NetDevState, 0)
 		for _, port := range ports {
 			statePath := filepath.Join(portPath, port.Name(), "state")
-			stateBytes, err := ioutil.ReadFile(statePath)
+			stateBytes, err := os.ReadFile(statePath)
 			if err != nil {
 				return hardware.NetDevStateUnknown, errors.Wrapf(err, "unable to get state for %s/%s port %s",
 					iface, dev.Name(), port.Name())
@@ -595,7 +594,7 @@ func (s *Provider) IsIOMMUEnabled() (bool, error) {
 
 	// Simple test for now -- if the path exists and contains
 	// DMAR entries, we assume that's good enough.
-	dmars, err := ioutil.ReadDir(s.sysPath("class", "iommu"))
+	dmars, err := os.ReadDir(s.sysPath("class", "iommu"))
 	if err != nil && !os.IsNotExist(err) {
 		return false, err
 	}

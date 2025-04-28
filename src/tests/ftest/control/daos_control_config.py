@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -43,7 +43,7 @@ class DaosControlConfigTest(TestWithServers):
             "Error setting the '{}' config file parameter to '{}'".format(
                 c_val[0], c_val[1]))
 
-        # Setup the access points with the server hosts
+        # Setup the hostlist with the server hosts
         self.log.info(
             "Executing dmg config with %s = %s, expecting to %s",
             c_val[0], c_val[1], c_val[2])

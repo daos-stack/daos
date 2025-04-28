@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,8 +8,10 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -16,6 +19,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/daos/api"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -186,6 +192,307 @@ func TestDaos_existingContainerCmd_resolveContainer(t *testing.T) {
 			test.CmpErr(t, tc.expErr, gotErr)
 			test.AssertEqual(t, tc.poolID, cmd.poolBaseCmd.Args.Pool.String(), "PoolID")
 			test.AssertEqual(t, tc.contID, cmd.Args.Container.String(), "ContainerID")
+		})
+	}
+}
+
+var (
+	defaultContInfo *daos.ContainerInfo = &daos.ContainerInfo{
+		PoolUUID:       defaultPoolInfo.UUID,
+		ContainerUUID:  test.MockPoolUUID(2),
+		ContainerLabel: "test-container",
+	}
+
+	contOpenErr error
+)
+
+func ContainerOpen(ctx context.Context, req api.ContainerOpenReq) (*api.ContainerOpenResp, error) {
+	return &api.ContainerOpenResp{
+		Connection: api.MockContainerHandle(),
+		Info:       defaultContInfo,
+	}, contOpenErr
+}
+
+func TestDaos_containerSetAttrCmd(t *testing.T) {
+	baseArgs := test.JoinArgs(nil, "container", "set-attr", defaultPoolInfo.Label, defaultContInfo.ContainerLabel)
+	keysOnlyArg := "key1,key2"
+	keyValArg := "key1:val1,key2:val2"
+
+	for name, tc := range map[string]struct {
+		args    []string
+		expErr  error
+		expArgs containerSetAttrCmd
+		setup   func(t *testing.T)
+	}{
+		"invalid flag": {
+			args:   test.JoinArgs(baseArgs, "--bad", keyValArg),
+			expErr: errors.New("unknown flag"),
+		},
+		"open fails": {
+			args:   test.JoinArgs(baseArgs, keyValArg),
+			expErr: errors.New("whoops"),
+			setup: func(t *testing.T) {
+				prevErr := contOpenErr
+				t.Cleanup(func() {
+					contOpenErr = prevErr
+				})
+				contOpenErr = errors.New("whoops")
+			},
+		},
+		"missing required arguments": {
+			args:   baseArgs,
+			expErr: errors.New("attribute name and value are required"),
+		},
+		"malformed required arguments": {
+			args:   test.JoinArgs(baseArgs, keysOnlyArg),
+			expErr: errors.New("invalid property"),
+		},
+		"success": {
+			args: test.JoinArgs(baseArgs, keyValArg),
+			expArgs: containerSetAttrCmd{
+				Args: struct {
+					Attrs ui.SetPropertiesFlag `positional-arg-name:"key:val[,key:val...]"`
+				}{
+					Attrs: ui.SetPropertiesFlag{
+						ParsedProps: map[string]string{
+							"key1": "val1",
+							"key2": "val2",
+						},
+					},
+				},
+			},
+		},
+		"success (one key, deprecated flag)": {
+			args: test.JoinArgs(baseArgs, "--attr", "one", "--value", "uno"),
+			expArgs: containerSetAttrCmd{
+				Args: struct {
+					Attrs ui.SetPropertiesFlag `positional-arg-name:"key:val[,key:val...]"`
+				}{
+					Attrs: ui.SetPropertiesFlag{
+						ParsedProps: map[string]string{
+							"one": "uno",
+						},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(api.ResetTestStubs)
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+
+			runCmdTest(t, tc.args, tc.expArgs, tc.expErr, "Container.SetAttribute")
+		})
+	}
+}
+
+func TestDaos_containerGetAttrCmd(t *testing.T) {
+	baseArgs := test.JoinArgs(nil, "container", "get-attr", defaultPoolInfo.Label, defaultContInfo.ContainerLabel)
+	keysOnlyArg := "key1,key2"
+
+	for name, tc := range map[string]struct {
+		args    []string
+		expErr  error
+		expArgs containerGetAttrCmd
+		setup   func(t *testing.T)
+	}{
+		"invalid flag": {
+			args:   test.JoinArgs(baseArgs, "--bad"),
+			expErr: errors.New("unknown flag"),
+		},
+		"missing container ID": {
+			args:   baseArgs[:len(baseArgs)-1],
+			expErr: errors.New("no container label or UUID supplied"),
+		},
+		"connect fails": {
+			args:   baseArgs,
+			expErr: errors.New("whoops"),
+			setup: func(t *testing.T) {
+				prevErr := contOpenErr
+				t.Cleanup(func() {
+					contOpenErr = prevErr
+				})
+				contOpenErr = errors.New("whoops")
+			},
+		},
+		"malformed arguments": {
+			args:   test.JoinArgs(baseArgs, strings.ReplaceAll(keysOnlyArg, ",", ":")),
+			expErr: errors.New("key cannot contain"),
+		},
+		"unknown key(s)": {
+			args:   test.JoinArgs(baseArgs, keysOnlyArg),
+			expErr: daos.Nonexistent,
+		},
+		"success (one key)": {
+			args: test.JoinArgs(baseArgs, "one"),
+			expArgs: containerGetAttrCmd{
+				Args: struct {
+					Attrs ui.GetPropertiesFlag `positional-arg-name:"key[,key...]"`
+				}{
+					Attrs: ui.GetPropertiesFlag{
+						ParsedProps: map[string]struct{}{
+							"one": {},
+						},
+					},
+				},
+			},
+		},
+		"success (one key, deprecated flag)": {
+			args: test.JoinArgs(baseArgs, "--attr", "one"),
+			expArgs: containerGetAttrCmd{
+				Args: struct {
+					Attrs ui.GetPropertiesFlag `positional-arg-name:"key[,key...]"`
+				}{
+					Attrs: ui.GetPropertiesFlag{
+						ParsedProps: map[string]struct{}{
+							"one": {},
+						},
+					},
+				},
+			},
+		},
+		"success (all keys)": {
+			args:    baseArgs,
+			expArgs: containerGetAttrCmd{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(api.ResetTestStubs)
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+
+			runCmdTest(t, tc.args, tc.expArgs, tc.expErr, "Container.GetAttribute")
+		})
+	}
+}
+
+func TestDaos_containerDelAttrCmd(t *testing.T) {
+	baseArgs := test.JoinArgs(nil, "container", "del-attr", defaultPoolInfo.Label, defaultContInfo.ContainerLabel)
+	keysOnlyArg := "key1,key2"
+
+	for name, tc := range map[string]struct {
+		args    []string
+		expErr  error
+		expArgs containerDelAttrCmd
+		setup   func(t *testing.T)
+	}{
+		"invalid flag": {
+			args:   test.JoinArgs(baseArgs, "--bad"),
+			expErr: errors.New("unknown flag"),
+		},
+		"missing required arguments": {
+			args:   baseArgs,
+			expErr: errors.New("attribute name is required"),
+		},
+		"connect fails": {
+			args:   test.JoinArgs(baseArgs, keysOnlyArg),
+			expErr: errors.New("whoops"),
+			setup: func(t *testing.T) {
+				prevErr := contOpenErr
+				t.Cleanup(func() {
+					contOpenErr = prevErr
+				})
+				contOpenErr = errors.New("whoops")
+			},
+		},
+		"malformed arguments": {
+			args:   test.JoinArgs(baseArgs, strings.ReplaceAll(keysOnlyArg, ",", ":")),
+			expErr: errors.New("key cannot contain"),
+		},
+		"success (one key)": {
+			args: test.JoinArgs(baseArgs, "one"),
+			expArgs: containerDelAttrCmd{
+				Args: struct {
+					Attrs ui.GetPropertiesFlag `positional-arg-name:"key[,key...]"`
+				}{
+					Attrs: ui.GetPropertiesFlag{
+						ParsedProps: map[string]struct{}{
+							"one": {},
+						},
+					},
+				},
+			},
+		},
+		"success (deprecated flag)": {
+			args: test.JoinArgs(baseArgs, "--attr", "one"),
+			expArgs: containerDelAttrCmd{
+				Args: struct {
+					Attrs ui.GetPropertiesFlag `positional-arg-name:"key[,key...]"`
+				}{
+					Attrs: ui.GetPropertiesFlag{
+						ParsedProps: map[string]struct{}{
+							"one": {},
+						},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(api.ResetTestStubs)
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+
+			runCmdTest(t, tc.args, tc.expArgs, tc.expErr, "Container.DeleteAttribute")
+		})
+	}
+}
+
+func TestDaos_containerListAttrCmd(t *testing.T) {
+	baseArgs := test.JoinArgs(nil, "container", "list-attr", defaultPoolInfo.Label, defaultContInfo.ContainerLabel)
+
+	for name, tc := range map[string]struct {
+		args    []string
+		expErr  error
+		expArgs containerListAttrsCmd
+		setup   func(t *testing.T)
+	}{
+		"invalid flag": {
+			args:   test.JoinArgs(baseArgs, "--bad"),
+			expErr: errors.New("unknown flag"),
+		},
+		"missing container ID": {
+			args:   baseArgs[:len(baseArgs)-1],
+			expErr: errors.New("no container label or UUID supplied"),
+		},
+		"connect fails": {
+			args:   baseArgs,
+			expErr: errors.New("whoops"),
+			setup: func(t *testing.T) {
+				prevErr := contOpenErr
+				t.Cleanup(func() {
+					contOpenErr = prevErr
+				})
+				contOpenErr = errors.New("whoops")
+			},
+		},
+		"success": {
+			args:    baseArgs,
+			expArgs: containerListAttrsCmd{},
+		},
+		"success (verbose, short)": {
+			args: test.JoinArgs(baseArgs, "-V"),
+			expArgs: containerListAttrsCmd{
+				Verbose: true,
+			},
+		},
+		"success (verbose, long)": {
+			args: test.JoinArgs(baseArgs, "--verbose"),
+			expArgs: containerListAttrsCmd{
+				Verbose: true,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(api.ResetTestStubs)
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+			runCmdTest(t, tc.args, tc.expArgs, tc.expErr, "Container.ListAttributes")
 		})
 	}
 }

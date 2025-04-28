@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -57,11 +58,17 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # Get the expected pool query values from the test yaml. This should be as simple as:
         #   exp_info = self.params.get("exp_vals", path="/run/*", default={})
         # but this yields an empty dictionary (the default), so it needs to be defined manually:
+        scm_size_total = (
+            self.params.get("total_mdonssd", path="/run/exp_vals/scm/*")
+            if self.server_managers[0].manager.job.using_control_metadata
+            else self.params.get("total", path="/run/exp_vals/scm/*")
+        )
         exp_info = {
             "state": self.params.get("pool_state", path="/run/exp_vals/*"),
             "uuid": self.pool.uuid.lower(),
             "total_targets": self.params.get("total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get("active_targets", path="/run/exp_vals/*"),
+            "disabled_ranks": self.params.get("disabled_ranks", path="/run/exp_vals/*"),
             "total_engines": self.params.get("total_engines", path="/run/exp_vals/*"),
             "disabled_targets": self.params.get("disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
@@ -77,26 +84,28 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             "tier_stats": [
                 {
                     "media_type": "scm",
-                    "total": self.params.get("total", path="/run/exp_vals/scm/*")
+                    "total": scm_size_total
                 },
                 {
                     "media_type": "nvme",
                     "total": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ],
-            "pool_layout_ver": 3,
+            "pool_layout_ver": 4,
             "query_mask": self.params.get("query_mask", path="/run/exp_vals/*"),
-            "upgrade_layout_ver": 3,
+            "upgrade_layout_ver": 4,
             "usage": [
                 {
                     "tier_name": "SCM",
-                    "size": self.params.get("total", path="/run/exp_vals/scm/*")
+                    "size": scm_size_total
                 },
                 {
                     "tier_name": "NVME",
                     "size": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
-            ]
+            ],
+            "md_on_ssd_active": self.server_managers[0].manager.job.using_control_metadata,
+            "mem_file_bytes": scm_size_total
         }
 
         self.assertDictEqual(

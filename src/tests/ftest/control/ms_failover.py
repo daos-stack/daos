@@ -1,5 +1,6 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -47,7 +48,7 @@ class ManagementServiceFailover(TestWithServers):
         """Verify the leader of the MS is in the replicas.
 
         Args:
-            replicas (list): list of hostnames representing the access points
+            replicas (list): list of hostnames representing the replicas
                 for the MS.
 
         Returns:
@@ -58,7 +59,7 @@ class ManagementServiceFailover(TestWithServers):
         start = time.time()
         while not l_hostname and (time.time() - start) < self.L_QUERY_TIMER:
             l_hostname = self.get_leader()
-            # Check that the new leader is in the access list
+            # Check that the new leader is in the MS replica list
             if l_hostname not in replicas:
                 self.log.error("Selected leader <%s> is not within the replicas"
                                " provided to servers", l_hostname)
@@ -78,7 +79,7 @@ class ManagementServiceFailover(TestWithServers):
             replica_count (int): Number of replicas to launch.
 
         Returns:
-            list: list of access point hosts where MS has been started.
+            list: list of replica hosts where MS has been started.
 
         """
         self.log.info("*** launching %d servers", replica_count)
@@ -87,7 +88,7 @@ class ManagementServiceFailover(TestWithServers):
             self.server_group:
                 {
                     "hosts": self.hostlist_servers,
-                    "access_points": replicas,
+                    "mgmt_svc_replicas": replicas,
                     "svr_config_file": None,
                     "dmg_config_file": None,
                     "svr_config_temp": None,
@@ -109,7 +110,7 @@ class ManagementServiceFailover(TestWithServers):
         """
         kill_ranks = self.server_managers[0].get_host_ranks(server)
         self.log.info("*** killing ranks %s on %s", kill_ranks, server)
-        self.server_managers[0].stop_ranks(kill_ranks, self.d_log, force=True)
+        self.server_managers[0].stop_ranks(kill_ranks, force=True)
 
         self.server_managers[0].update_expected_states(
             kill_ranks, ["stopped", "excluded"])

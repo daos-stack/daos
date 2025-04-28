@@ -5,7 +5,7 @@ timeout: 700
 server_config:
   name: daos_server
   engines_per_host: 2
-  crt_timeout: 60
+  crt_timeout: 10
   engines:
     0:
       pinned_numa_node: 0
@@ -32,7 +32,6 @@ dmg:
 pool:
   scm_size: 3000000000
   nvme_size: 9000000000
-  control_method: dmg
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -48,8 +47,8 @@ ior:
   dfs_destroy: false
   iorflags:
     ior_flags:
-      - "-v -W -w -r -R"
-      - "-v -W -w -r -R -F"
+      - -v -W -w -r -R
+      - -v -W -w -r -R -F
     ior_api:
       - DFS
       - MPIIO
@@ -61,10 +60,9 @@ ior:
       - [256B, 512K]
       - [1M, 8M]
     obj_class:
-      - "SX"
-      - "RP_2GX"
+      - SX
+      - RP_2GX
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
   disable_caching: true
 hdf5_vol:
   plugin_path: /usr/lib64/mpich/lib

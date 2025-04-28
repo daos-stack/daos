@@ -61,6 +61,13 @@ func printPoolHealth(out io.Writer, pi *daos.PoolInfo, verbose bool) {
 	}
 
 	var healthStrings []string
+	if pi.DeadRanks != nil && pi.DeadRanks.Count() > 0 {
+		deadStr := "Dead"
+		if verbose {
+			deadStr += fmt.Sprintf(" %s", pi.DeadRanks)
+		}
+		healthStrings = append(healthStrings, deadStr)
+	}
 	if pi.DisabledTargets > 0 {
 		degStr := "Degraded"
 		if verbose {
@@ -125,12 +132,16 @@ func printPoolHealth(out io.Writer, pi *daos.PoolInfo, verbose bool) {
 	fmt.Fprintf(out, "%s: %s\n", pi.Name(), strings.Join(healthStrings, ","))
 }
 
-func printContainerHealth(out io.Writer, ci *daos.ContainerInfo, verbose bool) {
+func printContainerHealth(out io.Writer, pi *daos.PoolInfo, ci *daos.ContainerInfo, verbose bool) {
 	if ci == nil {
 		return
 	}
 
-	fmt.Fprintf(out, "%s: %s\n", ci.Name(), txtfmt.Title(ci.Health))
+	healthStr := txtfmt.Title(ci.Health)
+	if pi != nil && pi.DisabledTargets > 0 {
+		healthStr += " (Pool Degraded)"
+	}
+	fmt.Fprintf(out, "%s: %s\n", ci.Name(), healthStr)
 }
 
 // PrintSystemHealthInfo pretty-prints the supplied system health struct.
@@ -173,7 +184,7 @@ func PrintSystemHealthInfo(out io.Writer, shi *daos.SystemHealthInfo, verbose bo
 			iiiw := txtfmt.NewIndentWriter(iiw)
 			if len(shi.Containers[pool.UUID]) > 0 {
 				for _, cont := range shi.Containers[pool.UUID] {
-					printContainerHealth(iiiw, cont, verbose)
+					printContainerHealth(iiiw, pool, cont, verbose)
 				}
 			} else {
 				fmt.Fprintln(iiiw, "No containers in pool.")

@@ -44,8 +44,8 @@
 |SSD|Solid State Drive|
 |[SWIM](https://doi.org/10.1109/DSN.2002.1028914)|Scalable Weakly-consistent Infection-style process group Membership Protocol|
 |[UCP](https://www.openucx.org/)|Unified Communication Protocols (high-level API of UCX)|
-|[UCS](https://www.openucx.org/)|Unified Communication Transports (low-level API of UCX)|
-|[UCT](https://www.openucx.org/)|Unified Communication Services (common utilities of UCX)|
+|[UCS](https://www.openucx.org/)|Unified Communication Services (common utilities of UCX)|
+|[UCT](https://www.openucx.org/)|Unified Communication Transports (low-level API of UCX)|
 |[UCX](https://www.openucx.org/)|Unified Communication X (includes UCP, UCT and UCS)|
 |[ULT](https://github.com/pmodels/argobots/wiki/User-level-Thread-(ULT))|User Level Thread|
 |UPI|Intel Ultra Path Interconnect|

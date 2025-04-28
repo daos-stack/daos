@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,35 +88,23 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
 
-		/* Skip this DTX since it has been committed or aggregated. */
-		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
-			goto next;
-
-		/* Remote ones are all ready, but local is not, then abort such DTX.
-		 * If related RPC sponsor is still alive, related RPC will be resent.
-		 */
-		if (unlikely(rc == DTX_ST_INITED)) {
-			rc = dtx_abort(cont, &dre->dre_dte, dre->dre_epoch);
-			D_DEBUG(DB_TRACE, "As new leader for DTX "DF_DTI", abort it (1): "DF_RC"\n",
-				DP_DTI(&dre->dre_dte.dte_xid), DP_RC(rc));
-			goto next;
-		}
-
-		/* If we failed to check the status, then assume that it is
+		/*
+		 * Skip this DTX since it has been committed or aggregated.
+		 * If we failed to check the status, then assume that it is
 		 * not committed, then commit it (again), that is harmless.
 		 */
+		if (rc != DTX_ST_COMMITTED && rc != -DER_NONEXIST) {
+			dtes[j] = dtx_entry_get(&dre->dre_dte);
+			dcks[j].oid = dre->dre_oid;
+			dcks[j].dkey_hash = dre->dre_dkey_hash;
+			j++;
+		}
 
-		dtes[j] = dtx_entry_get(&dre->dre_dte);
-		dcks[j].oid = dre->dre_oid;
-		dcks[j].dkey_hash = dre->dre_dkey_hash;
-		j++;
-
-next:
 		dtx_dre_release(drh, dre);
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j);
+		rc = dtx_commit(cont, dtes, dcks, j, true);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -256,6 +245,13 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * let's commit the DTX globally.
 		 */
 		D_GOTO(out, rc = DSHR_NEED_COMMIT);
+	case -DER_OOG:
+	case -DER_HG:
+		D_WARN("Need retry resync for DTX " DF_DTI " because of " DF_RC "\n",
+		       DP_DTI(&dte->dte_xid), DP_RC(rc));
+		/* Yield to give more chance for network recovery. */
+		ABT_thread_yield();
+		D_GOTO(out, rc = DSHR_NEED_RETRY);
 	case -DER_INPROGRESS:
 	case -DER_TIMEDOUT:
 		D_WARN("Other participants not sure about whether the "
@@ -359,7 +355,7 @@ out:
 
 		dck.oid = oid;
 		dck.dkey_hash = dkey_hash;
-		rc = dtx_coll_commit(cont, dce, &dck);
+		rc = dtx_coll_commit(cont, dce, &dck, true);
 	}
 
 	dtx_coll_entry_put(dce);
@@ -393,6 +389,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	if (tgt_array == NULL)
 		D_GOTO(out, err = -DER_NOMEM);
 
+again:
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
@@ -444,6 +441,10 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 		rc = dtx_status_handle_one(cont, &dre->dre_dte, dre->dre_oid, dre->dre_dkey_hash,
 					   dre->dre_epoch, tgt_array, &err);
+
+		if (unlikely(cont->sc_stopping))
+			D_GOTO(out, err = -DER_CANCELED);
+
 		switch (rc) {
 		case DSHR_NEED_COMMIT:
 			goto commit;
@@ -475,7 +476,12 @@ commit:
 		rc = dtx_resync_commit(cont, drh, count);
 		if (rc < 0)
 			err = rc;
+		count = 0;
 	}
+
+	/* The last DTX entry may be re-added to the list because of DSHR_NEED_RETRY. */
+	if (unlikely(!d_list_empty(&drh->drh_list)))
+		goto again;
 
 out:
 	D_FREE(tgt_array);
@@ -612,6 +618,12 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
+	if (pool->sp_disable_dtx_resync) {
+		D_DEBUG(DB_MD, "Skip DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
+			block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+		goto out;
+	}
+
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target_by_rank_idx(pool->sp_map, myrank,
 					      dss_get_module_info()->dmi_tgt_id, &target);
@@ -689,6 +701,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 
 	if (rc >= 0)
 		rc = rc1;
+
+	if (rc >= 0)
+		vos_set_dtx_resync_version(cont->sc_hdl, ver);
 
 	D_DEBUG(DB_MD, "Stop DTX resync (%s) scan for "DF_UUID"/"DF_UUID" with ver %u: rc = %d\n",
 		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);

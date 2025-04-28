@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -56,8 +56,7 @@ class DmvrSerialSmall(DataMoverTestBase):
         self.set_tool(tool)
 
         # Create pool1
-        pool1 = self.create_pool()
-        pool1.connect(2)
+        pool1 = self.get_pool()
 
         # Create cont1
         cont1 = self.get_container(pool1)
@@ -69,8 +68,7 @@ class DmvrSerialSmall(DataMoverTestBase):
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
         # Create pool2
-        pool2 = self.create_pool()
-        pool2.connect(2)
+        pool2 = self.get_pool()
 
         # Serialize/Deserialize cont1 to a new cont2 in pool2
         result = self.run_datamover(

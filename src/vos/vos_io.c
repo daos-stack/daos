@@ -37,6 +37,8 @@ struct vos_io_context {
 	struct dcs_iod_csums	*ic_iod_csums;
 	/** reference on the object */
 	struct vos_object	*ic_obj;
+	/** used only for md-on-ssd phase2 evictable pool */
+	struct vos_object	*ic_pinned_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
 	struct bio_desc		*ic_biod;
 	struct vos_ts_set	*ic_ts_set;
@@ -599,6 +601,9 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 
 	if (ioc->ic_obj)
 		vos_obj_release(ioc->ic_obj, 0, evict);
+
+	if (ioc->ic_pinned_obj)
+		vos_obj_release(ioc->ic_pinned_obj, 0, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
@@ -2119,17 +2124,16 @@ release:
 
 umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		daos_size_t size)
+		daos_size_t size, struct vos_object *obj)
 {
-	umem_off_t	umoff;
+	umem_off_t		 umoff;
+	struct umem_instance	*umm = vos_cont2umm(cont);
 
 	D_ASSERT(size > 0);
-
-	if (vos_cont2umm(cont)->umm_ops->mo_reserve != NULL) {
-		umoff = umem_reserve(vos_cont2umm(cont), rsrvd_scm, size);
-	} else {
-		umoff = umem_alloc(vos_cont2umm(cont), size);
-	}
+	if (umm->umm_ops->mo_reserve != NULL)
+		umoff = vos_obj_reserve(umm, obj, rsrvd_scm, size);
+	else
+		umoff = vos_obj_alloc(umm, obj, size, false);
 
 	return umoff;
 }
@@ -2175,7 +2179,7 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	if (media == DAOS_MEDIA_SCM) {
 		umem_off_t	umoff;
 
-		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size);
+		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size, ioc->ic_pinned_obj);
 		if (!UMOFF_IS_NULL(umoff)) {
 			ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
 			ioc->ic_umoffs_cnt++;
@@ -2577,7 +2581,12 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	tx_started = true;
 
-	/* Commit the CoS DTXs via the IO PMDK transaction. */
+	/*
+	 * Commit the CoS DTXs via the IO PMDK transaction.
+	 *
+	 * It's guaranteed that no other objects are involved in the CoS DTXs, so we don't
+	 * need to pin extra objects here.
+	 */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 		D_ASSERT(!dth->dth_local);
 
@@ -2590,7 +2599,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_GOTO(abort, err = -DER_NOMEM);
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
-					      dth->dth_dti_cos_count, 0, NULL, daes, dces);
+					      dth->dth_dti_cos_count, 0, false, NULL, daes, dces);
 		if (err < 0)
 			goto abort;
 		if (err == 0)
@@ -2669,7 +2678,7 @@ abort:
 
 		if (daes != NULL)
 			vos_dtx_post_handle(ioc->ic_cont, daes, dces, dth->dth_dti_cos_count,
-					    false, err != 0);
+					    false, err != 0, false);
 	}
 
 	if (err != 0)
@@ -2743,6 +2752,20 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		D_ERROR(DF_UOID": Hold space failed. "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
 		goto error;
+	}
+
+	/* Hold the object for the evictable md-on-ssd phase2 pool */
+	if (vos_pool_is_evictable(vos_cont2pool(ioc->ic_cont))) {
+		/*
+		 * FIXME:
+		 * The same object will be referenced by vos_obj_acquire() and vos_obj_hold()
+		 * (in vos_update_end()) twice, this is for avoiding the complication of adding
+		 * object ilog to ts_set. We'll re-org vos_obj_hold() in the future to make the
+		 * code look cleaner.
+		 */
+		rc = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_pinned_obj);
+		if (rc != 0)
+			goto error;
 	}
 
 	rc = dkey_update_begin(ioc);

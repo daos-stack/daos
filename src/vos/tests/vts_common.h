@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,6 +96,8 @@ vts_pool_fallocate(char **fname);
 int
 vts_ctx_init(struct vos_test_ctx *tcx,
 	     size_t pool_size);
+int
+vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t pool_size, size_t meta_size);
 
 void
 vts_ctx_fini(struct vos_test_ctx *tcx);
@@ -138,6 +141,10 @@ int run_ilog_tests(const char *cfg);
 int run_csum_extent_tests(const char *cfg);
 int run_mvcc_tests(const char *cfg);
 int run_wal_tests(const char *cfg);
+int
+run_evtree_tests(const char *cfg);
+int
+run_tree_tests(const char *cfg);
 int
 run_vos_command(const char *arg0, const char *cmd);
 

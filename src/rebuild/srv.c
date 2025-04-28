@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +45,44 @@ void
 rebuild_pool_map_put(struct pool_map *map)
 {
 	pool_map_decref(map);
+}
+
+/**
+ * Check whether the RPT is stale (new rebuild started).
+ * Only used in rebuild_tgt_status_check_ult(), the ULT only can exit when rebuild abort
+ * or globally done. When rebuild done, the leader notifies each target server by IV LAZY SYNC
+ * (see rebuild_leader_status_notify), so possibly the rebuild globally done but the async IV
+ * notification lost due to some network issue and lead to dangling rebuild_tgt_status_check_ult().
+ */
+bool
+rpt_stale(struct rebuild_tgt_pool_tracker *rpt)
+{
+	struct rebuild_tls      *tls = rebuild_tls_get();
+	struct rebuild_pool_tls *pool_tls;
+	bool                     found = false;
+
+	D_ASSERT(tls != NULL);
+	/* Only 1 thread will access the list, no need lock */
+	d_list_for_each_entry(pool_tls, &tls->rebuild_pool_list, rebuild_pool_list) {
+		if (uuid_compare(pool_tls->rebuild_pool_uuid, rpt->rt_pool_uuid) != 0)
+			continue;
+
+		if (rpt->rt_rebuild_ver == pool_tls->rebuild_pool_ver &&
+		    rpt->rt_rebuild_gen == pool_tls->rebuild_pool_gen)
+			found = true;
+
+		if ((rpt->rt_rebuild_ver < pool_tls->rebuild_pool_ver) ||
+		    (rpt->rt_rebuild_ver == pool_tls->rebuild_pool_ver &&
+		     rpt->rt_rebuild_gen < pool_tls->rebuild_pool_gen)) {
+			D_ERROR(DF_RB ": found new rebuild ver %d, gen %d\n", DP_RB_RPT(rpt),
+				pool_tls->rebuild_pool_ver, pool_tls->rebuild_pool_gen);
+			return true;
+		}
+	}
+
+	if (!found)
+		D_ERROR(DF_RB ": rebuild_tls not found\n", DP_RB_RPT(rpt));
+	return !found;
 }
 
 struct rebuild_pool_tls *
@@ -159,24 +198,89 @@ is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
 
 }
 
+/* determine if "most" engines are done with their current rebuild phase (scan or pull) */
+static bool
+is_rebuild_phase_mostly_done(int engines_done_ct, int engines_total_ct)
+{
+	const int MIN_WAIT_CT = 2;
+	const int MAX_WAIT_CT = 20;
+	int       wait_ct_threshold;
+	int       engines_waiting_ct = engines_total_ct - engines_done_ct;
+
+	/* When is the global operation "mostly done" (e.g., waiting for 20 or fewer engines)? */
+	wait_ct_threshold = .05 * engines_total_ct;
+	wait_ct_threshold = max(MIN_WAIT_CT, wait_ct_threshold);
+	wait_ct_threshold = min(MAX_WAIT_CT, wait_ct_threshold);
+
+	return (engines_waiting_ct <= wait_ct_threshold);
+}
+
 #define SCAN_DONE	0x1
 #define PULL_DONE	0x2
+
+static void
+servers_sop_swap(void *array, int a, int b)
+{
+	struct rebuild_server_status **servers = (struct rebuild_server_status **)array;
+	struct rebuild_server_status  *tmp;
+
+	tmp        = servers[a];
+	servers[a] = servers[b];
+	servers[b] = tmp;
+}
+
+static int
+servers_sop_cmp(void *array, int a, int b)
+{
+	struct rebuild_server_status **servers = (struct rebuild_server_status **)array;
+
+	if (servers[a]->rank > servers[b]->rank)
+		return 1;
+	if (servers[a]->rank < servers[b]->rank)
+		return -1;
+	return 0;
+}
+
+static int
+servers_sop_cmp_key(void *array, int i, uint64_t key)
+{
+	struct rebuild_server_status **servers = (struct rebuild_server_status **)array;
+	d_rank_t                       rank    = (d_rank_t)key;
+
+	if (servers[i]->rank > rank)
+		return 1;
+	if (servers[i]->rank < rank)
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t servers_sort_ops = {
+    .so_swap    = servers_sop_swap,
+    .so_cmp     = servers_sop_cmp,
+    .so_cmp_key = servers_sop_cmp_key,
+};
+
+static struct rebuild_server_status *
+rebuild_server_get_status(struct rebuild_global_pool_tracker *rgt, d_rank_t rank)
+{
+	int idx;
+
+	idx = daos_array_find(rgt->rgt_servers_sorted, rgt->rgt_servers_number, rank,
+			      &servers_sort_ops);
+	if (idx < 0)
+		return NULL;
+	return rgt->rgt_servers_sorted[idx];
+}
+
 static void
 rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 			  d_rank_t rank, uint32_t resync_ver, unsigned flags)
 {
-	struct rebuild_server_status	*status = NULL;
-	int				i;
+	struct rebuild_server_status *status = NULL;
 
 	D_ASSERT(rgt->rgt_servers_number > 0);
 	D_ASSERT(rgt->rgt_servers != NULL);
-	for (i = 0; i < rgt->rgt_servers_number; i++) {
-		if (rgt->rgt_servers[i].rank == rank) {
-			status = &rgt->rgt_servers[i];
-			break;
-		}
-	}
-
+	status = rebuild_server_get_status(rgt, rank);
 	if (status == NULL) {
 		D_INFO("rank %u is not included in this rebuild.\n", rank);
 		return;
@@ -187,6 +291,20 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		status->scan_done = 1;
 	if (flags & PULL_DONE)
 		status->pull_done = 1;
+}
+
+static void
+rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t rank)
+{
+	int i;
+
+	i = daos_array_find(rgt->rgt_servers_sorted, rgt->rgt_servers_number, rank,
+			    &servers_sort_ops);
+	if (i >= 0) {
+		rgt->rgt_servers[i].last_update = ABT_get_wtime();
+		return;
+	}
+	D_INFO("rank %u is not included in this rebuild.\n", rank);
 }
 
 static uint32_t
@@ -257,12 +375,109 @@ rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen)
 	return found;
 }
 
+static void
+update_and_warn_for_slow_engines(struct rebuild_global_pool_tracker *rgt)
+{
+	int    i;
+	int    scan_ct = 0;
+	int    pull_ct = 0;
+	int    done_ct;
+	int    wait_ct;
+	bool   scan_gl = false;
+	bool   pull_gl = false;
+	bool   do_warn = false;
+	double now     = ABT_get_wtime();
+	double tw      = now - rgt->rgt_last_warn_ts; /* time since last warning logged */
+	bool   warned  = false;
+
+	/* Throttle warnings to not more often than once per 2 minutes */
+	do_warn = (tw >= 120);
+
+	/* Count scan/pull progress and warn for any ranks that haven't provided updates recently */
+	for (i = 0; i < rgt->rgt_servers_number; i++) {
+		double   tu = now - rgt->rgt_servers[i].last_update;
+		d_rank_t r  = rgt->rgt_servers[i].rank;
+
+		if (rgt->rgt_servers[i].scan_done) {
+			scan_ct++;
+			if (rgt->rgt_servers[i].pull_done) {
+				pull_ct++;
+				continue;
+			}
+		}
+
+		if (!do_warn)
+			continue;
+
+		if (tu > 30) {
+			D_WARN(DF_RB ": no updates from rank %u in %8.3f seconds. "
+				     "scan_done=%d pull_done=%d\n",
+			       DP_RB_RGT(rgt), r, tu, rgt->rgt_servers[i].scan_done,
+			       rgt->rgt_servers[i].pull_done);
+			warned = true;
+		}
+	}
+
+	scan_gl = (scan_ct == rgt->rgt_servers_number);
+	pull_gl = (pull_ct == rgt->rgt_servers_number);
+	if (scan_gl && pull_gl)
+		return;
+
+	/* Determine if scan/pull progress is almost done; mark the time and warn on possible stall.
+	 */
+	done_ct = scan_gl ? pull_ct : scan_ct;
+	wait_ct = rgt->rgt_servers_number - done_ct;
+#if 0
+	D_DEBUG(DB_TRACE, DF_RB ": s_done=%s, s_ct=%d, p_done=%s, p_ct=%d, servers=%d, d_ct=%d, "
+			" almost=%s\n", DP_RB_RGT(rgt), scan_gl ? "yes" : "no", scan_ct, pull_gl ? "yes" : "no",
+			pull_ct, rgt->rgt_servers_number, done_ct,
+			is_rebuild_phase_mostly_done(done_ct, rgt->rgt_servers_number) ? "yes" : "no");
+#endif
+	if (is_rebuild_phase_mostly_done(done_ct, rgt->rgt_servers_number)) {
+		if (!scan_gl && rgt->rgt_scan_warn_deadline_ts == 0.0) {
+			rgt->rgt_scan_warn_deadline_ts = now + 120.0;
+			D_DEBUG(DB_REBUILD, DF_RB ": scan almost done, %d/%d engines\n",
+				DP_RB_RGT(rgt), done_ct, rgt->rgt_servers_number);
+		} else if (!pull_gl && rgt->rgt_pull_warn_deadline_ts == 0.0) {
+			rgt->rgt_pull_warn_deadline_ts = now + 120.0;
+			D_DEBUG(DB_REBUILD, DF_RB ": pull almost done, %d/%d engines\n",
+				DP_RB_RGT(rgt), done_ct, rgt->rgt_servers_number);
+		}
+
+		if (!do_warn)
+			return;
+
+		if (!scan_gl && now > rgt->rgt_scan_warn_deadline_ts) {
+			D_WARN(DF_RB ": scan hung? waiting for %d/%d engines:\n", DP_RB_RGT(rgt),
+			       wait_ct, rgt->rgt_servers_number);
+			for (i = 0; i < rgt->rgt_servers_number; i++)
+				if (!rgt->rgt_servers[i].scan_done)
+					D_WARN(DF_RB ": rank %u not finished scanning!\n",
+					       DP_RB_RGT(rgt), rgt->rgt_servers[i].rank);
+			warned = true;
+		} else if (!pull_gl && now > rgt->rgt_pull_warn_deadline_ts) {
+			D_WARN(DF_RB ": pull hung? waiting for %d/%d engines:\n", DP_RB_RGT(rgt),
+			       wait_ct, rgt->rgt_servers_number);
+			for (i = 0; i < rgt->rgt_servers_number; i++)
+				if (!rgt->rgt_servers[i].pull_done)
+					D_WARN(DF_RB ": rank %u not finished pulling!\n",
+					       DP_RB_RGT(rgt), rgt->rgt_servers[i].rank);
+			warned = true;
+		}
+
+		if (warned)
+			rgt->rgt_last_warn_ts = now;
+	}
+}
+
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
 {
-	D_DEBUG(DB_REBUILD, "iv rank %d scan_done %d pull_done %d resync dtx %u\n",
-		iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
+	rebuild_leader_set_update_time(rgt, iv->riv_rank);
+
+	D_DEBUG(DB_REBUILD, DF_RB ": iv rank %d scan_done %d pull_done %d resync dtx %u\n",
+		DP_RB_RGT(rgt), iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
 		iv->riv_dtx_resyc_version);
 
 	if (!iv->riv_scan_done) {
@@ -273,25 +488,29 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 	if (!is_rebuild_global_scan_done(rgt)) {
 		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version,
 					  SCAN_DONE);
-		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d scan done\n",
-			rgt->rgt_rebuild_ver, iv->riv_rank);
+		D_DEBUG(DB_REBUILD, DF_RB ": rank %d scan done\n", DP_RB_RGT(rgt), iv->riv_rank);
 		/* If global scan is not done, then you can not trust
 		 * pull status. But if the rebuild on that target is
 		 * failed(riv_status != 0), then the target will report
 		 * both scan and pull status to the leader, i.e. they
 		 * both can be trusted.
 		 */
-		if (iv->riv_status == 0)
+		if (iv->riv_status == 0) {
+			/* test only: update_and_warn_for_slow_engines(rgt); */
 			return 0;
+		}
 	}
 
-	/* Only trust pull done if scan is done globally */
+	/* Only trust pull done if scan errored or is done globally */
 	if (iv->riv_pull_done) {
-		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version,
-					  PULL_DONE);
-		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d pull done\n",
-			rgt->rgt_rebuild_ver, iv->riv_rank);
+		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version, PULL_DONE);
+		D_DEBUG(DB_REBUILD, DF_RB ": rank %d pull done\n", DP_RB_RGT(rgt), iv->riv_rank);
+		if (iv->riv_status != 0)
+			DL_WARN(iv->riv_status, DF_RB ": rank %u update with failure",
+				DP_RB_RGT(rgt), iv->riv_rank);
 	}
+
+	/* test only: update_and_warn_for_slow_engines(rgt); */
 
 	return 0;
 }
@@ -418,7 +637,8 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
-					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op, &dms);
+					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op,
+					     rpt->rt_global_scan_done, &dms);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -484,6 +704,45 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 	}
 	if (rpt)
 		rpt_put(rpt);
+}
+
+/*
+ * Restart rebuild if \a rank's rebuild not finished.
+ * Only used for massive failure recovery case, see pool_restart_rebuild_if_rank_wip().
+ */
+void
+ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank)
+{
+	struct rebuild_global_pool_tracker	*rgt;
+	int					 i;
+
+	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1, -1);
+	if (rgt == NULL)
+		return;
+
+	if (rgt->rgt_status.rs_state != DRS_IN_PROGRESS) {
+		rgt_put(rgt);
+		return;
+	}
+
+	for (i = 0; i < rgt->rgt_servers_number; i++) {
+		if (rgt->rgt_servers[i].rank == rank) {
+			if (!rgt->rgt_servers[i].pull_done) {
+				rgt->rgt_status.rs_errno = -DER_STALE;
+				rgt->rgt_abort = 1;
+				rgt->rgt_status.rs_fail_rank = rank;
+				D_INFO(DF_RB ": abort rebuild because rank %d WIP\n",
+				       DP_RB_RGT(rgt), rank);
+			}
+			rgt_put(rgt);
+			return;
+		}
+	}
+
+	D_INFO(DF_RB ": rank %d not in rgt_servers,  rgt_servers_number %d\n",
+	       DP_RB_RGT(rgt), rank, rgt->rgt_servers_number);
+	rgt_put(rgt);
+	return;
 }
 
 /* TODO: Add something about what the current operation is for output status */
@@ -727,6 +986,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			D_PRINT("%s", sbuf);
 		}
 sleep:
+		update_and_warn_for_slow_engines(rgt);
 		sched_req_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
 	}
 
@@ -741,6 +1001,8 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 	d_list_del(&rgt->rgt_list);
 	if (rgt->rgt_servers)
 		D_FREE(rgt->rgt_servers);
+	if (rgt->rgt_servers_sorted)
+		D_FREE(rgt->rgt_servers_sorted);
 
 	if (rgt->rgt_lock)
 		ABT_mutex_free(&rgt->rgt_lock);
@@ -759,6 +1021,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	struct rebuild_global_pool_tracker *rgt;
 	int rank_nr;
 	struct pool_domain *doms;
+	double                              now;
 	int i;
 	int rc = 0;
 
@@ -774,6 +1037,21 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	D_ALLOC_ARRAY(rgt->rgt_servers, rank_nr);
 	if (rgt->rgt_servers == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(rgt->rgt_servers_sorted, rank_nr);
+	if (rgt->rgt_servers_sorted == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	now                = ABT_get_wtime();
+	rgt->rgt_last_warn_ts = now;
+	for (i = 0; i < rank_nr; i++) {
+		rgt->rgt_servers_sorted[i]      = &rgt->rgt_servers[i];
+		rgt->rgt_servers[i].rank        = doms[i].do_comp.co_rank;
+		rgt->rgt_servers[i].last_update = now;
+	}
+	rgt->rgt_servers_number = rank_nr;
+
+	rc = daos_array_sort(rgt->rgt_servers_sorted, rank_nr, true, &servers_sort_ops);
+	D_ASSERT(rc == 0);
 
 	rc = ABT_mutex_create(&rgt->rgt_lock);
 	if (rc != ABT_SUCCESS)
@@ -782,10 +1060,6 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	rc = ABT_cond_create(&rgt->rgt_done_cond);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	for (i = 0; i < rank_nr; i++)
-		rgt->rgt_servers[i].rank = doms[i].do_comp.co_rank;
-	rgt->rgt_servers_number = rank_nr;
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
 	rgt->rgt_rebuild_ver = ver;
@@ -898,10 +1172,10 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 		ret = rebuild_global_pool_tracker_create(pool, rebuild_ver, rebuild_gen,
 							leader_term, reclaim_eph, rebuild_op, rgt);
 		if (ret) {
+			rc = ret;
 			DL_ERROR(rc, DF_RB " rebuild_global_pool_tracker create failed",
 				 DP_UUID(pool->sp_uuid), rebuild_ver, rebuild_gen,
 				 RB_OP_STR(rebuild_op));
-			rc = ret;
 		}
 	}
 
@@ -1926,7 +2200,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		return 0;
 	}
 
-	if (ds_pool_skip_for_check(pool)) {
+	if (ds_pool_restricted(pool, false)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" skip rebuild under check mode\n",
 			DP_UUID(pool->sp_uuid));
 		return 0;
@@ -2089,10 +2363,20 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 int
 ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 {
-	struct daos_prop_entry	*entry;
-	int			rc = 0;
+	struct daos_prop_entry *entry;
+	char                   *env;
+	int                     rc = 0;
 
 	rebuild_gst.rg_abort = 0;
+
+	d_agetenv_str(&env, REBUILD_ENV);
+	if (env && !strcasecmp(env, REBUILD_ENV_DISABLED)) {
+		D_DEBUG(DB_REBUILD, DF_UUID ": Rebuild is disabled for all pools\n",
+			DP_UUID(pool->sp_uuid));
+		d_freeenv_str(&env);
+		return DER_SUCCESS;
+	}
+	d_freeenv_str(&env);
 
 	if (pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
 		D_DEBUG(DB_REBUILD, DF_UUID" No data sync for reintegration\n",
@@ -2355,6 +2639,10 @@ rebuild_tgt_status_check_ult(void *arg)
 			break;
 
 		sched_req_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
+		if (iv.riv_pull_done && rpt_stale(rpt)) {
+			D_ERROR(DF_RB " is stale, exit the ULT.\n", DP_RB_RPT(rpt));
+			break;
+		}
 	}
 
 	sched_req_put(rpt->rt_ult);

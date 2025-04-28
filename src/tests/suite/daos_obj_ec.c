@@ -285,6 +285,8 @@ ec_rec_list_punch(void **state)
 	daos_obj_id_t	oid;
 	int		num_rec;
 	int		i;
+	daos_recx_t	recx;
+	char		data[16];
 
 	if (!test_runable(arg, 6))
 		return;
@@ -292,9 +294,6 @@ ec_rec_list_punch(void **state)
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < 100; i++) {
-		daos_recx_t recx;
-		char data[16];
-
 		/* Make dkey on different shards */
 		req.iod_type = DAOS_IOD_ARRAY;
 		recx.rx_nr = 5;
@@ -313,8 +312,6 @@ ec_rec_list_punch(void **state)
 
 	/* punch the akey */
 	for (i = 0; i < 100; i++) {
-		daos_recx_t recx;
-
 		recx.rx_nr = 5;
 		recx.rx_idx = i * EC_CELL_SIZE;
 
@@ -2402,7 +2399,7 @@ ec_dkey_enum_fail(void **state)
 		recx.rx_nr = 5;
 		recx.rx_idx = 0;
 		memset(data, 'a', 5);
-		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1, data, 16, &req);
+		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1, data, 5, &req);
 	}
 
 	print_message("iterate dkey...\n");

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize/english"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -39,6 +41,12 @@ const (
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
 	DefaultPoolTimeout = 5 * time.Minute
+)
+
+// Pool create error conditions.
+var (
+	errPoolCreateFirstTierZeroBytes = errors.New("can't create pool with 0 byte first tier")
+	errPoolCreateFirstTierRatioZero = errors.New("can't create pool with 0.0 first tier ratio")
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -136,10 +144,17 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 
 	type toJSON PoolCreateReq
 	return json.Marshal(struct {
+		UUID       string                 `json:"uuid,omitempty"`
 		Properties []*mgmtpb.PoolProperty `json:"properties"`
 		ACL        []string               `json:"acl"`
 		*toJSON
 	}{
+		UUID: func() string {
+			if pcr.UUID == uuid.Nil {
+				return ""
+			}
+			return pcr.UUID.String()
+		}(),
 		Properties: props,
 		ACL:        acl,
 		toJSON:     (*toJSON)(pcr),
@@ -199,6 +214,7 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
+		UUID       uuid.UUID            `json:"uuid,omitempty"` // Optional UUID; auto-generate if not supplied
 		User       string               `json:"user"`
 		UserGroup  string               `json:"user_group"`
 		ACL        *AccessControlList   `json:"-"`
@@ -209,19 +225,22 @@ type (
 		NumRanks   uint32               `json:"num_ranks"`   // Auto-sizing param
 		Ranks      []ranklist.Rank      `json:"ranks"`       // Manual-sizing param
 		TierBytes  []uint64             `json:"tier_bytes"`  // Per-rank values
+		MemRatio   float32              `json:"mem_ratio"`   // mem_file_size:meta_blob_size
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
-		UUID      string   `json:"uuid"`
-		Leader    uint32   `json:"svc_ldr"`
-		SvcReps   []uint32 `json:"svc_reps"`
-		TgtRanks  []uint32 `json:"tgt_ranks"`
-		TierBytes []uint64 `json:"tier_bytes"` // Per-rank storage tier sizes
+		UUID          string   `json:"uuid"`
+		Leader        uint32   `json:"svc_ldr"`
+		SvcReps       []uint32 `json:"svc_reps"`
+		TgtRanks      []uint32 `json:"tgt_ranks"`
+		TierBytes     []uint64 `json:"tier_bytes"`       // Per-rank storage tier sizes.
+		MemFileBytes  uint64   `json:"mem_file_bytes"`   // Per-rank. MD-on-SSD mode only.
+		MdOnSsdActive bool     `json:"md_on_ssd_active"` // MD-on-SSD mode.
 	}
 )
 
-type maxPoolSizeGetter func() (uint64, uint64, error)
+type maxPoolSizeGetter func(*PoolCreateReq) (uint64, uint64, error)
 
 func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req *PoolCreateReq) error {
 	hasTotBytes := req.TotalBytes > 0
@@ -233,14 +252,14 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 	switch {
 	case hasTierBytes && hasNoTierRatio && !hasTotBytes:
 		if req.TierBytes[0] == 0 {
-			return errors.New("can't create pool with 0 SCM")
+			return errPoolCreateFirstTierZeroBytes
 		}
 		// Storage sizes have been written to TierBytes in request (manual-size).
 		log.Debugf("manual-size pool create mode: %+v", req)
 
 	case hasNoTierBytes && hasTierRatio && hasTotBytes:
 		if req.TierRatio[0] == 0 {
-			return errors.New("can't create pool with 0.0 SCM ratio")
+			return errPoolCreateFirstTierRatioZero
 		}
 		// Storage tier ratios and total pool size given, distribution of space across
 		// ranks to be calculated on the server side (auto-total-size).
@@ -248,7 +267,7 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 
 	case hasNoTierBytes && hasTierRatio && !hasTotBytes:
 		if req.TierRatio[0] == 0 {
-			return errors.New("can't create pool with 0.0 SCM ratio")
+			return errPoolCreateFirstTierRatioZero
 		}
 		availRatio := req.TierRatio[0]
 		if req.TierRatio[1] != availRatio {
@@ -257,7 +276,7 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 		req.TierRatio = nil
 		// Storage tier ratios specified without a total size, use specified fraction of
 		// available space (auto-percentage-size).
-		scmBytes, nvmeBytes, err := getMaxPoolSz()
+		scmBytes, nvmeBytes, err := getMaxPoolSz(req)
 		if err != nil {
 			return err
 		}
@@ -286,8 +305,8 @@ func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCre
 		return
 	}
 
-	getMaxPoolSz := func() (uint64, uint64, error) {
-		return getMaxPoolSize(ctx, rpcClient, ranklist.RankList(in.Ranks))
+	getMaxPoolSz := func(createReq *PoolCreateReq) (uint64, uint64, error) {
+		return getMaxPoolSize(ctx, rpcClient, createReq)
 	}
 
 	if err = poolCreateReqChkSizes(rpcClient, getMaxPoolSz, in); err != nil {
@@ -299,7 +318,9 @@ func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCre
 		return
 	}
 
-	out.Uuid = uuid.New().String()
+	if out.Uuid == "" {
+		out.Uuid = uuid.New().String()
+	}
 	return
 }
 
@@ -515,7 +536,7 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 	return resp, err
 }
 
-// UpdateState update the pool state.
+// UpdateState updates the pool state based on response field values.
 func (pqr *PoolQueryResp) UpdateState() error {
 	// Update the state as Ready if DAOS return code is 0.
 	if pqr.Status == 0 {
@@ -584,14 +605,14 @@ func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*daos.PoolQueryT
 	pqti.State = daos.PoolQueryTargetState(pbInfo.State)
 	pqti.Space = []*daos.StorageUsageStats{
 		{
-			Total:     uint64(pbInfo.Space[daos.StorageMediaTypeScm].Total),
-			Free:      uint64(pbInfo.Space[daos.StorageMediaTypeScm].Free),
-			MediaType: daos.StorageMediaTypeScm,
+			Total:     uint64(pbInfo.Space[0].Total),
+			Free:      uint64(pbInfo.Space[0].Free),
+			MediaType: daos.StorageMediaType(pbInfo.Space[0].MediaType),
 		},
 		{
-			Total:     uint64(pbInfo.Space[daos.StorageMediaTypeNvme].Total),
-			Free:      uint64(pbInfo.Space[daos.StorageMediaTypeNvme].Free),
-			MediaType: daos.StorageMediaTypeNvme,
+			Total:     uint64(pbInfo.Space[1].Total),
+			Free:      uint64(pbInfo.Space[1].Free),
+			MediaType: daos.StorageMediaType(pbInfo.Space[1].MediaType),
 		},
 	}
 
@@ -724,79 +745,170 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	return resp, nil
 }
 
-// PoolExcludeReq struct contains request
-type PoolExcludeReq struct {
+// PoolRanksReq struct contains request for operation on multiple pool-ranks. Control API receives
+// generic PoolRanksReq with multiple ranks from API consumer (e.g. dmg admin tool) and issues
+// specific e.g. pb.PoolDrain gRPC requests to server for each rank in serial using the management
+// service client API. Per-rank results are returned in control API generic PoolRanksResp.
+type PoolRanksReq struct {
 	poolRequest
-	ID        string
-	Rank      ranklist.Rank
-	TargetIdx []uint32
+	ID        string          `json:"id"`
+	Ranks     []ranklist.Rank `json:"ranks"`
+	TargetIdx []uint32        `json:"target_idx"`
+	Force     bool            `json:"force"`
 }
 
-// ExcludeResp has no other parameters other than success/failure for now.
+// PoolRankResult describes the result of an operation on a pool's rank. JSON compatible with
+// shared RankResult protobuf message.
+type PoolRankResult struct {
+	Rank    ranklist.Rank `json:"rank"`
+	Errored bool          `json:"errored"`
+	Msg     string        `json:"msg"`
+}
 
-// PoolExclude will set a pool target for a specific rank to down.
-// This should automatically start the rebuildiing process.
-// Returns an error (including any DER code from DAOS).
-func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeReq) error {
-	pbReq := &mgmtpb.PoolExcludeReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
+// PoolRanksResp struct contains response from operation on multiple pool-ranks.
+type PoolRanksResp struct {
+	ID      string            `json:"id"`
+	Results []*PoolRankResult `json:"results"`
+}
+
+// Errors returns either a generic failure based on the requested rankset failure or a rank-specific
+// failure depending on whether or not FailedRank has been set in the response.
+func (resp *PoolRanksResp) Errors() error {
+	if resp == nil {
+		return errors.Errorf("nil %T", resp)
 	}
+	id := resp.ID
+	if id == "" {
+		id = "<unknown>"
+	}
+
+	rs := ranklist.MustCreateRankSet("")
+	for _, res := range resp.Results {
+		if res.Errored {
+			rs.Add(res.Rank)
+		}
+	}
+
+	if rs.Count() > 0 {
+		return errors.Errorf("%s %s failed on pool %s",
+			english.PluralWord(rs.Count(), "rank", "ranks"), rs.RangedString(), id)
+	}
+
+	return nil
+}
+
+type poolRankOpSig func(context.Context, UnaryInvoker, *PoolRanksReq, ranklist.Rank) (*PoolRankResult, error)
+
+// Iterate through multiple ranks in PoolRanksReq and call supplied poolRankOp to generate and
+// return a result.
+func getPoolRanksResp(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq, poolRankOp poolRankOpSig) (*PoolRanksResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+	if req.ID == "" {
+		return nil, errors.New("empty pool id")
+	}
+	if len(req.Ranks) == 0 {
+		return nil, errors.New("no ranks in request")
+	}
+
+	results := []*PoolRankResult{}
+	for _, rank := range req.Ranks {
+		result, err := poolRankOp(ctx, rpcClient, req, rank)
+		if err != nil {
+			rpcClient.Debugf("pool %s rank %d failed: %s", req.ID, rank, err.Error())
+			result = &PoolRankResult{
+				Rank:    rank,
+				Errored: true,
+				Msg:     err.Error(),
+			}
+		}
+		results = append(results, result)
+	}
+
+	return &PoolRanksResp{
+		ID:      req.ID,
+		Results: results,
+	}, nil
+}
+
+func getPoolRankResult(status int32, rank ranklist.Rank) *PoolRankResult {
+	var msg string
+	errored := daos.Status(status) != daos.Success
+	if errored {
+		msg = daos.Status(status).Error()
+	}
+
+	return &PoolRankResult{Rank: rank, Errored: errored, Msg: msg}
+}
+
+// Implements poolRankOpSig.
+func poolExcludeRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq, rank ranklist.Rank) (*PoolRankResult, error) {
+	pbReq := new(mgmtpb.PoolExcludeReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
+	}
+	pbReq.Sys = req.getSystem(rpcClient)
+	pbReq.Rank = rank.Uint32()
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Exclude DAOS pool target request: %s\n", pbReq)
+	rpcClient.Debugf("Exclude DAOS pool-rank targets request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return errors.Wrap(ur.getMSError(), "pool exclude failed")
-}
-
-// PoolDrainReq struct contains request
-type PoolDrainReq struct {
-	poolRequest
-	ID        string
-	Rank      ranklist.Rank
-	TargetIdx []uint32
-}
-
-// DrainResp has no other parameters other than success/failure for now.
-
-// PoolDrain will set a pool target for a specific rank to the drain status.
-// This should automatically start the rebuildiing process.
-// Returns an error (including any DER code from DAOS).
-func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) error {
-	pbReq := &mgmtpb.PoolDrainReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
+	resp := new(mgmtpb.PoolExcludeResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
 	}
+	rpcClient.Debugf("Exclude DAOS pool-rank targets response: %+v\n", *resp)
+
+	return getPoolRankResult(resp.Status, rank), nil
+}
+
+// PoolExclude will set pool targets on specified ranks to down state which should automatically
+// start the rebuilding process. Returns pool-ranks response and error.
+func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (*PoolRanksResp, error) {
+	return getPoolRanksResp(ctx, rpcClient, req, poolExcludeRank)
+}
+
+// Implements poolRankOpSig.
+func poolDrainRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq, rank ranklist.Rank) (*PoolRankResult, error) {
+	pbReq := new(mgmtpb.PoolDrainReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
+	}
+	pbReq.Sys = req.getSystem(rpcClient)
+	pbReq.Rank = rank.Uint32()
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Drain DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
+	rpcClient.Debugf("Drain DAOS pool-rank targets request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return err
-	}
-
-	return errors.Wrap(ur.getMSError(), "pool drain failed")
-}
-
-func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
-	out = new(mgmtpb.PoolExtendReq)
-	if err = convert.Types(in, out); err != nil {
 		return nil, err
 	}
 
-	return
+	resp := new(mgmtpb.PoolDrainResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
+	}
+	rpcClient.Debugf("Drain DAOS pool-rank targets response: %+v\n", *resp)
+
+	return getPoolRankResult(resp.Status, rank), nil
+}
+
+// PoolDrain will set pool targets on specified ranks in to the drain state which should
+// automatically start the rebuildiing process. Returns pool-ranks response and error.
+// Drain engages a cooperative transfer of data before rank gets excluded.
+func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (*PoolRanksResp, error) {
+	return getPoolRanksResp(ctx, rpcClient, req, poolDrainRank)
 }
 
 // PoolExtendReq struct contains request
@@ -810,9 +922,9 @@ type PoolExtendReq struct {
 // This should automatically start the rebalance process.
 // Returns an error (including any DER code from DAOS).
 func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq) error {
-	pbReq, err := genPoolExtendRequest(req)
-	if err != nil {
-		return errors.Wrap(err, "failed to generate PoolExtend request")
+	pbReq := new(mgmtpb.PoolExtendReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
 	pbReq.Sys = req.getSystem(rpcClient)
 
@@ -829,38 +941,38 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 	return errors.Wrap(ur.getMSError(), "pool extend failed")
 }
 
-// PoolReintegrateReq struct contains request
-type PoolReintegrateReq struct {
-	poolRequest
-	ID        string
-	Rank      ranklist.Rank
-	TargetIdx []uint32
-}
-
-// ReintegrateResp has no other parameters other than success/failure for now.
-
-// PoolReintegrate will set a pool target for a specific rank back to up.
-// This should automatically start the reintegration process.
-// Returns an error (including any DER code from DAOS).
-func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
-	pbReq := &mgmtpb.PoolReintegrateReq{
-		Sys:       req.getSystem(rpcClient),
-		Id:        req.ID,
-		Rank:      req.Rank.Uint32(),
-		TargetIdx: req.TargetIdx,
+// Implements poolRankOpSig.
+func poolReintegrateRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq, rank ranklist.Rank) (*PoolRankResult, error) {
+	pbReq := new(mgmtpb.PoolReintReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
+	pbReq.Rank = rank.Uint32()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
+	rpcClient.Debugf("Reintegrate DAOS pool-rank targets request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return errors.Wrap(ur.getMSError(), "pool reintegrate failed")
+	resp := new(mgmtpb.PoolReintResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
+	}
+	rpcClient.Debugf("Reintegrate DAOS pool-rank targets response: %+v\n", *resp)
+
+	return getPoolRankResult(resp.Status, rank), nil
+}
+
+// PoolReintegrate will set pool targets on specified ranks back to up state which should
+// automatically start the reintegration process. Returns pool-ranks response and error.
+func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (*PoolRanksResp, error) {
+	return getPoolRanksResp(ctx, rpcClient, req, poolReintegrateRank)
 }
 
 // ListPoolsReq contains the inputs for the list pools command.
@@ -1030,6 +1142,7 @@ func newFilterRankFunc(ranks ranklist.RankList) filterRankFn {
 func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespaces storage.ScmNamespaces, rankNVMeFreeSpace rankFreeSpaceMap) (uint64, error) {
 	scmBytes := uint64(math.MaxUint64)
 
+	// Realistically there should only be one-per-rank but handle the case for multiple anyway.
 	for _, scmNamespace := range scmNamespaces {
 		if scmNamespace.Mount == nil {
 			return 0, errors.Errorf("SCM device %s (bdev %s, name %s) is not mounted",
@@ -1065,12 +1178,17 @@ func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespace
 func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, controller := range nvmeControllers {
 		for _, smdDevice := range controller.SmdDevices {
-			msgDev := fmt.Sprintf("SMD device %s (rank %d, ctrlr %s)", smdDevice.UUID,
+			msgDev := fmt.Sprintf("SMD device %s (rank %d, ctrlr %s", smdDevice.UUID,
 				smdDevice.Rank, controller.PciAddr)
 
-			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
-				log.Debugf("Skipping %s, not used for storing data", msgDev)
-				continue
+			if smdDevice.Roles.IsEmpty() {
+				msgDev += ")"
+			} else {
+				msgDev += fmt.Sprintf(", roles %q)", smdDevice.Roles.String())
+				if !smdDevice.Roles.HasData() {
+					log.Debugf("skipping %s, not used for storing data", msgDev)
+					continue
+				}
 			}
 
 			if controller.NvmeState == storage.NvmeStateNew {
@@ -1104,31 +1222,43 @@ func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControl
 }
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
-func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
+func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *PoolCreateReq) (uint64, uint64, error) {
+	if createReq.MemRatio < 0 {
+		return 0, 0, errors.New("invalid mem-ratio, should be greater than zero")
+	}
+	if createReq.MemRatio > 1 {
+		return 0, 0, errors.New("invalid mem-ratio, should not be greater than one")
+	}
+
 	// Verify that the DAOS system is ready before attempting to query storage.
 	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
 		return 0, 0, err
 	}
 
-	resp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
+	scanReq := &StorageScanReq{
+		Usage:    true,
+		MemRatio: createReq.MemRatio,
+	}
+
+	scanResp, err := StorageScan(ctx, rpcClient, scanReq)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	if len(resp.HostStorage) == 0 {
+	if len(scanResp.HostStorage) == 0 {
 		return 0, 0, errors.New("Empty host storage response from StorageScan")
 	}
 
 	// Generate function to verify a rank is in the provided rank slice.
-	filterRank := newFilterRankFunc(ranks)
+	filterRank := newFilterRankFunc(ranklist.RankList(createReq.Ranks))
 	rankNVMeFreeSpace := make(rankFreeSpaceMap)
 	scmBytes := uint64(math.MaxUint64)
-	for _, key := range resp.HostStorage.Keys() {
-		hostStorage := resp.HostStorage[key].HostStorage
+	for _, key := range scanResp.HostStorage.Keys() {
+		hostStorage := scanResp.HostStorage[key].HostStorage
 
 		if hostStorage.ScmNamespaces.Usable() == 0 {
 			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
-				resp.HostStorage[key].HostSet.String())
+				scanResp.HostStorage[key].HostSet.String())
 		}
 
 		sb, err := processSCMSpaceStats(rpcClient, filterRank, hostStorage.ScmNamespaces, rankNVMeFreeSpace)
@@ -1146,7 +1276,8 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, ranks ranklist.
 	}
 
 	if scmBytes == math.MaxUint64 {
-		return 0, 0, errors.Errorf("No SCM storage space available with rank list %s", ranks)
+		return 0, 0, errors.Errorf("No SCM storage space available with rank list %q",
+			createReq.Ranks)
 	}
 
 	nvmeBytes := uint64(math.MaxUint64)
@@ -1156,8 +1287,28 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, ranks ranklist.
 		}
 	}
 
-	rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
-		humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
+	if !scanResp.HostStorage.IsMdOnSsdEnabled() {
+		rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
+			humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
 
-	return scmBytes, nvmeBytes, nil
+		return scmBytes, nvmeBytes, nil
+	}
+	rpcClient.Debugf("md-on-ssd mode detected")
+
+	// In MD-on-SSD mode calculate metaBytes based on the minimum ramdisk (called scm here)
+	// availability across ranks. NVMe sizes returned in StorageScan response at the beginning
+	// of this function have been adjusted based on SSD bdev roles and MemRatio passed in the
+	// scan request. The rationale behind deriving pool sizes from ramdisk availability is that
+	// this is more likely to be the limiting factor than SSD usage.
+	if createReq.MemRatio == 0 {
+		createReq.MemRatio = 1
+	}
+	metaBytes := uint64(float64(scmBytes) / float64(createReq.MemRatio))
+
+	rpcClient.Debugf("With minimum available ramdisk capacity of %s and mem-ratio %.2f,"+
+		" the maximum per-rank sizes for a pool are META=%s (%d B) and DATA=%s (%d B)",
+		humanize.Bytes(scmBytes), createReq.MemRatio, humanize.Bytes(metaBytes),
+		metaBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
+
+	return metaBytes, nvmeBytes, nil
 }

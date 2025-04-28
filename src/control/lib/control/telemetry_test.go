@@ -617,6 +617,10 @@ func TestControl_Metric_JSON(t *testing.T) {
 						CumulativeCount: 55,
 						UpperBound:      500,
 					},
+					{
+						CumulativeCount: 4242,
+						UpperBound:      math.Inf(1),
+					},
 				},
 			},
 		},

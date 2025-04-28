@@ -344,21 +344,28 @@ func Test_CalcMinHugepages(t *testing.T) {
 			},
 			expErr: errors.New("numTargets"),
 		},
-		"2KB pagesize; 16 targets": {
+		"2MiB pagesize; 1 target": {
+			input: &common.MemInfo{
+				HugepageSizeKiB: 2048,
+			},
+			numTargets: 1,
+			expPages:   512,
+		},
+		"2MiB pagesize; 16 targets": {
 			input: &common.MemInfo{
 				HugepageSizeKiB: 2048,
 			},
 			numTargets: 16,
 			expPages:   8192,
 		},
-		"2KB pagesize; 31 targets": {
+		"2MiB pagesize; 31 targets": {
 			input: &common.MemInfo{
 				HugepageSizeKiB: 2048,
 			},
 			numTargets: 31,
 			expPages:   15872,
 		},
-		"1GB pagesize; 16 targets": {
+		"1GiB pagesize; 16 targets": {
 			input: &common.MemInfo{
 				HugepageSizeKiB: 1048576,
 			},

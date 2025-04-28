@@ -55,11 +55,37 @@ type Config struct {
 	DisableAutoEvict    bool                       `yaml:"disable_auto_evict,omitempty"`
 	EvictOnStart        bool                       `yaml:"enable_evict_on_start,omitempty"`
 	ExcludeFabricIfaces common.StringSet           `yaml:"exclude_fabric_ifaces,omitempty"`
+	IncludeFabricIfaces common.StringSet           `yaml:"include_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
 	TelemetryPort       int                        `yaml:"telemetry_port,omitempty"`
 	TelemetryEnabled    bool                       `yaml:"telemetry_enabled,omitempty"`
 	TelemetryRetain     time.Duration              `yaml:"telemetry_retain,omitempty"`
+}
+
+// Validate performs basic validation of the configuration.
+func (c *Config) Validate() error {
+	if c == nil {
+		return errors.New("config is nil")
+	}
+
+	if !daos.SystemNameIsValid(c.SystemName) {
+		return fmt.Errorf("invalid system name: %s", c.SystemName)
+	}
+
+	if c.TelemetryRetain > 0 && c.TelemetryPort == 0 {
+		return errors.New("telemetry_retain requires telemetry_port")
+	}
+
+	if c.TelemetryEnabled && c.TelemetryPort == 0 {
+		return errors.New("telemetry_enabled requires telemetry_port")
+	}
+
+	if len(c.ExcludeFabricIfaces) > 0 && len(c.IncludeFabricIfaces) > 0 {
+		return errors.New("cannot specify both exclude_fabric_ifaces and include_fabric_ifaces")
+	}
+
+	return nil
 }
 
 // TelemetryExportEnabled returns true if client telemetry export is enabled.
@@ -95,16 +121,8 @@ func LoadConfig(cfgPath string) (*Config, error) {
 		return nil, errors.Wrapf(err, "parsing config: %s", cfgPath)
 	}
 
-	if !daos.SystemNameIsValid(cfg.SystemName) {
-		return nil, fmt.Errorf("invalid system name: %s", cfg.SystemName)
-	}
-
-	if cfg.TelemetryRetain > 0 && cfg.TelemetryPort == 0 {
-		return nil, errors.New("telemetry_retain requires telemetry_port")
-	}
-
-	if cfg.TelemetryEnabled && cfg.TelemetryPort == 0 {
-		return nil, errors.New("telemetry_enabled requires telemetry_port")
+	if err := cfg.Validate(); err != nil {
+		return nil, errors.Wrap(err, "agent config validation failed")
 	}
 
 	return cfg, nil

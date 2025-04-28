@@ -17,7 +17,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
@@ -38,12 +39,12 @@ type configGenCmd struct {
 type getFabricFn func(context.Context, logging.Logger, string) (*control.HostFabric, error)
 
 func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*control.HostFabric, error) {
-	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log).Scan, provider)
+	hf, err := GetLocalFabricIfaces(ctx, network.DefaultFabricScanner(log).Scan, provider)
 	if err != nil {
 		return nil, errors.Wrap(err, "fetching local fabric interfaces")
 	}
 
-	topo, err := hwprov.DefaultTopologyProvider(log).GetTopology(ctx)
+	topo, err := topology.DefaultProvider(log).GetTopology(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "fetching local hardware topology")
 	}
@@ -120,6 +121,8 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		return nil, err
 	}
 	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
+
+	cmd.CheckDeprecated(cmd.Logger)
 
 	req := new(control.ConfGenerateReq)
 	if err := convert.Types(cmd, req); err != nil {

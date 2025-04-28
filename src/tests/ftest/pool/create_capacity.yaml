@@ -41,7 +41,6 @@ server_config:
       storage: auto
 
 pool:
-  control_method: dmg
   scm_size: 192MiB
   # NOTE The minimal size of DATA with MD on SCM is equal to 1GiB (i.e. size of a SPDK cluster)
   nvme_size: 1024MiB

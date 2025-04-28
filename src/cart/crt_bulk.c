@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,13 +86,14 @@ int
 crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
 {
-	struct crt_context	*ctx;
-	int			rc = 0;
+	struct crt_context *ctx;
+	struct crt_bulk    *ret_hdl  = NULL;
+	int                 quota_rc = 0;
+	int                 rc       = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || !crt_sgl_valid(sgl) ||
-	    /* Now HG treats WO as invalid parameter */
-	    (bulk_perm != CRT_BULK_RW && bulk_perm != CRT_BULK_RO /* &&
-	     bulk_perm != CRT_BULK_WO */) || bulk_hdl == NULL) {
+	    (bulk_perm != CRT_BULK_RW && bulk_perm != CRT_BULK_RO && bulk_perm != CRT_BULK_WO) ||
+	    bulk_hdl == NULL) {
 		D_ERROR("invalid parameter, crt_ctx: %p, "
 			"crt_sgl_valid: %d, bulk_perm: %d, bulk_hdl: %p.\n",
 			crt_ctx, crt_sgl_valid(sgl), bulk_perm, bulk_hdl);
@@ -99,46 +101,79 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	}
 
 	ctx = crt_ctx;
-	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, bulk_hdl);
-	if (rc != 0)
-		D_ERROR("crt_hg_bulk_create() failed, rc: "DF_RC"\n",
-			DP_RC(rc));
+
+	D_ALLOC_PTR(ret_hdl);
+	if (ret_hdl == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
+	if (quota_rc == -DER_QUOTA_LIMIT) {
+		D_DEBUG(DB_ALL, "Exceeded bulk limit, deferring bulk handle allocation\n");
+		ret_hdl->bound       = false;
+		ret_hdl->sgl         = *sgl;
+		ret_hdl->bulk_perm   = bulk_perm;
+		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
+		ret_hdl->crt_ctx     = crt_ctx;
+		ret_hdl->deferred    = true;
+		D_GOTO(out, rc = DER_SUCCESS);
+	}
+
+	ret_hdl->deferred = false;
+	ret_hdl->crt_ctx  = crt_ctx;
+
+	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
+	if (rc != 0) {
+		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
+		D_FREE(ret_hdl);
+		D_GOTO(out, rc);
+	}
 
 out:
+	if (rc == 0 && bulk_hdl)
+		*bulk_hdl = ret_hdl;
 	return rc;
 }
 
 int
-crt_bulk_bind(crt_bulk_t bulk_hdl, crt_context_t crt_ctx)
+crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 {
-	struct crt_context	*ctx = crt_ctx;
-	int			rc = 0;
+	struct crt_context *ctx  = crt_ctx;
+	struct crt_bulk    *bulk = crt_bulk;
+	int                 rc   = 0;
 
-	if (ctx == CRT_CONTEXT_NULL || bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("invalid parameter, NULL crt_ctx or bulk_hdl.\n");
+	if (ctx == NULL || bulk == NULL) {
+		D_ERROR("invalid parameter, NULL crt_ctx or crt_bulk.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_hg_bulk_bind(bulk_hdl, &ctx->cc_hg_ctx);
-	if (rc != 0)
+	if (bulk->deferred) {
+		bulk->bound = true;
+		D_GOTO(out, rc = DER_SUCCESS);
+	}
+
+	rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
+	if (rc != 0) {
 		D_ERROR("crt_hg_bulk_bind() failed, rc: %d.\n", rc);
+		D_GOTO(out, rc);
+	}
 
 out:
 	return rc;
 }
 
 int
-crt_bulk_addref(crt_bulk_t bulk_hdl)
+crt_bulk_addref(crt_bulk_t crt_bulk)
 {
-	int         rc = -DER_SUCCESS;
-	hg_return_t hg_ret;
+	struct crt_bulk *bulk = crt_bulk;
+	int              rc   = -DER_SUCCESS;
+	hg_return_t      hg_ret;
 
-	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
+	if (bulk == NULL) {
+		D_ERROR("invalid parameter, NULL bulk\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hg_ret = HG_Bulk_ref_incr(bulk_hdl);
+	hg_ret = HG_Bulk_ref_incr(bulk->hg_bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d.\n", hg_ret);
 		rc = crt_hgret_2_der(hg_ret);
@@ -149,24 +184,38 @@ out:
 }
 
 int
-crt_bulk_free(crt_bulk_t bulk_hdl)
+crt_bulk_free(crt_bulk_t crt_bulk)
 {
-	int         rc = -DER_SUCCESS;
-	hg_return_t hg_ret;
+	struct crt_bulk *bulk = crt_bulk;
+	int              rc   = -DER_SUCCESS;
+	hg_return_t      hg_ret;
 
-	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
+	if (bulk == NULL) {
+		D_ERROR("invalid parameter, NULL bulk\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hg_ret = HG_Bulk_free(bulk_hdl);
+	/* This can happen if D_QUOTA_BULKS is enabled on a client */
+	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
+		if (bulk->deferred) {
+			/* Treat as success */
+			D_GOTO(out, rc = DER_SUCCESS);
+		} else {
+			D_ASSERTF(0, "Bulk handle should not be NULL\n");
+		}
+	}
+
+	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
-
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
+	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
+	if (bulk->crt_ctx)
+		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 out:
+	D_FREE(bulk);
 	return rc;
 }
 
@@ -210,53 +259,62 @@ out:
 }
 
 int
-crt_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
+crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 {
-	hg_size_t hg_size;
+	struct crt_bulk *bulk = crt_bulk;
 
 	if (bulk_len == NULL) {
 		D_ERROR("bulk_len is NULL\n");
 		return -DER_INVAL;
 	}
 
-	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("bulk_hdl is NULL\n");
+	if (bulk == NULL) {
+		D_ERROR("bulk is NULL\n");
 		return -DER_INVAL;
 	}
 
-	hg_size   = HG_Bulk_get_size(bulk_hdl);
-	*bulk_len = hg_size;
+	if (bulk->deferred)
+		return -DER_NOTSUPPORTED;
 
+	*bulk_len = crt_hg_bulk_get_len(bulk->hg_bulk_hdl);
 	return 0;
 }
 
 int
-crt_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
+crt_bulk_get_sgnum(crt_bulk_t crt_bulk, unsigned int *bulk_sgnum)
 {
-	hg_uint32_t hg_sgnum;
+	struct crt_bulk *bulk = crt_bulk;
 
 	D_ASSERT(bulk_sgnum != NULL);
-	hg_sgnum    = HG_Bulk_get_segment_count(bulk_hdl);
-	*bulk_sgnum = hg_sgnum;
+	D_ASSERT(bulk != NULL);
 
+	if (bulk->deferred)
+		return -DER_NOTSUPPORTED;
+
+	*bulk_sgnum = crt_hg_bulk_get_sgnum(bulk->hg_bulk_hdl);
 	return 0;
 }
 
 int
-crt_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
+crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 {
-	int		rc = 0;
+	struct crt_bulk *bulk = crt_bulk;
+	int              rc   = 0;
 
-	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
+	if (bulk == NULL) {
+		D_ERROR("invalid parameter, NULL bulk.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
 	if (sgl == NULL) {
 		D_ERROR("invalid parameter, NULL sgl pointer.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_hg_bulk_access(bulk_hdl, sgl);
+	if (bulk->deferred)
+		*sgl = bulk->sgl;
+	else
+		rc = crt_hg_bulk_access(bulk->hg_bulk_hdl, sgl);
 
 out:
 	return rc;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,7 +13,7 @@ import (
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 )
 
 // FabricScan performs a scan of fabric interfaces given a list of providers.
@@ -35,7 +35,7 @@ func (cs *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkSca
 		providers = []string{req.GetProvider()}
 	}
 
-	topo, err := hwprov.DefaultTopologyProvider(cs.log).GetTopology(ctx)
+	topo, err := topology.DefaultProvider(cs.log).GetTopology(ctx)
 	if err != nil {
 		return nil, err
 	}

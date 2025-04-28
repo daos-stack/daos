@@ -113,7 +113,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_cmd = None
         self.fs_copy_cmd = None
         self.cont_clone_cmd = None
-        self.pool = []
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
 
@@ -293,20 +292,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.fail("Invalid param_type: {}".format(_type))
         return None
 
-    def create_pool(self, **params):
-        """Create a TestPool object and adds to self.pool.
-
-        Returns:
-            TestPool: the created pool
-
-        """
-        pool = self.get_pool(connect=False, **params)
-
-        # Save the pool
-        self.pool.append(pool)
-
-        return pool
-
     def parse_create_cont_label(self, output):
         """Parse a uuid or label from create container output.
 
@@ -344,8 +329,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of DaosObj created.
 
         """
-        self.log.info("Creating dataset in %s/%s",
-                      str(cont.pool.uuid), str(cont.uuid))
+        self.log.info("Creating dataset in %s/%s", str(cont.pool), str(cont))
 
         cont.open()
 
@@ -415,8 +399,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             akey_extents (list): varying number of akey extents to iterate.
 
         """
-        self.log.info("Verifying dataset in %s/%s",
-                      str(cont.pool.uuid), str(cont.uuid))
+        self.log.info("Verifying dataset in %s/%s", str(cont.pool), str(cont))
 
         cont.open()
 

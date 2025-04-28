@@ -273,7 +273,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 
 
 		name: daos_server
-		access_points:
+		mgmt_svc_replicas:
 		- server-1
 		port: 10001
 

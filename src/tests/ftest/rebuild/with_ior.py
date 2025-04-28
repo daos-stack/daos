@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,7 +29,7 @@ class RbldWithIOR(IorTestBase):
              sequence while failure/rebuild is triggered in another process
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild
         :avocado: tags=RbldWithIOR,test_rebuild_with_ior
         """
@@ -61,7 +62,7 @@ class RbldWithIOR(IorTestBase):
         self.run_ior_with_pool(timeout=ior_timeout)
 
         # kill the server
-        self.server_managers[0].stop_ranks([rank_to_kill], self.d_log)
+        self.server_managers[0].stop_ranks([rank_to_kill])
 
         # wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()

@@ -44,6 +44,7 @@ Environment variables in this section only apply to the server side.
 |DAOS\_MD\_CAP         |Size of a metadata pmem pool/file in MBs. INTEGER. Default to 128 MB.|
 |DAOS\_START\_POOL\_SVC|Determines whether to start existing pool services when starting a daos\_server. BOOL. Default to true.|
 |CRT\_DISABLE\_MEM\_PIN|Disable memory pinning workaround on a server side. BOOL. Default to 0.|
+|CRT\_EVENT\_DELAY|Delay in seconds before handling a set of CaRT events. INTEGER. Default to 10 s. A longer delay enables batching of successive CaRT events, leading to fewer pool map changes when multiple engines become unavailable at around the same time.|
 |DAOS\_SCHED\_PRIO\_DISABLED|Disable server ULT prioritizing. BOOL. Default to 0.|
 |DAOS\_SCHED\_RELAX\_MODE|The mode of CPU relaxing on idle. "disabled":disable relaxing; "net":wait on network request for INTVL; "sleep":sleep for INTVL. STRING. Default to "net"|
 |DAOS\_SCHED\_RELAX\_INTVL|CPU relax interval in milliseconds. INTEGER. Default to 1 ms.|
@@ -53,7 +54,7 @@ Environment variables in this section only apply to the server side.
 |DAOS\_DTX\_RPC\_HELPER\_THD|DTX RPC helper threshold. The valid range is [18, unlimited). The default value is 513.|
 |DAOS\_DTX\_BATCHED\_ULT\_MAX|The max count of DTX batched commit ULTs. The valid range is [0, unlimited). 0 means to commit DTX synchronously. The default value is 32.|
 |DAOS\_FORWARD\_NEIGHBOR|Set to enable I/O forwarding on neighbor xstream in the absence of helper threads.|
-|DAOS\_POOL\_RF|Redundancy factor for the pool. The valid range is [1, 4]. The default value is 2.|
+|DAOS\_POOL\_RF|Redundancy factor for the pool. The valid range is [0, 4]. The default value is 2.|
 
 ## Server and Client environment variables
 

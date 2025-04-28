@@ -65,7 +65,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         start_dfuse(self, dfuse)
 
         # Create a test pool
-        pool1 = self.create_pool()
+        pool1 = self.get_pool()
 
         # Create a special container to hold UNS entries
         uns_cont = self.get_container(pool1)
@@ -215,7 +215,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         start_dfuse(self, dfuse)
 
         # Create a test pool
-        pool1 = self.create_pool()
+        pool1 = self.get_pool()
 
         # Create a special container to hold UNS entries
         uns_cont = self.get_container(pool1)

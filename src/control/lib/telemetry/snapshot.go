@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,6 +25,8 @@ import (
 	"time"
 )
 
+var _ Metric = (*Snapshot)(nil)
+
 type Snapshot struct {
 	metricBase
 }
@@ -34,18 +36,22 @@ func (s *Snapshot) Type() MetricType {
 }
 
 func (s *Snapshot) Value() time.Time {
+	timeVal := time.Time{} // zero val
 	if s.handle == nil || s.node == nil {
-		return time.Time{}
+		return timeVal
 	}
 
-	var tms C.struct_timespec
-
-	res := C.d_tm_get_timer_snapshot(s.handle.ctx, &tms, s.node)
-	if res == C.DER_SUCCESS {
-		return time.Unix(int64(tms.tv_sec), int64(tms.tv_nsec))
+	fetch := func() C.int {
+		var tms C.struct_timespec
+		res := C.d_tm_get_timer_snapshot(s.handle.ctx, &tms, s.node)
+		if res == C.DER_SUCCESS {
+			timeVal = time.Unix(int64(tms.tv_sec), int64(tms.tv_nsec))
+		}
+		return res
 	}
+	s.fetchValWithRetry(fetch)
 
-	return time.Time{}
+	return timeVal
 }
 
 func (s *Snapshot) FloatValue() float64 {

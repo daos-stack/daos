@@ -224,6 +224,7 @@ timeout_cmd() {
 fetch_repo_config() {
     local repo_server="$1"
 
+    # shellcheck disable=SC1091
     . /etc/os-release
     local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
     local repopath="${REPOS_DIR}/$repo_file"
@@ -261,6 +262,7 @@ rpm_test_version() {
 set_local_repo() {
     local repo_server="$1"
 
+    # shellcheck disable=SC1091
     . /etc/os-release
 
     rm -f "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}".repo
@@ -333,7 +335,7 @@ post_provision_config_nodes() {
     fi
 
     if $CONFIG_POWER_ONLY; then
-        rm -f "$REPOS_DIR"/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
+        rm -f "$REPOS_DIR"/*_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload          \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
@@ -370,7 +372,11 @@ post_provision_config_nodes() {
                 branch="${branch%:*}"
             fi
         fi
-        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$DISTRO_NAME/
+        local subdir
+        if ! $COVFN_DISABLED; then
+            subdir="bullseye/"
+        fi
+        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/"${subdir:-}"$DISTRO_NAME/
         dnf -y config-manager --add-repo="$repo_url"
         repo="$(url_to_repo "$repo_url")"
         # PR-repos: should always be able to upgrade modular packages
@@ -404,7 +410,7 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2001
     if [ ${#inst_rpms[@]} -gt 0 ]; then
-        if ! retry_dnf 360 install "${inst_rpms[@]}"; then
+        if ! retry_dnf 360 install "${inst_rpms[@]/%/${DAOS_VERSION:-}}"; then
             rc=${PIPESTATUS[0]}
             dump_repos
             return "$rc"

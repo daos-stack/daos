@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,7 +26,6 @@
 #endif
 
 
-static int start_epoch = 5;
 #define BUF_SIZE 2000
 static int buf_size = BUF_SIZE;
 struct pm_info {
@@ -1068,7 +1068,7 @@ obj_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 
 	assert_rc_equal(rc, 0);
 
-	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 }
 
@@ -1095,7 +1095,7 @@ cond_dkey_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	assert_rc_equal(rc, expected_rc);
 
 	if (expected_rc == 0) {
-		rc = vos_dtx_commit(coh, &xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 }
@@ -1128,7 +1128,7 @@ cond_akey_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	assert_rc_equal(rc, expected_rc);
 
 	if (expected_rc == 0) {
-		rc = vos_dtx_commit(coh, &xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 }
@@ -1240,7 +1240,7 @@ cond_updaten_op_(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 	vts_dtx_end(dth);
 
 	if (expected_rc == 0) {
-		rc = vos_dtx_commit(coh, &xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -1271,11 +1271,11 @@ cond_test(void **state)
 	daos_unit_oid_t		 oid;
 	d_sg_list_t		 sgl[MAX_SGL] = {0};
 	d_iov_t			 iov[MAX_SGL];
-	daos_epoch_t		 epoch = start_epoch;
+	daos_epoch_t		 epoch;
 	int			 i;
 
 	test_args_reset(arg, VPOOL_SIZE);
-
+	epoch = d_hlc_get() + 1000;
 	oid = gen_oid(0);
 
 	for (i = 0; i < MAX_SGL; i++) {
@@ -1369,8 +1369,6 @@ cond_test(void **state)
 			0, -DER_NO_PERM, sgl, 5, "new",
 			"foo", "f", "bar", "d", "val", "e", "flag", "new",
 			"temp");
-
-	start_epoch = epoch + 1;
 }
 
 /** Making the oid generation deterministic, I get to 18201 before I hit a false
@@ -1386,12 +1384,11 @@ multiple_oid_cond_test(void **state)
 	daos_unit_oid_t		 oid;
 	d_sg_list_t		 sgl = {0};
 	d_iov_t			 iov = {0};
-	daos_epoch_t		 epoch = start_epoch + NUM_OIDS * 3;
+	daos_epoch_t		 epoch;
 	int			 i;
 
-	start_epoch = epoch + 1;
-
 	test_args_reset(arg, VPOOL_SIZE);
+	epoch = d_hlc_get() + NUM_OIDS * 3;
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
@@ -1495,13 +1492,13 @@ remove_test(void **state)
 	d_sg_list_t		 sgl;
 	daos_recx_t		 recx[SM_BUF_LEN];
 	daos_unit_oid_t		 oid;
-	daos_epoch_t		 epoch = start_epoch;
+	daos_epoch_t		 epoch;
 	int			 rc = 0;
 	char			 key1 = 'a';
 	char			 key2 = 'b';
 
 	test_args_reset(arg, VPOOL_SIZE);
-
+	epoch = d_hlc_get();
 	oid = gen_oid(0);
 
 	d_iov_set(&dkey, &key1, sizeof(key1));
@@ -1594,8 +1591,6 @@ remove_test(void **state)
 		    FETCH_DATA, 1, &REM_VAL1[0], FETCH_HOLE,
 		    sizeof(REM_VAL1) + sizeof(REM_VAL2) + sizeof(REM_VAL3) - 5,
 		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
-
-	start_epoch = epoch + 1;
 }
 
 static void
@@ -1670,7 +1665,7 @@ minor_epoch_punch_sv(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch;
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
 	const char		*expected = "xxxxx";
@@ -1681,7 +1676,7 @@ minor_epoch_punch_sv(void **state)
 	daos_unit_oid_t		oid;
 
 	test_args_reset(arg, VPOOL_SIZE);
-
+	epoch = d_hlc_get();
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
 
@@ -1726,7 +1721,7 @@ tx_end:
 	vts_dtx_end(dth);
 	assert_rc_equal(rc, 0);
 
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	/* Now read back original # of bytes */
@@ -1741,7 +1736,6 @@ tx_end:
 	assert_memory_equal(buf, expected, strlen(expected));
 
 	d_sgl_fini(&sgl, false);
-	start_epoch = epoch + 1;
 }
 
 static void
@@ -1754,7 +1748,7 @@ minor_epoch_punch_array(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch;
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
 	const char		*expected = "xxxxxLonelyWorld";
@@ -1766,7 +1760,7 @@ minor_epoch_punch_array(void **state)
 	daos_unit_oid_t		oid;
 
 	test_args_reset(arg, VPOOL_SIZE);
-
+	epoch = d_hlc_get();
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
 
@@ -1822,7 +1816,7 @@ tx_end:
 	vts_dtx_end(dth);
 	assert_rc_equal(rc, 0);
 
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	/* Now read back original # of bytes */
@@ -1837,7 +1831,6 @@ tx_end:
 	assert_memory_equal(buf, expected, strlen(expected));
 
 	d_sgl_fini(&sgl, false);
-	start_epoch = epoch + 1;
 }
 
 static void
@@ -1850,7 +1843,7 @@ minor_epoch_punch_rebuild(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch;
 	const char		*expected = "xxxxxlonelyworld";
 	const char		*first = "hello";
 	const char		*second = "lonelyworld";
@@ -1860,7 +1853,7 @@ minor_epoch_punch_rebuild(void **state)
 	daos_unit_oid_t		oid;
 
 	test_args_reset(arg, VPOOL_SIZE);
-
+	epoch = d_hlc_get();
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
 
@@ -1930,8 +1923,6 @@ minor_epoch_punch_rebuild(void **state)
 	epoch += 2;
 
 	d_sgl_fini(&sgl, false);
-
-	start_epoch = epoch + 1;
 }
 
 #define NUM_RANKS 100
@@ -1948,7 +1939,7 @@ many_keys(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch = d_hlc_get();
 	const char		*w = "x";
 	char			*dkey_buf = DKEY_NAME;
 	char			akey_buf[UPDATE_DKEY_SIZE];
@@ -1995,8 +1986,6 @@ many_keys(void **state)
 	}
 
 	d_sgl_fini(&sgl, false);
-
-	start_epoch = epoch + 1;
 }
 
 #define CELL_SZ 2
@@ -2102,7 +2091,7 @@ ec_size(void **state)
 	struct io_test_args	*arg = *state;
 	int			rc = 0;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch;
 	const char		w[] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 	daos_unit_oid_t		oid;
 	uint64_t		size;
@@ -2110,7 +2099,7 @@ ec_size(void **state)
 	int			i;
 
 	test_args_reset(arg, VPOOL_1G);
-
+	epoch = d_hlc_get();
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
 
@@ -2201,8 +2190,6 @@ ec_size(void **state)
 	assert_int_equal(size, 201 * STRIPE_SZ);
 
 	d_sgl_fini(&sgl, false);
-
-	start_epoch = epoch + 1;
 }
 
 static void
@@ -2219,7 +2206,7 @@ test_inprogress_parent_punch(void **state)
 	d_sg_list_t		sgl;
 	struct dtx_handle	*dth1;
 	struct dtx_handle	*dth2;
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch;
 	struct dtx_id		xid1;
 	struct dtx_id		xid2;
 	const char		*expected = "xxxxx";
@@ -2232,7 +2219,7 @@ test_inprogress_parent_punch(void **state)
 	daos_unit_oid_t		oid;
 
 	test_args_reset(arg, VPOOL_SIZE);
-
+	epoch = d_hlc_get();
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
 
@@ -2303,7 +2290,7 @@ test_inprogress_parent_punch(void **state)
 	assert_rc_equal(rc, 0);
 	xid2 = dth2->dth_xid;
 	vts_dtx_end(dth2);
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	/** Now try to punch akey 2, should fail */
@@ -2314,7 +2301,7 @@ test_inprogress_parent_punch(void **state)
 	assert_rc_equal(rc, -DER_INPROGRESS);
 
 	/** Now commit the in progress punch and try again */
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid1, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid1, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
@@ -2322,7 +2309,7 @@ test_inprogress_parent_punch(void **state)
 	assert_rc_equal(rc, 0);
 	xid2 = dth2->dth_xid;
 	vts_dtx_end(dth2);
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, NULL);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	memset(buf, 'x', sizeof(buf));
@@ -2336,8 +2323,6 @@ test_inprogress_parent_punch(void **state)
 	assert_memory_equal(buf, expected, strlen(expected));
 
 	d_sgl_fini(&sgl, false);
-
-	start_epoch = epoch + 1;
 }
 
 #define NR_OBJ 10
@@ -2458,9 +2443,9 @@ many_tx(void **state)
 	d_sg_list_t		sgl;
 	d_sg_list_t		fetch_sgl;
 	char			buf[32];
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch;
 	daos_handle_t		coh;
-	daos_epoch_range_t	epr = {epoch, epoch};
+	daos_epoch_range_t	epr;
 	struct vos_ioreq	req[NR_TX] = {0};
 	const char		*first = "Hello";
 	char			dkey_buf[NR_DKEY][UPDATE_DKEY_SIZE];
@@ -2482,8 +2467,11 @@ many_tx(void **state)
 
 	test_args_reset(arg, VPOOL_SIZE);
 	coh = arg->ctx.tc_co_hdl;
-
 	memset(&iod, 0, sizeof(iod));
+
+	epoch = d_hlc_get() + 1000;
+	epr.epr_lo = epoch;
+	epr.epr_hi = epoch;
 
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
@@ -2583,9 +2571,8 @@ start_over:
 						writes++;
 					vts_dtx_end(req[cur_tx].dth);
 					if (req[old_tx].commit) {
-						rc = vos_dtx_commit(coh,
-							    &req[old_tx].xid, 1,
-							    NULL);
+						rc = vos_dtx_commit(coh, &req[old_tx].xid, 1,
+								    false, NULL);
 						assert_rc_equal(rc, 1);
 					}
 					memset(&req[old_tx], 0, sizeof(req[0]));
@@ -2604,7 +2591,7 @@ start_over:
 			memset(&req[old_tx], 0, sizeof(req[0]));
 			continue;
 		}
-		rc = vos_dtx_commit(coh, &req[old_tx].xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &req[old_tx].xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 		memset(&req[old_tx], 0, sizeof(req[0]));
 	}
@@ -2624,7 +2611,6 @@ start_over:
 
 	d_sgl_fini(&sgl, false);
 	d_sgl_fini(&fetch_sgl, false);
-	start_epoch = epoch + 1;
 }
 
 static struct dtx_id
@@ -2668,7 +2654,7 @@ execute_op(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 do_commit:
 	vts_dtx_end(req.dth);
 	if (commit && req.commit) {
-		rc = vos_dtx_commit(coh, &req.xid, 1, NULL);
+		rc = vos_dtx_commit(coh, &req.xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -2686,7 +2672,7 @@ uncommitted_parent(void **state)
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
 	char			buf[32];
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch;
 	daos_handle_t		coh;
 	char			*first = "Hello";
 	char			dkey_buf[UPDATE_DKEY_SIZE];
@@ -2696,7 +2682,7 @@ uncommitted_parent(void **state)
 
 	test_args_reset(arg, VPOOL_SIZE);
 	coh = arg->ctx.tc_co_hdl;
-
+	epoch = d_hlc_get();
 	memset(&iod, 0, sizeof(iod));
 
 	rc = d_sgl_init(&sgl, 1);
@@ -2720,7 +2706,7 @@ uncommitted_parent(void **state)
 	execute_op(coh, oid, epoch, &dkey, &akey[1], &sgl, first, 5, true,
 		   TX_OP_UPDATE1);
 	/** Commit the punch */
-	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	memset(buf, 'x', sizeof(buf));
@@ -2736,7 +2722,6 @@ uncommitted_parent(void **state)
 	assert_memory_equal(buf, first, 5);
 
 	d_sgl_fini(&sgl, false);
-	start_epoch = epoch + 1;
 }
 
 static void
@@ -2750,7 +2735,7 @@ test_uncommitted_key(void **state)
 	daos_iod_t           iod;
 	d_sg_list_t          sgl;
 	char                 buf[32];
-	daos_epoch_t         epoch = start_epoch;
+	daos_epoch_t         epoch;
 	daos_handle_t        coh;
 	char                *first = "Hello";
 	char                 dkey_buf[UPDATE_DKEY_SIZE];
@@ -2760,7 +2745,7 @@ test_uncommitted_key(void **state)
 
 	test_args_reset(arg, VPOOL_SIZE);
 	coh = arg->ctx.tc_co_hdl;
-
+	epoch = d_hlc_get();
 	memset(&iod, 0, sizeof(iod));
 
 	rc = d_sgl_init(&sgl, 1);
@@ -2789,7 +2774,7 @@ test_uncommitted_key(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** Commit the update */
-	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	rc = vos_dtx_commit(coh, &xid, 1, false, NULL);
 	assert_rc_equal(rc, 1);
 
 	memset(buf, 'x', sizeof(buf));
@@ -2798,7 +2783,6 @@ test_uncommitted_key(void **state)
 	assert_memory_equal(buf, "Hello", 5);
 
 	d_sgl_fini(&sgl, false);
-	start_epoch = epoch + 1;
 }
 
 static void
@@ -2812,7 +2796,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	daos_recx_t		rex[2] = {0};
 	daos_iod_t		iod[2] = {0};
 	d_sg_list_t		sgl[2] = {0};
-	daos_epoch_t		epoch = start_epoch;
+	daos_epoch_t		epoch;
 	struct dtx_handle	*dth = NULL;
 	struct dtx_id		 xid;
 	const char		*expected = "xxxxx";
@@ -2826,7 +2810,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	daos_unit_oid_t		oid;
 
 	test_args_reset(arg, VPOOL_SIZE);
-
+	epoch = d_hlc_get();
 	memset(rex, 0, sizeof(rex));
 	memset(iod, 0, sizeof(iod));
 
@@ -2888,7 +2872,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	assert_rc_equal(rc, 0);
 	if (with_dtx) {
 		vts_dtx_end(dth);
-		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -2916,7 +2900,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	assert_rc_equal(rc, 0);
 	if (with_dtx) {
 		vts_dtx_end(dth);
-		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -2933,7 +2917,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	assert_rc_equal(rc, 0);
 	if (with_dtx) {
 		vts_dtx_end(dth);
-		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -2976,7 +2960,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	assert_rc_equal(rc, 0);
 	if (with_dtx) {
 		vts_dtx_end(dth);
-		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+		rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, false, NULL);
 		assert_rc_equal(rc, 1);
 	}
 
@@ -3011,7 +2995,6 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	if (with_dtx)
 		vts_dtx_end(dth);
 
-	start_epoch = epoch + 1;
 	d_sgl_fini(&sgl[0], false);
 	d_sgl_fini(&sgl[1], false);
 }

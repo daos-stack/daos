@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -268,7 +269,7 @@ static void
 dtx_act_commit_options_parsing(void **state)
 {
 	struct ddb_cmd_info	 info = {0};
-	struct dtx_act_commit_options	*options = &info.dci_cmd_option.dci_dtx_act_commit;
+	struct dtx_act_options  *options = &info.dci_cmd_option.dci_dtx_act;
 
 	/* test invalid arguments and options */
 	test_run_inval_cmd("dtx_act_commit", "path", "dtx_id", "extra"); /* too many argument */
@@ -284,7 +285,7 @@ static void
 dtx_act_abort_options_parsing(void **state)
 {
 	struct ddb_cmd_info	 info = {0};
-	struct dtx_act_abort_options	*options = &info.dci_cmd_option.dci_dtx_act_abort;
+	struct dtx_act_options  *options = &info.dci_cmd_option.dci_dtx_act;
 
 	/* test invalid arguments and options */
 	test_run_inval_cmd("dtx_act_abort", "path", "dtx_id", "extra"); /* too many argument */

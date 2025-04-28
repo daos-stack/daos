@@ -58,8 +58,7 @@ class DmvrDstCreate(DataMoverTestBase):
         self.set_api(api)
 
         # Create 1 pool
-        pool1 = self.create_pool()
-        pool1.connect(2)
+        pool1 = self.get_pool()
 
         # Create a source cont
         cont1 = self.get_container(pool1, type=cont_type)
@@ -98,8 +97,7 @@ class DmvrDstCreate(DataMoverTestBase):
         self.verify_cont(cont3, api, check_props, src_props)
 
         # Create another pool
-        pool2 = self.create_pool()
-        pool2.connect(2)
+        pool2 = self.get_pool()
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont4 (different pool) (empty cont)",

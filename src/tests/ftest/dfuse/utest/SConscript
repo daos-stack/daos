@@ -16,9 +16,11 @@ def scons():
     test_env = env.Clone()
     test_env.AppendUnique(LIBS=['cmocka', 'gurt'])
     test_env.require('cmocka')
+    tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
+    test_exe = test_env.d_test_program('whitelist_test.c')
+    test_env.Install(tests_dir, test_exe)
 
     for test in PIL4DFS_TEST_SRC:
-        tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
         test_exe = test_env.d_test_program(test)
         test_env.Install(tests_dir, test_exe)
 

@@ -22,7 +22,6 @@ server_config:
       storage: auto
 pool:
   size: 50%
-  control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
   type: POSIX
@@ -70,7 +69,7 @@ mdtest_easy: &mdtest_easy_base
   write_bytes: 0
   num_of_files_dirs: 100000000
   stonewall_timer: 30
-  stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  stonewall_statusfile: stoneWallingStatusFile
   dfs_destroy: false
 mdtest_dfs_s1:
   <<: *mdtest_easy_base
@@ -158,7 +157,6 @@ mdtest:
     - [DFS, 4096, 4096, 1, 25, 20, '-u']
     - [POSIX, 0, 0, 2, 10, 5, '-u -C -T -r']
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
   disable_caching: true
 hdf5_vol:
   plugin_path: /usr/lib64/mpich/lib

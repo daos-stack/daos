@@ -17,7 +17,6 @@ server_config:
 pool:
   scm_size: 1GB
   svcn: 3
-  control_method: dmg
   pool_query_timeout: 30
 container:
   control_method: daos

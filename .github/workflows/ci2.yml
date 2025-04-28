@@ -4,7 +4,7 @@ on:
   pull_request:
 
 concurrency:
-  group: ci2-${{ github.head_ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 permissions: {}
@@ -15,7 +15,7 @@ jobs:
   # from scratch, but do not save them.
   Build-and-test:
     name: Run DAOS/NLT tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
       checks: write
@@ -26,7 +26,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:mantic
+            with: ubuntu:oracular
     env:
       DEPS_JOBS: 10
       COMPILER: clang
@@ -36,7 +36,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Setup git hash
@@ -67,7 +67,8 @@ jobs:
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
       - name: Publish NLT test results
         if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v1.17
+        # yamllint disable-line rule:line-length
+        uses: EnricoMi/publish-unit-test-result-action@afb2984f4d89672b2f9d9c13ae23d53779671984  # v2.19.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
@@ -76,7 +77,7 @@ jobs:
 
   Build:
     name: Build DAOS
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -101,7 +102,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Setup git hash

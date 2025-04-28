@@ -31,7 +31,6 @@ server_config:
 
 pool:
   size: 100%
-  control_method: dmg
 
 container:
   type: POSIX

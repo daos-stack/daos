@@ -1,5 +1,7 @@
 /*
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,20 +68,11 @@ struct ds_cont_child {
 	ABT_cond		 sc_scrub_cond;
 	ABT_cond		 sc_rebuild_cond;
 	ABT_cond		 sc_fini_cond;
-	uint32_t		 sc_dtx_resyncing:1,
-				 sc_dtx_reindex:1,
-				 sc_dtx_reindex_abort:1,
-				 sc_dtx_delay_reset:1,
-				 sc_dtx_registered:1,
-				 sc_props_fetched:1,
-				 sc_stopping:1,
-				 sc_vos_agg_active:1,
-				 sc_ec_agg_active:1,
-				 /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
-				 sc_rw_disabled:1,
-				 sc_scrubbing:1,
-				 sc_rebuilding:1;
-	uint32_t		 sc_dtx_batched_gen;
+	uint32_t                 sc_dtx_resyncing : 1, sc_dtx_reindex : 1, sc_dtx_reindex_abort : 1,
+	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_props_fetched : 1, sc_stopping : 1,
+	    sc_destroying : 1, sc_vos_agg_active : 1, sc_ec_agg_active : 1,
+	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
+	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1, sc_open_initializing : 1;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 
@@ -107,6 +100,15 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_committable_count;
 	uint32_t		 sc_dtx_committable_coll_count;
 
+	/* Last timestamp when EC aggregation reports -DER_INPROGRESS. */
+	uint64_t		 sc_ec_agg_busy_ts;
+
+
+	/* The global minimum stable epoch. All data @lower epoch should has been globally
+	 * stable (committed or aborted). Used as the start epoch for incremental reintegration.
+	 */
+	uint64_t		sc_global_stable_eph;
+
 	/* The global minimum EC aggregation epoch, which will be upper
 	 * limit for VOS aggregation, i.e. EC object VOS aggregation can
 	 * not cross this limit. For simplification purpose, all objects
@@ -115,10 +117,11 @@ struct ds_cont_child {
 	uint64_t		sc_ec_agg_eph_boundary;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
-	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
-	 * local VOS.
+	/* Used by ds_cont_track_eph_query_ult to query the minimum ec_agg_eph and stable_eph
+	 * from all local VOS.
 	 */
-	uint64_t		*sc_ec_query_agg_eph;
+	uint64_t		*sc_query_ec_agg_eph;
+	uint64_t		*sc_query_stable_eph;
 	/**
 	 * Timestamp of last EC update, which is used by aggregation to check
 	 * if it needs to do EC aggregate.
@@ -133,6 +136,8 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 	/* The global list for committable collective DTXs. */
 	d_list_t		 sc_dtx_coll_list;
+	/* The list for current DTX batched commit. */
+	d_list_t		 sc_dtx_batched_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 };
@@ -176,8 +181,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
-	int32_t			sch_ref;
-	uint32_t		sch_closed:1;
+	int32_t                  sch_ref;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
@@ -258,11 +262,8 @@ int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
-void ds_cont_tgt_ec_eph_query_ult(void *data);
-int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
-			  uint64_t **epoch_p);
-int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
-void ds_cont_ec_eph_free(struct ds_pool *pool);
+void ds_cont_track_eph_query_ult(void *data);
+void ds_cont_track_eph_free(struct ds_pool *pool);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 

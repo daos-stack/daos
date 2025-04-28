@@ -24,7 +24,6 @@ server_config:
       storage: auto
 
 pool:
-  control_method: dmg
   size: 200G
 
 container:

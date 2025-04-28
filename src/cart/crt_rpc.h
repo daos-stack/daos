@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,7 +19,8 @@
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
 
-#define CRT_QUOTA_RPCS_DEFAULT 64
+#define CRT_QUOTA_RPCS_DEFAULT          64
+#define CRT_QUOTA_BULKS_DEFAULT         64
 
 /* uri lookup max retry times */
 #define CRT_URI_LOOKUP_RETRY_MAX	(8)
@@ -166,29 +168,30 @@ struct crt_rpc_priv {
 	 * match with crp_req_hdr.cch_flags.
 	 */
 	uint32_t		crp_flags;
-	uint32_t		crp_srv:1, /* flag of server received request */
-				crp_output_got:1,
-				crp_input_got:1,
-				/* flag of collective RPC request */
-				crp_coll:1,
-				/* flag of crp_tgt_uri need to be freed */
-				crp_uri_free:1,
-				/* flag of forwarded rpc for corpc */
-				crp_forward:1,
-				/* flag of in timeout binheap */
-				crp_in_binheap:1,
-				/* set if a call to crt_req_reply pending */
-				crp_reply_pending:1,
-				/* set to 1 if target ep is set */
-				crp_have_ep:1,
-				/* RPC is tracked by the context */
-				crp_ctx_tracked:1,
-				/* 1 if RPC fails HLC epsilon check */
-				crp_fail_hlc:1,
-				/* RPC completed flag */
-				crp_completed:1,
-				/* RPC originated from a primary provider */
-				crp_src_is_primary:1;
+	uint32_t                 crp_srv : 1, /* flag of server received request */
+	    crp_output_got : 1, crp_input_got : 1,
+	    /* flag of collective RPC request */
+	    crp_coll                : 1,
+	    /* flag of crp_tgt_uri need to be freed */
+	    crp_uri_free            : 1,
+	    /* flag of forwarded rpc for corpc */
+	    crp_forward             : 1,
+	    /* flag of in timeout binheap */
+	    crp_in_binheap          : 1,
+	    /* set if a call to crt_req_reply pending */
+	    crp_reply_pending       : 1,
+	    /* set to 1 if target ep is set */
+	    crp_have_ep             : 1,
+	    /* RPC is tracked by the context */
+	    crp_ctx_tracked         : 1,
+	    /* 1 if RPC fails HLC epsilon check */
+	    crp_fail_hlc            : 1,
+	    /* RPC completed flag */
+	    crp_completed           : 1,
+	    /* RPC originated from a primary provider */
+	    crp_src_is_primary      : 1,
+	    /* release input buffer early */
+	    crp_release_input_early : 1;
 
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */

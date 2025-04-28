@@ -9,6 +9,7 @@ package engine
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,8 @@ const (
 	envLogMasks      = "D_LOG_MASK"
 	envLogDbgStreams = "DD_MASK"
 	envLogSubsystems = "DD_SUBSYS"
+
+	minABTThreadStackSizeDCPM = 20480
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -342,7 +345,80 @@ func (c *Config) Validate() error {
 	if err := ValidateLogSubsystems(subsystems); err != nil {
 		return errors.Wrap(err, "validate engine log subsystems")
 	}
+	return nil
+}
 
+// Ensure at least 20KiB ABT stack size for an engine with DCPM storage class.
+func (c *Config) UpdatePMDKEnvarsStackSizeDCPM() error {
+	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+	if err != nil {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeDCPM))
+		return nil
+	}
+	// Ensure at least 20KiB ABT stack size for an engine with DCPM storage class.
+	stackSizeValue, err := strconv.Atoi(stackSizeStr)
+	if err != nil {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+			stackSizeStr)
+	}
+	if stackSizeValue < minABTThreadStackSizeDCPM {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for DCPM storage class, found %d", minABTThreadStackSizeDCPM,
+			stackSizeValue)
+	}
+	return nil
+}
+
+// Ensure proper configuration of shutdown (SDS) state
+func (c *Config) UpdatePMDKEnvarsPMemobjConf(isDCPM bool) error {
+	pmemobjConfStr, pmemobjConfErr := c.GetEnvVar("PMEMOBJ_CONF")
+	//also work for empty string
+	hasSdsAtCreate := strings.Contains(pmemobjConfStr, "sds.at_create")
+	if isDCPM {
+		if !hasSdsAtCreate {
+			return nil
+		}
+		// Confirm default handling of shutdown state (SDS) for DCPM storage class.
+		return errors.New("env_var PMEMOBJ_CONF should NOT contain 'sds.at_create=?' " +
+			"for DCPM storage class, found '" + pmemobjConfStr + "'")
+	}
+
+	// Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
+	if pmemobjConfErr != nil {
+		c.EnvVars = append(c.EnvVars, "PMEMOBJ_CONF=sds.at_create=0")
+		return nil
+	}
+	if !hasSdsAtCreate {
+		envVars, _ := common.DeleteKeyValue(c.EnvVars, "PMEMOBJ_CONF")
+		c.EnvVars = append(envVars, "PMEMOBJ_CONF="+pmemobjConfStr+
+			";sds.at_create=0")
+		return nil
+	}
+	if strings.Contains(pmemobjConfStr, "sds.at_create=1") {
+		return errors.New("env_var PMEMOBJ_CONF should contain 'sds.at_create=0' " +
+			"for non-DCPM storage class, found '" + pmemobjConfStr + "'")
+	}
+	return nil
+}
+
+// Ensure proper environment variables for PMDK w/ NDCTL enabled based on
+// the actual configuration of the storage class.
+func (c *Config) UpdatePMDKEnvars() error {
+
+	if len(c.Storage.Tiers) == 0 {
+		return errors.New("Invalid config - no tier 0 defined")
+	}
+
+	isDCPM := c.Storage.Tiers[0].Class == storage.ClassDcpm
+
+	if err := c.UpdatePMDKEnvarsPMemobjConf(isDCPM); err != nil {
+		return err
+	}
+
+	if isDCPM {
+		return c.UpdatePMDKEnvarsStackSizeDCPM()
+	}
 	return nil
 }
 
@@ -689,4 +765,14 @@ func (c *Config) WithIndex(i uint32) *Config {
 func (c *Config) WithStorageIndex(i uint32) *Config {
 	c.Storage.EngineIdx = uint(i)
 	return c
+}
+
+// WithEnvVarAbtThreadStackSize sets environment variable ABT_THREAD_STACKSIZE.
+func (c *Config) WithEnvVarAbtThreadStackSize(stack_size uint16) *Config {
+	return c.WithEnvVars(fmt.Sprintf("ABT_THREAD_STACKSIZE=%d", stack_size))
+}
+
+// WithEnvVarPMemObjSdsAtCreate sets PMEMOBJ_CONF env. var. to sds.at_create=0/1 value
+func (c *Config) WithEnvVarPMemObjSdsAtCreate(value uint8) *Config {
+	return c.WithEnvVars(fmt.Sprintf("PMEMOBJ_CONF=sds.at_create=%d", value))
 }

@@ -31,7 +31,6 @@ dmg:
   transport_config:
     allow_insecure: True
 pool:
-  control_method: dmg
   max_num_pools: 40
   total_pool_percentage: 95
   min_nvme_per_target: 1073741824 # 1 GiB

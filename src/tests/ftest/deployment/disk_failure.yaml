@@ -26,7 +26,6 @@ server_config:
       targets: 16
 pool:
   size: 80%
-  control_method: dmg
   svcn: 3
 container:
   type: POSIX

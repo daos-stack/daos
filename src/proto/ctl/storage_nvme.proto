@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,6 +28,8 @@ message ScanNvmeReq {
 	bool Basic = 3;		// Strip NVMe device details to only basic
 	uint64 MetaSize = 4;	// Size of the metadata blob
 	uint64 RdbSize = 5;	// Size of the RDB blob
+	float  MemRatio = 6;	// Ratio of VOS-file:meta-blob sizes
+	bool   LinkStats = 7;	// Populate PCIe link info in health statistics
 }
 
 message ScanNvmeResp {

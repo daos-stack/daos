@@ -198,8 +198,7 @@ message LedManageReq {
 
 message DevReplaceReq {
 	string old_dev_uuid = 1;	// UUID of old (hot-removed) blobstore/device
-	string new_dev_uuid = 2;	// UUID of new (hot-plugged) blobstore/device
-	bool no_reint = 3;		// Skip device reintegration if set
+	string new_dev_uuid = 2;        // UUID of new (hot-plugged) blobstore/device
 }
 
 message SetFaultyReq {

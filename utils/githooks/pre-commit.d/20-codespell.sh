@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -20,4 +21,5 @@ then
 fi
 
 echo "Checking for spelling mistakes"
-_git_diff_cached_files | xargs codespell
+# Convert file names to relative path format that codespell expects. I.e. "./path"
+_git_diff_cached_files | xargs -r -n 1 -I% echo "./%" | xargs -r codespell

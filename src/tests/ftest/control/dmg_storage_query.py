@@ -252,7 +252,8 @@ class DmgStorageQuery(ControlTestBase):
                     manager.update_expected_states(0, ["Errored"])
                 expect_failed_engine = True
             try:
-                self.dmg.storage_set_faulty(uuid=device['uuid'])
+                self.dmg.storage_set_faulty(host=device['hosts'].split(':')[0],
+                                            uuid=device['uuid'])
             except CommandFailure:
                 if not expect_failed_engine:
                     self.fail("Error setting the faulty state for {}".format(device['uuid']))

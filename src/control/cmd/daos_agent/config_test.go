@@ -88,6 +88,18 @@ transport_config:
   allow_insecure: true
 `)
 
+	badFilterCfg := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+transport_config:
+  allow_insecure: true
+include_fabric_ifaces: ["ib0"]
+exclude_fabric_ifaces: ["ib3"]
+`)
+
 	for name, tc := range map[string]struct {
 		path      string
 		expResult *Config
@@ -127,6 +139,10 @@ transport_config:
 		"bad log mask": {
 			path:   badLogMaskCfg,
 			expErr: errors.New("not a valid log level"),
+		},
+		"bad filter config": {
+			path:   badFilterCfg,
+			expErr: errors.New("cannot specify both exclude_fabric_ifaces and include_fabric_ifaces"),
 		},
 		"all options": {
 			path: optCfg,

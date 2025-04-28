@@ -1,6 +1,8 @@
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+# Copyright (c) 2024 Intel Corporation.
+
 cache:
   backend: fs
-  clear: false
   dir:
   redis:
     ca: ""
@@ -17,7 +19,7 @@ db:
   no-progress: false
   repository: ghcr.io/aquasecurity/trivy-db
   skip-update: false
-debug: false
+debug: true
 dependency-tree: true
 exit-code: 0
 generate-default-config: false

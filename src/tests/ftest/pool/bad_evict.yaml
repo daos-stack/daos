@@ -14,7 +14,6 @@ server_config:
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  control_method: dmg
   scm_size: 1073741824
 evicttests:
   UUID: !mux

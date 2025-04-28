@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -116,6 +117,35 @@ func TestControl_StorageMap(t *testing.T) {
 						},
 					},
 					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				},
+			},
+			expHsmLen: 2,
+		},
+		"mismatch smd rank": {
+			hss: []*HostStorage{
+				{
+					NvmeDevices: storage.NvmeControllers{
+						&storage.NvmeController{
+							SmdDevices: []*storage.SmdDevice{
+								{Rank: ranklist.Rank(1)},
+							},
+						},
+					},
+					ScmNamespaces: storage.ScmNamespaces{
+						storage.MockScmNamespace(0),
+					},
+				},
+				{
+					NvmeDevices: storage.NvmeControllers{
+						&storage.NvmeController{
+							SmdDevices: []*storage.SmdDevice{
+								{Rank: ranklist.Rank(2)},
+							},
+						},
+					},
+					ScmNamespaces: storage.ScmNamespaces{
+						storage.MockScmNamespace(0),
+					},
 				},
 			},
 			expHsmLen: 2,

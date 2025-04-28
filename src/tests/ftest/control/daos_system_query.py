@@ -32,8 +32,8 @@ class DaosSystemQuery(TestWithServers):
         exp_sys_name = self.server_managers[0].get_config_value("name")
         exp_provider = self.server_managers[0].get_config_value("provider")
 
-        num_access_points = len(self.host_info.access_points)
-        exp_num_ap_ranks = num_access_points * engines_per_host
+        num_ms_replicas = len(self.host_info.mgmt_svc_replicas)
+        exp_num_ms_ranks = num_ms_replicas * engines_per_host
 
         query_output = daos_cmd.system_query()["response"]
 
@@ -50,6 +50,6 @@ class DaosSystemQuery(TestWithServers):
             self.fail("expected {} rank URIs, got '{}'".format(exp_num_ranks, num_ranks))
 
         num_ap_ranks = len(query_output["access_point_rank_uris"])
-        if num_ap_ranks != exp_num_ap_ranks:
-            self.fail("expected {} access point rank URIs, got '{}'".format(exp_num_ap_ranks,
+        if num_ap_ranks != exp_num_ms_ranks:
+            self.fail("expected {} access point rank URIs, got '{}'".format(exp_num_ms_ranks,
                                                                             num_ap_ranks))

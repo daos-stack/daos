@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -180,10 +180,35 @@ process_line_cb(void *cb_args, char *line, uint32_t line_len)
 	/* ignore empty lines */
 	if (all_whitespace(line, line_len))
 		return 0;
-	return ddb_run_cmd(ctx, line, ctx->dc_write_mode);
+	return ddb_run_cmd(ctx, line);
 }
 
 #define str_has_value(str) ((str) != NULL && strlen(str) > 0)
+
+static int
+open_if_needed(struct ddb_ctx *ctx, struct program_args *pa, bool *open)
+{
+	int rc = 0;
+
+	if (!str_has_value(pa->pa_pool_path)) {
+		*open = false;
+		goto out;
+	}
+	ctx->dc_pool_path = pa->pa_pool_path;
+
+	if (str_has_value(pa->pa_r_cmd_run)) {
+		rc = ddb_parse_cmd_str(ctx, pa->pa_r_cmd_run, open);
+		if (rc)
+			return rc;
+	} else if (str_has_value(pa->pa_cmd_file)) {
+		*open = true;
+	} else {
+		*open = false;
+	}
+
+out:
+	return rc;
+}
 
 int
 ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
@@ -193,6 +218,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	char			*input_buf;
 	int			 rc;
 	struct ddb_ctx		 ctx = {0};
+	bool                     open = true;
 
 	D_ASSERT(io_ft);
 	ctx.dc_io_ft = *io_ft;
@@ -217,14 +243,17 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		D_GOTO(done, rc = -DER_INVAL);
 	}
 
-	if (str_has_value(pa.pa_pool_path)) {
-		rc = dv_pool_open(pa.pa_pool_path, &ctx.dc_poh);
+	rc = open_if_needed(&ctx, &pa, &open);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+	if (open) {
+		rc = dv_pool_open(pa.pa_pool_path, &ctx.dc_poh, 0);
 		if (!SUCCESS(rc))
 			D_GOTO(done, rc);
 	}
 
 	if (str_has_value(pa.pa_r_cmd_run)) {
-		rc = ddb_run_cmd(&ctx, pa.pa_r_cmd_run, pa.pa_write_mode);
+		rc = ddb_run_cmd(&ctx, pa.pa_r_cmd_run);
 		if (!SUCCESS(rc))
 			D_ERROR("Command '%s' failed: "DF_RC"\n", input_buf, DP_RC(rc));
 		D_GOTO(done, rc);
@@ -248,7 +277,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		if (input_buf[strlen(input_buf) - 1] == '\n')
 			input_buf[strlen(input_buf) - 1] = '\0';
 
-		rc = ddb_run_cmd(&ctx, input_buf, pa.pa_write_mode);
+		rc = ddb_run_cmd(&ctx, input_buf);
 		if (!SUCCESS(rc)) {
 			D_ERROR("Command '%s' failed: "DF_RC"\n", input_buf, DP_RC(rc));
 			ddb_printf(&ctx, "Command '%s' failed: "DF_RC"\n", input_buf, DP_RC(rc));

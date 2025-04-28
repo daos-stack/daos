@@ -30,9 +30,7 @@ PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 $(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
 	echo Creating $@
 	echo $(basename $@)
-	cd ../../ &&                                          \
-	git archive --format tar --prefix $(NAME)-$(VERSION)/ \
-	            -o $$OLDPWD/$(basename $@) HEAD ./
+	cd ../../ && utils/rpms/archive.sh utils/rpms "$(NAME)" "$(VERSION)" tar
 	rm -f $@
 	gzip $(basename $@)
 

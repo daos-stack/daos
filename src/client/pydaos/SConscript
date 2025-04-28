@@ -4,6 +4,7 @@ import sys
 
 SOURCES = ["pydaos_core.py", "pydaos_shim.c", "__init__.py"]
 SOURCES_RAW = ["daos_cref.py", "__init__.py", "conversion.py", "daos_api.py"]
+SOURCES_TORCH = ["torch_api.py", "torch_shim.c", "__init__.py"]
 
 
 def install_shim_sources():
@@ -16,9 +17,13 @@ def install_shim_sources():
         env.Install(
             os.path.join("$PREFIX", "lib/daos/python/pydaos/raw"), f"raw/{source}"
         )
+    for source in SOURCES_TORCH:
+        env.Install(
+            os.path.join("$PREFIX", "lib/daos/python/pydaos/torch"), f"torch/{source}"
+        )
 
 
-def build_shim_module():
+def build_shim_modules():
     """Build PyDAOS shim module for the specified python version"""
 
     if GetOption("help"):
@@ -58,13 +63,33 @@ def build_shim_module():
     new_env.Install(install_path, "__init__.py")
     new_env.Install(install_path, "pydaos_core.py")
     # install raw wrappers
-    install_path += "/raw"
-    new_env.Install(install_path, "raw/__init__.py")
-    new_env.Install(install_path, "raw/daos_api.py")
-    new_env.Install(install_path, "raw/conversion.py")
-    new_env.Install(install_path, "raw/daos_cref.py")
+    install_path_raw = install_path + "/raw"
+    new_env.Install(install_path_raw, "raw/__init__.py")
+    new_env.Install(install_path_raw, "raw/daos_api.py")
+    new_env.Install(install_path_raw, "raw/conversion.py")
+    new_env.Install(install_path_raw, "raw/daos_cref.py")
+
+    torch_obj = new_env.SharedObject(
+        "torch_shim", "torch/torch_shim.c", SHLINKFLAGS=[], SHLIBPREFIX=""
+    )
+
+    new_env.Replace(LIBS=["daos", "dfs"])
+    torch = new_env.d_library(
+        target="torch/torch_shim",
+        source=[torch_obj],
+        install_off="../../../..",
+        SHLINK="gcc -pthread -shared",
+        SHLINKFLAGS=[],
+        SHLIBPREFIX="",
+        SHLIBSUFFIX=".so",
+    )
+    install_path_torch = install_path + "/torch"
+    new_env.Install(install_path_torch, torch)
+
+    new_env.Install(install_path_torch, "torch/__init__.py")
+    new_env.Install(install_path_torch, "torch/torch_api.py")
 
 
 if __name__ == "SCons.Script":
     install_shim_sources()
-    build_shim_module()
+    build_shim_modules()

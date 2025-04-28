@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package control
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -38,7 +37,7 @@ func saveConfig(t *testing.T, cfg *Config, cfgPath string) {
 		t.Fatal(err)
 	}
 
-	if err := ioutil.WriteFile(cfgPath, data, 0644); err != nil {
+	if err := os.WriteFile(cfgPath, data, 0644); err != nil {
 		t.Fatal(err)
 	}
 }

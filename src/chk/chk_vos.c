@@ -19,11 +19,20 @@ chk_db_fetch(char *key, int key_size, void *val, int val_size)
 {
 	d_iov_t	key_iov;
 	d_iov_t	val_iov;
+	int	rc;
 
 	d_iov_set(&key_iov, key, key_size);
 	d_iov_set(&val_iov, val, val_size);
 
-	return chk_db->sd_fetch(chk_db, CHK_DB_TABLE, &key_iov, &val_iov);
+	if (chk_db->sd_lock)
+		chk_db->sd_lock(chk_db);
+
+	rc = chk_db->sd_fetch(chk_db, CHK_DB_TABLE, &key_iov, &val_iov);
+
+	if (chk_db->sd_unlock)
+		chk_db->sd_unlock(chk_db);
+
+	return rc;
 }
 
 static int
@@ -33,21 +42,17 @@ chk_db_update(char *key, int key_size, void *val, int val_size)
 	d_iov_t	val_iov;
 	int	rc;
 
-	if (chk_db->sd_tx_begin) {
-		rc = chk_db->sd_tx_begin(chk_db);
-		if (rc != 0)
-			goto out;
-	}
-
 	d_iov_set(&key_iov, key, key_size);
 	d_iov_set(&val_iov, val, val_size);
 
+	if (chk_db->sd_lock)
+		chk_db->sd_lock(chk_db);
+
 	rc = chk_db->sd_upsert(chk_db, CHK_DB_TABLE, &key_iov, &val_iov);
 
-	if (chk_db->sd_tx_end)
-		rc = chk_db->sd_tx_end(chk_db, rc);
+	if (chk_db->sd_unlock)
+		chk_db->sd_unlock(chk_db);
 
-out:
 	return rc;
 }
 
@@ -57,27 +62,33 @@ chk_db_delete(char *key, int key_size)
 	d_iov_t	key_iov;
 	int	rc;
 
-	if (chk_db->sd_tx_begin) {
-		rc = chk_db->sd_tx_begin(chk_db);
-		if (rc != 0)
-			goto out;
-	}
-
 	d_iov_set(&key_iov, key, key_size);
+
+	if (chk_db->sd_lock)
+		chk_db->sd_lock(chk_db);
 
 	rc = chk_db->sd_delete(chk_db, CHK_DB_TABLE, &key_iov);
 
-	if (chk_db->sd_tx_end)
-		rc = chk_db->sd_tx_end(chk_db, rc);
+	if (chk_db->sd_unlock)
+		chk_db->sd_unlock(chk_db);
 
-out:
 	return rc;
 }
 
 static int
 chk_db_traverse(sys_db_trav_cb_t cb, void *args)
 {
-	return chk_db->sd_traverse(chk_db, CHK_DB_TABLE, cb, args);
+	int	rc;
+
+	if (chk_db->sd_lock)
+		chk_db->sd_lock(chk_db);
+
+	rc = chk_db->sd_traverse(chk_db, CHK_DB_TABLE, cb, args);
+
+	if (chk_db->sd_unlock)
+		chk_db->sd_unlock(chk_db);
+
+	return rc;
 }
 
 int
@@ -243,11 +254,8 @@ chk_prop_update(struct chk_property *cpp, d_rank_list_t *rank_list)
 	d_iov_t	val_iov;
 	int	rc;
 
-	if (chk_db->sd_tx_begin) {
-		rc = chk_db->sd_tx_begin(chk_db);
-		if (rc != 0)
-			goto out;
-	}
+	if (chk_db->sd_lock)
+		chk_db->sd_lock(chk_db);
 
 	if (cpp->cp_rank_nr != 0 && rank_list != NULL) {
 		D_ASSERTF(cpp->cp_rank_nr == rank_list->rl_nr, "Invalid rank nr %u/%u\n",
@@ -259,7 +267,7 @@ chk_prop_update(struct chk_property *cpp, d_rank_list_t *rank_list)
 
 		rc = chk_db->sd_upsert(chk_db, CHK_DB_TABLE, &key_iov, &val_iov);
 		if (rc != 0)
-			goto end;
+			goto out;
 	}
 
 	d_iov_set(&key_iov, CHK_PROPERTY, strlen(CHK_PROPERTY));
@@ -267,11 +275,10 @@ chk_prop_update(struct chk_property *cpp, d_rank_list_t *rank_list)
 
 	rc = chk_db->sd_upsert(chk_db, CHK_DB_TABLE, &key_iov, &val_iov);
 
-end:
-	if (chk_db->sd_tx_end)
-		rc = chk_db->sd_tx_end(chk_db, rc);
-
 out:
+	if (chk_db->sd_unlock)
+		chk_db->sd_unlock(chk_db);
+
 	if (rc != 0)
 		D_ERROR("Failed to update check property on rank %u: "DF_RC"\n",
 			dss_self_rank(), DP_RC(rc));

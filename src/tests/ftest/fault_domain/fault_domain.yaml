@@ -24,20 +24,15 @@ number_pools: 5
 pool_0:
   size: 1G
   nranks: 1
-  control_method: dmg
 pool_1:
   size: 3G
   nranks: 3
-  control_method: dmg
 pool_2:
   smc_size: 3G
   nranks: 3
-  control_method: dmg
 pool_3:
   scm_size: 2G
   nranks: 2
-  control_method: dmg
 pool_4:
   scm_size: 2G
   nranks: 2
-  control_method: dmg

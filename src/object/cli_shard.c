@@ -1451,11 +1451,15 @@ obj_shard_coll_punch_cb(tse_task_t *task, void *data)
 			shard_args->pa_auxi.obj_auxi->max_delay = timeout;
 	}
 
-	DL_CDEBUG(task->dt_result < 0, DLOG_ERR, DB_IO, task->dt_result,
-		  "DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" with DTX "
-		  DF_DTI" for task %p, map_ver %u/%u, flags %lx/%x", rpc, DP_UOID(ocpi->ocpi_oid),
-		  DP_DTI(&ocpi->ocpi_xid), task, ocpi->ocpi_map_ver, *cb_args->cpca_ver,
-		  (unsigned long)ocpi->ocpi_api_flags, ocpi->ocpi_flags);
+	DL_CDEBUG(task->dt_result < 0 && task->dt_result != -DER_INPROGRESS,
+		  DLOG_ERR, DB_IO, task->dt_result,
+		  "DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" in "DF_UUID"/"DF_UUID"/"
+		  DF_UUID" with DTX "DF_DTI" for task %p, map_ver %u/%u, flags %lx/%x, %s layout",
+		  rpc, DP_UOID(ocpi->ocpi_oid), DP_UUID(ocpi->ocpi_po_uuid),
+		  DP_UUID(ocpi->ocpi_co_hdl), DP_UUID(ocpi->ocpi_co_uuid), DP_DTI(&ocpi->ocpi_xid),
+		  task, ocpi->ocpi_map_ver, *cb_args->cpca_ver,
+		  (unsigned long)ocpi->ocpi_api_flags, ocpi->ocpi_flags,
+		  cb_args->cpca_shard_args->pa_coa.coa_raw_sparse ? "sparse" : "continuous");
 
 	crt_req_decref(rpc);
 

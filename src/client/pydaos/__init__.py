@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2023 Intel Corporation.
+# (C) Copyright 2019-2024 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -14,21 +14,37 @@ from . import pydaos_shim  # pylint: disable=relative-beyond-top-level,import-se
 DAOS_MAGIC = 0x7A8A
 
 
+class DaosErrorCode():
+    """Class to represent a daos error code.
+
+    Class for translating from numerical values to names/messages.
+    err_num should be negative as passed to this function.
+
+    This is not an exception class.
+    """
+
+    # pylint: disable=too-few-public-methods
+    def __init__(self, err_num):
+        self.err = err_num
+
+        try:
+            (self.name, self.message) = pydaos_shim._errors[-err_num]
+        except KeyError:
+            self.name = "DER_UNKNOWN"
+            self.message = f"Unknown error code {err_num}"
+
+    def __str__(self):
+        return f'DAOS error code {self.err} ({self.name}): "{self.message}"'
+
+
 # Define the PyDError class here before doing the pydaos_core import so that
 # it's accessible from within the module.
 class PyDError(Exception):
     """PyDAOS exception when operation cannot be completed."""
 
-    # DER_* error code is printed in both integer and string format where
-    # possible.  There is an odd effect with daos_init() errors that
-    # pydaos_shim is valid during __init__ but None during __str__ so format
-    # the string early and just report it later on.
     def __init__(self, message, rc):  # pylint: disable=super-init-not-called
-        err = pydaos_shim.err_to_str(DAOS_MAGIC, rc)
-        if err:
-            self.message = '{}: {}'.format(message, err)
-        else:
-            self.message = '{}: {}'.format(message, rc)
+        self.error = DaosErrorCode(rc)
+        self.message = f'{message}: {str(self.error)}'
 
     def __str__(self):
         return self.message

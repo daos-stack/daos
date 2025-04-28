@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,6 +25,8 @@ import (
 	"time"
 )
 
+var _ Metric = (*Timestamp)(nil)
+
 type Timestamp struct {
 	metricBase
 }
@@ -34,16 +36,22 @@ func (t *Timestamp) Type() MetricType {
 }
 
 func (t *Timestamp) Value() time.Time {
-	zero := time.Time{}
+	timeVal := time.Time{} // zero val
 	if t.handle == nil || t.node == nil {
-		return zero
+		return timeVal
 	}
-	var clk C.time_t
-	res := C.d_tm_get_timestamp(t.handle.ctx, &clk, t.node)
-	if res == C.DER_SUCCESS {
-		return time.Unix(int64(clk), 0)
+
+	fetch := func() C.int {
+		var clk C.time_t
+		res := C.d_tm_get_timestamp(t.handle.ctx, &clk, t.node)
+		if res == C.DER_SUCCESS {
+			timeVal = time.Unix(int64(clk), 0)
+		}
+		return res
 	}
-	return zero
+	t.fetchValWithRetry(fetch)
+
+	return timeVal
 }
 
 // FloatValue converts the timestamp to time in seconds since the UNIX epoch.

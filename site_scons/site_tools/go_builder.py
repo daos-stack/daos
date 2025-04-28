@@ -5,10 +5,9 @@ import os
 import re
 import subprocess  # nosec B404
 
-from SCons.Script import Configure, Exit, File, GetOption, Glob, Scanner
+from SCons.Script import Configure, Dir, Exit, File, GetOption, Glob, Scanner
 
 GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.18.0'
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 
@@ -18,7 +17,7 @@ def _scan_go_file(node, env, _path):
     includes = []
     path_name = str(node)[12:]
     rc = subprocess.run([env.d_go_bin, 'list', '--json', '-mod=vendor', path_name],
-                        cwd='src/control', stdout=subprocess.PIPE, check=True)
+                        cwd='src/control', stdout=subprocess.PIPE, check=True, env=env['ENV'])
     data = json.loads(rc.stdout.decode('utf-8'))
     for dep in data['Deps']:
         if not dep.startswith('github.com/daos-stack/daos'):
@@ -47,6 +46,17 @@ def _scan_go_file(node, env, _path):
                     includes.append(f'../../../include/{header}')
 
     return includes
+
+
+def get_min_go_version():
+    """Get go minimum version from go.mod"""
+    go_mod_path = os.path.join(Dir('#').abspath, "src", "control", "go.mod")
+    with open(go_mod_path, 'r') as f:
+        for line in f:
+            if line.startswith('go '):  # e.g. "go 1.21"
+                parts = line.split()
+                return get_go_version("go" + parts[1])
+    return None
 
 
 def get_go_version(output):
@@ -81,6 +91,13 @@ def generate(env):
             context.Result(0)
             return 0
 
+        context.Display('Getting minimum go version... ')
+        min_go_version = get_min_go_version()
+        if min_go_version is None:
+            context.Result('no minimum go version found in go.mod')
+            return 0
+        context.Display(min_go_version + '\n')
+
         context.Display(f'Checking {env.d_go_bin} version... ')
         cmd_rc = subprocess.run([env.d_go_bin, 'version'], check=True, stdout=subprocess.PIPE)
         out = cmd_rc.stdout.decode('utf-8').strip()
@@ -93,15 +110,15 @@ def generate(env):
         if go_version is None:
             context.Result(f'failed to get version from "{out}"')
             return 0
-        if len([x for x, y in
-                zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
+        if len([x for x, y in zip(go_version.split('.'), min_go_version.split('.'))
                 if int(x) < int(y)]) > 0:
-            context.Result(f'{out} is too old (min supported: {MIN_GO_VERSION}) ')
+            context.Result(f'{out} is too old (min supported: {min_go_version}) ')
             return 0
+
         context.Result(go_version)
         return 1
 
-    env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
+    env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER, os.environ['PATH']))
 
     if GetOption('help') or GetOption('clean'):
         return
@@ -125,6 +142,16 @@ def generate(env):
         env["ENV"]["GOMAXPROCS"] = '1'
     else:
         env["ENV"]["GOMAXPROCS"] = '5'
+
+    # If not already set in the environment, define some parameters for the Go toolchain
+    # that allow it to download and use a newer version as required to meet the requirements
+    # defined in go.mod.
+    if 'GOTOOLCHAIN' not in env['ENV']:
+        env['ENV']['GOTOOLCHAIN'] = 'auto'
+    if 'GOSUMDB' not in env['ENV']:
+        env['ENV']['GOSUMDB'] = 'sum.golang.org'
+    if 'GOPROXY' not in env['ENV']:
+        env['ENV']['GOPROXY'] = 'https://proxy.golang.org,direct'
 
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 

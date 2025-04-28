@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,6 @@ import (
 	crand "crypto/rand"
 	"encoding/hex"
 	"flag"
-	"io/ioutil"
 	mrand "math/rand"
 	"os"
 	"path/filepath"
@@ -44,7 +43,7 @@ func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []b
 	if err != nil {
 		t.Fatal("Failed to generate ecdsa key for testing")
 	}
-	source, err = ioutil.ReadFile("testdata/certs/source.txt")
+	source, err = os.ReadFile("testdata/certs/source.txt")
 	if err != nil {
 		t.Fatal("Failed to read in source file for Sign test.")
 	}
@@ -73,12 +72,12 @@ func TestSign(t *testing.T) {
 				result = []byte(err.Error())
 			}
 			if *update {
-				err := ioutil.WriteFile(golden, result, 0644)
+				err := os.WriteFile(golden, result, 0644)
 				if err != nil {
 					t.Errorf("failed to update golden file %s", golden)
 				}
 			}
-			expected, err := ioutil.ReadFile(golden)
+			expected, err := os.ReadFile(golden)
 			if err != nil {
 				t.Errorf("unable to read golden file %s", golden)
 			}
@@ -105,7 +104,7 @@ func VerifyTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PublicKey, source []
 		t.Fatal("Failed to generate ecdsa key for testing")
 	}
 	ecdsaKey = gen.Public()
-	source, err = ioutil.ReadFile("testdata/certs/source.txt")
+	source, err = os.ReadFile("testdata/certs/source.txt")
 	if err != nil {
 		t.Fatal("Failed to read in source file for Sign test.")
 	}
@@ -128,7 +127,7 @@ func TestVerify(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			golden := filepath.Join("testdata", "certs", tc.name+".golden")
-			expected, err := ioutil.ReadFile(golden)
+			expected, err := os.ReadFile(golden)
 			if err != nil {
 				t.Errorf("unable to read golden file %s", golden)
 			}

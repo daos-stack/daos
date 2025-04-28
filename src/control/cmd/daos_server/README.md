@@ -120,7 +120,7 @@ The control API is responsible for working out which `daos_server` instance
 is the MS leader and issuing the request, `dmg` uses the control API.
 The `dmg` tool requires the hostlist of all hosts in the DAOS system to be
 specified either on the command line or in the `daos_control.yml` config file.
-A list of access point servers is defined in the server's config file.
+A list of MS replica servers is defined in the server's config file.
 
 ## Functionality
 

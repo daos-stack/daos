@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,12 +57,16 @@ enum dtx_operation {
 #undef X
 
 /* DTX RPC input fields */
+/* clang-format off */
 #define DAOS_ISEQ_DTX							\
 	((uuid_t)		(di_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(di_co_uuid)		CRT_VAR)	\
 	((uint64_t)		(di_epoch)		CRT_VAR)	\
+	((uint32_t)		(di_version)		CRT_VAR)	\
+	((uint32_t)		(di_padding)		CRT_VAR)	\
 	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)	\
 	((uint32_t)		(di_flags)		CRT_ARRAY)
+/* clang-format on */
 
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
@@ -76,14 +81,18 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * dci_hints is sparse array, one per engine, sorted against the rank ID.
  * It can hold more than 19K engines inline RPC body.
  */
+/* clang-format off */
 #define DAOS_ISEQ_COLL_DTX						\
 	((uuid_t)		(dci_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(dci_co_uuid)		CRT_VAR)	\
 	((struct dtx_id)	(dci_xid)		CRT_VAR)	\
 	((uint32_t)		(dci_version)		CRT_VAR)	\
+	((uint32_t)		(dci_min_rank)		CRT_VAR)	\
+	((uint32_t)		(dci_max_rank)		CRT_VAR)	\
 	((uint32_t)		(dci_padding)		CRT_VAR)	\
 	((uint64_t)		(dci_epoch)		CRT_VAR)	\
 	((uint8_t)		(dci_hints)		CRT_ARRAY)
+/* clang-format on */
 
 /* DTX collective RPC output fields */
 #define DAOS_OSEQ_COLL_DTX						\
@@ -187,7 +196,14 @@ extern uint32_t dtx_batched_ult_max;
  * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
  * too much resource as to server maybe out of memory.
  */
-#define DTX_RPC_STEP_LENGTH	DTX_THRESHOLD_COUNT
+#define DTX_REG_RPC_STEP_LENGTH         512
+
+/*
+ * High priority (DTX) RPC may break through IO chore credit restriction temporarily.
+ * To reduce the side-affect on the other IO forward RPCs, use smaller step for high
+ * priority RPC.
+ */
+#define DTX_PRI_RPC_STEP_LENGTH         64
 
 extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
 extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
@@ -213,6 +229,8 @@ struct dtx_pool_metrics {
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
 	struct d_tm_node_t	*dt_dtx_leader_total;
+	struct d_tm_node_t	*dt_async_cmt_lat;
+	struct d_tm_node_t      *dt_chore_retry;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };
@@ -258,10 +276,13 @@ int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 int dtx_cos_add(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
 		uint64_t dkey_hash, daos_epoch_t epoch, uint32_t flags);
 int dtx_cos_del(struct ds_cont_child *cont, struct dtx_id *xid,
-		daos_unit_oid_t *oid, uint64_t dkey_hash);
+		daos_unit_oid_t *oid, uint64_t dkey_hash, bool demote);
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 void dtx_cos_prio(struct ds_cont_child *cont, struct dtx_id *xid,
 		  daos_unit_oid_t *oid, uint64_t dkey_hash);
+
+void dtx_cos_batched_del(struct ds_cont_child *cont, struct dtx_id xid[], bool rm[],
+			 uint32_t count);
 
 /* dtx_rpc.c */
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,

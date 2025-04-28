@@ -2175,6 +2175,7 @@ basic_byte_array(void **state)
 	char		 *bulk_buf_out = NULL;
 	char		 *buf;
 	char		 *buf_out;
+	char		 *buf_out_tmp;
 	int		 buf_len, tmp_len;
 	int		 step = 1;
 	int		 rc;
@@ -2287,8 +2288,10 @@ next_step:
 	assert_memory_equal(buf, buf_out, buf_len);
 
 	print_message("short read should get iov_len with tail hole trimmed\n");
-	memset(buf_out, 0, buf_len);
 	tmp_len = buf_len / 3;
+	buf_out_tmp = buf_out;
+	D_ALLOC(buf_out, max(buf_len, tmp_len + 99));
+	D_ASSERT(buf_out != NULL);
 	sgl.sg_nr_out	= 0;
 	sgl.sg_nr = 1;
 	d_iov_set(&sg_iov[0], buf_out, tmp_len + 99);
@@ -2306,6 +2309,8 @@ next_step:
 	assert_int_equal(sgl.sg_nr_out, 1);
 	assert_int_equal(sgl.sg_iovs[0].iov_len, tmp_len);
 	assert_memory_equal(buf, buf_out, tmp_len);
+	D_FREE(buf_out);
+	buf_out = buf_out_tmp;
 
 	if (step++ == 1)
 		goto next_step;

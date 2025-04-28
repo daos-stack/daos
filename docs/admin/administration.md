@@ -620,21 +620,17 @@ Usage:
 [nvme-faulty command options]
       -u, --uuid=     Device UUID to set
       -f, --force     Do not require confirmation
+      -l, --host=     Single host address <ipv4addr/hostname> to connect to
 ```
 
 To manually evict an NVMe SSD (auto eviction is covered later in this section),
 the device state needs to be set faulty by running the following command:
 ```bash
-$ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg storage set nvme-faulty --host=boro-11 --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: This command will permanently mark the device as unusable!
 Are you sure you want to continue? (yes/no)
 yes
--------
-boro-11
--------
-  Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
-            Targets:[] Rank:0 State:EVICTED LED:ON
+set-faulty operation performed successfully on the following host: wolf-310:10001
 ```
 The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
 faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
@@ -693,19 +689,14 @@ Usage:
 [nvme command options]
           --old-uuid= Device UUID of hot-removed SSD
           --new-uuid= Device UUID of new device
-          --no-reint  Bypass reintegration of device and just bring back online.
+          -l, --host= Single host address <ipv4addr/hostname> to connect to
 ```
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
 DAOS, run the following command:
 ```bash
-$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
--------
-boro-11
--------
-  Devices
-    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b [TrAddr:]
-      Targets:[] Rank:1 State:NORMAL LED:OFF
+$ dmg storage replace nvme --host=boro-11 --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
+dev-replace operation performed successfully on the following host: boro-11:10001
 ```
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
@@ -716,14 +707,9 @@ In order to reuse a device that was previously set as FAULTY and evicted from th
 system, an admin can run the following command (setting the old device UUID to be the
 new device UUID):
 ```bash
-$ dmg -l boro-11 storage replace nvme --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg storage replace nvme --host=boro-11 ---old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: Attempting to reuse a previously set FAULTY device!
--------
-boro-11
--------
-  Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
-      Targets:[] Rank:1 State:NORMAL LED:OFF
+dev-replace operation performed successfully on the following host: boro-11:10001
 ```
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
@@ -839,9 +825,9 @@ device would remain in this state until replaced by a new device.
 
 ## System Operations
 
-The DAOS server acting as the access point records details of engines
-that join the DAOS system. Once an engine has joined the DAOS system, it is
-identified by a unique system "rank". Multiple ranks can reside on the same
+The DAOS server acting as the Management Service (MS) leader records details
+of engines that join the DAOS system. Once an engine has joined the DAOS system,
+it is identified by a unique system "rank". Multiple ranks can reside on the same
 host machine, accessible via the same network address.
 
 A DAOS system can be shutdown and restarted to perform maintenance and/or
@@ -851,14 +837,14 @@ made to the rank's metadata stored on persistent memory.
 Storage reformat can also be performed after system shutdown. Pools will be
 removed and storage wiped.
 
-System commands will be handled by a DAOS Server acting as access point and
+System commands will be handled by a DAOS Server acting as the MS leader and
 listening on the address specified in the DMG config file "hostlist" parameter.
 See
 [`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
 for details.
 
 At least one of the addresses in the hostlist parameters should match one of the
-"access point" addresses specified in the server config file
+`mgmt_svc_replicas` addresses specified in the server config file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 that is supplied when starting `daos_server` instances.
 
@@ -912,6 +898,31 @@ output of `dmg system query`. The engine can be stopped (see next section)
 and then restarted to rejoin the system. An failed engine might also be excluded
 from the pools it hosted, please check the pool operation section on how to
 reintegrate an excluded engine.
+
+After one or more DAOS engines being excluded, the DAOS agent cache needs to be
+refreshed.  For detailed information, please refer to the [1][System Deployment
+documentation].  Before refreshing the DAOS Agent cache, it should be checked
+that the exclusion information has been spread to the Management Service leader.
+This could be done using the `dump-attachinfo` sub-command of the `daos_agent`
+executable:
+
+```bash
+daos_agent -o /tmp/daos_agent-tmp.yml dump-attachinfo
+```
+
+This usage of the `daos_agent` command needs a minimal DAOS agent configuration
+file `/tmp/daos_agent-tmp.yml` such as:
+
+```yaml
+name: daos_server
+access_points:
+- sertver-1
+port: 10001
+transport_config:
+  allow_insecure: true
+log_file: /tmp/daos_agent-tmp.log
+```
+
 
 ### Shutdown
 
@@ -1042,20 +1053,22 @@ formatted again by running `dmg storage format`.
 
 To add a new server to an existing DAOS system, one should install:
 
-- the relevant certificates
-- the server yaml file pointing to the access points of the running
-  DAOS system
+- A copy of the relevant certificates from an existing server. All servers must
+  share the same set of certificates in order to provide services.
+- A copy of the server yaml file from an existing server (DAOS server configurations
+  should be homogeneous) -- the `mgmt_svc_replicas` entry is used by the new server in
+  order to know which servers should handle its SystemJoin request.
 
 The daos\_control.yml file should also be updated to include the new DAOS server.
 
-Then starts the daos\_server via systemd and format the new server via
+Then start the daos\_server via systemd and format the new server via
 dmg as follows:
 
 ```
 $ dmg storage format -l ${new_storage_node}
 ```
 
-new_storage_node should be replaced with the hostname or the IP address of the
+`new_storage_node` should be replaced with the hostname or the IP address of the
 new storage node (comma separated list or range of hosts for multiple nodes)
 to be added.
 
@@ -1067,6 +1080,11 @@ the system (this can be checked with `dmg system query -v`).
     nodes (if membership is not restricted on the dmg command line). That being
     said, existing pools won't be automatically extended to use the new servers.
     Please see the pool operation section for how to extend the pool membership.
+
+After extending the system, the cache of the `daos_agent` service of the client
+nodes needs to be refreshed.  For detailed information, please refer to the
+[1][System Deployment documentation].
+
 
 ## Software Upgrade
 
@@ -1116,3 +1134,5 @@ Examples:
   * daos_server 2.4.0 is only compatible with daos_engine 2.4.0
   * daos_agent 2.6.0 is compatible with daos_server 2.4.0 (2.5 is a development version)
   * dmg 2.4.1 is compatible with daos_server 2.4.0
+
+[1]: <deployment.md#refresh-agent-cache>(Refresh DAOS Agent Cache)

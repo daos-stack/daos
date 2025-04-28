@@ -11,8 +11,10 @@ CompletedProcess
 DArray
 DDict
 DFS
+DataLoader
 Datamover
 EL
+Enakta
 EOF
 FPP
 FS
@@ -25,6 +27,7 @@ IOR
 ISA
 KVM
 Launchable
+LLC
 Lustre
 MPI
 Makefile
@@ -138,6 +141,7 @@ debian
 debuginfo
 defusedxml
 del
+dentry
 deps
 dereference
 dereferencing
@@ -201,6 +205,7 @@ getfattr
 getxattr
 gid
 groupadd
+groupdel
 groupname
 grp
 hackery
@@ -238,6 +243,7 @@ ip
 iptable
 iptables
 iteratively
+IterableDataset
 jira
 journalctl
 json
@@ -250,6 +256,7 @@ ldflags
 len
 libaio
 libdaos
+libdfs
 libdts
 libduns
 libfabric
@@ -276,6 +283,7 @@ mca
 mdtest
 mem
 memcheck
+memoryview
 metadata
 mgmt
 middleware
@@ -365,6 +373,7 @@ puuid
 py
 pydaos
 pytest
+pytorch
 ramdisk
 randrw
 ranklist
@@ -403,6 +412,7 @@ scancel
 scm
 scons
 scontrol
+seekable
 sharedctypes
 shlex
 simul
@@ -465,6 +475,7 @@ timestamp
 timestamps
 tmp
 tmpfs
+toolchain
 toplevel
 traceback
 transfersize
@@ -492,6 +503,7 @@ uri
 url
 useradd
 userdel
+usermod
 username
 ushort
 usr
@@ -509,6 +521,7 @@ vm
 vos
 wildcard
 wipefs
+workset
 xargs
 xattr
 xattrs

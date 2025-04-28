@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright 2022-2024 Intel Corporation.
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -20,19 +21,17 @@
 set -ue
 
 _print_githook_header "Flake8"
+
+py_files=$(_git_diff_cached_files "*.py SConstruct */SConscript")
+
+if [ -z "$py_files" ]; then
+    echo "No python changes. Skipping"
+    exit 0
+fi
+
 if ! command -v flake8 > /dev/null 2>&1; then
     echo "flake8 not installed. Install flake8 command to improve pre-commit checks:"
     echo "  python3 -m pip install -r ./utils/cq/requirements.txt"
-    exit 0
-fi
-
-if flake8 --version | grep ^6\\.; then
-    echo "flake8 >= 6.x does not have the --diff option. Skipping."
-    exit 0
-fi
-
-if [ ! -f .flake8 ]; then
-    echo "No .flake8 config. Skipping"
     exit 0
 fi
 
@@ -47,12 +46,17 @@ if [ "$BRANCH" = "origin/master" ]; then
     echo "  Checking tree"
     flake8 --statistics
 else
-
-    # shellcheck disable=SC1091
+    rc=0
 
     # non-scons
-    git diff "$TARGET" -U10 | flake8 --config .flake8 --diff
+    if ! echo "$py_files" | grep -vi scons | xargs -r flake8 --config .flake8; then
+        rc=1
+    fi
 
     # scons
-    git diff "$TARGET" -U10 | flake8 --config .flake8-scons --diff
+    if ! echo "$py_files" | grep -i scons | xargs -r flake8 --config .flake8-scons; then
+        rc=1;
+    fi
+
+    exit "$rc"
 fi

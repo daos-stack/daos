@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +16,7 @@ int
 daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
 			struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API");
 	return -DER_NOSYS;
 }
 
@@ -23,7 +24,7 @@ int
 daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
 		     struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API");
 	return -DER_NOSYS;
 }
 
@@ -31,7 +32,7 @@ int
 daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *clist,
 		    daos_anchor_t *anchor, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API");
 	return -DER_NOSYS;
 }
 
@@ -88,7 +89,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 
 	if (nr != 1) {
 		/* TODO: create multiple tasks for punch of multiple dkeys */
-		D_ERROR("Can't punch multiple dkeys for now\n");
+		D_ERROR("Can't punch multiple dkeys for now");
 		return -DER_INVAL;
 	}
 
@@ -120,7 +121,7 @@ int
 daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
 	       daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API");
 	return -DER_NOSYS;
 }
 
@@ -315,25 +316,23 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors)
 
 	/** TBD - support more than per shard iteration */
 	if (*nr != 0 && *nr != layout->ol_nr) {
-		D_ERROR("For now, num anchors should be the same as what is"
-			" reported as optimal\n");
+		D_ERROR("For now, num anchors should be the same as what is reported as optimal");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	*nr = layout->ol_nr;
 
 	if (anchors) {
-		int		grp_size;
-		uint32_t	i;
+		int	grp_size;
 
 		rc = dc_obj_get_grp_size(oh, &grp_size);
 		if (rc)
 			D_GOTO(out, rc);
 
-		for (i = 0; i < layout->ol_nr; i++) {
+		for (uint32_t i = 0; i < layout->ol_nr; i++) {
 			daos_anchor_set_zero(&anchors[i]);
 			dc_obj_shard2anchor(&anchors[i], i * grp_size);
-			daos_anchor_set_flags(&anchors[i], DIOF_TO_SPEC_SHARD);
+			daos_anchor_set_flags(&anchors[i], DIOF_TO_SPEC_GROUP);
 		}
 	}
 out:
@@ -354,7 +353,7 @@ daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor)
 	/** TBD - support more than per shard iteration */
 	daos_anchor_set_zero(anchor);
 	dc_obj_shard2anchor(anchor, index * grp_size);
-	daos_anchor_set_flags(anchor, DIOF_TO_SPEC_SHARD);
+	daos_anchor_set_flags(anchor, DIOF_TO_SPEC_GROUP);
 
 	return 0;
 }
@@ -416,13 +415,13 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 
 	rc = dc_cont_hdl2redunfac(coh, &cont_rf);
 	if (rc) {
-		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dc_cont_hdl2redunfac failed");
 		return rc;
 	}
 
 	rc = dc_cont_hdl2globalver(coh, &co_global_ver);
 	if (rc) {
-		D_ERROR("dc_cont_hdl2globalver failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dc_cont_hdl2globalver failed");
 		return rc;
 	}
 
@@ -657,7 +656,7 @@ struct oit_filter_arg {
 static int
 oit_filter_fetch_init(struct oit_filter_arg *oa)
 {
-	uint32_t	 i, nr = *oa->oa_oids_nr;
+	uint32_t	 nr = *oa->oa_oids_nr;
 	uint32_t	 val_len = DAOS_OIT_MARKER_MAX_LEN + DAOS_OIT_DEFAULT_VAL_LEN;
 	uint64_t	 buf_len;
 	daos_iod_t	*iod;
@@ -681,7 +680,7 @@ oit_filter_fetch_init(struct oit_filter_arg *oa)
 	buf_ptr += sizeof(d_sg_list_t) * nr;
 	oa->oa_fiovs = buf_ptr;
 	buf_ptr += sizeof(d_iov_t) * nr;
-	for (i = 0; i < nr; i++) {
+	for (uint32_t i = 0; i < nr; i++) {
 		iod = &oa->oa_fiods[i];
 		DAOS_OIT_AKEY_SET(&iod->iod_name, &oa->oa_oids[i]);
 		iod->iod_type	= DAOS_IOD_SINGLE;
@@ -725,7 +724,6 @@ oit_filter_oids(struct oit_filter_arg *oa)
 	daos_obj_id_t		*oids = oa->oa_oids;
 	uint32_t		*oids_nr = oa->oa_oids_nr;
 	d_iov_t			*iov, *iovs = oa->oa_fiovs;
-	int			 i, j, iov_idx;
 	int			 rc = 0;
 
 	if (*oids_nr == 0)
@@ -735,7 +733,7 @@ oit_filter_oids(struct oit_filter_arg *oa)
 	if (oa->oa_filter == NULL)
 		return 0;
 
-	for (i = 0, iov_idx = 0; i < *oids_nr; i++) {
+	for (uint32_t i = 0, iov_idx = 0; i < *oids_nr; i++) {
 		iov = &iovs[iov_idx++];
 		D_ASSERTF(iov->iov_len >= DAOS_OIT_DEFAULT_VAL_LEN &&
 			  iov->iov_len <= DAOS_OIT_MARKER_MAX_LEN +
@@ -751,7 +749,7 @@ oit_filter_oids(struct oit_filter_arg *oa)
 			break;
 		} else if (rc == 0) {
 			/* remove this oid from the oid array */
-			for (j = i; j < *oids_nr - 1; j++)
+			for (uint32_t j = i; j < *oids_nr - 1; j++)
 				oids[j] = oids[j + 1];
 			D_ASSERT(*oids_nr >= 1);
 			oids[*oids_nr - 1].lo = 0;
@@ -778,7 +776,6 @@ oit_filter_if_needed(tse_task_t *task, void *args)
 	daos_obj_list_akey_t	*largs;
 	tse_task_t		*ltask = NULL;
 	int			 rc = task->dt_result;
-	int			 i;
 
 	if (task->dt_result != 0)
 		D_GOTO(arg_free, rc);
@@ -808,7 +805,7 @@ oit_filter_if_needed(tse_task_t *task, void *args)
 	}
 
 	*oa->oa_oids_nr = oa->oa_want_nr - oa->oa_listed_nr;
-	for (i = 0; i < *oa->oa_oids_nr; i++)
+	for (uint32_t i = 0; i < *oa->oa_oids_nr; i++)
 		d_iov_set(&oa->oa_sgl.sg_iovs[i], &oa->oa_oids[i + oa->oa_listed_nr],
 			  sizeof(oa->oa_oids[0]));
 
@@ -908,7 +905,6 @@ oit_list_filter(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 		daos_anchor_t *anchor, daos_oit_filter_cb filter, daos_event_t *ev)
 {
 	struct oit_filter_arg	*oa;
-	int			 i;
 	int			 rc;
 	uint32_t		 max_bucket;
 	uint32_t		 bucket;
@@ -953,7 +949,7 @@ oit_list_filter(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 		D_GOTO(failed, rc = -DER_NOMEM);
 
 	DAOS_OIT_DKEY_SET(&oa->oa_dkey, &oa->oa_bucket);
-	for (i = 0; i < *oa->oa_oids_nr; i++)
+	for (uint32_t i = 0; i < *oa->oa_oids_nr; i++)
 		d_iov_set(&oa->oa_sgl.sg_iovs[i], &oa->oa_oids[i + oa->oa_listed_nr],
 			  sizeof(oa->oa_oids[0]));
 

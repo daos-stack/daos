@@ -161,8 +161,8 @@ setup(void **state)
 
 	uuid_generate_time_safe(test_arg->pool_uuid);
 	vts_pool_fallocate(&test_arg->fname);
-	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0, 0, 0 /* version */,
-			      &test_arg->poh);
+	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0 /* scm_sz */, 0 /* data_sz */,
+			      0 /* meta_sz */, 0 /* flags */, 0 /* version */, &test_arg->poh);
 	assert_rc_equal(ret, 0);
 	*state = test_arg;
 	return 0;

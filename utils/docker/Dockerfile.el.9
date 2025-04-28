@@ -1,4 +1,6 @@
 # Copyright 2022-2024 Intel Corporation
+# Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of EL 9 based
@@ -8,7 +10,7 @@
 # Pull base image
 ARG POINT_RELEASE=
 ARG BASE_DISTRO=almalinux:9$POINT_RELEASE
-FROM $BASE_DISTRO as basic
+FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
@@ -19,6 +21,7 @@ ARG CB0
 ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
+ARG DAOS_LAB_CA_FILE_URL
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el9.sh /tmp/install.sh
 # script to setup local repo if available
@@ -65,6 +68,7 @@ RUN python3 -m pip --no-cache-dir install --upgrade pip && \
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
 COPY --chown=daos_server:daos_server SConstruct .
+COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/

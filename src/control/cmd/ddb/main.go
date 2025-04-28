@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +15,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"unsafe"
 
 	"github.com/desertbit/grumble"
 	"github.com/jessevdk/go-flags"
@@ -23,6 +25,11 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+/*
+ #include <stdlib.h>
+*/
+import "C"
 
 func exitWithError(log logging.Logger, err error) {
 	cmdName := path.Base(os.Args[0])
@@ -51,7 +58,7 @@ func (pathStr vosPathStr) Complete(match string) (comps []flags.Completion) {
 	if match == "" || match == "/" {
 		match = defMntPrefix
 	}
-	for _, comp := range listDir(match) {
+	for _, comp := range listDirVos(match) {
 		comps = append(comps, flags.Completion{Item: comp})
 	}
 	sort.Slice(comps, func(i, j int) bool { return comps[i].Item < comps[j].Item })
@@ -176,9 +183,14 @@ Example Paths:
 	app := createGrumbleApp(ctx)
 
 	if opts.Args.VosPath != "" {
-		log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-		if err := ddbOpen(ctx, string(opts.Args.VosPath), opts.WriteMode); err != nil {
-			return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
+			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
+			if err := ddbOpen(ctx, string(opts.Args.VosPath), opts.WriteMode); err != nil {
+				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+			}
 		}
 	}
 
@@ -186,12 +198,16 @@ Example Paths:
 		return errors.New("Cannot use both command file and a command string")
 	}
 
+	if opts.Args.VosPath != "" {
+		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
+		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
+	}
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
 		if opts.Args.RunCmd != "" {
 			err := runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
 			if err != nil {
-				log.Errorf("Error running command %s\n", string(opts.Args.RunCmd))
+				log.Errorf("Error running command %q %s\n", string(opts.Args.RunCmd), err)
 			}
 		} else {
 			err := runFileCmds(log, app, opts.CmdFile)
@@ -213,7 +229,7 @@ Example Paths:
 	// Print the version upon entry
 	log.Infof("ddb version %s", build.DaosVersion)
 	// app.Run() uses the os.Args so need to clear them before running
-	os.Args = args
+	os.Args = []string{}
 	result := app.Run()
 	// make sure pool is closed
 	if ddbPoolIsOpen(ctx) {

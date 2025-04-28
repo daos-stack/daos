@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package control
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -80,7 +79,7 @@ func LoadConfig(cfgPath string) (*Config, error) {
 		return nil, ErrNoConfigFile
 	}
 
-	data, err := ioutil.ReadFile(cfgPath)
+	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return nil, err
 	}

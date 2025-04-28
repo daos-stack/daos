@@ -25,7 +25,7 @@ func TestPretty_PrintNVMeController(t *testing.T) {
 	ctrlrWithSmd := func(idx int32, roleBits int) *storage.NvmeController {
 		c := storage.MockNvmeController(idx)
 		sd := storage.MockSmdDevice(nil, idx)
-		sd.Roles = storage.BdevRoles{storage.OptionBits(roleBits)}
+		sd.Roles = storage.BdevRolesFromBits(roleBits)
 		sd.Rank = ranklist.Rank(idx)
 		c.SmdDevices = []*storage.SmdDevice{sd}
 		return c

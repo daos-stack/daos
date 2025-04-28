@@ -80,6 +80,12 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions[1].ID = 2
 		rl.Regions[1].SocketID = 1
 		rl.Regions[1].ISetID++
+	case "dual-sock-one-free":
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ID = 2
+		rl.Regions[1].SocketID = 1
+		rl.Regions[1].ISetID++
+		rl.Regions[1].FreeCapacity = rl.Regions[1].Capacity
 	case "dual-sock-isetid-switch":
 		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
 		rl.Regions = append(rl.Regions, rl.Regions[0])
@@ -261,6 +267,50 @@ const (
     "persistence_domain":"memory_controller"
   }
 ]
+`
+
+	// JSON output from "ndctl list -Rv" showing single namespace on dual socket.
+	ndctlRegionsOneFree = `[
+    {
+      "dev":"region1",
+      "size":1078036791296,
+      "align":16777216,
+      "available_size":1078036791296,
+      "max_available_extent":1078036791296,
+      "type":"pmem",
+      "numa_node":1,
+      "target_node":3,
+      "iset_id":-3098214067285580732,
+      "persistence_domain":"memory_controller"
+    },
+    {
+      "dev":"region0",
+      "size":1078036791296,
+      "align":16777216,
+      "available_size":0,
+      "max_available_extent":0,
+      "type":"pmem",
+      "numa_node":0,
+      "target_node":2,
+      "iset_id":7845533025580426308,
+      "persistence_domain":"memory_controller",
+      "namespaces":[
+        {
+          "dev":"namespace0.0",
+          "mode":"fsdax",
+          "map":"dev",
+          "size":1061190369280,
+          "uuid":"d7804a1c-954a-48f5-bc4a-1fc76c6b60ee",
+          "raw_uuid":"83c04060-109d-40a3-8867-6664c277c958",
+          "sector_size":512,
+          "align":2097152,
+          "blockdev":"pmem0",
+          "numa_node":0,
+          "target_node":2
+        }
+      ]
+    }
+  ]
 `
 )
 

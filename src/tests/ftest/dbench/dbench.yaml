@@ -1,23 +1,24 @@
 hosts:
   test_servers: 2
   test_clients: 1
+
 timeout: 200
+
 server_config:
   name: daos_server
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
+      storage: auto
+
 pool:
   scm_size: 16G
   svcn: 1
+
 container:
   type: POSIX
   control_method: daos
+
 dbench:
   loadfile: /usr/share/dbench/client.txt  # writes about 25M and perform 500 thousand operations
   timelimit: 10

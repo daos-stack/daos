@@ -80,7 +80,6 @@ type (
 		IDs             string // comma separated list of IDs
 		Rank            ranklist.Rank
 		ReplaceUUID     string // For device replacement, UUID of new device
-		ReplaceNoReint  bool   // For device replacement, indicate no reintegration
 		IdentifyTimeout uint32 // For LED identify, blink duration in minutes
 		Operation       SmdManageOpcode
 	}
@@ -306,7 +305,6 @@ func packPBSmdManageReq(req *SmdManageReq, pbReq *ctlpb.SmdManageReq) error {
 			Replace: &ctlpb.DevReplaceReq{
 				OldDevUuid: req.IDs,
 				NewDevUuid: req.ReplaceUUID,
-				NoReint:    req.ReplaceNoReint,
 			},
 		}
 	case LedCheckOp:

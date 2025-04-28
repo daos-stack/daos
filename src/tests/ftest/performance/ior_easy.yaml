@@ -28,7 +28,7 @@ server_config:
 
 pool:
   size: 95%
-  properties: ec_cell_sz:128KiB
+  properties: ec_cell_sz:1MiB
 
 container:
   type: POSIX

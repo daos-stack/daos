@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -294,6 +295,89 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxActAbort(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
+		},
+		Completer: nil,
+	})
+	// Command: feature
+	app.AddCommand(&grumble.Command{
+		Name:      "feature",
+		Aliases:   nil,
+		Help:      "Manage vos pool features",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.String("e", "enable", "", "Enable vos pool features")
+			f.String("d", "disable", "", "Disable vos pool features")
+			f.Bool("s", "show", false, "Show current features")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+		},
+		Completer: featureCompleter,
+	})
+	// Command: rm_pool
+	app.AddCommand(&grumble.Command{
+		Name:      "rm_pool",
+		Aliases:   nil,
+		Help:      "Remove a vos pool.",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbRmPool(ctx, c.Args.String("path"))
+		},
+		Completer: rmPoolCompleter,
+	})
+	// Command: dtx_act_discard_invalid
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_act_discard_invalid",
+		Aliases:   nil,
+		Help:      "Discard the active DTX entry's records if invalid.",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to a container.")
+			a.String("dtx_id", "DTX id of the entry to validate or 'all' to validate all active DTX entries.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxActDiscardInvalid(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
+		},
+		Completer: nil,
+	})
+	// Command: dev_list
+	app.AddCommand(&grumble.Command{
+		Name:      "dev_list",
+		Aliases:   nil,
+		Help:      "List all devices",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the vos db.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDevList(ctx, c.Args.String("db_path"))
+		},
+		Completer: nil,
+	})
+	// Command dev_replace
+	app.AddCommand(&grumble.Command{
+		Name:      "dev_replace",
+		Aliases:   nil,
+		Help:      "Replace an old device with a new unused device",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the vos db.")
+			a.String("old_dev", "Old device UUID.")
+			a.String("new_dev", "New device UUID.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDevReplace(ctx, c.Args.String("db_path"), c.Args.String("old_dev"), c.Args.String("new_dev"))
 		},
 		Completer: nil,
 	})

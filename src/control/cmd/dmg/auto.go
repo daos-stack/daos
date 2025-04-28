@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,6 +53,8 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	if len(hl) == 0 {
 		hl = []string{"localhost"}
 	}
+
+	cmd.CheckDeprecated(cmd.Logger)
 
 	req := control.ConfGenerateRemoteReq{
 		ConfGenerateReq: control.ConfGenerateReq{},

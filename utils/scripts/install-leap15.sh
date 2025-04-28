@@ -31,6 +31,7 @@ dnf --nodocs install \
     hwloc-devel \
     java-1_8_0-openjdk-devel \
     libaio-devel \
+    libasan8 \
     libcmocka-devel \
     libcapstone-devel \
     libevent-devel \
@@ -38,6 +39,7 @@ dnf --nodocs install \
     libjson-c-devel \
     libltdl7 \
     liblz4-devel \
+    libndctl-devel \
     libnuma-devel \
     libopenssl-devel \
     libprotobuf-c-devel \

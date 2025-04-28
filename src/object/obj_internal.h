@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -293,10 +294,16 @@ struct coll_oper_args {
 	struct shard_auxi_args	 coa_auxi;
 	int			 coa_dct_nr;
 	uint32_t		 coa_dct_cap;
-	uint32_t		 coa_max_dct_sz;
+	union {
+		/* Save obj->cob_min_rank for verification during obj_coll_prep_one(). */
+		uint32_t	 coa_min_rank;
+		/* Only can be used since obj_coll_oper_args_collapse() after object layout scan. */
+		uint32_t	 coa_max_dct_sz;
+	};
 	uint8_t			 coa_max_shard_nr;
 	uint8_t			 coa_max_bitmap_sz;
 	uint8_t			 coa_for_modify:1,
+				 coa_raw_sparse:1,
 				 coa_sparse:1;
 	uint8_t			 coa_target_nr;
 	/*
@@ -479,6 +486,8 @@ struct obj_auxi_args {
 	uint32_t			 flags;
 	uint16_t			 retry_cnt;
 	uint16_t			 inprogress_cnt;
+	/* Last timestamp (in second) when report retry warning message. */
+	uint32_t                         retry_warn_ts;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
@@ -568,7 +577,7 @@ is_ec_parity_shard(struct dc_object *obj, uint64_t dkey_hash, uint32_t shard)
 static inline bool
 daos_obj_id_is_ec(daos_obj_id_t oid)
 {
-	return daos_obj_id2ord(oid) >= OR_RS_2P1 && daos_obj_id2ord(oid) <= OR_RS_16P2;
+	return daos_obj_id2ord(oid) >= OR_RS_2P1 && daos_obj_id2ord(oid) <= OR_RS_16P3;
 }
 
 #define obj_ec_parity_rotate_enabled(obj)	(obj->cob_layout_version > 0)
@@ -1094,7 +1103,7 @@ int daos_obj_query_merge(struct obj_query_merge_args *oqma);
 void obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc);
 void obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,
-			crt_endpoint_t *tgt_ep);
+			crt_endpoint_t *tgt_ep, daos_obj_id_t oid);
 void obj_coll_disp_move(struct obj_coll_disp_cursor *ocdc);
 int obj_utils_init(void);
 void obj_utils_fini(void);

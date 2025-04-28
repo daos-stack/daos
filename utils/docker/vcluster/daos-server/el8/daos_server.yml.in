@@ -1,7 +1,7 @@
 # DAOS Server configuration file
 
 name: daos_server
-access_points: ['daos-server']
+mgmt_svc_replicas: ['daos-server']
 port: 10001
 
 provider: ofi+tcp

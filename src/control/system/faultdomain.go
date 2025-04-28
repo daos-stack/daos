@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,12 +7,13 @@
 package system
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -25,11 +26,15 @@ const (
 
 	// FaultDomainRootID is the ID of the root node
 	FaultDomainRootID = 1
+
+	// FaultDomainLabelAssign is used to assign a label to a domain layer.
+	FaultDomainLabelAssign = "="
 )
 
 // FaultDomain represents a multi-layer fault domain.
 type FaultDomain struct {
-	Domains []string // Hierarchical sequence of fault domain levels
+	Domains []string `json:"domains"`          // Hierarchical sequence of fault domain levels
+	Labels  []string `json:"labels,omitempty"` // Labels for each layer of the domain (optional)
 }
 
 func (f *FaultDomain) String() string {
@@ -39,7 +44,33 @@ func (f *FaultDomain) String() string {
 	if f.Empty() {
 		return FaultDomainSeparator
 	}
-	return FaultDomainSeparator + strings.Join(f.Domains, FaultDomainSeparator)
+	return FaultDomainSeparator + strings.Join(f.DomainStrings(), FaultDomainSeparator)
+}
+
+// DomainStrings returns the array of domain strings, including labels if applicable.
+func (f *FaultDomain) DomainStrings() []string {
+	if f == nil || f.Empty() {
+		return []string{}
+	}
+	if f.HasLabels() {
+		levels := make([]string, 0, len(f.Domains))
+		for i := range f.Domains {
+			levels = append(levels, fmt.Sprintf("%s%s%s", f.Labels[i], FaultDomainLabelAssign, f.Domains[i]))
+		}
+		return levels
+	}
+	return f.Domains
+}
+
+// HasLabels checks whether the FaultDomain has associated labels for every level.
+func (f *FaultDomain) HasLabels() bool {
+	if f == nil || f.Empty() {
+		return false
+	}
+	if len(f.Labels) == len(f.Domains) {
+		return true
+	}
+	return false
 }
 
 // Equals checks if the fault domains are equal.
@@ -58,6 +89,14 @@ func (f *FaultDomain) Equals(other *FaultDomain) bool {
 	for i, dom := range f.Domains {
 		if other.Domains[i] != dom {
 			return false
+		}
+		if other.HasLabels() || f.HasLabels() {
+			if other.HasLabels() != f.HasLabels() {
+				return false
+			}
+			if other.Labels[i] != f.Labels[i] {
+				return false
+			}
 		}
 	}
 	return true
@@ -82,7 +121,11 @@ func (f *FaultDomain) Level(level int) (string, error) {
 	if level < 0 || level >= f.NumLevels() {
 		return "", errors.New("out of range")
 	}
-	return f.Domains[f.topLevelIdx()-level], nil
+	return f.Domains[f.levelIdx(level)], nil
+}
+
+func (f *FaultDomain) levelIdx(level int) int {
+	return f.topLevelIdx() - level
 }
 
 func (f *FaultDomain) topLevelIdx() int {
@@ -100,6 +143,17 @@ func (f *FaultDomain) BottomLevel() string {
 func (f *FaultDomain) TopLevel() string {
 	top, _ := f.Level(f.topLevelIdx())
 	return top
+}
+
+// GetLabel returns the label for the bottom layer of the fault domain.
+func (f *FaultDomain) GetLabel() string {
+	if f == nil {
+		return "(nil)"
+	}
+	if f.Empty() || !f.HasLabels() {
+		return ""
+	}
+	return f.Labels[f.levelIdx(0)]
 }
 
 // IsAncestorOf determines if this fault domain is an ancestor of the one passed in.
@@ -146,22 +200,74 @@ func (f *FaultDomain) MustCreateChild(childLevel string) *FaultDomain {
 	return child
 }
 
+func errFaultDomainSpecialChar(specialChar string) error {
+	return fmt.Errorf("invalid fault domain contains special character %q", specialChar)
+}
+
 // NewFaultDomain creates a FaultDomain from a sequence of strings representing
 // individual levels of the domain.
 // For each level of the domain, we assume case insensitivity and trim
 // leading/trailing whitespace.
 func NewFaultDomain(domains ...string) (*FaultDomain, error) {
-	for i := range domains {
-		domains[i] = strings.TrimSpace(domains[i])
-		if domains[i] == "" || strings.Contains(domains[i], FaultDomainSeparator) {
-			return nil, errors.New("invalid fault domain")
+	fd := &FaultDomain{}
+
+	normalize := func(s string) (string, error) {
+		// strip out all the spaces and quote marks without worrying about quote mark matching.
+		// e.g. "   string1"" becomes string1
+		for prev := s; ; prev = s {
+			s = strings.TrimSpace(s)
+			s = strings.Trim(s, "\"")
+			if s == prev {
+				break
+			}
 		}
-		domains[i] = strings.ToLower(domains[i])
+		if s == "" {
+			return "", fmt.Errorf("empty string is an invalid fault domain")
+		}
+		if strings.Contains(s, FaultDomainSeparator) {
+			return "", errFaultDomainSpecialChar(FaultDomainSeparator)
+		}
+		if strings.Contains(s, FaultDomainLabelAssign) {
+			return "", errFaultDomainSpecialChar(FaultDomainLabelAssign)
+		}
+		return strings.ToLower(s), nil
 	}
 
-	return &FaultDomain{
-		Domains: domains,
-	}, nil
+	var useLabels bool
+	for i, d := range domains {
+		var label string
+		var dom string
+		var err error
+		parts := strings.SplitN(d, "=", 2)
+		if len(parts) == 1 {
+			if i != 0 && useLabels {
+				return nil, fmt.Errorf("layer %d (%s) has no label, but other layers include labels", i, d)
+			}
+
+			dom = parts[0]
+		} else {
+			if i == 0 {
+				useLabels = true
+			} else if !useLabels {
+				return nil, fmt.Errorf("layer %d (%s) has a label, but other layers don't include labels", i, d)
+			}
+			label = parts[0]
+			dom = parts[1]
+
+			if label, err = normalize(label); err != nil {
+				return nil, errors.Wrapf(err, "domain label %q", label)
+			}
+
+			fd.Labels = append(fd.Labels, label)
+		}
+
+		if dom, err = normalize(dom); err != nil {
+			return nil, errors.Wrapf(err, "domain name %q", dom)
+		}
+		fd.Domains = append(fd.Domains, dom)
+	}
+
+	return fd, nil
 }
 
 // MustCreateFaultDomain creates a FaultDomain from a sequence of strings
@@ -189,7 +295,7 @@ func NewFaultDomainFromString(domainStr string) (*FaultDomain, error) {
 	}
 
 	if !strings.HasPrefix(domainStr, FaultDomainSeparator) {
-		return nil, errors.New("invalid fault domain")
+		return nil, errors.New("fault path must start with root (/)")
 	}
 
 	domains := strings.Split(domainStr, FaultDomainSeparator)
@@ -214,9 +320,9 @@ type (
 	// This tree structure is not thread-safe and callers are expected to
 	// add access synchronization if needed.
 	FaultDomainTree struct {
-		Domain   *FaultDomain
-		ID       uint32
-		Children []*FaultDomainTree
+		Domain   *FaultDomain       `json:"domain"`
+		ID       uint32             `json:"id"`
+		Children []*FaultDomainTree `json:"children"`
 	}
 )
 
@@ -253,6 +359,43 @@ func (t *FaultDomainTree) nextID() uint32 {
 	return nextID
 }
 
+// GetLabel gets the label for the top level of the FaultDomainTree.
+func (t *FaultDomainTree) GetLabel() string {
+	if t == nil {
+		return "(nil)"
+	}
+	if t.IsRoot() {
+		return ""
+	}
+	return t.Domain.GetLabel()
+}
+
+// Labels returns the sequence of non-root, labels from the top of this tree to the bottom.
+// NB: This method assumes a balanced tree, and does not search for the longest branch when collecting the labels.
+func (t *FaultDomainTree) Labels() ([]string, error) {
+	if t == nil {
+		return nil, errors.New("nil FaultDomainTree")
+	}
+	list := t.labels()
+	hasLabels := len(list) > 0 && list[0] != ""
+	if !hasLabels {
+		return []string{}, nil
+	}
+	return list, nil
+}
+
+func (t *FaultDomainTree) labels() []string {
+	labelList := []string{}
+	if !t.IsRoot() {
+		labelList = append(labelList, t.GetLabel())
+	}
+	if t.IsLeaf() {
+		return labelList
+	}
+	// all children must have the same label
+	return append(labelList, t.Children[0].labels()...)
+}
+
 // AddDomain adds a child fault domain, including intermediate nodes, to the
 // fault domain tree.
 func (t *FaultDomainTree) AddDomain(domain *FaultDomain) error {
@@ -283,35 +426,47 @@ func (t *FaultDomainTree) Merge(t2 *FaultDomainTree) error {
 		return nil // nothing to do
 	}
 
-	// To merge, tree domains must match at the top.
 	if !t.Domain.Equals(t2.Domain) {
-		return errors.New("trees cannot be merged")
+		return fmt.Errorf("FaultDomainTrees don't share a root, so cannot be merged")
 	}
 
 	nextID := t.nextID()
-	t.mergeTree(t2, &nextID)
-	return nil
+	return t.mergeTree(t2, &nextID, t.labels())
 }
 
-func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree, nextID *uint32) {
+func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree, nextID *uint32, labels []string) error {
 	for _, m := range toBeMerged.Children {
 		foundBranch := false
 		for _, p := range t.Children {
 			if p.Domain.Equals(m.Domain) {
 				foundBranch = true
-				p.mergeTree(m, nextID)
+				if err := p.mergeTree(m, nextID, labels[1:]); err != nil {
+					return err
+				}
 				break
+			}
+			if p.Domain.HasLabels() != m.Domain.HasLabels() {
+				if m.Domain.HasLabels() {
+					return errors.New("cannot merge a fault domain tree with labels into one with no labels")
+				}
+				return errors.New("cannot merge a fault domain tree with no labels into one with labels")
+			}
+			if len(labels) > 0 && m.GetLabel() != labels[0] {
+				return fmt.Errorf("cannot merge a fault domain tree with label %q at level with different existing label %q", m.GetLabel(), labels[0])
 			}
 		}
 		if !foundBranch {
 			if nextID != nil {
 				m.updateAllIDs(nextID)
 			}
+			if err := t.verifyChildLabels(m, labels); err != nil {
+				return err
+			}
 			t.addChild(m)
 		}
 	}
 
-	return
+	return nil
 }
 
 func (t *FaultDomainTree) updateAllIDs(nextID *uint32) {
@@ -320,6 +475,19 @@ func (t *FaultDomainTree) updateAllIDs(nextID *uint32) {
 	for _, c := range t.Children {
 		c.updateAllIDs(nextID)
 	}
+}
+
+func (t *FaultDomainTree) verifyChildLabels(child *FaultDomainTree, labels []string) error {
+	if len(labels) == 0 {
+		return nil // nothing to check
+	}
+	if child.GetLabel() != labels[0] {
+		return fmt.Errorf("child tree with label %q at level with different existing label %q", child.GetLabel(), labels[0])
+	}
+	if child.IsLeaf() {
+		return nil
+	}
+	return t.verifyChildLabels(child.Children[0], labels[1:])
 }
 
 func (t *FaultDomainTree) addChild(child *FaultDomainTree) {
@@ -530,7 +698,7 @@ func NewFaultDomainTree(domains ...*FaultDomain) *FaultDomainTree {
 	nextID := tree.ID + 1
 	for _, d := range domains {
 		subtree := faultDomainTreeFromDomain(d)
-		tree.mergeTree(subtree, &nextID)
+		tree.mergeTree(subtree, &nextID, tree.labels())
 	}
 	return tree
 }
@@ -540,8 +708,9 @@ func faultDomainTreeFromDomain(d *FaultDomain) *FaultDomainTree {
 	nextID := tree.ID + 1
 	if !d.Empty() {
 		node := tree
+		domainStrs := d.DomainStrings()
 		for i := 0; i < d.NumLevels(); i++ {
-			childDomain := MustCreateFaultDomain(d.Domains[:i+1]...)
+			childDomain := MustCreateFaultDomain(domainStrs[:i+1]...)
 			child := NewFaultDomainTree().
 				WithNodeDomain(childDomain).
 				WithID(nextID)

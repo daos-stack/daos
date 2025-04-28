@@ -223,7 +223,7 @@ bring-up DAOS servers and clients.
 ### Run dfuse
 
 	# Bring up 4 hosts server with appropriate daos_server.yml and
-	# access-point, reference to  DAOS Set-Up
+	# MS replicas, reference to  DAOS Set-Up
 	# After DAOS servers, DAOS admin and client started.
 
 	$ dmg storage format

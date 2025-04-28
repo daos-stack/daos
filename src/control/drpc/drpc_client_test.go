@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,13 +8,13 @@ package drpc
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 // testSockPath is an arbitrary path string to use for testing. These tests
@@ -41,7 +41,7 @@ func (m *mockDialer) dial(ctx context.Context, socketPath string) (net.Conn, err
 }
 
 func (m *mockDialer) SetError(errStr string) {
-	m.OutputErr = fmt.Errorf(errStr)
+	m.OutputErr = errors.New(errStr)
 	m.OutputConn = nil
 }
 

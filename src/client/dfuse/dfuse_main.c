@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,8 +10,8 @@
 #include <getopt.h>
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <fuse3/fuse.h>
-#include <fuse3/fuse_lowlevel.h>
+#include <fused/fuse.h>
+#include <fused/fuse_lowlevel.h>
 #include <string.h>
 
 #include <sys/types.h>
@@ -166,6 +168,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
  *
  * Should be called from the post_start plugin callback and creates
  * a filesystem.
+ * Returns a DAOS error code.
  * Returns true on success, false on failure.
  */
 int
@@ -204,18 +207,17 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
 
 	/* Blocking */
-	if (dfuse_info->di_threaded)
-		rc = dfuse_loop(dfuse_info);
-	else
-		rc = fuse_session_loop(dfuse_info->di_session);
-	if (rc != 0)
+	rc = dfuse_loop(dfuse_info);
+	if (rc != 0) {
 		DHS_ERROR(dfuse_info, rc, "Fuse loop exited");
+		rc = daos_errno2der(rc);
+	}
 
 umount:
 
 	fuse_session_unmount(dfuse_info->di_session);
 
-	return daos_errno2der(rc);
+	return rc;
 }
 
 #define DF_POOL_PREFIX "pool="
@@ -279,18 +281,20 @@ show_help(char *name)
 	    "	   --path=<path>	Path to load UNS pool/container data\n"
 	    "	   --sys-name=STR	DAOS system name context for servers\n"
 	    "\n"
-	    "	-S --singlethread	Single threaded (deprecated)\n"
 	    "	-t --thread-count=count	Total number of threads to use\n"
 	    "	-e --eq-count=count	Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
 	    "	   --enable-caching	Enable all caching (default)\n"
 	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
+	    "	   --enable-local-flock	Enable the support of local flock\n"
 	    "	   --disable-caching	Disable all caching\n"
 	    "	   --disable-wb-cache	Use write-through rather than write-back cache\n"
 	    "	-o options		mount style options string\n"
 	    "\n"
 	    "	   --multi-user		Run dfuse in multi user mode\n"
 	    "	   --read-only		Mount dfuse read-only\n"
+	    "	   --snap=name		Mount a snapshot by name (read-only mode)\n"
+	    "	   --snap-epoch=epoch	Mount a snapshot by epoch (read-only mode)\n"
 	    "\n"
 	    "	-h --help		Show this help\n"
 	    "	-v --version		Show version\n"
@@ -416,6 +420,8 @@ main(int argc, char **argv)
 	char              *path              = NULL;
 	bool               have_thread_count = false;
 	int                pos_index         = 0;
+	char		  *snap_name	     = NULL;
+	daos_epoch_t	   snap_epoch	     = 0;
 
 	struct option      long_options[] = {{"mountpoint", required_argument, 0, 'm'},
 					     {"multi-user", no_argument, 0, 'M'},
@@ -423,15 +429,17 @@ main(int argc, char **argv)
 					     {"pool", required_argument, 0, 'p'},
 					     {"container", required_argument, 0, 'c'},
 					     {"sys-name", required_argument, 0, 'G'},
-					     {"singlethread", no_argument, 0, 'S'},
 					     {"thread-count", required_argument, 0, 't'},
 					     {"eq-count", required_argument, 0, 'e'},
 					     {"foreground", no_argument, 0, 'f'},
 					     {"enable-caching", no_argument, 0, 'E'},
 					     {"enable-wb-cache", no_argument, 0, 'F'},
+					     {"enable-local-flock", no_argument, 0, 'L'},
 					     {"disable-caching", no_argument, 0, 'A'},
 					     {"disable-wb-cache", no_argument, 0, 'B'},
 					     {"read-only", no_argument, 0, 'r'},
+					     {"snap", required_argument, 0, 's'},
+					     {"snap-epoch", required_argument, 0, 'N'},
 					     {"options", required_argument, 0, 'o'},
 					     {"version", no_argument, 0, 'v'},
 					     {"help", no_argument, 0, 'h'},
@@ -447,13 +455,13 @@ main(int argc, char **argv)
 	if (dfuse_info == NULL)
 		D_GOTO(out_debug, rc = -DER_NOMEM);
 
-	dfuse_info->di_threaded = true;
-	dfuse_info->di_caching  = true;
-	dfuse_info->di_wb_cache = true;
-	dfuse_info->di_eq_count = 1;
+	dfuse_info->di_caching     = true;
+	dfuse_info->di_wb_cache    = true;
+	dfuse_info->di_eq_count    = 1;
+	dfuse_info->di_local_flock = false;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:t:o:fhe:s:N:v", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -475,6 +483,9 @@ main(int argc, char **argv)
 		case 'F':
 			dfuse_info->di_wb_cache = true;
 			break;
+		case 'L':
+			dfuse_info->di_local_flock = true;
+			break;
 		case 'A':
 			dfuse_info->di_caching  = false;
 			dfuse_info->di_wb_cache = false;
@@ -491,13 +502,6 @@ main(int argc, char **argv)
 		case 'P':
 			path = optarg;
 			break;
-		case 'S':
-			/* Set it to be single threaded, but allow an extra one
-			 * for the event queue processing
-			 */
-			dfuse_info->di_threaded     = false;
-			dfuse_info->di_thread_count = 2;
-			break;
 		case 'e':
 			dfuse_info->di_eq_count = atoi(optarg);
 			break;
@@ -513,6 +517,17 @@ main(int argc, char **argv)
 			break;
 		case 'o':
 			parse_mount_option(optarg, dfuse_info, pool_name, cont_name);
+			break;
+		case 's':
+			snap_name = optarg;
+			dfuse_info->di_read_only = true;
+			break;
+		case 'N':
+			if (strncmp(optarg, "0x", 2) == 0)
+				snap_epoch = strtol(optarg + 2, NULL, 16);
+			else
+				snap_epoch = atol(optarg);
+			dfuse_info->di_read_only = true;
 			break;
 		case 'h':
 			show_help(argv[0]);
@@ -564,7 +579,7 @@ main(int argc, char **argv)
 	 * check CPU binding.  If bound to a number of cores then launch that number of threads,
 	 * if not bound them limit to 16.
 	 */
-	if (dfuse_info->di_threaded && !have_thread_count) {
+	if (!have_thread_count) {
 		struct hwloc_topology *hwt;
 		hwloc_const_cpuset_t   hw;
 		int                    total;
@@ -713,7 +728,8 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	rc = dfuse_cont_open(dfuse_info, dfp, cont_name[0] ? cont_name : NULL, &dfs);
+	rc = dfuse_cont_open(dfuse_info, dfp, cont_name[0] ? cont_name : NULL, snap_epoch,
+			     snap_name, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
@@ -750,10 +766,19 @@ out_daos:
 		rc = rc2;
 out_fini:
 	if (dfuse_info && rc == -DER_SUCCESS) {
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
-		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_container_count) == 0);
+		if (atomic_load_relaxed(&dfuse_info->di_inode_count) != 0 ||
+		    atomic_load_relaxed(&dfuse_info->di_fh_count) != 0 ||
+		    atomic_load_relaxed(&dfuse_info->di_pool_count) != 0 ||
+		    atomic_load_relaxed(&dfuse_info->di_container_count) != 0) {
+			DFUSE_TRA_WARNING(dfuse_info,
+					  "Not all resources were cleaned up, probably"
+					  " due to forced umount: inodes=" DF_U64 " handles=" DF_U64
+					  " pools= " DF_U64 " containers=" DF_U64,
+					  atomic_load_relaxed(&dfuse_info->di_inode_count),
+					  atomic_load_relaxed(&dfuse_info->di_fh_count),
+					  atomic_load_relaxed(&dfuse_info->di_pool_count),
+					  atomic_load_relaxed(&dfuse_info->di_container_count));
+		}
 	}
 
 	DFUSE_TRA_DOWN(dfuse_info);

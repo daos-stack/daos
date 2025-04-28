@@ -27,7 +27,6 @@ server_config:
 
 pool:
   size: 50%
-  control_method: dmg
 
 container:
   type: POSIX
@@ -48,3 +47,5 @@ ior:
   block_size: 1G
   dfs_oclass: EC_2P2G1
   dfs_dir_oclass: EC_2P2G1
+
+scm_threshold: 1500000

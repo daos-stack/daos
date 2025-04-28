@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +8,6 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
-#include <daos/stack_mmap.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/heap.h>
 
@@ -72,6 +72,7 @@ struct mem_stats {
 /* See dss_chore. */
 struct dss_chore_queue {
 	d_list_t   chq_list;
+	int32_t    chq_credits;
 	bool       chq_stop;
 	ABT_mutex  chq_mutex;
 	ABT_cond   chq_cond;
@@ -105,11 +106,7 @@ struct dss_xstream {
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
-	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
-#ifdef ULT_MMAP_STACK
-	/* per-xstream pool/list of free stacks */
-	struct stack_pool	*dx_sp;
-#endif
+	struct mem_stats        dx_mem_stats;   /* memory usages stats on this xstream */
 	bool			dx_progress_started;	/* Network poll started */
 	int                     dx_tag;                 /** tag for xstream */
 	struct dss_chore_queue	dx_chore_queue;
@@ -166,6 +163,11 @@ extern unsigned int          dss_tgt_offload_xs_nr;
 extern unsigned int          dss_offload_per_numa_nr;
 /** Number of target per socket */
 extern unsigned int          dss_tgt_per_numa_nr;
+/** The maximum number of credits for each IO chore queue. That is per helper XS. */
+extern uint32_t              dss_chore_credits;
+
+#define DSS_CHORE_CREDITS_MIN 1024
+#define DSS_CHORE_CREDITS_DEF 4096
 
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);
@@ -288,43 +290,14 @@ sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
-#ifdef ULT_MMAP_STACK
-/* callback to ensure stack will be freed in exiting-ULT/current-XStream pool */
-static inline void
-dss_free_stack_cb(void *arg)
-{
-	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
-	/* main thread doesn't have TLS and XS */
-	struct dss_xstream *dx = dss_tls_get() ? dss_current_xstream() : NULL;
-
-	/* ensure pool where to free stack is from current-XStream/ULT-exiting */
-	if (dx != NULL)
-		desc->sp = dx->dx_sp;
-
-}
-#else
-#define dss_free_stack_cb NULL
-#endif
-
 static inline int
 sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		    ABT_thread_attr t_attr, ABT_thread *thread,
 		    unsigned int flags)
 {
-	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
-	struct sched_info	*info = &dx->dx_sched_info;
-	int			 rc;
-#ifdef ULT_MMAP_STACK
-	bool			 tls_set = dss_tls_get() ? true : false;
-	struct dss_xstream	*cur_dx = NULL;
-
-	if (tls_set)
-		cur_dx = dss_current_xstream();
-
-	/* if possible,stack should be allocated from launching XStream pool */
-	if (cur_dx == NULL)
-		cur_dx = dx;
-#endif
+	ABT_pool           abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
+	struct sched_info *info     = &dx->dx_sched_info;
+	int                rc;
 
 	if (sched_xstream_stopping())
 		return -DER_SHUTDOWN;
@@ -334,7 +307,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = daos_abt_thread_create(cur_dx->dx_sp, dss_free_stack_cb, abt_pool, func, arg, t_attr, thread);
+	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 

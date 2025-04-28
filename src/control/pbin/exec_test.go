@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -88,7 +87,7 @@ func generatePayload(size int) []byte {
 }
 
 func loadJSONPayload(t *testing.T, name string) []byte {
-	loadBuf, err := ioutil.ReadFile(fmt.Sprintf("testdata/%s.json", name))
+	loadBuf, err := os.ReadFile(fmt.Sprintf("testdata/%s.json", name))
 	if err != nil {
 		t.Fatal(err)
 	}

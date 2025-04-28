@@ -33,6 +33,15 @@ class MdtestEasy(PerformanceTestBase):
         """
         self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_16p2g1/*")
 
+    def test_performance_mdtest_easy_dfs_rp_3g1(self):
+        """Test Description: Run MDTest Easy, DFS, RP_3G1.
+
+        :avocado: tags=all,manual
+        :avocado: tags=performance
+        :avocado: tags=MdtestEasy,test_performance_mdtest_easy_dfs_rp_3g1
+        """
+        self.run_performance_mdtest(namespace="/run/mdtest_dfs_rp_3g1/*")
+
     def test_performance_mdtest_easy_pil4dfs_s1(self):
         """Test Description: Run MDTest Easy, dfuse + pil4dfs, S1.
 
@@ -51,3 +60,12 @@ class MdtestEasy(PerformanceTestBase):
         :avocado: tags=MdtestEasy,test_performance_mdtest_easy_pil4dfs_ec_16p2g1
         """
         self.run_performance_mdtest(namespace="/run/mdtest_pil4dfs_ec_16p2g1/*")
+
+    def test_performance_mdtest_easy_pil4dfs_rp_3g1(self):
+        """Test Description: Run MDTest Easy, dfuse + pil4dfs, RP_3G1.
+
+        :avocado: tags=all,manual
+        :avocado: tags=performance
+        :avocado: tags=MdtestEasy,test_performance_mdtest_easy_pil4dfs_rp_3g1
+        """
+        self.run_performance_mdtest(namespace="/run/mdtest_pil4dfs_rp_3g1/*")

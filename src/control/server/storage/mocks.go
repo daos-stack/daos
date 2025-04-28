@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -107,7 +108,7 @@ func MockSmdDevice(c *NvmeController, varIdx ...int32) *SmdDevice {
 	sd := SmdDevice{
 		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		Roles:     BdevRoles{OptionBits(BdevRoleAll)},
+		Roles:     BdevRolesFromBits(BdevRoleAll),
 	}
 	if c != nil {
 		sd.Ctrlr = *c
@@ -203,7 +204,7 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
 		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
-		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
+		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 25% available
 		Rank:       ranklist.Rank(uint32(idx)),
 	}
 }
@@ -453,4 +454,64 @@ func (m *MockScmProvider) QueryFirmware(ScmFirmwareQueryRequest) (*ScmFirmwareQu
 
 func (m *MockScmProvider) UpdateFirmware(ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error) {
 	return m.FirmwareUpdateRes, m.FirmwareUpdateErr
+}
+
+type mockBdevProvider struct {
+	callCounts         map[string]int
+	PrepareErr         error
+	PrepareResp        *BdevPrepareResponse
+	ScanErr            error
+	ScanResp           *BdevScanResponse
+	FormatErr          error
+	FormatResp         *BdevFormatResponse
+	WriteConfigErr     error
+	WriteConfigResp    *BdevWriteConfigResponse
+	ReadConfigErr      error
+	ReadConfigResp     *BdevReadConfigResponse
+	QueryFirmwareErr   error
+	QueryFirmwareResp  *NVMeFirmwareQueryResponse
+	UpdateFirmwareErr  error
+	UpdateFirmwareResp *NVMeFirmwareUpdateResponse
+}
+
+func (m *mockBdevProvider) addCall(name string) {
+	if m.callCounts == nil {
+		m.callCounts = make(map[string]int)
+	}
+	m.callCounts[name]++
+}
+
+func (m *mockBdevProvider) Prepare(BdevPrepareRequest) (*BdevPrepareResponse, error) {
+	m.addCall("Prepare")
+	return m.PrepareResp, m.PrepareErr
+}
+
+func (m *mockBdevProvider) Scan(BdevScanRequest) (*BdevScanResponse, error) {
+	m.addCall("Scan")
+	return m.ScanResp, m.ScanErr
+}
+
+func (m *mockBdevProvider) Format(BdevFormatRequest) (*BdevFormatResponse, error) {
+	m.addCall("Format")
+	return m.FormatResp, m.FormatErr
+}
+
+func (m *mockBdevProvider) WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfigResponse, error) {
+	m.addCall("WriteConfig")
+	return m.WriteConfigResp, m.WriteConfigErr
+}
+
+func (m *mockBdevProvider) ReadConfig(BdevReadConfigRequest) (*BdevReadConfigResponse, error) {
+	m.addCall("ReadConfig")
+	return m.ReadConfigResp, m.ReadConfigErr
+}
+
+func (m *mockBdevProvider) QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
+	m.addCall("QueryFirmware")
+	return m.QueryFirmwareResp, m.QueryFirmwareErr
+}
+
+func (m *mockBdevProvider) UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
+	m.addCall("UpdateFirmware")
+	return m.UpdateFirmwareResp, m.UpdateFirmwareErr
 }

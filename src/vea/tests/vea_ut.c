@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -285,8 +285,15 @@ ut_reserve_bitmap(void **state)
 
 	for (i = 0; i < IO_STREAM_CNT; i++) {
 		/* reset off and seq */
+		rc = umem_tx_begin(&args->vua_umm, &args->vua_txd);
+		assert_int_equal(rc, 0);
+		rc = umem_tx_add_ptr(&args->vua_umm, args->vua_hint[i],
+				     sizeof(*args->vua_hint[i]));
+		assert_int_equal(rc, 0);
 		args->vua_hint[i]->vhd_off = 0;
 		args->vua_hint[i]->vhd_seq = 0;
+		rc = umem_tx_commit(&args->vua_umm);
+		assert_int_equal(rc, 0);
 
 		rc = vea_hint_load(args->vua_hint[i], &args->vua_hint_ctxt[i]);
 		assert_rc_equal(rc, 0);
@@ -634,8 +641,6 @@ ut_setup(struct vea_ut_args *test_args)
 	for (i = 0; i < IO_STREAM_CNT; i++) {
 		test_args->vua_hint[i] = root_addr;
 
-		test_args->vua_hint[i]->vhd_off = 0;
-		test_args->vua_hint[i]->vhd_seq = 0;
 		D_INIT_LIST_HEAD(&test_args->vua_resrvd_list[i]);
 
 		root_addr += sizeof(struct vea_hint_df);

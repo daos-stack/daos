@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"sort"
@@ -228,7 +228,7 @@ func (tss *testSnapshotSink) Write(data []byte) (int, error) {
 	return int(w), err
 }
 func (tss *testSnapshotSink) Reader() io.ReadCloser {
-	return ioutil.NopCloser(tss.contents)
+	return io.NopCloser(tss.contents)
 }
 
 func TestSystem_Database_SnapshotRestore(t *testing.T) {
@@ -276,7 +276,6 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			Replicas:  <-replicas,
 			Storage: &PoolServiceStorage{
 				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
-				CurrentRankStr:     fmt.Sprintf("[0-%d]", maxRanks),
 				PerRankTierStorage: []uint64{1, 2},
 			},
 		}

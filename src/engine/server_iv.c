@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1060,10 +1061,13 @@ static int
 _iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
        crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
-	int rc;
+	int	sleep_ms, total_ms = 0, rc;
 
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
+
+	/* Sleep 1 ms before retry for IV_OID, sleep 1 sec before retry for other IV */
+	sleep_ms = key->class_id == IV_OID ? 1 : 1000;
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
@@ -1094,15 +1098,13 @@ retry:
 		 * but in-flight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_INFO("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
-		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
-		if (key->class_id == IV_OID) {
-			/* sleep 1msec and retry */
-			dss_sleep(1);
-		} else {
-			/* sleep 1sec and retry */
-			dss_sleep(1000);
-		}
+		if (total_ms % 10000 == 0)
+			D_DEBUG(DB_TRACE, "ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n",
+				ns->iv_ns_id, key->class_id, opc, key->rank, ns->iv_master_rank,
+				DP_RC(rc));
+
+		dss_sleep(sleep_ms);
+		total_ms += sleep_ms;
 		goto retry;
 	}
 

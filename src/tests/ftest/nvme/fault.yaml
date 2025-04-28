@@ -19,7 +19,6 @@ dmg:
     allow_insecure: True
 pool:
   size: 96%
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos

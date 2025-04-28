@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,172 +141,202 @@
 }
 
 struct daos_obj_class daos_obj_classes[] = {
-	/* single replica classes */
-	OC_SS_DEF(1),
-	OC_SS_DEF(2),
-	OC_SS_DEF(4),
-	OC_SS_DEF(6),
-	OC_SS_DEF(8),
-	OC_SS_DEF(12),
-	OC_SS_DEF(16),
-	OC_SS_DEF(32),
-	OC_SS_DEF_GX(),
+    /* single replica classes */
+    OC_SS_DEF(1),
+    OC_SS_DEF(2),
+    OC_SS_DEF(4),
+    OC_SS_DEF(6),
+    OC_SS_DEF(8),
+    OC_SS_DEF(12),
+    OC_SS_DEF(16),
+    OC_SS_DEF(32),
+    OC_SS_DEF_GX(),
 
-	/* 2-replica classes */
-	OC_RP_DEF(2, 1),
-	OC_RP_DEF(2, 2),
-	OC_RP_DEF(2, 4),
-	OC_RP_DEF(2, 6),
-	OC_RP_DEF(2, 8),
-	OC_RP_DEF(2, 12),
-	OC_RP_DEF(2, 16),
-	OC_RP_DEF(2, 32),
-	OC_RP_DEF_GX(2),
+    /* 2-replica classes */
+    OC_RP_DEF(2, 1),
+    OC_RP_DEF(2, 2),
+    OC_RP_DEF(2, 4),
+    OC_RP_DEF(2, 6),
+    OC_RP_DEF(2, 8),
+    OC_RP_DEF(2, 12),
+    OC_RP_DEF(2, 16),
+    OC_RP_DEF(2, 32),
+    OC_RP_DEF_GX(2),
 
-	/* 3-replica classes */
-	OC_RP_DEF(3, 1),
-	OC_RP_DEF(3, 2),
-	OC_RP_DEF(3, 4),
-	OC_RP_DEF(3, 6),
-	OC_RP_DEF(3, 8),
-	OC_RP_DEF(3, 12),
-	OC_RP_DEF(3, 16),
-	OC_RP_DEF(3, 32),
-	OC_RP_DEF_GX(3),
+    /* 3-replica classes */
+    OC_RP_DEF(3, 1),
+    OC_RP_DEF(3, 2),
+    OC_RP_DEF(3, 4),
+    OC_RP_DEF(3, 6),
+    OC_RP_DEF(3, 8),
+    OC_RP_DEF(3, 12),
+    OC_RP_DEF(3, 16),
+    OC_RP_DEF(3, 32),
+    OC_RP_DEF_GX(3),
 
-	/* 4-replica classes */
-	OC_RP_DEF(4, 1),
-	OC_RP_DEF(4, 2),
-	OC_RP_DEF(4, 4),
-	OC_RP_DEF(4, 6),
-	OC_RP_DEF(4, 8),
-	OC_RP_DEF(4, 12),
-	OC_RP_DEF(4, 16),
-	OC_RP_DEF(4, 32),
-	OC_RP_DEF_GX(4),
+    /* 4-replica classes */
+    OC_RP_DEF(4, 1),
+    OC_RP_DEF(4, 2),
+    OC_RP_DEF(4, 4),
+    OC_RP_DEF(4, 6),
+    OC_RP_DEF(4, 8),
+    OC_RP_DEF(4, 12),
+    OC_RP_DEF(4, 16),
+    OC_RP_DEF(4, 32),
+    OC_RP_DEF_GX(4),
 
-	/* 5-replica classes */
-	OC_RP_DEF(5, 1),
-	OC_RP_DEF(5, 2),
-	OC_RP_DEF(5, 4),
-	OC_RP_DEF(5, 6),
-	OC_RP_DEF(5, 8),
-	OC_RP_DEF(5, 12),
-	OC_RP_DEF(5, 16),
-	OC_RP_DEF(5, 32),
-	OC_RP_DEF_GX(5),
+    /* 5-replica classes */
+    OC_RP_DEF(5, 1),
+    OC_RP_DEF(5, 2),
+    OC_RP_DEF(5, 4),
+    OC_RP_DEF(5, 6),
+    OC_RP_DEF(5, 8),
+    OC_RP_DEF(5, 12),
+    OC_RP_DEF(5, 16),
+    OC_RP_DEF(5, 32),
+    OC_RP_DEF_GX(5),
 
-	/* 6-replica classes */
-	OC_RP_DEF(6, 1),
-	OC_RP_DEF(6, 2),
-	OC_RP_DEF(6, 4),
-	OC_RP_DEF(6, 6),
-	OC_RP_DEF(6, 8),
-	OC_RP_DEF(6, 12),
-	OC_RP_DEF(6, 16),
-	OC_RP_DEF(6, 32),
-	OC_RP_DEF_GX(6),
+    /* 6-replica classes */
+    OC_RP_DEF(6, 1),
+    OC_RP_DEF(6, 2),
+    OC_RP_DEF(6, 4),
+    OC_RP_DEF(6, 6),
+    OC_RP_DEF(6, 8),
+    OC_RP_DEF(6, 12),
+    OC_RP_DEF(6, 16),
+    OC_RP_DEF(6, 32),
+    OC_RP_DEF_GX(6),
 
-	/* extremely scalable fetch */
-	OC_RP_XSF(),
+    /* extremely scalable fetch */
+    OC_RP_XSF(),
 
-	/* EC(2+1) classes */
-	OC_EC_DEF(2, 1, 1),
-	OC_EC_DEF(2, 1, 2),
-	OC_EC_DEF(2, 1, 4),
-	OC_EC_DEF(2, 1, 8),
-	OC_EC_DEF(2, 1, 12),
-	OC_EC_DEF(2, 1, 16),
-	OC_EC_DEF(2, 1, 32),
-	OC_EC_DEF_GX(2, 1),
+    /* EC(2+1) classes */
+    OC_EC_DEF(2, 1, 1),
+    OC_EC_DEF(2, 1, 2),
+    OC_EC_DEF(2, 1, 4),
+    OC_EC_DEF(2, 1, 8),
+    OC_EC_DEF(2, 1, 12),
+    OC_EC_DEF(2, 1, 16),
+    OC_EC_DEF(2, 1, 32),
+    OC_EC_DEF_GX(2, 1),
 
-	/* EC(2+2) classes */
-	OC_EC_DEF(2, 2, 1),
-	OC_EC_DEF(2, 2, 2),
-	OC_EC_DEF(2, 2, 4),
-	OC_EC_DEF(2, 2, 8),
-	OC_EC_DEF(2, 2, 12),
-	OC_EC_DEF(2, 2, 16),
-	OC_EC_DEF(2, 2, 32),
-	OC_EC_DEF_GX(2, 2),
+    /* EC(2+2) classes */
+    OC_EC_DEF(2, 2, 1),
+    OC_EC_DEF(2, 2, 2),
+    OC_EC_DEF(2, 2, 4),
+    OC_EC_DEF(2, 2, 8),
+    OC_EC_DEF(2, 2, 12),
+    OC_EC_DEF(2, 2, 16),
+    OC_EC_DEF(2, 2, 32),
+    OC_EC_DEF_GX(2, 2),
 
-	/* EC(4+1) classes */
-	OC_EC_DEF(4, 1, 1),
-	OC_EC_DEF(4, 1, 2),
-	OC_EC_DEF(4, 1, 4),
-	OC_EC_DEF(4, 1, 8),
-	OC_EC_DEF(4, 1, 12),
-	OC_EC_DEF(4, 1, 16),
-	OC_EC_DEF(4, 1, 32),
-	OC_EC_DEF_GX(4, 1),
+    /* EC(4+1) classes */
+    OC_EC_DEF(4, 1, 1),
+    OC_EC_DEF(4, 1, 2),
+    OC_EC_DEF(4, 1, 4),
+    OC_EC_DEF(4, 1, 8),
+    OC_EC_DEF(4, 1, 12),
+    OC_EC_DEF(4, 1, 16),
+    OC_EC_DEF(4, 1, 32),
+    OC_EC_DEF_GX(4, 1),
 
-	/* EC(4+2) classes */
-	OC_EC_DEF(4, 2, 1),
-	OC_EC_DEF(4, 2, 2),
-	OC_EC_DEF(4, 2, 4),
-	OC_EC_DEF(4, 2, 8),
-	OC_EC_DEF(4, 2, 12),
-	OC_EC_DEF(4, 2, 16),
-	OC_EC_DEF(4, 2, 32),
-	OC_EC_DEF_GX(4, 2),
+    /* EC(4+2) classes */
+    OC_EC_DEF(4, 2, 1),
+    OC_EC_DEF(4, 2, 2),
+    OC_EC_DEF(4, 2, 4),
+    OC_EC_DEF(4, 2, 8),
+    OC_EC_DEF(4, 2, 12),
+    OC_EC_DEF(4, 2, 16),
+    OC_EC_DEF(4, 2, 32),
+    OC_EC_DEF_GX(4, 2),
 
-	/* EC(8+1) classes */
-	OC_EC_DEF(8, 1, 1),
-	OC_EC_DEF(8, 1, 2),
-	OC_EC_DEF(8, 1, 4),
-	OC_EC_DEF(8, 1, 8),
-	OC_EC_DEF(8, 1, 12),
-	OC_EC_DEF(8, 1, 16),
-	OC_EC_DEF(8, 1, 32),
-	OC_EC_DEF_GX(8, 1),
+    /* EC(4+3) classes */
+    OC_EC_DEF(4, 3, 1),
+    OC_EC_DEF(4, 3, 2),
+    OC_EC_DEF(4, 3, 4),
+    OC_EC_DEF(4, 3, 8),
+    OC_EC_DEF(4, 3, 12),
+    OC_EC_DEF(4, 3, 16),
+    OC_EC_DEF(4, 3, 32),
+    OC_EC_DEF_GX(4, 3),
 
-	/* EC(8+2) classes */
-	OC_EC_DEF(8, 2, 1),
-	OC_EC_DEF(8, 2, 2),
-	OC_EC_DEF(8, 2, 4),
-	OC_EC_DEF(8, 2, 8),
-	OC_EC_DEF(8, 2, 12),
-	OC_EC_DEF(8, 2, 16),
-	OC_EC_DEF(8, 2, 32),
-	OC_EC_DEF_GX(8, 2),
+    /* EC(8+1) classes */
+    OC_EC_DEF(8, 1, 1),
+    OC_EC_DEF(8, 1, 2),
+    OC_EC_DEF(8, 1, 4),
+    OC_EC_DEF(8, 1, 8),
+    OC_EC_DEF(8, 1, 12),
+    OC_EC_DEF(8, 1, 16),
+    OC_EC_DEF(8, 1, 32),
+    OC_EC_DEF_GX(8, 1),
 
-	/* EC(16+1) classes */
-	OC_EC_DEF(16, 1, 1),
-	OC_EC_DEF(16, 1, 2),
-	OC_EC_DEF(16, 1, 4),
-	OC_EC_DEF(16, 1, 8),
-	OC_EC_DEF(16, 1, 12),
-	OC_EC_DEF(16, 1, 16),
-	OC_EC_DEF(16, 1, 32),
-	OC_EC_DEF_GX(16, 1),
+    /* EC(8+2) classes */
+    OC_EC_DEF(8, 2, 1),
+    OC_EC_DEF(8, 2, 2),
+    OC_EC_DEF(8, 2, 4),
+    OC_EC_DEF(8, 2, 8),
+    OC_EC_DEF(8, 2, 12),
+    OC_EC_DEF(8, 2, 16),
+    OC_EC_DEF(8, 2, 32),
+    OC_EC_DEF_GX(8, 2),
 
-	/* EC(16+2) classes */
-	OC_EC_DEF(16, 2, 1),
-	OC_EC_DEF(16, 2, 2),
-	OC_EC_DEF(16, 2, 4),
-	OC_EC_DEF(16, 2, 8),
-	OC_EC_DEF(16, 2, 12),
-	OC_EC_DEF(16, 2, 16),
-	OC_EC_DEF(16, 2, 32),
-	OC_EC_DEF_GX(16, 2),
+    /* EC(8+3) classes */
+    OC_EC_DEF(8, 3, 1),
+    OC_EC_DEF(8, 3, 2),
+    OC_EC_DEF(8, 3, 4),
+    OC_EC_DEF(8, 3, 8),
+    OC_EC_DEF(8, 3, 12),
+    OC_EC_DEF(8, 3, 16),
+    OC_EC_DEF(8, 3, 32),
+    OC_EC_DEF_GX(8, 3),
 
-	/* Internal classes: echo objects */
-	OC_RP_ECHO_DEF(1),
-	OC_RP_ECHO_DEF(2),
-	OC_RP_ECHO_DEF(3),
-	OC_RP_ECHO_DEF(4),
+    /* EC(16+1) classes */
+    OC_EC_DEF(16, 1, 1),
+    OC_EC_DEF(16, 1, 2),
+    OC_EC_DEF(16, 1, 4),
+    OC_EC_DEF(16, 1, 8),
+    OC_EC_DEF(16, 1, 12),
+    OC_EC_DEF(16, 1, 16),
+    OC_EC_DEF(16, 1, 32),
+    OC_EC_DEF_GX(16, 1),
 
-	/* Internal classes: specified rank */
-	OC_RP_SRANK_DEF(1, 1),
-	OC_RP_SRANK_DEF(2, 1),
-	OC_RP_SRANK_DEF(3, 1),
+    /* EC(16+2) classes */
+    OC_EC_DEF(16, 2, 1),
+    OC_EC_DEF(16, 2, 2),
+    OC_EC_DEF(16, 2, 4),
+    OC_EC_DEF(16, 2, 8),
+    OC_EC_DEF(16, 2, 12),
+    OC_EC_DEF(16, 2, 16),
+    OC_EC_DEF(16, 2, 32),
+    OC_EC_DEF_GX(16, 2),
 
-	/* The last one */
-	{
-		.oc_name	= NULL,
-		.oc_id		= OC_UNKNOWN,
-		.oc_private	= true,
-	},
+    /* EC(16+3) classes */
+    OC_EC_DEF(16, 3, 1),
+    OC_EC_DEF(16, 3, 2),
+    OC_EC_DEF(16, 3, 4),
+    OC_EC_DEF(16, 3, 8),
+    OC_EC_DEF(16, 3, 12),
+    OC_EC_DEF(16, 3, 16),
+    OC_EC_DEF(16, 3, 32),
+    OC_EC_DEF_GX(16, 3),
+
+    /* Internal classes: echo objects */
+    OC_RP_ECHO_DEF(1),
+    OC_RP_ECHO_DEF(2),
+    OC_RP_ECHO_DEF(3),
+    OC_RP_ECHO_DEF(4),
+
+    /* Internal classes: specified rank */
+    OC_RP_SRANK_DEF(1, 1),
+    OC_RP_SRANK_DEF(2, 1),
+    OC_RP_SRANK_DEF(3, 1),
+
+    /* The last one */
+    {
+	.oc_name    = NULL,
+	.oc_id      = OC_UNKNOWN,
+	.oc_private = true,
+    },
 };
 
 int

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -250,7 +250,7 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	t.Helper()
 
 	name := strings.Replace(t.Name(), "/", "-", -1)
-	tmpDir, err := ioutil.TempDir("", name)
+	tmpDir, err := os.MkdirTemp("", name)
 	if err != nil {
 		t.Fatalf("Couldn't create temporary directory: %v", err)
 	}
@@ -268,7 +268,7 @@ func CreateTestDir(t *testing.T) (string, func()) {
 func CreateTestFile(t *testing.T, dir, content string) string {
 	t.Helper()
 
-	file, err := ioutil.TempFile(dir, "")
+	file, err := os.CreateTemp(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,13 +424,46 @@ func Context(t *testing.T) context.Context {
 	return ctx
 }
 
-// MustLogContext returns a context containing the supplied logger.
+// MustLogContext returns a context containing a buffer-backed logger.
+// The contents of the buffer will be displayed on test failure. If the
+// optional parent context is not supplied, a default context is created.
 // Canceled when the test is done.
-func MustLogContext(t *testing.T, log logging.Logger) context.Context {
+func MustLogContext(t *testing.T, parents ...context.Context) context.Context {
 	t.Helper()
-	ctx, err := logging.ToContext(Context(t), log)
+
+	var parent context.Context
+	switch len(parents) {
+	case 0:
+		parent = Context(t)
+	case 1:
+		if parents[0] == nil {
+			// Pass through a nil context for tests that expect it.
+			return nil
+		} else {
+			var cancel context.CancelFunc
+			parent, cancel = context.WithCancel(parents[0])
+			t.Cleanup(cancel)
+		}
+	default:
+		t.Fatal("too many parent contexts")
+	}
+
+	log, buf := logging.NewTestLogger(t.Name())
+	t.Cleanup(func() {
+		ShowBufferOnFailure(t, buf)
+	})
+
+	ctx, err := logging.ToContext(parent, log)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return ctx
+}
+
+// JoinArgs creates a new string slice from a base string and optional
+// additional string arguments. Does not modify the base string.
+func JoinArgs(base []string, args ...string) []string {
+	joined := make([]string, len(base))
+	copy(joined, base)
+	return append(joined, args...)
 }

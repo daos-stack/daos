@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -130,7 +130,7 @@ dc_cont_open_flags_valid(uint64_t flags)
 	f = flags;
 
 	/* One and only one of DAOS_COO_RO, DAOS_COO_RW, and DAOS_COO_EX. */
-	m = f & (DAOS_COO_RO | DAOS_COO_RW | DAOS_COO_EX);
+	m = f & DAOS_COO_IO_BASE_MASK;
 	if (m != DAOS_COO_RO && m != DAOS_COO_RW && m != DAOS_COO_EX)
 		return false;
 
@@ -149,4 +149,6 @@ dc_cont_open_flags_valid(uint64_t flags)
 	return true;
 }
 
+int
+dc_cont_mark_all_slave(void);
 #endif /* __DD_CONT_H__ */

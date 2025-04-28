@@ -299,6 +299,8 @@ out:
 	rc = check_tx(th, rc);
 	if (rc == ERESTART)
 		goto restart;
+	if (rc == 0)
+		DFS_OP_STAT_INCR(dfs, DOS_RENAME);
 
 	if (entry.value) {
 		D_ASSERT(S_ISLNK(entry.mode));

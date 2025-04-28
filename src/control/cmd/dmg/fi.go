@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,8 +11,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
@@ -78,7 +78,7 @@ func (cmd *addCheckerReportCmd) Execute(_ []string) (errOut error) {
 
 	var rpt *chkpb.CheckReport
 	if cmd.File != "" {
-		buf, err := ioutil.ReadFile(cmd.File)
+		buf, err := os.ReadFile(cmd.File)
 		if err != nil {
 			return errors.Wrapf(err, "failed to open file %s", cmd.File)
 		}

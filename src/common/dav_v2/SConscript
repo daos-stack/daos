@@ -1,0 +1,32 @@
+"""Build dav_v2 libraries"""
+
+
+SRC = ['alloc_class.c', 'bucket.c', 'container_ravl.c', 'container_seglists.c', 'critnib.c',
+       'dav_clogs.c', 'dav_iface.c', 'heap.c', 'memblock.c', 'memops.c', 'meta_io.c',
+       'palloc.c', 'ravl.c', 'ravl_interval.c', 'recycler.c', 'stats.c', 'tx.c', 'ulog.c',
+       'util.c', 'wal_tx.c']
+
+
+def scons():
+    """Scons function"""
+
+    Import('denv', 'env', 'base_env')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    env.d_add_build_rpath()
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.d_add_build_rpath()
+    denv.AppendUnique(LIBPATH=[Dir('.')])
+    denv.d_add_build_rpath()
+
+    lenv = denv.Clone()
+    lenv.AppendUnique(LIBS=['pthread', 'gurt'])
+    lenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DDAV_V2_BUILD'])
+    lenv.AppendUnique(CFLAGS=['-fvisibility=hidden'])
+
+    dav_v2 = lenv.d_library('dav_v2', SRC)
+    lenv.Install('$PREFIX/lib64/', dav_v2)
+
+
+if __name__ == "SCons.Script":
+    scons()
