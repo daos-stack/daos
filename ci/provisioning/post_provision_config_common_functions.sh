@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2022-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eux
 
 : "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
