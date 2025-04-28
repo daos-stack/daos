@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2021-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eux
 
 : "${STORAGE_PREP_OPT:=}"

@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2020-2022 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eux
 
 DAOS_TEST_SHARED_DIR=$(mktemp -d -p /mnt/share/)

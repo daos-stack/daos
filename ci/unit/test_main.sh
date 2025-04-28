@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 # This is the script used for running unit testing
 # run_utest.py and run_utest.py with memcheck stages on the CI
 set -uex

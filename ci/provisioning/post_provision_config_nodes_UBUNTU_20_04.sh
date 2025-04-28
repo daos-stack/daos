@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+#  Copyright 2020-2022 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 
 post_provision_config_nodes() {
     # should we port this to Ubuntu or just consider $CONFIG_POWER_ONLY dead?
