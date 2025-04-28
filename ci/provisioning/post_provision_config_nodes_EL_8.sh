@@ -11,7 +11,7 @@ set +e
     systemctl start postfix.service
     postfix_start_exit=$?
     if [ $postfix_start_exit -ne 0 ]; then
-        echo "ERROR: Postfix not started: $postfix_start_exit"
+        echo "WARNING: Postfix not started: $postfix_start_exit"
         systemctl status postfix.service
         journalctl -xe -u postfix.service
     fi

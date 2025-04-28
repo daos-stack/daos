@@ -127,7 +127,7 @@ class CoreFileProcessing():
                 self.install_debuginfo_packages()
 
             except RunException as error:
-                self.log.info("Install debuginfo packages ERROR")
+                self.log.error("Install debuginfo packages failed")
                 self.log.error(error)
                 self.log.debug("Stacktrace", exc_info=True)
                 errors += 1
@@ -270,7 +270,8 @@ class CoreFileProcessing():
         cmds = []
 
         # -debuginfo packages that don't get installed with debuginfo-install
-        self.log.info("DEBUG: -debuginfo packages that don't get installed with debuginfo-install")
+        self.log.debug("Installing -debuginfo packages that don't get installed",
+                       " with debuginfo-install")
         for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5',
                     'libabt0' if "suse" in self.distro_info.name.lower() else "argobots",
                     'libfabric', 'hdf5-vol-daos', 'hdf5-vol-daos-mpich',
@@ -278,7 +279,7 @@ class CoreFileProcessing():
                     'hdf5-vol-daos-openmpi-tests', 'ior']:
             debug_pkg = self.resolve_debuginfo(pkg)
             if debug_pkg and debug_pkg not in install_pkgs:
-                self.log.info("DEBUG: install_pkgs.append: %s", pkg)
+                self.log.debug("install_pkgs.append: %s", pkg)
                 install_pkgs.append(debug_pkg)
 
         # remove any "source tree" test hackery that might interfere with RPM installation
@@ -287,7 +288,7 @@ class CoreFileProcessing():
             cmds.append(["sudo", "rm", "-f", path])
 
         if self.USE_DEBUGINFO_INSTALL:
-            self.log.info("DEBUG: self.USE_DEBUGINFO_INSTALL")
+            self.log.debug("self.USE_DEBUGINFO_INSTALL")
             dnf_args = ["--nobest", "--exclude", "ompi-debuginfo"]
             if os.getenv("TEST_RPMS", 'false') == 'true':
                 if "suse" in self.distro_info.name.lower():
@@ -308,7 +309,7 @@ class CoreFileProcessing():
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
                 + ["daos-" + rpm_version, "daos-*-" + rpm_version])
-            self.log.info("DEBUG: %s", " ".join(cmds[-1]))
+            self.log.debug("%s", " ".join(cmds[-1]))
         # else:
         #     # We're not using the yum API to install packages
         #     # See the comments below.
@@ -322,7 +323,7 @@ class CoreFileProcessing():
         # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
         # Now install a few pkgs that debuginfo-install wouldn't
-        self.log.info("DEBUG: Now install a few pkgs that debuginfo-install wouldn't")
+        self.log.debug("Now install a few pkgs that debuginfo-install wouldn't")
         cmd = ["sudo", "dnf", "-y"]
         if self.is_el() or "suse" in self.distro_info.name.lower():
             cmd.append("--enablerepo=*debug*")
@@ -340,7 +341,7 @@ class CoreFileProcessing():
             self.log.info("Run Command: %s", " ".join(cmd))
             if not run_local(self.log, " ".join(cmd), True, 120).passed:
                 # got an error, so abort this list of commands and re-run
-                self.log.info("DEBUG: got an error, so abort this list of commands and re-run")
+                self.log.debug("Got an error, so abort this list of commands and re-run")
                 # it with a dnf clean, makecache first
                 retry = True
                 break
