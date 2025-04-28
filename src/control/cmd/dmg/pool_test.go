@@ -834,6 +834,19 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set pool rd_fac property",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("rd_fac", "1"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool property invalid property",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb whoops:foo",
 			"",
