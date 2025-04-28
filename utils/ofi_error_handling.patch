@@ -1,0 +1,47 @@
+diff --git a/prov/tcp/src/xnet_cm.c b/prov/tcp/src/xnet_cm.c
+index 1ae35d27d..cea78b4bc 100644
+--- a/prov/tcp/src/xnet_cm.c
++++ b/prov/tcp/src/xnet_cm.c
+@@ -63,7 +63,7 @@ xnet_recv_cm_msg(SOCKET sock, struct xnet_cm_msg *msg)
+ 			"Failed to read cm header, ret: %zd, sockerr: %d\n",
+ 			ret, ofi_sockerr());
+ 		msg->hdr.seg_size = 0;
+-		return ofi_sockerr() ? -ofi_sockerr() : -FI_EIO;
++		return ret >= 0 ? -FI_EIO : -ofi_sockerr();
+ 	}
+ 
+ 	return 0;
+@@ -105,7 +105,7 @@ xnet_handle_cm_msg(SOCKET sock, struct xnet_cm_msg *msg, uint8_t exp_msg)
+ 			FI_WARN(&xnet_prov, FI_LOG_EP_CTRL,
+ 				"Failed to read cm data, ret: %zd, sockerr: %d\n",
+ 				ret, ofi_sockerr());
+-			ret = ofi_sockerr() ? -ofi_sockerr() : -FI_EIO;
++			ret = ret >= 0 ? -FI_EIO : -ofi_sockerr();
+ 			goto err;
+ 		}
+ 	}
+diff --git a/src/common.c b/src/common.c
+index 2f619b191..71a9aab75 100644
+--- a/src/common.c
++++ b/src/common.c
+@@ -1417,6 +1417,20 @@ int ofi_bsock_async_done(const struct fi_provider *prov,
+ 	uint8_t ctrl[CMSG_SPACE(sizeof(*serr) * 2)];
+ 	int ret;
+ 
++	int val = 0;
++	socklen_t len = sizeof(val);
++	ret = getsockopt(bsock->sock, SOL_SOCKET, SO_ERROR, &val, &len);
++	if (ret < 0) {
++		FI_WARN(prov, FI_LOG_EP_DATA,
++			"Error reading socket error (%s)\n", strerror(errno));
++		return -errno;
++	}
++	if (val != 0) {
++		FI_WARN(prov, FI_LOG_EP_DATA,
++			"Socket error (%s)\n", strerror(val));
++		return -val;
++	}
++
+ 	msg.msg_control = &ctrl;
+ 	msg.msg_controllen = sizeof(ctrl);
+ 	ret = recvmsg(bsock->sock, &msg, MSG_ERRQUEUE);
