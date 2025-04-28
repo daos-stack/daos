@@ -54,23 +54,25 @@ whether you want to specify an absolute size, use available capacity percentages
 
 - **Set total size with tier ratio (`--size` + `--tier-ratio`)**
   - Use `--size` (`-z`) to define the **total pool capacity** in **bytes**.
-  - Use `--tier-ratio` (`-t`) to control the split between **SCM** and **NVMe**.
-    - Format: `scm,nvme` (as percentages).
+  - Use `--tier-ratio` (`-t`) to control the percentage-split between **SCM** and **NVMe**.
+    - Format: `<scm>,<nvme>` (specified as percentages or fractions).
     - Default: `6,94` → 6% SCM, 94% NVMe.
     - Examples:
       - `-z=100TB -t=6,94` → 6 TB SCM, 94 TB NVMe.
       - `-z=10TB -t=100,0` → SCM-only pool.
+      - `-t 0.12,0.88` → 12% SCM, 88% NVMe.
   - Good for: specifying total pool size while controlling SCM/NVMe balance.
 
 - **Use percentage of free space (`--size` as %)**
   - Define pool size as a **percentage** of available free space.
-  - `--tier-ratio` is **ignored**.
   - Example: `--size=100%` allocates all currently free space on both tiers.
   - Notes:
     - Cannot be used to create SCM-only pools (unless there's no NVMe).
     - Uses the **minimum free space** across all engines.
     - Pool size can vary depending on system state.
     - Command output shows **actual allocated sizes**.
+    - The actual pool size is dependent on the minimum space available across all the engines and is
+      limited based on the lowest common denominator
 
 - **Manually set SCM and NVMe sizes (`--scm-size` and `--nvme-size`)**
   - Use `--scm-size` (`-s`) and optionally `--nvme-size` (`-n`) to define **per-engine** sizes in **bytes**.
