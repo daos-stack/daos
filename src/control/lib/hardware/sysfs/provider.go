@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/pkg/errors"
 
@@ -604,13 +603,29 @@ func (s *Provider) IsIOMMUEnabled() (bool, error) {
 	return err == nil && len(dmars) > 0, nil
 }
 
-const (
-	// From linux syscall table.
-	PRCTL_SYSCALL = 157
-
-	// See /usr/include/linux/prctl.h
-	PR_GET_THP_DISABLE = 42
-)
+//const (
+//	// From linux syscall table.
+//	PRCTL_SYSCALL = 157
+//
+//	// See /usr/include/linux/prctl.h
+//	PR_GET_THP_DISABLE = 42
+//)
+//
+//// IsTEPEnabled checks whether transparent hugepages is enabled by interrogating sysfs and
+//// implements the THPDetector interface on sysfs provider.
+//func (s *Provider) IsTHPEnabled() (bool, error) {
+//	if s == nil {
+//		return false, errors.New("sysfs provider is nil")
+//	}
+//
+//	state, _, errno := syscall.RawSyscall6(uintptr(PRCTL_SYSCALL), uintptr(PR_GET_THP_DISABLE),
+//		0, 0, 0, 0, 0)
+//	if errno != 0 {
+//		return false, errors.Wrap(errno, "failed get transparent hugepages disable status")
+//	}
+//
+//	return state != 1, nil
+//}
 
 // IsTEPEnabled checks whether transparent hugepages is enabled by interrogating sysfs and
 // implements the THPDetector interface on sysfs provider.
@@ -619,11 +634,15 @@ func (s *Provider) IsTHPEnabled() (bool, error) {
 		return false, errors.New("sysfs provider is nil")
 	}
 
-	state, _, errno := syscall.RawSyscall6(uintptr(PRCTL_SYSCALL), uintptr(PR_GET_THP_DISABLE),
-		0, 0, 0, 0, 0)
-	if errno != 0 {
-		return false, errors.Wrap(errno, "failed get transparent hugepages disable status")
+	thpStatePath := s.sysPath("kernel", "mm", "transparent_hugepage", "enabled")
+	thpState, err := os.ReadFile(thpStatePath)
+	if err != nil {
+		return false, errors.Wrap(err, "unable to get transparent hugepage state")
 	}
 
-	return state != 1, nil
+	thpStateStr := strings.TrimSuffix(string(thpState), "\n")
+	strToks := strings.Split(thpStateStr, " ")
+	isDisabled := common.Includes(strToks, "[never]")
+
+	return !isDisabled, nil
 }
