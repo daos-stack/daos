@@ -7,6 +7,7 @@ trap 'if [ -n "${tmp}" ] && [ -z "${DEBUG:-}" ]; then rm -rf "${tmp}"; fi' EXIT
 tmp="$(mktemp -d)"
 
 export DEPENDS=()
+export EXTRA_OPS=()
 isa="$(uname -m)"
 export isa
 export prefix="${PREFIX:-/usr}"
@@ -15,12 +16,40 @@ export libdir="${LIBDIR:-/usr/lib64}"
 export includedir="${INCLUDEDIR:-/usr/include}"
 export datadir="${DATADIR:-/usr/share}"
 export sysconfdir="${SYSCONFDIR:-/etc}"
+export sysctldir="${SYSCTLDIR:-/etc/sysctl.d}"
+export unitdir="${UNITDIR:-/usr/lib/systemd/system}"
 export mandir="${MANDIR:-/usr/share/man}"
 daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
 export daos_version
 daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
   sed 's/^Release: *//' | sed 's/%.*//')"
 export daos_release
+
+export libfabric_version="1.22.0"
+if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
+  libfabric_lib="libfabric1"
+else
+  libfabric_lib="libfabric"
+fi
+export libfabric_lib
+export libfabric_dev="${libfabric_lib}-devel"
+
+export mercury_version="2.4.0"
+
+export argobots_version="1.2"
+if [[ "${DISTRO:-}" =~ "suse" ]]; then
+  argobots_lib="libabt0"
+  argobots_dev="libabt-devel"
+else
+  argobots_lib="argobots"
+  argobots_dev="argobots-devel"
+fi
+export argobots_lib
+export argobots_dev
+
+export pmdk_version="2.1.0"
+export isal_version="2.30.0"
+export isal_crypto_version="2.24.0"
 
 expand_directories() {
   local -n expanded=$1; shift
@@ -115,11 +144,9 @@ replace_paths() {
 create_depends() {
   local -n deps=$1
   deps=()
-  if [ ${#DEPENDS[@]} -ge 1 ]; then
-    for dep in "${DEPENDS[@]}"; do
-      deps+=("--depends ${dep}")
-    done
-  fi
+  for dep in "${DEPENDS[@]}"; do
+    deps+=( "--depends" "${dep}" )
+  done
 }
 
 build_package() {
@@ -134,14 +161,19 @@ build_package() {
   --name "${name}" \
   --license "${LICENSE}" \
   --version "${VERSION}" \
+  --iteration "${RELEASE}" \
   --architecture "${ARCH}" \
   --description "${DESCRIPTION}" \
   --url "${URL}" \
-  ${depends[@]} \
+  "${depends[@]}" \
+  "${EXTRA_OPS[@]}" \
   $@
+
+  EXTRA_OPTS=()
 }
 
 build_debug_package() {
+  local version
   name="$1"; shift
   dbgpkgs=()
   if [ $# -eq 0 ]; then
@@ -149,7 +181,8 @@ build_debug_package() {
   fi
   new_deps=()
   for dep in "${DEPENDS[@]}"; do
-    new_deps+=("${dep}-debuginfo")
+    version="$(echo "${dep}" | sed 's/[^ ]*//')"
+    new_deps+=("${dep// */}-debuginfo${version}")
   done
   DEPENDS=("${new_deps[@]}")
 

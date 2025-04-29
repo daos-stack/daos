@@ -18,7 +18,7 @@ libs=()
 mans=()
 pkgcfgs=()
 
-VERSION="2.30.0"
+VERSION="${isal_version}"
 RELEASE="3"
 LICENSE="BSD-3-Clause"
 ARCH=${isa}

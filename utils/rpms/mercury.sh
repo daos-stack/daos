@@ -20,7 +20,7 @@ libs_internal=()
 cmakes=()
 pkgcfgs=()
 
-VERSION="2.4.0"
+VERSION="${mercury_version}"
 RELEASE="2"
 LICENSE="BSD"
 ARCH=${isa}
@@ -52,8 +52,10 @@ clean_bin dbg_lib_internal "${files[@]}"
 create_install_list libs_internal "${files[@]}"
 
 ARCH="${isa}"
+DEPENDS=("${libfabric_lib} >= ${libfabric_version}")
 build_package "mercury" "${bins[@]}" "${libs[@]}" "${libs_internal[@]}"
 build_debug_package "mercury" "${dbg_lib[@]}" "${dbg_bin[@]}" "${dbg_lib_internal[@]}"
+DEPENDS=()
 
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ucx.so"
@@ -94,7 +96,8 @@ if [ -n "${SL_UCX_PREFIX}" ]; then
 fi
 create_install_list cmakes "${files[@]}"
 
-DEPENDS=("mercury")
+DEPENDS=("mercury = ${mercury_version}")
 build_package "mercury-devel" \
   "${libs[@]}" "${includes[@]}" "${pkgcfgs[@]}" "${cmakes[@]}"
+DEPENDS=()
 

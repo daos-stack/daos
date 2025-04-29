@@ -1,4 +1,5 @@
 #!/bin/bash
+VERSION="${mercury_version}"
 # (C) Copyright 2025 Google LLC
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
@@ -19,7 +20,7 @@ mans=()
 pkgcfgs=()
 data=()
 
-VERSION="2.1.0"
+VERSION="${pmdk_version}"
 RELEASE="4"
 LICENSE="BSD-3-Clause"
 ARCH=${isa}

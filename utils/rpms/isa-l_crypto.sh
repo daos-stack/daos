@@ -16,7 +16,7 @@ internal_includes=()
 libs=()
 pkgcfgs=()
 
-VERSION="2.24.0"
+VERSION="${isal_crypto_version}"
 RELEASE="2"
 LICENSE="BSD-3-Clause"
 ARCH=${isa}

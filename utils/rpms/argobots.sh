@@ -15,21 +15,13 @@ libs=()
 pkgcfg=()
 dbg=()
 
-VERSION="1.2"
+VERSION="${argobots_version}"
 RELEASE="2"
 LICENSE="UChicago Argonne, LLC -- Argobots License"
 DESCRIPTION="Argobots is a lightweight, low-level threading and tasking framework.
 This release is an experimental version of Argobots that contains
 features related to user-level threads, tasklets, and some schedulers."
 URL="https://argobots.org"
-
-if [[ "${DISTRO:-}" =~ "suse" ]]; then
-  argobots_lib="libabt0"
-  argobots_devel="libabt-devel"
-else
-  argobots_lib="argobots"
-  argobots_devel="argobots-devel"
-fi
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_ARGOBOTS_PREFIX}/lib64/libabt.so.*"
@@ -54,7 +46,7 @@ list_files files "${SL_ARGOBOTS_PREFIX}/include/abt.h"
 create_install_list headers "${files[@]}"
 
 DEPENDS=("${argobots_lib}")
-build_package "${argobots_devel}" \
+build_package "${argobots_dev}" \
   "${libs[@]}" \
   "${pkgcfg[@]}" \
   "${headers[@]}"
