@@ -38,9 +38,9 @@ var (
 		"disable_vfio: true in config while running as non-root user with NVMe devices",
 		"set disable_vfio: false or run daos_server as root",
 	)
-	FaultThpEnabled = serverFault(
-		code.ServerThpEnabled,
-		"THP (transparent hugepages) enabled on storage server, DAOS requires THP to be disabled",
+	FaultTransparentHugepageEnabled = serverFault(
+		code.ServerTransparentHugepageEnabled,
+		"transparent hugepage (THP) enabled on storage server, DAOS requires THP to be disabled",
 		"disable THP by adding 'transparent_hugepage=never' kernel parameter in the grub configuration file then reboot and restart daos_server",
 	)
 	FaultHarnessNotStarted = serverFault(

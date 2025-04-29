@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -305,12 +306,24 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]stri
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
 // are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
 // required for emulated NVMe.
-func prepBdevStorage(srv *server, iommuEnabled bool) error {
+func prepBdevStorage(srv *server, iommuChecker hardware.IOMMUDetector, thpChecker hardware.THPDetector) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
 	if srv.cfg.DisableHugepages {
 		srv.log.Debugf("skip nvme prepare as disable_hugepages: true in config")
 		return nil
+	}
+
+	// Fail to start if transparent hugepages are enabled. DAOS SPDK use needs feature disabled.
+	if thpEnabled, err := thpChecker.IsTHPEnabled(); err != nil {
+		return errors.Wrap(err, "transparent hugepage check")
+	} else if thpEnabled {
+		return FaultTransparentHugepageEnabled
+	}
+
+	iommuEnabled, err := iommuChecker.IsIOMMUEnabled()
+	if err != nil {
+		return errors.Wrap(err, "iommu check")
 	}
 
 	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)

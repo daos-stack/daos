@@ -161,7 +161,7 @@ const (
 	ServerBadFaultDomainLabels
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
-	ServerThpEnabled
+	ServerTransparentHugepageEnabled
 )
 
 // server config fault codes

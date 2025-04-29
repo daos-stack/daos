@@ -54,6 +54,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 
 		fi, err := fis.GetInterfaceOnNetDevice(iface, prov)
 		if err != nil {
+			return 0, err
 		}
 		return fi.NUMANode, nil
 	}
@@ -347,20 +348,11 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	iommuEnabled, err := topology.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
-	if err != nil {
-		return err
-	}
-
-	// Fail to start if transparent hugepages are enabled. DAOS SPDK use needs feature disabled.
-	if thpEnabled, err := topology.DefaultTHPDetector(srv.log).IsTHPEnabled(); err != nil {
-		return err
-	} else if thpEnabled {
-		return FaultThpEnabled
-	}
+	iommuChecker := topology.DefaultIOMMUDetector(srv.log)
+	thpChecker := topology.DefaultTHPDetector(srv.log)
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
+	if err := prepBdevStorage(srv, iommuChecker, thpChecker); err != nil {
 		return err
 	}
 

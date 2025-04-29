@@ -549,9 +549,9 @@ requested.
 boot](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/performance_tuning_guide/sect-red_hat_enterprise_linux-performance_tuning_guide-memory-configuring-huge-pages)
 
 
-## Disabling transparent hugepages (THB) at boot-time
+## Disabling transparent hugepage (THP) feature at boot-time
 
-Linux transparent hugepages feature also increases the likelihood of hugepage memory fragmentation
+Linux transparent hugepages feature can increase the likelihood of hugepage memory fragmentation
 and should be disabled for optimal performance of DAOS.
 
 [See here for details of how to disable THP on

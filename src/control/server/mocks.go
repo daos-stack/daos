@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -99,4 +100,24 @@ func (ms *mockSubscriber) getRx() []string {
 	defer ms.Unlock()
 
 	return ms.rx
+}
+
+type mockIOMMUDetector struct {
+	enabled bool
+	err     error
+}
+
+// IsIOMMUEnabled implements hardware.IOMMUDetector interface
+func (mid mockIOMMUDetector) IsIOMMUEnabled() (bool, error) {
+	return mid.enabled, mid.err
+}
+
+type mockTHPDetector struct {
+	enabled bool
+	err     error
+}
+
+// IsTHPEnabled implements hardware.THPDetector interface
+func (mid mockTHPDetector) IsTHPEnabled() (bool, error) {
+	return mid.enabled, mid.err
 }
