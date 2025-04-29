@@ -9,17 +9,6 @@ if [ -z "${SL_MERCURY_PREFIX}" ]; then
   exit 0
 fi
 
-bins=()
-dbg_bin=()
-dbg_lib=()
-dbg_lib_internal=()
-files=()
-includes=()
-libs=()
-libs_internal=()
-cmakes=()
-pkgcfgs=()
-
 VERSION="${mercury_version}"
 RELEASE="2"
 LICENSE="BSD"
@@ -38,41 +27,39 @@ URL="http://mercury-hpc.github.io"
 
 TARGET_PATH="${bindir}"
 list_files files "${SL_MERCURY_PREFIX}/bin/*"
-clean_bin dbg_bin "${files[@]}"
-create_install_list bins "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so.*"
-clean_bin dbg_lib "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ofi.so"
-clean_bin dbg_lib_internal "${files[@]}"
-create_install_list libs_internal "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
 DEPENDS=("${libfabric_lib} >= ${libfabric_version}")
-build_package "mercury" "${bins[@]}" "${libs[@]}" "${libs_internal[@]}"
-build_debug_package "mercury" "${dbg_lib[@]}" "${dbg_bin[@]}" "${dbg_lib_internal[@]}"
+build_package "mercury"
 DEPENDS=()
 
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ucx.so"
-clean_bin dbg_lib_internal "${files[@]}"
-create_install_list libs_internal "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
-build_package "mercury-ucx" "${libs_internal[@]}"
-build_debug_package "mercury-ucx" "${dbg_lib_internal[@]}"
+build_package "mercury-ucx"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so"
-create_install_list libs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}"
 list_files files "${SL_MERCURY_PREFIX}/include/*.h"
-create_install_list includes "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir/pkgconfig}"
 list_files files "${SL_MERCURY_PREFIX}/lib64/pkgconfig/*.pc"
@@ -83,7 +70,7 @@ fi
 if [ -n "${SL_UCX_PREFIX}" ]; then
   replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
 fi
-create_install_list pkgcfgs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/cmake/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/cmake/mercury/*"
@@ -94,10 +81,9 @@ fi
 if [ -n "${SL_UCX_PREFIX}" ]; then
   replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
 fi
-create_install_list cmakes "${files[@]}"
+append_install_list "${files[@]}"
 
 DEPENDS=("mercury = ${mercury_version}")
-build_package "mercury-devel" \
-  "${libs[@]}" "${includes[@]}" "${pkgcfgs[@]}" "${cmakes[@]}"
+build_package "mercury-devel"
 DEPENDS=()
 

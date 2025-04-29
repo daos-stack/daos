@@ -10,15 +10,6 @@ if [ -z "${SL_PREFIX}" ]; then
   exit 1
 fi
 
-bins=()
-dbg_bin=()
-dbg_lib=()
-dbg_internal_lib=()
-files=()
-libs=()
-internal_libs=()
-data=()
-
 daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
@@ -39,35 +30,31 @@ to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost."
 URL="https://daos.io"
 
+if false; then
 # Some extra "install" steps
-
-# common files
-supp=()
+# daos package
 TARGET_PATH="${sysconfdir}/daos"
 list_files files "${SL_PREFIX}/etc/memcheck*.supp"
-create_install_list supp "${files[@]}"
+append_install_list "${files[@]}"
 
-comp=()
 TARGET_PATH="${sysconfdir}/bash_completion.d"
 list_files files "${SL_PREFIX}/etc/bash_completion.d/daos.bash"
-create_install_list comp "${files[@]}"
+append_install_list "${files[@]}"
 
-certs=()
 TARGET_PATH="${libdir}/daos/certgen"
 list_files files "${SL_PREFIX}/lib64/daos/certgen/*"
-create_install_list certs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_PREFIX}/lib64/libgurt.so.*" \
   "${SL_PREFIX}/lib64/libcart.so.*" \
   "${SL_PREFIX}/lib64/libdaos_common.so"
-clean_bin dbg_lib "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
-extras=()
 TARGET_PATH="${libdir}/daos"
 list_files files "${SL_PREFIX}/lib64/daos/VERSION"
-create_install_list version "${extras[@]}"
+append_install_list "${extras[@]}"
 
 mkdir -p "${tmp}${sysconfdir}/daos/certs"
 extras+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos/certs")
@@ -77,21 +64,21 @@ EXTRA_OPTS+=("rpm-defattr-dir" "(-, root, root, -)")
 EXTRA_OPTS+=("rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
 DEPENDS=( "mercury >= ${mercury_version}" "libfabric >= ${libfabric_version}" )
-build_package "daos" "${supp[@]}" "${comp[@]}" "${libs[@]}" "${certs[@]}" "${extras[@]}"
-build_debug_package "daos" "${dbg_lib[@]}"
+build_package "daos"
 
 # Only build server RPMs if we built the server
 if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   echo "Creating server packages"
+  # daos-server package
   mkdir -p "${tmp}/${sysconfdir}/ld.so.conf.d"
   echo "${libdir}/daos_srv" > "${tmp}/${sysconfdir}/ld.so.conf.d/daos.conf"
-  extra_files=("${tmp}/${sysconfdir}/ld.so.conf.d/daos.conf=${sysconfdir}/ld.so.conf.d/daos.conf")
+  install_list+==("${tmp}/${sysconfdir}/ld.so.conf.d/daos.conf=${sysconfdir}/ld.so.conf.d/daos.conf")
   mkdir -p "${tmp}/${sysctldir}"
   install -m 644 "utils/rpms/${sysctl_script_name}" "${tmp}/${sysctldir}"
-  extra_files+=("${tmp}/${sysctldir}/${sysctl_script_name}=${sysctldir}/${sysctl_script_name}")
+  install_list+=("${tmp}/${sysctldir}/${sysctl_script_name}=${sysctldir}/${sysctl_script_name}")
   mkdir -p "${tmp}/${unitdir}"
   install -m 644 "utils/systemd/${server_svc_name}" "${tmp}/${unitdir}"
-  extra_files+=("${tmp}/${unitdir}/${server_svc_name}=${unitdir}/${server_svc_name}")
+  install_list+=("${tmp}/${unitdir}/${server_svc_name}=${unitdir}/${server_svc_name}")
   mkdir -p "${tmp}/${sysconfdir}/daos/certs"
 
   TARGET_PATH="${bindir}"
@@ -101,15 +88,15 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
                    "${SL_PREFIX}/bin/daos_server_helper" \
                    "${SL_PREFIX}/bin/daos_storage_estimator.py" \
                    "${SL_PREFIX}/bin/daos_server"
-  clean_bin dbg_bin "${files[@]}"
-  create_install_list bins "${files[@]}"
+  clean_bin "${files[@]}"
+  append_install_list "${files[@]}"
   sed -i -e '1s/env //' "${tmp}/${bindir}/daos_storage_estimator.py"
 
   TARGET_PATH="${libdir}"
   list_files files "${SL_PREFIX}/lib64/libdaos_common_pmem.so" \
     "${SL_PREFIX}/lib64/libdav_v2.so"
-  clean_bin dbg_lib "${files[@]}"
-  create_install_list libs "${files[@]}"
+  clean_bin "${files[@]}"
+  append_install_list "${files[@]}"
 
   TARGET_PATH="${libdir}/daos_srv"
   list_files files "${SL_PREFIX}/lib64/daos_srv/libchk.so" \
@@ -130,24 +117,22 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
     "${SL_PREFIX}/lib64/daos_srv/libbio.so" \
     "${SL_PREFIX}/lib64/daos_srv/libplacement.so" \
     "${SL_PREFIX}/lib64/daos_srv/libpipeline.so"
-  clean_bin dbg_internal_lib "${files[@]}"
-  create_install_list internal_libs "${files[@]}"
+  clean_bin "${files[@]}"
+  append_install_list "${files[@]}"
 
-  conf=()
   TARGET_PATH="${sysconfdir}/daos"
   list_files files "${SL_PREFIX}/etc/daos_server.yml" \
   "${SL_PREFIX}/etc/vos_size_input.yaml"
-  create_install_list conf "${files[@]}"
+  append_install_list "${files[@]}"
 
   TARGET_PATH="${datadir}/daos/control"
   list_files files "${SL_PREFIX}/share/daos/control/*"
-  create_install_list data "${files[@]}"
+  append_install_list "${files[@]}"
 
   estimator="$(find "${SL_PREFIX}" -name storage_estimator | sed "s#${SL_PREFIX}/lib64##")"
-  scripts=()
   TARGET_PATH="${libdir}${estimator}"
   list_files files "${SL_PREFIX}/lib64${estimator}/*"
-  create_install_list scripts "${files[@]}"
+  append_install_list "${files[@]}"
 
   EXTRA_OPTS=()
   cat << EOF  > "${tmp}/pre_install_server"
@@ -182,12 +167,248 @@ EOF
   EXTRA_OPTS+=("rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
   EXTRA_OPTS+=("rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
 
-  DEPENDS=( "daos = ${daos_version}" "daos-spdk = ${daos_version}" "libpmemobj = ${pmdk_version}" )
-  DEPENDS+=( "argobots = ${argobots_version}" )
-  build_package "daos-server" "${bins[@]}" "${extra_files[@]}" "${libs[@]}" "${conf[@]}" "${data[@]}" \
-	               "${internal_libs[@]}" "${scripts[@]}"
-  build_debug_package "daos-server" "${dbg_bin[@]}" "${dbg_lib[@]}" "${dbg_internal_lib[@]}"
+  DEPENDS=( "daos = ${RELEASE}" "daos-spdk = ${RELEASE}" )
+  DEPENDS+=( "${pmemobj_lib} = ${pmdk_version}" "argobots = ${argobots_version}" )
+  build_package "daos-server"
+
+  TARGET_PATH="${bindir}"
+  list_files files "${SL_PREFIX}/bin/dtx_tests" \
+                   "${SL_PREFIX}/bin/dtx_ut" \
+                   "${SL_PREFIX}/bin/evt_ctl" \
+                   "${SL_PREFIX}/bin/rdbt" \
+                   "${SL_PREFIX}/bin/smd_ut" \
+                   "${SL_PREFIX}/bin/bio_ut" \
+                   "${SL_PREFIX}/bin/vea_ut" \
+                   "${SL_PREFIX}/bin/vos_tests" \
+                   "${SL_PREFIX}/bin/vea_stress" \
+                   "${SL_PREFIX}/bin/ddb_tests" \
+                   "${SL_PREFIX}/bin/ddb_ut" \
+                   "${SL_PREFIX}/bin/obj_ctl" \
+                   "${SL_PREFIX}/bin/vos_perf"
+  clean_bin "${files[@]}"
+  append_install_list "${files[@]}"
+
+  DEPENDS=("daos-server = ${RELEASE}" "daos-admin = ${RELEASE}")
+  build_package "daos-server-tests"
 else
   echo "Skipping server packaging because server is not built"
 fi
 
+# daos-admin package
+TARGET_PATH="${bindir}"
+list_files files "${SL_PREFIX}/bin/dmg"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${mandir}/man8"
+list_files files "${SL_PREFIX}/share/man/man8/dmg.8*"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${sysconfdir}/daos"
+list_files files "${SL_PREFIX}/etc/daos_control.yml"
+append_install_list "${files[@]}"
+
+DEPENDS=( "daos = ${VERSION}" )
+build_package "daos-admin"
+
+# daos-client package
+TARGET_PATH="${bindir}"
+list_files files "${SL_PREFIX}/bin/cart_ctl" \
+                 "${SL_PREFIX}/bin/self_test" \
+                 "${SL_PREFIX}/bin/daos_agent" \
+                 "${SL_PREFIX}/bin/dfuse" \
+                 "${SL_PREFIX}/bin/daos"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${libdir}"
+list_files files "${SL_PREFIX}/lib64/libdaos.so.*" \
+                 "${SL_PREFIX}/lib64/libdaos_cmd_hdlrs.so" \
+                 "${SL_PREFIX}/lib64/libdaos_self_test.so" \
+                 "${SL_PREFIX}/lib64/libdfs.so" \
+                 "${SL_PREFIX}/lib64/libds3.so" \
+                 "${SL_PREFIX}/lib64/libduns.so" \
+                 "${SL_PREFIX}/lib64/libdfuse.so" \
+                 "${SL_PREFIX}/lib64/libioil.so" \
+                 "${SL_PREFIX}/lib64/libpil4dfs.so"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${libdir}/daos"
+list_files files "${SL_PREFIX}/lib64/daos/API_VERSION"
+append_install_list "${files[@]}"
+
+pydaos="$(find "${SL_PREFIX}/lib64" -name pydaos | sed "s#${SL_PREFIX}/lib64##")"
+TARGET_PATH="${libdir}${pydaos}"
+list_files files "${SL_PREFIX}/lib64${pydaos}/*"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${mandir}/man8"
+list_files files "${SL_PREFIX}/share/man/man8/daos.8*"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${sysconfdir}/daos"
+list_files files "${SL_PREFIX}/etc/daos_agent.yml"
+append_install_list "${files[@]}"
+
+mkdir -p "${tmp}/${unitdir}"
+install -m 644 "utils/systemd/${agent_svc_name}" "${tmp}/${unitdir}"
+install_list+=("${tmp}/${unitdir}/${agent_svc_name}=${unitdir}/${agent_svc_name}")
+
+TARGET_PATH="${datadir}/daos"
+list_files files "${SL_PREFIX}/share/daos/ioil-ld-opts"
+append_install_list "${files[@]}"
+
+EXTRA_OPTS=()
+cat << EOF  > "${tmp}/pre_install_client"
+getent group agent >/dev/null || groupadd -r daos_agent
+getent group daos_daemons >/dev/null || groupadd -r daos_daemons
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
+EOF
+EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_client")
+
+cat << EOF  > "${tmp}/post_install_client"
+systemctl daemon-reload
+EOF
+EXTRA_OPTS+=("--after-install" "${tmp}/post_install_client")
+
+cat << EOF  > "${tmp}/pre_uninstall_client"
+# TODO: workout what %systemd_preun %{agent_svc_name} does
+EOF
+EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
+
+if [[ "${DISTRO:-el8}" =~ suse ]]; then
+cat << EOF  > "${tmp}/post_uninstall_client"
+# TODO: workout what %systemd_postun %{agent_svc_name} does
+EOF
+EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
+fi
+
+EXTERNAL_DEPENDS=("/usr/bin/fusermount3")
+DEPENDS=("daos = ${VERSION}")
+build_package "daos-client"
+
+# client-tests
+TARGET_PATH="${daoshome}/TESTING"
+FILTER_LIST=("TESTING/ftest/avocado_tests.yaml")
+list_files files "${SL_PREFIX}/lib/daos/TESTING/*"
+BASE_PATH="${tmp}${daoshome}/TESTING"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${bindir}"
+list_files files "${SL_PREFIX}/bin/hello_drpc" \
+	   "${SL_PREFIX}/bin/acl_dump_test" \
+	   "${SL_PREFIX}/bin/agent_tests" \
+	   "${SL_PREFIX}/bin/drpc_engine_test" \
+	   "${SL_PREFIX}/bin/drpc_test" \
+	   "${SL_PREFIX}/bin/dfuse_test" \
+	   "${SL_PREFIX}/bin/eq_tests" \
+	   "${SL_PREFIX}/bin/job_tests" \
+	   "${SL_PREFIX}/bin/jump_pl_map" \
+	   "${SL_PREFIX}/bin/pl_bench" \
+	   "${SL_PREFIX}/bin/ring_pl_map" \
+	   "${SL_PREFIX}/bin/security_test" \
+	   "${SL_PREFIX}/bin/fault_status" \
+	   "${SL_PREFIX}/bin/crt_launch" \
+	   "${SL_PREFIX}/bin/daos_perf" \
+	   "${SL_PREFIX}/bin/daos_test" \
+	   "${SL_PREFIX}/bin/daos_debug_set_params" \
+	   "${SL_PREFIX}/bin/dfs_test" \
+	   "${SL_PREFIX}/bin/jobtest" \
+	   "${SL_PREFIX}/bin/daos_gen_io_conf" \
+	   "${SL_PREFIX}/bin/daos_run_io_conf"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${libdir}"
+list_files files "${SL_PREFIX}/lib64/libdaos_tests.so" \
+	   "${SL_PREFIX}/lib64/libdpar.so"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${sysconfdir}/daos"
+list_files files "${SL_PREFIX}/etc/fault-inject-cart.yaml"
+append_install_list "${files[@]}"
+
+#todo add external depends
+EXTERNAL_DEPENDS=("${protobufc_lib}")
+EXTERNAL_DEPENDS+=("fio")
+EXTERNAL_DEPENDS+=("git")
+EXTERNAL_DEPENDS+=("dbench")
+EXTERNAL_DEPENDS+=("lbzip2")
+EXTERNAL_DEPENDS+=("attr")
+EXTERNAL_DEPENDS+=("ior")
+EXTERNAL_DEPENDS+=("go >= 1.21")
+EXTERNAL_DEPENDS+=("${lmod}")
+EXTERNAL_DEPENDS+=("${capstone_lib}")
+EXTERNAL_DEPENDS+=("pciutils-devel")
+if [[ "${DISTRO:-el8}" =~ suse ]]; then
+  EXTERNAL_DEPENDS+=("libndctl-devel")
+fi
+if [[ "${DISTRO:-el8}" =~ el ]]; then
+  EXTERNAL_DEPENDS+=("ndctl-devel")
+  EXTERNAL_DEPENDS+=("daxctl-devel")
+fi
+DEPENDS=( "daos-client = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
+DEPENDS+=("daos-devel = ${VERSION}-${RELEASE}")
+build_package "daos-client-tests"
+
+TARGET_PATH="${includedir}"
+list_files files "${SL_PREFIX}/include/*"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${libdir}"
+list_files files "${SL_PREFIX}/lib64/libdaos.so" \
+                 "${SL_PREFIX}/lib64/libgurt.so" \
+                 "${SL_PREFIX}/lib64/libcart.so" \
+                 "${SL_PREFIX}/lib64/*.a"
+append_install_list "${files[@]}"
+
+TARGET_PATH="${daoshome}/python"
+list_files files "${SL_PREFIX}/lib/daos/python/*"
+append_install_list "${files[@]}"
+
+EXTERNAL_DEPENDS=("libuuid-devel")
+DEPENDS=("daos-client = ${VERSION}-${RELEASE}")
+build_package "daos-devel"
+
+EXTERNAL_DEPENDS=("hdf5-devel")
+TARGET_PATH="${libdir}"
+list_files files "${SL_PREFIX}/lib64/libdaos_serialize.so"
+append_install_list "${files[@]}"
+build_package "daos-serialize"
+
+if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
+  TARGET_PATH="${bindir}/daos_firmware_helper"
+  list_files files "${SL_PREFIX}/bin/daos_firmware_helper"
+  append_install_list "${files[@]}"
+
+  DEPENDS=("daos-server = ${VERSION}-${RELEASE}")
+  build_package "daos-firmware"
+fi
+
+TARGET_PATH="${libdir}"
+list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
+build_package "daos-client-tests-openmpi"
+fi
+
+#shim packages
+PACKAGE_TYPE="empty"
+ARCH="noarch"
+EXTERNAL_DEPENDS=("libmpi.so.40()(64bit)")
+# no files in shim
+build_package "daos-mofed-shim"
+
+DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
+build_package "daos-tests"
+
+build_package "daos-client-tests-mpich"
+
+DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
+DEPENDS=("daos-tests-openmpi = ${VERSION}-${RELEASE}")
+DEPENDS=("daos-tests-mpich = ${VERSION}-${RELEASE}")
+DEPENDS=("daos-serialize = ${VERSION}-${RELEASE}")
+build_package "daos-tests-internal"

@@ -9,12 +9,6 @@ if [ -z "${SL_ARGOBOTS_PREFIX}" ]; then
   exit 0
 fi
 
-files=()
-headers=()
-libs=()
-pkgcfg=()
-dbg=()
-
 VERSION="${argobots_version}"
 RELEASE="2"
 LICENSE="UChicago Argonne, LLC -- Argobots License"
@@ -25,28 +19,24 @@ URL="https://argobots.org"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_ARGOBOTS_PREFIX}/lib64/libabt.so.*"
-clean_bin dbg "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
-build_package "${argobots_lib}" "${libs[@]}"
-build_debug_package "${argobots_lib}" "${dbg[@]}"
+build_package "${argobots_lib}"
 
 TARGET_PATH="${libdir}/pkgconfig"
 list_files files "${SL_ARGOBOTS_PREFIX}/lib64/pkgconfig/*"
 replace_paths "${SL_ARGOBOTS_PREFIX}" "${files[@]}"
-create_install_list pkgcfg "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_ARGOBOTS_PREFIX}/lib64/libabt.so"
-create_install_list libs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}"
 list_files files "${SL_ARGOBOTS_PREFIX}/include/abt.h"
-create_install_list headers "${files[@]}"
+append_install_list "${files[@]}"
 
-DEPENDS=("${argobots_lib}")
-build_package "${argobots_dev}" \
-  "${libs[@]}" \
-  "${pkgcfg[@]}" \
-  "${headers[@]}"
+DEPENDS=("${argobots_lib} = ${argobots_version}")
+build_package "${argobots_dev}"

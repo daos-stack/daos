@@ -9,15 +9,6 @@ if [ -z "${SL_ISAL_PREFIX}" ]; then
   exit 0
 fi
 
-bins=()
-dbg=()
-files=()
-includes=()
-internal_includes=()
-libs=()
-mans=()
-pkgcfgs=()
-
 VERSION="${isal_version}"
 RELEASE="3"
 LICENSE="BSD-3-Clause"
@@ -37,43 +28,40 @@ fi
 
 TARGET_PATH="${bindir}"
 list_files files "${SL_ISAL_PREFIX}/bin/igzip"
-clean_bin dbg "${files[@]}"
-create_install_list bins "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man1"
 list_files files "${SL_ISAL_PREFIX}/share/man/man1/igzip.*"
-create_install_list mans "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
 build_package "isa-l" "${bins[@]}" "${mans[@]}"
-build_debug_package "isa-l" "${dbg[@]}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so.*"
-clean_bin dbg "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 DEPENDS=("isa-l")
-build_package "${isal_libname}" "${libs[@]}"
-build_debug_package "${isal_libname}" "${dbg[@]}"
+build_package "${isal_libname}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so"
-create_install_list libs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir/pkgconfig}"
 list_files files "${SL_ISAL_PREFIX}/lib64/pkgconfig/libisal.pc"
 replace_paths "${SL_ISAL_PREFIX}" "${files[@]}"
-create_install_list pkgcfgs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}"
 list_files files "${SL_ISAL_PREFIX}/include/isa-l.h"
-create_install_list includes "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}/isa-l"
 list_files files "${SL_ISAL_PREFIX}/include/isa-l/*"
-create_install_list internal_includes "${files[@]}"
+append_install_list "${files[@]}"
 
-DEPENDS=("${isal_libname}")
-build_package "${isal_devname}" \
-  "${libs[@]}" "${includes[@]}" "${internal_includes[@]}" "${pkgcfgs[@]}"
+DEPENDS=("${isal_libname} = ${isal_version}")
+build_package "${isal_devname}"

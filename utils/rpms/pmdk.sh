@@ -10,16 +10,6 @@ if [ -z "${SL_PMDK_PREFIX}" ]; then
   exit 0
 fi
 
-bins=()
-dbg=()
-files=()
-includes=()
-internal_includes=()
-libs=()
-mans=()
-pkgcfgs=()
-data=()
-
 VERSION="${pmdk_version}"
 RELEASE="4"
 LICENSE="BSD-3-Clause"
@@ -35,66 +25,63 @@ fi
 # libpmem
 TARGET_PATH="${libdir}"
 list_files files "${SL_PMDK_PREFIX}/lib64/libpmem.so.*"
-clean_bin dbg "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${datadir}/pmdk"
 list_files files "${SL_PMDK_PREFIX}/share/pmdk/pmdk.magic"
-create_install_list data "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
 build_package "libpmem${LIBMAJOR:-}" "${libs[@]}" "${data[@]}"
-build_debug_package "libpmem${LIBMAJOR:-}" "${dbg[@]}"
 
 #libpmemobj
 DEPENDS=("libpmem${LIBMAJOR:-}")
 TARGET_PATH="${libdir}"
 list_files files "${SL_PMDK_PREFIX}/lib64/libpmemobj.so.*"
-clean_bin dbg "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
 build_package "libpmemobj${LIBMAJOR:-}" "${libs[@]}"
-build_debug_package "libpmemobj${LIBMAJOR:-}" "${dbg[@]}"
 
 #libpmempool
 TARGET_PATH="${libdir}"
 list_files files "${SL_PMDK_PREFIX}/lib64/libpmempool.so.*"
-clean_bin dbg "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
 build_package "libpmempool${LIBMAJOR:-}" "${libs[@]}"
-build_debug_package "libpmempool${LIBMAJOR:-}" "${dbg[@]}"
 
 #libpmem-devel
 TARGET_PATH="${libdir}"
 list_files files "${SL_PMDK_PREFIX}/lib64/libpmem.so"
-create_install_list libs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir/pkgconfig}"
 list_files files "${SL_PMDK_PREFIX}/lib64/pkgconfig/libpmem.pc"
 replace_paths "${SL_PMDK_PREFIX}" "${files[@]}"
-create_install_list pkgcfgs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}"
 list_files files "${SL_PMDK_PREFIX}/include/libpmem.h"
-create_install_list includes "${files[@]}"
+append_install_list "${files[@]}"
 
 man7=()
 TARGET_PATH="${mandir}/man7"
 list_files files "${SL_PMDK_PREFIX}/share/man/man7/libpmem.7.gz"
-create_install_list man7 "${files[@]}"
+append_install_list "${files[@]}"
 
 man5=()
 TARGET_PATH="${mandir}/man5"
 list_files files "${SL_PMDK_PREFIX}/share/man/man5/pmem_ctl.5.gz"
-create_install_list man5 "${files[@]}"
+append_install_list "${files[@]}"
 
 man3=()
 TARGET_PATH="${mandir}/man3"
 list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmem_*.3.gz"
-create_install_list man3 "${files[@]}"
+append_install_list "${files[@]}"
 
 build_package "libpmem-devel" \
   "${libs[@]}" "${pkgcfgs[@]}" "${includes[@]}" "${man7[@]}" "${man5[@]}" "${man3[@]}"
@@ -102,29 +89,29 @@ build_package "libpmem-devel" \
 #libpmemobj-devel
 TARGET_PATH="${libdir}"
 list_files files "${SL_PMDK_PREFIX}/lib64/libpmemobj.so"
-create_install_list libs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir/pkgconfig}"
 list_files files "${SL_PMDK_PREFIX}/lib64/pkgconfig/libpmemobj.pc"
 replace_paths "${SL_PMDK_PREFIX}" "${files[@]}"
-create_install_list pkgcfgs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}"
 list_files files "${SL_PMDK_PREFIX}/include/libpmemobj.h"
-create_install_list includes "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}/libpmemobj"
 list_files files "${SL_PMDK_PREFIX}/include/libpmemobj/*.h"
-create_install_list internal_includes "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man7"
 list_files files "${SL_PMDK_PREFIX}/share/man/man7/libpmemobj.7.gz"
-create_install_list man7 "${files[@]}"
+append_install_list "${files[@]}"
 
 man5=()
 TARGET_PATH="${mandir}/man5"
 list_files files "${SL_PMDK_PREFIX}/share/man/man5/poolset.5.gz"
-create_install_list man5 "${files[@]}"
+append_install_list "${files[@]}"
 
 man3=()
 TARGET_PATH="${mandir}/man3"
@@ -135,7 +122,7 @@ list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmemobj_*.3.gz" \
   "${SL_PMDK_PREFIX}/share/man/man3/direct_*.3.gz" \
   "${SL_PMDK_PREFIX}/share/man/man3/d_r*.3.gz" \
   "${SL_PMDK_PREFIX}/share/man/man3/tx_*.3.gz"
-create_install_list man3 "${files[@]}"
+append_install_list "${files[@]}"
 
 DEPENDS=("libpmem-devel" "libpmemobj${LIBMAJOR:-}")
 build_package "libpmemobj-devel" \
@@ -145,73 +132,73 @@ build_package "libpmemobj-devel" \
 #libpmempool-devel
 TARGET_PATH="${libdir}"
 list_files files "${SL_PMDK_PREFIX}/lib64/libpmempool.so"
-create_install_list libs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir/pkgconfig}"
 list_files files "${SL_PMDK_PREFIX}/lib64/pkgconfig/libpmempool.pc"
 replace_paths "${SL_PMDK_PREFIX}" "${files[@]}"
-create_install_list pkgcfgs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}"
 list_files files "${SL_PMDK_PREFIX}/include/libpmempool.h"
-create_install_list includes "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man7"
 list_files files "${SL_PMDK_PREFIX}/share/man/man7/libpmempool.7.gz"
-create_install_list man7 "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man5"
 list_files files "${SL_PMDK_PREFIX}/share/man/man5/poolset.5.gz"
-create_install_list man5 "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man3"
 list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmempool_*.3.gz"
-create_install_list man3 "${files[@]}"
+append_install_list "${files[@]}"
 
 DEPENDS=("libpmem-devel" "libpmempool${LIBMAJOR:-}")
-build_package "libpmemobj-devel" \
-  "${libs[@]}" "${pkgcfgs[@]}" "${includes[@]}" "${man7[@]}" "${man5[@]}" "${man3[@]}"
+build_package "libpmemobj-devel"
 
 #pmempool
 TARGET_PATH="${bindir}"
 list_files files "${SL_PMDK_PREFIX}/bin/pmempool"
-clean_bin dbg "${files[@]}"
-create_install_list bins "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man1"
 list_files files "${SL_PMDK_PREFIX}/share/man/man1/pmempool.1.gz" \
   "${SL_PMDK_PREFIX}/share/man/man1/pmempool-*.1.gz"
-create_install_list mans "${files[@]}"
+append_install_list "${files[@]}"
 
-DEPENDS=("libpmem${LIBMAJOR:-}" "libpmempool${LIBMAJOR:-}" "libpmemobj${LIBMAJOR:-}")
-build_package "pmempool" "${bins[@]}" "${mans[@]}"
+DEPENDS=("libpmem${LIBMAJOR:-} = ${pmdk_version}" "libpmempool${LIBMAJOR:-} = ${pmdk_version}")
+DEPENDS+=("libpmemobj${LIBMAJOR:-} = ${pmdk_version}")
+build_package "pmempool"
 
 #pmreorder
 TARGET_PATH="${bindir}"
 list_files files "${SL_PMDK_PREFIX}/bin/pmreorder"
 replace_paths "${SL_PMDK_PREFIX}" "${files[@]}"
-create_install_list bins "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man1"
 list_files files "${SL_PMDK_PREFIX}/share/man/man1/pmreorder.1.gz"
-create_install_list mans "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${datadir}/pmreorder"
 list_files files "${SL_PMDK_PREFIX}/share/pmreorder/*.py"
-create_install_list data "${files[@]}"
+append_install_list "${files[@]}"
 
 DEPENDS=()
-build_package "pmreorder" "${bins[@]}" "${mans[@]}" "${data[@]}"
+build_package "pmreorder"
 
 #daxio
 TARGET_PATH="${bindir}"
 list_files files "${SL_PMDK_PREFIX}/bin/daxio"
-clean_bin dbg "${files[@]}"
-create_install_list bins "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man1"
 list_files files "${SL_PMDK_PREFIX}/share/man/man1/daxio.1.gz"
-create_install_list mans "${files[@]}"
+append_install_list "${files[@]}"
 
-DEPENDS=("libpmem${LIBMAJOR:-}")
-build_package "daxio" "${bins[@]}" "${mans[@]}"
+DEPENDS=("libpmem${LIBMAJOR:-} = ${pmdk_version}")
+build_package "daxio"

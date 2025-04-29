@@ -9,16 +9,6 @@ if [ -z "${SL_OFI_PREFIX}" ]; then
   exit 0
 fi
 
-bins=()
-dbg_bin=()
-dbg_lib=()
-files=()
-includes=()
-internal_includes=()
-libs=()
-mans=()
-pkgcfgs=()
-
 VERSION="${libfabric_version}"
 RELEASE="3"
 LICENSE="BSD or GPLv2"
@@ -29,49 +19,47 @@ URL="https://github.com/ofiwg/libfabric"
 
 TARGET_PATH="${bindir}"
 list_files files "${SL_OFI_PREFIX}/bin/fi_*"
-clean_bin dbg_bin "${files[@]}"
-create_install_list bins "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_OFI_PREFIX}/lib64/libfabric*.so.*"
-clean_bin dbg_lib "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${mandir}/man1"
 list_files files "${SL_OFI_PREFIX}/share/man/man1/fi_*.1*"
-create_install_list mans "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
-build_package "${libfabric_lib}" "${bins[@]}" "${mans[@]}" "${libs[@]}"
-build_debug_package "${libfabric_lib}" "${dbg_lib[@]}" "${dbg_bin[@]}"
+build_package "${libfabric_lib}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_OFI_PREFIX}/lib64/libfabric*.so"
-create_install_list libs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}/rdma"
 list_files files "${SL_OFI_PREFIX}/include/rdma/*.h"
-create_install_list includes "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}/rdma/providers"
 list_files files "${SL_OFI_PREFIX}/include/rdma/providers/*.h"
-create_install_list internal_includes "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir/pkgconfig}"
 list_files files "${SL_OFI_PREFIX}/lib64/pkgconfig/${libfabric_lib}.pc"
 replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
-create_install_list pkgcfgs "${files[@]}"
+append_install_list "${files[@]}"
 
 man3=()
 TARGET_PATH="${mandir}/man3"
 list_files files "${SL_OFI_PREFIX}/share/man/man3/fi*.3*"
-create_install_list man3 "${files[@]}"
+append_install_list "${files[@]}"
 
 man7=()
 TARGET_PATH="${mandir}/man7"
 list_files files "${SL_OFI_PREFIX}/share/man/man7/f*.7*"
-create_install_list man7 "${files[@]}"
+append_install_list "${files[@]}"
 
 DEPENDS=("${libfabric_lib} = ${libfabric_version}")
-build_package "${libfabric_dev}" \
-  "${libs[@]}" "${includes[@]}" "${man3[@]}" "${man7[@]}" "${pkgcfgs[@]}" "${internal_includes[@]}"
+build_package "${libfabric_dev}"

@@ -9,14 +9,6 @@ if [ -z "${SL_SPDK_PREFIX}" ]; then
   exit 1
 fi
 
-bins=()
-dbg_bin=()
-dbg_lib=()
-files=()
-libs=()
-internal_libs=()
-data=()
-
 VERSION=${daos_version}
 RELEASE=${daos_release}
 LICENSE="BSD"
@@ -28,25 +20,24 @@ URL="https://spdk.io"
 
 TARGET_PATH="${bindir}"
 list_files files "${SL_SPDK_PREFIX}/bin/daos_spdk*"
-clean_bin dbg_bin "${files[@]}"
-create_install_list bins "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 BASE_PATH="${tmp}/${datadir}/daos/spdk"
 TARGET_PATH="${datadir}/daos/spdk"
 list_files files "${SL_SPDK_PREFIX}/share/daos/spdk/*"
-create_install_list data "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/daos_srv"
 list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/libspdk.so.*" \
   "${SL_SPDK_PREFIX}/lib64/daos_srv/librte*.so.*"
-clean_bin dbg_lib "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-22.0"
 list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-22.0/lib*.so.*"
-clean_bin dbg_lib "${files[@]}"
-create_install_list internal_libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
 ARCH="${isa}"
-build_package "daos-spdk" "${bins[@]}" "${data[@]}" "${libs[@]}" "${internal_libs[@]}"
-build_debug_package "daos-spdk" "${dbg_bin[@]}" "${dbg_lib[@]}"
+build_package "daos-spdk"

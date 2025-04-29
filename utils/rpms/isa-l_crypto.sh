@@ -9,13 +9,6 @@ if [ -z "${SL_ISAL_CRYPTO_PREFIX}" ]; then
   exit 0
 fi
 
-dbg=()
-files=()
-includes=()
-internal_includes=()
-libs=()
-pkgcfgs=()
-
 VERSION="${isal_crypto_version}"
 RELEASE="2"
 LICENSE="BSD-3-Clause"
@@ -44,29 +37,27 @@ fi
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/libisal_crypto.so.*"
-clean_bin dbg "${files[@]}"
-create_install_list libs "${files[@]}"
+clean_bin "${files[@]}"
+append_install_list "${files[@]}"
 
-build_package "${isal_crypto_libname}" "${libs[@]}"
-build_debug_package "${isal_crypto_libname}" "${dbg[@]}"
+build_package "${isal_crypto_libname}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/libisal_crypto.so"
-create_install_list libs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir/pkgconfig}"
 list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/pkgconfig/libisal_crypto.pc"
 replace_paths "${SL_ISAL_CRYPTO_PREFIX}" "${files[@]}"
-create_install_list pkgcfgs "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}"
 list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto.h"
-create_install_list includes "${files[@]}"
+append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}/isa-l_crypto"
 list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto/*"
-create_install_list internal_includes "${files[@]}"
+append_install_list "${files[@]}"
 
-DEPENDS=("${isal_crypto_libname}")
-build_package "${isal_crypto_devname}" \
-  "${libs[@]}" "${includes[@]}" "${internal_includes[@]}" "${pkgcfgs[@]}"
+DEPENDS=("${isal_crypto_libname} = ${isal_crypto_version}")
+build_package "${isal_crypto_devname}"
