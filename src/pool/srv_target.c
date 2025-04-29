@@ -42,6 +42,8 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
+__thread bool firewall_blocking_flag = false;
+
 /* ds_pool_child **************************************************************/
 
 static void
@@ -2808,5 +2810,6 @@ out:
 	if (rc)
 		D_ERROR("rpc failed, " DF_RC "\n", DP_RC(rc));
 out_bulk_null:
+	firewall_blocking_flag = false;
 	crt_reply_send(rpc);
 }
