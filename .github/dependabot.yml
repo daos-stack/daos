@@ -9,7 +9,7 @@ updates:
       - dependency-name: "avocado-framework*"
     schedule:
       interval: "cron"
-      cronjob: "0 0 1-7,15-21 * 0"  # first and third Sunday
+      cronjob: "0 0 1,15 * *"  # Twice a month
     groups:
       python-packages:
         patterns:
@@ -24,7 +24,7 @@ updates:
     directory: /
     schedule:
       interval: "cron"
-      cronjob: "0 0 1-7,15-21 * 0"  # first and third Sunday
+      cronjob: "0 0 1,15 * *"  # Twice a month
     groups:
       gha-versions:
         patterns:
@@ -39,7 +39,7 @@ updates:
     directory: /
     schedule:
       interval: "cron"
-      cronjob: "0 0 1-7,15-21 * 0"  # first and third Sunday
+      cronjob: "0 0 1,15 * *"  # Twice a month
     groups:
       gha-versions:
         patterns:
