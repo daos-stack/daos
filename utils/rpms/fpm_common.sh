@@ -170,8 +170,8 @@ clean_bin() {
     mkdir -p "${dbgroot}"
     dbgpath="${dbgroot}/${dname}"
     cp "${file}" "${dbgpath}"
-    strip --only-keep-debug "${dbgpath}"
-    strip "${file}" || true
+    strip --only-keep-debug "${dbgpath}" > /dev/null 2>&1
+    strip "${file}" > /dev/null 2>&1 || true
     dbg_list+=("${dbgpath}")
   done
 }
@@ -244,4 +244,5 @@ build_debug_package() {
     install_list+=("${pkg}=${pkg//$tmp/}")
   done
   build_package "${name}-debuginfo"
+  dbg_list=()
 }
