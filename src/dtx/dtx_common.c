@@ -407,7 +407,7 @@ dtx_aggregate(void *arg)
 		struct dtx_stat		stat = { 0 };
 		int			rc;
 
-		rc = vos_dtx_aggregate(cont->sc_hdl);
+		rc = vos_dtx_aggregate(cont->sc_hdl, NULL);
 		if (rc != 0)
 			break;
 
