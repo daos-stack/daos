@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -91,7 +92,7 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 		rResp := new(ctlpb.SmdQueryResp_RankResp)
 		rResp.Rank = engineRank.Uint32()
 
-		dresp, err := ei.CallDrpc(ctx, drpc.MethodSmdPools, new(ctlpb.SmdPoolReq))
+		dresp, err := ei.CallDrpc(ctx, daos.MethodSmdPools, new(ctlpb.SmdPoolReq))
 		if err != nil {
 			return err
 		}
@@ -353,7 +354,7 @@ func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, 
 // been made to manually trigger a faulty device state.
 func replaceDevRetryBusy(ctx context.Context, log logging.Logger, e Engine, req proto.Message) (res *ctlpb.SmdManageResp_Result, err error) {
 	for try := 0; try < maxDevReplaceRetries; try++ {
-		res, err = sendManageReq(ctx, e, drpc.MethodReplaceStorage, req)
+		res, err = sendManageReq(ctx, e, daos.MethodReplaceStorage, req)
 		if err != nil {
 			return
 		}
@@ -414,7 +415,7 @@ func (svc *ControlService) singleDevSmdManage(ctx context.Context, req *ctlpb.Sm
 	case *ctlpb.SmdManageReq_Faulty:
 		dReq := req.GetFaulty()
 		msg := fmt.Sprintf("%s set-faulty", msg)
-		devRes, err = sendManageReq(ctx, engine, drpc.MethodSetFaultyState, dReq)
+		devRes, err = sendManageReq(ctx, engine, daos.MethodSetFaultyState, dReq)
 		svc.log.Tracef("%s: req %+v, resp %+v", msg, dReq, devRes)
 	default:
 		return nil, errors.Errorf("unexpected smd manage request type, want "+
@@ -478,7 +479,7 @@ func (svc *ControlService) multiDevSmdManage(ctx context.Context, req *ctlpb.Smd
 					"address", dev.uuid)
 			}
 			dReq.Ids = dev.trAddr
-			devRes, err := sendManageReq(ctx, engine, drpc.MethodLedManage, dReq)
+			devRes, err := sendManageReq(ctx, engine, daos.MethodLedManage, dReq)
 			if err != nil {
 				return nil, errors.Wrap(err, msg)
 			}
