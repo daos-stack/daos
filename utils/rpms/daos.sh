@@ -30,6 +30,7 @@ to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost."
 URL="https://daos.io"
 
+if false; then
 # Some extra "install" steps
 # daos package
 TARGET_PATH="${sysconfdir}/daos"
@@ -392,7 +393,7 @@ list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 build_package "daos-client-tests-openmpi"
-
+fi
 #shim packages
 PACKAGE_TYPE="empty"
 ARCH="noarch"

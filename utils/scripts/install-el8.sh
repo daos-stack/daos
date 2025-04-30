@@ -34,6 +34,7 @@ dnf --nodocs install \
     golang \
     graphviz \
     help2man \
+    hdf5-devel \
     hwloc-devel \
     java-1.8.0-openjdk \
     json-c-devel \
@@ -64,7 +65,12 @@ dnf --nodocs install \
     protobuf-c-devel \
     python3-devel \
     python3-pip \
+    rpm-build \
+    @ruby:3.3 \
+    rubygems \
+    rubygem-json \
     sg3_utils \
+    squashfs-tools \
     sudo \
     systemd \
     valgrind-devel \
@@ -87,3 +93,5 @@ if [ -e /etc/fedora-release ]; then
 else
         dnf install maven
 fi
+
+gem install fpm
