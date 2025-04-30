@@ -664,7 +664,7 @@ dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info)
 		rc = d_setenv("FI_TCP_FIREWALL_ADDR", client_firewall_mode, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
-		D_INFO("Using server's value for FI_TCP_FIREWALL_ADDR: %s\n", client_firewall_mode);
+		D_INFO("Client firewall mode enabled: %s\n", client_firewall_mode);
 	}
 
 	/* If the server has set this, the client must use the same value. */

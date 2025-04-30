@@ -116,15 +116,17 @@
 #disable_srx: false
 #
 #
-## CART: Enable TCP Firewall Addr
-## This gets shared with the client. It is used for TCP connections between
-## the client and server. If enabled, it will tell the client
-## to tell the server that it is behind a firewall and servers will no longer
-## attempt to make TCP connections to clients on bulk transfer. Instead, clients
-## will receive a special error message and ping servers that they don't have
-## TCP connections established with.
+## Libfabric: Disable Client Firewall Mode
+## Without Client Firewall Mode (CFM), TCP clients behind a firewall may
+## not function properly for bulk transfer I/Os due to implementation
+## details in the underlying network provider. By default, CFM is enabled
+## for clients that support the feature. Disabling the feature will revert to
+## previous behavior that requires an open network path from servers
+## to initiate unrelated TCP connections back to clients.
+## NB: Has no effect on non-TCP configurations.
 #
-#disable_client_firewall_mode: true
+## default: true
+#disable_client_firewall_mode: false
 #
 #
 ## CART: Fabric authorization key
