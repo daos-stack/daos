@@ -297,6 +297,21 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				return resp
 			}(respWith(testResp, "test1", "dev1", defNumaMap)),
 		},
+		"client telemetry enabled; self in register pattern": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
+			tmCfg: &TelemetryConfig{
+				Port:       1234,
+				Enabled:    true,
+				RegPattern: cfgRe(`.*\.test`),
+			},
+			expResp: func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
+				resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+					fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+					fmt.Sprintf("%s=1", telemetry.ClientMetricsRegisterEnv),
+				)
+				return resp
+			}(respWith(testResp, "test1", "dev1", defNumaMap)),
+		},
 		"client telemetry enabled; self not in register pattern": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
 			tmCfg: &TelemetryConfig{

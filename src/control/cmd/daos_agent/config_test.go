@@ -250,40 +250,40 @@ telemetry_retain: 10m
 		},
 		"telemetry enable pattern without enable": {
 			input: `
-telemetry_enable_pattern: foo
+telemetry_enabled_procs: foo
 `,
-			expErr: errors.New("cannot specify telemetry_enable_pattern without telemetry_enabled"),
+			expErr: errors.New("cannot specify telemetry_enabled_procs without telemetry_enabled"),
 		},
 		"invalid enable pattern": {
 			input: `
-telemetry_enable_pattern: "*"
+telemetry_enabled_procs: "*"
 `,
 			expErr: errors.New("invalid regular expression"),
 		},
-		"telemetry enable and disable patterns specified": {
+		"telemetry enabled and disabled patterns specified": {
 			input: `
 telemetry_port: 1234
 telemetry_enabled: true
-telemetry_enable_pattern: foo
-telemetry_disable_pattern: bar
+telemetry_enabled_procs: foo
+telemetry_disabled_procs: bar
 `,
-			expErr: errors.New("cannot specify both telemetry_enable_pattern and telemetry_disable_pattern"),
+			expErr: errors.New("cannot specify both telemetry_enabled_procs and telemetry_disabled_procs"),
 		},
-		"telemetry disable pattern without enable": {
+		"telemetry disabled pattern without enable": {
 			input: `
-telemetry_disable_pattern: foo
+telemetry_disabled_procs: foo
 `,
-			expErr: errors.New("cannot specify telemetry_disable_pattern without telemetry_enabled"),
+			expErr: errors.New("cannot specify telemetry_disabled_procs without telemetry_enabled"),
 		},
-		"invalid disable pattern": {
+		"invalid disabled pattern": {
 			input: `
-telemetry_disable_pattern: "*"
+telemetry_disabled_procs: "*"
 `,
 			expErr: errors.New("invalid regular expression"),
 		},
-		"empty disable pattern": {
+		"empty disabled pattern": {
 			input: `
-telemetry_disable_pattern: ""
+telemetry_disabled_procs: ""
 `,
 			expErr: errors.New("empty regular expression"),
 		},
@@ -317,11 +317,11 @@ telemetry_retain: 10s
 				return cfg
 			}),
 		},
-		"telemetry config with enable pattern": {
+		"telemetry config with enabled pattern": {
 			input: `
 telemetry_port: 1234
 telemetry_enabled: true
-telemetry_enable_pattern: ^foo$
+telemetry_enabled_procs: ^foo$
 `,
 			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
 				cfg.Telemetry.Port = 1234

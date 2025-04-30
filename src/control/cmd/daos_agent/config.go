@@ -83,8 +83,8 @@ type TelemetryConfig struct {
 	Port       int           `yaml:"telemetry_port,omitempty"`
 	Enabled    bool          `yaml:"telemetry_enabled,omitempty"`
 	Retain     time.Duration `yaml:"telemetry_retain,omitempty"`
-	RegPattern *ConfigRegexp `yaml:"telemetry_enable_pattern,omitempty"`
-	IgnPattern *ConfigRegexp `yaml:"telemetry_disable_pattern,omitempty"`
+	RegPattern *ConfigRegexp `yaml:"telemetry_enabled_procs,omitempty"`
+	IgnPattern *ConfigRegexp `yaml:"telemetry_disabled_procs,omitempty"`
 }
 
 // Validate performs basic validation of the telemetry configuration.
@@ -103,16 +103,16 @@ func (tc *TelemetryConfig) Validate() error {
 
 	if tc.RegPattern != nil {
 		if !tc.Enabled {
-			return errors.New("cannot specify telemetry_enable_pattern without telemetry_enabled")
+			return errors.New("cannot specify telemetry_enabled_procs without telemetry_enabled")
 		}
 	}
 	if tc.IgnPattern != nil {
 		if !tc.Enabled {
-			return errors.New("cannot specify telemetry_disable_pattern without telemetry_enabled")
+			return errors.New("cannot specify telemetry_disabled_procs without telemetry_enabled")
 		}
 	}
 	if tc.IgnPattern != nil && tc.RegPattern != nil {
-		return errors.New("cannot specify both telemetry_enable_pattern and telemetry_disable_pattern")
+		return errors.New("cannot specify both telemetry_enabled_procs and telemetry_disabled_procs")
 	}
 
 	return nil
