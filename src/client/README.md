@@ -5,3 +5,6 @@
 - <a href="https://github.com/daos-stack/go-daos">Go bindings</a> and <a href="https://godoc.org/github.com/daos-stack/go-daos/pkg/daos">API documentation</a>
 - <a href="dfs/README.md">POSIX File & Directory Emulation (libdfs)</a>
 - <a href="ds3/README.md">S3 Emulation (libds3)</a>
+
+# Other Documentation
+- <a href="telemetry.md">DAOS Client Telemetry</a>
