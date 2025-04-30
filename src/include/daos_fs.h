@@ -1321,8 +1321,6 @@ dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *n
  * Enable metrics for the DFS namespace.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
- *
- * \return		0 on success, errno code on failure.
  */
 void
 dfs_metrics_init(dfs_t *dfs);
