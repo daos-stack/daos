@@ -7,6 +7,11 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <sys/types.h>
+#include <time.h>
+
+#include "daos_errno.h"
+#include "daos_types.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb.h"
@@ -14,6 +19,8 @@
 #include "ddb_printer.h"
 #include "daos.h"
 #include "ddb_tree_path.h"
+#include "gurt/common.h"
+#include "gurt/debug.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 #define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
@@ -1255,6 +1262,105 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
 	else
 		ddb_print(ctx, "Device replacing succeeded\n");
+
+	return rc;
+}
+
+enum { TIMESPEC_FMT_SIZE = sizeof("1970-01-01 00:00:00.000000000") };
+
+static int
+timespec2str(struct timespec *tspec, char *buf, size_t buf_size)
+{
+	struct tm date;
+	size_t    buf_len;
+	int       rc;
+
+	tzset();
+	if (localtime_r(&(tspec->tv_sec), &date) == NULL)
+		return d_errno2der(errno);
+
+	if (strftime(buf, buf_size, "%F %T", &date) == 0)
+		return -DER_INVAL;
+
+	buf_len = strnlen(buf, buf_size);
+	D_ASSERT(buf_len < buf_size);
+
+	rc = snprintf(&buf[buf_len], buf_size - buf_len, ".%09ld", tspec->tv_nsec);
+	if (rc < 0)
+		return -DER_INVAL;
+	if (rc >= buf_size - buf_len)
+		return -DER_TRUNC;
+
+	return -DER_SUCCESS;
+}
+
+static int
+dtx_print_time_stat(struct ddb_ctx *ctx, char *stat_name, uint64_t epoch, char *align)
+{
+	struct timespec tspec;
+	char            buf[TIMESPEC_FMT_SIZE];
+	int             rc;
+
+	rc = d_hlc2timespec(epoch, &tspec);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Conversion error of the DTX stat %s: " DF_RC "\n", stat_name,
+			   DP_RC(rc));
+		return rc;
+	}
+	rc = timespec2str(&tspec, buf, TIMESPEC_FMT_SIZE);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Conversion error of the DTX stat %s: " DF_RC "\n", stat_name,
+			   DP_RC(rc));
+		return rc;
+	}
+	ddb_printf(ctx, "\t- %s time:%s%s, %" PRIu64 "\n", stat_name, align, buf, epoch);
+
+	return -DER_SUCCESS;
+}
+
+int
+ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
+{
+	struct dv_indexed_tree_path itp = {0};
+	daos_handle_t               coh = {0};
+	struct dtx_stat             stat;
+	int                         rc;
+
+	rc = init_path(ctx, opt->path, &itp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (!itp_has_cont(&itp)) {
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
+	if (!SUCCESS(rc))
+		goto done;
+
+	rc = vos_dtx_cmt_reindex(coh);
+	if (rc < 0) {
+		ddb_errorf(ctx, "DTX entries Statistic refresh failed: " DF_RC, DP_RC(rc));
+		goto done;
+	}
+	vos_dtx_stat(coh, &stat, 0);
+
+	ddb_print(ctx, "DTX entries statistics of ");
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
+	ddb_printf(ctx, "\t- Number of committed DTX of the container:\t%" PRIu32 "\n",
+		   stat.dtx_cont_cmt_count);
+	ddb_printf(ctx, "\t- Number of committed DTX of the pool:\t\t%" PRIu32 "\n",
+		   stat.dtx_pool_cmt_count);
+	rc =
+	    dtx_print_time_stat(ctx, "DTX newest aggregated", stat.dtx_newest_aggregated, "\t\t\t");
+	if (!SUCCESS(rc))
+		goto done;
+
+done:
+	itp_free(&itp);
+	dv_cont_close(&coh);
 
 	return rc;
 }
