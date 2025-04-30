@@ -7,6 +7,10 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <sys/types.h>
+#include <time.h>
+#include "daos_errno.h"
+#include "daos_types.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb.h"
@@ -14,6 +18,9 @@
 #include "ddb_printer.h"
 #include "daos.h"
 #include "ddb_tree_path.h"
+#include "gurt/common.h"
+#include "gurt/debug.h"
+#include "vos_internal.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 #define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
@@ -477,7 +484,7 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 			itp_free(&itp);
 			return rc;
 		}
-		ddb_printf(ctx, "%d Active Entries\n", args.entry_count);
+		ddb_printf(ctx, "%" PRIu32 " Active Entries\n", args.entry_count);
 	}
 	if (both || opt->committed) {
 		args.entry_count = 0;
@@ -487,7 +494,7 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 			itp_free(&itp);
 			return rc;
 		}
-		ddb_printf(ctx, "%d Committed Entries\n", args.entry_count);
+		ddb_printf(ctx, "%" PRIu32 " Committed Entries\n", args.entry_count);
 	}
 
 	dv_cont_close(&coh);
@@ -874,12 +881,12 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	}
 
 	offset = parse_uint32_t(opt->offset);
-	if (offset <= 0) {
+	if (offset == 0) {
 		ddb_errorf(ctx, "'%s' is not a valid offset\n", opt->offset);
 		return -DER_INVAL;
 	}
 	blk_cnt = parse_uint32_t(opt->blk_cnt);
-	if (blk_cnt <= 0) {
+	if (blk_cnt == 0) {
 		ddb_errorf(ctx, "'%s' is not a valid block size\n", opt->blk_cnt);
 		return -DER_INVAL;
 	}
@@ -888,7 +895,7 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	if (!SUCCESS(rc))
 		return rc;
 
-	ddb_printf(ctx, "Adding free region to vea {%lu, %d}\n", offset, blk_cnt);
+	ddb_printf(ctx, "Adding free region to vea {%" PRIu64 ", %" PRIu32 "}\n", offset, blk_cnt);
 	rc = dv_vea_free_region(ctx->dc_poh, offset, blk_cnt);
 	if (!SUCCESS(rc))
 		ddb_errorf(ctx, "Unable to add new free region: "DF_RC"\n", DP_RC(rc));
@@ -1122,7 +1129,7 @@ dtx_active_entry_discard_invalid(struct dv_dtx_active_entry *entry, void *cb_arg
 		ddb_errorf(ctx, "Error: " DF_RC "\n", DP_RC(rc));
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -1255,6 +1262,167 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
 	else
 		ddb_print(ctx, "Device replacing succeeded\n");
+
+	return rc;
+}
+
+enum { TIMESPEC_FMT_SIZE = sizeof("1970-01-01 00:00:00.000000000") };
+
+static int
+timespec2str(struct timespec *tspec, char *buf, size_t buf_size)
+{
+	struct tm date;
+	size_t    buf_len;
+	int       rc;
+
+	tzset();
+	if (localtime_r(&(tspec->tv_sec), &date) == NULL)
+		return d_errno2der(errno);
+
+	if (strftime(buf, buf_size, "%F %T", &date) == 0)
+		return -DER_INVAL;
+
+	buf_len = strnlen(buf, buf_size);
+	D_ASSERT(buf_len < buf_size);
+
+	rc = snprintf(&buf[buf_len], buf_size - buf_len, ".%09ld", tspec->tv_nsec);
+	if (rc < 0)
+		return -DER_INVAL;
+	if (rc >= buf_size - buf_len)
+		return -DER_TRUNC;
+
+	return -DER_SUCCESS;
+}
+
+static int
+dtx_print_time_stat(struct ddb_ctx *ctx, char *stat_name, uint64_t epoch, char *align)
+{
+	struct timespec tspec;
+	char            buf[TIMESPEC_FMT_SIZE];
+	int             rc;
+
+	rc = d_hlc2timespec(epoch, &tspec);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Conversion error of the DTX stat %s: " DF_RC "\n", stat_name,
+			   DP_RC(rc));
+		return rc;
+	}
+	rc = timespec2str(&tspec, buf, TIMESPEC_FMT_SIZE);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Conversion error of the DTX stat %s: " DF_RC "\n", stat_name,
+			   DP_RC(rc));
+		return rc;
+	}
+	ddb_printf(ctx, "\t- %s time:%s%s, %" PRIu64 "\n", stat_name, align, buf, epoch);
+
+	return -DER_SUCCESS;
+}
+
+int
+ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
+{
+	struct dv_indexed_tree_path itp = {0};
+	daos_handle_t               coh = {0};
+	struct dtx_stat             stat;
+	int                         rc;
+
+	rc = init_path(ctx, opt->path, &itp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (!itp_has_cont(&itp)) {
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
+	if (!SUCCESS(rc))
+		goto done;
+
+	rc = vos_dtx_cmt_reindex(coh);
+	if (rc < 0) {
+		ddb_errorf(ctx, "DTX entries Statistic refresh failed: " DF_RC, DP_RC(rc));
+		goto done;
+	}
+	vos_dtx_stat(coh, &stat, 0);
+
+	ddb_print(ctx, "DTX entries statistics of ");
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
+	ddb_printf(ctx, "\t- Number of committed DTX of the container:\t%" PRIu32 "\n",
+		   stat.dtx_cont_cmt_count);
+	ddb_printf(ctx, "\t- Number of committed DTX of the pool:\t\t%" PRIu32 "\n",
+		   stat.dtx_pool_cmt_count);
+	rc =
+	    dtx_print_time_stat(ctx, "DTX newest aggregated", stat.dtx_newest_aggregated, "\t\t\t");
+	if (!SUCCESS(rc))
+		goto done;
+
+done:
+	itp_free(&itp);
+	dv_cont_close(&coh);
+
+	return rc;
+}
+
+int
+ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
+{
+	struct dv_indexed_tree_path itp = {0};
+	daos_handle_t               coh = {0};
+	uint64_t                   *epoch;
+	int                         rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
+	rc = init_path(ctx, opt->path, &itp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (!itp_has_cont(&itp)) {
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
+	if (!SUCCESS(rc))
+		goto done;
+
+	switch (opt->format) {
+	case DDB_DTX_AGGR_NOW:
+		epoch = NULL;
+		break;
+	case DDB_DTX_AGGR_DATE:
+		rc = ddb_date2epoch(optarg, &opt->epoch);
+		if (!SUCCESS(rc)) {
+			ddb_error(ctx, "'--date' option arg date format is invalid\n");
+			goto done;
+		}
+	case DDB_DTX_AGGR_EPOCH:
+		epoch = &opt->epoch;
+		break;
+	default:
+		D_ASSERT(false && "Invalid dtx_aggr options");
+	}
+
+	ddb_print(ctx, "Starting DTX entries aggregation of ");
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
+	rc = vos_dtx_aggregate(coh, epoch);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Aggregation of DTX entries failed: " DF_RC "\n", DP_RC(rc));
+		goto done;
+	}
+	ddb_print(ctx, "Aggregation of DTX is done\n");
+
+	rc = -DER_SUCCESS;
+
+done:
+	itp_free(&itp);
+	dv_cont_close(&coh);
 
 	return rc;
 }

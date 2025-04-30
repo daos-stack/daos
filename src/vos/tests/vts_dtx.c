@@ -842,7 +842,7 @@ dtx_18(void **state)
 	sleep(3);
 
 	/* Aggregate the DTXs. */
-	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl);
+	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 10; i++) {
