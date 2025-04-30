@@ -477,7 +477,7 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 			itp_free(&itp);
 			return rc;
 		}
-		ddb_printf(ctx, "%d Active Entries\n", args.entry_count);
+		ddb_printf(ctx, "%" PRIu32 " Active Entries\n", args.entry_count);
 	}
 	if (both || opt->committed) {
 		args.entry_count = 0;
@@ -487,7 +487,7 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 			itp_free(&itp);
 			return rc;
 		}
-		ddb_printf(ctx, "%d Committed Entries\n", args.entry_count);
+		ddb_printf(ctx, "%" PRIu32 " Committed Entries\n", args.entry_count);
 	}
 
 	dv_cont_close(&coh);
@@ -874,12 +874,12 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	}
 
 	offset = parse_uint32_t(opt->offset);
-	if (offset <= 0) {
+	if (offset == 0) {
 		ddb_errorf(ctx, "'%s' is not a valid offset\n", opt->offset);
 		return -DER_INVAL;
 	}
 	blk_cnt = parse_uint32_t(opt->blk_cnt);
-	if (blk_cnt <= 0) {
+	if (blk_cnt == 0) {
 		ddb_errorf(ctx, "'%s' is not a valid block size\n", opt->blk_cnt);
 		return -DER_INVAL;
 	}
@@ -888,7 +888,7 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	if (!SUCCESS(rc))
 		return rc;
 
-	ddb_printf(ctx, "Adding free region to vea {%lu, %d}\n", offset, blk_cnt);
+	ddb_printf(ctx, "Adding free region to vea {%" PRIu64 ", %" PRIu32 "}\n", offset, blk_cnt);
 	rc = dv_vea_free_region(ctx->dc_poh, offset, blk_cnt);
 	if (!SUCCESS(rc))
 		ddb_errorf(ctx, "Unable to add new free region: "DF_RC"\n", DP_RC(rc));
@@ -1122,7 +1122,7 @@ dtx_active_entry_discard_invalid(struct dv_dtx_active_entry *entry, void *cb_arg
 		ddb_errorf(ctx, "Error: " DF_RC "\n", DP_RC(rc));
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -1257,4 +1257,43 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		ddb_print(ctx, "Device replacing succeeded\n");
 
 	return rc;
+}
+
+int
+ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
+{
+	struct dv_indexed_tree_path itp = {0};
+	daos_handle_t               coh = {0};
+	int                         rc;
+
+	// FIXME DAOS-17322 TO REMOVE
+	ddb_print(ctx, "WARNING: DTX aggregation is not yet implemented\n");
+	ddb_printf(ctx, "- path: %s\n", opt->path);
+	if (opt->time_stamp != NULL && opt->time_stamp[0] != '\0')
+		ddb_printf(ctx, "- time_stamp: %s\n", opt->time_stamp);
+	// FIXME DAOS-17322 TO REMOVE
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
+	rc = init_path(ctx, opt->path, &itp);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
+
+	if (!itp_has_cont(&itp))
+		D_GOTO(done, rc = -DER_INVAL);
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+
+done:
+	itp_free(&itp);
+	dv_cont_close(&coh);
+
+	return 0;
 }

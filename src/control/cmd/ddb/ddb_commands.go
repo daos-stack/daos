@@ -381,4 +381,21 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Completer: nil,
 	})
+	// Command dtx_aggr
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_aggr",
+		Aliases:   nil,
+		Help:      "Aggregate DTX entries",
+		LongHelp:  "Aggregate DTX entries until a given timestamp or duration",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to aggregate.")
+			// TODO DAOS-17322 Define the supported format
+			a.String("time_stamp", "TODO", grumble.Default(""))
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxAggr(ctx, c.Args.String("path"), c.Args.String("time_stamp"))
+		},
+		Completer: nil,
+	})
 }

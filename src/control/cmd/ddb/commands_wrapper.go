@@ -290,3 +290,15 @@ func ddbDevReplace(ctx *DdbContext, db_path string, old_devid string, new_devid 
 	/* Run the c code command */
 	return daosError(C.ddb_run_dev_replace(&ctx.ctx, &options))
 }
+
+func ddbDtxAggr(ctx *DdbContext, path string, time_stamp string) error {
+	/* Set up the options */
+	options := C.struct_dtx_aggr_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	// TODO DAOS-17322 Uniformize time_stamp and duration
+	options.time_stamp = C.CString(time_stamp)
+	defer freeString(options.time_stamp)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dtx_aggr(&ctx.ctx, &options))
+}
