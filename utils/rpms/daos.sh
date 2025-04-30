@@ -30,7 +30,6 @@ to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost."
 URL="https://daos.io"
 
-if false; then
 # Some extra "install" steps
 # daos package
 TARGET_PATH="${sysconfdir}/daos"
@@ -279,10 +278,10 @@ EOF
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
 if [[ "${DISTRO:-el8}" =~ suse ]]; then
-cat << EOF  > "${tmp}/post_uninstall_client"
+  cat << EOF  > "${tmp}/post_uninstall_client"
 # TODO: workout what %systemd_postun %{agent_svc_name} does
 EOF
-EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
+  EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
 fi
 
 EXTERNAL_DEPENDS=("/usr/bin/fusermount3")
@@ -393,7 +392,6 @@ list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 build_package "daos-client-tests-openmpi"
-fi
 
 #shim packages
 PACKAGE_TYPE="empty"
