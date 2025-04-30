@@ -272,14 +272,14 @@ BuildArch: noarch
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
 Requires: mpifileutils-mpich
 Requires: testmpio
-Requires: mpich = 4.1~a1-3
+Requires: mpich = 4.1~a1
 Requires: ior
 Requires: hdf5-mpich-tests
 Requires: hdf5-vol-daos-mpich-tests
 Requires: MACSio-mpich
 Requires: simul-mpich
 Requires: romio-tests
-Requires: python3-mpi4py-tests >= 3.1.6-1
+Requires: python3-mpi4py-tests >= 3.1.6
 
 %description client-tests-mpich
 This is the package needed to run the DAOS client test suite mpich tools
