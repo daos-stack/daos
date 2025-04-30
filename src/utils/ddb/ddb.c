@@ -46,6 +46,7 @@
 #define COMMAND_NAME_DEV_LIST                "dev_list"
 #define COMMAND_NAME_DEV_REPLACE             "dev_replace"
 #define COMMAND_NAME_DTX_STAT                "dtx_stat"
+#define COMMAND_NAME_DTX_AGGR                "dtx_aggr"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -853,6 +854,82 @@ dtx_stat_option_parse(struct ddb_ctx *ctx, struct dtx_stat_options *cmd_args, ui
 	return 0;
 }
 
+/* Parse command line options for the 'dtx_aggr' command */
+static int
+dtx_aggr_option_parse(struct ddb_ctx *ctx, struct dtx_aggr_options *cmd_args, uint32_t argc,
+		      char **argv)
+{
+	int           opt;
+	char         *options_short = "e:d:";
+	int           index         = 0;
+	char         *endptr;
+	struct option options_long[] = {{"epoch", required_argument, NULL, 'e'},
+					{"date", required_argument, NULL, 'd'},
+					{NULL}};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+	/* Restart getopt */
+	optind           = 1;
+	opterr           = 0;
+	cmd_args->format = DDB_DTX_AGGR_NOW;
+	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+		switch (opt) {
+		case 'e':
+			if (cmd_args->format == DDB_DTX_AGGR_DATE) {
+				ddb_error(
+				    ctx, "'--epoch' and '--date' options are mutually exclusive\n");
+				return -DER_INVAL;
+			}
+			if (cmd_args->format == DDB_DTX_AGGR_EPOCH) {
+				ddb_error(ctx, "'--epoch' option can not be used multiple time\n");
+				return -DER_INVAL;
+			}
+			errno           = 0;
+			cmd_args->epoch = strtoull(optarg, &endptr, 10);
+			if (errno != 0 || endptr == optarg || *endptr != '\0') {
+				ddb_error(ctx, "'--epoch' option arg epoch format is invalid\n");
+				return -DER_INVAL;
+			}
+			cmd_args->format = DDB_DTX_AGGR_EPOCH;
+			break;
+		case 'd':
+			if (cmd_args->format == DDB_DTX_AGGR_EPOCH) {
+				ddb_error(
+				    ctx, "'--epoch' and '--date' options are mutually exclusive\n");
+				return -DER_INVAL;
+			}
+			if (cmd_args->format == DDB_DTX_AGGR_DATE) {
+				ddb_error(ctx, "'--date' option can not be used multiple time\n");
+				return -DER_INVAL;
+			}
+			cmd_args->date   = optarg;
+			cmd_args->format = DDB_DTX_AGGR_DATE;
+			break;
+		case '?':
+			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+			break;
+		default:
+			return -DER_INVAL;
+		}
+	}
+
+	index = optind;
+	if (argc - index > 0) {
+		cmd_args->path = argv[index];
+		index++;
+	} else {
+		ddb_error(ctx, "Expected argument 'path'\n");
+		return -DER_INVAL;
+	}
+
+	if (argc - index > 0) {
+		ddb_errorf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 int
 ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info)
 {
@@ -979,6 +1056,11 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return dtx_stat_option_parse(ctx, &info->dci_cmd_option.dci_dtx_stat, argc, argv);
 	}
 
+	if (same(cmd, COMMAND_NAME_DTX_AGGR)) {
+		info->dci_cmd = DDB_CMD_DTX_AGGR;
+		return dtx_aggr_option_parse(ctx, &info->dci_cmd_option.dci_dtx_aggr, argc, argv);
+	}
+
 	ddb_errorf(ctx,
 		   "'%s' is not a valid command. Available commands are:"
 		   "'help', "
@@ -1005,7 +1087,8 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		   "'rm_pool', "
 		   "'dev_list', "
 		   "'dev_replace', "
-		   "'dtx_stat'\n",
+		   "'dtx_stat', "
+		   "'dtx_aggr'\n",
 		   cmd);
 
 	return -DER_INVAL;
@@ -1183,6 +1266,10 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str)
 
 	case DDB_CMD_DTX_STAT:
 		rc = ddb_run_dtx_stat(ctx, &info.dci_cmd_option.dci_dtx_stat);
+		break;
+
+	case DDB_CMD_DTX_AGGR:
+		rc = ddb_run_dtx_aggr(ctx, &info.dci_cmd_option.dci_dtx_aggr);
 		break;
 
 	case DDB_CMD_UNKNOWN:
@@ -1397,6 +1484,18 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "    [path]\n");
 	ddb_print(ctx, "\tOptional, VOS tree path to query.\n");
 	ddb_print(ctx, "\n");
+
+	/* Command: dtx_aggr */
+	ddb_print(ctx, "dtx_aggr <path>\n");
+	ddb_print(ctx, "\tAggregate DTX entries until a given timestamp or duration.\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to aggregate.\n");
+	ddb_print(ctx, "Options:\n");
+	ddb_print(ctx, "    -e, --epoch\n");
+	ddb_print(ctx, "\tMax aggregation epoch\n");
+	ddb_print(ctx, "    -d, --date\n");
+	ddb_print(ctx, "\tMax aggregation date (format '1970-01-01 00:00:00')\n");
+	ddb_print(ctx, "\n");
 }
 
 void
@@ -1465,4 +1564,5 @@ ddb_program_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "   dev_list	     List all devices\n");
 	ddb_print(ctx, "   dev_replace	     Replace an old device with a new unused device\n");
 	ddb_print(ctx, "   dtx_stat	     Stat on DTX entries\n");
+	ddb_print(ctx, "   dtx_aggr	     Aggregate DTX entries\n");
 }

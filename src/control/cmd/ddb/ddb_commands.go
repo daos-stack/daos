@@ -8,6 +8,8 @@
 package main
 
 import (
+	"math"
+
 	"github.com/desertbit/grumble"
 )
 
@@ -393,6 +395,25 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxStat(ctx, c.Args.String("path"))
+		},
+		Completer: nil,
+	})
+	// Command dtx_aggr
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_aggr",
+		Aliases:   nil,
+		Help:      "Aggregate DTX entries",
+		LongHelp:  "Aggregate DTX entries until a given epoch or date",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to aggregate.")
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("e", "epoch", math.MaxUint64, "Max aggregation epoch")
+			f.String("d", "date", "", "Max aggregation date (format '1970-01-01 00:00:00')")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxAggr(ctx, c.Args.String("path"), c.Flags.Uint64("epoch"), c.Flags.String("date"))
 		},
 		Completer: nil,
 	})

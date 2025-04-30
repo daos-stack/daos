@@ -316,6 +316,39 @@ dtx_stat_parsing(void **state)
 	assert_null(options->path);
 }
 
+static void
+dtx_aggr_parsing(void **state)
+{
+	struct ddb_cmd_info      info    = {0};
+	struct dtx_aggr_options *options = &info.dci_cmd_option.dci_dtx_aggr;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("dtx_aggr", "path", "extra");
+	test_run_inval_cmd("dtx_aggr", "-z");
+	test_run_inval_cmd("dtx_aggr", "-e", "foo", "path");
+	test_run_inval_cmd("dtx_aggr", "-e", "666", "-e", "999", "path");
+	test_run_inval_cmd("dtx_aggr", "-d", "1970-01-01 00:00:00", "-d", "2000-01-01 00:00:00",
+			   "path");
+	test_run_inval_cmd("dtx_aggr", "-e", "42", "-d", "1970-01-01 00:00:00", "path");
+
+	/* test all arguments */
+	test_run_cmd(&info, "dtx_aggr", "path");
+	assert_non_null(options->path);
+	assert_null(options->epoch);
+	assert_null(options->date);
+
+	/* test all options and arguments */
+	test_run_cmd(&info, "dtx_aggr", "-e", "42", "path");
+	assert_non_null(options->path);
+	assert_non_null(options->epoch);
+	assert_null(options->date);
+
+	test_run_cmd(&info, "dtx_aggr", "-d", "1970-01-01 00:00:00", "path");
+	assert_non_null(options->path);
+	assert_null(options->epoch);
+	assert_non_null(options->date);
+}
+
 /*
  * -----------------------------------------------
  * Execute
@@ -341,6 +374,7 @@ ddb_cmd_options_tests_run()
 	    TEST(dtx_act_commit_options_parsing),
 	    TEST(dtx_act_abort_options_parsing),
 	    TEST(dtx_stat_parsing),
+	    TEST(dtx_aggr_parsing),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands option parsing tests", tests,
