@@ -29,6 +29,7 @@ dnf --nodocs install \
     go-race \
     graphviz \
     gzip \
+    hdf5-devel \
     hwloc-devel \
     java-1_8_0-openjdk-devel \
     libaio-devel \
@@ -59,12 +60,21 @@ dnf --nodocs install \
     pciutils \
     pciutils-devel \
     python3-devel \
+    rpm-build \
     scons \
     sg3_utils \
     sudo \
     valgrind-devel \
     which \
     yasm
+
+ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
+dnf --nodocs install \
+    "@ruby:${ruby_version}" \
+    rubygems \
+    rubygem-json
+
+gem install fpm
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then

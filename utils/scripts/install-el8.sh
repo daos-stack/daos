@@ -66,9 +66,6 @@ dnf --nodocs install \
     python3-devel \
     python3-pip \
     rpm-build \
-    @ruby:3.3 \
-    rubygems \
-    rubygem-json \
     sg3_utils \
     squashfs-tools \
     sudo \
@@ -76,6 +73,12 @@ dnf --nodocs install \
     valgrind-devel \
     which \
     yasm
+
+ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
+dnf --nodocs install \
+    "@ruby:${ruby_version}" \
+    rubygems \
+    rubygem-json
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then

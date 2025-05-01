@@ -66,14 +66,17 @@ dnf --nodocs install \
     python3-devel \
     python3-pip \
     rpm-build \
-    @ruby:3.3  \
-    rubygems \
-    rubygem-json \
     sg3_utils \
     squashfs-tools \
     sudo \
     valgrind-devel \
     which \
     yasm
+
+ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
+dnf --nodocs install \
+    "@ruby:${ruby_version}" \
+    rubygems \
+    rubygem-json
 
 gem install fpm
