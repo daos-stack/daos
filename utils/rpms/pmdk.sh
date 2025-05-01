@@ -70,17 +70,14 @@ TARGET_PATH="${includedir}"
 list_files files "${SL_PMDK_PREFIX}/include/libpmem.h"
 append_install_list "${files[@]}"
 
-man7=()
 TARGET_PATH="${mandir}/man7"
 list_files files "${SL_PMDK_PREFIX}/share/man/man7/libpmem.7.gz"
 append_install_list "${files[@]}"
 
-man5=()
 TARGET_PATH="${mandir}/man5"
 list_files files "${SL_PMDK_PREFIX}/share/man/man5/pmem_ctl.5.gz"
 append_install_list "${files[@]}"
 
-man3=()
 TARGET_PATH="${mandir}/man3"
 list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmem_*.3.gz"
 append_install_list "${files[@]}"
@@ -109,12 +106,10 @@ TARGET_PATH="${mandir}/man7"
 list_files files "${SL_PMDK_PREFIX}/share/man/man7/libpmemobj.7.gz"
 append_install_list "${files[@]}"
 
-man5=()
 TARGET_PATH="${mandir}/man5"
 list_files files "${SL_PMDK_PREFIX}/share/man/man5/poolset.5.gz"
 append_install_list "${files[@]}"
 
-man3=()
 TARGET_PATH="${mandir}/man3"
 list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmemobj_*.3.gz" \
   "${SL_PMDK_PREFIX}/share/man/man3/pobj_*.3.gz" \
