@@ -1780,3 +1780,115 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 	oid_cp(oid, obj->oid);
 	return 0;
 }
+
+int
+dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
+{
+	uint8_t *p;
+
+	if (buf == NULL || *buf_size == 0) {
+		size_t size = 0;
+
+		size += sizeof(obj->oid);
+		size += sizeof(obj->mode);
+		size += sizeof(obj->flags);
+		size += sizeof(obj->parent_oid);
+		size += DFS_MAX_NAME + 1;
+
+		if ((obj->mode & S_IFMT) == S_IFLNK) {
+			size += sizeof(uint32_t);
+			size += obj->value ? strlen(obj->value) : 0;
+		} else if ((obj->mode & S_IFMT) == S_IFDIR) {
+			size += sizeof(daos_oclass_id_t);
+			size += sizeof(daos_size_t);
+		}
+
+		size += sizeof(struct stat);
+		size += sizeof(bool);
+		*buf_size = size;
+		return 0;
+	}
+
+	p = buf;
+	memcpy(p, &obj->oid, sizeof(obj->oid));
+	p += sizeof(obj->oid);
+	memcpy(p, &obj->mode, sizeof(obj->mode));
+	p += sizeof(obj->mode);
+	memcpy(p, &obj->flags, sizeof(obj->flags));
+	p += sizeof(obj->flags);
+	memcpy(p, &obj->parent_oid, sizeof(obj->parent_oid));
+	p += sizeof(obj->parent_oid);
+	memcpy(p, obj->name, DFS_MAX_NAME + 1);
+	p += DFS_MAX_NAME + 1;
+
+	if ((obj->mode & S_IFMT) == S_IFLNK) {
+		uint32_t len = obj->value ? strlen(obj->value) : 0;
+
+		memcpy(p, &len, sizeof(len));
+		p += sizeof(len);
+		if (len > 0) {
+			memcpy(p, obj->value, len);
+			p += len;
+		}
+	} else if ((obj->mode & S_IFMT) == S_IFDIR) {
+		memcpy(p, &obj->d.oclass, sizeof(obj->d.oclass));
+		p += sizeof(obj->d.oclass);
+		memcpy(p, &obj->d.chunk_size, sizeof(obj->d.chunk_size));
+		p += sizeof(obj->d.chunk_size);
+	}
+
+	memcpy(p, &obj->dc_stbuf, sizeof(obj->dc_stbuf));
+	p += sizeof(obj->dc_stbuf);
+	memcpy(p, &obj->dc_stated, sizeof(obj->dc_stated));
+	p += sizeof(obj->dc_stated);
+	return 0;
+}
+
+int
+dfs_obj_deserialize(const char *buf, size_t buf_size, struct dfs_obj *obj)
+{
+	const uint8_t *p = (const uint8_t *)buf;
+
+	memcpy(&obj->oid, p, sizeof(obj->oid));
+	p += sizeof(obj->oid);
+	memcpy(&obj->mode, p, sizeof(obj->mode));
+	p += sizeof(obj->mode);
+	memcpy(&obj->flags, p, sizeof(obj->flags));
+	p += sizeof(obj->flags);
+	memcpy(&obj->parent_oid, p, sizeof(obj->parent_oid));
+	p += sizeof(obj->parent_oid);
+	memcpy(obj->name, p, DFS_MAX_NAME + 1);
+	p += DFS_MAX_NAME + 1;
+
+	if ((obj->mode & S_IFMT) == S_IFLNK) {
+		uint32_t len;
+
+		memcpy(&len, p, sizeof(len));
+		p += sizeof(len);
+		if (len > 0) {
+			obj->value = malloc(len + 1);
+			if (!obj->value)
+				return -1;
+			memcpy(obj->value, p, len);
+			p += len;
+			obj->value[len] = '\0';
+		} else {
+			obj->value = NULL;
+		}
+	} else if ((obj->mode & S_IFMT) == S_IFDIR) {
+		memcpy(&obj->d.oclass, p, sizeof(obj->d.oclass));
+		p += sizeof(obj->d.oclass);
+		memcpy(&obj->d.chunk_size, p, sizeof(obj->d.chunk_size));
+		p += sizeof(obj->d.chunk_size);
+		obj->value = NULL;
+	} else {
+		obj->value = NULL;
+	}
+
+	memcpy(&obj->dc_stbuf, p, sizeof(obj->dc_stbuf));
+	p += sizeof(obj->dc_stbuf);
+	memcpy(&obj->dc_stated, p, sizeof(obj->dc_stated));
+	p += sizeof(obj->dc_stated);
+
+	return 0;
+}
