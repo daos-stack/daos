@@ -483,7 +483,7 @@ int
 release_int(dfs_obj_t *obj);
 
 int
-dcache_create(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
+dcache_create(dfs_t *dfs, int type, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
 	      uint32_t gc_reclaim_max);
 int
 dcache_destroy(dfs_t *dfs);
@@ -503,5 +503,12 @@ void
 drec_del_at(dfs_dcache_t *dcache, dfs_obj_t *rec);
 int
 drec_del(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent);
+
+enum { DFS_CACHE_SHM, DFS_CACHE_DRAM };
+
+int
+dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size);
+int
+dfs_obj_deserialize(const uint8_t *buf, size_t buf_size, struct dfs_obj *obj);
 
 #endif /* __DFS_INTERNAL_H__ */
