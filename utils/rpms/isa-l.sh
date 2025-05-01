@@ -26,6 +26,7 @@ else
   isal_devname="libisa-l-devel"
 fi
 
+files=()
 TARGET_PATH="${bindir}"
 list_files files "${SL_ISAL_PREFIX}/bin/igzip"
 clean_bin "${files[@]}"
@@ -36,7 +37,7 @@ list_files files "${SL_ISAL_PREFIX}/share/man/man1/igzip.*"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-build_package "isa-l" "${bins[@]}" "${mans[@]}"
+build_package "isa-l"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so.*"

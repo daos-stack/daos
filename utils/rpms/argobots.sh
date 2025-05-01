@@ -17,6 +17,7 @@ This release is an experimental version of Argobots that contains
 features related to user-level threads, tasklets, and some schedulers."
 URL="https://argobots.org"
 
+files=()
 TARGET_PATH="${libdir}"
 list_files files "${SL_ARGOBOTS_PREFIX}/lib64/libabt.so.*"
 clean_bin "${files[@]}"

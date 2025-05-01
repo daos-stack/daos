@@ -25,6 +25,7 @@ call to be serialized. Since code generation is done using the C
 preprocessor, no external tool is required."
 URL="http://mercury-hpc.github.io"
 
+files=()
 TARGET_PATH="${bindir}"
 list_files files "${SL_MERCURY_PREFIX}/bin/*"
 clean_bin "${files[@]}"

@@ -18,6 +18,7 @@ and libraries for writing high performance, scalable, user-mode storage
 applications."
 URL="https://spdk.io"
 
+files=()
 TARGET_PATH="${bindir}"
 list_files files "${SL_SPDK_PREFIX}/bin/daos_spdk*"
 clean_bin "${files[@]}"

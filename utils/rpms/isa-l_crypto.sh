@@ -35,6 +35,7 @@ else
   isal_crypto_devname="libisa-l_crypto-devel"
 fi
 
+files=()
 TARGET_PATH="${libdir}"
 list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/libisal_crypto.so.*"
 clean_bin "${files[@]}"

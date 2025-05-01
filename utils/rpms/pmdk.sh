@@ -22,6 +22,8 @@ if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
   LIBMAJOR=1
 fi
 
+files=()
+
 # libpmem
 TARGET_PATH="${libdir}"
 list_files files "${SL_PMDK_PREFIX}/lib64/libpmem.so.*"
@@ -33,7 +35,7 @@ list_files files "${SL_PMDK_PREFIX}/share/pmdk/pmdk.magic"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-build_package "libpmem${LIBMAJOR:-}" "${libs[@]}" "${data[@]}"
+build_package "libpmem${LIBMAJOR:-}"
 
 #libpmemobj
 DEPENDS=("libpmem${LIBMAJOR:-}")
@@ -43,7 +45,7 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-build_package "libpmemobj${LIBMAJOR:-}" "${libs[@]}"
+build_package "libpmemobj${LIBMAJOR:-}"
 
 #libpmempool
 TARGET_PATH="${libdir}"
@@ -52,7 +54,7 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-build_package "libpmempool${LIBMAJOR:-}" "${libs[@]}"
+build_package "libpmempool${LIBMAJOR:-}"
 
 #libpmem-devel
 TARGET_PATH="${libdir}"
@@ -83,8 +85,7 @@ TARGET_PATH="${mandir}/man3"
 list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmem_*.3.gz"
 append_install_list "${files[@]}"
 
-build_package "libpmem-devel" \
-  "${libs[@]}" "${pkgcfgs[@]}" "${includes[@]}" "${man7[@]}" "${man5[@]}" "${man3[@]}"
+build_package "libpmem-devel"
 
 #libpmemobj-devel
 TARGET_PATH="${libdir}"
@@ -125,9 +126,7 @@ list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmemobj_*.3.gz" \
 append_install_list "${files[@]}"
 
 DEPENDS=("libpmem-devel" "libpmemobj${LIBMAJOR:-}")
-build_package "libpmemobj-devel" \
-  "${libs[@]}" "${pkgcfgs[@]}" "${includes[@]}" "${internal_includes[@]}" "${man7[@]}" \
-  "${man5[@]}" "${man3[@]}"
+build_package "libpmemobj-devel"
 
 #libpmempool-devel
 TARGET_PATH="${libdir}"

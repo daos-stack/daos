@@ -32,6 +32,7 @@ URL="https://daos.io"
 
 # Some extra "install" steps
 # daos package
+files=()
 TARGET_PATH="${sysconfdir}/daos"
 list_files files "${SL_PREFIX}/etc/memcheck*.supp"
 append_install_list "${files[@]}"

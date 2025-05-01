@@ -106,6 +106,8 @@ else
     if ! command -v dnf; then
         zypper --non-interactive --gpg-auto-import-keys install \
             dnf dnf-plugins-core
+    else
+        install_dnf
     fi
 fi
 if [ ! -d /etc/yum.repos.d/ ]; then

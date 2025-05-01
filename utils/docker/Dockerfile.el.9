@@ -115,8 +115,11 @@ LABEL DAOS=true
 WORKDIR /home/daos/daos/
 COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
 COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
+COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/config utils/config
+COPY --chown=daos_server:daos_server utils/certs utils/certs
+COPY --chown=daos_server:daos_server utils/completion utils/completion
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -134,6 +137,8 @@ RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         cp -r utils/config/examples /opt/daos;                             \
     }
 
+COPY --chown=daos_server:daos_server utils utils
+
 # Build RPMs
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
 	export DISTRO="el9" &&                                             \
@@ -145,7 +150,9 @@ RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         ./utils/rpms/isa-l_crypto.sh &&                                    \
         ./utils/rpms/pmdk.sh &&                                            \
         ./utils/rpms/spdk.sh &&                                            \
-        ./utils/rpms/daos.sh;                                              \
+        ./utils/rpms/daos.sh &&                                            \
+	mkdir -p /home/daos/rpms &&                                        \
+	cp *.rpm /home/daos/rpms;                                          \
     }
 
 # Set environment variables

@@ -59,7 +59,7 @@ if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
 else
   pmemobj_lib="libpmemobj"
 fi
-export libfabric_lib
+export pmemobj_lib
 export libfabric_dev="${libfabric_lib}-devel"
 export isal_version="2.30.0"
 export isal_crypto_version="2.24.0"
@@ -73,6 +73,9 @@ elif [[ "${DISTRO:-el8}" =~ el ]]; then
   capstone_lib="capstone-devel"
   protobufc_lib="protobuf-c-devel"
 fi
+export lmod
+export capstone_lib
+export protobufc_lib
 
 filter_file() {
   for filter in "${FILTER_LIST[@]}"; do
@@ -196,7 +199,6 @@ create_depends() {
 }
 
 build_package() {
-  local args
   name="$1"; shift
 
   depends=()
@@ -217,7 +219,7 @@ build_package() {
   "${EXTRA_OPS[@]}" \
   "${install_list[@]}"
 
-  EXTRA_OPTS=()
+  export EXTRA_OPTS=()
   install_list=()
 
   if [[ ! "${name}" =~ debuginfo ]]; then
@@ -235,6 +237,7 @@ build_debug_package() {
   fi
   new_deps=()
   for dep in "${DEPENDS[@]}"; do
+    # shellcheck disable=SC2001
     version="$(echo "${dep}" | sed 's/[^ ]*//')"
     new_deps+=("${dep// */}-debuginfo${version}")
   done

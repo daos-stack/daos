@@ -17,6 +17,7 @@ DESCRIPTION="Provides a user-space API to access high-performance fabric
 services, such as RDMA. This package contains the runtime library."
 URL="https://github.com/ofiwg/libfabric"
 
+files=()
 TARGET_PATH="${bindir}"
 list_files files "${SL_OFI_PREFIX}/bin/fi_*"
 clean_bin "${files[@]}"
@@ -47,16 +48,14 @@ list_files files "${SL_OFI_PREFIX}/include/rdma/providers/*.h"
 append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir/pkgconfig}"
-list_files files "${SL_OFI_PREFIX}/lib64/pkgconfig/${libfabric_lib}.pc"
+list_files files "${SL_OFI_PREFIX}/lib64/pkgconfig/libfabric.pc"
 replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
 append_install_list "${files[@]}"
 
-man3=()
 TARGET_PATH="${mandir}/man3"
 list_files files "${SL_OFI_PREFIX}/share/man/man3/fi*.3*"
 append_install_list "${files[@]}"
 
-man7=()
 TARGET_PATH="${mandir}/man7"
 list_files files "${SL_OFI_PREFIX}/share/man/man7/f*.7*"
 append_install_list "${files[@]}"

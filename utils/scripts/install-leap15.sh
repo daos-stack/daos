@@ -68,13 +68,13 @@ dnf --nodocs install \
     which \
     yasm
 
-ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
-dnf --nodocs install \
-    "@ruby:${ruby_version}" \
-    rubygems \
-    rubygem-json
-
+dnf install ruby-devel
+gem install json -v 2.7.6
+gem install dotenv -v 2.8.1
 gem install fpm
+if [ ! -f /usr/bin/fpm ]; then
+    ln -s "$(basename "$(ls -1 /usr/bin/fpm.ruby*)")" /usr/bin/fpm
+fi
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then

@@ -150,8 +150,11 @@ LABEL DAOS=true
 WORKDIR /home/daos/daos/
 COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
 COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
+COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/config utils/config
+COPY --chown=daos_server:daos_server utils/certs utils/certs
+COPY --chown=daos_server:daos_server utils/completion utils/completion
 
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
@@ -162,10 +165,31 @@ RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
-              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE    \
+	      FIRMWARE_MGMT=1 &&                                           \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
         cp -r utils/config/examples /opt/daos;                             \
+    }
+
+COPY --chown=daos_server:daos_server utils utils
+
+# Build RPMs
+RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
+	export DISTRO=suse.lp155 &&                                        \
+        source ./utils/sl/setup_local.sh &&                                \
+        ./utils/rpms/argobots.sh &&                                        \
+        ./utils/rpms/libfabric.sh &&                                       \
+        ./utils/rpms/mercury.sh &&                                         \
+        ./utils/rpms/isa-l.sh &&                                           \
+        ./utils/rpms/isa-l_crypto.sh &&                                    \
+        ./utils/rpms/pmdk.sh &&                                            \
+        ./utils/rpms/spdk.sh &&                                            \
+        ./utils/rpms/daos.sh &&                                            \
+	mkdir -p /home/daos/rpms &&                                        \
+	cp *.rpm /home/daos/rpms;                                          \
     }
 
 # Set environment variables
