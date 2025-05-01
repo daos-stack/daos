@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -740,7 +741,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 
 		d_getenv_bool("DFS_ENABLE_DCACHE", &d_enable_dcache);
 		if (d_enable_dcache) {
-			rc = dcache_create(dfs, DCACHE_SIZE_BITS, 0, 0, 0);
+			rc = dcache_create(dfs, DFS_CACHE_SHM, DCACHE_SIZE_BITS, 0, 0, 0);
 			if (rc) {
 				D_ERROR("Failed to create dcache: %d (%s)\n", rc, strerror(rc));
 				goto err_root;
