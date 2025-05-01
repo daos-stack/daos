@@ -1,10 +1,9 @@
 """
 (C) Copyright 2022-2023 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
-
 from general_utils import bytes_to_human
 from pool_create_all_base import PoolCreateAllTestBase
 
@@ -71,7 +70,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=PoolCreateAllVmTests,test_rank_filter
         """
         ranks = list(range(self.engines_count))
-        random.shuffle(ranks)
+        self.random.shuffle(ranks)
         ranks = ranks[(len(ranks) // 2):]
         delta_bytes = self.params.get("delta", "/run/test_rank_filter/*", 0)
         self.log.info("Test ranks filtered pool creation with full storage")

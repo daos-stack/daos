@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2317
 #
 #  Copyright 2023-2024 Intel Corporation.
 #  Copyright 2025 Hewlett Packard Enterprise Development LP
@@ -9,6 +10,7 @@
 #
 # Will only check if Jenkinsfile is modified
 #
+# shellcheck disable=SC2317
 
 set -ue
 
@@ -19,7 +21,15 @@ if [ -z "$(_git_diff_cached_files "Jenkinsfile")" ] ; then
     exit 0
 fi
 
+echo "Temporary skipping as the old Jenkins instance is not accessible"
+echo "Pre-hook will be restored after new instance of Jenkins will be fully operational"
+exit 0
+
+echo "Checking syntax"
 : "${JENKINS_HOST:=build.hpdd.intel.com}"
+echo "Temporary no access to $JENKINS_HOST. Skipping"
+exit 0
+# shellcheck disable=SC2317
 if ! ping -c 1 "$JENKINS_HOST" &> /dev/null; then
     echo "Failed to access $JENKINS_HOST. Skipping"
     exit 0

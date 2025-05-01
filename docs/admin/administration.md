@@ -1029,6 +1029,23 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
     Then restart DAOS Servers and format.
 
 
+### Storage Format Replace
+
+If storage metadata for a rank is lost, for example after losing PMem contents after NVDIMM failure,
+storage for that rank will need to be formatted and rank metadata regenerated. If other hardware on
+the storage server has not changed the old rank can be "reused" by formatting using the
+`dmg storage format --replace` option.
+
+An examples workflow would be:
+- `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
+- `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
+- After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
+- Storage server is rebooted after running `daos_server scm prepare` and command is run again.
+- Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
+- `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
+- Running `dmg storage format` now will create new "Joined" rank, instead run with `--replace` flag.
+- Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
+
 ### System Erase
 
 To erase the DAOS sorage configuration, the `dmg system erase`

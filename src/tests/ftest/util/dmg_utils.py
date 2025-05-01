@@ -1152,12 +1152,14 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
-    def system_start(self, ranks=None):
+    def system_start(self, ranks=None, ignore_admin_excluded=False):
         """Start the system.
 
         Args:
             ranks (str, optional): Comma separated rank-ranges to start e.g.
                 "0,2-5". Defaults to None.
+            ignore_admin_excluded (bool, optional): Ignore admin-excluded ranks
+                in list of ranks specified
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -1166,7 +1168,8 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "start"), ranks=ranks)
+        self._get_result(("system", "start"), ranks=ranks,
+                         ignore_admin_excluded=ignore_admin_excluded)
 
         # Populate a dictionary with host set keys for each unique state
         data = {}

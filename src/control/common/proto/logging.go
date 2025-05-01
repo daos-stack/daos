@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -132,6 +133,15 @@ func Debug(msg proto.Message) string {
 		fmt.Fprintf(&bld, "dead_ranks:%s ", m.DeadRanks)
 		fmt.Fprintf(&bld, "rebuild:%+v ", m.Rebuild)
 		fmt.Fprintf(&bld, "tier_stats:%+v ", m.TierStats)
+	case *mgmtpb.PoolDrainReq:
+		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
+		fmt.Fprintf(&bld, "drain rank:%d", m.Rank)
+	case *mgmtpb.PoolReintReq:
+		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
+		fmt.Fprintf(&bld, "reintegrate rank:%d", m.Rank)
+	case *mgmtpb.PoolExcludeReq:
+		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
+		fmt.Fprintf(&bld, "exclude rank:%d", m.Rank)
 	case *mgmtpb.PoolEvictReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
 		if len(m.Handles) > 0 {

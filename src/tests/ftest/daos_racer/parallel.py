@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 """
 (C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,7 +53,8 @@ class DaosRacerParallelTest(TestWithServers):
             job_manager.run()
 
         except CommandFailure as error:
-            self.log.error("DAOS Racer Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            msg = f"daos_racer failed: {error}"
+            self.log.error(msg)
+            self.fail(msg)
 
         self.log.info("Test passed!")

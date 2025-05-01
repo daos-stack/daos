@@ -181,8 +181,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
-	int32_t			sch_ref;
-	uint32_t		sch_closed:1;
+	int32_t                  sch_ref;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);

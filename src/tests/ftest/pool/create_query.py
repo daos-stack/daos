@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,8 +39,13 @@ class PoolCreateQueryTests(TestWithServers):
         # Create pool
         pool = add_pool(self)
         epsilon_bytes = 1 << 20  # 1 MiB
+        epsilon_scm_bytes = (
+            ((1 << 24) * 8)  # 16 MiB * 8 tgts
+            if self.server_managers[0].manager.job.using_control_metadata
+            else (1 << 20)  # 1 MiB
+        )
         self.assertLessEqual(
-            abs(pool.scm_per_rank - pool.scm_size.value), epsilon_bytes,
+            abs(pool.scm_per_rank - pool.scm_size.value), epsilon_scm_bytes,
             "SCM size of the pool created too different from the given size")
         self.assertGreaterEqual(
             pool.scm_per_rank, pool.scm_size.value,

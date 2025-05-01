@@ -191,6 +191,25 @@ func FaultBadFaultDomainLabels(faultPath, addr string, reqLabels, systemLabels [
 	)
 }
 
+func FaultJoinReplaceEnabledPoolRank(rank ranklist.Rank, poolIDs ...string) *fault.Fault {
+	return serverFault(
+		code.ServerJoinReplaceEnabledPoolRank,
+		fmt.Sprintf("rank %d is enabled on %s %s and cannot be replaced until excluded on all pools",
+			rank, english.PluralWord(len(poolIDs), "pool", "pools"), strings.Join(poolIDs, ",")),
+		"run dmg system exclude --rank=<rank> to manually exclude rank from all system pools then attempt dmg storage format --replace again",
+	)
+}
+
+// FaultRankAdminExcluded indicates that the given rank list is administratively excluded.
+func FaultRankAdminExcluded(ranks ranklist.RankList) *fault.Fault {
+	return serverFault(
+		code.ServerRankAdminExcluded,
+		fmt.Sprintf("%s [%s] %s administratively excluded and cannot be operated on by this command", english.PluralWord(len(ranks), "rank", "ranks"), ranks.String(),
+			english.PluralWord(len(ranks), "is", "are")),
+		"re-run the command without requesting the administratively excluded rank(s)",
+	)
+}
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +18,8 @@ from util.run_utils import RunException, find_command, run_local, run_remote
 
 # One of the dfuse tests intermittently creates core files which is known so make a special case
 # for that test.
-CORE_FILES_IGNORE = {'./dfuse/daos_build.py': ('./conftest')}
+CORE_FILES_IGNORE = {'./dfuse/daos_build.py': ('./conftest'),
+                     './dfuse/daos_build_vm.py': ('./conftest')}
 
 
 class CoreFileException(Exception):

@@ -15,6 +15,7 @@ daos_base_deps:
     - iproute
     - jq
     - lbzip2
+    - libasan
     - numactl
     - numactl-libs
     - numatop

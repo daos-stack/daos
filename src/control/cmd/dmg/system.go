@@ -112,6 +112,11 @@ type baseRankListCmd struct {
 	rankListCmd
 }
 
+type liveRankListCmd struct {
+	baseRankListCmd
+	IgnoreAdminExcluded bool `long:"ignore-admin-excluded" description:"Ignore requested ranks in AdminExcluded state instead of returning an error"`
+}
+
 // systemQueryCmd is the struct representing the command to query system status.
 type systemQueryCmd struct {
 	baseRankListCmd
@@ -176,7 +181,7 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
-	baseRankListCmd
+	liveRankListCmd
 	Force bool `long:"force" description:"Force stop DAOS system members"`
 	Full  bool `long:"full" hidden:"true" description:"Attempt a graceful shutdown of DAOS system. Experimental and not for use in production environments"`
 }
@@ -201,7 +206,11 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
-	req := &control.SystemStopReq{Force: cmd.Force, Full: cmd.Full}
+	req := &control.SystemStopReq{
+		Force:               cmd.Force,
+		Full:                cmd.Full,
+		IgnoreAdminExcluded: cmd.IgnoreAdminExcluded,
+	}
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
@@ -228,7 +237,7 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 
 // systemStartCmd is the struct representing the command to start system.
 type systemStartCmd struct {
-	baseRankListCmd
+	liveRankListCmd
 }
 
 // Execute is run when systemStartCmd activates.
@@ -241,7 +250,9 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 
-	req := new(control.SystemStartReq)
+	req := &control.SystemStartReq{
+		IgnoreAdminExcluded: cmd.IgnoreAdminExcluded,
+	}
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 

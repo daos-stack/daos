@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +10,7 @@ package bdev
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -156,4 +158,24 @@ func writeJsonConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) er
 	}
 
 	return nil
+}
+
+func strictJsonUnmarshal(r io.Reader, v any) error {
+	decoder := json.NewDecoder(r)
+	decoder.DisallowUnknownFields()
+
+	return decoder.Decode(v)
+}
+
+func strictJsonUnmarshalBuf(data []byte, v any) error {
+	return strictJsonUnmarshal(bytes.NewReader(data), v)
+}
+
+func readSpdkConfig(r io.Reader) (*SpdkConfig, error) {
+	cfg := &SpdkConfig{}
+	if err := strictJsonUnmarshal(r, cfg); err != nil {
+		return nil, storage.FaultInvalidSPDKConfig(err)
+	}
+
+	return cfg, nil
 }

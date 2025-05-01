@@ -7,10 +7,11 @@ export PS4='+ ${HOSTNAME%%.*}:${BASH_SOURCE:+$BASH_SOURCE:}$LINENO:${FUNCNAME:+$
 rm -f ci_key*
 ssh-keygen -m PEM -N "" -f ci_key
 cat << "EOF" > ci_key_ssh_config
-host wolf-*
+host *
     CheckHostIp no
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
+    TCPKeepAlive yes
     LogLevel error
 EOF
 
@@ -62,6 +63,8 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            REPO_PATH=\"${REPO_PATH:-}\"
            ARTIFACTS_URL=\"${ARTIFACTS_URL:-}\"
            COVFN_DISABLED=\"${COVFN_DISABLED:-true}\"
+           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:-wolf-2:/export/scratch}\"
+           CI_SCONS_ARGS=\"${CI_SCONS_ARGS:-}\"
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
            $(cat ci/provisioning/post_provision_config_common_functions.sh)

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,9 +9,8 @@ import os
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
-from env_modules import load_mpi
-from exception_utils import MPILoadError
-from general_utils import run_command
+from host_utils import get_local_host
+from job_manager_utils import Mpirun
 
 
 class PosixSimul(TestWithServers):
@@ -69,25 +69,27 @@ class PosixSimul(TestWithServers):
     :avocado: recursive
     """
 
-    def run_simul(self, include=None, exclude=None, raise_exception=True):
+    def run_simul(self, exclude=None, faillist=None):
         """Run simul.
 
         If an include value is set, the exclude value is ignored and vice versa.
 
         Args:
-            include (str, optional): comma-separated list of tests to include. Defaults to None.
             exclude (str, optional): comma-separated list of tests to exclude. Defaults to None.
-            raise_exception (bool, optional): whether to raise an exception. Defaults to True.
-
-        Raises:
-            MPILoadError: if there is an error loading the MPI
-
-        Returns:
-            CmdResult: result from the simul command
+            faillist (str array, optional): The list of tests expected to fail. Defaults to None.
 
         """
-        mpi_type = self.params.get("mpi_type", "/run/*", "")
-        simul_path = self.params.get("simul_path", "/run/*", "")
+        if faillist is None:
+            # run tests expect to pass
+            raise_exception = True
+            if exclude is None:
+                self.fail("Both exclude and faillist are None")
+        else:
+            # run tests expect to fail
+            raise_exception = False
+        mpi_type = self.params.get("mpi_type", "/run/mpi/*", "")
+        simul_path = self.params.get("simul_path", "/run/mpi/*", "")
+        ppn = self.params.get("ppn", "/run/client_processes/*", "")
 
         # Create a pool
         self.log_step("Create a pool")
@@ -103,22 +105,26 @@ class PosixSimul(TestWithServers):
         start_dfuse(self, dfuse, pool, container)
         dfuse.check_running()
 
-        # The use of MPI here is to run in parallel all simul tests on a single host.
-        if not load_mpi(mpi_type):
-            raise MPILoadError(mpi_type)
-
-        # Run simul
         simul_cmd = os.path.join(simul_path, "simul")
-        if include and not exclude:
-            cmd = "{0} -vv -d {1} -i {2}".format(simul_cmd, dfuse.mount_dir.value, include)
-        elif exclude and not include:
-            cmd = "{0} -vv -d {1} -e {2}".format(simul_cmd, dfuse.mount_dir.value, exclude)
+        self.log_step(f"Running simul on {mpi_type}")
+        if faillist is None:
+            mpirun = Mpirun(f"{simul_cmd} -vv -d {dfuse.mount_dir.value} -e {exclude}",
+                            mpi_type=mpi_type)
+            mpirun.assign_hosts(get_local_host(), dfuse.mount_dir.value)
+            mpirun.assign_processes(ppn=ppn)
+            mpirun.run(raise_exception=raise_exception)
         else:
-            cmd = None  # appease pylint
-            self.fail("##Both include and exclude tests are selected both or empty.")
-
-        self.log_step("Running simul on %s", mpi_type)
-        return run_command(cmd, output_check="combined", raise_exception=raise_exception)
+            for test_to_fail in faillist:
+                mpirun = Mpirun(f"{simul_cmd} -vv -d {dfuse.mount_dir.value} -i {test_to_fail}",
+                                mpi_type=mpi_type)
+                mpirun.assign_hosts(get_local_host(), dfuse.mount_dir.value)
+                mpirun.assign_processes(ppn=ppn)
+                out = mpirun.run(raise_exception=raise_exception)
+                # testing cases that are expected to fail
+                if "FAILED in simul" in out.stdout_text:
+                    self.log.info("Test %s failed as expected", test_to_fail)
+                else:
+                    self.fail(f"Test {test_to_fail} was expected to fail, but passed")
 
     def test_posix_simul(self):
         """Test simul.
@@ -128,7 +134,14 @@ class PosixSimul(TestWithServers):
         :avocado: tags=posix,simul,dfuse
         :avocado: tags=PosixSimul,test_posix_simul
         """
-        self.run_simul(exclude="9,18,30,39,40")
+        # test  9, readdir, shared mode, dfuse returns NULL for readdir of an empty dir
+        # test 18, link, shared mode, daos does not support hard link
+        # test 20, fcntl locking, shared mode, daos does not support flock
+        # test 30, readdir, individual mode, dfuse returns NULL for readdir of an empty dir
+        # test 39, link, individual mode, daos does not support hard link
+        # test 40, link, individual mode, daos does not support hard link
+        # test 41, fcntl locking, individual mode, daos does not support flock
+        self.run_simul(exclude="9,18,20,30,39,40,41")
         self.log.info('Test passed')
 
     def test_posix_expected_failures(self):
@@ -139,16 +152,6 @@ class PosixSimul(TestWithServers):
         :avocado: tags=posix,simul,dfuse
         :avocado: tags=PosixSimul,test_posix_expected_failures
         """
-        expected_failures = {"9": None, "18": None, "30": None, "39": None, "40": None}
-        for test in sorted(expected_failures):
-            expected_failures[test] = self.run_simul(include=test, raise_exception=False)
-        failed = []
-        for test in sorted(expected_failures):
-            if "FAILED in simul" in expected_failures[test].stdout_text:
-                self.log.info("Test %s failed as expected", test)
-            else:
-                self.log.info("Test %s was expected to fail, but passed", test)
-                failed.append(test)
-        if failed:
-            self.fail(f"Simul tests {', '.join(failed)} expected to failed, but passed")
+        faillist = {"9", "18", "20", "30", "39", "40", "41"}
+        self.run_simul(faillist=faillist)
         self.log.info('Test passed')

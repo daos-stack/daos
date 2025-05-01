@@ -1,5 +1,6 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +8,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 import getpass
 import os
-import random
 import re
 import stat
 import threading
@@ -28,8 +28,8 @@ from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
 from general_utils import (DaosTestError, check_ping, check_ssh, get_journalctl, get_log_file,
-                           get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
-                           run_pcmd, wait_for_result)
+                           get_random_bytes, get_random_string, list_to_str, run_command,
+                           wait_for_result)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
@@ -204,10 +204,9 @@ def run_event_check(self, since, until):
     detected = 0
     events = self.params.get("events", "/run/*")
     # check events on all server nodes
-    hosts = list(set(self.hostlist_servers))
     if events:
         for journalctl_type in ["kernel", "daos_server"]:
-            for output in get_journalctl(hosts, since, until, journalctl_type):
+            for output in get_journalctl(self.hostlist_servers, since, until, journalctl_type):
                 for event in events:
                     lines = output["data"].splitlines()
                     for line in lines:
@@ -219,33 +218,6 @@ def run_event_check(self, since, until):
                         "Found %s instances of %s in system log from %s through %s",
                         detected, event, since, until)
     return events_found
-
-
-def get_journalctl_logs(self, hosts, since, until, journalctl_type):
-    """Run the journalctl on daos servers.
-
-    Args:
-        self (obj): soak obj
-        since (str): start time
-        until (str): end time
-        journalctl_type (str): the -t param for journalctl
-        log (bool):  If true; write the events to a logfile
-
-    Returns:
-        list: a list of dictionaries containing the following key/value pairs:
-            "hosts": NodeSet containing the hosts with this data
-            "data":  data requested for the group of hosts
-
-    """
-    results = get_journalctl(hosts, since, until, journalctl_type)
-    name = f"journalctl_{journalctl_type}.log"
-    destination = self.outputsoak_dir
-    for result in results:
-        for host in result["hosts"]:
-            log_name = name + "-" + str(host)
-            self.log.info("Logging output to %s", log_name)
-            write_logfile(result["data"], log_name, destination)
-    return results
 
 
 def get_daos_server_logs(self):
@@ -301,11 +273,9 @@ def run_monitor_check(self):
         self (obj): soak obj
 
     """
-    monitor_cmds = self.params.get("monitor", "/run/*")
-    hosts = self.hostlist_servers
-    if monitor_cmds:
-        for cmd in monitor_cmds:
-            pcmd(hosts, cmd, timeout=30)
+    monitor_cmds = self.params.get("monitor", "/run/*") or []
+    for cmd in monitor_cmds:
+        run_remote(self.log, self.hostlist_servers, cmd, timeout=30)
 
 
 def run_metrics_check(self, logging=True, prefix=None):
@@ -326,17 +296,13 @@ def run_metrics_check(self, logging=True, prefix=None):
                 name = prefix + f"_metrics_{engine}.csv"
             destination = self.outputsoak_dir
             daos_metrics = f"{self.sudo_cmd} daos_metrics -S {engine} --csv"
-            self.log.info("Running %s", daos_metrics)
-            results = run_pcmd(hosts=self.hostlist_servers,
-                               command=daos_metrics,
-                               verbose=(not logging),
-                               timeout=60)
+            result = run_remote(
+                self.log, self.hostlist_servers, daos_metrics, verbose=(not logging), timeout=60)
             if logging:
-                for result in results:
-                    hosts = result["hosts"]
-                    log_name = name + "-" + str(hosts)
+                for data in result.output:
+                    log_name = name + "-" + str(data.hosts)
                     self.log.info("Logging %s output to %s", daos_metrics, log_name)
-                    write_logfile(result["stdout"], log_name, destination)
+                    write_logfile(data.stdout, log_name, destination)
 
 
 def get_harassers(harasser):
@@ -582,7 +548,7 @@ def launch_vmd_identify_check(self, name, results, args):
     uuid_list = [device['uuid'] for device in device_info]
     # limit the number of leds to blink to 1024
     if len(uuid_list) > 1024:
-        uuids = random.sample(uuid_list, 1024)
+        uuids = self.random.sample(uuid_list, 1024)
     else:
         uuids = uuid_list
     self.log.info("VMD device UUIDs: %s", uuids)
@@ -832,12 +798,12 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
         exclude_servers = (len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)  # nosec
+        rank = self.random.randint(0, exclude_servers)
 
         if targets >= 8:
             tgt_idx = None
         else:
-            target_list = random.sample(range(0, 8), targets)
+            target_list = self.random.sample(range(0, 8), targets)
             tgt_idx = ','.join(str(tgt) for tgt in target_list)
 
         # init the status dictionary
@@ -905,7 +871,7 @@ def launch_server_stop_start(self, pools, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)  # nosec
+        rank = self.random.randint(0, exclude_servers)
         # init the status dictionary
         params = {"name": name,
                   "status": status,

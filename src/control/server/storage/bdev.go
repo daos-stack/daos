@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -539,6 +540,7 @@ type (
 		Scan(BdevScanRequest) (*BdevScanResponse, error)
 		Format(BdevFormatRequest) (*BdevFormatResponse, error)
 		WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfigResponse, error)
+		ReadConfig(BdevReadConfigRequest) (*BdevReadConfigResponse, error)
 		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
 		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
 	}
@@ -616,6 +618,15 @@ type (
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
 	BdevWriteConfigResponse struct{}
+
+	// BdevReadConfigRequest defines the parameters for a ReadConfig operation.
+	BdevReadConfigRequest struct {
+		pbin.ForwardableRequest
+		ConfigPath string
+	}
+
+	// BdevReadConfigResponse contains the result of a ReadConfig operation.
+	BdevReadConfigResponse struct{}
 
 	// BdevDeviceFormatRequest designs the parameters for a device-specific format.
 	BdevDeviceFormatRequest struct {
@@ -819,6 +830,17 @@ func (f *BdevAdminForwarder) WriteConfig(req BdevWriteConfigRequest) (*BdevWrite
 
 	res := new(BdevWriteConfigResponse)
 	if err := f.SendReq("BdevWriteConfig", req, res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (f *BdevAdminForwarder) ReadConfig(req BdevReadConfigRequest) (*BdevReadConfigResponse, error) {
+	req.Forwarded = true
+
+	res := new(BdevReadConfigResponse)
+	if err := f.SendReq("BdevReadConfig", req, res); err != nil {
 		return nil, err
 	}
 

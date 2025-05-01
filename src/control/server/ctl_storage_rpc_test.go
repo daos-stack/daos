@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1676,6 +1677,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		expResp          *ctlpb.StorageFormatResp
 		expErr           error
 		reformat         bool // indicates setting of reformat parameter
+		replace          bool // indicates setting of replace parameter
 	}{
 		"nil request": {
 			nilReq: true,
@@ -1836,12 +1838,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"nvme and dcpm": {
+		"nvme and dcpm; replace set": {
 			sMounts: []string{"/mnt/daos"},
 			sClass:  storage.ClassDcpm,
 			sDevs:   []string{"dev/pmem0"},
 			bClass:  storage.ClassNvme,
 			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
+			replace: true,
 			bmbcs: []*bdev.MockBackendConfig{
 				{
 					ScanRes: &storage.BdevScanResponse{
@@ -2063,6 +2066,44 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
+		"dcpm already mounted no reformat; replace fails": {
+			scmMounted: true,
+			sMounts:    []string{"/mnt/daos"},
+			sClass:     storage.ClassDcpm,
+			sDevs:      []string{"/dev/pmem1"},
+			bClass:     storage.ClassNvme,
+			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
+			replace:    true,
+			bmbcs: []*bdev.MockBackendConfig{
+				{
+					ScanRes: &storage.BdevScanResponse{
+						Controllers: storage.NvmeControllers{mockNvmeController0},
+					},
+				},
+			},
+			expErr: errors.New("only valid if at least one engine requires format"),
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: storage.NilBdevAddress,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info: fmt.Sprintf(msgNvmeFormatSkipNotDone,
+								0),
+						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
 		"dcpm already mounted and reformat set": {
 			scmMounted: true,
 			reformat:   true,
@@ -2128,7 +2169,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"nvme and dcpm success multi-io": {
+		"nvme and dcpm multi-io; replace succeeds": {
 			sMounts: []string{"/mnt/daos0", "/mnt/daos1"},
 			sClass:  storage.ClassDcpm,
 			sDevs:   []string{"/dev/pmem0", "/dev/pmem1"},
@@ -2137,6 +2178,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				{mockNvmeController0.PciAddr},
 				{mockNvmeController1.PciAddr},
 			},
+			replace: true,
 			// One for each engine.
 			bmbcs: []*bdev.MockBackendConfig{
 				{
@@ -2413,6 +2455,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			if !tc.nilReq {
 				req = &ctlpb.StorageFormatReq{
 					Reformat: tc.reformat,
+					Replace:  tc.replace,
 				}
 			}
 			if tc.noSrvCfg {

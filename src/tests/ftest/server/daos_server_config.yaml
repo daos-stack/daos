@@ -8,10 +8,7 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
 # The 'config_val' list is composed of the following values:
 # - name of the config attribute, used to look for the attribute object
 # - test value that will be inserted into the server config for the attribute

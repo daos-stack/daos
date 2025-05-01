@@ -5,6 +5,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   Run_in_docker:
     if: github.repository == 'daos-stack/daos'
@@ -13,7 +17,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
       - name: Build deps in Docker
         run: docker build . --file utils/docker/Dockerfile.el.9
             --build-arg DAOS_BUILD=no

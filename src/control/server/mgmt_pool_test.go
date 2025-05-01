@@ -44,7 +44,6 @@ var (
 		Replicas: []ranklist.Rank{0},
 		Storage: &system.PoolServiceStorage{
 			CreationRankStr:    "0",
-			CurrentRankStr:     "0",
 			PerRankTierStorage: mockTierBytes,
 			MemRatio:           mockMemRatio,
 		},

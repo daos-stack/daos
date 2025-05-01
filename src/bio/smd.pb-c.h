@@ -222,31 +222,28 @@ struct  _Ctl__BioHealthResp
   /*
    * port identifier
    */
-  uint32_t           link_port_id;
+  uint32_t link_port_id;
   /*
    * maximum speed in transactions per second
    */
-  float              link_max_speed;
+  float link_max_speed;
   /*
    * maximum width (number of lanes)
    */
-  uint32_t           link_max_width;
+  uint32_t link_max_width;
   /*
    * negotiated speed in transactions per second
    */
-  float              link_neg_speed;
+  float link_neg_speed;
   /*
    * negotiated width (number of lanes)
    */
-  uint32_t           link_neg_width;
+  uint32_t link_neg_width;
 };
-#define CTL__BIO_HEALTH_RESP__INIT                                                                 \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&ctl__bio_health_resp__descriptor)                         \
-		, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,                      \
-		    (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  \
-		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0                                       \
-	}
+#define CTL__BIO_HEALTH_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+
 
 /*
  * Namespace represents a namespace created on an NvmeController.
@@ -412,10 +409,10 @@ struct  _Ctl__SmdDevReq
 {
   ProtobufCMessage base;
 };
-#define CTL__SMD_DEV_REQ__INIT                                                                     \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&ctl__smd_dev_req__descriptor)                             \
-	}
+#define CTL__SMD_DEV_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_dev_req__descriptor) \
+     }
+
 
 struct  _Ctl__SmdDevResp
 {
@@ -601,13 +598,12 @@ struct  _Ctl__DevReplaceReq
   /*
    * UUID of new (hot-plugged) blobstore/device
    */
-  char            *new_dev_uuid;
+  char *new_dev_uuid;
 };
-#define CTL__DEV_REPLACE_REQ__INIT                                                                 \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&ctl__dev_replace_req__descriptor)                         \
-		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string                 \
-	}
+#define CTL__DEV_REPLACE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_replace_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
 
 struct  _Ctl__SetFaultyReq
 {

@@ -164,8 +164,7 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
-	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
-	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
+	struct dtx_cos_key       dcks[DTX_REFRESH_MAX] = {0};
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	uint32_t		 committed = 0;
 	uint32_t		*flags = NULL;
@@ -299,7 +298,8 @@ dtx_handler(crt_rpc_t *rpc)
 		for (i = 0, rc1 = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &dcks[i], true);
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &din->di_version, &dcks[i],
+					     true);
 			if (*ptr == -DER_NONEXIST && !(flags[i] & DRF_INITIAL_LEADER)) {
 				struct dtx_stat		stat = { 0 };
 

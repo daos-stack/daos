@@ -56,6 +56,7 @@ struct dtx_req_args {
 	uuid_t				 dra_po_uuid;
 	/* container UUID */
 	uuid_t				 dra_co_uuid;
+	uint32_t                         dra_version;
 	/* The count of sub requests. */
 	int				 dra_length;
 	/* The collective RPC result. */
@@ -261,8 +262,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		din = crt_req_get(req);
 		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
 		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
-		din->di_epoch = epoch;
-		din->di_dtx_array.ca_count = drr->drr_count;
+		din->di_epoch               = epoch;
+		din->di_version             = dra->dra_version;
+		din->di_dtx_array.ca_count  = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 		if (drr->drr_flags != NULL) {
 			din->di_flags.ca_count = drr->drr_count;
@@ -666,7 +668,8 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 	dra->dra_cmt_list = cmt_list;
 	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
-	dra->dra_opc = opc;
+	dra->dra_version  = pool->sp_map_version;
+	dra->dra_opc      = opc;
 	uuid_copy(dra->dra_po_uuid, pool->sp_uuid);
 	uuid_copy(dra->dra_co_uuid, cont->sc_uuid);
 

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +10,6 @@ package bdev
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -103,13 +103,39 @@ func TestBackend_createAioFile(t *testing.T) {
 
 func TestBackend_writeJSONFile(t *testing.T) {
 	tierID := 84
-	host, _ := os.Hostname()
+	hostName := "testHost"
+
+	genSpdkCfg := func(in *SpdkConfig, mut func(in *SpdkConfig) *SpdkConfig) *SpdkConfig {
+		if mut != nil {
+			return mut(in)
+		}
+		return in
+	}
+	defaultTestCfg := func() *SpdkConfig {
+		return genSpdkCfg(defaultSpdkConfig(), func(in *SpdkConfig) *SpdkConfig {
+			in.Subsystems[0].Configs = append(in.Subsystems[0].Configs,
+				&SpdkSubsystemConfig{
+					Method: "bdev_nvme_attach_controller",
+					Params: &NvmeAttachControllerParams{
+						TransportType:    "PCIe",
+						DeviceName:       "Nvme_testHost_0_84_0",
+						TransportAddress: "0000:01:00.0",
+					},
+				},
+				&SpdkSubsystemConfig{
+					Method: "bdev_nvme_set_hotplug",
+					Params: &NvmeSetHotplugParams{},
+				},
+			)
+			return in
+		})
+	}
 
 	tests := map[string]struct {
 		confIn    *engine.Config
 		enableVmd bool
+		expCfg    *SpdkConfig
 		expErr    error
-		expOut    string
 	}{
 		"nvme; single ssds; hotplug enabled": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -119,60 +145,35 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
 				},
 			}).WithStorageEnableHotplug(true),
-			expOut: `
-{
-  "daos_data": {
-    "config": [
-      {
-        "params": {
-          "begin": 0,
-          "end": 7
-        },
-        "method": "hotplug_busid_range"
-      }
-    ]
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_0",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": true,
-            "period_us": 5000000
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: genSpdkCfg(defaultSpdkConfig(), func(in *SpdkConfig) *SpdkConfig {
+				in.DaosData.Configs = []*DaosConfig{
+					{
+						Method: "hotplug_busid_range",
+						Params: &HotplugBusidRangeParams{
+							Begin: 0,
+							End:   7,
+						},
+					},
+				}
+				in.Subsystems[0].Configs = append(in.Subsystems[0].Configs,
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_0_84_0",
+							TransportAddress: "0000:01:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_set_hotplug",
+						Params: &NvmeSetHotplugParams{
+							Enable:     true,
+							PeriodUsec: 5000000,
+						},
+					},
+				)
+				return in
+			}),
 		},
 		"nvme; multiple ssds": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -183,60 +184,31 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					DeviceRoles: storage.BdevRolesFromBits(storage.BdevRoleAll),
 				},
 			}),
-			expOut: `
-{
-  "daos_data": {
-    "config": []
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_7",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84_7",
-            "traddr": "0000:02:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: genSpdkCfg(defaultSpdkConfig(), func(in *SpdkConfig) *SpdkConfig {
+				in.Subsystems[0].Configs = append(in.Subsystems[0].Configs,
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_0_84_7",
+							TransportAddress: "0000:01:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_1_84_7",
+							TransportAddress: "0000:02:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_set_hotplug",
+						Params: &NvmeSetHotplugParams{},
+					},
+				)
+				return in
+			}),
 		},
 		"nvme; multiple ssds; vmd enabled; bus-id range": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -248,69 +220,40 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				},
 			}),
 			enableVmd: true,
-			expOut: `
-{
-  "daos_data": {
-    "config": []
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_0",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84_0",
-            "traddr": "0000:02:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    },
-    {
-      "subsystem": "vmd",
-      "config": [
-        {
-          "params": {},
-          "method": "enable_vmd"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: genSpdkCfg(defaultSpdkConfig(), func(in *SpdkConfig) *SpdkConfig {
+				in.Subsystems[0].Configs = append(in.Subsystems[0].Configs,
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_0_84_0",
+							TransportAddress: "0000:01:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_1_84_0",
+							TransportAddress: "0000:02:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_set_hotplug",
+						Params: &NvmeSetHotplugParams{},
+					},
+				)
+				in.Subsystems = append(in.Subsystems, &SpdkSubsystem{
+					Name: "vmd",
+					Configs: []*SpdkSubsystemConfig{
+						{
+							Method: "enable_vmd",
+							Params: &VmdEnableParams{},
+						},
+					},
+				})
+				return in
+			}),
 		},
 		"nvme; multiple ssds; hotplug enabled; bus-id range": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -321,68 +264,43 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
 				},
 			}).WithStorageEnableHotplug(true),
-			expOut: `
-{
-  "daos_data": {
-    "config": [
-      {
-        "params": {
-          "begin": 128,
-          "end": 143
-        },
-        "method": "hotplug_busid_range"
-      }
-    ]
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_0",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84_0",
-            "traddr": "0000:02:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": true,
-            "period_us": 5000000
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: genSpdkCfg(defaultSpdkConfig(), func(in *SpdkConfig) *SpdkConfig {
+				in.DaosData.Configs = []*DaosConfig{
+					{
+						Method: "hotplug_busid_range",
+						Params: &HotplugBusidRangeParams{
+							Begin: 128,
+							End:   143,
+						},
+					},
+				}
+				in.Subsystems[0].Configs = append(in.Subsystems[0].Configs,
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_0_84_0",
+							TransportAddress: "0000:01:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_1_84_0",
+							TransportAddress: "0000:02:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_set_hotplug",
+						Params: &NvmeSetHotplugParams{
+							Enable:     true,
+							PeriodUsec: 5000000,
+						},
+					},
+				)
+				return in
+			}),
 		},
 		"nvme; multiple ssds; vmd and hotplug enabled": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -393,77 +311,52 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				},
 			}).WithStorageEnableHotplug(true),
 			enableVmd: true,
-			expOut: `
-{
-  "daos_data": {
-    "config": [
-      {
-        "params": {
-          "begin": 0,
-          "end": 255
-        },
-        "method": "hotplug_busid_range"
-      }
-    ]
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_0",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84_0",
-            "traddr": "0000:02:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": true,
-            "period_us": 5000000
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    },
-    {
-      "subsystem": "vmd",
-      "config": [
-        {
-          "params": {},
-          "method": "enable_vmd"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: genSpdkCfg(defaultSpdkConfig(), func(in *SpdkConfig) *SpdkConfig {
+				in.DaosData.Configs = []*DaosConfig{
+					{
+						Method: "hotplug_busid_range",
+						Params: &HotplugBusidRangeParams{
+							Begin: 0,
+							End:   255,
+						},
+					},
+				}
+				in.Subsystems[0].Configs = append(in.Subsystems[0].Configs,
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_0_84_0",
+							TransportAddress: "0000:01:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_attach_controller",
+						Params: &NvmeAttachControllerParams{
+							TransportType:    "PCIe",
+							DeviceName:       "Nvme_testHost_1_84_0",
+							TransportAddress: "0000:02:00.0",
+						},
+					},
+					&SpdkSubsystemConfig{
+						Method: "bdev_nvme_set_hotplug",
+						Params: &NvmeSetHotplugParams{
+							Enable:     true,
+							PeriodUsec: 5000000,
+						},
+					},
+				)
+				in.Subsystems = append(in.Subsystems, &SpdkSubsystem{
+					Name: "vmd",
+					Configs: []*SpdkSubsystemConfig{
+						{
+							Method: "enable_vmd",
+							Params: &VmdEnableParams{},
+						},
+					},
+				})
+				return in
+			}),
 		},
 		"nvme; single controller; acceleration set to none; move and crc opts specified": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -475,52 +368,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				// Verify default "none" acceleration setting is ignored.
 			}).WithStorageAccelProps(storage.AccelEngineNone,
 				storage.AccelOptCRCFlag|storage.AccelOptMoveFlag),
-			expOut: `
-{
-  "daos_data": {
-    "config": []
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_0",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: defaultTestCfg(),
 		},
 		"nvme; single controller; acceleration set to spdk; no opts specified": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -531,52 +379,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				},
 				// Verify default "spdk" acceleration setting with no enable options is ignored.
 			}).WithStorageAccelProps(storage.AccelEngineSPDK, 0),
-			expOut: `
-{
-  "daos_data": {
-    "config": []
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_0",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: defaultTestCfg(),
 		},
 		"nvme; single controller; auto faulty disabled but criteria set": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -587,52 +390,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				},
 				// Verify "false" auto faulty setting is ignored.
 			}).WithStorageAutoFaultyCriteria(false, 100, 200),
-			expOut: `
-{
-  "daos_data": {
-    "config": []
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_0",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: defaultTestCfg(),
 		},
 		"nvme; single controller; accel set with opts; rpc srv set; auto faulty criteria": {
 			confIn: engine.MockConfig().WithStorage(&storage.TierConfig{
@@ -646,78 +404,35 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					storage.AccelOptCRCFlag|storage.AccelOptMoveFlag).
 				WithStorageSpdkRpcSrvProps(true, "/tmp/spdk.sock").
 				WithStorageAutoFaultyCriteria(true, 100, 200),
-			expOut: `
-{
-  "daos_data": {
-    "config": [
-      {
-        "params": {
-          "accel_engine": "spdk",
-          "accel_opts": 3
-        },
-        "method": "accel_props"
-      },
-      {
-        "params": {
-          "enable": true,
-          "sock_addr": "/tmp/spdk.sock"
-        },
-        "method": "spdk_rpc_srv"
-      },
-      {
-        "params": {
-          "enable": true,
-          "max_io_errs": 100,
-          "max_csum_errs": 200
-        },
-        "method": "auto_faulty"
-      }
-    ]
-  },
-  "subsystems": [
-    {
-      "subsystem": "bdev",
-      "config": [
-        {
-          "params": {
-            "bdev_io_pool_size": 65536,
-            "bdev_io_cache_size": 256
-          },
-          "method": "bdev_set_options"
-        },
-        {
-          "params": {
-            "retry_count": 4,
-            "timeout_us": 0,
-            "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none",
-            "nvme_ioq_poll_period_us": 0
-          },
-          "method": "bdev_nvme_set_options"
-        },
-        {
-          "params": {
-            "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84_0",
-            "traddr": "0000:01:00.0"
-          },
-          "method": "bdev_nvme_attach_controller"
-        },
-        {
-          "params": {
-            "enable": false,
-            "period_us": 0
-          },
-          "method": "bdev_nvme_set_hotplug"
-        }
-      ]
-    }
-  ]
-}
-`,
+			expCfg: genSpdkCfg(defaultTestCfg(), func(in *SpdkConfig) *SpdkConfig {
+				in.DaosData.Configs = []*DaosConfig{
+					{
+						Method: "accel_props",
+						Params: &AccelPropsParams{
+							Engine:  "spdk",
+							Options: 3,
+						},
+					},
+					{
+						Method: "spdk_rpc_srv",
+						Params: &SpdkRpcServerParams{
+							Enable:   true,
+							SockAddr: "/tmp/spdk.sock",
+						},
+					},
+					{
+						Method: "auto_faulty",
+						Params: &AutoFaultyParams{
+							Enable:      true,
+							MaxIoErrs:   100,
+							MaxCsumErrs: 200,
+						},
+					},
+				}
+				return in
+			}),
 		},
 	}
-
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -734,6 +449,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			req.Hostname = hostName
 
 			gotErr := writeJsonConfig(log, req)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -741,17 +457,17 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				return
 			}
 
-			gotOut, err := os.ReadFile(cfgOutputPath)
+			r, err := os.Open(cfgOutputPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotCfg, err := readSpdkConfig(r)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			// replace hostname in wantOut
-			tc.expOut = strings.ReplaceAll(tc.expOut, "hostfoo", host)
-			tc.expOut = strings.TrimSpace(tc.expOut)
-
-			if diff := cmp.Diff(tc.expOut, string(gotOut)); diff != "" {
-				t.Fatalf("(-want, +got):\n%s", diff)
+			if diff := cmp.Diff(tc.expCfg, gotCfg); diff != "" {
+				t.Fatalf("unexpected config after write (-want, +got):\n%s", diff)
 			}
 		})
 	}

@@ -2,6 +2,11 @@
 
 set -eux
 
+if [ ! -f subset.txt ]; then
+    echo "Skipping launchable analaysis; no subset.txt file"
+    exit 0
+fi
+
 dir="$1/$STAGE_NAME/"
 if ! mkdir -p "$dir"; then
     echo "Failed to create \"$dir\":"

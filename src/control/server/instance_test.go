@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -282,7 +283,7 @@ func (mi *MockInstance) isAwaitingFormat() bool {
 }
 
 func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
-func (mi *MockInstance) NotifyStorageReady()                     {}
+func (mi *MockInstance) NotifyStorageReady(_ bool)               {}
 
 func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	return nil, nil

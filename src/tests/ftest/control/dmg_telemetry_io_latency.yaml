@@ -1,22 +1,24 @@
 hosts:
   test_servers: 1
   test_clients: 1
+
 timeout: 800
+
 server_config:
   name: daos_server
   engines_per_host: 1
   engines:
     0:
       targets: 1
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
+
 pool:
   scm_size: 20G
+
 container:
   type: POSIX
   control_method: daos
+
 ior:
   block_size: 8M
   transfer_sizes: ['512', 1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K, 512K, 1M, 2M, 4M, 8M]

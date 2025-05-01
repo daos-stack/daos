@@ -1,11 +1,9 @@
 # Pool Operations
 
-A DAOS pool is a storage reservation that can span any number of storage engines in a
-DAOS system. Pools are managed by the administrator. The amount of space allocated
-to a pool is decided at creation time with the `dmg pool create` command.
-Pools can be expanded at a later time with the `dmg pool expand` command
-that adds additional engine ranks to the existing pool's storage allocation.
-The DAOS management API also provides these capabilities.
+DAOS pool is a storage reservation that can span multiple storage engines within a DAOS system.
+Pools are managed by the administrator using the dmg utility. The size of a pool is defined at
+creation time, and it can be expanded later by adding additional engine ranks. These management
+operations are also supported through the DAOS management API.
 
 
 ## Pool Basics
@@ -40,64 +38,52 @@ The maximum length of a pool label is 127 characters.
 Labels that can be parsed as a UUID (e.g. 123e4567-e89b-12d3-a456-426614174000)
 are forbidden. Pool labels must be unique across the DAOS system.
 
-A pool's size is determined by two factors: How many storage engines are
-participating in the storage allocation, and how much capacity in each
-storage tier is allocated (the latter can be specified either on a per-engine
-basis, or as the total for the pool across all participating engines).
-The same amount of storage will be allocated on each of the participating
-storage engines. If one or more of those engines do not have sufficient free
-space for the requested capacity, the pool creation will fail.
+A pool’s size is determined by two factors: the number of storage engines participating
+in the allocation, and the amount of capacity allocated from each storage tier.
+The capacity can be specified either per engine or as a total across all participating engines.
+DAOS allocates the same amount of storage on each participating engine. If any of the selected
+engines lack sufficient free space to meet the requested allocation, the pool creation will fail.
 
-If neither the `--nranks` nor the `--ranks` option is used,
-then the pool will span all storage engines of the DAOS system.
-To limit the pool to only a subset of the engines, those two options
-can be used to specify either the desired number of engines,
-or an explicit list of engine ranks to be used for this pool.
+If neither the --nranks nor --ranks option is specified, the pool will span all storage engines
+in the DAOS system by default. To restrict the pool to a subset of engines, these options can be
+used to either specify the desired number of engines (--nranks) or provide an explicit list of
+engine ranks (--ranks) to be used for the pool.
 
-The capacity of the pool can be specified in three different ways:
+DAOS provides multiple ways to define the capacity of a pool, offering flexibility depending on
+whether you want to specify an absolute size, use available capacity percentages, or manually set tier-specific values:
 
-1. The `--size` option can be used to specify the _total_ pool
-   capacity in **Bytes**. This value denotes the sum of the SCM
-   and NVMe capacities. The relative contributions of the SCM and
-   NVMe storage tiers to the total pool size are determined by the
-   `--tier-ratio` parameter.
-   By default this ratio is `6,94`, so for a pool of size 100TB
-   there will be 6TB of SCM and 94 TB of NVMe storage.
-   An SCM-only pool can be created by using `--tier-ratio 100,0`.
+- **Set total size with tier ratio (`--size` + `--tier-ratio`)**
+  - Use `--size` (`-z`) to define the **total pool capacity** in **bytes**.
+  - Use `--tier-ratio` (`-t`) to control the percentage-split between **SCM** and **NVMe**.
+    - Format: `<scm>,<nvme>` (specified as percentages or fractions).
+    - Default: `6,94` → 6% SCM, 94% NVMe.
+    - Examples:
+      - `-z=100TB -t=6,94` → 6 TB SCM, 94 TB NVMe.
+      - `-z=10TB -t=100,0` → SCM-only pool.
+      - `-t 0.12,0.88` → 12% SCM, 88% NVMe.
+  - Good for: specifying total pool size while controlling SCM/NVMe balance.
 
-2. The `--size` option can be used to specify the _total_ pool
-   capacity as a **percentage of the currently free capacity**.
-   In this case, the tier ratio will be ignored. For example,
-   requesting `--size=100%` will allocate 100% of the free SCM
-   capacity and 100% of the free NVMe capacity to the pool,
-   regardless of the ratio of those two free capacity values.
+- **Use percentage of free space (`--size` as %)**
+  - Define pool size as a **percentage** of available free space.
+  - Example: `--size=100%` allocates all currently free space on both tiers.
+  - Notes:
+    - Cannot be used to create SCM-only pools (unless there's no NVMe).
+    - Uses the **minimum free space** across all engines.
+    - Pool size can vary depending on system state.
+    - Command output shows **actual allocated sizes**.
+    - The actual pool size is dependent on the minimum space available across all the engines and is
+      limited based on the lowest common denominator
 
-   * This implies that it is not possible to create an SCM-only
-     pool by using a percentage size (unless there is no NVMe
-     storage in the system at all, and all pools are SCM-only).
-
-   * If the amount of free space is different across the
-     participating engines, then the _minimum_ free space is
-     used to calculate the space that is allocated per engine.
-
-   * Because the percentage numbers refer to currently free
-     space and not total space, the absolute size of a pool
-     created with `--size=percentage%` will be impacted by other
-     concurrent pool create operations. The command output will
-     always list the total capacities in addition to the
-     requested percentage.
-
-3. The `--scm-size` parameter (and optionally `--nvme-size`) can
-   be used to specify the SCM capacity (and optionally the NVMe
-   capacity) _per storage engine_ in **Bytes**.
-   The minimum SCM size is 16 MiB per **target**, so for a storage
-   engine with 16 targets the minimum is `--scm-size=256MiB`.
-   The NVMe size can be zero. If it is non-zero then the minimum
-   NVMe size is 1 GiB per **target**, so for a storage engine
-   with 16 targets the minimum non-zero NVMe size is
-   `--nvme-size=16GiB`.
-   To derive the total pool capacity, these per-engine capacities
-   have to be multiplied by the number of participating engines.
+- **Manually set SCM and NVMe sizes (`--scm-size` and `--nvme-size`)**
+  - Use `--scm-size` (`-s`) and optionally `--nvme-size` (`-n`) to define **per-engine** sizes in **bytes**.
+  - **Minimums:**
+    - SCM: **16 MiB per target** (e.g., `--scm-size=256MiB` for 16 targets).
+    - NVMe: Optional, but if set must be **≥ 1 GiB per target** (e.g., `--nvme-size=16GiB`).
+  - Total pool size is calculated as:  
+    ```
+    total_size = (scm_size + nvme_size) × number_of_engines
+    ```
+  - Good for: precise control over storage allocation per engine.
 
 !!! note
     The suffixes "M", "MB", "G", "GB", "T" or "TB" denote base-10
@@ -117,6 +103,12 @@ Examples:
 To create a pool labeled `tank`:
 ```bash
 $ dmg pool create --size=${N}TB tank
+```
+
+or with the short option:
+
+```bash
+$ dmg pool create -z=${N}TB tank
 ```
 
 This command creates a pool labeled `tank` distributed across the DAOS servers
@@ -149,6 +141,7 @@ The typical output of this command is as follows:
 
 ```bash
 $ dmg pool create --size 50GB tank
+
 Creating DAOS pool with automatic storage allocation: 50 GB total, 6,94 tier ratio
 Pool created with 6.00% SCM/NVMe ratio
 -----------------------------------------
@@ -165,11 +158,11 @@ with pool service redundancy enabled by default (pool service replicas on ranks
 1-5). If no redundancy is desired, use `--properties=svc_rf:0` to set the pool
 service redundancy property to 0 (or `--nsvc=1`).
 
-Note that it is difficult to determine the usable space by the user, and
-currently we cannot provide the precise value. The usable space depends not only
-on pool size, but also on number of targets, target size, object class,
-storage redundancy factor, etc.
-
+!!! note
+    It is difficult to determine the usable space by the user, and currently we
+    cannot provide the precise value. The usable space depends not only on pool
+    size, but also on number of targets, target size, object class, storage
+    redundancy factor, etc.
 
 #### Creating a pool in MD-on-SSD mode
 
@@ -585,6 +578,7 @@ tank     47 GB  0%   0%        0/32
 
 This returns a table of pool labels (or UUIDs if no label was specified)
 with the following information for each pool:
+
 - The total pool size (NVMe or DATA tier, not including Metadata tier).
 - The percentage of used space (i.e., 100 * used space  / total space)
   for the NVMe or DATA tier.
@@ -613,6 +607,15 @@ $ dmg pool list --verbose
 Label UUID                                 SvcReps Meta Size Meta Used Meta Imbalance DATA Size DATA Used DATA Imbalance Disabled
 ----- ----                                 ------- --------- --------- -------------- --------- --------- -------------- --------
 tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB      10 kB     0%             47 GB     0 B       0%             0/32
+```
+
+### Renaming a Pool
+
+To rename a pool labeled `tank` to `neo`:
+
+```bash
+$ dmg pool set-prop tank label:neo
+pool set-prop succeeded
 ```
 
 ### Destroying a Pool
@@ -1219,20 +1222,30 @@ surviving engine.
 
 ### Manual Exclusion
 
-An operator can exclude one or more engines or targets from a specific DAOS pool
-using the rank the target resides, as well as the target idx on that rank.
-If a target idx list is not provided, all targets on the engine rank will be excluded.
+An operator can exclude one or more engines or targets from a specific DAOS pool using the rank(s)
+where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx list is
+not provided, all selected targets on the engine rank(s) will be excluded.
 
-To exclude a target from a pool:
+To exclude multiple targets on a single rank from a pool:
 
 ```bash
-$ dmg pool exclude --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+$ dmg pool exclude --ranks=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool target exclude command accepts 2 parameters:
+To exclude multiple targets on multiple ranks from a pool:
 
-* The engine rank of the target(s) to be excluded.
-* The target indices of the targets to be excluded from that engine rank (optional).
+```bash
+$ dmg pool exclude --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+```
+
+The pool target exclude command accepts 4 parameters:
+
+* The label or UUID of the pool that the targets will be excluded.
+* The engine rank(s) of the target(s) to be excluded. This can be a single integer or a list of
+  comma-separated ranges e.g. "1" or "1-9,10,12-19".
+* The target indices of the targets to be excluded from each specified engine rank (optional).
+* The force flag which can be used to override RF check as documented below (optional, use with
+  caution).
 
 Upon successful manual exclusion, the self-healing mechanism will be triggered
 to restore redundancy on the remaining engines.
@@ -1243,6 +1256,36 @@ to restore redundancy on the remaining engines.
     and return the error code -DER_RF. You can proceed with the exclusion by specifying
     the --force option. Please note that forcing the operation may result in data loss,
     and it is strongly recommended to verify the RF status before proceeding.
+
+#### System Exclude
+
+To exclude ranks or hosts from all pools that they belong to, the 'dmg system exclude'
+command can be used. The command takes either a host-set or rank-set. Requesting a
+host-set excludes all ranks on selected hosts.
+
+To exclude a set of hosts from all pools:
+
+```Bash
+$ dmg system exclude --rank-hosts foo-[001-100]
+```
+
+To exclude a set of ranks from all pools:
+
+```Bash
+$ dmg system exclude --ranks 1-100
+```
+
+Selected ranks will be set to `AdminExcluded` state in system membership (as shown in output of
+`dmg system query` command). This will exclude all rank targets from all pools and render the ranks
+unusable in pools until `dmg system clear-exclude --ranks=${rank_range_list}` is run to return the
+ranks to the previous (normally `Excluded`) state. Then the engine can be restarted to rejoin the
+system and will enter the `Joined` state and ready to be reintegrated into pools.
+
+Engine state can be queryed via the system membership using:
+
+```bash
+$ dmg system query
+```
 
 ### Drain
 
@@ -1258,16 +1301,28 @@ data would not be integrated into a rebuild and would be lost.
 Drain operation is not allowed if there are other ongoing rebuild operations, otherwise
 it will return -DER_BUSY.
 
-To drain a target from a pool:
+An operator can drain one or more engines or targets from a specific DAOS pool using the rank(s)
+where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx list is
+not provided, all selected targets on the engine rank(s) will be drained.
+
+To drain multiple targets on a single rank from a pool:
 
 ```bash
-$ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} $DAOS_POOL
+$ dmg pool drain --ranks=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool target drain command accepts 2 parameters:
+To drain multiple targets on multiple ranks from a pool:
 
-* The engine rank of the target(s) to be drained.
-* The target indices of the targets to be drained from that engine rank (optional).
+```bash
+$ dmg pool drain --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+```
+
+The pool target drain command accepts 3 parameters:
+
+* The label or UUID of the pool that the targets to be drained.
+* The engine rank(s) of the target(s) to be drained. This can be a single integer or a list of
+  comma-separated ranges e.g. "1" or "1-9,10,12-19".
+* The target indices of the targets to be drained from each specified engine rank (optional).
 
 #### System Drain
 
@@ -1296,15 +1351,28 @@ supplying a target idx list, or reintegrate an entire engine rank by omitting th
 Reintegrate operation is not allowed if there are other ongoing rebuild operations,
 otherwise it will return -DER_BUSY.
 
-```
-$ dmg pool reintegrate $DAOS_POOL --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
+An operator can reintegrate one or more engines or targets from a specific DAOS pool using the
+rank(s) where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx
+list is not provided, all selected targets on the engine rank(s) will be reintegrated.
+
+To reintegrate multiple targets on a single rank from a pool:
+
+```bash
+$ dmg pool reintegrate --ranks=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool reintegrate command accepts 3 parameters:
+To reintegrate multiple targets on multiple ranks from a pool:
+
+```bash
+$ dmg pool reintegrate --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+```
+
+The pool target reintegrate command accepts 3 parameters:
 
 * The label or UUID of the pool that the targets will be reintegrated into.
-* The engine rank of the affected targets.
-* The target indices of the targets to be reintegrated on that engine rank (optional).
+* The engine rank(s) of the target(s) to be reintegrated. This can be a single integer or a list of
+  comma-separated ranges e.g. "1" or "1-9,10,12-19".
+* The target indices of the targets to be reintegrated from each specified engine rank (optional).
 
 When rebuild is triggered it will list the operations and their related engines/targets
 by their engine rank and target index.
@@ -1320,7 +1388,7 @@ Target (rank 5 idx 1) is down.
 These should be the same values used when reintegrating the targets.
 
 ```
-$ dmg pool reintegrate $DAOS_POOL --rank=5 --target-idx=0,1
+$ dmg pool reintegrate $DAOS_POOL --ranks=5 --target-idx=0,1
 ```
 
 !!! warning
@@ -1328,8 +1396,25 @@ $ dmg pool reintegrate $DAOS_POOL --rank=5 --target-idx=0,1
     pool, there is currently no way to list the targets that have actually
     been disabled. As a result, it is recommended for now to try to reintegrate
     all engine ranks one after the other via `for i in seq $NR_RANKs; do dmg
-    pool reintegrate --rank=$i; done`. This limitation will be addressed in the
+    pool reintegrate --ranks=$i; done`. This limitation will be addressed in the
     next release.
+
+#### System Reintegrate
+
+To reintegrate ranks or hosts from all pools that they belong to, the 'dmg system reintegrate'
+command can be used. The command takes either a host-set or rank-set. Selecting a host-set reintegrates all ranks on selected hosts.
+
+To reintegrate a set of hosts from all pools:
+
+```Bash
+$ dmg system reintegrate --rank-hosts foo-[001-100]
+```
+
+To reintegrate a set of ranks from all pools:
+
+```Bash
+$ dmg system reintegrate --ranks 1-100
+```
 
 ## Pool Extension
 
