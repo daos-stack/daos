@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,7 +39,7 @@
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdlfec";
+static const char *all_tests = "ismdlfecr";
 
 static void
 print_usage()
@@ -57,6 +58,7 @@ print_usage()
 	/* verifyenv is only run by exec test. Should not be executed directly */
 	/* print_message("dfuse_test    --verifyenv\n");                       */
 	print_message("dfuse_test -c|--cache\n");
+	print_message("dfuse_test -r|--realpath\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -935,6 +937,100 @@ do_cachingcheck(void **state)
 	assert_return_code(rc, errno);
 }
 
+/*
+ * Check the correctness of realpath() in interception library.
+ *
+ * Create directories and symbolic links, then call realpath() and verify results
+ *
+ */
+void
+do_realpathcheck(void **state)
+{
+	int   rc;
+	char  dir_name[256];
+	char  link_name[256];
+	char  path_name[256];
+	char *resolved;
+	char *rc_path;
+	int   len_testdir;
+
+	/* create directories and symbolic links */
+	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir0");
+	rc = mkdir(dir_name, 0740);
+	assert_return_code(rc, errno);
+
+	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir0/dir00");
+	rc = mkdir(dir_name, 0740);
+	assert_return_code(rc, errno);
+
+	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir0/dir00/dir000");
+	rc = mkdir(dir_name, 0740);
+	assert_return_code(rc, errno);
+
+	snprintf(link_name, 256, "%s/%s", test_dir, "test_dir0/sym00");
+	rc = symlink("dir00/dir000", link_name);
+	assert_return_code(rc, errno);
+
+	snprintf(link_name, 256, "%s/%s", test_dir, "test_dir0/sym01");
+	rc = symlink("dir00", link_name);
+	assert_return_code(rc, errno);
+
+	/* call realpath() and verify results */
+
+	/* including '/' */
+	len_testdir = strlen(test_dir) + 1;
+	resolved    = malloc(PATH_MAX);
+	assert_true(resolved != NULL);
+
+	snprintf(path_name, 256, "%s/%s", test_dir, "test_dir0/sym00/../..");
+	rc_path = realpath(path_name, resolved);
+	assert_true(rc_path != NULL);
+	assert_true(strcmp(resolved + len_testdir, "test_dir0") == 0);
+
+	snprintf(path_name, 256, "%s/%s", test_dir, "test_dir0/sym00/../../");
+	rc_path = realpath(path_name, resolved);
+	assert_true(rc_path != NULL);
+	assert_true(strcmp(resolved + len_testdir, "test_dir0") == 0);
+
+	snprintf(path_name, 256, "%s/%s", test_dir, "test_dir0/sym00/..");
+	rc_path = realpath(path_name, resolved);
+	assert_true(rc_path != NULL);
+	assert_true(strcmp(resolved + len_testdir, "test_dir0/dir00") == 0);
+
+	snprintf(path_name, 256, "%s/%s", test_dir, "test_dir0/sym01/..");
+	rc_path = realpath(path_name, resolved);
+	assert_true(rc_path != NULL);
+	assert_true(strcmp(resolved + len_testdir, "test_dir0") == 0);
+
+	snprintf(path_name, 256, "%s/%s", test_dir, "test_dir0/sym00/../../sym01");
+	rc_path = realpath(path_name, resolved);
+	assert_true(rc_path != NULL);
+	assert_true(strcmp(resolved + len_testdir, "test_dir0/dir00") == 0);
+
+	free(resolved);
+
+	/* remove all directories and symbolic links */
+	snprintf(link_name, 256, "%s/%s", test_dir, "test_dir0/sym01");
+	rc = unlink(link_name);
+	assert_return_code(rc, errno);
+
+	snprintf(link_name, 256, "%s/%s", test_dir, "test_dir0/sym00");
+	rc = unlink(link_name);
+	assert_return_code(rc, errno);
+
+	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir0/dir00/dir000");
+	rc = rmdir(dir_name);
+	assert_return_code(rc, errno);
+
+	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir0/dir00");
+	rc = rmdir(dir_name);
+	assert_return_code(rc, errno);
+
+	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir0");
+	rc = rmdir(dir_name);
+	assert_return_code(rc, errno);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -1029,6 +1125,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(cache_tests, NULL, NULL);
 			break;
 
+		case 'r':
+			printf("\n\n=================");
+			printf("dfuse realpath check");
+			printf("=====================\n");
+			const struct CMUnitTest realpath_tests[] = {
+			    cmocka_unit_test(do_realpathcheck),
+			};
+			nr_failed += cmocka_run_group_tests(realpath_tests, NULL, NULL);
+			break;
+
 		default:
 			assert_true(0);
 		}
@@ -1058,9 +1164,10 @@ main(int argc, char **argv)
 					       {"exec", no_argument, NULL, 'e'},
 					       {"verifyenv", no_argument, NULL, 't'},
 					       {"cache", no_argument, NULL, 'c'},
+					       {"realpath", no_argument, NULL, 'r'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlfetc", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlfetcr", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

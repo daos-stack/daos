@@ -1,5 +1,6 @@
 """
   (C) Copyright 2021-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -112,7 +113,8 @@ class DaosCoreTestDfuse(TestWithServers):
             '--mmap',
             '--exec',
             '--directory',
-            '--cache'
+            '--cache',
+            '--realpath'
         ]
         if use_dfuse:
             parameters.append('--lowfd')

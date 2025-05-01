@@ -475,11 +475,7 @@ static int (*next_mpi_init)(int *argc, char ***argv);
 static int (*next_pmpi_init)(int *argc, char ***argv);
 static void *(*next_dlopen)(const char *filename, int flags);
 
-/* to do!! */
-/**
- * static char * (*org_realpath)(const char *pathname, char *resolved_path);
- * org_realpath real_realpath=NULL;
- */
+static char *(*next_realpath)(const char *pathname, char *resolved_path);
 
 static int
 remove_dot_dot(char path[], int *len);
@@ -1445,6 +1441,182 @@ remove_dot_and_cleanup(char path[], int len)
 	}
 
 	return nNonZero;
+}
+
+#define ELOOP_THRESHOLD 40
+
+/* The codee of this function is mainly from
+ * https://github.com/lattera/glibc/blob/master/stdlib/canonicalize.c
+ */
+
+char *
+realpath(const char *name, char *resolved)
+{
+	char       *rpath, *dest, *extra_buf = NULL;
+	const char *start, *end, *rpath_limit;
+	long int    path_max;
+	int         num_links = 0;
+	struct stat st;
+	int         n;
+	ptrdiff_t   dest_offset;
+	char       *new_rpath;
+	char       *buf;
+	size_t      len;
+	size_t      new_size;
+
+	if (name == NULL) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if (name[0] == 0) {
+		errno = ENOENT;
+		return NULL;
+	}
+
+	if (next_realpath == NULL) {
+		next_realpath = dlsym(RTLD_NEXT, "realpath");
+		D_ASSERT(next_realpath != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_realpath(name, resolved);
+
+	/* get cwd if it is not set yet */
+	if (cur_dir[0] != '/')
+		update_cwd();
+
+#ifdef PATH_MAX
+	path_max = PATH_MAX;
+#else
+	path_max = pathconf(name, _PC_PATH_MAX);
+	if (path_max <= 0)
+		path_max = 1024;
+#endif
+
+	if (resolved == NULL) {
+		rpath = malloc(path_max);
+		if (rpath == NULL)
+			return NULL;
+	} else {
+		rpath = resolved;
+	}
+	rpath_limit = rpath + path_max;
+
+	if (name[0] != '/') {
+		strncpy(rpath, cur_dir, path_max);
+		dest = rawmemchr(rpath, '\0');
+	} else {
+		rpath[0] = '/';
+		dest     = rpath + 1;
+	}
+
+	for (start = end = name; *start; start = end) {
+		/* Skip sequence of multiple path-separators.  */
+		while (*start == '/')
+			++start;
+
+		/* Find end of path component.  */
+		for (end = start; *end && *end != '/'; ++end)
+			/* Nothing.  */;
+
+		if (end - start == 0) {
+			break;
+		} else if (end - start == 1 && start[0] == '.') {
+			/* nothing */
+			;
+		} else if (end - start == 2 && start[0] == '.' && start[1] == '.') {
+			/* Back up to previous component, ignore if at root already.  */
+			if (dest > rpath + 1)
+				while ((--dest)[-1] != '/')
+					;
+		} else {
+			if (dest[-1] != '/')
+				*dest++ = '/';
+
+			if (dest + (end - start) >= rpath_limit) {
+				dest_offset = dest - rpath;
+
+				if (resolved) {
+					errno = ENAMETOOLONG;
+					if (dest > rpath + 1)
+						dest--;
+					*dest = '\0';
+					goto error;
+				}
+				new_size = rpath_limit - rpath;
+				if (end - start + 1 > path_max)
+					new_size += end - start + 1;
+				else
+					new_size += path_max;
+				new_rpath = (char *)realloc(rpath, new_size);
+				if (new_rpath == NULL)
+					goto error;
+				rpath       = new_rpath;
+				rpath_limit = rpath + new_size;
+				dest        = rpath + dest_offset;
+			}
+
+			dest  = mempcpy(dest, start, end - start);
+			*dest = '\0';
+
+			if (lstat(rpath, &st) < 0)
+				goto error;
+
+			if (S_ISLNK(st.st_mode)) {
+				buf = alloca(path_max);
+
+				if (++num_links > ELOOP_THRESHOLD) {
+					errno = ELOOP;
+					goto error;
+				}
+
+				n = readlink(rpath, buf, path_max - 1);
+				if (n < 0)
+					goto error;
+				buf[n] = '\0';
+
+				if (!extra_buf)
+					D_ALLOC(extra_buf, path_max);
+
+				len = strlen(end);
+				if (path_max - n <= len) {
+					errno = ENAMETOOLONG;
+					goto error;
+				}
+
+				/* Careful here, end may be a pointer into extra_buf... */
+				memmove(&extra_buf[n], end, len + 1);
+				name = end = memcpy(extra_buf, buf, n);
+
+				if (buf[0] == '/')
+					dest = rpath + 1; /* It's an absolute symlink */
+				else
+					/* Back up to previous component, ignore if at root already:
+					 */
+					if (dest > rpath + 1)
+						while ((--dest)[-1] != '/')
+							;
+			} else if (!S_ISDIR(st.st_mode) && *end != '\0') {
+				errno = ENOTDIR;
+				goto error;
+			}
+		}
+	}
+	if (dest > rpath + 1 && dest[-1] == '/')
+		--dest;
+	*dest = '\0';
+
+	D_FREE(extra_buf);
+	D_ASSERT(resolved == NULL || resolved == rpath);
+	return rpath;
+
+error:
+	D_ASSERT(resolved == NULL || resolved == rpath);
+	if (resolved == NULL)
+		free(rpath);
+	D_FREE(extra_buf);
+	return NULL;
 }
 
 static int
