@@ -54,7 +54,7 @@ on:
       - 'release/*'
 
 concurrency:
-  group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 defaults:
@@ -71,6 +71,7 @@ jobs:
     # with:
     #    NAME: ${{ env.NAME }}
     # in the Call-RPM-Build job but the above issue prevents it
+    if: false  # Disable this job until it will be fully implemented
     name: Compute outputs
     runs-on: [self-hosted, light]
     outputs:
@@ -245,7 +246,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
@@ -374,7 +375,7 @@ jobs:
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
+        uses: EnricoMi/publish-unit-test-result-action@afb2984f4d89672b2f9d9c13ae23d53779671984  # v2.19.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -529,7 +530,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
@@ -642,7 +643,7 @@ jobs:
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
+        uses: EnricoMi/publish-unit-test-result-action@afb2984f4d89672b2f9d9c13ae23d53779671984  # v2.19.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}

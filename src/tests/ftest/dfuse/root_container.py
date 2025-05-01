@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,7 +42,6 @@ class RootContainerTest(TestWithServers):
         tmp_file_name = self.params.get("tmp_file_name", '/run/container/*')
         tmp_file_count = self.params.get("tmp_file_count", '/run/container/*')
         tmp_file_size = self.params.get("tmp_file_size", '/run/container/*')
-        device = "scm"
 
         # Create a pool and container.
         self.log_step("Create a pool and a root container")
@@ -72,7 +72,7 @@ class RootContainerTest(TestWithServers):
 
         # Create 100 sub containers and verify the temp files
         self.verify_create_delete_containers(
-            pool, device, 100, dfuse_hosts, dfuse.mount_dir.value, tmp_file_count, tmp_file_size,
+            pool, 100, dfuse_hosts, dfuse.mount_dir.value, tmp_file_count, tmp_file_size,
             tmp_file_size)
         self.verify_multi_pool_containers(
             pool_count, cont_count, dfuse_hosts, dfuse.mount_dir.value, tmp_file_count,
@@ -107,8 +107,8 @@ class RootContainerTest(TestWithServers):
                 self.insert_files_and_verify(
                     hosts, sub_container, tmp_file_count, tmp_file_name, tmp_file_size)
 
-    def verify_create_delete_containers(self, pool, device, cont_count, hosts, mount_dir,
-                                        tmp_file_count, tmp_file_name, tmp_file_size):
+    def verify_create_delete_containers(self, pool, cont_count, hosts, mount_dir, tmp_file_count,
+                                        tmp_file_name, tmp_file_size):
         """Verify multiple pools and containers creation and deletion.
 
         Create multiple containers and multiple multi-mb files in each of
@@ -118,7 +118,6 @@ class RootContainerTest(TestWithServers):
 
         Args:
             pool (TestPool): pool in which to create the containers
-            device (str): device where the pools and containers are created
             cont_count (int): Number of containers to be created.
             hosts (NodeSet): Hosts on which to run the commands
             tmp_file_count (int): number of temporary files
@@ -127,7 +126,7 @@ class RootContainerTest(TestWithServers):
         """
         self.log.info("Verifying multiple container create delete")
         self.log_step(f"Create {cont_count} new sub containers and insert files")
-        pool_space_before = pool.get_pool_free_space(device)
+        pool_space_before = pool.get_total_free_space(True)
         self.log.info("Pool space before = %s", pool_space_before)
         containers = []
         for idx in range(cont_count):
@@ -140,7 +139,7 @@ class RootContainerTest(TestWithServers):
         expected = pool_space_before - cont_count * tmp_file_count * tmp_file_size
         self.log_step(
             f"Verify the pool free space <= {expected} after creating {cont_count} containers")
-        pool_space_after = self._get_pool_free_space(pool, device, expected)
+        pool_space_after = self._get_pool_free_space(pool, expected)
         if pool_space_after > expected:
             self.fail(f"Pool free space exceeds {expected} after creating {cont_count} containers")
 
@@ -159,7 +158,7 @@ class RootContainerTest(TestWithServers):
             loop += 1
             self.log.debug(
                 "Check if the pool free space >= %s (loop %s/%s)", expected, loop, max_loops)
-            current = self._get_pool_free_space(pool, device, expected)
+            current = self._get_pool_free_space(pool, expected)
             if current >= expected:
                 break
             if loop >= max_loops:
@@ -203,18 +202,17 @@ class RootContainerTest(TestWithServers):
         if not result.passed:
             self.fail(f"Error inserting files into {cont_dir} on {str(result.failed_hosts)}")
 
-    def _get_pool_free_space(self, pool, device, expected):
+    def _get_pool_free_space(self, pool, expected):
         """Get the current pool free space.
 
         Args:
             pool (TestPool): pool to query
-            device (str): device type, e.g. "scm" or "nvme"
             expected (int): expected pool free space
 
         Returns:
             int: current pool free space
         """
-        current = pool.get_pool_free_space(device)
+        current = pool.get_total_free_space(True)
         self.log.info("  Current pool free space:   %s", current)
         self.log.info("  Expected pool free space:  %s", expected)
         return current

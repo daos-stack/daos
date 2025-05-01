@@ -130,6 +130,13 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		    !daos_crt_network_error(rc)))
 			break;
 
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			rc = -DER_SHUTDOWN;
+			DL_INFO(rc, DF_RB ": give up ds_object_migrate_send, shutdown rebuild",
+				DP_RB_RPT(rpt));
+			break;
+		}
+
 		/* otherwise let's retry */
 		D_DEBUG(DB_REBUILD, DF_RB " retry send object to tgt_id %d\n", DP_RB_RPT(rpt),
 			arg->tgt_id);

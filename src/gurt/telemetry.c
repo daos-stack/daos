@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,15 +25,15 @@
 #include <gurt/telemetry_producer.h>
 #include <gurt/telemetry_consumer.h>
 
-/** minimal list of shared memory regions with a global ID */
-struct shmem_region_list {
+/** minimal list of memory regions with a global ID */
+struct mem_region_list {
 	struct d_tm_node_t	*rl_link_node;
 	key_t			 rl_key;
 	d_list_t		 rl_link;
 };
 
-/** Header of a shared memory region */
-struct d_tm_shmem_hdr {
+/** Header of a memory region */
+struct d_tm_mem_hdr {
 	uint64_t		 sh_base_addr;	/** address of this struct */
 	key_t			 sh_key;	/** key to access region */
 	uint32_t                 sh_deleted : 1, /** marked for deletion */
@@ -53,47 +54,52 @@ struct d_tm_shmem_hdr {
 };
 
 /** node in the linked list of open memory regions from local perspective */
-struct local_shmem_list {
-	struct d_tm_shmem_hdr	*region;	/** pointer to the shmem */
+struct local_mem_list {
+	struct d_tm_mem_hdr     *region;        /** pointer to the region */
 	uint32_t		 shmid;		/** local shmid */
-	key_t			 key;		/** shmem key */
+	key_t                    key;           /** access key */
 	d_list_t		 link;		/** linked list metadata */
 };
 
 /** Context for a given telemetry session */
 struct d_tm_context {
-	struct d_tm_shmem_hdr	*shmem_root; /** primary shared memory region */
+	struct d_tm_mem_hdr     *mem_root;   /** primary memory region */
 	int			 shmid_root; /** shmid of root region */
 	/**
-	 * Ephemeral shmem regions that are currently open for this context.
-	 * Head of a linked list of struct shmem_list.
+	 * Ephemeral mem regions that are currently open for this context.
+	 * Head of a linked list of struct mem_list.
 	 */
-	d_list_t		 open_shmem;
+	d_list_t                 open_mem;
 };
 
 /**
- * Internal tracking data for shared memory for this process.
+ * Internal tracking data for telemetry memory (shared or local) used by this process.
  */
-static struct d_tm_shmem {
+static struct d_tm_mem {
 	struct d_tm_context	*ctx; /** context for the producer */
-	struct d_tm_node_t	*root; /** root node of shmem */
+	struct d_tm_node_t      *root;     /** root node of telemetry memory regions */
 	pthread_mutex_t		 add_lock; /** for synchronized access */
-	uint32_t                 retain : 1, /** retain shmem region during exit */
+	uint32_t                 retain : 1, /** retain shmem region after exit */
 	    sync_access                 : 1, /** enable sync access to shmem */
 	    retain_non_empty            : 1, /** retain shmem region if it is not empty */
-	    multiple_writer_lock        : 1; /** lock for multiple writer */
+	    multiple_writer_lock        : 1, /** lock for multiple writer */
+	    use_non_shared_mem          : 1; /** use non-shared memory for regions */
 	int			 id; /** Instance ID */
-} tm_shmem;
+} tm_mem;
 
 /* Internal helper functions */
-static int allocate_shared_memory(int srv_idx, size_t mem_size,
-				  struct d_tm_shmem_hdr **shmem);
-static void *shmalloc(struct d_tm_shmem_hdr *region, int length);
-static bool validate_shmem_ptr(struct d_tm_shmem_hdr *shmem_root,
-			       void *ptr);
-static void *conv_ptr(struct d_tm_shmem_hdr *shmem_root, void *ptr);
-static int alloc_node(struct d_tm_shmem_hdr *shmem,
-		      struct d_tm_node_t **newnode, const char *name);
+static int
+allocate_memory_segment(int srv_idx, size_t mem_size, bool shared, struct d_tm_mem_hdr **mem_hdr);
+static void
+release_ctx_mem(struct d_tm_context **ctx, bool destroy_shmem);
+static void *
+tm_alloc(struct d_tm_mem_hdr *region, int length);
+static bool
+validate_shmem_ptr(struct d_tm_mem_hdr *shmem_root, void *ptr);
+static void *
+conv_ptr(struct d_tm_mem_hdr *shmem_root, void *ptr);
+static int
+alloc_node(struct d_tm_mem_hdr *mem_hdr, struct d_tm_node_t **newnode, const char *name);
 static struct d_tm_node_t *find_child(struct d_tm_context *ctx,
 				      struct d_tm_node_t *parent,
 				      char *name);
@@ -103,7 +109,7 @@ static int parse_path_fmt(char *path, size_t path_size, const char *fmt,
 			  va_list args);
 
 /**
- * Returns a pointer to the root node for the given shared memory segment
+ * Returns a pointer to the root node for the given memory segment
  *
  * \param[in]	ctx	Client context
  *
@@ -112,9 +118,8 @@ static int parse_path_fmt(char *path, size_t path_size, const char *fmt,
 struct d_tm_node_t *
 d_tm_get_root(struct d_tm_context *ctx)
 {
-	if (ctx != NULL && ctx->shmem_root != NULL)
-		return conv_ptr(ctx->shmem_root,
-				ctx->shmem_root->sh_root);
+	if (ctx != NULL && ctx->mem_root != NULL)
+		return conv_ptr(ctx->mem_root, ctx->mem_root->sh_root);
 
 	return NULL;
 }
@@ -179,22 +184,22 @@ d_tm_get_name(struct d_tm_context *ctx, struct d_tm_node_t *node)
 static int
 d_tm_lock_shmem(void)
 {
-	struct d_tm_context *ctx = tm_shmem.ctx;
+	struct d_tm_context *ctx = tm_mem.ctx;
 	int                  rc;
 
-	if (tm_shmem.multiple_writer_lock) {
-		rc = D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
+	if (tm_mem.multiple_writer_lock) {
+		rc = D_MUTEX_LOCK(&ctx->mem_root->sh_multiple_writer_lock);
 		if (unlikely(rc != 0)) {
 			DL_ERROR(rc, "failed to take multiple writer lock");
 			return rc;
 		}
 	}
 
-	rc = D_MUTEX_LOCK(&tm_shmem.add_lock);
+	rc = D_MUTEX_LOCK(&tm_mem.add_lock);
 	if (unlikely(rc != 0)) {
 		DL_ERROR(rc, "failed to take shared memory lock");
-		if (tm_shmem.multiple_writer_lock)
-			D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
+		if (tm_mem.multiple_writer_lock)
+			D_MUTEX_UNLOCK(&ctx->mem_root->sh_multiple_writer_lock);
 		return rc;
 	}
 
@@ -204,17 +209,17 @@ d_tm_lock_shmem(void)
 static int
 d_tm_unlock_shmem(void)
 {
-	struct d_tm_context *ctx = tm_shmem.ctx;
+	struct d_tm_context *ctx = tm_mem.ctx;
 	int                  rc;
 
-	rc = D_MUTEX_UNLOCK(&tm_shmem.add_lock);
+	rc = D_MUTEX_UNLOCK(&tm_mem.add_lock);
 	if (unlikely(rc != 0)) {
 		DL_ERROR(rc, "failed to release shared memory lock");
 		return rc;
 	}
 
-	if (tm_shmem.multiple_writer_lock) {
-		rc = D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
+	if (tm_mem.multiple_writer_lock) {
+		rc = D_MUTEX_UNLOCK(&ctx->mem_root->sh_multiple_writer_lock);
 		if (unlikely(rc != 0)) {
 			DL_ERROR(rc, "failed to release multiple writer lock");
 			return rc;
@@ -228,12 +233,12 @@ d_tm_unlock_shmem(void)
  * Returns either the shmid or an error.
  */
 static int
-attach_shmem(key_t key, size_t size, int flags, struct d_tm_shmem_hdr **shmem)
+attach_shmem(key_t key, size_t size, int flags, struct d_tm_mem_hdr **mem_hdr)
 {
 	int	 shmid;
 	void	*addr;
 
-	D_ASSERT(shmem != NULL);
+	D_ASSERT(mem_hdr != NULL);
 
 	shmid = shmget(key, size, flags);
 	if (shmid < 0) {
@@ -249,32 +254,54 @@ attach_shmem(key_t key, size_t size, int flags, struct d_tm_shmem_hdr **shmem)
 
 	D_INFO("%s shmid %d key 0x%x addr %p\n", size > 0 ? "allocated" : "attached", shmid, key,
 	       addr);
-	*shmem = addr;
+	*mem_hdr = addr;
 	return shmid;
 }
 
 static int
-new_shmem(key_t key, size_t size, struct d_tm_shmem_hdr **shmem)
+alloc_non_shared_mem(size_t size, struct d_tm_mem_hdr **mem_hdr)
 {
-	int rc;
-	D_INFO("creating new shared memory segment, key=0x%x, size=%lu\n",
-	       key, size);
-	rc = attach_shmem(key, size, IPC_CREAT | 0660, shmem);
+	void *addr;
+
+	D_ASSERT(mem_hdr != NULL);
+
+	D_ALLOC(addr, size);
+	if (addr == NULL)
+		return -DER_NOMEM;
+
+	*mem_hdr = addr;
+	return 0;
+}
+
+static int
+new_mem_segment(key_t key, size_t size, bool shared, struct d_tm_mem_hdr **mem_hdr)
+{
+	const char *mem_type = "";
+	int         rc;
+
+	if (shared)
+		mem_type = "shared ";
+
+	D_INFO("creating new %smemory segment, key=0x%x, size=%lu\n", mem_type, key, size);
+
+	if (shared)
+		rc = attach_shmem(key, size, IPC_CREAT | 0660, mem_hdr);
+	else
+		rc = alloc_non_shared_mem(size, mem_hdr);
 	if (rc < 0)
-		D_ERROR("failed to create shared memory segment, key=0x%x: "DF_RC"\n", key,
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create %smemory segment, key=0x%x", mem_type, key);
 
 	return rc;
 }
 
 static int
-open_shmem(key_t key, struct d_tm_shmem_hdr **shmem)
+open_shmem(key_t key, struct d_tm_mem_hdr **shmem)
 {
 	return attach_shmem(key, 0, 0, shmem);
 }
 
 static inline void
-close_shmem(struct d_tm_shmem_hdr *shmem)
+close_shmem(struct d_tm_mem_hdr *shmem)
 {
 	if (shmem == NULL)
 		return;
@@ -294,39 +321,38 @@ destroy_shmem(int shmid)
 }
 
 static int
-track_open_shmem(struct d_tm_context *ctx, struct d_tm_shmem_hdr *shmem,
-		 uint32_t shmid, key_t key)
+track_open_region(struct d_tm_context *ctx, struct d_tm_mem_hdr *mem_hdr, uint32_t shmid, key_t key)
 {
-	struct local_shmem_list	*new;
+	struct local_mem_list *new;
 
 	D_ALLOC_PTR(new);
 	if (new == NULL)
 		return -DER_NOMEM;
 
-	new->region = shmem;
+	new->region = mem_hdr;
 	new->shmid = shmid;
 	new->key = key;
 
-	d_list_add(&new->link, &ctx->open_shmem);
+	d_list_add(&new->link, &ctx->open_mem);
 
 	return 0;
 }
 
-static struct d_tm_shmem_hdr *
+static struct d_tm_mem_hdr *
 open_shmem_for_key(struct d_tm_context *ctx, key_t key)
 {
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr     *shmem;
 	uint32_t		 shmid;
 	int			 rc;
 
-	D_ASSERT(ctx != NULL && ctx->shmem_root != NULL);
+	D_ASSERT(ctx != NULL && ctx->mem_root != NULL);
 
 	rc = open_shmem(key, &shmem);
 	if (rc < 0)
 		return NULL;
 	shmid = rc;
 
-	rc = track_open_shmem(ctx, shmem, shmid, key);
+	rc = track_open_region(ctx, shmem, shmid, key);
 	if (rc != 0) {
 		D_ERROR("got shmem segment but couldn't allocate linked "
 			"list, "DF_RC"\n", DP_RC(rc));
@@ -337,14 +363,14 @@ open_shmem_for_key(struct d_tm_context *ctx, key_t key)
 	return shmem;
 }
 
-static struct local_shmem_list *
-get_shmem_entry_for_key(struct d_tm_context *ctx, key_t key)
+static struct local_mem_list *
+get_mem_list_entry_for_key(struct d_tm_context *ctx, key_t key)
 {
-	struct local_shmem_list *current;
+	struct local_mem_list *current;
 
-	D_ASSERT(ctx != NULL && ctx->shmem_root != NULL);
+	D_ASSERT(ctx != NULL && ctx->mem_root != NULL);
 
-	d_list_for_each_entry(current, &ctx->open_shmem, link) {
+	d_list_for_each_entry(current, &ctx->open_mem, link) {
 		if (current->region == NULL) {
 			D_WARN("malformed shmem list\n");
 			continue;
@@ -357,33 +383,44 @@ get_shmem_entry_for_key(struct d_tm_context *ctx, key_t key)
 	return NULL;
 }
 
-static struct d_tm_shmem_hdr *
-get_shmem_for_key(struct d_tm_context *ctx, key_t key)
+static struct d_tm_mem_hdr *
+get_mem_region_for_key(struct d_tm_context *ctx, key_t key)
 {
-	struct local_shmem_list	*entry;
+	struct local_mem_list *entry;
 
-	D_ASSERT(ctx != NULL && ctx->shmem_root != NULL);
+	D_ASSERT(ctx != NULL && ctx->mem_root != NULL);
 
-	if (ctx->shmem_root->sh_key == key)
-		return ctx->shmem_root;
+	if (ctx->mem_root->sh_key == key)
+		return ctx->mem_root;
 
-	entry = get_shmem_entry_for_key(ctx, key);
+	entry = get_mem_list_entry_for_key(ctx, key);
 	if (entry != NULL)
 		return entry->region;
+
+	if (tm_mem.use_non_shared_mem) {
+		D_ERROR("couldn't find mem region key 0x%x in non-shared mode\n", key);
+		return NULL;
+	}
 
 	return open_shmem_for_key(ctx, key);
 }
 
 static void
-close_local_shmem_entry(struct local_shmem_list *entry, bool destroy)
+release_mem_list_entry(struct local_mem_list *entry, bool destroy)
 {
 	d_list_del(&entry->link);
-	if (destroy)
-		entry->region->sh_deleted = 1;
-	close_shmem(entry->region);
 
-	if (destroy)
-		destroy_shmem(entry->shmid);
+	if (tm_mem.use_non_shared_mem) {
+		D_FREE(entry->region);
+	} else {
+		if (destroy)
+			entry->region->sh_deleted = 1;
+
+		close_shmem(entry->region);
+
+		if (destroy)
+			destroy_shmem(entry->shmid);
+	}
 
 	D_FREE(entry);
 }
@@ -391,35 +428,40 @@ close_local_shmem_entry(struct local_shmem_list *entry, bool destroy)
 static void
 close_shmem_for_key(struct d_tm_context *ctx, key_t key, bool destroy)
 {
-	struct local_shmem_list	*current;
-	struct local_shmem_list	*next;
+	struct local_mem_list *current;
+	struct local_mem_list *next;
 
-	d_list_for_each_entry_safe(current, next, &ctx->open_shmem, link) {
+	d_list_for_each_entry_safe(current, next, &ctx->open_mem, link) {
 		if (current->key == key) {
-			close_local_shmem_entry(current, destroy);
+			release_mem_list_entry(current, destroy);
 			return;
 		}
 	}
 }
 
 static void
-close_all_shmem(struct d_tm_context *ctx, bool destroy)
+release_all_mem_list_entries(struct d_tm_context *ctx, bool destroy)
 {
-	struct local_shmem_list	*current;
-	struct local_shmem_list	*next;
+	struct local_mem_list *current;
+	struct local_mem_list *next;
 
-	d_list_for_each_entry_safe(current, next, &ctx->open_shmem, link) {
-		close_local_shmem_entry(current, destroy);
+	d_list_for_each_entry_safe(current, next, &ctx->open_mem, link) {
+		release_mem_list_entry(current, destroy);
 	}
 
-	close_shmem(ctx->shmem_root);
-	ctx->shmem_root = NULL;
-	if (destroy)
-		destroy_shmem(ctx->shmid_root);
+	if (tm_mem.use_non_shared_mem) {
+		D_FREE(ctx->mem_root);
+	} else {
+		close_shmem(ctx->mem_root);
+		if (destroy)
+			destroy_shmem(ctx->shmid_root);
+	}
+
+	ctx->mem_root = NULL;
 }
 
 static void *
-conv_ptr(struct d_tm_shmem_hdr *shmem_root, void *ptr)
+conv_ptr(struct d_tm_mem_hdr *shmem_root, void *ptr)
 {
 	void *temp;
 
@@ -462,7 +504,7 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 {
 	key_t			 link_key;
 	struct d_tm_metric_t	*metric;
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr     *shmem;
 
 	if (ctx == NULL || link == NULL)
 		return NULL;
@@ -476,7 +518,7 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 
 	metric = d_tm_conv_ptr(ctx, link, link->dtn_metric);
 	link_key = (key_t)metric->dtm_data.value;
-	shmem = get_shmem_for_key(ctx, link_key);
+	shmem    = get_mem_region_for_key(ctx, link_key);
 	if (shmem == NULL) {
 		D_ERROR("couldn't follow link to shmem key 0x%x\n", link_key);
 		return NULL;
@@ -487,7 +529,7 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 		 * created with the same key since deletion occurred.
 		 */
 		close_shmem_for_key(ctx, link_key, false);
-		shmem = get_shmem_for_key(ctx, link_key);
+		shmem = get_mem_region_for_key(ctx, link_key);
 		if (shmem == NULL) {
 			D_DEBUG(DB_TRACE, "couldn't reopen shmem key 0x%x\n",
 				link_key);
@@ -513,7 +555,7 @@ static struct d_tm_node_t *
 find_child(struct d_tm_context *ctx, struct d_tm_node_t *parent,
 	   char *name)
 {
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr     *mem_hdr;
 	struct d_tm_node_t	*child = NULL;
 	char			*client_name;
 
@@ -528,18 +570,18 @@ find_child(struct d_tm_context *ctx, struct d_tm_node_t *parent,
 			return NULL;
 	}
 
-	shmem = get_shmem_for_key(ctx, parent->dtn_shmem_key);
-	if (shmem == NULL)
+	mem_hdr = get_mem_region_for_key(ctx, parent->dtn_shmem_key);
+	if (mem_hdr == NULL)
 		return NULL;
 
 	if (parent->dtn_child == NULL)
 		return NULL;
 
-	child = conv_ptr(shmem, parent->dtn_child);
+	child = conv_ptr(mem_hdr, parent->dtn_child);
 	if (child == NULL)
 		return NULL;
 
-	client_name = conv_ptr(shmem, child->dtn_name);
+	client_name = conv_ptr(mem_hdr, child->dtn_name);
 
 	/*
 	 * cleared links don't have names but we still want to traverse
@@ -547,11 +589,11 @@ find_child(struct d_tm_context *ctx, struct d_tm_node_t *parent,
 	 */
 	while ((child != NULL) && (client_name == NULL ||
 		strncmp(client_name, name, D_TM_MAX_NAME_LEN) != 0)) {
-		child = conv_ptr(shmem, child->dtn_sibling);
+		child       = conv_ptr(mem_hdr, child->dtn_sibling);
 		client_name = NULL;
 		if (child == NULL)
 			break;
-		client_name = conv_ptr(shmem, child->dtn_name);
+		client_name = conv_ptr(mem_hdr, child->dtn_name);
 	}
 
 	if (client_name == NULL)
@@ -561,8 +603,7 @@ find_child(struct d_tm_context *ctx, struct d_tm_node_t *parent,
 }
 
 static int
-init_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t *node,
-	  const char *name)
+init_node(struct d_tm_mem_hdr *mem_hdr, struct d_tm_node_t *node, const char *name)
 {
 	int buff_len;
 
@@ -572,13 +613,13 @@ init_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t *node,
 		return -DER_EXCEEDS_PATH_LEN;
 	}
 	buff_len += 1; /* make room for the trailing null */
-	node->dtn_name = shmalloc(shmem, buff_len);
+	node->dtn_name = tm_alloc(mem_hdr, buff_len);
 	if (node->dtn_name == NULL) {
 		D_ERROR("cannot allocate node name [%s]\n", name);
 		return -DER_NO_SHMEM;
 	}
-	strncpy(conv_ptr(shmem, node->dtn_name), name, buff_len);
-	node->dtn_shmem_key = shmem->sh_key;
+	strncpy(conv_ptr(mem_hdr, node->dtn_name), name, buff_len);
+	node->dtn_shmem_key = mem_hdr->sh_key;
 	node->dtn_child = NULL;
 	/* may be reinitializing an existing node, in which case we shouldn't
 	 * reset the metric ptr or the sibling ptr.
@@ -590,7 +631,7 @@ init_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t *node,
 /**
  * Allocate a \a newnode and initialize its \a name.
  *
- * \param[in]	shmem	Shared memory region
+ * \param[in]	mem_hdr	Parent memory region
  * \param[out]	newnode	A pointer for the new node
  * \param[in]	name	The name of the new node
  *
@@ -601,27 +642,26 @@ init_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t *node,
  *		-DER_INVAL		bad pointers given
  */
 static int
-alloc_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t **newnode,
-	   const char *name)
+alloc_node(struct d_tm_mem_hdr *mem_hdr, struct d_tm_node_t **newnode, const char *name)
 {
 	struct d_tm_node_t	*node = NULL;
 	struct d_tm_node_t      *tmp;
 	int			rc = DER_SUCCESS;
 
-	if (shmem == NULL || newnode == NULL || name == NULL) {
+	if (mem_hdr == NULL || newnode == NULL || name == NULL) {
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	node = shmalloc(shmem, sizeof(struct d_tm_node_t));
+	node = tm_alloc(mem_hdr, sizeof(struct d_tm_node_t));
 	if (node == NULL) {
 		rc = -DER_NO_SHMEM;
 		goto out;
 	}
 
-	tmp = conv_ptr(shmem, node);
+	tmp = conv_ptr(mem_hdr, node);
 
-	rc = init_node(shmem, tmp, name);
+	rc = init_node(mem_hdr, tmp, name);
 	if (rc != 0)
 		goto out;
 	tmp->dtn_metric  = NULL;
@@ -653,7 +693,7 @@ static int
 add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	  char *name)
 {
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr     *mem_hdr;
 	struct d_tm_node_t	*child = NULL;
 	struct d_tm_node_t	*sibling = NULL;
 	int			 rc = DER_SUCCESS;
@@ -662,13 +702,13 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		D_GOTO(failure, rc = -DER_INVAL);
 
 	if (parent->dtn_type == D_TM_LINK) {
-		parent = d_tm_follow_link(tm_shmem.ctx, parent);
+		parent = d_tm_follow_link(tm_mem.ctx, parent);
 		if (parent == NULL)
 			D_GOTO(failure, rc = -DER_INVAL);
 	}
 
-	shmem = get_shmem_for_key(tm_shmem.ctx, parent->dtn_shmem_key);
-	if (shmem == NULL) {
+	mem_hdr = get_mem_region_for_key(tm_mem.ctx, parent->dtn_shmem_key);
+	if (mem_hdr == NULL) {
 		D_ERROR("can't get parent node shmem region, key=0x%x\n",
 			parent->dtn_shmem_key);
 		D_GOTO(failure, rc = -DER_NO_SHMEM);
@@ -679,15 +719,15 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	 * 1) a previously-cleared link node that can be reused, or
 	 * 2) the right place to attach a newly allocated node.
 	 */
-	child = conv_ptr(shmem, parent->dtn_child);
-	while (child != NULL && !is_cleared_link(tm_shmem.ctx, child)) {
+	child = conv_ptr(mem_hdr, parent->dtn_child);
+	while (child != NULL && !is_cleared_link(tm_mem.ctx, child)) {
 		sibling = child;
-		child   = conv_ptr(shmem, child->dtn_sibling);
+		child   = conv_ptr(mem_hdr, child->dtn_sibling);
 	}
 
-	if (is_cleared_link(tm_shmem.ctx, child)) {
+	if (is_cleared_link(tm_mem.ctx, child)) {
 		/* we can reuse this node instead of allocating a new one */
-		rc = init_node(shmem, child, name);
+		rc = init_node(mem_hdr, child, name);
 		if (rc != 0) {
 			D_ERROR("failed to reinit cleared link node, " DF_RC
 				"\n", DP_RC(rc));
@@ -697,7 +737,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		return 0;
 	}
 
-	rc = alloc_node(shmem, newnode, name);
+	rc = alloc_node(mem_hdr, newnode, name);
 	if (rc != 0) {
 		D_ERROR("can't alloc child node, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(failure, rc);
@@ -712,7 +752,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	else
 		sibling->dtn_sibling = *newnode;
 
-	*newnode = conv_ptr(shmem, *newnode);
+	*newnode = conv_ptr(mem_hdr, *newnode);
 	return 0;
 
 failure:
@@ -721,57 +761,61 @@ failure:
 }
 
 static int
-alloc_ctx(struct d_tm_context **ctx, struct d_tm_shmem_hdr *shmem, int shmid)
+alloc_ctx(struct d_tm_context **ctx, struct d_tm_mem_hdr *mem_hdr, int shmid)
 {
 	struct d_tm_context *new_ctx;
 
 	D_ASSERT(ctx != NULL);
-	D_ASSERT(shmem != NULL);
+	D_ASSERT(mem_hdr != NULL);
 
 	D_ALLOC_PTR(new_ctx);
 	if (new_ctx == NULL)
 		return -DER_NOMEM;
 
-	new_ctx->shmem_root = shmem;
+	new_ctx->mem_root   = mem_hdr;
 	new_ctx->shmid_root = shmid;
-	D_INIT_LIST_HEAD(&new_ctx->open_shmem);
+	D_INIT_LIST_HEAD(&new_ctx->open_mem);
 
 	*ctx = new_ctx;
 	return 0;
 }
 
 static int
-create_shmem(const char *root_path, key_t key, size_t size_bytes,
-	     int *new_shmid, struct d_tm_shmem_hdr **new_shmem)
+create_mem_segment(const char *root_path, key_t key, size_t size_bytes, int *new_shmid,
+		   struct d_tm_mem_hdr **new_mem_hdr)
 {
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr     *mem_hdr;
+	bool                     shared = tm_mem.use_non_shared_mem ? false : true;
 	int			 rc;
 
 	D_ASSERT(root_path != NULL);
 	D_ASSERT(size_bytes > 0);
 	D_ASSERT(new_shmid != NULL);
-	D_ASSERT(new_shmem != NULL);
+	D_ASSERT(new_mem_hdr != NULL);
 
-	rc = allocate_shared_memory(key, size_bytes, &shmem);
+	rc = allocate_memory_segment(key, size_bytes, shared, &mem_hdr);
 	if (rc < 0)
 		return rc;
 
 	*new_shmid = rc;
-	rc = alloc_node(shmem, &shmem->sh_root, root_path);
+	rc         = alloc_node(mem_hdr, &mem_hdr->sh_root, root_path);
 	if (rc != 0) {
-		destroy_shmem(*new_shmid);
+		if (shared)
+			destroy_shmem(*new_shmid);
+		else
+			D_FREE(mem_hdr);
 		return rc;
 	}
 
-	*new_shmem = shmem;
+	*new_mem_hdr = mem_hdr;
 	return 0;
 }
 
 int
 destroy_shmem_with_key(key_t key)
 {
-	struct d_tm_shmem_hdr		*header;
-	struct shmem_region_list	*entry;
+	struct d_tm_mem_hdr             *header;
+	struct mem_region_list          *entry;
 	d_list_t			*cur;
 	d_list_t			*head;
 	int				rc;
@@ -808,7 +852,7 @@ destroy_shmem_with_key(key_t key)
 static bool
 is_initialized(void)
 {
-	return tm_shmem.ctx != NULL && tm_shmem.ctx->shmem_root != NULL;
+	return tm_mem.ctx != NULL && tm_mem.ctx->mem_root != NULL;
 }
 
 /**
@@ -817,7 +861,7 @@ is_initialized(void)
  *
  * \param[in]	id		Identifies the producer process amongst others
  *				on the same machine.
- * \param[in]	mem_size	Size in bytes of the shared memory segment that
+ * \param[in]	mem_size	Size in bytes of the memory segment that
  *				is allocated.
  * \param[in]	flags		Optional flags to control initialization.
  *				Use D_TM_SERIALIZATION to enable read/write
@@ -825,6 +869,8 @@ is_initialized(void)
  *				Use D_TM_RETAIN_SHMEM to retain the shared
  *				memory segment created for these metrics after
  *				this process exits.
+ *                              Use D_TM_NO_SHMEM to use non-shared memory
+ *                              for telemetry (client only).
  * \param[in]   root_name       The name of this node in the telemetry tree.
  *
  * \return		DER_SUCCESS		Success
@@ -835,7 +881,7 @@ is_initialized(void)
 int
 d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 {
-	struct d_tm_shmem_hdr   *new_shmem = NULL;
+	struct d_tm_mem_hdr     *new_mem_hdr = NULL;
 	key_t			 key;
 	int                      shmid = 0;
 	int			 rc = DER_SUCCESS;
@@ -853,63 +899,82 @@ d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 		return -DER_EXCEEDS_PATH_LEN;
 	}
 
-	memset(&tm_shmem, 0, sizeof(tm_shmem));
+	memset(&tm_mem, 0, sizeof(tm_mem));
 
 	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM | D_TM_RETAIN_SHMEM_IF_NON_EMPTY |
-		       D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK)) != 0) {
+		       D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK | D_TM_NO_SHMEM)) != 0) {
 		D_ERROR("Invalid flags 0x%x\n", flags);
 		rc = -DER_INVAL;
 		goto failure;
 	}
 
+	if ((flags & D_TM_NO_SHMEM) != 0) {
+		if ((flags & (D_TM_RETAIN_SHMEM | D_TM_RETAIN_SHMEM_IF_NON_EMPTY)) != 0) {
+			D_ERROR("Cannot set no_shmem with retain_shmem flags\n");
+			rc = -DER_INVAL;
+			goto failure;
+		}
+		/* TODO: Guard against non-client use of this flag */
+		D_INFO("Using non-shared memory segments for telemetry\n");
+		tm_mem.use_non_shared_mem = 1;
+	}
+
 	if (flags & D_TM_SERIALIZATION) {
-		tm_shmem.sync_access = 1;
+		tm_mem.sync_access = 1;
 		D_INFO("Serialization enabled for id %d\n", id);
 	}
 
 	if (flags & D_TM_RETAIN_SHMEM) {
-		tm_shmem.retain = 1;
+		tm_mem.retain = 1;
 		D_INFO("Retaining shared memory for id %d\n", id);
 	}
 
 	if (flags & D_TM_RETAIN_SHMEM_IF_NON_EMPTY) {
-		tm_shmem.retain_non_empty = 1;
+		tm_mem.retain_non_empty = 1;
 		D_INFO("Retaining shared memory for id %d if not empty\n", id);
 	}
 
 	if (flags & D_TM_MULTIPLE_WRITER_LOCK) {
-		tm_shmem.multiple_writer_lock = 1;
+		tm_mem.multiple_writer_lock = 1;
 		D_INFO("Require multiple write protection for id %d\n", id);
 	}
 
-	tm_shmem.id = id;
-	key = d_tm_get_srv_key(id);
-	if (flags & D_TM_OPEN_OR_CREATE) {
-		rc = open_shmem(key, &new_shmem);
-		if (rc > 0) {
-			D_ASSERT(new_shmem != NULL);
-			shmid = rc;
+	tm_mem.id = id;
+	key       = d_tm_get_srv_key(id);
+
+	if (tm_mem.use_non_shared_mem) {
+		rc = create_mem_segment(root_name, key, mem_size, &shmid, &new_mem_hdr);
+		if (rc != 0)
+			goto failure;
+	} else {
+		if (flags & D_TM_OPEN_OR_CREATE) {
+			rc = open_shmem(key, &new_mem_hdr);
+			if (rc > 0) {
+				D_ASSERT(new_mem_hdr != NULL);
+				shmid = rc;
+			}
+		}
+
+		if (new_mem_hdr == NULL) {
+			rc = destroy_shmem_with_key(key);
+			if (rc != 0)
+				goto failure;
+			rc = create_mem_segment(root_name, key, mem_size, &shmid, &new_mem_hdr);
+			if (rc != 0)
+				goto failure;
 		}
 	}
 
-	if (new_shmem == NULL) {
-		rc = destroy_shmem_with_key(key);
-		if (rc != 0)
-			goto failure;
-		rc = create_shmem(root_name, key, mem_size, &shmid, &new_shmem);
-		if (rc != 0)
-			goto failure;
-	}
-
-	rc = alloc_ctx(&tm_shmem.ctx, new_shmem, shmid);
+	rc = alloc_ctx(&tm_mem.ctx, new_mem_hdr, shmid);
 	if (rc != 0)
 		goto failure;
 
-	D_DEBUG(DB_TRACE, "Shared memory allocation success!\n"
-		"Memory size is %" PRIu64 " bytes at address 0x%" PRIx64
-		"\n", mem_size, new_shmem->sh_base_addr);
+	D_DEBUG(DB_TRACE,
+		"Telemetry memory allocation success!\n"
+		"Memory size is %" PRIu64 " bytes at address 0x%" PRIx64 "\n",
+		mem_size, new_mem_hdr->sh_base_addr);
 
-	rc = D_MUTEX_INIT(&tm_shmem.add_lock, NULL);
+	rc = D_MUTEX_INIT(&tm_mem.add_lock, NULL);
 	if (rc != 0) {
 		D_ERROR("Mutex init failure: " DF_RC "\n", DP_RC(rc));
 		goto failure;
@@ -922,7 +987,7 @@ d_tm_init_with_name(int id, uint64_t mem_size, int flags, const char *root_name)
 failure:
 	D_ERROR("Failed to initialize telemetry and metrics for ID %u: "
 		DF_RC "\n", id, DP_RC(rc));
-	d_tm_close(&tm_shmem.ctx);
+	release_ctx_mem(&tm_mem.ctx, false);
 	return rc;
 }
 
@@ -932,7 +997,7 @@ failure:
  *
  * \param[in]	id		Identifies the producer process amongst others
  *				on the same machine.
- * \param[in]	mem_size	Size in bytes of the shared memory segment that
+ * \param[in]	mem_size	Size in bytes of the memory segment that
  *				is allocated.
  * \param[in]	flags		Optional flags to control initialization.
  *				Use D_TM_SERIALIZATION to enable read/write
@@ -940,6 +1005,8 @@ failure:
  *				Use D_TM_RETAIN_SHMEM to retain the shared
  *				memory segment created for these metrics after
  *				this process exits.
+ *                              Use D_TM_NO_SHMEM to use non-shared memory
+ *                              for telemetry (client only).
  *
  * \return		DER_SUCCESS		Success
  *			-DER_NO_SHMEM		Out of shared memory
@@ -960,14 +1027,14 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 static bool
 is_node_empty(struct d_tm_node_t *node)
 {
-	struct d_tm_context   *ctx = tm_shmem.ctx;
-	struct d_tm_shmem_hdr *shmem;
+	struct d_tm_context   *ctx = tm_mem.ctx;
+	struct d_tm_mem_hdr   *mem_hdr;
 	struct d_tm_node_t    *child;
 
-	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
-	child = conv_ptr(shmem, node->dtn_child);
+	mem_hdr = get_mem_region_for_key(ctx, node->dtn_shmem_key);
+	child   = conv_ptr(mem_hdr, node->dtn_child);
 	while (child != NULL && !is_cleared_link(ctx, child)) {
-		child = conv_ptr(shmem, child->dtn_sibling);
+		child = conv_ptr(mem_hdr, child->dtn_sibling);
 		if (child->dtn_name != NULL)
 			return false;
 	}
@@ -983,26 +1050,25 @@ d_tm_fini(void)
 {
 	bool destroy_shmem = true;
 
-	if (tm_shmem.ctx == NULL)
+	if (tm_mem.ctx == NULL)
 		goto out;
 
-	if (tm_shmem.retain)
+	if (tm_mem.retain)
 		destroy_shmem = false;
 
-	if (tm_shmem.retain_non_empty) {
+	if (tm_mem.retain_non_empty) {
 		struct d_tm_node_t *root;
 
-		root = d_tm_get_root(tm_shmem.ctx);
+		root = d_tm_get_root(tm_mem.ctx);
 		if (!is_node_empty(root))
 			destroy_shmem = false;
 	}
 
 	/* close with the option to destroy the shmem region if needed */
-	close_all_shmem(tm_shmem.ctx, destroy_shmem);
-	d_tm_close(&tm_shmem.ctx);
+	release_ctx_mem(&tm_mem.ctx, destroy_shmem);
 
 out:
-	memset(&tm_shmem, 0, sizeof(tm_shmem));
+	memset(&tm_mem, 0, sizeof(tm_mem));
 }
 
 /**
@@ -1500,22 +1566,22 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 
 static int
 validate_node_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node,
-		  struct d_tm_shmem_hdr **node_shmem)
+		  struct d_tm_mem_hdr **node_mem_hdr)
 {
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr *mem_hdr;
 
 	D_ASSERT(node != NULL);
-	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
-	if (shmem == NULL) {
+	mem_hdr = get_mem_region_for_key(ctx, node->dtn_shmem_key);
+	if (mem_hdr == NULL) {
 		D_ERROR("node shmem key %d not valid\n", node->dtn_shmem_key);
 		return -DER_INVAL;
 	}
 
-	if (!validate_shmem_ptr(shmem, (void *)node))
+	if (!validate_shmem_ptr(mem_hdr, (void *)node))
 		return -DER_METRIC_NOT_FOUND;
 
-	if (node_shmem != NULL)
-		*node_shmem = shmem;
+	if (node_mem_hdr != NULL)
+		*node_mem_hdr = mem_hdr;
 
 	return 0;
 }
@@ -1567,22 +1633,22 @@ _reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node)
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
 	struct d_tm_histogram_t *dtm_histogram = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr       = NULL;
 	int			 rc;
 
 	if (ctx == NULL || node == NULL)
 		return -DER_INVAL;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data == NULL)
 		return -DER_METRIC_NOT_FOUND;
 
-	dtm_stats = conv_ptr(shmem, metric_data->dtm_stats);
-	dtm_histogram = conv_ptr(shmem, metric_data->dtm_histogram);
+	dtm_stats     = conv_ptr(mem_hdr, metric_data->dtm_stats);
+	dtm_histogram = conv_ptr(mem_hdr, metric_data->dtm_histogram);
 	d_tm_node_lock(node);
 	memset(&metric_data->dtm_data, 0, sizeof(metric_data->dtm_data));
 	if (dtm_stats != NULL)
@@ -1666,7 +1732,7 @@ void
 d_tm_iterate(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, int filter, char *path,
 	     int format, int opt_fields, d_tm_iter_cb_t iter_cb, void *cb_arg)
 {
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr     = NULL;
 	char			*fullpath = NULL;
 	char			*parent_name = NULL;
 
@@ -1679,16 +1745,16 @@ d_tm_iterate(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, int 
 			return;
 	}
 
-	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
-	if (shmem == NULL)
+	mem_hdr = get_mem_region_for_key(ctx, node->dtn_shmem_key);
+	if (mem_hdr == NULL)
 		return;
 
 	if (node->dtn_type & filter)
 		iter_cb(ctx, node, level, path, format, opt_fields, cb_arg);
 
-	parent_name = conv_ptr(shmem, node->dtn_name);
+	parent_name = conv_ptr(mem_hdr, node->dtn_name);
 	node = node->dtn_child;
-	node = conv_ptr(shmem, node);
+	node        = conv_ptr(mem_hdr, node);
 	if (node == NULL)
 		return;
 
@@ -1703,7 +1769,7 @@ d_tm_iterate(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, int 
 			     cb_arg);
 		D_FREE(fullpath);
 		node = node->dtn_sibling;
-		node = conv_ptr(shmem, node);
+		node = conv_ptr(mem_hdr, node);
 	}
 }
 
@@ -1748,7 +1814,7 @@ d_tm_count_metrics(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		   int d_tm_type)
 {
 	uint64_t		 count = 0;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr = NULL;
 
 	if (node == NULL)
 		return 0;
@@ -1759,20 +1825,20 @@ d_tm_count_metrics(struct d_tm_context *ctx, struct d_tm_node_t *node,
 			return 0;
 	}
 
-	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
-	if (shmem == NULL)
+	mem_hdr = get_mem_region_for_key(ctx, node->dtn_shmem_key);
+	if (mem_hdr == NULL)
 		return 0;
 
 	if (d_tm_type & node->dtn_type)
 		count++;
 
 	node = node->dtn_child;
-	node = conv_ptr(shmem, node);
+	node = conv_ptr(mem_hdr, node);
 
 	while (node != NULL) {
 		count += d_tm_count_metrics(ctx, node, d_tm_type);
 		node = node->dtn_sibling;
-		node = conv_ptr(shmem, node);
+		node = conv_ptr(mem_hdr, node);
 	}
 	return count;
 }
@@ -2293,7 +2359,7 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 	pthread_mutexattr_t	mattr;
 	struct d_tm_node_t	*parent_node;
 	struct d_tm_node_t	*temp = NULL;
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr     *mem_hdr;
 	struct d_tm_metric_t    *metric;
 	char			*token;
 	char			*rest;
@@ -2320,26 +2386,25 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 		goto out;
 	}
 
-	shmem = get_shmem_for_key(ctx, temp->dtn_shmem_key);
-	if (shmem == NULL) {
+	mem_hdr = get_mem_region_for_key(ctx, temp->dtn_shmem_key);
+	if (mem_hdr == NULL) {
 		rc = -DER_NO_SHMEM;
 		goto out;
 	}
 
 	temp->dtn_type = metric_type;
 	if (temp->dtn_metric == NULL) {
-		temp->dtn_metric = shmalloc(shmem,
-					    sizeof(struct d_tm_metric_t));
+		temp->dtn_metric = tm_alloc(mem_hdr, sizeof(struct d_tm_metric_t));
 		if (temp->dtn_metric == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto out;
 		}
 	}
 
-	metric            = conv_ptr(shmem, temp->dtn_metric);
+	metric            = conv_ptr(mem_hdr, temp->dtn_metric);
 	metric->dtm_stats = NULL;
 	if (has_stats(temp)) {
-		metric->dtm_stats = shmalloc(shmem, sizeof(struct d_tm_stats_t));
+		metric->dtm_stats = tm_alloc(mem_hdr, sizeof(struct d_tm_stats_t));
 		if (metric->dtm_stats == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto out;
@@ -2357,12 +2422,12 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 
 	if (buff_len > 0) {
 		buff_len += 1; /** make room for the trailing null */
-		metric->dtm_desc = shmalloc(shmem, buff_len);
+		metric->dtm_desc = tm_alloc(mem_hdr, buff_len);
 		if (metric->dtm_desc == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto out;
 		}
-		strncpy(conv_ptr(shmem, metric->dtm_desc), desc, buff_len);
+		strncpy(conv_ptr(mem_hdr, metric->dtm_desc), desc, buff_len);
 	} else {
 		metric->dtm_desc = NULL;
 	}
@@ -2398,19 +2463,18 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 
 	if (buff_len > 0) {
 		buff_len += 1; /** make room for the trailing null */
-		metric->dtm_units = shmalloc(shmem, buff_len);
+		metric->dtm_units = tm_alloc(mem_hdr, buff_len);
 		if (metric->dtm_units == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto out;
 		}
-		strncpy(conv_ptr(shmem, metric->dtm_units), unit_string, buff_len);
+		strncpy(conv_ptr(mem_hdr, metric->dtm_units), unit_string, buff_len);
 	} else {
 		metric->dtm_units = NULL;
 	}
 
 	temp->dtn_protect = false;
-	if (tm_shmem.sync_access &&
-	    (temp->dtn_type != D_TM_DIRECTORY)) {
+	if (tm_mem.sync_access && (temp->dtn_type != D_TM_DIRECTORY)) {
 		rc = pthread_mutexattr_init(&mattr);
 		if (rc != 0) {
 			D_ERROR("pthread_mutexattr_init failed: " DF_RC "\n",
@@ -2506,7 +2570,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 	 * which leads to this d_tm_add_metric() call.
 	 * If the metric is found, it's not an error.  Just return.
 	 */
-	tmp_node = d_tm_find_metric(tm_shmem.ctx, path);
+	tmp_node = d_tm_find_metric(tm_mem.ctx, path);
 	if (tmp_node != NULL) {
 		d_tm_unlock_shmem();
 		if (node != NULL)
@@ -2515,7 +2579,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 	}
 
 	D_DEBUG(DB_TRACE, "adding item: [%s] ", path);
-	rc = add_metric(tm_shmem.ctx, node, metric_type, desc, units, path);
+	rc = add_metric(tm_mem.ctx, node, metric_type, desc, units, path);
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "failed\n");
 		D_GOTO(failure, rc);
@@ -2532,7 +2596,7 @@ failure:
 }
 
 static void
-invalidate_link_node(struct d_tm_shmem_hdr *parent, struct d_tm_node_t *node)
+invalidate_link_node(struct d_tm_mem_hdr *parent, struct d_tm_node_t *node)
 {
 	if (node == NULL || node->dtn_type != D_TM_LINK)
 		return;
@@ -2547,19 +2611,18 @@ invalidate_link_node(struct d_tm_shmem_hdr *parent, struct d_tm_node_t *node)
 }
 
 static int
-get_free_region_entry(struct d_tm_shmem_hdr *shmem,
-		      struct shmem_region_list **entry)
+get_free_region_entry(struct d_tm_mem_hdr *mem_hdr, struct mem_region_list **entry)
 {
 	d_list_t                        *cur;
 	d_list_t                        *head;
 	d_list_t                        *next;
-	struct shmem_region_list	*tmp;
+	struct mem_region_list          *tmp;
 
-	D_ASSERT(shmem != NULL);
+	D_ASSERT(mem_hdr != NULL);
 	D_ASSERT(entry != NULL);
 
-	head = &shmem->sh_subregions;
-	for (cur = conv_ptr(shmem, head->next); cur != head; cur = conv_ptr(shmem, cur->next)) {
+	head = &mem_hdr->sh_subregions;
+	for (cur = conv_ptr(mem_hdr, head->next); cur != head; cur = conv_ptr(mem_hdr, cur->next)) {
 		tmp = d_list_entry(cur, __typeof__(*tmp), rl_link);
 		if (tmp->rl_link_node == NULL) {
 			*entry = tmp;
@@ -2567,29 +2630,27 @@ get_free_region_entry(struct d_tm_shmem_hdr *shmem,
 		}
 	}
 
-	tmp = shmalloc(shmem, sizeof(struct shmem_region_list));
+	tmp = tm_alloc(mem_hdr, sizeof(struct mem_region_list));
 	if (tmp == NULL) {
-		D_ERROR("failed to alloc entry for ephemeral shmem key 0x%x\n",
-			shmem->sh_key);
+		D_ERROR("failed to alloc entry for ephemeral shmem key 0x%x\n", mem_hdr->sh_key);
 		return -DER_NO_SHMEM;
 	}
 
-	next = conv_ptr(shmem, head->next);
+	next = conv_ptr(mem_hdr, head->next);
 	/* NB: sh_subregions is initialized by D_INIT_LIST_HEAD(), so it is not shmem address */
-	if (d_list_empty(&shmem->sh_subregions))
-		cur = (d_list_t *)(shmem->sh_base_addr +
-				   (uint64_t)(&((struct d_tm_shmem_hdr *)(0))->sh_subregions));
+	if (d_list_empty(&mem_hdr->sh_subregions))
+		cur = (d_list_t *)(mem_hdr->sh_base_addr +
+				   (uint64_t)(&((struct d_tm_mem_hdr *)(0))->sh_subregions));
 	else
 		cur = head->next;
 
 	head->next = &tmp->rl_link;
 	next->prev = &tmp->rl_link;
 
-	tmp               = conv_ptr(shmem, tmp);
+	tmp               = conv_ptr(mem_hdr, tmp);
 	tmp->rl_link.next = cur;
-	tmp->rl_link.prev =
-	    (d_list_t *)(shmem->sh_base_addr +
-			 (uint64_t)(&((struct d_tm_shmem_hdr *)(0))->sh_subregions));
+	tmp->rl_link.prev = (d_list_t *)(mem_hdr->sh_base_addr +
+					 (uint64_t)(&((struct d_tm_mem_hdr *)(0))->sh_subregions));
 
 	*entry = tmp;
 	return 0;
@@ -2664,7 +2725,7 @@ static int
 sync_attached_segment_uid(char *path, key_t child_key)
 {
 	struct d_tm_node_t  *link_node;
-	struct d_tm_context *ctx     = tm_shmem.ctx;
+	struct d_tm_context *ctx     = tm_mem.ctx;
 	struct shmid_ds      shminfo = {0};
 	uid_t                o_uid;
 	int                  child_shmid;
@@ -2711,10 +2772,10 @@ static int
 attach_path_segment(key_t key, char *path)
 {
 	struct d_tm_node_t       *link_node;
-	struct d_tm_context      *ctx = tm_shmem.ctx;
-	struct d_tm_shmem_hdr    *parent_shmem;
+	struct d_tm_context      *ctx = tm_mem.ctx;
+	struct d_tm_mem_hdr      *parent_mem_hdr;
 	struct d_tm_metric_t     *link_metric;
-	struct shmem_region_list *region_entry;
+	struct mem_region_list   *region_entry;
 	int                       rc;
 
 	if (unlikely(path == NULL)) {
@@ -2730,28 +2791,28 @@ attach_path_segment(key_t key, char *path)
 	}
 
 	/* track attached regions within the parent shmem */
-	parent_shmem = get_shmem_for_key(ctx, link_node->dtn_shmem_key);
-	if (unlikely(parent_shmem == NULL)) {
-		D_ERROR("failed to get parent shmem pointer\n");
+	parent_mem_hdr = get_mem_region_for_key(ctx, link_node->dtn_shmem_key);
+	if (unlikely(parent_mem_hdr == NULL)) {
+		D_ERROR("failed to get parent mem pointer\n");
 		D_GOTO(fail_link, rc = -DER_NO_SHMEM);
 	}
 
 	D_ASSERT(link_node->dtn_type == D_TM_LINK);
-	link_metric                 = conv_ptr(parent_shmem, link_node->dtn_metric);
+	link_metric                 = conv_ptr(parent_mem_hdr, link_node->dtn_metric);
 	link_metric->dtm_data.value = key;
 
-	rc = get_free_region_entry(parent_shmem, &region_entry);
+	rc = get_free_region_entry(parent_mem_hdr, &region_entry);
 	if (unlikely(rc != 0))
 		D_GOTO(fail_link, rc);
 	region_entry->rl_key       = key;
 	region_entry->rl_link_node = link_node;
 
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
+	if (tm_mem.multiple_writer_lock)
+		D_MUTEX_UNLOCK(&ctx->mem_root->sh_multiple_writer_lock);
 
 	return 0;
 fail_link:
-	invalidate_link_node(parent_shmem, link_node);
+	invalidate_link_node(parent_mem_hdr, link_node);
 fail:
 	return rc;
 }
@@ -2761,7 +2822,7 @@ fail:
  * by fmt. This segment will be treated the same as an ephemeral directory
  * that can be deleted later along with its children.
  *
- * \param[in]	key		Key to the shared memory segment
+ * \param[in]	key		Key to the memory segment
  * \param[in]	fmt		Path constructed via variadic arguments
  *
  * \return	0		Success
@@ -2772,7 +2833,7 @@ int
 d_tm_attach_path_segment(key_t key, const char *fmt, ...)
 {
 	struct d_tm_node_t  *link_node;
-	struct d_tm_context *ctx = tm_shmem.ctx;
+	struct d_tm_context *ctx = tm_mem.ctx;
 	va_list              args;
 	char                 path[D_TM_MAX_NAME_LEN] = {0};
 	int                  rc;
@@ -2840,8 +2901,8 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		       const char *fmt, ...)
 {
 	struct d_tm_node_t              *new_node;
-	struct d_tm_context             *ctx = tm_shmem.ctx;
-	struct d_tm_shmem_hdr           *new_shmem;
+	struct d_tm_context             *ctx = tm_mem.ctx;
+	struct d_tm_mem_hdr             *new_mem_hdr;
 	va_list				 args;
 	key_t				 key;
 	char				 path[D_TM_MAX_NAME_LEN] = {0};
@@ -2856,7 +2917,7 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		D_GOTO(fail, rc = -DER_INVAL);
 	}
 
-	if (size_bytes <= sizeof(struct d_tm_shmem_hdr) ||
+	if (size_bytes <= sizeof(struct d_tm_mem_hdr) ||
 	    size_bytes % 8 != 0) { /* must be 64-bit aligned */
 		D_ERROR("invalid size requested, size=%lu\n", size_bytes);
 		D_GOTO(fail, rc = -DER_INVAL);
@@ -2885,17 +2946,16 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		D_GOTO(fail_unlock, rc = -DER_EXIST);
 	}
 
-	key = get_unique_shmem_key(path, tm_shmem.id);
-	rc = create_shmem(get_last_token(path), key, size_bytes, &new_shmid,
-			  &new_shmem);
+	key = get_unique_shmem_key(path, tm_mem.id);
+	rc  = create_mem_segment(get_last_token(path), key, size_bytes, &new_shmid, &new_mem_hdr);
 	if (unlikely(rc != 0)) {
 		DL_ERROR(rc, "failed to create shmem for %s", path);
 		D_GOTO(fail_unlock, rc);
 	}
-	new_node = new_shmem->sh_root;
+	new_node = new_mem_hdr->sh_root;
 
 	/* track at the process level */
-	rc = track_open_shmem(ctx, new_shmem, new_shmid, key);
+	rc = track_open_region(ctx, new_mem_hdr, new_shmid, key);
 	if (unlikely(rc != 0)) {
 		DL_ERROR(rc, "failed to track shmem for %s", path);
 		D_GOTO(fail_shmem, rc);
@@ -2907,10 +2967,12 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		D_GOTO(fail_attach, rc);
 	}
 
-	rc = sync_attached_segment_uid(path, key);
-	if (unlikely(rc != 0)) {
-		DL_ERROR(rc, "failed to sync %s permissions", path);
-		D_GOTO(fail_sync, rc);
+	if (!tm_mem.use_non_shared_mem) {
+		rc = sync_attached_segment_uid(path, key);
+		if (unlikely(rc != 0)) {
+			DL_ERROR(rc, "failed to sync %s permissions", path);
+			D_GOTO(fail_sync, rc);
+		}
 	}
 
 	if (node != NULL)
@@ -2928,7 +2990,7 @@ fail_attach:
 	close_shmem_for_key(ctx, key, true);
 	goto fail_unlock; /* shmem will be closed/destroyed already */
 fail_shmem:
-	close_shmem(new_shmem);
+	close_shmem(new_mem_hdr);
 	destroy_shmem(new_shmid);
 fail_unlock:
 	d_tm_unlock_shmem();
@@ -2939,14 +3001,14 @@ fail:
 }
 
 static void
-clear_region_entry_for_key(struct d_tm_shmem_hdr *shmem, key_t key)
+clear_region_entry_for_key(struct d_tm_mem_hdr *mem_hdr, key_t key)
 {
 	d_list_t                 *cur;
 	d_list_t                 *head;
-	struct shmem_region_list *tmp;
+	struct mem_region_list   *tmp;
 
-	head = &shmem->sh_subregions;
-	for (cur = conv_ptr(shmem, head->next); cur != head; cur = conv_ptr(shmem, cur->next)) {
+	head = &mem_hdr->sh_subregions;
+	for (cur = conv_ptr(mem_hdr, head->next); cur != head; cur = conv_ptr(mem_hdr, cur->next)) {
 		tmp = d_list_entry(cur, __typeof__(*tmp), rl_link);
 		if (tmp->rl_key == key) {
 			D_DEBUG(DB_TRACE,
@@ -2963,12 +3025,12 @@ clear_region_entry_for_key(struct d_tm_shmem_hdr *shmem, key_t key)
 static int
 rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 {
-	struct d_tm_shmem_hdr		*parent_shmem;
-	struct d_tm_shmem_hdr		*shmem;
+	struct d_tm_mem_hdr             *parent_mem_hdr;
+	struct d_tm_mem_hdr             *mem_hdr;
 	struct d_tm_node_t		*node;
 	d_list_t                        *cur;
 	d_list_t                        *head;
-	struct shmem_region_list	*curr;
+	struct mem_region_list          *curr;
 	key_t				 key;
 	int				 rc = 0;
 
@@ -2980,8 +3042,8 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	parent_shmem = get_shmem_for_key(ctx, link->dtn_shmem_key);
-	if (parent_shmem == NULL) {
+	parent_mem_hdr = get_mem_region_for_key(ctx, link->dtn_shmem_key);
+	if (parent_mem_hdr == NULL) {
 		D_ERROR("couldn't get parent shmem, key=0x%x\n",
 			link->dtn_shmem_key);
 		D_GOTO(out, rc = -DER_SHMEM_PERMS);
@@ -2994,29 +3056,29 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 	}
 	key = node->dtn_shmem_key;
 
-	shmem = get_shmem_for_key(ctx, key);
-	if (shmem == NULL) {
+	mem_hdr = get_mem_region_for_key(ctx, key);
+	if (mem_hdr == NULL) {
 		D_ERROR("couldn't get shmem for key 0x%x\n", key);
 		D_GOTO(out_link, rc = -DER_SHMEM_PERMS);
 	}
 
 	/* delete sub-regions recursively */
-	head = &shmem->sh_subregions;
-	for (cur = conv_ptr(shmem, head->next); cur != head; cur = conv_ptr(shmem, cur->next)) {
+	head = &mem_hdr->sh_subregions;
+	for (cur = conv_ptr(mem_hdr, head->next); cur != head; cur = conv_ptr(mem_hdr, cur->next)) {
 		curr = d_list_entry(cur, __typeof__(*curr), rl_link);
-		rc   = rm_ephemeral_dir(ctx, conv_ptr(shmem, curr->rl_link_node));
+		rc   = rm_ephemeral_dir(ctx, conv_ptr(mem_hdr, curr->rl_link_node));
 		if (rc != 0) /* nothing much we can do to recover here */
 			D_ERROR("error removing tmp dir [%s]: "DF_RC"\n",
 				link->dtn_name, DP_RC(rc));
 	}
 	rc = 0; /* subregions will be cut off regardless */
 
-	clear_region_entry_for_key(parent_shmem, key);
+	clear_region_entry_for_key(parent_mem_hdr, key);
 	close_shmem_for_key(ctx, key, true);
 
 out_link:
 	/* invalidate since the link node can't be deleted from parent */
-	invalidate_link_node(parent_shmem, link);
+	invalidate_link_node(parent_mem_hdr, link);
 out:
 	return rc;
 }
@@ -3024,7 +3086,7 @@ out:
 static int
 try_del_ephemeral_dir(char *path, bool force)
 {
-	struct d_tm_context *ctx = tm_shmem.ctx;
+	struct d_tm_context *ctx = tm_mem.ctx;
 	struct d_tm_node_t  *link;
 	int                  rc = 0;
 
@@ -3173,7 +3235,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets, int i
 	struct d_tm_metric_t	*metric;
 	struct d_tm_histogram_t	*histogram;
 	struct d_tm_bucket_t	*dth_buckets;
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr     *mem_hdr;
 	uint64_t                 min = 0;
 	uint64_t                 max = 0;
 	char                    *max_str;
@@ -3201,8 +3263,8 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets, int i
 	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
-	shmem = get_shmem_for_key(tm_shmem.ctx, node->dtn_shmem_key);
-	if (shmem == NULL) {
+	mem_hdr = get_mem_region_for_key(tm_mem.ctx, node->dtn_shmem_key);
+	if (mem_hdr == NULL) {
 		rc = -DER_NO_SHMEM;
 		goto failure;
 	}
@@ -3214,7 +3276,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets, int i
 	}
 
 	metric = node->dtn_metric;
-	histogram = shmalloc(shmem, sizeof(struct d_tm_histogram_t));
+	histogram = tm_alloc(mem_hdr, sizeof(struct d_tm_histogram_t));
 
 	if (histogram == NULL) {
 		d_tm_unlock_shmem();
@@ -3222,8 +3284,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets, int i
 		goto failure;
 	}
 
-	histogram->dth_buckets = shmalloc(shmem, num_buckets *
-					       sizeof(struct d_tm_bucket_t));
+	histogram->dth_buckets = tm_alloc(mem_hdr, num_buckets * sizeof(struct d_tm_bucket_t));
 	if (histogram->dth_buckets == NULL) {
 		d_tm_unlock_shmem();
 		rc = -DER_NO_SHMEM;
@@ -3324,7 +3385,7 @@ d_tm_get_num_buckets(struct d_tm_context *ctx,
 {
 	struct d_tm_histogram_t	*dtm_histogram = NULL;
 	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr       = NULL;
 	int			 rc;
 
 	if (ctx == NULL || histogram == NULL || node == NULL)
@@ -3333,18 +3394,18 @@ d_tm_get_num_buckets(struct d_tm_context *ctx,
 	if (unlikely(!node_is_readable(node)))
 		return -DER_AGAIN;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
 	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data == NULL)
 		return -DER_METRIC_NOT_FOUND;
 
-	dtm_histogram = conv_ptr(shmem, metric_data->dtm_histogram);
+	dtm_histogram = conv_ptr(mem_hdr, metric_data->dtm_histogram);
 	if (dtm_histogram == NULL)
 		return -DER_METRIC_NOT_FOUND;
 
@@ -3383,7 +3444,7 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 	struct d_tm_histogram_t	*dtm_histogram = NULL;
 	struct d_tm_bucket_t	*dth_bucket = NULL;
 	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr       = NULL;
 	int			 rc;
 
 	if (ctx == NULL || node == NULL || bucket == NULL)
@@ -3392,7 +3453,7 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 	if (bucket_id < 0)
 		return -DER_INVAL;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
@@ -3402,24 +3463,24 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data == NULL)
 		return -DER_METRIC_NOT_FOUND;
 
-	dtm_histogram = conv_ptr(shmem, metric_data->dtm_histogram);
+	dtm_histogram = conv_ptr(mem_hdr, metric_data->dtm_histogram);
 	if (dtm_histogram == NULL)
 		return -DER_METRIC_NOT_FOUND;
 
 	if (bucket_id >= dtm_histogram->dth_num_buckets)
 		return -DER_INVAL;
 
-	dth_bucket = conv_ptr(shmem, dtm_histogram->dth_buckets);
+	dth_bucket = conv_ptr(mem_hdr, dtm_histogram->dth_buckets);
 	if (dth_bucket == NULL)
 		return -DER_METRIC_NOT_FOUND;
 
 	bucket->dtb_min = dth_bucket[bucket_id].dtb_min;
 	bucket->dtb_max = dth_bucket[bucket_id].dtb_max;
-	bucket->dtb_bucket = conv_ptr(shmem, dth_bucket[bucket_id].dtb_bucket);
+	bucket->dtb_bucket = conv_ptr(mem_hdr, dth_bucket[bucket_id].dtb_bucket);
 	return DER_SUCCESS;
 }
 
@@ -3441,7 +3502,7 @@ d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
 		 struct d_tm_node_t *node)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr     = NULL;
 	int			 rc;
 
 	if (val == NULL || node == NULL || node->dtn_metric == NULL)
@@ -3457,11 +3518,11 @@ d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
 	if (ctx == NULL) {
 		metric_data = node->dtn_metric;
 	} else {
-		rc = validate_node_ptr(ctx, node, &shmem);
+		rc = validate_node_ptr(ctx, node, &mem_hdr);
 		if (rc != 0)
 			return rc;
 
-		metric_data = conv_ptr(shmem, node->dtn_metric);
+		metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 		if (metric_data == NULL)
 			return -DER_METRIC_NOT_FOUND;
 	}
@@ -3489,13 +3550,13 @@ d_tm_get_timestamp(struct d_tm_context *ctx, time_t *val,
 		   struct d_tm_node_t *node)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr     = NULL;
 	int			 rc;
 
 	if (ctx == NULL || val == NULL || node == NULL)
 		return -DER_INVAL;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
@@ -3505,7 +3566,7 @@ d_tm_get_timestamp(struct d_tm_context *ctx, time_t *val,
 	if (unlikely(!node_is_readable(node)))
 		return -DER_AGAIN;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data != NULL) {
 		d_tm_node_lock(node);
 		*val = metric_data->dtm_data.value;
@@ -3521,13 +3582,13 @@ d_tm_get_meminfo(struct d_tm_context *ctx, struct d_tm_meminfo_t *meminfo,
 		 struct d_tm_node_t *node)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr     = NULL;
 	int			 rc;
 
 	if (ctx == NULL || meminfo == NULL || node == NULL)
 		return -DER_INVAL;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
@@ -3537,7 +3598,7 @@ d_tm_get_meminfo(struct d_tm_context *ctx, struct d_tm_meminfo_t *meminfo,
 	if (unlikely(!node_is_readable(node)))
 		return -DER_AGAIN;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data != NULL) {
 		d_tm_node_lock(node);
 		*meminfo = metric_data->dtm_data.meminfo;
@@ -3567,13 +3628,13 @@ d_tm_get_timer_snapshot(struct d_tm_context *ctx, struct timespec *tms,
 			struct d_tm_node_t *node)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr     = NULL;
 	int			 rc;
 
 	if (ctx == NULL || tms == NULL || node == NULL)
 		return -DER_INVAL;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
@@ -3583,7 +3644,7 @@ d_tm_get_timer_snapshot(struct d_tm_context *ctx, struct timespec *tms,
 	if (unlikely(!node_is_readable(node)))
 		return -DER_AGAIN;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data != NULL) {
 		d_tm_node_lock(node);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
@@ -3619,14 +3680,14 @@ d_tm_get_duration(struct d_tm_context *ctx, struct timespec *tms,
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr     = NULL;
 	double			 sum = 0;
 	int			 rc;
 
 	if (ctx == NULL || tms == NULL || node == NULL)
 		return -DER_INVAL;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
@@ -3636,11 +3697,11 @@ d_tm_get_duration(struct d_tm_context *ctx, struct timespec *tms,
 	if (unlikely(!node_is_readable(node)))
 		return -DER_AGAIN;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data == NULL)
 		return -DER_METRIC_NOT_FOUND;
 
-	dtm_stats = conv_ptr(shmem, metric_data->dtm_stats);
+	dtm_stats = conv_ptr(mem_hdr, metric_data->dtm_stats);
 	d_tm_node_lock(node);
 	tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 	tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
@@ -3687,14 +3748,14 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr     = NULL;
 	double			 sum = 0;
 	int			 rc;
 
 	if (ctx == NULL || val == NULL || node == NULL)
 		return -DER_INVAL;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
@@ -3704,9 +3765,9 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 	if (unlikely(!node_is_readable(node)))
 		return -DER_AGAIN;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data != NULL) {
-		dtm_stats = conv_ptr(shmem, metric_data->dtm_stats);
+		dtm_stats = conv_ptr(mem_hdr, metric_data->dtm_stats);
 		d_tm_node_lock(node);
 		*val = metric_data->dtm_data.value;
 		if (has_stats(node) && stats != NULL && dtm_stats != NULL) {
@@ -3752,7 +3813,7 @@ int d_tm_get_metadata(struct d_tm_context *ctx, char **desc, char **units,
 		      struct d_tm_node_t *node)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_shmem_hdr	*shmem = NULL;
+	struct d_tm_mem_hdr     *mem_hdr     = NULL;
 	char			*desc_str;
 	char			*units_str;
 	int			 rc;
@@ -3769,7 +3830,7 @@ int d_tm_get_metadata(struct d_tm_context *ctx, char **desc, char **units,
 	if (units != NULL)
 		*units = NULL;
 
-	rc = validate_node_ptr(ctx, node, &shmem);
+	rc = validate_node_ptr(ctx, node, &mem_hdr);
 	if (rc != 0)
 		return rc;
 
@@ -3779,13 +3840,13 @@ int d_tm_get_metadata(struct d_tm_context *ctx, char **desc, char **units,
 	if (unlikely(!node_is_readable(node)))
 		return -DER_AGAIN;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
+	metric_data = conv_ptr(mem_hdr, node->dtn_metric);
 	if (metric_data != NULL) {
 		d_tm_node_lock(node);
-		desc_str = conv_ptr(shmem, metric_data->dtm_desc);
+		desc_str = conv_ptr(mem_hdr, metric_data->dtm_desc);
 		if ((desc != NULL) && (desc_str != NULL))
 			D_STRNDUP(*desc, desc_str, D_TM_MAX_DESC_LEN);
-		units_str = conv_ptr(shmem, metric_data->dtm_units);
+		units_str = conv_ptr(mem_hdr, metric_data->dtm_units);
 		if ((units != NULL) && (units_str != NULL))
 			D_STRNDUP(*units, units_str, D_TM_MAX_UNIT_LEN);
 		d_tm_node_unlock(node);
@@ -3817,7 +3878,7 @@ list_children(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 {
 	int			 rc = DER_SUCCESS;
 	int			 skip_add = skip_root && (cur_depth == 0);
-	struct d_tm_shmem_hdr	*shmem;
+	struct d_tm_mem_hdr     *mem_hdr;
 
 	cur_depth++;
 	if (max_depth > 0 && cur_depth > max_depth)
@@ -3843,11 +3904,11 @@ list_children(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	if (node->dtn_child == NULL)
 		goto out;
 
-	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
-	if (shmem == NULL)
+	mem_hdr = get_mem_region_for_key(ctx, node->dtn_shmem_key);
+	if (mem_hdr == NULL)
 		D_GOTO(out, rc = -DER_SHMEM_PERMS);
 
-	node = conv_ptr(shmem, node->dtn_child);
+	node = conv_ptr(mem_hdr, node->dtn_child);
 	if (node == NULL) {
 		rc = -DER_INVAL;
 		goto out;
@@ -3858,7 +3919,7 @@ list_children(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 				   cur_depth, max_depth, 0);
 		if (rc != DER_SUCCESS)
 			goto out;
-		node = conv_ptr(shmem, node->dtn_sibling);
+		node = conv_ptr(mem_hdr, node->dtn_sibling);
 	}
 
 out:
@@ -4021,27 +4082,31 @@ d_tm_cli_pid_key(pid_t pid)
 }
 
 /**
- * Allocates a shared memory segment for a given key.
+ * Allocates a memory segment for a given key.
  *
- * \param[in]	key		Key for the shmem region
- * \param[in]	mem_size	Size in bytes of the shared memory region
- * \param[out]	shmem		Address of new shmem region
+ * \param[in]	key		Key for the memory region
+ * \param[in]	mem_size	Size in bytes of the memory region
+ * \param[in]   shared          Use shared memory
+ * \param[out]	mem_hdr		Address of new memory region
  *
  * \return	Shmid of new shmem region
  *		-DER_NO_SHMEM		Failed to allocate new shmem
  *		-DER_SHMEM_PERMS	Failed to attach to new shmem
  */
 static int
-allocate_shared_memory(key_t key, size_t mem_size,
-		       struct d_tm_shmem_hdr **shmem)
+allocate_memory_segment(key_t key, size_t mem_size, bool shared, struct d_tm_mem_hdr **mem_hdr)
 {
 	int			 shmid;
-	struct d_tm_shmem_hdr	*header;
+	const char              *mem_type = "";
+	struct d_tm_mem_hdr     *header;
 	int                      rc;
 
-	D_ASSERT(shmem != NULL);
+	D_ASSERT(mem_hdr != NULL);
 
-	shmid = new_shmem(key, mem_size, &header);
+	if (shared)
+		mem_type = "shared ";
+
+	shmid = new_mem_segment(key, mem_size, shared, &header);
 	if (shmid < 0)
 		return shmid;
 
@@ -4054,12 +4119,12 @@ allocate_shared_memory(key_t key, size_t mem_size,
 	header->sh_base_addr = (uint64_t)header;
 	header->sh_key = key;
 	header->sh_bytes_total = mem_size;
-	header->sh_bytes_free = mem_size - sizeof(struct d_tm_shmem_hdr);
-	header->sh_free_addr = (void *)header + sizeof(struct d_tm_shmem_hdr);
+	header->sh_bytes_free  = mem_size - sizeof(struct d_tm_mem_hdr);
+	header->sh_free_addr   = (void *)header + sizeof(struct d_tm_mem_hdr);
 
 	D_INIT_LIST_HEAD(&header->sh_subregions);
 
-	if (tm_shmem.multiple_writer_lock) {
+	if (tm_mem.multiple_writer_lock) {
 		rc = D_MUTEX_INIT(&header->sh_multiple_writer_lock, NULL);
 		if (rc) {
 			DL_ERROR(rc, "multiple writer lock failed");
@@ -4068,10 +4133,11 @@ allocate_shared_memory(key_t key, size_t mem_size,
 	}
 
 	D_DEBUG(DB_MEM,
-		"Created shared memory region for key 0x%x, size=%lu header %p base %p free %p\n",
-		key, mem_size, header, (void *)header->sh_base_addr, (void *)header->sh_free_addr);
+		"Created %smemory region for key 0x%x, size=%lu header %p base %p free %p\n",
+		mem_type, key, mem_size, header, (void *)header->sh_base_addr,
+		(void *)header->sh_free_addr);
 
-	*shmem = header;
+	*mem_hdr = header;
 
 	return shmid;
 }
@@ -4088,19 +4154,33 @@ struct d_tm_context *
 d_tm_open(int id)
 {
 	struct d_tm_context	*new_ctx;
-	struct d_tm_shmem_hdr	*addr;
+	struct d_tm_mem_hdr     *addr;
 	key_t			key;
 	int			shmid;
 
-	key = d_tm_get_srv_key(id);
-	shmid = open_shmem(key, &addr);
-	if (shmid < 0)
-		return NULL;
+	if (tm_mem.use_non_shared_mem) {
+		new_ctx = tm_mem.ctx;
+	} else {
+		key   = d_tm_get_srv_key(id);
+		shmid = open_shmem(key, &addr);
+		if (shmid < 0)
+			return NULL;
 
-	if (alloc_ctx(&new_ctx, addr, shmid) != 0)
-		return NULL;
+		if (alloc_ctx(&new_ctx, addr, shmid) != 0)
+			return NULL;
+	}
 
 	return new_ctx;
+}
+
+static void
+release_ctx_mem(struct d_tm_context **ctx, bool destroy_shmem)
+{
+	if (ctx == NULL || *ctx == NULL)
+		return;
+
+	release_all_mem_list_entries(*ctx, destroy_shmem);
+	D_FREE(*ctx);
 }
 
 /**
@@ -4111,52 +4191,52 @@ d_tm_open(int id)
 void
 d_tm_close(struct d_tm_context **ctx)
 {
-	if (ctx == NULL || *ctx == NULL)
+	/* d_tm_fini() will clean up */
+	if (tm_mem.use_non_shared_mem)
 		return;
 
-	close_all_shmem(*ctx, false);
-	D_FREE(*ctx);
+	release_ctx_mem(ctx, false);
 }
 
 /**
  * Releases deleted resources cached by the context.
  *
- * Not thread safe. Recommended as a periodic task for telemetry clients.
+ * Not thread safe. Recommended as a periodic task for telemetry consumers.
  *
  * \param[in]	ctx	Context to be garbage collected
  */
 void
 d_tm_gc_ctx(struct d_tm_context *ctx)
 {
-	struct local_shmem_list	*cur = NULL;
-	struct local_shmem_list	*next = NULL;
+	struct local_mem_list *cur  = NULL;
+	struct local_mem_list *next = NULL;
 
 	if (ctx == NULL)
 		return;
 
-	d_list_for_each_entry_safe(cur, next, &ctx->open_shmem, link) {
+	d_list_for_each_entry_safe(cur, next, &ctx->open_mem, link) {
 		if (cur->region == NULL || cur->region->sh_deleted)
-			close_local_shmem_entry(cur, false);
+			release_mem_list_entry(cur, false);
 	}
 }
 
 /**
- * Allocates memory from within the shared memory pool with 64-bit alignment
+ * Allocates memory from within the pre-allocated memory pool with 64-bit alignment.
  * Clears the allocated buffer.
  *
- * param[in]	shmem	The shmem pool in which to alloc
- * param[in]	length	Size in bytes of the region within the shared memory
+ * param[in]	mem_hdr	The memory pool in which to alloc
+ * param[in]	length	Size in bytes of the region within the memory
  *			pool to allocate
  *
  * \return		Address of the allocated memory
  *			NULL if there was no more memory available
  */
 static void *
-shmalloc(struct d_tm_shmem_hdr *shmem, int length)
+tm_alloc(struct d_tm_mem_hdr *mem_hdr, int length)
 {
 	void *new_mem;
 
-	if (shmem == NULL || length == 0)
+	if (mem_hdr == NULL || length == 0)
 		return NULL;
 
 	if (length % sizeof(uint64_t) != 0) {
@@ -4164,24 +4244,24 @@ shmalloc(struct d_tm_shmem_hdr *shmem, int length)
 		length &= ~(sizeof(uint64_t) - 1);
 	}
 
-	if ((shmem->sh_bytes_free == 0 || length > shmem->sh_bytes_free)) {
+	if ((mem_hdr->sh_bytes_free == 0 || length > mem_hdr->sh_bytes_free)) {
 		D_CRIT("Shared memory allocation failure!\n");
 		return NULL;
 	}
 
-	new_mem = shmem->sh_free_addr;
+	new_mem = mem_hdr->sh_free_addr;
 
-	shmem->sh_bytes_free -= length;
-	shmem->sh_free_addr += length;
+	mem_hdr->sh_bytes_free -= length;
+	mem_hdr->sh_free_addr += length;
 	D_DEBUG(DB_TRACE, "Allocated %d bytes.  Now %" PRIu64 " remain %p/%p\n", length,
-		shmem->sh_bytes_free, shmem, new_mem);
-	memset(conv_ptr(shmem, new_mem), 0, length);
+		mem_hdr->sh_bytes_free, mem_hdr, new_mem);
+	memset(conv_ptr(mem_hdr, new_mem), 0, length);
 	return new_mem;
 }
 
 /**
  * Validates that the pointer resides within the address space
- * of the client's shared memory region.
+ * of the consumer's shared memory region.
  *
  * \param[in]	shmem_root	Pointer to the shared memory segment
  * \param[in]	ptr		The pointer to validate
@@ -4190,7 +4270,7 @@ shmalloc(struct d_tm_shmem_hdr *shmem, int length)
  *		false		The pointer is invalid
  */
 bool
-validate_shmem_ptr(struct d_tm_shmem_hdr *shmem_root, void *ptr)
+validate_shmem_ptr(struct d_tm_mem_hdr *shmem_root, void *ptr)
 {
 	uint64_t shmem_max_addr;
 
@@ -4207,28 +4287,28 @@ validate_shmem_ptr(struct d_tm_shmem_hdr *shmem_root, void *ptr)
 }
 
 /**
- * Convert the virtual address of the pointer in shared memory from a server
- * address to a client side virtual address.
+ * Convert the virtual address of the pointer in shared memory from a producer
+ * address to a consumer side virtual address.
  *
  * \param[in]	ctx	Telemetry context
  * \param[in]	node	Node this pointer belongs to
  * \param[in]	ptr	The pointer to convert
  *
- * \return		A pointer to the item in the client's address
+ * \return		A pointer to the item in the consumer's address
  *			space
  *			NULL if the pointer is invalid
  */
 void *
 d_tm_conv_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node, void *ptr)
 {
-	struct d_tm_shmem_hdr *shmem = NULL;
+	struct d_tm_mem_hdr *mem_hdr = NULL;
 
-	if (ctx == NULL || ctx->shmem_root == NULL || node == NULL)
+	if (ctx == NULL || ctx->mem_root == NULL || node == NULL)
 		return NULL;
 
-	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
-	if (shmem == NULL)
+	mem_hdr = get_mem_region_for_key(ctx, node->dtn_shmem_key);
+	if (mem_hdr == NULL)
 		return NULL;
 
-	return conv_ptr(shmem, ptr);
+	return conv_ptr(mem_hdr, ptr);
 }
