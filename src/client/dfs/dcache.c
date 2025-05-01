@@ -13,6 +13,8 @@
 #include <stdint.h>
 #include <inttypes.h>
 
+#include <daos/pool.h>
+#include <daos/container.h>
 #include <daos/debug.h>
 #include <gurt/hash.h>
 #include <gurt/list.h>
@@ -82,14 +84,16 @@ typedef int (*drec_del_fn_t)(dfs_dcache_t *, char *, dfs_obj_t *);
 /** DFS dentry cache */
 struct dfs_dcache {
 	/** Cached DAOS file system */
-	dfs_t              *dd_dfs;
+	dfs_t *dd_dfs;
+	/** Key prefix of the DFS root directory */
+	char   dd_key_root_prefix[DCACHE_KEY_PREF_SIZE];
+	/** cache type */
+	int    dd_type;
 	union {
 		/** process local (dram) cache */
 		struct {
 			/** Hash table holding the cached directories */
 			struct d_hash_table  dd_dir_hash;
-			/** Key prefix of the DFS root directory */
-			char                 dd_key_root_prefix[DCACHE_KEY_PREF_SIZE];
 			/** flag to indicate whether garbage collection is disabled or not */
 			bool                 dd_disable_gc;
 			/** Garbage collector time-out of a dir-cache record in seconds */
@@ -126,7 +130,8 @@ struct dfs_dcache {
 
 		/** Shmem version */
 		struct {
-			struct d_shm_ht_loc dshm_loc;
+			/** shm hash table */
+			struct d_shm_ht_loc dd_ht;
 		} shm;
 	};
 };
@@ -402,23 +407,48 @@ drec_del_act(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent);
 static inline int
 dcache_add_root(dfs_dcache_t *dcache)
 {
-	dfs_obj_t *rec;
+	struct d_shm_ht_rec_loc rec_loc;
+	void                   *val;
+	daos_size_t             val_size;
 	int        rc;
 
-	rc = dup_int(dcache->dd_dfs, &dcache->dd_dfs->root, O_RDWR, &rec, DCACHE_KEY_PREF_SIZE);
+	/** for local cache, just duplicate the entry and store the pointer */
+	if (dcache->dd_type == DFS_CACHE_DRAM) {
+		dfs_obj_t *rec;
+
+		rc = dup_int(dcache->dd_dfs, &dcache->dd_dfs->root, O_RDWR, &rec,
+			     DCACHE_KEY_PREF_SIZE);
+		if (rc)
+			return rc;
+		rec->dc = dcache;
+		atomic_init(&rec->dc_ref, 0);
+		atomic_flag_clear(&rec->dc_deleted);
+		memcpy(&rec->dc_key_child_prefix[0], &dcache->dd_key_root_prefix[0],
+		       DCACHE_KEY_PREF_SIZE);
+		memcpy(&rec->dc_key[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
+		rec->dc_key_len = DCACHE_KEY_PREF_SIZE - 1;
+
+		rc = d_hash_rec_insert(&dcache->dh.dd_dir_hash, rec->dc_key, rec->dc_key_len,
+				       &rec->dc_entry, true);
+		if (rc)
+			release_int(rec);
+		return rc;
+	}
+
+	/** for shmem cache, serialize the object and insert the serialized form */
+	rc = dfs_obj_serialize(&dcache->dd_dfs->root, NULL, &val_size);
 	if (rc)
 		return rc;
-	rec->dc = dcache;
-	atomic_init(&rec->dc_ref, 0);
-	atomic_flag_clear(&rec->dc_deleted);
-	memcpy(&rec->dc_key_child_prefix[0], &dcache->dh.dd_key_root_prefix[0],
-	       DCACHE_KEY_PREF_SIZE);
-	memcpy(&rec->dc_key[0], &dcache->dh.dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
-	rec->dc_key_len = DCACHE_KEY_PREF_SIZE - 1;
-	rc              = d_hash_rec_insert(&dcache->dh.dd_dir_hash, rec->dc_key, rec->dc_key_len,
-					    &rec->dc_entry, true);
+
+	D_ALLOC(val, val_size);
+	if (val == NULL)
+		return ENOMEM;
+
+	shm_ht_rec_find_insert(&dcache->shm.dd_ht, &dcache->dd_key_root_prefix[0],
+			       DCACHE_KEY_PREF_SIZE - 1, val, val_size, &rec_loc, &rc);
 	if (rc)
-		release_int(rec);
+		D_FREE(val);
+
 	return daos_der2errno(rc);
 }
 
@@ -434,6 +464,7 @@ dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_p
 		return ENOMEM;
 
 	dcache_tmp->dd_dfs             = dfs;
+	dcache_tmp->dd_type               = DFS_CACHE_DRAM;
 	dcache_tmp->dh.destroy_fn         = dcache_destroy_act;
 	dcache_tmp->dh.find_insert_fn     = dcache_find_insert_act;
 	dcache_tmp->dh.find_insert_rel_fn = dcache_find_insert_rel_act;
@@ -463,7 +494,7 @@ dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_p
 		dcache_tmp->dh.dd_expire_gc.tv_sec += dcache_tmp->dh.dd_period_gc;
 	}
 
-	rc = snprintf(&dcache_tmp->dh.dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE,
+	rc = snprintf(&dcache_tmp->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE,
 		      "%016" PRIx64 "-%016" PRIx64 ":", dfs->root.oid.hi, dfs->root.oid.lo);
 	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
 
@@ -609,7 +640,7 @@ dcache_find_insert_rel_act(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *
 	if (key == NULL)
 		return -DER_NOMEM;
 
-	key_prefix = dcache->dh.dd_key_root_prefix;
+	key_prefix = dcache->dd_key_root_prefix;
 	memcpy(key, key_prefix, key_prefix_len);
 	memcpy(key + key_prefix_len, name, len);
 	key_len      = key_prefix_len + len;
@@ -690,7 +721,7 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int fl
 	rc         = -DER_SUCCESS;
 	name       = path;
 	name_len   = 0;
-	key_prefix = dcache->dh.dd_key_root_prefix;
+	key_prefix = dcache->dd_key_root_prefix;
 	parent     = NULL;
 	for (;;) {
 		size_t key_len;
@@ -920,15 +951,75 @@ drec_del_at_dact(dfs_dcache_t *dcache, dfs_obj_t *rec)
 		DS_ERROR(rc, "release_int() failed");
 }
 
+static int
+dcache_create_shm(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
+		  uint32_t gc_reclaim_max)
+{
+	dfs_dcache_t *dcache_tmp;
+	uuid_t        pool_uuid;
+	uuid_t        cont_uuid;
+	char          ht_name[DAOS_UUID_STR_SIZE * 2 + 1];
+	int           rc;
+
+	rc = shm_init();
+	if (rc)
+		return daos_der2errno(rc);
+
+	D_ALLOC_PTR(dcache_tmp);
+	if (dcache_tmp == NULL)
+		D_GOTO(err_shm, rc = ENOMEM);
+
+	dcache_tmp->dd_dfs  = dfs;
+	dcache_tmp->dd_type = DFS_CACHE_DRAM;
+
+	/** create / open a hash table with the pool.cont name */
+	rc = dc_pool_hdl2uuid(dfs->poh, NULL, &pool_uuid);
+	if (rc)
+		D_GOTO(err_dcache, rc = daos_der2errno(rc));
+
+	rc = dc_cont_hdl2uuid(dfs->coh, NULL, &cont_uuid);
+	if (rc)
+		D_GOTO(err_dcache, rc = daos_der2errno(rc));
+
+	uuid_unparse(pool_uuid, ht_name);
+	ht_name[36] = '.';
+	uuid_unparse(cont_uuid, ht_name + DAOS_UUID_STR_SIZE);
+
+	rc = shm_ht_create(ht_name, bits, 3, &dcache_tmp->shm.dd_ht);
+	if (rc != 0)
+		D_GOTO(err_dcache, rc = daos_der2errno(rc));
+
+	rc = snprintf(&dcache_tmp->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE,
+		      "%016" PRIx64 "-%016" PRIx64 ":", dfs->root.oid.hi, dfs->root.oid.lo);
+	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
+
+	rc = dcache_add_root(dcache_tmp);
+	if (rc != 0)
+		D_GOTO(err_ht, rc = daos_der2errno(rc));
+
+	dfs->dcache = dcache_tmp;
+	return 0;
+
+err_ht:
+	shm_ht_decref(&dcache_tmp->shm.dd_ht);
+err_dcache:
+	D_FREE(dcache_tmp);
+err_shm:
+	shm_fini();
+	return rc;
+}
+
 int
-dcache_create(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
+dcache_create(dfs_t *dfs, int type, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
 	      uint32_t gc_reclaim_max)
 {
 	D_ASSERT(dfs);
 	if (bits == 0)
 		return dcache_create_dact(dfs);
-
-	return dcache_create_act(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
+	if (type == DFS_CACHE_DRAM)
+		return dcache_create_act(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
+	else
+		return dcache_create_shm(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
 }
 
 int
