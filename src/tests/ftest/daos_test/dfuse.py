@@ -113,7 +113,8 @@ class DaosCoreTestDfuse(TestWithServers):
             '--mmap',
             '--exec',
             '--directory',
-            '--cache'
+            '--cache',
+            '--realpath'
         ]
         if use_dfuse:
             parameters.append('--lowfd')
