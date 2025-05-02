@@ -201,12 +201,14 @@ create_depends() {
 build_package() {
   name="$1"; shift
 
+  output_type="${OUTPUT_TYPE:-rpm}"
+
   depends=()
   create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
-  pkgname="${name}-${VERSION}-${RELEASE}.${DISTRO:-el8}.${ARCH}.rpm"
+  pkgname="${name}-${VERSION}-${RELEASE}.${DISTRO:-el8}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
-  fpm -s "${PACKAGE_TYPE}" -t rpm \
+  fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
   -p "${pkgname}" \
   --name "${name}" \
   --license "${LICENSE}" \

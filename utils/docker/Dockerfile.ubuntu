@@ -36,12 +36,13 @@ RUN locale-gen en_US.UTF-8
 RUN update-alternatives --set \
     java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
-ARG UID=5000
-
 # Add DAOS users
-RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
-            --home /home/daos daos_server
-RUN echo "daos_server:daos_server" | chpasswd
+ARG UID=1000
+COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
+     /tmp/daos-server-user-setup.sh
+RUN set -e;                                    \
+    chmod +x /tmp/daos-server-user-setup.sh && \
+    /tmp/daos-server-user-setup.sh
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 

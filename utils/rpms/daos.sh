@@ -167,8 +167,8 @@ EOF
   EXTRA_OPTS+=("rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
   EXTRA_OPTS+=("rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
 
-  DEPENDS=( "daos = ${RELEASE}" "daos-spdk = ${RELEASE}" )
-  DEPENDS+=( "${pmemobj_lib} = ${pmdk_version}" "argobots = ${argobots_version}" )
+  DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${VERSION}-${RELEASE}" )
+  DEPENDS+=( "${pmemobj_lib} = ${pmdk_version}" "${argobots_lib} = ${argobots_version}" )
   build_package "daos-server"
 
   TARGET_PATH="${bindir}"
@@ -188,7 +188,7 @@ EOF
   clean_bin "${files[@]}"
   append_install_list "${files[@]}"
 
-  DEPENDS=("daos-server = ${RELEASE}" "daos-admin = ${RELEASE}")
+  DEPENDS=("daos-server = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
   build_package "daos-server-tests"
 else
   echo "Skipping server packaging because server is not built"
