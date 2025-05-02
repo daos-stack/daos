@@ -24,7 +24,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -644,6 +644,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %endif
 
 %changelog
+* Thu May 01 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-9
+- Start to deprecate this file being used to build DAOS but rather only source
+  RPM
+
 * Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8
 - Add support of the libasan
 
