@@ -1590,7 +1590,8 @@ realpath(const char *name, char *resolved)
 				name = end = memcpy(extra_buf, buf, n);
 
 				if (buf[0] == '/')
-					dest = rpath + 1; /* It's an absolute symlink */
+					/* It's an absolute symlink */
+					dest = rpath + 1;
 				else
 					/* Back up to previous component, ignore if at root already:
 					 */
@@ -5140,6 +5141,9 @@ out_err:
 char *
 getcwd(char *buf, size_t size)
 {
+	char *rc;
+	int   len;
+
 	if (next_getcwd == NULL) {
 		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
 		D_ASSERT(next_getcwd != NULL);
@@ -5148,15 +5152,17 @@ getcwd(char *buf, size_t size)
 	if (!d_hook_enabled)
 		return next_getcwd(buf, size);
 
-	if (cur_dir[0] != '/')
-		update_cwd();
+	if (cur_dir[0] != '/') {
+		/* cur_dir is not initialized yet */
+		rc = next_getcwd(cur_dir, DFS_MAX_PATH);
+		if (rc == NULL)
+			return NULL;
+	}
 
 	if (query_dfs_mount(cur_dir) < 0)
 		return next_getcwd(buf, size);
 
 	if (buf == NULL) {
-		size_t len;
-
 		if (size == 0)
 			size = PATH_MAX;
 		len = strnlen(cur_dir, size);
@@ -6737,23 +6743,12 @@ static void
 update_cwd(void)
 {
 	char *cwd = NULL;
-	char *pt_end = NULL;
 
 	/* daos_init() may be not called yet. */
-	cwd = get_current_dir_name();
-
+	cwd = getcwd(cur_dir, DFS_MAX_PATH);
 	if (cwd == NULL) {
-		D_FATAL("fatal error to get CWD with get_current_dir_name(): %d (%s)\n", errno,
-			strerror(errno));
+		D_FATAL("fatal error to get CWD with getcwd(): %d (%s)\n", errno, strerror(errno));
 		abort();
-	} else {
-		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
-		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-			D_FATAL("fatal error, cwd path is too long:  %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			abort();
-		}
-		free(cwd);
 	}
 }
 
