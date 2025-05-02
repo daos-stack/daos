@@ -37,7 +37,7 @@ RUN update-alternatives --set \
     java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
 # Add DAOS users
-ARG UID=1000
+ARG UID=5000
 COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
      /tmp/daos-server-user-setup.sh
 RUN set -e;                                    \
