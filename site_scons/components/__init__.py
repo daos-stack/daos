@@ -360,7 +360,7 @@ def define_components(reqs):
     else:
         spdk_arch = 'haswell'
 
-    move_files = os.path.join(Dir('#').abspath, 'utils/scripts/move_files.sh')
+    copy_files = os.path.join(Dir('#').abspath, 'utils/scripts/copy_files.sh')
     reqs.define('spdk',
                 retriever=CopyRetriever(),
                 commands=[['./configure',
@@ -380,10 +380,10 @@ def define_components(reqs):
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
                            'includedir=$SPDK_PREFIX/include/daos_srv', 'install'],
-                          [move_files, 'dpdk/build/lib', '$SPDK_PREFIX/lib64/daos_srv'],
-                          [move_files, 'dpdk/build/include', '$SPDK_PREFIX/include/daos_srv/dpdk'],
-                          [move_files, 'include', '$SPDK_PREFIX/share/daos/spdk/include'],
-                          [move_files, 'scripts', '$SPDK_PREFIX/share/daos/spdk/scripts'],
+                          [copy_files, 'dpdk/build/lib', '$SPDK_PREFIX/lib64/daos_srv'],
+                          [copy_files, 'dpdk/build/include', '$SPDK_PREFIX/include/daos_srv/dpdk'],
+                          [copy_files, 'include', '$SPDK_PREFIX/share/daos/spdk/include'],
+                          [copy_files, 'scripts', '$SPDK_PREFIX/share/daos/spdk/scripts'],
                           ['mv', '$SPDK_PREFIX/bin/spdk_nvme_discovery_aer',
                            '$SPDK_PREFIX/bin/daos_spdk_nvme_discovery_aer'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/daos_spdk_nvme_lsvmd'],

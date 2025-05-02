@@ -72,7 +72,7 @@ COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
-COPY --chown=daos_server:daos_server utils/scripts/move_files.sh utils/scripts/move_files.sh
+COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh utils/scripts/copy_files.sh
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -137,10 +137,11 @@ RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         cp -r utils/config/examples /opt/daos;                             \
     }
 
+ARG DAOS_PACKAGES_BUILD=yes
 COPY --chown=daos_server:daos_server utils utils
 
 # Build RPMs
-RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || {                               \
 	export DISTRO="el9" &&                                             \
         source ./utils/sl/setup_local.sh &&                                \
         ./utils/rpms/argobots.sh &&                                        \
