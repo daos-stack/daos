@@ -86,6 +86,8 @@ def _known_deps(env, **kwargs):
         libs = set(kwargs['LIBS'])
     else:
         libs = set(env.get('LIBS', []))
+    if GetOption("test_coverage"):
+        libs += ['gcov']
 
     known_libs = libs.intersection(set(libraries.keys()))
     missing.update(libs - known_libs)
@@ -121,6 +123,8 @@ def _add_lib(libtype, libname, target):
 
 def _run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
+    if GetOption("test_coverage"):
+        daos_libs += ['gcov']
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
     return result
