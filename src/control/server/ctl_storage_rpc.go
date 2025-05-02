@@ -828,7 +828,7 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 		}
 	}
 
-	if req.replace && len(needFormat) == 0 {
+	if req.replace && len(needFormat) == 0 && len(emptyTmpfs) == 0 {
 		// Only valid if at least one engine requires format.
 		return nil, nil, errors.New("format replace option only valid if at " +
 			"least one engine requires format but no engines need format")
