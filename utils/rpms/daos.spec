@@ -31,8 +31,9 @@ License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
+
 # only use for source rpm with new build
-if %{with olddaos}
+%if %{with olddaos}
 %if (0%{?rhel} >= 8)
 BuildRequires: python3-scons >= 2.4
 %else
@@ -142,7 +143,8 @@ Requires: openssl
 Requires: mercury >= %{mercury_version}
 
 %endif
-%
+
+%description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
 software-defined object store designed from the ground up for
 massively distributed Non Volatile Memory (NVM). DAOS takes advantage
