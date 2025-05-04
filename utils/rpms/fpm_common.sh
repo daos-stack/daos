@@ -11,7 +11,7 @@ export PACKAGE_TYPE="dir"
 export dbg_list=()
 export EXTERNAL_DEPENDS=()
 export DEPENDS=()
-export EXTRA_OPS=()
+export EXTRA_OPTS=()
 export FILTER_LIST=()
 isa="$(uname -m)"
 export isa
@@ -31,51 +31,13 @@ daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
 export daos_release
 
 export libfabric_version="1.22.0"
-if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
-  libfabric_lib="libfabric1"
-else
-  libfabric_lib="libfabric"
-fi
-export libfabric_lib
-export libfabric_dev="${libfabric_lib}-devel"
-
 export mercury_version="2.4.0"
-
 export argobots_version="1.2"
-if [[ "${DISTRO:-}" =~ "suse" ]]; then
-  argobots_lib="libabt0"
-  argobots_dev="libabt-devel"
-else
-  argobots_lib="argobots"
-  argobots_dev="argobots-devel"
-fi
-export argobots_lib
-export argobots_dev
-
 export pmdk_version="2.1.0"
-
-if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
-  pmemobj_lib="libpmemobj1"
-else
-  pmemobj_lib="libpmemobj"
-fi
-export pmemobj_lib
-export libfabric_dev="${libfabric_lib}-devel"
 export isal_version="2.30.0"
 export isal_crypto_version="2.24.0"
 
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
-  lmod="lua-lmod"
-  capstone_lib="libcapstone-devel"
-  protobufc_lib="libprotobuf-c-devel"
-elif [[ "${DISTRO:-el8}" =~ el ]]; then
-  lmod="Lmod"
-  capstone_lib="capstone-devel"
-  protobufc_lib="protobuf-c-devel"
-fi
-export lmod
-export capstone_lib
-export protobufc_lib
+source utils/rpms/package_names.sh
 
 filter_file() {
   for filter in "${FILTER_LIST[@]}"; do
@@ -218,7 +180,7 @@ build_package() {
   --description "${DESCRIPTION}" \
   --url "${URL}" \
   "${depends[@]}" \
-  "${EXTRA_OPS[@]}" \
+  "${EXTRA_OPTS[@]}" \
   "${install_list[@]}"
 
   export EXTRA_OPTS=()

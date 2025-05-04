@@ -18,13 +18,7 @@ Provides various algorithms for erasure coding, crc, raid, compression and
 decompression"
 URL="https://github.com/intel/isa-l"
 
-if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
-  isal_libname="libisal2"
-  isal_devname="libisal-devel"
-else
-  isal_libname="libisa-l"
-  isal_devname="libisa-l-devel"
-fi
+isal_dev="${isal_dev}"
 
 files=()
 TARGET_PATH="${bindir}"
@@ -45,24 +39,26 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 DEPENDS=("isa-l")
-build_package "${isal_libname}"
+build_package "${isal_lib}"
 
-TARGET_PATH="${libdir}"
-list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so"
-append_install_list "${files[@]}"
+if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
+  TARGET_PATH="${libdir}"
+  list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so"
+  append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir/pkgconfig}"
-list_files files "${SL_ISAL_PREFIX}/lib64/pkgconfig/libisal.pc"
-replace_paths "${SL_ISAL_PREFIX}" "${files[@]}"
-append_install_list "${files[@]}"
+  TARGET_PATH="${libdir/pkgconfig}"
+  list_files files "${SL_ISAL_PREFIX}/lib64/pkgconfig/libisal.pc"
+  replace_paths "${SL_ISAL_PREFIX}" "${files[@]}"
+  append_install_list "${files[@]}"
 
-TARGET_PATH="${includedir}"
-list_files files "${SL_ISAL_PREFIX}/include/isa-l.h"
-append_install_list "${files[@]}"
+  TARGET_PATH="${includedir}"
+  list_files files "${SL_ISAL_PREFIX}/include/isa-l.h"
+  append_install_list "${files[@]}"
 
-TARGET_PATH="${includedir}/isa-l"
-list_files files "${SL_ISAL_PREFIX}/include/isa-l/*"
-append_install_list "${files[@]}"
+  TARGET_PATH="${includedir}/isa-l"
+  list_files files "${SL_ISAL_PREFIX}/include/isa-l/*"
+  append_install_list "${files[@]}"
 
-DEPENDS=("${isal_libname} = ${isal_version}")
-build_package "${isal_devname}"
+  DEPENDS=("${isal_lib} = ${isal_version}")
+  build_package "${isal_dev}"
+fi

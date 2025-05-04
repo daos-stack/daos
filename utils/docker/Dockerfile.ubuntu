@@ -108,8 +108,11 @@ COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct require
 # needed for NLT test
 COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
+COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/config utils/config
+COPY --chown=daos_server:daos_server utils/certs utils/certs
+COPY --chown=daos_server:daos_server utils/completion utils/completion
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -119,10 +122,25 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+    { export MPI_PKG=any &&       \
+      scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE \
+      FIRMWARE_MGMT=1 && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) && \
     go clean -cache && cp -r utils/config/examples /opt/daos; }
+
+ARG DAOS_PACKAGES_BUILD=yes
+COPY --chown=daos_server:daos_server utils utils
+
+# Build RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || { \
+	export DISTRO=ubuntu &&                      \
+	export OUTPUT_TYPE=deb &&                    \
+	export LIBDIR=/usr/lib/x86_64-linux-gnu &&   \
+	utils/rpms/build_packages.sh &&              \
+	mkdir -p /home/daos/dpkg &&                  \
+	cp *.deb /home/daos/dpkg;                    \
+    }
 
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH

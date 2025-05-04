@@ -30,7 +30,7 @@ list_files files "${SL_SPDK_PREFIX}/share/daos/spdk/*"
 append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/daos_srv"
-list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/libspdk.so.*" \
+list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/libspdk*.so.*" \
   "${SL_SPDK_PREFIX}/lib64/daos_srv/librte*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"

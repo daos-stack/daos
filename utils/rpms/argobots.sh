@@ -26,18 +26,20 @@ append_install_list "${files[@]}"
 ARCH="${isa}"
 build_package "${argobots_lib}"
 
-TARGET_PATH="${libdir}/pkgconfig"
-list_files files "${SL_ARGOBOTS_PREFIX}/lib64/pkgconfig/*"
-replace_paths "${SL_ARGOBOTS_PREFIX}" "${files[@]}"
-append_install_list "${files[@]}"
+if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
+  TARGET_PATH="${libdir}/pkgconfig"
+  list_files files "${SL_ARGOBOTS_PREFIX}/lib64/pkgconfig/*"
+  replace_paths "${SL_ARGOBOTS_PREFIX}" "${files[@]}"
+  append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir}"
-list_files files "${SL_ARGOBOTS_PREFIX}/lib64/libabt.so"
-append_install_list "${files[@]}"
+  TARGET_PATH="${libdir}"
+  list_files files "${SL_ARGOBOTS_PREFIX}/lib64/libabt.so"
+  append_install_list "${files[@]}"
 
-TARGET_PATH="${includedir}"
-list_files files "${SL_ARGOBOTS_PREFIX}/include/abt.h"
-append_install_list "${files[@]}"
+  TARGET_PATH="${includedir}"
+  list_files files "${SL_ARGOBOTS_PREFIX}/include/abt.h"
+  append_install_list "${files[@]}"
 
-DEPENDS=("${argobots_lib} = ${argobots_version}")
-build_package "${argobots_dev}"
+  DEPENDS=("${argobots_lib} = ${argobots_version}")
+  build_package "${argobots_dev}"
+fi

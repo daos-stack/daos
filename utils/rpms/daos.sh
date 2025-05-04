@@ -59,11 +59,13 @@ append_install_list "${extras[@]}"
 mkdir -p "${tmp}${sysconfdir}/daos/certs"
 extras+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos/certs")
 
-EXTRA_OPTS=("rpm-defattr-file" "(-, root, root, -)")
-EXTRA_OPTS+=("rpm-defattr-dir" "(-, root, root, -)")
-EXTRA_OPTS+=("rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
+if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
+  EXTRA_OPTS=("--rpm-defattrfile" "(-, root, root, -)")
+  EXTRA_OPTS+=("--rpm-defattrdir" "(-, root, root, -)")
+  EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
+fi
 
-DEPENDS=( "mercury >= ${mercury_version}" "libfabric >= ${libfabric_version}" )
+DEPENDS=( "mercury >= ${mercury_version}" "${libfabric_lib} >= ${libfabric_version}" )
 build_package "daos"
 
 # Only build server RPMs if we built the server
@@ -163,9 +165,11 @@ ldconfig
 EOF
   EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_server")
   fi
-  EXTRA_OPTS+=("rpm-attr" "0644,root,root:${sysconfdir}/daos/daos_server.yml")
-  EXTRA_OPTS+=("rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
-  EXTRA_OPTS+=("rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
+  if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
+    EXTRA_OPTS+=("--rpm-attr" "0644,root,root:${sysconfdir}/daos/daos_server.yml")
+    EXTRA_OPTS+=("--rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
+    EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
+  fi
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${VERSION}-${RELEASE}" )
   DEPENDS+=( "${pmemobj_lib} = ${pmdk_version}" "${argobots_lib} = ${argobots_version}" )
@@ -208,7 +212,7 @@ TARGET_PATH="${sysconfdir}/daos"
 list_files files "${SL_PREFIX}/etc/daos_control.yml"
 append_install_list "${files[@]}"
 
-DEPENDS=( "daos = ${VERSION}" )
+DEPENDS=( "daos = ${VERSION}-${RELEASE}" )
 build_package "daos-admin"
 
 # daos-client package
@@ -285,8 +289,8 @@ EOF
   EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
 fi
 
-EXTERNAL_DEPENDS=("/usr/bin/fusermount3")
-DEPENDS=("daos = ${VERSION}")
+EXTERNAL_DEPENDS=("fuse3")
+DEPENDS=("daos = ${VERSION}-${RELEASE}")
 build_package "daos-client"
 
 # client-tests
@@ -340,14 +344,13 @@ EXTERNAL_DEPENDS+=("lbzip2")
 EXTERNAL_DEPENDS+=("attr")
 EXTERNAL_DEPENDS+=("ior")
 EXTERNAL_DEPENDS+=("go >= 1.21")
-EXTERNAL_DEPENDS+=("${lmod}")
-EXTERNAL_DEPENDS+=("${capstone_lib}")
-EXTERNAL_DEPENDS+=("pciutils-devel")
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
-  EXTERNAL_DEPENDS+=("libndctl-devel")
+if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
+  EXTERNAL_DEPENDS+=("${lmod}")
 fi
+EXTERNAL_DEPENDS+=("${capstone_lib}")
+EXTERNAL_DEPENDS+=("pciutils")
+EXTERNAL_DEPENDS+=("${ndctl_lib}")
 if [[ "${DISTRO:-el8}" =~ el ]]; then
-  EXTERNAL_DEPENDS+=("ndctl-devel")
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
 DEPENDS=( "daos-client = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
@@ -369,15 +372,17 @@ TARGET_PATH="${daoshome}/python"
 list_files files "${SL_PREFIX}/lib/daos/python/*"
 append_install_list "${files[@]}"
 
-EXTERNAL_DEPENDS=("libuuid-devel")
+EXTERNAL_DEPENDS=("${uuid_lib}")
 DEPENDS=("daos-client = ${VERSION}-${RELEASE}")
-build_package "daos-devel"
+build_package "${daos_dev}"
 
-EXTERNAL_DEPENDS=("hdf5-devel")
-TARGET_PATH="${libdir}"
-list_files files "${SL_PREFIX}/lib64/libdaos_serialize.so"
-append_install_list "${files[@]}"
-build_package "daos-serialize"
+if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
+  EXTERNAL_DEPENDS=("${hdf5_lib}")
+  TARGET_PATH="${libdir}"
+  list_files files "${SL_PREFIX}/lib64/libdaos_serialize.so"
+  append_install_list "${files[@]}"
+  build_package "daos-serialize"
+fi
 
 if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
   TARGET_PATH="${bindir}/daos_firmware_helper"

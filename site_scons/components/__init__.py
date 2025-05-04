@@ -119,11 +119,26 @@ def define_mercury(reqs):
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--libdir=$OFI_PREFIX/lib64',
+                 '--with-dlopen',
+                 '--disable-static',
+                 '--disable-silent-rules',
+                 '--enable-sockets',
+                 '--enable-tcp',
+                 '--enable-verbs',
+                 '--enable-rxm',
+                 '--enable-shm',
+                 '--enable-psm2',
+                 '--enable-opx',
                  '--disable-efa',
-                 '--disable-psm2',
-                 '--disable-psm3',
-                 '--disable-opx',
-                 '--without-gdrcopy']
+                 '--disable-dmabuf_peer_mem',
+                 '--disable-hook_hmem',
+                 '--disable-hook_debug',
+                 '--disable-trace',
+                 '--disable-perf',
+                 '--disable-rxd',
+                 '--disable-mrail',
+                 '--disable-udp',
+                 '--disable-psm3']
 
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
@@ -142,7 +157,7 @@ def define_mercury(reqs):
                 pkgconfig='libfabric',
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib64'],
-                build_env={'CFLAGS': "-fstack-usage"})
+                build_env={'CFLAGS': "-fstack-usage -fPIC"})
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',

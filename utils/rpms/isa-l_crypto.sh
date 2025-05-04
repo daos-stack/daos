@@ -27,38 +27,32 @@ Provides various algorithms for erasure coding, crc, raid, compression and
 decompression"
 URL="https://github.com/intel/isa-l_crypto"
 
-if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
-  isal_crypto_libname="libisal_crypto2"
-  isal_crypto_devname="libisal_crypto-devel"
-else
-  isal_crypto_libname="libisa-l_crypto"
-  isal_crypto_devname="libisa-l_crypto-devel"
-fi
-
 files=()
 TARGET_PATH="${libdir}"
 list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/libisal_crypto.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
-build_package "${isal_crypto_libname}"
+build_package "${isal_crypto_lib}"
 
-TARGET_PATH="${libdir}"
-list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/libisal_crypto.so"
-append_install_list "${files[@]}"
+if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
+  TARGET_PATH="${libdir}"
+  list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/libisal_crypto.so"
+  append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir/pkgconfig}"
-list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/pkgconfig/libisal_crypto.pc"
-replace_paths "${SL_ISAL_CRYPTO_PREFIX}" "${files[@]}"
-append_install_list "${files[@]}"
+  TARGET_PATH="${libdir/pkgconfig}"
+  list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/pkgconfig/libisal_crypto.pc"
+  replace_paths "${SL_ISAL_CRYPTO_PREFIX}" "${files[@]}"
+  append_install_list "${files[@]}"
 
-TARGET_PATH="${includedir}"
-list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto.h"
-append_install_list "${files[@]}"
+  TARGET_PATH="${includedir}"
+  list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto.h"
+  append_install_list "${files[@]}"
 
-TARGET_PATH="${includedir}/isa-l_crypto"
-list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto/*"
-append_install_list "${files[@]}"
+  TARGET_PATH="${includedir}/isa-l_crypto"
+  list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto/*"
+  append_install_list "${files[@]}"
 
-DEPENDS=("${isal_crypto_libname} = ${isal_crypto_version}")
-build_package "${isal_crypto_devname}"
+  DEPENDS=("${isal_crypto_lib} = ${isal_crypto_version}")
+  build_package "${isal_crypto_dev}"
+fi
