@@ -42,7 +42,11 @@ dnf --nodocs install \
     libcmocka-devel \
     libevent-devel \
     libipmctl-devel \
+    libibverbs-devel \
     libiscsi-devel \
+    libnl3-devel \
+    libpsm2-devel \
+    librdmacm-devel \
     libtool \
     libtool-ltdl-devel \
     libunwind-devel \

@@ -164,6 +164,10 @@ build_package() {
   name="$1"; shift
 
   output_type="${OUTPUT_TYPE:-rpm}"
+  if [ "${output_type}" = "rpm" ]; then
+    EXTRA_OPTS+=("--rpm-autoprov")
+    EXTRA_OPTS+=("--rpm-autoreq")
+  fi
 
   depends=()
   create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
@@ -203,7 +207,11 @@ build_debug_package() {
   for dep in "${DEPENDS[@]}"; do
     # shellcheck disable=SC2001
     version="$(echo "${dep}" | sed 's/[^ ]*//')"
-    new_deps+=("${dep// */}-debuginfo${version}")
+    new_dep="${dep// *}-debuginfo${version}"
+    if [[ "${new_dep}" =~ -dev ]]; then
+      continue
+    fi
+    new_deps+=("${new_dep}")
   done
   DEPENDS=("${new_deps[@]}")
 

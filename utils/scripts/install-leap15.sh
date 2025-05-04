@@ -37,12 +37,16 @@ dnf --nodocs install \
     libcmocka-devel \
     libcapstone-devel \
     libevent-devel \
+    libibverbs-devel \
     libiscsi-devel \
     libjson-c-devel \
     libltdl7 \
     liblz4-devel \
     libndctl-devel \
+    libnl3-devel \
     libnuma-devel \
+    libpsm2-devel \
+    librdmacm-devel \
     libopenssl-devel \
     libprotobuf-c-devel \
     libtool \

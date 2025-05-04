@@ -60,9 +60,7 @@ mkdir -p "${tmp}${sysconfdir}/daos/certs"
 extras+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos/certs")
 
 if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
-  EXTRA_OPTS=("--rpm-defattrfile" "(-, root, root, -)")
-  EXTRA_OPTS+=("--rpm-defattrdir" "(-, root, root, -)")
-  EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
+  EXTRA_OPTS=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 fi
 
 DEPENDS=( "mercury >= ${mercury_version}" "${libfabric_lib} >= ${libfabric_version}" )
