@@ -1090,7 +1090,6 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		struct daos_cpd_sub_req *dcsr;
 		struct dc_object        *obj;
 		int                      ping_task_rc;
-    
 		start   = dc_tx_leftmost_req(tx, true);
 		req_cnt = tx->tx_write_cnt;
 		int      tgt_ids_rc;
@@ -1111,7 +1110,6 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 
 		ping_task_rc =
 		    obj_create_ping_task(sched, tx->tx_co->dc_pool_hdl, &tgt_list_head, &task);
-    
 		if (ping_task_rc != 0) {
 			D_ERROR("Failed to create ping task for task %p: %d, %d\n", task,
 				ping_task_rc, rc);
