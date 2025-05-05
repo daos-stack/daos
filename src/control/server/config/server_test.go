@@ -232,8 +232,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
 
-	t.Logf("defaultCfg constructed: %+v", defaultCfg)
-
 	var bypass = true
 
 	// Next, construct a config to compare against the first one. It should be
