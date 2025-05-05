@@ -235,11 +235,12 @@ Requires: lbzip2
 Requires: attr
 Requires: ior
 Requires: go >= 1.21
+# Require lmod fix for https://github.com/TACC/Lmod/issues/687
 %if (0%{?suse_version} >= 1315)
-Requires: lua-lmod
+Requires: lua-lmod >= 8.7.36
 Requires: libcapstone-devel
 %else
-Requires: Lmod
+Requires: Lmod >= 8.7.36
 Requires: capstone-devel
 %endif
 Requires: pciutils-devel
