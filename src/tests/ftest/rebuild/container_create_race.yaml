@@ -16,10 +16,7 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos0
+      storage: auto
     1:
       targets: 2
       pinned_numa_node: 1
@@ -27,10 +24,7 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos1
+      storage: auto
 
 testparams:
   rank_to_kill: 3
