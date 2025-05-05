@@ -42,6 +42,8 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
+__thread bool firewall_blocking_flag = false;
+
 /* ds_pool_child **************************************************************/
 
 static void
