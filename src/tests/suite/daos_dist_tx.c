@@ -3193,6 +3193,7 @@ dtx_44(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK,
 				 DAOS_CLIENT_UNREACHABLE_CPD_BODY | DAOS_FAIL_ONCE);
 	par_barrier(PAR_COMM_WORLD);
+
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
