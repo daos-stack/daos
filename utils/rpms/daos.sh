@@ -59,9 +59,7 @@ append_install_list "${extras[@]}"
 mkdir -p "${tmp}${sysconfdir}/daos/certs"
 extras+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos/certs")
 
-if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
-  EXTRA_OPTS=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
-fi
+EXTRA_OPTS=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
 DEPENDS=( "mercury >= ${mercury_version}" "${libfabric_lib} >= ${libfabric_version}" )
 build_package "daos"
@@ -136,6 +134,7 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
 
   EXTRA_OPTS=()
   cat << EOF  > "${tmp}/pre_install_server"
+#!/bin/bash
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
@@ -144,33 +143,35 @@ EOF
   EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_server")
 
 cat << EOF  > "${tmp}/post_install_server"
+#!/bin/bash
+set -x
 ldconfig
 sysctl -p "${sysctldir}/${sysctl_script_name}"
-systemctl daemon-reload
+systemctl daemon-reload || true
 EOF
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_server")
 
 cat << EOF  > "${tmp}/pre_uninstall_server"
+#!/bin/bash
 # TODO: workout what %systemd_preun %{server_svc_name} does
 EOF
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
   if [[ "${DISTRO:-el8}" =~ suse ]]; then
     cat << EOF  > "${tmp}/post_uninstall_server"
+#!/bin/bash
 # TODO: work out what %postun server does
 ldconfig
 # TODO: workout what %systemd_postun %{server_svc_name} does
 EOF
-  EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_server")
+    EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_server")
   fi
-  if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
-    EXTRA_OPTS+=("--rpm-attr" "0644,root,root:${sysconfdir}/daos/daos_server.yml")
-    EXTRA_OPTS+=("--rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
-    EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
-  fi
+  EXTRA_OPTS+=("--rpm-attr" "0644,root,root:${sysconfdir}/daos/daos_server.yml")
+  EXTRA_OPTS+=("--rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
+  EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${VERSION}-${RELEASE}" )
-  DEPENDS+=( "${pmemobj_lib} = ${pmdk_version}" "${argobots_lib} = ${argobots_version}" )
+  DEPENDS+=( "${pmemobj_lib} >= ${pmdk_version}" "${argobots_lib} >= ${argobots_version}" )
   build_package "daos-server"
 
   TARGET_PATH="${bindir}"
@@ -271,7 +272,7 @@ EOF
 EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_client")
 
 cat << EOF  > "${tmp}/post_install_client"
-systemctl daemon-reload
+systemctl daemon-reload || true
 EOF
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_client")
 

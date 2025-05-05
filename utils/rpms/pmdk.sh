@@ -163,8 +163,8 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
     "${SL_PMDK_PREFIX}/share/man/man1/pmempool-*.1.gz"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${pmem_lib} = ${pmdk_version}" "${pmemobj_lib} = ${pmdk_version}")
-  DEPENDS+=("${pmempool_lib} = ${pmdk_version}")
+  DEPENDS=("${pmem_lib} = ${pmdk_version}-${RELEASE}" "${pmemobj_lib} = ${pmdk_version}-${RELEASE}")
+  DEPENDS+=("${pmempool_lib} = ${pmdk_version}-${RELEASE}")
   build_package "pmempool"
 
   #pmreorder
@@ -194,6 +194,6 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   list_files files "${SL_PMDK_PREFIX}/share/man/man1/daxio.1.gz"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${libpmem_lib} = ${pmdk_version}")
+  DEPENDS=("${libpmem_lib} = ${pmdk_version}-${RELEASE}")
   build_package "daxio"
 fi

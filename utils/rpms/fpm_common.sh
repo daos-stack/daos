@@ -64,11 +64,11 @@ expand_directories() {
         if filter_file "${subfile}"; then
           continue
         fi
-	if [ -d "${subfile}" ]; then
+        if [ -d "${subfile}" ]; then
           expanddirs+=("${subfile}")
-	else
+        else
           expanded+=("${subfile}")
-	fi
+        fi
       done
     else
       expanded+=("${file}")
@@ -164,10 +164,8 @@ build_package() {
   name="$1"; shift
 
   output_type="${OUTPUT_TYPE:-rpm}"
-  if [ "${output_type}" = "rpm" ]; then
-    EXTRA_OPTS+=("--rpm-autoprov")
-    EXTRA_OPTS+=("--rpm-autoreq")
-  fi
+  EXTRA_OPTS+=("--rpm-autoprov")
+  EXTRA_OPTS+=("--rpm-autoreq")
 
   depends=()
   create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
