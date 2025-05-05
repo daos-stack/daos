@@ -129,7 +129,7 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) && \
     go clean -cache && cp -r utils/config/examples /opt/daos; }
 
-ARG DAOS_PACKAGES_BUILD=yes
+ARG DAOS_PACKAGES_BUILD=$DAOS_BUILD
 COPY --chown=daos_server:daos_server utils utils
 
 # Build RPMs
