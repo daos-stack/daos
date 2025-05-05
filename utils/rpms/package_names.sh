@@ -7,7 +7,7 @@ set_lib_name() {
   deb_lib="$1"; shift
   local extension=""
   local dist="${DISTRO:-el8}"
-  local -n lib="${comp}_${vartype}"
+  local -n _lib="${comp}_${vartype}"
   if [ "${vartype}" = "dev" ]; then
     if [[ "${dist}" =~ suse|el ]]; then
       extension="-devel"
@@ -18,11 +18,11 @@ set_lib_name() {
   fi
 
   if [[ "${dist}" =~ suse ]]; then
-    lib="${suse_lib}${extension}"
+    _lib="${suse_lib}${extension}"
   elif [[ "${dist}" =~ el ]]; then
-    lib="${el_lib}${extension}"
+    _lib="${el_lib}${extension}"
   else
-    lib="${deb_lib}${extension}"
+    _lib="${deb_lib}${extension}"
   fi
 }
 
@@ -55,9 +55,9 @@ export mercury_dev
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
 set_lib_name pmem lib libpmem libpmem1 libpmem1
 set_lib_name pmempool lib libpmempool libpmempool1 libpmempool1
-export pmem
-export pmemobj
-export pmempool
+export pmem_lib
+export pmemobj_lib
+export pmempool_lib
 
 set_lib_name protobufc lib protobuf-c libprotobuf-c1 libprotobuf-c1
 export protobufc_lib
@@ -78,3 +78,4 @@ lmod="Lmod"
 if [[ "${DISTRO:-el8}" =~ suse ]]; then
   lmod="lua-lmod"
 fi
+export lmod

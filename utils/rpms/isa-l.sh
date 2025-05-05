@@ -18,8 +18,6 @@ Provides various algorithms for erasure coding, crc, raid, compression and
 decompression"
 URL="https://github.com/intel/isa-l"
 
-isal_dev="${isal_dev}"
-
 files=()
 TARGET_PATH="${bindir}"
 list_files files "${SL_ISAL_PREFIX}/bin/igzip"

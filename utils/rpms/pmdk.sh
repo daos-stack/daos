@@ -17,10 +17,6 @@ DESCRIPTION="The Persistent Memory Development Kit is a collection of libraries 
 using memory-mapped persistence, optimized specifically for persistent memory."
 URL="https://github.com/pmem/pmdk"
 
-if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
-  LIBMAJOR=1
-fi
-
 files=()
 
 # libpmem
@@ -54,7 +50,11 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   append_install_list "${files[@]}"
 
   ARCH="${isa}"
-  build_package "${pmempoool_lib}"
+  build_package "${pmempool_lib}"
+
+  #if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
+  #  LIBMAJOR=1
+  #fi
 
   ##libpmem-devel
   #TARGET_PATH="${libdir}"
@@ -194,6 +194,6 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   list_files files "${SL_PMDK_PREFIX}/share/man/man1/daxio.1.gz"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${libpmem_lib} = ${pmdk_version}-${RELEASE}")
+  DEPENDS=("${pmem_lib} = ${pmdk_version}-${RELEASE}")
   build_package "daxio"
 fi
