@@ -195,12 +195,6 @@ enum latency_type {
 	VOS_LATENCY,
 };
 
-enum dtx_target_identity {
-	DTX_UNSPECIFIED,
-	DTX_LEADER,
-	DTX_FOLLOWER,
-};
-
 static inline void
 obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_size)
 {
