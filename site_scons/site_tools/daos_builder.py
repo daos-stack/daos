@@ -130,7 +130,6 @@ def _run_command(env, target, sources, daos_libs, command):
 
 def _static_library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
-    kwargs = _add_code_coverage(env, **kwargs)
     libname = _get_libname(*args, **kwargs)
     if 'hide_syms' in kwargs:
         # Allow for auto-hiding of symbols, used for the Interception library.  There are multiple
@@ -142,6 +141,7 @@ def _static_library(env, *args, **kwargs):
         kwargs['target'] = f"{real_target}_source"
     else:
         real_target = None
+    kwargs = _add_code_coverage(env, **kwargs)
     lib = env.StaticLibrary(*args, **kwargs)
     if real_target:
         lib = env.Command(real_target, lib, 'objcopy --localize-hidden $SOURCE $TARGET')
@@ -255,10 +255,10 @@ def _configure_mpi(self):
 
 
 def _add_code_coverage(env, **kwargs):
-    """Add gcov library for code coverage"""
+    """Add library for code coverage"""
     if GetOption("test_coverage"):
         if 'LIBS' in kwargs:
-            if type(kwargs['LIBS']) is str:
+            if isinstance(kwargs['LIBS'], str):
                 kwargs['LIBS'] = [kwargs['LIBS']]
             kwargs['LIBS'].append('gcov')
         else:
