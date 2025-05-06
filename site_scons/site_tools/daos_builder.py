@@ -130,7 +130,7 @@ def _run_command(env, target, sources, daos_libs, command):
 
 def _static_library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
-    kwargs = _add_code_coverage(denv, **kwargs)
+    kwargs = _add_code_coverage(env, **kwargs)
     libname = _get_libname(*args, **kwargs)
     if 'hide_syms' in kwargs:
         # Allow for auto-hiding of symbols, used for the Interception library.  There are multiple
