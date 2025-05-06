@@ -308,16 +308,17 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 
 // MockMemInfo returns a mock MemInfo result.
 func MockMemInfo() *common.MemInfo {
-	return &common.MemInfo{
-		HugepagesTotal:  1024,
-		HugepagesFree:   512,
-		HugepagesRsvd:   64,
-		HugepagesSurp:   32,
-		HugepageSizeKiB: 2048,
-		MemTotalKiB:     (humanize.GiByte * 4) / humanize.KiByte,
-		MemFreeKiB:      (humanize.GiByte * 1) / humanize.KiByte,
-		MemAvailableKiB: (humanize.GiByte * 2) / humanize.KiByte,
-	}
+	mi := &common.MemInfo{}
+	mi.HugepagesTotal = 1024
+	mi.HugepagesFree = 512
+	mi.HugepagesRsvd = 64
+	mi.HugepagesSurp = 32
+	mi.HugepageSizeKiB = 2048
+	mi.MemTotalKiB = (humanize.GiByte * 4) / humanize.KiByte
+	mi.MemFreeKiB = (humanize.GiByte * 1) / humanize.KiByte
+	mi.MemAvailableKiB = (humanize.GiByte * 2) / humanize.KiByte
+
+	return mi
 }
 
 func mockNvmeCtrlrWithSmd(roleBits int, varIdx ...int32) *storage.NvmeController {

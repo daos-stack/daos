@@ -1638,10 +1638,10 @@ func TestServer_checkTmpfsMem(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			getMemInfo := func() (*common.MemInfo, error) {
-				return &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					MemAvailableKiB: (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte,
-				}, tc.memInfoErr
+				mi := common.MemInfo{}
+				mi.HugepageSizeKiB = 2048
+				mi.MemAvailableKiB = (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte
+				return &mi, tc.memInfoErr
 			}
 
 			gotErr := checkTmpfsMem(log, tc.scmCfgs, getMemInfo)
@@ -2329,9 +2329,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bdevProv := bdev.NewMockProvider(log, nil)
 			if tc.getMemInfo == nil {
 				tc.getMemInfo = func() (*common.MemInfo, error) {
-					return &common.MemInfo{
-						MemAvailableKiB: (6 * humanize.GiByte) / humanize.KiByte,
-					}, nil
+					mi := common.MemInfo{}
+					mi.MemAvailableKiB = (6 * humanize.GiByte) / humanize.KiByte
+					return &mi, nil
 				}
 			}
 

@@ -748,10 +748,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 
 			// test with typical meminfo values
-			mi := &common.MemInfo{
-				HugepageSizeKiB: 2048,
-				MemTotalKiB:     (humanize.GiByte * 50) / humanize.KiByte,
-			}
+			mi := &common.MemInfo{}
+			mi.MemTotalKiB = (50 * humanize.GiByte) / humanize.KiByte
+			mi.HugepageSizeKiB = 2048
 
 			osSetenv = func(string, string) error {
 				return nil
@@ -1018,10 +1017,9 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
 			cfg = tc.srvCfgExtra(cfg)
 
-			mi := &common.MemInfo{
-				HugepageSizeKiB: 2048,
-				MemAvailableKiB: (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte,
-			}
+			mi := &common.MemInfo{}
+			mi.HugepageSizeKiB = 2048
+			mi.MemAvailableKiB = (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte
 
 			if len(cfg.Engines) == 0 {
 				t.Fatal("test expects at least one engine in config")

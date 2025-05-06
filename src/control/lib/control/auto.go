@@ -520,12 +520,11 @@ func getStorageDetails(req ConfGenerateReq, numaCount int, hs *HostStorage) (*st
 	sd := storageDetails{
 		NumaSCMs: make(numaSCMsMap),
 		NumaSSDs: make(numaSSDsMap),
-		MemInfo: &common.MemInfo{
-			HugepageSizeKiB: hs.MemInfo.HugepageSizeKiB,
-			MemTotalKiB:     hs.MemInfo.MemTotalKiB,
-		},
-		scmCls: storage.ClassDcpm,
+		scmCls:   storage.ClassDcpm,
 	}
+	sd.MemInfo = &common.MemInfo{}
+	sd.MemInfo.HugepageSizeKiB = hs.MemInfo.HugepageSizeKiB
+	sd.MemInfo.MemTotalKiB = hs.MemInfo.MemTotalKiB
 	if sd.MemInfo.HugepageSizeKiB == 0 {
 		return nil, errors.New("requires nonzero HugepageSizeKiB")
 	}
