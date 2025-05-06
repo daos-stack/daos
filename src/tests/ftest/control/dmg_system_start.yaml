@@ -1,0 +1,25 @@
+hosts:
+  test_servers: 1
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos0
+    1:
+      fabric_iface_port: 31516
+      log_file: daos_server1.log
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos1
+  system_ram_reserved: 1
