@@ -1,7 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
   (C) Copyright 2025 Hewlett Packard Enterprise Development LP
-  (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -120,7 +119,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     cmds = ['python3 -m venv {}/venv'.format(mount_dir),
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
-            f'git -C {build_dir} submodule update --init --recursive',
+            f'git -C {build_dir} submodule init',
+            f'git -C {build_dir} submodule update',
             'python3 -m pip install pip --upgrade',
             f'python3 -m pip install -r {build_dir}/requirements-build.txt',
             f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',

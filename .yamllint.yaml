@@ -35,4 +35,3 @@ ignore: |
   /venv/
   /build/
   /install/
-  /deps/

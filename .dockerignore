@@ -5,8 +5,8 @@
 # just generate noise and extra work for docker.
 *
 !src
-!deps
 !utils/build.config
+!utils/*.patch
 !utils/certs
 !utils/ci
 !utils/completion
