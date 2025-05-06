@@ -187,6 +187,11 @@ def _program(env, *args, **kwargs):
 def _test_program(env, *args, **kwargs):
     """Build Program with fixed RPATH"""
     denv = env.Clone()
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            kwargs['LIBS'].append('gcov')
+        else:
+            denv.AppendUnique(LIBS=['gcov'])
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get("install_off", None), False, True)
