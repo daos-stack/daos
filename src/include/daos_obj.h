@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -475,10 +476,7 @@ enum {
 typedef struct {
 	/** Key length */
 	daos_size_t	kd_key_len;
-	/**
-	 * Flag for akey value types: DAOS_IOD_SINGLE, DAOS_IOD_ARRAY.
-	 * It is ignored for dkey enumeration.
-	 */
+	/** Internal flag used for enumeration type. Should be ignored by users. */
 	uint32_t	kd_val_type;
 } daos_key_desc_t;
 
