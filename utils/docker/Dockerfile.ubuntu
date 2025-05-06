@@ -1,4 +1,5 @@
 # Copyright 2018-2024 Intel Corporation
+# Copyright 2025 Google LLC
 # Copyright 2025 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
@@ -64,6 +65,7 @@ RUN python3 -m pip --no-cache-dir install --upgrade pip && \
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
 COPY --chown=daos_server:daos_server SConstruct .
+COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
@@ -101,6 +103,8 @@ LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
 COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
+# needed for NLT test
+COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src

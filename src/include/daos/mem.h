@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -195,7 +196,7 @@ struct umem_pool {
 #define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
 #define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
 
-#define UMEM_CACHE_MIN_EVICTABLE_PAGES	2
+#define UMEM_CACHE_MIN_PAGES      1
 
 enum umem_page_event_types {
 	UMEM_CACHE_EVENT_PGLOAD = 0,

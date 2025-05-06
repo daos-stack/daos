@@ -1,29 +1,31 @@
 hosts:
   test_servers: 2
   test_clients: 1
+
 timeout: 2700
+
 server_config:
   name: daos_server
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
+      storage: auto
+
 pool:
   scm_size: 1000000000
   pool_count: 1
+
 container:
   type: POSIX
   control_method: daos
   cont_count: 5
+
 find_cmd:
   height: 3
   subdirs_per_node: 6
   files_per_node: 10
   needles: 100
+
 perf:
   samples: 3
   challenger_path: /mnt/lustre
