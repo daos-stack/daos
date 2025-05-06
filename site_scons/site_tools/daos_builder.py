@@ -174,6 +174,11 @@ def _library(env, *args, **kwargs):
 def _program(env, *args, **kwargs):
     """Build Program with relative RPATH"""
     denv = env.Clone()
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            kwargs['LIBS'].append('gcov')
+        else:
+            denv.AppendUnique(LIBS=['gcov'])
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
