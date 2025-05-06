@@ -86,8 +86,6 @@ def _known_deps(env, **kwargs):
         libs = set(kwargs['LIBS'])
     else:
         libs = set(env.get('LIBS', []))
-    if GetOption("test_coverage"):
-        libs += ['gcov']
 
     known_libs = libs.intersection(set(libraries.keys()))
     missing.update(libs - known_libs)
@@ -157,6 +155,11 @@ def _static_library(env, *args, **kwargs):
 def _library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
     denv = env.Clone()
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            kwargs['LIBS'].append('gcov')
+        else:
+            denv.AppendUnique(LIBS=['gcov'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     lib = denv.SharedLibrary(*args, **kwargs)
