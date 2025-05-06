@@ -560,8 +560,9 @@ dv_path_verify(daos_handle_t poh, struct dv_indexed_tree_path *itp)
 	args.pva_current_idx = 0;
 	args.pva_itp = itp;
 
-	param.ip_hdl = coh;
+	param.ip_hdl        = coh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors,
 			 verify_path_pre_cb, verify_path_post_cb, &args, NULL);
