@@ -143,7 +143,14 @@ def _static_library(env, *args, **kwargs):
         kwargs['target'] = f"{real_target}_source"
     else:
         real_target = None
-    kwargs = _add_code_coverage(env, **kwargs)
+    # kwargs = _add_code_coverage(env, **kwargs)
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            if isinstance(kwargs['LIBS'], str):
+                kwargs['LIBS'] = [kwargs['LIBS']]
+            kwargs['LIBS'].append('gcov')
+        else:
+            env.AppendUnique(LIBS=['gcov'])
     lib = env.StaticLibrary(*args, **kwargs)
     if real_target:
         lib = env.Command(real_target, lib, 'objcopy --localize-hidden $SOURCE $TARGET')
@@ -158,7 +165,15 @@ def _static_library(env, *args, **kwargs):
 def _library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
     denv = env.Clone()
-    kwargs = _add_code_coverage(denv, **kwargs)
+    # kwargs = _add_code_coverage(denv, **kwargs)
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            if isinstance(kwargs['LIBS'], str):
+                kwargs['LIBS'] = [kwargs['LIBS']]
+            kwargs['LIBS'].append('gcov')
+        else:
+            denv.AppendUnique(LIBS=['gcov'])
+
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     lib = denv.SharedLibrary(*args, **kwargs)
@@ -173,7 +188,15 @@ def _library(env, *args, **kwargs):
 def _program(env, *args, **kwargs):
     """Build Program with relative RPATH"""
     denv = env.Clone()
-    kwargs = _add_code_coverage(denv, **kwargs)
+    # kwargs = _add_code_coverage(denv, **kwargs)
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            if isinstance(kwargs['LIBS'], str):
+                kwargs['LIBS'] = [kwargs['LIBS']]
+            kwargs['LIBS'].append('gcov')
+        else:
+            denv.AppendUnique(LIBS=['gcov'])
+
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
@@ -187,7 +210,15 @@ def _program(env, *args, **kwargs):
 def _test_program(env, *args, **kwargs):
     """Build Program with fixed RPATH"""
     denv = env.Clone()
-    kwargs = _add_code_coverage(denv, **kwargs)
+    # kwargs = _add_code_coverage(denv, **kwargs)
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            if isinstance(kwargs['LIBS'], str):
+                kwargs['LIBS'] = [kwargs['LIBS']]
+            kwargs['LIBS'].append('gcov')
+        else:
+            denv.AppendUnique(LIBS=['gcov'])
+
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get("install_off", None), False, True)
@@ -256,16 +287,16 @@ def _configure_mpi(self):
     return None
 
 
-def _add_code_coverage(env, **kwargs):
-    """Add library for code coverage"""
-    if GetOption("test_coverage"):
-        if 'LIBS' in kwargs:
-            if isinstance(kwargs['LIBS'], str):
-                kwargs['LIBS'] = [kwargs['LIBS']]
-            kwargs['LIBS'].append('gcov')
-        else:
-            env.AppendUnique(LIBS=['gcov'])
-    return kwargs
+# def _add_code_coverage(env, **kwargs):
+#     """Add library for code coverage"""
+#     if GetOption("test_coverage"):
+#         if 'LIBS' in kwargs:
+#             if isinstance(kwargs['LIBS'], str):
+#                 kwargs['LIBS'] = [kwargs['LIBS']]
+#             kwargs['LIBS'].append('gcov')
+#         else:
+#             env.AppendUnique(LIBS=['gcov'])
+#     return kwargs
 
 
 def generate(env):
