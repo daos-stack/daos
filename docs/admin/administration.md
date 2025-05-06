@@ -1043,7 +1043,8 @@ An examples workflow would be:
 - Storage server is rebooted after running `daos_server scm prepare` and command is run again.
 - Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
 - `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
-- Running `dmg storage format` now will create new "Joined" rank, instead run with `--replace` flag.
+- Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
+  rank will be created).
 - Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
 
 ### System Erase
