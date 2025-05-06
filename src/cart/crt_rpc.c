@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1537,7 +1538,7 @@ out:
 			/* failure already reported through complete cb */
 			if (complete_cb != NULL)
 				rc = 0;
-		} else if (!crt_rpc_completed(rpc_priv)) {
+		} else {
 			RPC_DECREF(rpc_priv);
 		}
 	}
