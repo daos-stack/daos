@@ -155,11 +155,7 @@ def _static_library(env, *args, **kwargs):
 def _library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
     denv = env.Clone()
-    if GetOption("test_coverage"):
-        if 'LIBS' in kwargs:
-            kwargs['LIBS'].append('gcov')
-        else:
-            denv.AppendUnique(LIBS=['gcov'])
+    kwargs = _add_code_coverage(denv, **kwargs)
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     lib = denv.SharedLibrary(*args, **kwargs)
@@ -174,11 +170,7 @@ def _library(env, *args, **kwargs):
 def _program(env, *args, **kwargs):
     """Build Program with relative RPATH"""
     denv = env.Clone()
-    if GetOption("test_coverage"):
-        if 'LIBS' in kwargs:
-            kwargs['LIBS'].append('gcov')
-        else:
-            denv.AppendUnique(LIBS=['gcov'])
+    kwargs = _add_code_coverage(denv, **kwargs)
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
@@ -192,11 +184,7 @@ def _program(env, *args, **kwargs):
 def _test_program(env, *args, **kwargs):
     """Build Program with fixed RPATH"""
     denv = env.Clone()
-    if GetOption("test_coverage"):
-        if 'LIBS' in kwargs:
-            kwargs['LIBS'].append('gcov')
-        else:
-            denv.AppendUnique(LIBS=['gcov'])
+    kwargs = _add_code_coverage(denv, **kwargs)
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get("install_off", None), False, True)
@@ -263,6 +251,18 @@ def _configure_mpi(self):
         _print(f'No {mpi} installed and/or loaded')
     _print("No MPI installed")
     return None
+
+
+def _add_code_coverage(env, **kwargs):
+    """Add gcov library for code coverage"""
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            if type(kwargs['LIBS']) is str:
+                kwargs['LIBS'] = [kwargs['LIBS']]
+            kwargs['LIBS'].append('gcov')
+        else:
+            env.AppendUnique(LIBS=['gcov'])
+    return kwargs
 
 
 def generate(env):
