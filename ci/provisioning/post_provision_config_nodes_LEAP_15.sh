@@ -17,5 +17,5 @@ distro_custom() {
                /etc/profile.d/lmod.sh;                                        \
     fi
     dnf remove -y lua-lmod
-    dnf install --downloadonly lua-lmod --repo='*lua*' --repo '*network-cluster*'
+    dnf install -y --downloadonly lua-lmod --repo='*lua*' --repo '*network-cluster*'
 }
