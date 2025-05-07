@@ -26,6 +26,9 @@ unsigned int	obj_coll_thd;
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 int		dc_obj_proto_version;
 
+unsigned int    iov_frag_count;
+unsigned int    iov_frag_size;
+
 static void *
 dc_obj_tls_init(int tags, int xs_id, int pid)
 {
@@ -199,6 +202,24 @@ dc_obj_init(void)
 			obj_coll_thd = OBJ_COLL_THD_MIN;
 		}
 		D_INFO("Set object collective operation threshold as %u\n", obj_coll_thd);
+	}
+
+	iov_frag_size = IOV_FRAG_SIZE_DEF;
+	d_getenv_uint("DAOS_IOV_FRAG_SIZE", &iov_frag_size);
+	if (iov_frag_size == 0) {
+		D_INFO("IOV fragment merging is disabled\n");
+	} else {
+		D_INFO("IOV fragment size merge threshold set to %u\n", iov_frag_size);
+	}
+
+	iov_frag_count = IOV_FRAG_COUNT_DEF;
+	d_getenv_uint("DAOS_IOV_FRAG_COUNT", &iov_frag_count);
+	if (iov_frag_count < IOV_FRAG_COUNT_MIN) {
+		D_WARN("Invalid IOV fragment count threshold: %u (minimum %u). Using default: %u\n",
+		       iov_frag_count, IOV_FRAG_COUNT_MIN, IOV_FRAG_COUNT_DEF);
+		iov_frag_count = IOV_FRAG_COUNT_DEF;
+	} else {
+		D_INFO("IOV fragment count merge threshold set to %u\n", iov_frag_count);
 	}
 
 	tx_verify_rdg = false;
