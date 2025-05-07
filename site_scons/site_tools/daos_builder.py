@@ -271,8 +271,9 @@ def _add_code_coverage(env, **kwargs):
             if isinstance(kwargs['LIBS'], str):
                 kwargs['LIBS'] = [kwargs['LIBS']]
             kwargs['LIBS'].append('gcov')
-        else:
-            env.AppendUnique(LIBS=['gcov'])
+        # else:
+        #     env.AppendUnique(LIBS=['gcov'])
+    env = env
     return kwargs
 
 
