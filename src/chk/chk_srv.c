@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,9 +101,9 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 	uint32_t			 shard_nr = 0;
 	int				 rc;
 
-	rc = chk_engine_query(cqi->cqi_gen, cqi->cqi_uuids.ca_count, cqi->cqi_uuids.ca_arrays,
-			      &cqo->cqo_ins_status, &cqo->cqo_ins_phase, &shard_nr, &shards,
-			      &cqo->cqo_gen);
+	rc = chk_engine_query(cqi->cqi_gen, cqi->cqi_flags, cqi->cqi_uuids.ca_count,
+			      cqi->cqi_uuids.ca_arrays, &cqo->cqo_ins_status, &cqo->cqo_ins_phase,
+			      &shard_nr, &shards, &cqo->cqo_gen);
 	if (rc != 0) {
 		cqo->cqo_status = rc;
 		cqo->cqo_cap = 0;

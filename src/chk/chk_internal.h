@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -117,9 +118,13 @@ CRT_RPC_DECLARE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
  * CHK_QUERY:
  * From check leader to check engine to query the check process for specified pools(s) or all pools.
  */
+/* clang-format off */
 #define DAOS_ISEQ_CHK_QUERY							\
 	((uint64_t)		(cqi_gen)		CRT_VAR)		\
+	((uint32_t)		(cqi_flags)		CRT_VAR)		\
+	((uint32_t)		(cqi_padding)		CRT_VAR)		\
 	((uuid_t)		(cqi_uuids)		CRT_ARRAY)
+/* clang-format on */
 
 #define DAOS_OSEQ_CHK_QUERY							\
 	((int32_t)			(cqo_status)		CRT_VAR)	\
@@ -757,9 +762,11 @@ int chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 
 int chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags);
 
-int chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *ins_status,
-		     uint32_t *ins_phase, uint32_t *shard_nr, struct chk_query_pool_shard **shards,
-		     uint64_t *l_gen);
+/* clang-format off */
+int chk_engine_query(uint64_t gen, uint32_t flags, int pool_nr, uuid_t pools[],
+		     uint32_t *ins_status, uint32_t *ins_phase, uint32_t *shard_nr,
+		     struct chk_query_pool_shard **shards, uint64_t *l_gen);
+/* clang-format on */
 
 int chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version);
 
@@ -820,8 +827,10 @@ int chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d
 int chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
 		    chk_co_rpc_cb_t stop_cb, void *args);
 
-int chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
-		     chk_co_rpc_cb_t query_cb, void *args);
+/* clang-format off */
+int chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t flags, int pool_nr,
+		     uuid_t pools[], chk_co_rpc_cb_t query_cb, void *args);
+/* clang-format on */
 
 int chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint32_t version);
 
