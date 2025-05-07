@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,7 +95,7 @@ ds_mgmt_check_stop(int32_t pool_nr, char **pools)
 }
 
 int
-ds_mgmt_check_query(int32_t pool_nr, char **pools, chk_query_head_cb_t head_cb,
+ds_mgmt_check_query(uint32_t flags, int32_t pool_nr, char **pools, chk_query_head_cb_t head_cb,
 		    chk_query_pool_cb_t pool_cb, void *buf)
 {
 	uuid_t	*uuids = NULL;
@@ -102,7 +103,7 @@ ds_mgmt_check_query(int32_t pool_nr, char **pools, chk_query_head_cb_t head_cb,
 
 	rc = ds_mgmt_chk_parse_uuid(pool_nr, pools, &uuids);
 	if (rc == 0) {
-		rc = chk_leader_query(pool_nr, uuids, head_cb, pool_cb, buf);
+		rc = chk_leader_query(flags, pool_nr, uuids, head_cb, pool_cb, buf);
 		D_FREE(uuids);
 	}
 

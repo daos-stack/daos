@@ -2784,11 +2784,14 @@ ds_chk_query_pool_cb(struct chk_query_pool_shard *shard, uint32_t idx, void *buf
 	if (pool->time == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	pool->n_targets = shard->cqps_target_nr;
+	if (pool->n_targets == 0)
+		goto out;
+
 	D_ALLOC_ARRAY(pool->targets, shard->cqps_target_nr);
 	if (pool->targets == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	pool->n_targets = shard->cqps_target_nr;
 	for (i = 0; i < shard->cqps_target_nr; i++) {
 		D_ALLOC_PTR(target);
 		if (target == NULL)
@@ -2855,15 +2858,19 @@ ds_mgmt_drpc_check_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to query check\n");
+	D_INFO("Received request to query check %s shallow\n", req->shallow ? "with" : "without");
 
-	rc = ds_mgmt_check_query(req->n_uuids, req->uuids, ds_chk_query_head_cb,
-				 ds_chk_query_pool_cb, &resp);
+	rc = ds_mgmt_check_query(req->shallow ? CQF_SHOW_DETAIL : 0, req->n_uuids, req->uuids,
+				 ds_chk_query_head_cb, ds_chk_query_pool_cb, &resp);
 	if (rc != 0)
 		D_ERROR("Failed to query check: "DF_RC"\n", DP_RC(rc));
 
 	resp.req_status = rc;
 	len = mgmt__check_query_resp__get_packed_size(&resp);
+	if (unlikely(len >= (1 << 20)))
+		D_WARN("Too large CHK query reply buffer (%ld) for %ld pools (%s shallow)\n", len,
+		       resp.n_pools, req->shallow ? "with" : "without");
+
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		D_ERROR("Failed to allocate response body (query check)\n");
