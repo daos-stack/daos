@@ -4684,8 +4684,8 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	d_iov_t             *iov, *iov_dup;
 	bool                 dup = false;
 	uint32_t             i, j, k, sgl_idx, count = 0, bitmap_sz;
-	int                  rc        = 0;
-	struct sgl_merge_ctx ctx       = {0};
+	int                  rc  = 0;
+	struct sgl_merge_ctx ctx = {0};
 	bool                 merge_iov =
             iov_frag_size == 0 ? false : obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
 
