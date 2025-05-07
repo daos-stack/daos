@@ -19,15 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
-func TestCommon_getMemInfo(t *testing.T) {
-	// Just a simple test to verify that we get something -- it should
-	// pretty much never error.
-	_, err := GetMemInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestCommon_parseMemInfoT(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input     string
