@@ -1,17 +1,12 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
 #include "bio_wal.h"
-
-#define BIO_META_MAGIC		(0xbc202210)
-#define BIO_META_VERSION	1
-
-#define BIO_WAL_MAGIC		(0xaf202209)
-#define BIO_WAL_VERSION		1
 
 #define WAL_HDR_MAGIC		(0xc01d2019)
 
@@ -1050,7 +1045,7 @@ load_wal_header(struct bio_meta_context *mc)
 	bio_addr_t		 addr = { 0 };
 	d_iov_t			 iov;
 	uint32_t		 csum;
-	int			 rc, csum_len;
+	int                      rc, csum_len, hdr_sz;
 
 	bio_addr_set(&addr, DAOS_MEDIA_NVME, 0);
 	d_iov_set(&iov, hdr, sizeof(*hdr));
@@ -1066,13 +1061,15 @@ load_wal_header(struct bio_meta_context *mc)
 		return -DER_UNINIT;
 	}
 
-	if (hdr->wh_version != BIO_WAL_VERSION) {
+	if (hdr->wh_version != BIO_WAL_VERSION && hdr->wh_version != 1) {
 		D_ERROR("Invalid WAL version. %u\n", hdr->wh_version);
 		return -DER_DF_INCOMPT;
 	}
 
 	csum_len = meta_csum_len(mc);
-	rc = meta_csum_calc(mc, hdr, sizeof(*hdr) - csum_len, &csum, csum_len);
+	hdr_sz   = hdr->wh_version == 1 ? sizeof(struct wal_header_v1) : sizeof(*hdr);
+	hdr_sz -= csum_len;
+	rc = meta_csum_calc(mc, hdr, hdr_sz, &csum, csum_len);
 	if (rc) {
 		D_ERROR("Calculate WAL headr csum failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -1910,6 +1907,21 @@ wal_open(struct bio_meta_context *mc)
 	if (rc)
 		return rc;
 
+	/* Auto upgrade WAL header from version 1 to 2 */
+	if (hdr->wh_version == 1) {
+		struct wal_header_v1 *v1 = (struct wal_header_v1 *)hdr;
+
+		v1->wh_csum     = 0;
+		hdr->wh_version = BIO_WAL_VERSION;
+		uuid_copy(hdr->wh_pool_id, mc->mc_wal->bic_pool_id);
+
+		rc = write_header(mc, mc->mc_wal, hdr, sizeof(*hdr), &hdr->wh_csum);
+		if (rc) {
+			DL_ERROR(rc, "Failed to upgrade WAL header (1 -> 2)");
+			return rc;
+		}
+	}
+
 	rc = ABT_mutex_create(&si->si_mutex);
 	if (rc != ABT_SUCCESS)
 		return -DER_NOMEM;
@@ -1947,7 +1959,7 @@ load_meta_header(struct bio_meta_context *mc)
 	bio_addr_t		 addr = { 0 };
 	d_iov_t			 iov;
 	uint32_t		 csum;
-	int			 rc, csum_len;
+	int                      rc, csum_len, hdr_sz;
 
 	bio_addr_set(&addr, DAOS_MEDIA_NVME, 0);
 	d_iov_set(&iov, hdr, sizeof(*hdr));
@@ -1963,13 +1975,15 @@ load_meta_header(struct bio_meta_context *mc)
 		return -DER_UNINIT;
 	}
 
-	if (hdr->mh_version != BIO_META_VERSION) {
+	if (hdr->mh_version != BIO_META_VERSION && hdr->mh_version != 1) {
 		D_ERROR("Invalid meta version. %u\n", hdr->mh_version);
 		return -DER_DF_INCOMPT;
 	}
 
 	csum_len = meta_csum_len(mc);
-	rc = meta_csum_calc(mc, hdr, sizeof(*hdr) - csum_len, &csum, csum_len);
+	hdr_sz   = hdr->mh_version == 1 ? sizeof(struct meta_header_v1) : sizeof(*hdr);
+	hdr_sz -= csum_len;
+	rc = meta_csum_calc(mc, hdr, hdr_sz, &csum, csum_len);
 	if (rc) {
 		D_ERROR("Calculate meta headr csum failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -1992,7 +2006,8 @@ meta_close(struct bio_meta_context *mc)
 int
 meta_open(struct bio_meta_context *mc)
 {
-	int	rc;
+	struct meta_header *hdr = &mc->mc_meta_hdr;
+	int                 rc;
 
 	rc = meta_csum_init(mc, HASH_TYPE_CRC32);
 	if (rc)
@@ -2001,6 +2016,20 @@ meta_open(struct bio_meta_context *mc)
 	rc = load_meta_header(mc);
 	if (rc)
 		meta_csum_fini(mc);
+
+	/* Auto upgrade meta header from version 1 to 2 */
+	if (hdr->mh_version == 1) {
+		struct meta_header_v1 *v1 = (struct meta_header_v1 *)hdr;
+
+		v1->mh_csum     = 0;
+		hdr->mh_version = BIO_META_VERSION;
+		uuid_copy(hdr->mh_pool_id, mc->mc_meta->bic_pool_id);
+
+		rc = write_header(mc, mc->mc_meta, hdr, sizeof(*hdr), &hdr->mh_csum);
+		if (rc)
+			DL_ERROR(rc, "Failed to upgrade meta header (1 -> 2)");
+	}
+
 	return rc;
 }
 
@@ -2072,6 +2101,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, uint32_t flag
 	meta_hdr->mh_vos_id = fi->fi_vos_id;
 	meta_hdr->mh_flags = (flags | META_HDR_FL_EMPTY);
 	meta_hdr->mh_backend_type = fi->fi_backend_type;
+	uuid_copy(meta_hdr->mh_pool_id, fi->fi_pool_id);
 
 	rc = write_header(mc, mc->mc_meta, meta_hdr, sizeof(*meta_hdr), &meta_hdr->mh_csum);
 	if (rc) {
@@ -2086,6 +2116,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, uint32_t flag
 	wal_hdr->wh_blk_bytes = WAL_BLK_SZ;
 	wal_hdr->wh_flags = 0;	/* Don't skip csum tail by default */
 	wal_hdr->wh_tot_blks = (fi->fi_wal_size / WAL_BLK_SZ) - WAL_HDR_BLKS;
+	uuid_copy(wal_hdr->wh_pool_id, fi->fi_pool_id);
 
 	rc = write_header(mc, mc->mc_wal, wal_hdr, sizeof(*wal_hdr), &wal_hdr->wh_csum);
 	if (rc) {

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +10,12 @@
 
 #include "bio_internal.h"
 
+#define BIO_META_MAGIC   (0xbc202210)
+#define BIO_META_VERSION 2
+
+#define BIO_WAL_MAGIC    (0xaf202209)
+#define BIO_WAL_VERSION  2
+
 enum meta_hdr_flags {
 	META_HDR_FL_EMPTY	= (1UL << 0),
 	META_HDR_FL_EVICTABLE	= (1UL << 1),
@@ -16,24 +23,50 @@ enum meta_hdr_flags {
 
 /* Meta blob header */
 struct meta_header {
-	uint32_t	mh_magic;
-	uint32_t	mh_version;
-	uuid_t		mh_meta_devid;		/* Meta SSD device ID */
-	uuid_t		mh_wal_devid;		/* WAL SSD device ID */
-	uuid_t		mh_data_devid;		/* Data SSD device ID */
-	uint64_t	mh_meta_blobid;		/* Meta blob ID */
-	uint64_t	mh_wal_blobid;		/* WAL blob ID */
-	uint64_t	mh_data_blobid;		/* Data blob ID */
-	uint32_t	mh_blk_bytes;		/* Block size for meta, in bytes */
-	uint32_t	mh_hdr_blks;		/* Meta blob header size, in blocks */
-	uint64_t	mh_tot_blks;		/* Meta blob capacity, in blocks */
-	uint32_t	mh_vos_id;		/* Associated per-engine target ID */
-	uint32_t	mh_flags;		/* Meta header flags */
-	uint8_t		mh_backend_type;	/* Backend allocator type */
-	uint8_t		mh_padding1;		/* Reserved */
-	uint16_t	mh_padding2;		/* Reserved */
-	uint32_t	mh_padding[4];		/* Reserved */
-	uint32_t	mh_csum;		/* Checksum of this header */
+	uint32_t mh_magic;
+	uint32_t mh_version;
+	uuid_t   mh_meta_devid;   /* Meta SSD device ID */
+	uuid_t   mh_wal_devid;    /* WAL SSD device ID */
+	uuid_t   mh_data_devid;   /* Data SSD device ID */
+	uint64_t mh_meta_blobid;  /* Meta blob ID */
+	uint64_t mh_wal_blobid;   /* WAL blob ID */
+	uint64_t mh_data_blobid;  /* Data blob ID */
+	uint32_t mh_blk_bytes;    /* Block size for meta, in bytes */
+	uint32_t mh_hdr_blks;     /* Meta blob header size, in blocks */
+	uint64_t mh_tot_blks;     /* Meta blob capacity, in blocks */
+	uint32_t mh_vos_id;       /* Associated per-engine target ID */
+	uint32_t mh_flags;        /* Meta header flags */
+	uint8_t  mh_backend_type; /* Backend allocator type */
+	uint8_t  mh_padding1;     /* Reserved */
+	uint16_t mh_padding2;     /* Reserved */
+	uint32_t mh_compat;       /* Compatibility bits */
+	uuid_t   mh_pool_id;      /* Pool UUID */
+	uint64_t mh_padding[15];  /* Reserved */
+	uint32_t mh_padding3;     /* Reserved */
+	uint32_t mh_csum;         /* Checksum of this header */
+};
+D_CASSERT(sizeof(struct meta_header) == 256);
+
+/* Meta blob header V1 */
+struct meta_header_v1 {
+	uint32_t mh_magic;
+	uint32_t mh_version;
+	uuid_t   mh_meta_devid;   /* Meta SSD device ID */
+	uuid_t   mh_wal_devid;    /* WAL SSD device ID */
+	uuid_t   mh_data_devid;   /* Data SSD device ID */
+	uint64_t mh_meta_blobid;  /* Meta blob ID */
+	uint64_t mh_wal_blobid;   /* WAL blob ID */
+	uint64_t mh_data_blobid;  /* Data blob ID */
+	uint32_t mh_blk_bytes;    /* Block size for meta, in bytes */
+	uint32_t mh_hdr_blks;     /* Meta blob header size, in blocks */
+	uint64_t mh_tot_blks;     /* Meta blob capacity, in blocks */
+	uint32_t mh_vos_id;       /* Associated per-engine target ID */
+	uint32_t mh_flags;        /* Meta header flags */
+	uint8_t  mh_backend_type; /* Backend allocator type */
+	uint8_t  mh_padding1;     /* Reserved */
+	uint16_t mh_padding2;     /* Reserved */
+	uint32_t mh_padding[4];   /* Reserved */
+	uint32_t mh_csum;         /* Checksum of this header */
 };
 
 enum wal_hdr_flags {
@@ -42,19 +75,40 @@ enum wal_hdr_flags {
 
 /* WAL blob header */
 struct wal_header {
-	uint32_t	wh_magic;
-	uint32_t	wh_version;
-	uint32_t	wh_gen;		/* WAL re-format timestamp */
-	uint16_t	wh_blk_bytes;	/* WAL block size in bytes, usually 4k */
-	uint16_t	wh_flags;	/* WAL header flags */
-	uint64_t	wh_tot_blks;	/* WAL blob capacity, in blocks */
-	uint64_t	wh_ckp_id;	/* Last check-pointed transaction ID */
-	uint64_t	wh_commit_id;	/* Last committed transaction ID */
-	uint32_t	wh_ckp_blks;	/* blocks used by last check-pointed transaction */
-	uint32_t	wh_commit_blks;	/* blocks used by last committed transaction */
-	uint64_t	wh_padding2;	/* Reserved */
-	uint32_t	wh_padding3;	/* Reserved */
-	uint32_t	wh_csum;	/* Checksum of this header */
+	uint32_t wh_magic;
+	uint32_t wh_version;
+	uint32_t wh_gen;         /* WAL re-format timestamp */
+	uint16_t wh_blk_bytes;   /* WAL block size in bytes, usually 4k */
+	uint16_t wh_flags;       /* WAL header flags */
+	uint64_t wh_tot_blks;    /* WAL blob capacity, in blocks */
+	uint64_t wh_ckp_id;      /* Last check-pointed transaction ID */
+	uint64_t wh_commit_id;   /* Last committed transaction ID */
+	uint32_t wh_ckp_blks;    /* blocks used by last check-pointed transaction */
+	uint32_t wh_commit_blks; /* blocks used by last committed transaction */
+	uuid_t   wh_pool_id;     /* Pool UUID */
+	uint32_t wh_compat;      /* Compatibility bits */
+	uint32_t wh_padding1;    /* Reserved */
+	uint64_t wh_padding[6];  /* Reserved */
+	uint32_t wh_padding2;    /* Reserved */
+	uint32_t wh_csum;        /* Checksum of this header */
+};
+D_CASSERT(sizeof(struct wal_header) == 128);
+
+/* WAL blob header V1 */
+struct wal_header_v1 {
+	uint32_t wh_magic;
+	uint32_t wh_version;
+	uint32_t wh_gen;         /* WAL re-format timestamp */
+	uint16_t wh_blk_bytes;   /* WAL block size in bytes, usually 4k */
+	uint16_t wh_flags;       /* WAL header flags */
+	uint64_t wh_tot_blks;    /* WAL blob capacity, in blocks */
+	uint64_t wh_ckp_id;      /* Last check-pointed transaction ID */
+	uint64_t wh_commit_id;   /* Last committed transaction ID */
+	uint32_t wh_ckp_blks;    /* blocks used by last check-pointed transaction */
+	uint32_t wh_commit_blks; /* blocks used by last committed transaction */
+	uint64_t wh_padding2;    /* Reserved */
+	uint32_t wh_padding3;    /* Reserved */
+	uint32_t wh_csum;        /* Checksum of this header */
 };
 
 /*
