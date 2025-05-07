@@ -4486,8 +4486,6 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 }
 
 #define SMALL_IOV_THRESHOLD 64
-#define FRAGMENT_SIZE       512
-#define FRAGMENT_COUNT      256
 #define MAX_MERGE_SIZE      (16 << 20)
 
 static inline bool
@@ -4621,7 +4619,7 @@ sgls_set_merged_bitmap(struct sgl_merge_ctx *ctx, d_sg_list_t *sg, uint32_t frag
 	uint32_t bitmap_sz = (sg->sg_nr + 63) / 64;
 	int      rc        = 0;
 
-	if (frag_chain >= FRAGMENT_COUNT) {
+	if (frag_chain >= iov_frag_count) {
 		rc = sgl_alloc_bitmaps_needed(&ctx->merged_bitmaps, i, bitmap_nr, bitmap_sz);
 		if (rc)
 			return rc;
@@ -4654,7 +4652,7 @@ sgls_set_merged_bitmap(struct sgl_merge_ctx *ctx, d_sg_list_t *sg, uint32_t frag
  *
  * 2. IOV Fragmentation Mitigation:
  *    a. Merges contiguous small IOVs (<= SMALL_IOV_THRESHOLD)
- *    b. Combines fragment chains (< FRAGMENT_SIZE) into single buffers
+ *    b. Combines fragment chains (<= iov_frag_size) into single buffers
  *    c. Skips zero-length IOV entries (unsupported by transport)
  *
  * 3. Memory Safety:
@@ -4688,7 +4686,8 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	uint32_t             i, j, k, sgl_idx, count = 0, bitmap_sz;
 	int                  rc        = 0;
 	struct sgl_merge_ctx ctx       = {0};
-	bool                 merge_iov = obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
+	bool                 merge_iov =
+            iov_frag_size == 0 ? false : obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
 
 	sgls = args->sgls;
 	if ((obj_auxi->rw_args.merge_ctx && obj_auxi->rw_args.merge_ctx->sgls_dup != NULL) ||
@@ -4732,7 +4731,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			if (sg->sg_nr == 1 || !merge_iov)
 				break;
 			/* Track mergeable IOV chains */
-			if (iov->iov_buf_len <= FRAGMENT_SIZE) {
+			if (iov->iov_buf_len <= iov_frag_size) {
 				frag_chain++;
 				if (frag_chain == 1)
 					frag_start = j;
