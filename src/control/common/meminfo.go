@@ -22,8 +22,10 @@ import (
 )
 
 var (
-	pathRootProc = "/proc"
-	pathRootSys  = "/sys"
+	pathRootProc  = "/proc"
+	pathRootSys   = "/sys"
+	regexpNodeDir = regexp.MustCompile(`node\d+$`)
+	regexpNodeTxt = regexp.MustCompile(`Node \d+ `)
 )
 
 // GetMemInfoFn is an alias for a function that returns memory information.
@@ -114,21 +116,18 @@ func parseMemInfoT(input io.Reader) (*MemInfoT, error) {
 	mi := new(MemInfoT)
 
 	mi.NumaNodeID = -1
-	re, err := regexp.Compile(`Node \d+ `)
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid pattern")
-	}
 
 	scn := bufio.NewScanner(input)
 	for scn.Scan() {
 		txt := scn.Text()
 
-		nodeStr := re.FindString(txt)
+		nodeStr := regexpNodeTxt.FindString(txt)
 		if nodeStr != "" {
-			txt, err = processNodeLine(nodeStr, txt, mi)
+			txtNew, err := processNodeLine(nodeStr, txt, mi)
 			if err != nil {
 				return nil, err
 			}
+			txt = txtNew
 		}
 
 		keyVal := strings.Split(txt, ":")
@@ -193,11 +192,6 @@ func getMemInfoNodes() ([]MemInfoT, error) {
 		return nil, errors.Wrap(err, "filepath glob")
 	}
 
-	re, err := regexp.Compile(`node\d+$`)
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid pattern")
-	}
-
 	nodeInfos := []MemInfoT{}
 	for _, match := range matches {
 		f, err := os.Stat(match)
@@ -209,7 +203,7 @@ func getMemInfoNodes() ([]MemInfoT, error) {
 		}
 
 		// Skip if directory name isn't node*.
-		if !re.MatchString(filepath.Base(match)) {
+		if !regexpNodeDir.MatchString(filepath.Base(match)) {
 			continue
 		}
 
