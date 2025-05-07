@@ -78,6 +78,7 @@ COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh utils/scripts/c
 ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_TARGET_TYPE=release
+ARG DAOS_PACKAGES_BUILD=yes
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -93,6 +94,19 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
     { scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos \
       TARGET_TYPE=$DAOS_TARGET_TYPE &&                           \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
+
+COPY --chown=daos_server:daos_server utils/rpms utils/rpms
+COPY --chown=daos_server:daos_server utils/sl utils/sl
+
+# Build third party RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
+	export DISTRO=ubuntu &&                                                 \
+	export OUTPUT_TYPE=deb &&                                               \
+	export LIBDIR=/usr/lib/x86_64-linux-gnu &&                              \
+	utils/rpms/build_packages.sh deps &&                                    \
+	mkdir -p /home/daos/dpkg &&                                             \
+	cp *.deb /home/daos/dpkg;                                               \
+    }
 
 USER root:root
 ARG CB1
@@ -129,17 +143,17 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) && \
     go clean -cache && cp -r utils/config/examples /opt/daos; }
 
-ARG DAOS_PACKAGES_BUILD=$DAOS_BUILD
+# Build RPMs
 COPY --chown=daos_server:daos_server utils utils
 
-# Build RPMs
-RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || { \
-	export DISTRO=ubuntu &&                      \
-	export OUTPUT_TYPE=deb &&                    \
-	export LIBDIR=/usr/lib/x86_64-linux-gnu &&   \
-	utils/rpms/build_packages.sh &&              \
-	mkdir -p /home/daos/dpkg &&                  \
-	cp *.deb /home/daos/dpkg;                    \
+# Build DAOS RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
+	export DISTRO=ubuntu &&                                            \
+	export OUTPUT_TYPE=deb &&                                          \
+	export LIBDIR=/usr/lib/x86_64-linux-gnu &&                         \
+	utils/rpms/build_packages.sh daos &&                               \
+	mkdir -p /home/daos/dpkg &&                                        \
+	cp *.deb /home/daos/dpkg;                                          \
     }
 
 # Set environment variables
