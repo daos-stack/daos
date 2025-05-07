@@ -2422,7 +2422,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	 * which otherwise might be written duplicately, which might cause
 	 * the failure in VOS.
 	 */
-	if ((flags & ORF_REBUILDING_IO) && (ds_pool_rebuild_needed(child->sc_pool->spc_pool) &&
+	if ((flags & ORF_REBUILDING_IO) && (ds_pool_rebuild_enabled(child->sc_pool->spc_pool) &&
 					    child->sc_pool->spc_rebuild_fence == 0)) {
 		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
 		return -DER_UPDATE_AGAIN;

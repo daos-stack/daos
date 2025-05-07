@@ -545,7 +545,7 @@ int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct 
 void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
 
 static inline bool
-ds_pool_rebuild_needed(struct ds_pool *pool)
+ds_pool_rebuild_enabled(struct ds_pool *pool)
 {
 	if (pool->sp_disable_rebuild)
 		return false;

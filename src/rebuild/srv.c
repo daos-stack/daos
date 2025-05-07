@@ -2383,8 +2383,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 		return DER_SUCCESS;
 	}
 
-	if (pool->sp_self_heal & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD) &&
-	    !pool->sp_disable_rebuild) {
+	if (ds_pool_rebuild_enabled(pool)) {
 		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN,
 					     pool->sp_self_heal & DAOS_SELF_HEAL_DELAY_REBUILD ? -1
 											       : 0);

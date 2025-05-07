@@ -7472,9 +7472,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
-	if (!(svc->ps_pool->sp_self_heal &
-	      (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) ||
-	    svc->ps_pool->sp_disable_rebuild) {
+	if (!ds_pool_rebuild_enabled(svc->ps_pool)) {
 		D_DEBUG(DB_MD, "self healing is disabled\n");
 		D_GOTO(out, rc);
 	}
