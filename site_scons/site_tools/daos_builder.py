@@ -258,6 +258,7 @@ def _add_code_coverage(env, **kwargs):
     if GetOption("test_coverage"):
         if 'LIBS' not in kwargs:
             kwargs['LIBS'] = []
+            kwargs['LIBS'].append('gcov')
         elif isinstance(kwargs['LIBS'], str):
             kwargs['LIBS'] = [kwargs['LIBS']]
             kwargs['LIBS'].append('gcov')
