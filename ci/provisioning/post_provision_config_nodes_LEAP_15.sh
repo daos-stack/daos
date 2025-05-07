@@ -16,6 +16,6 @@ distro_custom() {
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                     \
                /etc/profile.d/lmod.sh;                                        \
     fi
-    dnf remove lua-lmod
+    dnf remove -y lua-lmod
     dnf install --downloadonly lua-lmod --repo='*lua*' --repo '*network-cluster*'
 }
