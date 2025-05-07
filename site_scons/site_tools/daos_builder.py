@@ -258,12 +258,11 @@ def _add_code_coverage(env, **kwargs):
     if GetOption("test_coverage"):
         if 'LIBS' not in kwargs:
             kwargs['LIBS'] = []
-            kwargs['LIBS'].append('gcov')
         elif isinstance(kwargs['LIBS'], str):
             kwargs['LIBS'] = [kwargs['LIBS']]
-            kwargs['LIBS'].append('gcov')
-        else:
-            env.AppendUnique(LIBS=['gcov'])
+        kwargs['LIBS'].append('gcov')
+        # else:
+        #     env.AppendUnique(LIBS=['gcov'])
     return kwargs
 # def _add_code_coverage(env, **kwargs):
 #     """Add library for code coverage"""
