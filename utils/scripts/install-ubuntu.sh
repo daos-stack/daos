@@ -62,6 +62,7 @@ apt-get install \
     sudo \
     uuid-dev \
     valgrind \
+    libncurses-dev \
     yasm
 
 sudo gem install fpm
