@@ -173,7 +173,7 @@ def _program(env, *args, **kwargs):
     denv = env.Clone()
     # kwargs = _add_code_coverage(**kwargs)
     if GetOption("test_coverage"):
-        denv.AppendUnique(LINKFLAGS=['-lgcov'])
+        denv.AppendUnique(LIBS=['gcov'])
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
@@ -189,7 +189,7 @@ def _test_program(env, *args, **kwargs):
     denv = env.Clone()
     # kwargs = _add_code_coverage(**kwargs)
     if GetOption("test_coverage"):
-        denv.AppendUnique(LINKFLAGS=['-lgcov'])
+        denv.AppendUnique(LIBS=['gcov'])
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get("install_off", None), False, True)
