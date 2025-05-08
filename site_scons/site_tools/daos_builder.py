@@ -253,27 +253,27 @@ def _configure_mpi(self):
     return None
 
 
-def _add_code_coverage(env, **kwargs):
-    """Add library for code coverage"""
-    if GetOption("test_coverage"):
-        if 'LIBS' not in kwargs:
-            kwargs['LIBS'] = []
-        elif isinstance(kwargs['LIBS'], str):
-            kwargs['LIBS'] = [kwargs['LIBS']]
-        else:
-            env.AppendUnique(LIBS=['gcov'])
-        kwargs['LIBS'].append('gcov')
-    return kwargs
 # def _add_code_coverage(env, **kwargs):
 #     """Add library for code coverage"""
 #     if GetOption("test_coverage"):
-#         if 'LIBS' in kwargs:
-#             if isinstance(kwargs['LIBS'], str):
-#                 kwargs['LIBS'] = [kwargs['LIBS']]
-#             kwargs['LIBS'].append('gcov')
+#         if 'LIBS' not in kwargs:
+#             kwargs['LIBS'] = []
+#         elif isinstance(kwargs['LIBS'], str):
+#             kwargs['LIBS'] = [kwargs['LIBS']]
 #         else:
 #             env.AppendUnique(LIBS=['gcov'])
+#         kwargs['LIBS'].append('gcov')
 #     return kwargs
+def _add_code_coverage(env, **kwargs):
+    """Add library for code coverage"""
+    if GetOption("test_coverage"):
+        if 'LIBS' in kwargs:
+            if isinstance(kwargs['LIBS'], str):
+                kwargs['LIBS'] = [kwargs['LIBS']]
+            kwargs['LIBS'].append('gcov')
+        else:
+            env.AppendUnique(LIBS=['gcov'])
+    return kwargs
 
 
 def generate(env):
