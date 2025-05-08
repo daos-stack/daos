@@ -129,7 +129,7 @@ def _run_command(env, target, sources, daos_libs, command):
 
 def _static_library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
-    kwargs = _add_code_coverage(env, **kwargs)
+    kwargs = _add_code_coverage(**kwargs)
     libname = _get_libname(*args, **kwargs)
     if 'hide_syms' in kwargs:
         # Allow for auto-hiding of symbols, used for the Interception library.  There are multiple
@@ -155,7 +155,7 @@ def _static_library(env, *args, **kwargs):
 def _library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
     denv = env.Clone()
-    kwargs = _add_code_coverage(denv, **kwargs)
+    kwargs = _add_code_coverage(**kwargs)
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     lib = denv.SharedLibrary(*args, **kwargs)
@@ -170,7 +170,7 @@ def _library(env, *args, **kwargs):
 def _program(env, *args, **kwargs):
     """Build Program with relative RPATH"""
     denv = env.Clone()
-    kwargs = _add_code_coverage(denv, **kwargs)
+    kwargs = _add_code_coverage(**kwargs)
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
@@ -184,7 +184,7 @@ def _program(env, *args, **kwargs):
 def _test_program(env, *args, **kwargs):
     """Build Program with fixed RPATH"""
     denv = env.Clone()
-    kwargs = _add_code_coverage(denv, **kwargs)
+    kwargs = _add_code_coverage(**kwargs)
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get("install_off", None), False, True)
@@ -264,15 +264,23 @@ def _configure_mpi(self):
 #         kwargs['LIBS'].append('gcov')
 #     return kwargs
 
-def _add_code_coverage(env, **kwargs):
+# def _add_code_coverage(env, **kwargs):
+#     """Add library for code coverage"""
+#     if GetOption("test_coverage"):
+#         if 'LIBS' in kwargs:
+#             if isinstance(kwargs['LIBS'], str):
+#                 kwargs['LIBS'] = [kwargs['LIBS']]
+#             kwargs['LIBS'].append('gcov')
+#         else:
+#             env.AppendUnique(LIBS=['gcov'])
+#     return kwargs
+def _add_code_coverage(**kwargs):
     """Add library for code coverage"""
     if GetOption("test_coverage"):
         if 'LIBS' in kwargs:
             if isinstance(kwargs['LIBS'], str):
                 kwargs['LIBS'] = [kwargs['LIBS']]
             kwargs['LIBS'].append('gcov')
-        else:
-            env.AppendUnique(LIBS=['gcov'])
     return kwargs
 
 
