@@ -28,7 +28,7 @@ func TestCommon_parseMemInfoT(t *testing.T) {
 	}{
 		"none parsed": {
 			expOut: &MemInfoT{
-				NumaNodeID: -1,
+				NumaNodeIndex: -1,
 			},
 			expFreeMB: 0,
 		},
@@ -44,7 +44,7 @@ HugePages_Surp:        0
 Hugepagesize:       2048 kB
 			`,
 			expOut: &MemInfoT{
-				NumaNodeID:      -1,
+				NumaNodeIndex:   -1,
 				HugepagesTotal:  1024,
 				HugepagesFree:   1023,
 				HugepageSizeKiB: 2048,
@@ -63,10 +63,10 @@ HugePages_Surp:        0
 Hugepagesize:       1048576 kB
 			`,
 			expOut: &MemInfoT{
+				NumaNodeIndex:   -1,
 				HugepagesTotal:  16,
 				HugepagesFree:   16,
 				HugepageSizeKiB: 1048576,
-				NumaNodeID:      -1,
 			},
 			expFreeMB: 16384,
 		},
@@ -138,7 +138,7 @@ func TestCommon_GetMemInfo(t *testing.T) {
 			},
 			expOut: &MemInfo{
 				MemInfoT: MemInfoT{
-					NumaNodeID:      -1,
+					NumaNodeIndex:   -1,
 					HugepagesTotal:  2560,
 					HugepagesFree:   2560,
 					HugepageSizeKiB: 2048,
@@ -159,7 +159,7 @@ func TestCommon_GetMemInfo(t *testing.T) {
 			},
 			expOut: &MemInfo{
 				MemInfoT: MemInfoT{
-					NumaNodeID:      -1,
+					NumaNodeIndex:   -1,
 					HugepagesTotal:  2560,
 					HugepagesFree:   2560,
 					HugepageSizeKiB: 2048,
@@ -176,12 +176,12 @@ func TestCommon_GetMemInfo(t *testing.T) {
 						MemUsedKiB:     10463372,
 					},
 					{
+						NumaNodeIndex:  1,
 						HugepagesTotal: 512,
 						HugepagesFree:  512,
 						MemTotalKiB:    99030076,
 						MemFreeKiB:     95526628,
 						MemUsedKiB:     3503448,
-						NumaNodeID:     1,
 					},
 				},
 			},
