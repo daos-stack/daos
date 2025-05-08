@@ -2015,8 +2015,10 @@ meta_open(struct bio_meta_context *mc)
 		return rc;
 
 	rc = load_meta_header(mc);
-	if (rc)
+	if (rc) {
 		meta_csum_fini(mc);
+		return rc;
+	}
 
 	/* Auto upgrade meta header from version 1 to 2 */
 	if (hdr->mh_version == 1) {
@@ -2027,8 +2029,11 @@ meta_open(struct bio_meta_context *mc)
 		uuid_copy(hdr->mh_pool_id, mc->mc_meta->bic_pool_id);
 
 		rc = write_header(mc, mc->mc_meta, hdr, sizeof(*hdr), &hdr->mh_csum);
-		if (rc)
+		if (rc) {
 			DL_ERROR(rc, "Failed to upgrade meta header (1 -> 2)");
+			meta_csum_fini(mc);
+			return rc;
+		}
 	}
 
 	return rc;
