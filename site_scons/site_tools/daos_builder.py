@@ -261,7 +261,8 @@ def _add_code_coverage(**kwargs):
             kwargs['LIBS'] = []
         elif isinstance(kwargs['LIBS'], str):
             kwargs['LIBS'] = [kwargs['LIBS']]
-        kwargs['LIBS'].append('gcov')
+        if 'gcov' not in kwargs['LIBS']:
+            kwargs['LIBS'].append('gcov')
         print(f"DEBUG.... _add_code_coverage: kwargs['LIBS']={kwargs['LIBS']}")
     return kwargs
 
