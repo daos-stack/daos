@@ -349,7 +349,7 @@ func setHugeNodes(log logging.Logger, srvCfg *config.Server, mi *common.MemInfo,
 	for _, nID := range nodeNrsKeys {
 		hnStrs = append(hnStrs, fmt.Sprintf("nodes_hp[%s]=%d", nID, nodeNrs[nID]))
 	}
-	req.HugeNodes = strings.Join(hnStrs, ",")
+	req.HugeNodes = fmt.Sprintf("'%s'", strings.Join(hnStrs, ","))
 
 	log.Tracef("sending HUGENODE=%q to SPDK setup script", req.HugeNodes)
 

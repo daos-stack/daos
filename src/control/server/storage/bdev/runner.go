@@ -111,6 +111,8 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 
 	if req.HugepageCount != 0 {
 		s.env[nrHugepagesEnv] = fmt.Sprintf("%d", req.HugepageCount)
+	}
+	if req.HugeNodes != "" {
 		s.env[hugeNodeEnv] = req.HugeNodes
 	}
 
