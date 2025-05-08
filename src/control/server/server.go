@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -73,7 +74,7 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
-	if err := cfg.SetNrHugepages(log, mi); err != nil {
+	if err := cfg.SetNrHugepages(log, mi.HugepageSizeKiB); err != nil {
 		return err
 	}
 
@@ -343,7 +344,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 
 // addEngines creates and adds engine instances to harness then starts goroutine to execute
 // callbacks when all engines are started.
-func (srv *server) addEngines(ctx context.Context) error {
+func (srv *server) addEngines(ctx context.Context, mi *common.MemInfo) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
@@ -353,7 +354,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 	}
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
+	if err := prepBdevStorage(srv, iommuEnabled, mi); err != nil {
 		return err
 	}
 
@@ -631,7 +632,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.addEngines(ctx); err != nil {
+	if err := srv.addEngines(ctx, mi); err != nil {
 		return err
 	}
 

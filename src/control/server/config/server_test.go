@@ -37,6 +37,7 @@ const (
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	mdOnSSDExample   = "../../../../utils/config/examples/daos_server_mdonssd.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
+	defHpSizeKb      = 2048
 )
 
 var (
@@ -994,8 +995,6 @@ func TestServerConfig_getMinMaxNrHugepages(t *testing.T) {
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
 
-	defHpSizeKb := 2048
-
 	for name, tc := range map[string]struct {
 		extraConfig     func(c *Server) *Server
 		zeroHpSize      bool
@@ -1177,7 +1176,6 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		extraConfig       func(c *Server) *Server
-		hugepagesTotal    int
 		expErr            error
 		expCfgNrHugepages int
 	}{
@@ -1259,19 +1257,6 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			},
 			expCfgNrHugepages: scanMinHugepageCount + 1,
 		},
-		"unset in cfg; insufficient total system hugepages; no engines configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithEngines()
-			},
-			hugepagesTotal:    scanMinHugepageCount - 1,
-			expCfgNrHugepages: scanMinHugepageCount,
-		},
-		"unset in cfg; sufficient total system hugepages; no engines configured": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithEngines()
-			},
-			hugepagesTotal: scanMinHugepageCount + 1,
-		},
 		"md-on-ssd enabled with explicit role assignment; zero total system hugepages": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
@@ -1291,27 +1276,6 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			},
 			// Min: 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD).
 			expCfgNrHugepages: 4608,
-		},
-		"md-on-ssd enabled with explicit role assignment; sufficient total system hugepages": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithEngines(
-					defaultEngineCfg().
-						WithFabricInterfacePort(1234).
-						WithStorage(
-							storage.NewTierConfig().
-								WithScmMountPoint("/mnt/daos/1").
-								WithStorageClass("ram").
-								WithScmDisableHugepages(),
-							storage.NewTierConfig().
-								WithStorageClass("nvme").
-								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-								WithBdevDeviceRoles(storage.BdevRoleAll),
-						),
-				)
-			},
-			// Total system hugepages meets minimum requirement, no change required.
-			// Min: 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD).
-			hugepagesTotal: 4608,
 		},
 		"md-on-ssd enabled with explicit role assignment; manual nr_hugepages in cfg": {
 			extraConfig: func(c *Server) *Server {
@@ -1340,14 +1304,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			// Apply test case changes to basic config
 			cfg := tc.extraConfig(baseCfg(t, log, testFile))
 
-			mi := &common.MemInfo{}
-			mi.HugepageSizeKiB = defHpSizeKb
-			mi.HugepagesTotal = tc.hugepagesTotal
-			if tc.zeroHpSize {
-				mi.HugepageSizeKiB = 0
-			}
-
-			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
+			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, defHpSizeKb))
 			if tc.expErr != nil {
 				return
 			}

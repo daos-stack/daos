@@ -531,11 +531,11 @@ func (cfg *Server) getMinNrHugepages(log logging.Logger, hpSizeKiB int) (int, er
 	return minHugepages, nil
 }
 
-// SetNrHugepages calculates minimum based on total target count if using nvme. If cfg.NrHugepages
-// is set to zero, no hugepage allocation requests will be made to the kernel during service
-// start-up in prepBdevStorage(). Only set non-zero here if a nr_hugepage change is required.
-func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error {
-	minHugepages, err := cfg.getMinNrHugepages(log, mi.HugepageSizeKiB)
+// SetNrHugepages calculates minimum based on total target count if using nvme. Handle scenarios for
+// disabling hugepages and no configured bdevs by setting config request value (NrHugepages)
+// appropriately. Hugepage allocation requests will be validated in prepBdevStorage().
+func (cfg *Server) SetNrHugepages(log logging.Logger, hugepageSizeKiB int) error {
+	minHugepages, err := cfg.getMinNrHugepages(log, hugepageSizeKiB)
 	if err != nil {
 		return err
 	}
@@ -551,7 +551,6 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 			// Real NVMe SSDs assigned in config but hugepages disabled.
 			return FaultConfigHugepagesDisabledWithNvmeBdevs
 		}
-
 		if minHugepages != 0 {
 			log.Notice("Hugepages have been disabled but DAOS targets will still be " +
 				"assigned to bdevs. This usage model is experimental so caution " +
@@ -563,54 +562,31 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		// Hugepages disabled and so zero nr_hugepages requested in config.
 		return nil
 	} else if minHugepages == 0 {
-		// Enable minimum nr_hugepages needed for scanning NVMe on host in discovery mode.
-		msg := fmt.Sprintf("configured nr_hugepages (%d) meets minimum required for scan (%d)",
-			cfg.NrHugepages, scanMinHugepageCount)
 		if cfg.NrHugepages < scanMinHugepageCount {
-			if mi.HugepagesTotal < scanMinHugepageCount {
-				cfg.NrHugepages = scanMinHugepageCount
-				msg = fmt.Sprintf("setting minimum (%d) in config to enable NVMe "+
-					"device discovery", scanMinHugepageCount)
-			} else {
-				msg = fmt.Sprintf("total system hugepage count (%d) meets "+
-					"minimum required for scan (%d)", mi.HugepagesTotal,
-					scanMinHugepageCount)
-			}
+			log.Infof("No hugepages required as zero configured engine targets, setting "+
+				"minimum (%d) in config to enable NVMe device discovery",
+				scanMinHugepageCount)
+			cfg.NrHugepages = scanMinHugepageCount
+		} else {
+			log.Infof("No hugepages required as zero configured engine targets, "+
+				"configurd value (%d) will be used to enable NVMe device discovery",
+				cfg.NrHugepages)
 		}
 
-		log.Infof("No hugepages required as zero configured engine targets, %s", msg)
-
-		// Zero tgts on bdevs and min allocation for discovery mode has either been met or
-		// is being applied.
+		// Zero tgts on bdevs and min allocation for discovery mode requested in cfg.
 		return nil
 	}
 
-	log.Infof("%d total hugepages currently allocated on host", mi.HugepagesTotal)
-
-	// If the config doesn't specify nr_hugepages, avoid requesting a new allocation unless the
-	// current system total is insufficient. This will reduce the chance of multiple allocations
-	// on server start causing hugepage memory fragmentation.
-	// - If the number of hugepages is unset in config and the number of total hugepages in the
-	//   system is insufficient to cover the amount required for the number of configured
-	//   targets then request the minimum number by setting cfg.NrHugepages.
-	// - If the number of hugepages is unset in config and the number of total hugepages in the
-	//   system is sufficient to cover the amount required for the number of configured targets
-	//   then leave cfg.NrHugepages equal to zero to indicate no change is required.
-	// - If the number is manually set in the config, notify if the configured amount is
-	//   insufficient for number of targets.
+	// Create a target request number in config based on calculated requirements or verify that
+	// a preset value meets the calculated requirement.
 
 	if cfg.NrHugepages == 0 {
-		if mi.HugepagesTotal < minHugepages {
-			cfg.NrHugepages = minHugepages
-			log.Debugf("nr_hugepages auto-set to %d (%s)", cfg.NrHugepages,
-				humanize.IBytes(hugePageBytes(cfg.NrHugepages, mi.HugepageSizeKiB)))
-		} else {
-			log.Debugf("skipping allocation of hugepages, %d min covered by total sys %d",
-				minHugepages, mi.HugepagesTotal)
-		}
+		cfg.NrHugepages = minHugepages
+		log.Debugf("nr_hugepages auto-set to %d (%s)", cfg.NrHugepages,
+			humanize.IBytes(hugePageBytes(cfg.NrHugepages, hugepageSizeKiB)))
 	} else {
 		log.Debugf("nr_hugepages has been set in server config to %d (%s)", cfg.NrHugepages,
-			humanize.IBytes(hugePageBytes(cfg.NrHugepages, mi.HugepageSizeKiB)))
+			humanize.IBytes(hugePageBytes(cfg.NrHugepages, hugepageSizeKiB)))
 		if cfg.NrHugepages < minHugepages {
 			log.Noticef("%d nr_hugepages (set in config file) is less than recommended "+
 				"%d, if this is not intentional update the 'nr_hugepages' config "+
