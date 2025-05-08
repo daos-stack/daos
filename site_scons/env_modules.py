@@ -1,4 +1,5 @@
 # Copyright 2019-2023 Intel Corporation
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -34,8 +35,7 @@ class _env_module():  # pylint: disable=invalid-name
 
     env_module_init = None
     _mpi_map = {"mpich": ['mpi/mpich-x86_64', 'gnu-mpich'],
-                "openmpi": ['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
-                            'gnu-openmpi', 'mpi/openmpi-x86_64']}
+                "openmpi": ['mpi/openmpi3-x86_64', 'gnu-openmpi', 'mpi/openmpi-x86_64']}
 
     def __init__(self, silent=False):
         """Load Modules for initializing environment variables"""
