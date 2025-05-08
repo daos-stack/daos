@@ -33,7 +33,7 @@ type GetMemInfoFn func() (*MemInfo, error)
 
 // MemInfoT contains system memory details gathered from meminfo files.
 type MemInfoT struct {
-	NumaNodeIndex   int `json:"numa_node_id"`
+	NumaNodeIndex   int `json:"numa_node_index"`
 	HugepagesTotal  int `json:"hugepages_total" hash:"ignore"`
 	HugepagesFree   int `json:"hugepages_free" hash:"ignore"`
 	HugepagesRsvd   int `json:"hugepages_reserved" hash:"ignore"`
