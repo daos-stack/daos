@@ -33,7 +33,7 @@ type GetMemInfoFn func() (*MemInfo, error)
 
 // MemInfoT contains system memory details gathered from meminfo files.
 type MemInfoT struct {
-	NumaNodeID      int `json:"numa_node_id"`
+	NumaNodeIndex   int `json:"numa_node_id"`
 	HugepagesTotal  int `json:"hugepages_total" hash:"ignore"`
 	HugepagesFree   int `json:"hugepages_free" hash:"ignore"`
 	HugepagesRsvd   int `json:"hugepages_reserved" hash:"ignore"`
@@ -59,7 +59,7 @@ func (mi *MemInfo) Summary() string {
 
 	var msgsHuge []string
 	for _, nn := range mi.NumaNodes {
-		msgsHuge = append(msgsHuge, fmt.Sprintf("node-%d total/free: %d/%d", nn.NumaNodeID,
+		msgsHuge = append(msgsHuge, fmt.Sprintf("node-%d total/free: %d/%d", nn.NumaNodeIndex,
 			nn.HugepagesTotal, nn.HugepagesFree))
 	}
 	msgHuge := strings.Join(msgsHuge, ", ")
@@ -103,9 +103,9 @@ func processNodeLine(nodeStr, txt string, mi *MemInfoT) (string, error) {
 		return "", err
 	}
 
-	if mi.NumaNodeID == -1 {
-		mi.NumaNodeID = id
-	} else if mi.NumaNodeID != id {
+	if mi.NumaNodeIndex == -1 {
+		mi.NumaNodeIndex = id
+	} else if mi.NumaNodeIndex != id {
 		return "", errors.New("unexpected mix of node ids in meminfo file")
 	}
 
@@ -115,7 +115,7 @@ func processNodeLine(nodeStr, txt string, mi *MemInfoT) (string, error) {
 func parseMemInfoT(input io.Reader) (*MemInfoT, error) {
 	mi := new(MemInfoT)
 
-	mi.NumaNodeID = -1
+	mi.NumaNodeIndex = -1
 
 	scn := bufio.NewScanner(input)
 	for scn.Scan() {
@@ -212,7 +212,7 @@ func getMemInfoNodes() ([]MemInfoT, error) {
 		if err != nil {
 			return nil, err
 		}
-		if mi.NumaNodeID == -1 {
+		if mi.NumaNodeIndex == -1 {
 			return nil, errors.New("missing numa node id in meminfo file")
 		}
 		nodeInfos = append(nodeInfos, *mi)
