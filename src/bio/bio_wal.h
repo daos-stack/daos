@@ -87,9 +87,9 @@ struct wal_header {
 	uint32_t wh_commit_blks; /* blocks used by last committed transaction */
 	uuid_t   wh_pool_id;     /* Pool UUID */
 	uint32_t wh_compat;      /* Compatibility bits */
-	uint32_t wh_padding1;    /* Reserved */
+	uint32_t wh_vos_id;      /* Associated per-engine target ID */
 	uint64_t wh_padding[6];  /* Reserved */
-	uint32_t wh_padding2;    /* Reserved */
+	uint32_t wh_padding1;    /* Reserved */
 	uint32_t wh_csum;        /* Checksum of this header */
 };
 D_CASSERT(sizeof(struct wal_header) == 128);

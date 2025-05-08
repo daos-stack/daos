@@ -1914,6 +1914,7 @@ wal_open(struct bio_meta_context *mc)
 		v1->wh_csum     = 0;
 		hdr->wh_version = BIO_WAL_VERSION;
 		uuid_copy(hdr->wh_pool_id, mc->mc_wal->bic_pool_id);
+		hdr->wh_vos_id = mc->mc_meta_hdr.mh_vos_id;
 
 		rc = write_header(mc, mc->mc_wal, hdr, sizeof(*hdr), &hdr->wh_csum);
 		if (rc) {
@@ -2117,6 +2118,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, uint32_t flag
 	wal_hdr->wh_flags = 0;	/* Don't skip csum tail by default */
 	wal_hdr->wh_tot_blks = (fi->fi_wal_size / WAL_BLK_SZ) - WAL_HDR_BLKS;
 	uuid_copy(wal_hdr->wh_pool_id, fi->fi_pool_id);
+	wal_hdr->wh_vos_id = fi->fi_vos_id;
 
 	rc = write_header(mc, mc->mc_wal, wal_hdr, sizeof(*wal_hdr), &wal_hdr->wh_csum);
 	if (rc) {
