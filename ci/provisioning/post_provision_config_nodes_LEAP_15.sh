@@ -3,6 +3,8 @@
 bootstrap_dnf() {
     rm -rf "$REPOS_DIR"
     ln -s ../zypp/repos.d "$REPOS_DIR"
+    dnf -y remove lua-lmod
+    dnf -y install lua-lmod '--repo=*lua*' --repo '*network-cluster*'
 }
 
 group_repo_post() {
