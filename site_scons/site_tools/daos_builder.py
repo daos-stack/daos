@@ -122,7 +122,9 @@ def _add_lib(libtype, libname, target):
 def _run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
     if GetOption("test_coverage"):
-        daos_libs += ['gcov']
+        # DH
+        if target != 'daos_server_helper':
+            daos_libs += ['gcov']
         print(f"DEBUG... target={target}, daos_libs={daos_libs}")
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
