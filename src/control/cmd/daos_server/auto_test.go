@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -247,10 +248,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 
 	var defCoresPerNuma uint32 = 26
 	var defNumaCount uint32 = 2
-	defMemInfo := common.MemInfo{
-		HugepageSizeKiB: 2048,
-		MemTotalKiB:     1, // Avoid failing non-zero check.
-	}
+	defMemInfo := common.MemInfo{}
+	defMemInfo.HugepageSizeKiB = 2048
+	defMemInfo.MemTotalKiB = 1 // Avoid failing non-zero check.
 	defHostFabric := &control.HostFabric{
 		Interfaces: []*control.HostFabricInterface{
 			eth0, eth1, ib0, ib1,

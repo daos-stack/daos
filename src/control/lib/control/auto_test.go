@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1456,11 +1457,11 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 			nd := &networkDetails{
 				NumaIfaces: tc.numaIfaces,
 			}
+			mi := &common.MemInfo{}
+			mi.HugepageSizeKiB = 2048
+			mi.MemTotalKiB = tc.memTotal / humanize.KiByte
 			sd := &storageDetails{
-				MemInfo: &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					MemTotalKiB:     tc.memTotal / humanize.KiByte,
-				},
+				MemInfo:  mi,
 				NumaSCMs: tc.numaPMems,
 				NumaSSDs: tc.numaSSDs,
 				scmCls:   storage.ClassDcpm,
