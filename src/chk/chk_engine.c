@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +34,7 @@ struct chk_query_pool_args {
 	struct chk_instance		*cqpa_ins;
 	uint32_t			 cqpa_cap;
 	uint32_t			 cqpa_idx;
+	uint32_t                         cqpa_flags;
 	struct chk_query_pool_shard	*cqpa_shards;
 };
 
@@ -2452,14 +2454,15 @@ out:
 static int
 chk_engine_query_pool(uuid_t uuid, void *args)
 {
-	struct chk_query_pool_args	*cqpa = args;
-	struct chk_query_pool_shard	*shard;
+	struct chk_query_pool_args      *cqpa  = args;
+	struct chk_query_pool_shard     *shard = NULL;
 	struct chk_query_pool_shard	*new_shards;
 	struct chk_bookmark		 cbk;
 	struct dss_coll_args		 coll_args = { 0 };
 	struct dss_coll_ops		 coll_ops = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	int				 rc = 0;
+	int                              i;
 
 	if (cqpa->cqpa_idx == cqpa->cqpa_cap) {
 		D_REALLOC_ARRAY(new_shards, cqpa->cqpa_shards, cqpa->cqpa_cap, cqpa->cqpa_cap << 1);
@@ -2505,7 +2508,38 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
 
+	if (rc != 0 || cqpa->cqpa_flags & CQF_SHOW_DETAIL ||
+	    shard->cqps_status == CHK__CHECK_POOL_STATUS__CPS_UNCHECKED)
+		goto out;
+
+	for (i = 0; i < dss_tgt_nr; i++) {
+		struct chk_query_target *target = &shard->cqps_targets[i];
+
+		if (shard->cqps_status != CHK__CHECK_POOL_STATUS__CPS_CHECKING &&
+		    shard->cqps_status != CHK__CHECK_POOL_STATUS__CPS_PENDING) {
+			if (shard->cqps_time.ct_stop_time < target->cqt_time.ct_stop_time)
+				shard->cqps_time.ct_stop_time = target->cqt_time.ct_stop_time;
+		} else if (target->cqt_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
+			if (shard->cqps_time.ct_left_time < target->cqt_time.ct_left_time)
+				shard->cqps_time.ct_left_time = target->cqt_time.ct_left_time;
+		}
+
+		shard->cqps_statistics.cs_repaired += target->cqt_statistics.cs_repaired;
+		shard->cqps_statistics.cs_ignored += target->cqt_statistics.cs_ignored;
+		shard->cqps_statistics.cs_failed += target->cqt_statistics.cs_failed;
+		shard->cqps_statistics.cs_total += target->cqt_statistics.cs_total;
+	}
+
 out:
+	/*
+	 * NOTE: Set cqps_target_nr as zero, then cqps_targets will not be transferred to leader,
+	 *       and then will not be replied to control plane. That will much reduce the query
+	 *       buffer usage to avoid dRPC overflow. In the future, when we supports arbitrary
+	 *       sized dRPC, then we can return per target based results if CQF_SHOW_DETAIL set.
+	 */
+	if (shard != NULL && (rc != 0 || !(cqpa->cqpa_flags & CQF_SHOW_DETAIL)))
+		shard->cqps_target_nr = 0;
+
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
 		 DF_ENGINE" on rank %u query pool "DF_UUIDF": "DF_RC"\n",
 		 DP_ENGINE(cqpa->cqpa_ins), dss_self_rank(), DP_UUID(uuid), DP_RC(rc));
@@ -2513,7 +2547,7 @@ out:
 }
 
 int
-chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *ins_status,
+chk_engine_query(uint64_t gen, uint32_t flags, int pool_nr, uuid_t pools[], uint32_t *ins_status,
 		 uint32_t *ins_phase, uint32_t *shard_nr, struct chk_query_pool_shard **shards,
 		 uint64_t *l_gen)
 {
@@ -2529,9 +2563,10 @@ chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *ins_status
 	 * it is new leader or not.
 	 */
 
-	cqpa.cqpa_ins = ins;
-	cqpa.cqpa_cap = 2;
-	cqpa.cqpa_idx = 0;
+	cqpa.cqpa_ins   = ins;
+	cqpa.cqpa_cap   = 2;
+	cqpa.cqpa_idx   = 0;
+	cqpa.cqpa_flags = flags;
 	D_ALLOC_ARRAY(cqpa.cqpa_shards, cqpa.cqpa_cap);
 	if (cqpa.cqpa_shards == NULL)
 		D_GOTO(log, rc = -DER_NOMEM);
