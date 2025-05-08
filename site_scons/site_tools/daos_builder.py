@@ -171,7 +171,9 @@ def _library(env, *args, **kwargs):
 def _program(env, *args, **kwargs):
     """Build Program with relative RPATH"""
     denv = env.Clone()
-    kwargs = _add_code_coverage(**kwargs)
+    # kwargs = _add_code_coverage(**kwargs)
+    if GetOption("test_coverage"):
+        denv.AppendUnique(LINKFLAGS=['-lgcov'])
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
@@ -185,7 +187,9 @@ def _program(env, *args, **kwargs):
 def _test_program(env, *args, **kwargs):
     """Build Program with fixed RPATH"""
     denv = env.Clone()
-    kwargs = _add_code_coverage(**kwargs)
+    # kwargs = _add_code_coverage(**kwargs)
+    if GetOption("test_coverage"):
+        denv.AppendUnique(LINKFLAGS=['-lgcov'])
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get("install_off", None), False, True)
