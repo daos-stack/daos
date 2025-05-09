@@ -37,7 +37,7 @@ index 1ae35d27d..64d66922a 100644
  
  disable:
 diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
-index 3fc566b7d..b1ef8e7e3 100644
+index 3fc566b7d..f72d923fe 100644
 --- a/prov/tcp/src/xnet_ep.c
 +++ b/prov/tcp/src/xnet_ep.c
 @@ -156,6 +156,76 @@ static void xnet_set_no_port(SOCKET sock)
@@ -117,11 +117,16 @@ index 3fc566b7d..b1ef8e7e3 100644
  int xnet_setup_socket(SOCKET sock, struct fi_info *info)
  {
  	int ret, optval = 1;
-@@ -231,6 +301,8 @@ static int xnet_ep_connect(struct fid_ep *ep_fid, const void *addr,
+@@ -231,6 +301,13 @@ static int xnet_ep_connect(struct fid_ep *ep_fid, const void *addr,
  	if (!ep->addr)
  		return -FI_ENOMEM;
  
-+	xnet_enable_keepalive(ep);
++	ret = xnet_enable_keepalive(ep);
++	if (ret) {
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "%p set tcp keepalive failure:%d\n",
++			ep, ret);
++		return -FI_EINVAL;
++	}
 +
  	ep->state = XNET_CONNECTING;
  	ret = ofi_bsock_connect(&ep->bsock, ep->addr,
