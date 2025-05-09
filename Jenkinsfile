@@ -668,10 +668,14 @@ pipeline {
                         }
                     }
                 }
+                /* This stage is disabled until we can use local artifactory to
+                install the go package. */
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        // expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { false }
+
                     }
                     agent {
                         dockerfile {
