@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -701,7 +702,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		daos_obj_oid_cycle(&dfs->oid);
 	}
 
-	if (dfs_metrics_enabled())
+	if (dfs_metrics_should_init(dfs))
 		dfs_metrics_init(dfs);
 
 	dfs->mounted = DFS_MOUNT;
