@@ -1727,7 +1727,7 @@ dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inp
 	 * -DER_INPROGRESS || -DER_UPDATE_AGAIN cases.
 	 */
 	++(*retry_cnt);
-	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
+	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN || err == -DER_NOTLEADER) {
 		if (++(*inprogress_cnt) > 1) {
 			limit += *inprogress_cnt;
 			if (limit > 10)
