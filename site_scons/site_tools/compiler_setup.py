@@ -124,10 +124,10 @@ def _base_setup(env):
     if GetOption('code_coverage'):
         env.AppendUnique(CXXFLAGS=['-fprofile-arcs', '-ftest-coverage'])
         env.AppendUnique(CCFLAGS=['-fprofile-arcs', '-ftest-coverage'])
-        env.AppendUnique(LDFLAGS=['-lgcov'])
+        # env.AppendUnique(LDFLAGS=['-lgcov'])
         env.AppendUnique(CGO_CFLAGS=['-fprofile-arcs', '-ftest-coverage'])
-        env.AppendUnique(CGO_LDFLAGS=['-lgcov'])
-        env.AppendUnique(LIBS=['gcov'])
+        # env.AppendUnique(CGO_LDFLAGS=['-lgcov'])
+        # env.AppendUnique(LIBS=['gcov'])
 
 
 def _check_flag_helper(context, compiler, ext, flag):
