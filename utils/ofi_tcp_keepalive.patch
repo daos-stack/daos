@@ -1,0 +1,146 @@
+diff --git a/prov/tcp/src/xnet.h b/prov/tcp/src/xnet.h
+index 6d2cbe029..eeeae5599 100644
+--- a/prov/tcp/src/xnet.h
++++ b/prov/tcp/src/xnet.h
+@@ -310,6 +310,9 @@ ssize_t xnet_get_conn(struct xnet_rdm *rdm, fi_addr_t dest_addr,
+ struct xnet_ep *xnet_get_rx_ep(struct xnet_rdm *rdm, fi_addr_t addr);
+ void xnet_freeall_conns(struct xnet_rdm *rdm);
+ 
++int xnet_enable_keepalive(struct xnet_ep *ep);
++int xnet_disable_keepalive(struct xnet_ep *ep);
++
+ struct xnet_uring {
+ 	struct fid fid;
+ 	ofi_io_uring_t ring;
+@@ -774,8 +777,8 @@ do {						\
+ 	ofi_straddr(_src_buf, &_src_len, ofi_translate_addr_format(ofi_sa_family(_src_addr)),	\
+ 		    _src_addr);									\
+ 												\
+-	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n", _buf, _src_buf,	\
+-		fi_strerror(err));								\
++	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "ep %p state %u error on %s From %s : %s\n",	\
++		ep, ep->state, _buf, _src_buf, fi_strerror(err));				\
+ } while(0)
+ 
+ #endif //_XNET_H_
+diff --git a/prov/tcp/src/xnet_cm.c b/prov/tcp/src/xnet_cm.c
+index 1ae35d27d..64d66922a 100644
+--- a/prov/tcp/src/xnet_cm.c
++++ b/prov/tcp/src/xnet_cm.c
+@@ -203,6 +203,8 @@ void xnet_req_done(struct xnet_ep *ep)
+ 	ret = xnet_req_done_internal(ep);
+ 	if (ret)
+ 		goto disable;
++
++	xnet_disable_keepalive(ep);
+ 	return;
+ 
+ disable:
+diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
+index 3fc566b7d..f72d923fe 100644
+--- a/prov/tcp/src/xnet_ep.c
++++ b/prov/tcp/src/xnet_ep.c
+@@ -156,6 +156,76 @@ static void xnet_set_no_port(SOCKET sock)
+ #define xnet_set_no_port(sock)
+ #endif
+ 
++int
++xnet_disable_keepalive(struct xnet_ep *ep)
++{
++	int optval = 0;
++	int ret;
++
++	ret = setsockopt(ep->bsock.sock, SOL_SOCKET, SO_KEEPALIVE, (char *)&optval,
++			 sizeof(optval));
++	if (ret) {
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set SO_KEEPALIVE failed %d", ret);
++		return -ofi_sockerr();
++	}
++
++	FI_INFO(&xnet_prov, FI_LOG_EP_CTRL, "ep %p KEEPALIVE is disabled.\n", ep);
++	return ret;
++}
++
++int
++xnet_enable_keepalive(struct xnet_ep *ep)
++{
++	int optval = 1;
++	int idle_time = 5;
++	int keep_intvl = 2;
++	int keep_cnt = 2;
++	int ret;
++
++	ret = setsockopt(ep->bsock.sock, SOL_SOCKET, SO_KEEPALIVE, (const void *)&optval,
++			 sizeof(optval));
++	if (ret) {
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set SO_KEEPALIVE failed %d", ret);
++		return -ofi_sockerr();
++	}
++
++	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPIDLE, (const void *)&idle_time,
++			 sizeof(idle_time));
++	if (ret) {
++		ret = -ofi_sockerr();
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set TCP_KEEPIDLE failed %d", ret);
++		goto out;
++	}
++
++	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPINTVL, (const void *)&keep_intvl,
++			 sizeof(keep_intvl));
++	if (ret) {
++		ret = -ofi_sockerr();
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set TCP_KEEPINTVL failed %d", ret);
++		goto out;
++	}
++
++	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPCNT, (const void *)&keep_cnt,
++			 sizeof(keep_cnt));
++	if (ret) {
++		ret = -ofi_sockerr();
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set SO_KEEPALIVE failed %d", ret);
++		goto out;
++	}
++
++	FI_INFO(&xnet_prov, FI_LOG_EP_CTRL, "%p KEEPALIVE idle %d intvl %d cnt %d\n",
++		ep, idle_time, keep_intvl, keep_cnt);
++
++out:
++	if (ret) {
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "%p KEEPALIVE set keepalive failed %d\n",
++			ep, ret);
++		xnet_disable_keepalive(ep);
++	}
++
++	return ret;
++}
++
+ int xnet_setup_socket(SOCKET sock, struct fi_info *info)
+ {
+ 	int ret, optval = 1;
+@@ -231,6 +301,13 @@ static int xnet_ep_connect(struct fid_ep *ep_fid, const void *addr,
+ 	if (!ep->addr)
+ 		return -FI_ENOMEM;
+ 
++	ret = xnet_enable_keepalive(ep);
++	if (ret) {
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "%p set tcp keepalive failure:%d\n",
++			ep, ret);
++		return -FI_EINVAL;
++	}
++
+ 	ep->state = XNET_CONNECTING;
+ 	ret = ofi_bsock_connect(&ep->bsock, ep->addr,
+ 				(socklen_t) ofi_sizeofaddr(ep->addr));
+diff --git a/prov/tcp/src/xnet_rdm_cm.c b/prov/tcp/src/xnet_rdm_cm.c
+index 4dfc96650..e73170445 100644
+--- a/prov/tcp/src/xnet_rdm_cm.c
++++ b/prov/tcp/src/xnet_rdm_cm.c
+@@ -367,6 +367,8 @@ ssize_t xnet_get_conn(struct xnet_rdm *rdm, fi_addr_t addr,
+ 		/* Force progress for apps that simply retry sending without
+ 		 * trying to drive progress in between.
+ 		 */
++		FI_WARN_SPARSE(&xnet_prov, FI_LOG_EP_CTRL, "conn %p ep %p/%d.\n",
++			       *conn, (*conn)->ep, (*conn)->ep->state);
+ 		xnet_run_progress(xnet_rdm2_progress(rdm), false);
+ 		return -FI_EAGAIN;
+ 	}
