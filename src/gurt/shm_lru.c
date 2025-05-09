@@ -23,7 +23,7 @@ lru_create_node(shm_lru_cache_t *cache, void *key, int key_size, void *data, int
 {
 	shm_lru_node_t *node_list;
 	shm_lru_node_t *node;
-	char           *buf_key = NULL;
+	char           *buf_key  = NULL;
 	char           *buf_data = NULL;
 	long int        key_mask;
 	long int        data_mask;
@@ -35,12 +35,12 @@ lru_create_node(shm_lru_cache_t *cache, void *key, int key_size, void *data, int
 		return SHM_LRU_NO_SPACE;
 
 	node_list = (shm_lru_node_t *)((long int)cache + cache->off_nodelist);
-	node = &(node_list[cache->first_av]);
+	node      = &(node_list[cache->first_av]);
 	cache->first_av = node->off_hnext;
 
 	if (key_size <= sizeof(long int)) {
 		/* key is small enough to be stored in-place */
-		key_mask = (key_size < 8) ? ((1L << (key_size << 3)) - 1) : (-1L);
+		key_mask  = (key_size < 8) ? ((1L << (key_size << 3)) - 1) : (-1L);
 		node->key = *((long int *)key) & key_mask;
 	} else if ((key_size > LRU_ALLOC_SIZE_THRESHOLD) || (cache->key_size == 0)) {
 		/* key is too long or has unknown size (long than sizeof(long int)), dynamically allocate
@@ -60,7 +60,7 @@ lru_create_node(shm_lru_cache_t *cache, void *key, int key_size, void *data, int
 
 	if (data_size <= sizeof(long int)) {
 		/* data are small enough to be stored in-place */
-		data_mask = (data_size < 8) ? ((1L << (data_size << 3)) - 1) : (-1L);
+		data_mask  = (data_size < 8) ? ((1L << (data_size << 3)) - 1) : (-1L);
 		node->data = *((long int *)data) & data_mask;
 	} else if ((data_size > LRU_ALLOC_SIZE_THRESHOLD) || (cache->data_size == 0)) {
 		/* data are too long or has unknown size (long than sizeof(long int)), dynamically allocate
@@ -82,8 +82,10 @@ lru_create_node(shm_lru_cache_t *cache, void *key, int key_size, void *data, int
 	node->data_size = data_size;
 
 	atomic_store(&node->ref_count, 0);
-	node->off_prev = node->off_next = node->off_hnext = 0;
-	*new_node      = node;
+	node->off_prev  = 0;
+	node->off_next  = 0;
+	node->off_hnext = 0;
+	*new_node       = node;
 
 	return SHM_LRU_SUCCESS;
 }
@@ -144,7 +146,7 @@ lru_remove_near_tail(shm_lru_cache_t *cache)
 	if (!cache->off_tail)
 		return SHM_LRU_SUCCESS;
 
-	node = (shm_lru_node_t *)((long int)cache + (long int)cache->off_tail);
+	node      = (shm_lru_node_t *)((long int)cache + (long int)cache->off_tail);
 	node_tail = node;
 
     /* only the node with zero reference count can be removed!!! */
@@ -171,7 +173,7 @@ lru_remove_near_tail(shm_lru_cache_t *cache)
 			node_hnext = (shm_lru_node_t *)((long int)cache + (long int)offset);
 			if (node_hnext->off_hnext == off_node_to_remove) {
 				node_hnext->off_hnext = node->off_hnext;
-				node->off_hnext = 0;
+				node->off_hnext       = 0;
 				break;
 			}
 			offset = node_hnext->off_hnext;
@@ -227,7 +229,7 @@ int
 shm_lru_get(shm_lru_cache_t *cache, void *key, int key_size, shm_lru_node_t **node_found, void **val)
 {
 	int            *off_hash = (int *)((long int)cache + (long int)cache->off_hashbuckets);
-	int             index = d_hash_string_u32(key, key_size) % cache->capacity;
+	int             index    = d_hash_string_u32(key, key_size) % cache->capacity;
 	shm_lru_node_t *node;
 	int             offset = off_hash[index];
 	bool            pre_owner_dead;
@@ -328,7 +330,7 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, int key_size, void *data, int dat
 		offset = (long int)node->off_hnext;
     }
 
-    /* Not found, remove one node near tail and create new node */
+	/* Not found, remove one node near tail and create new node */
 	if (cache->size >= cache->capacity) {
 		rc = lru_remove_near_tail(cache);
 		if (rc) {
@@ -344,7 +346,7 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, int key_size, void *data, int dat
 	node_new->off_hnext  = off_hash[index];
 	off_hash[index]      = (long int)node_new - (long int)cache;
 
-    /* Insert at LRU head */
+	/* Insert at LRU head */
 	node_new->off_next = cache->off_head;
 	if (cache->off_head) {
 		node_head = (shm_lru_node_t *)((long int)cache + (long int)cache->off_head);
@@ -394,15 +396,15 @@ shm_lru_create_cache(int capacity, int key_size, int data_size, shm_lru_cache_t 
 
 	memset(cache, 0, sizeof(shm_lru_cache_t) + sizeof(int)*capacity + sizeof(shm_lru_node_t) *
 		   capacity);
-	cache->capacity = capacity;
-	cache->size     = 0;
-	cache->first_av = 0;
-	cache->key_size = key_size;
-	cache->data_size = data_size;
+	cache->capacity        = capacity;
+	cache->size            = 0;
+	cache->first_av        = 0;
+	cache->key_size        = key_size;
+	cache->data_size       = data_size;
 	cache->off_hashbuckets = sizeof(shm_lru_cache_t);
-	cache->off_nodelist = cache->off_hashbuckets + sizeof(int) * capacity;
-	cache->off_keylist = cache->off_nodelist + sizeof(shm_lru_node_t) * capacity;
-	cache->off_datalist = cache->off_keylist + size_key_buf;
+	cache->off_nodelist    = cache->off_hashbuckets + sizeof(int) * capacity;
+	cache->off_keylist     = cache->off_nodelist + sizeof(shm_lru_node_t) * capacity;
+	cache->off_datalist    = cache->off_keylist + size_key_buf;
 
 	/* form a linked list for all free nodes. first_av points to the head node. */
 	node_list = (shm_lru_node_t *)((long int)cache + cache->off_nodelist);
@@ -424,8 +426,7 @@ shm_lru_create_cache(int capacity, int key_size, int data_size, shm_lru_cache_t 
 shm_lru_cache_t *
 shm_lru_get_cache(enum SHM_LRU_CACHE_TYPE type)
 {
-	switch (type)
-	{
+	switch (type) {
 	case CACHE_DENTRY:
 		return (shm_lru_cache_t *)((long int)d_shm_head + d_shm_head->off_lru_cache_dentry);
 
@@ -451,10 +452,10 @@ lru_free_dymaic_buff(shm_lru_cache_t *cache)
 	while (offset) {
 		node = (shm_lru_node_t *)((long int)cache + (long int)offset);
 		if (node->key_size > sizeof(long int)) {
-			shm_free((char *)cache + node->key);;
+			shm_free((char *)cache + node->key);
 		}
 		if (node->data_size > sizeof(long int)) {
-			shm_free((char *)cache + node->data);;
+			shm_free((char *)cache + node->data);
 		}
 		offset = node->off_next;
 	}

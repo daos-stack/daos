@@ -530,62 +530,60 @@ shm_ht_rec_data(d_shm_ht_rec_loc_t rec_loc, int *err);
 int
 shm_ht_rec_num_ref(d_shm_ht_rec_loc_t rec_loc);
 
-
-
 /* dynamic allocation if data is larger than this threshold */
 #define LRU_ALLOC_SIZE_THRESHOLD (4096)
 
 /* Node in LRU cache */
 typedef struct shm_lru_node {
-    /* key size*/
-    int         key_size;
-    /* data size*/
-    int         data_size;
-    /* store key if length is not larger than sizeof(long int), otherwise store the offset to key */
-    long int    key;
-    /* store data if length is not larger than sizeof(long int), otherwise store offset to data */
-    long int    data;
-    /* the reference count of this record */
-    _Atomic int ref_count;
-    /* the index of hash bucket this record is in */
-    int         idx_bucket;
-    /* off_prev and off_next are used in doubly linked list for LRU */
-    int         off_prev;
-    int         off_next;
-    /* offset to the next node in hash chain in each bucket for allocated node. point to next
+	/* key size*/
+	int         key_size;
+	/* data size*/
+	int         data_size;
+	/* store key if length is not larger than sizeof(long int), otherwise store the offset to key */
+	long int    key;
+	/* store data if length is not larger than sizeof(long int), otherwise store offset to data */
+	long int    data;
+	/* the reference count of this record */
+	_Atomic int ref_count;
+	/* the index of hash bucket this record is in */
+	int         idx_bucket;
+	/* off_prev and off_next are used in doubly linked list for LRU */
+	int         off_prev;
+	int         off_next;
+	/* offset to the next node in hash chain in each bucket for allocated node. point to next
 	 * available node for free nodes
 	 */
-    int         off_hnext;
+	int         off_hnext;
 } shm_lru_node_t;
 
-/* This implmentation of shm LRU is mainly optimized for performance by using pre-allocated buffer
+/* This implementation of shm LRU is mainly optimized for performance by using pre-allocated buffer
  * when possible
  */
 
 /* LRU Cache structure */
 typedef struct {
 	/* max number of nodes to hold */
-    int           capacity;
+	int           capacity;
 	/* number of nodes */
-    int           size;
+	int           size;
 	/* Most recently used node */
-    int           off_head;
+	int           off_head;
 	/* Least recently used node */
-    int           off_tail;
+	int           off_tail;
 	/* First available/free node */
-    int           first_av;
+	int           first_av;
 	/* the size of key. zero means key size is variable */
-    int           key_size;
+	int           key_size;
 	/* the size of data. zero means data size is variable */
-    int           data_size;
+	int           data_size;
 	/* the offset to the array of offset of hash buckets */
-    int           off_hashbuckets;
+	int           off_hashbuckets;
 	/* the offset to the array of preallocated array of nodes */
-    int           off_nodelist;
+	int           off_nodelist;
 	/* the offset to the array of preallocated array of keys */
-    long int      off_keylist;
+	long int      off_keylist;
 	/* the offset to the array of preallocated array of data */
-    long int      off_datalist;
+	long int      off_datalist;
 	d_shm_mutex_t lock;
 } shm_lru_cache_t;
 

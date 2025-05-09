@@ -386,7 +386,7 @@ test_lrucache(void **state)
 
 	for (i = 1; i <= 16; i++) {
 		key = i;
-		rc = shm_lru_get(cache, key_long, i, &node_found, (void **)&addr_val);
+		rc  = shm_lru_get(cache, key_long, i, &node_found, (void **)&addr_val);
 		assert(rc == 0);
 		assert_true(memcmp(addr_val, data_long, i) == 0);
 		shm_lru_node_dec_ref(node_found);
@@ -410,7 +410,7 @@ test_lrucache(void **state)
 	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
 
 	key = 1;
-	rc = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
 	assert(rc == 0);
 	assert(*addr_val == 10);
 	shm_lru_node_dec_ref(node_found);
@@ -420,11 +420,11 @@ test_lrucache(void **state)
 	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
 
 	key = 2;
-	rc = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
 	assert(rc == SHM_LRU_REC_NOT_FOUND);
 
 	key = 1;
-	rc = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
 	assert(rc == 0);
 	assert(*addr_val == 10);
 	shm_lru_node_dec_ref(node_found);
@@ -433,7 +433,7 @@ test_lrucache(void **state)
 
 	/* large number of operations */
 	capacity = 100;
-	rc = shm_lru_create_cache(capacity, sizeof(int), sizeof(int), &cache);
+	rc       = shm_lru_create_cache(capacity, sizeof(int), sizeof(int), &cache);
 	assert_true(rc == 0);
 
 	/* make cache full */
@@ -446,7 +446,7 @@ test_lrucache(void **state)
 	/* verify all items exist */
 	for (i = 0; i < capacity; i++) {
 		key = i;
-		rc = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
 		assert(rc == 0);
 		assert(*addr_val == i);
 		shm_lru_node_dec_ref(node_found);
@@ -462,14 +462,14 @@ test_lrucache(void **state)
 	/* verify first 50 items are evicted */
 	for (i = 0; i < 50; i++) {
 		key = i;
-		rc = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
 		assert(rc == SHM_LRU_REC_NOT_FOUND);
 	}
 
 	/* verify remaining items do exist */
 	for (i = 50; i < capacity + 50; i++) {
 		key = i;
-		rc = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
 		assert(rc == 0);
 		assert(*addr_val == i);
 		shm_lru_node_dec_ref(node_found);
@@ -963,9 +963,9 @@ int
 main(int argc, char **argv)
 {
 	int                     opt = 0, index = 0, rc;
-	const struct CMUnitTest tests[] = {cmocka_unit_test(test_hash), cmocka_unit_test(test_lock),
-					   cmocka_unit_test(test_mem), cmocka_unit_test(test_rwlock),
-					   cmocka_unit_test(test_lrucache)};
+	const struct CMUnitTest tests[] = {
+		cmocka_unit_test(test_hash), cmocka_unit_test(test_lock), cmocka_unit_test(test_mem),
+		cmocka_unit_test(test_rwlock), cmocka_unit_test(test_lrucache)};
 
 	// clang-format off
 	static struct option    long_options[] = {

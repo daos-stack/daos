@@ -15,8 +15,6 @@
 #include <sys/time.h>
 #include <gurt/shm_utils.h>
 
-#pragma GCC diagnostic ignored "-Wunused-function"
-
 /** global DFS mount used for all tests */
 static uuid_t		co_uuid;
 static daos_handle_t	co_hdl;
@@ -3482,10 +3480,10 @@ dfs_test_pipeline_find(void **state)
 	test_pipeline_find(state, OC_RP_3GX);
 }
 
-#define NUM_INT     (1024*1024)
-#define NUM_READ    (1000)
-#define MAX_RG 16
-#define MAX_IOV 1024
+#define NUM_INT  (1024*1024)
+#define NUM_READ (1000)
+#define MAX_RG   16
+#define MAX_IOV  1024
 
 static void
 dfs_test_datacache(void **state)
@@ -3495,7 +3493,7 @@ dfs_test_datacache(void **state)
 	daos_handle_t  coh;
 	dfs_obj_t     *file;
 	char          *cname = "cont_datacache";
-	char          *name = "file_datacache";
+	char          *name  = "file_datacache";
 	int            rc;
 	daos_size_t    read_size;
 	int           *buf_wr;
@@ -3511,7 +3509,7 @@ dfs_test_datacache(void **state)
 	int            range_num;
 	int            range_size;
 	daos_range_t   iod_rgs[MAX_RG];
-	dfs_iod_t	   iod;
+	dfs_iod_t      iod;
 	struct timeval tm1;
 	struct timeval tm2;
 	double         dt;
@@ -3549,9 +3547,9 @@ dfs_test_datacache(void **state)
 	}
 
 	d_iov_set(&iov, buf_wr, NUM_INT * sizeof(int));
-	sgl.sg_nr = 1;
+	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
+	sgl.sg_iovs   = &iov;
 
 	rc = dfs_write(dfs, file, &sgl, 0, NULL);
 	assert_int_equal(rc, 0);
@@ -3592,7 +3590,7 @@ dfs_test_datacache(void **state)
 	memset(buf_rd, 0, NUM_INT * sizeof(int));
 	buf_rd[1] = 1;
 	buf_rd[2] = 2;
-	rc = dfs_read(dfs, file, &sgl,  3 * sizeof(int), &read_size, NULL);
+	rc        = dfs_read(dfs, file, &sgl,  3 * sizeof(int), &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_true(read_size == ((NUM_INT - 3) * sizeof(int)));
 
@@ -3605,7 +3603,7 @@ dfs_test_datacache(void **state)
 	}
 
 	/* verify read with various block size */
-	for (block_num = 1; block_num <= 1024; block_num*=2) {
+	for (block_num = 1; block_num <= 1024; block_num *= 2) {
 		block_size = (NUM_INT * sizeof(int)) / block_num;
 
 		for (i = 0; i < block_num; i++) {
@@ -3675,7 +3673,7 @@ dfs_test_datacache(void **state)
 		assert_true(read_size == (NUM_INT * sizeof(int)));
 	}
 	gettimeofday(&tm2, NULL);
-	dt          = (tm2.tv_sec - tm1.tv_sec)*1000000 + (tm2.tv_usec - tm1.tv_usec);
+	dt          = (tm2.tv_sec - tm1.tv_sec) * 1000000 + (tm2.tv_usec - tm1.tv_usec);
 	perf_cached = NUM_READ * NUM_INT * sizeof(int) * 0.001 / dt;
 	printf("%7.2lf GB/s\n", perf_cached);
 
@@ -3698,7 +3696,7 @@ dfs_test_datacache(void **state)
 		assert_true(read_size == (NUM_INT * sizeof(int)));
 	}
 	gettimeofday(&tm2, NULL);
-	dt            = (tm2.tv_sec - tm1.tv_sec)*1000000 + (tm2.tv_usec - tm1.tv_usec);
+	dt            = (tm2.tv_sec - tm1.tv_sec) * 1000000 + (tm2.tv_usec - tm1.tv_usec);
 	perf_no_cache = NUM_READ * NUM_INT * sizeof(int) * 0.001 / dt;
 	printf("%7.2lf GB/s\n", perf_no_cache);
 

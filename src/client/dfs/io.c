@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -132,49 +133,49 @@ static int
 daos_array_read_cached(dfs_t *dfs, dfs_obj_t *obj, daos_array_iod_t *iod, d_sg_list_t *sgl)
 {
 	/* offset of current read request */
-	daos_off_t        off;
+	daos_off_t       off;
 	/* index of range */
-	int               idx_rg;
+	int              idx_rg;
 	/* index of iov */
-	int               idx_iov;
+	int              idx_iov;
 	/* counter of number of range */
-	int               rg_cnt;
-	int               i;
-	int               j;
-	int               rc;
+	int              rg_cnt;
+	int              i;
+	int              j;
+	int              rc;
 	/* hold the LRU node of cache query */
-	shm_lru_node_t   *node_found = NULL;
+	shm_lru_node_t  *node_found = NULL;
 	/* the key used for data cache query. oid + read offset (aligned) */
-	cache_data_key_t  key;
+	cache_data_key_t key;
 	/* offset aligned to caching block size */
-	daos_off_t        off_aligned;
-	daos_off_t        off_aligned_pre = -1;
-	/* current offset in curretn caching block. offset % DEFAULT_CACHE_DATA_SIZE */
-	daos_off_t        off_data;
+	daos_off_t       off_aligned;
+	daos_off_t       off_aligned_pre = -1;
+	/* current offset in current caching block. offset % DEFAULT_CACHE_DATA_SIZE */
+	daos_off_t       off_data;
 	/* dynamic buffer that holds data and iov_range_t list */
-	char             *buf;
+	char            *buf;
 	/* dynamic buffer for daos_array_read() */
-	char             *data;
+	char            *data;
 	/* the cached data for the queried key */
-	char             *cache_data;
+	char            *cache_data;
 	/* list of ranges with min and max iov */
-	iov_range_t      *iov_range_list;
-	d_sg_list_t	      sgl_loc;
-	d_iov_t		      iov;
+	iov_range_t     *iov_range_list;
+	d_sg_list_t	     sgl_loc;
+	d_iov_t		     iov;
 	/* total size of read */
-	daos_size_t       read_size;
+	daos_size_t      read_size;
 	/* the total size of read in current range */
-	daos_size_t       read_size_rg;
-	daos_size_t       byte_to_read_iov;
-	daos_size_t       byte_read_loc;
-	daos_size_t       byte_rg_sum;
-	daos_size_t       byte_to_read_real;
-	daos_size_t       byte_to_prefetch;
-	daos_size_t       byte_cached;
-	daos_size_t       byte_to_cache;
-	bool              is_eof = false;
-	daos_array_iod_t  iod_loc;
-	daos_range_t      rg;
+	daos_size_t      read_size_rg;
+	daos_size_t      byte_to_read_iov;
+	daos_size_t      byte_read_loc;
+	daos_size_t      byte_rg_sum;
+	daos_size_t      byte_to_read_real;
+	daos_size_t      byte_to_prefetch;
+	daos_size_t      byte_cached;
+	daos_size_t      byte_to_cache;
+	bool             is_eof = false;
+	daos_array_iod_t iod_loc;
+	daos_range_t     rg;
 
 	/* this buffer is shared by iov_range_list and data */
 	buf = shm_alloc(sizeof(iov_range_t) * iod->arr_nr + MAX_PREFETCH_READ_SIZE);
@@ -199,7 +200,7 @@ daos_array_read_cached(dfs_t *dfs, dfs_obj_t *obj, daos_array_iod_t *iod, d_sg_l
 			if (rg_cnt >= iod->arr_nr)
 				break;
 			iov_range_list[rg_cnt].iov_min = i + 1;
-			byte_rg_sum = 0;
+			byte_rg_sum                    = 0;
 		}
 	}
 
@@ -215,13 +216,13 @@ daos_array_read_cached(dfs_t *dfs, dfs_obj_t *obj, daos_array_iod_t *iod, d_sg_l
 		read_size_rg = 0;
 
 		/* loop over iov list for current contiguous range */
-		for (idx_iov = iov_range_list[idx_rg].iov_min; idx_iov <= iov_range_list[idx_rg].iov_max;
-			 idx_iov++) {
-			off_data          = (off + read_size_rg) % DEFAULT_CACHE_DATA_SIZE;
-			off_aligned       = (off + read_size_rg) - off_data;
+		for (idx_iov = iov_range_list[idx_rg].iov_min;
+			 idx_iov <= iov_range_list[idx_rg].iov_max; idx_iov++) {
+			off_data    = (off + read_size_rg) % DEFAULT_CACHE_DATA_SIZE;
+			off_aligned = (off + read_size_rg) - off_data;
 			/* the number of bytes read for one request */
-			byte_to_read_iov  = sgl->sg_iovs[idx_iov].iov_len;
-			byte_read_loc     = 0;
+			byte_to_read_iov = sgl->sg_iovs[idx_iov].iov_len;
+			byte_read_loc    = 0;
 
 			/* loop until the requested size is completed or reaching the end of the file */
 			while (byte_to_read_iov > 0) {
