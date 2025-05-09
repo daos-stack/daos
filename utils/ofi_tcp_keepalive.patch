@@ -1,11 +1,3 @@
-commit 7e590cfd30667b88e7755bfe265906ec19397d78
-Author: Di Wang <ddiwang@google.com>
-Date:   Thu May 8 18:41:22 2025 +0000
-
-    enable keepalive for libfabric
-    
-    Signed-off-by: Di Wang <ddiwang@google.com>
-
 diff --git a/prov/tcp/src/xnet.h b/prov/tcp/src/xnet.h
 index 6d2cbe029..eeeae5599 100644
 --- a/prov/tcp/src/xnet.h
@@ -45,10 +37,10 @@ index 1ae35d27d..64d66922a 100644
  
  disable:
 diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
-index 3fc566b7d..9f26d9c63 100644
+index 3fc566b7d..b1ef8e7e3 100644
 --- a/prov/tcp/src/xnet_ep.c
 +++ b/prov/tcp/src/xnet_ep.c
-@@ -156,6 +156,66 @@ static void xnet_set_no_port(SOCKET sock)
+@@ -156,6 +156,76 @@ static void xnet_set_no_port(SOCKET sock)
  #define xnet_set_no_port(sock)
  #endif
  
@@ -78,36 +70,46 @@ index 3fc566b7d..9f26d9c63 100644
 +	int keep_cnt = 2;
 +	int ret;
 +
-+	ret = setsockopt(ep->bsock.sock, SOL_SOCKET, SO_KEEPALIVE, (char *)&optval,
++	ret = setsockopt(ep->bsock.sock, SOL_SOCKET, SO_KEEPALIVE, (const void *)&optval,
 +			 sizeof(optval));
 +	if (ret) {
 +		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set SO_KEEPALIVE failed %d", ret);
 +		return -ofi_sockerr();
 +	}
 +
-+	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPIDLE, (char *)&idle_time,
++	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPIDLE, (const void *)&idle_time,
 +			 sizeof(idle_time));
 +	if (ret) {
++		ret = -ofi_sockerr();
 +		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set TCP_KEEPIDLE failed %d", ret);
-+		return -ofi_sockerr();
++		goto out;
 +	}
 +
-+	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPINTVL, (char *)&keep_intvl,
++	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPINTVL, (const void *)&keep_intvl,
 +			 sizeof(keep_intvl));
 +	if (ret) {
++		ret = -ofi_sockerr();
 +		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set TCP_KEEPINTVL failed %d", ret);
-+		return -ofi_sockerr();
++		goto out;
 +	}
 +
-+	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPCNT, (char *)&keep_cnt,
++	ret = setsockopt(ep->bsock.sock, IPPROTO_TCP, TCP_KEEPCNT, (const void *)&keep_cnt,
 +			 sizeof(keep_cnt));
 +	if (ret) {
++		ret = -ofi_sockerr();
 +		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "set SO_KEEPALIVE failed %d", ret);
-+		return -ofi_sockerr();
++		goto out;
 +	}
 +
 +	FI_INFO(&xnet_prov, FI_LOG_EP_CTRL, "%p KEEPALIVE idle %d intvl %d cnt %d\n",
 +		ep, idle_time, keep_intvl, keep_cnt);
++
++out:
++	if (ret) {
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "%p KEEPALIVE set keepalive failed %d\n",
++			ep, ret);
++		xnet_disable_keepalive(ep);
++	}
 +
 +	return ret;
 +}
@@ -115,7 +117,7 @@ index 3fc566b7d..9f26d9c63 100644
  int xnet_setup_socket(SOCKET sock, struct fi_info *info)
  {
  	int ret, optval = 1;
-@@ -231,6 +291,8 @@ static int xnet_ep_connect(struct fid_ep *ep_fid, const void *addr,
+@@ -231,6 +301,8 @@ static int xnet_ep_connect(struct fid_ep *ep_fid, const void *addr,
  	if (!ep->addr)
  		return -FI_ENOMEM;
  
