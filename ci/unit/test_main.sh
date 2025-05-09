@@ -35,8 +35,6 @@ if $USE_BULLSEYE; then
   rm -rf bullseye
   mkdir -p bullseye
   tar -C bullseye --strip-components=1 -xf bullseye.tar
-else
-  BULLSEYE=
 fi
 
 NODE=${NODELIST%%,*}

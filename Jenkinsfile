@@ -17,7 +17,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
-@Library(value='pipeline-lib@hendersp/DAOS-17537') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -669,14 +668,10 @@ pipeline {
                         }
                     }
                 }
-                /* This stage is disabled until we can use local artifactory to
-                install the go package. */
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        // expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
-                        expression { false }
-
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
                     }
                     agent {
                         dockerfile {
