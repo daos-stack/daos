@@ -21,6 +21,7 @@ apt-get install \
     clang-format \
     cmake \
     curl \
+    fdupes \
     git \
     golang-go \
     kmod \
@@ -39,6 +40,7 @@ apt-get install \
     libndctl-dev \
     libnuma-dev \
     libopenmpi-dev \
+    libpsm2-dev \
     libpci-dev \
     libprotobuf-c-dev \
     librdmacm-dev \
@@ -50,14 +52,19 @@ apt-get install \
     maven \
     numactl \
     openjdk-8-jdk \
+    pandoc \
     patchelf \
     pciutils \
     pkg-config \
+    ruby \
     python3-dev \
     python3-venv \
+    sudo \
     uuid-dev \
     valgrind \
     yasm
+
+sudo gem install fpm
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then

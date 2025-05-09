@@ -22,11 +22,12 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
+import os
 import platform
 
 import distro
 from prereq_tools import CopyRetriever, GitRepoRetriever
-from SCons.Script import GetOption
+from SCons.Script import Dir, GetOption
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -117,11 +118,27 @@ def define_mercury(reqs):
     # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
+                 '--libdir=$OFI_PREFIX/lib64',
+                 '--with-dlopen',
+                 '--disable-static',
+                 '--disable-silent-rules',
+                 '--enable-sockets',
+                 '--enable-tcp',
+                 '--enable-verbs',
+                 '--enable-rxm',
+                 '--enable-shm',
+                 '--enable-psm2',
+                 '--enable-opx',
                  '--disable-efa',
-                 '--disable-psm2',
-                 '--disable-psm3',
-                 '--disable-opx',
-                 '--without-gdrcopy']
+                 '--disable-dmabuf_peer_mem',
+                 '--disable-hook_hmem',
+                 '--disable-hook_debug',
+                 '--disable-trace',
+                 '--disable-perf',
+                 '--disable-rxd',
+                 '--disable-mrail',
+                 '--disable-udp',
+                 '--disable-psm3']
 
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
@@ -139,8 +156,8 @@ def define_mercury(reqs):
                 headers=['rdma/fabric.h'],
                 pkgconfig='libfabric',
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
-                patch_rpath=['lib'],
-                build_env={'CFLAGS': "-fstack-usage"})
+                patch_rpath=['lib64'],
+                build_env={'CFLAGS': "-fstack-usage -fPIC"})
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
@@ -173,14 +190,19 @@ def define_mercury(reqs):
                      '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
                      '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
+                     '-DMERCURY_INSTALL_LIB_DIR:PATH=$MERCURY_PREFIX/lib64',
+                     '-DMERCURY_INSTALL_DATA_DIR:PATH=$MERCURY_PREFIX/lib64',
+                     '-DNA_INSTALL_PLUGIN_DIR:PATH=$MERCURY_PREFIX/lib64/mercury',
                      '-DBUILD_DOCUMENTATION:BOOL=OFF',
                      '-DBUILD_EXAMPLES:BOOL=OFF',
                      '-DBUILD_TESTING:BOOL=ON',
                      '-DBUILD_TESTING_PERF:BOOL=ON',
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
+                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
+                     '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
@@ -251,7 +273,7 @@ def define_components(reqs):
     reqs.define('isal',
                 retriever=CopyRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
+                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'])
@@ -260,7 +282,7 @@ def define_components(reqs):
                 commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
-                           '--libdir=$ISAL_CRYPTO_PREFIX/lib'],
+                           '--libdir=$ISAL_CRYPTO_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal_crypto'])
@@ -271,13 +293,18 @@ def define_components(reqs):
                            'all',
                            'BUILD_EXAMPLES=n',
                            'BUILD_BENCHMARKS=n',
-                           'DOC=n',
+                           'DOC=y',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
-                           'prefix=$PMDK_PREFIX']],
+                           'prefix=$PMDK_PREFIX',
+                           'libdir=$PMDK_PREFIX/lib64'],
+                          ['mkdir', '-p', '$PMDK_PREFIX/share/pmdk'],
+                          ['cp', 'utils/pmdk.magic', '$PMDK_PREFIX/share/pmdk'],
+                          ['fdupes', '-s', '$PMDK_PREFIX/share/man']],
                 libs=['pmemobj'])
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
+                 '--libdir=$ARGOBOTS_PREFIX/lib64',
                  'CC=gcc',
                  '--enable-stack-unwind=yes']
     try:
@@ -348,6 +375,7 @@ def define_components(reqs):
     else:
         spdk_arch = 'haswell'
 
+    copy_files = os.path.join(Dir('#').abspath, 'utils/scripts/copy_files.sh')
     reqs.define('spdk',
                 retriever=CopyRetriever(),
                 commands=[['./configure',
@@ -365,17 +393,25 @@ def define_components(reqs):
                            '--with-shared',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
-                          ['make', 'install'],
-                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
-                          ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
-                          ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
-                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
-                          ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
-                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
+                          ['make', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
+                           'includedir=$SPDK_PREFIX/include/daos_srv', 'install'],
+                          [copy_files, 'dpdk/build/lib', '$SPDK_PREFIX/lib64/daos_srv'],
+                          [copy_files, 'dpdk/build/include', '$SPDK_PREFIX/include/daos_srv/dpdk'],
+                          [copy_files, 'include', '$SPDK_PREFIX/share/daos/spdk/include'],
+                          [copy_files, 'scripts', '$SPDK_PREFIX/share/daos/spdk/scripts'],
+                          ['mv', '$SPDK_PREFIX/bin/spdk_nvme_discovery_aer',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_discovery_aer'],
+                          ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/daos_spdk_nvme_lsvmd'],
+                          ['cp', 'build/examples/nvme_manage',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_manage'],
+                          ['mv', '$SPDK_PREFIX/bin/spdk_nvme_identify',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_identify'],
+                          ['cp', '$SPDK_PREFIX/bin/spdk_nvme_perf',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
-                patch_rpath=['lib', 'bin'])
+                extra_lib_path=['lib64/daos_srv'],
+                extra_include_path=['include/daos_srv'],
+                patch_rpath=['lib64/daos_srv', 'bin'])
 
     reqs.define('protobufc',
                 retriever=CopyRetriever(),
