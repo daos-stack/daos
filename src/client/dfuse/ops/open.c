@@ -63,8 +63,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		goto err;
 
 	if (ie->ie_dfs->dfc_data_timeout != 0) {
-		if (fi->flags & O_DIRECT)
+		if (fi->flags & O_DIRECT) {
 			fi_out.direct_io = 1;
+			fi_out.parallel_direct_writes = 1;
+		}
 
 		/* If the file is already open or (potentially) in cache then allow any existing
 		 * kernel cache to be used.  If not then use pre-read.
@@ -110,10 +112,13 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		fi_out.direct_io  = 0;
 		fi_out.keep_cache = 0;
 
-		if (fi->flags & O_DIRECT)
+		if (fi->flags & O_DIRECT) {
 			fi_out.direct_io = 1;
+			fi_out.parallel_direct_writes = 1;
+		}
 	} else {
 		fi_out.direct_io = 1;
+		fi_out.parallel_direct_writes = 1;
 	}
 
 	if (ie->ie_dfs->dfc_direct_io_disable)
