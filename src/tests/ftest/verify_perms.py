@@ -24,7 +24,7 @@ from util.user_utils import get_user_uid_gid
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
+logger.addHandler(get_console_handler("%(message)s", logging.INFO))
 
 
 class VerifyPermsError(Exception):

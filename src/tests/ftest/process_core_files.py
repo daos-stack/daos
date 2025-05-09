@@ -124,11 +124,8 @@ class CoreFileProcessing():
         # Install the debug information needed for stacktrace generation
         if core_files:
             try:
-                self.log.info("Install debuginfo packages STARTED")
                 self.install_debuginfo_packages()
-
             except RunException as error:
-                self.log.error("Install debuginfo packages failed")
                 self.log.error(error)
                 self.log.debug("Stacktrace", exc_info=True)
                 errors += 1
@@ -136,8 +133,6 @@ class CoreFileProcessing():
         else:
             self.log.debug(
                 "No core.*[0-9] files found in %s", os.path.join(directory, "stacktraces*"))
-
-        self.log.info("Install debuginfo packages DONE")
 
         # Create a stacktrace from each core file and then remove the core file
         for core_dir, core_name_list in core_files.items():
@@ -280,7 +275,6 @@ class CoreFileProcessing():
                     'hdf5-vol-daos-openmpi-tests', 'ior']:
             debug_pkg = self.resolve_debuginfo(pkg)
             if debug_pkg and debug_pkg not in install_pkgs:
-                self.log.debug("install_pkgs.append: %s", pkg)
                 install_pkgs.append(debug_pkg)
 
         # remove any "source tree" test hackery that might interfere with RPM installation
@@ -310,7 +304,6 @@ class CoreFileProcessing():
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
                 + ["daos-" + rpm_version, "daos-*-" + rpm_version])
-            self.log.debug("%s", " ".join(cmds[-1]))
         # else:
         #     # We're not using the yum API to install packages
         #     # See the comments below.
@@ -339,10 +332,8 @@ class CoreFileProcessing():
 
         retry = False
         for cmd in cmds:
-            self.log.info("Run Command: %s", " ".join(cmd))
             if not run_local(self.log, " ".join(cmd), True, 120).passed:
                 # got an error, so abort this list of commands and re-run
-                self.log.debug("Got an error, so abort this list of commands and re-run")
                 # it with a dnf clean, makecache first
                 retry = True
                 break
@@ -354,9 +345,9 @@ class CoreFileProcessing():
             cmds.insert(0, cmd_prefix + ["clean", "all"])
             cmds.insert(1, cmd_prefix + ["makecache"])
             for cmd in cmds:
-                self.log.info("Retry Command: %s", " ".join(cmd))
                 if not run_local(self.log, " ".join(cmd)).passed:
                     break
+        self.log.info("Installing debuginfo packages for stacktrace creation - DONE")
 
     def is_el(self):
         """Determine if the distro is EL based.
