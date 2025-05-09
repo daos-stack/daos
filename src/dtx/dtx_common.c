@@ -1686,7 +1686,7 @@ out:
 	if (rc < 0) {
 		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
 			DP_UUID(cont->sc_uuid), rc);
-		if (likely(!dtx_cont_opened(cont))) {
+		if (likely(!dtx_cont_opened(cont)) && !dbca->dbca_deregister) {
 			d_list_del(&dbca->dbca_sys_link);
 			/* Give it to the batched commit for further handling asynchronously. */
 			d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
@@ -1922,6 +1922,9 @@ dtx_cont_open(struct ds_cont_child *cont)
 
 		d_list_for_each_entry(dbca, &dbpa->dbpa_cont_list, dbca_pool_link) {
 			if (dbca->dbca_cont == cont) {
+				if (unlikely(dbca->dbca_deregister))
+					return -DER_SHUTDOWN;
+
 				rc = start_dtx_reindex_ult(cont);
 				if (rc != 0)
 					return rc;
