@@ -220,6 +220,9 @@ pipeline {
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
+        string(name: 'CI_SCONS_ARGS',
+               defaultValue: '',
+               description: 'Arguments for scons when building DAOS')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
@@ -368,9 +371,6 @@ pipeline {
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
-        string(name: 'CI_SCONS_ARGS',
-               defaultValue: '',
-               description: 'Arguments for scons when building DAOS')
     }
 
     stages {
