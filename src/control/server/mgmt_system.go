@@ -30,7 +30,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -560,7 +559,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	}
 
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
-	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
+	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodGroupUpdate, req)
 	if err != nil {
 		if err == errEngineNotReady {
 			return err
@@ -1542,7 +1541,7 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 			Id:      ps.PoolUUID.String(),
 		}
 
-		dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, evictReq)
+		dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolEvict, evictReq)
 		if err != nil {
 			return nil, err
 		}
@@ -1668,7 +1667,7 @@ func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemPrope
 	for _, ps := range pools {
 		pspr.Id = ps.PoolUUID.String()
 		pspr.SvcRanks = ranklist.RanksToUint32(ps.Replicas)
-		dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, pspr)
+		dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolSetProp, pspr)
 		if err != nil {
 			return err
 		}
