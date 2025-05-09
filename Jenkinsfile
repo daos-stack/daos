@@ -630,7 +630,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 8') {
+                stage('Build on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !params.CI_el8_NOBUILD && !skipStage() }
