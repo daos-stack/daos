@@ -121,11 +121,11 @@ def _add_lib(libtype, libname, target):
 
 def _run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
-    if GetOption("test_coverage"):
+    if GetOption("code_coverage"):
         if 'gcov' not in daos_libs:
             daos_libs += ['gcov']
-        env.AppendENVPath('CGO_LDFLAGS', '-lgcov', sep=' ')
-        print(f"DEBUG... target={target}, daos_libs={daos_libs}")
+        # env.AppendENVPath('CGO_LDFLAGS', '-lgcov', sep=' ')
+        env.AppendUnique(CGO_LDFLAGS=['-lgcov'])
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
     return result
@@ -257,21 +257,9 @@ def _configure_mpi(self):
     return None
 
 
-# def _add_code_coverage(**kwargs):
-#     """Add library for code coverage"""
-#     if GetOption("test_coverage"):
-#         if 'LIBS' not in kwargs:
-#             kwargs['LIBS'] = []
-#         elif isinstance(kwargs['LIBS'], str):
-#             kwargs['LIBS'] = [kwargs['LIBS']]
-#         if 'gcov' not in kwargs['LIBS']:
-#             kwargs['LIBS'].append('gcov')
-#         print(f"DEBUG.... _add_code_coverage: kwargs['LIBS']={kwargs['LIBS']}")
-#     return kwargs
-
 def _add_code_coverage(env, **kwargs):
     """Add library for code coverage"""
-    if GetOption("test_coverage"):
+    if GetOption("code_coverage"):
         if 'LIBS' in kwargs:
             if isinstance(kwargs['LIBS'], str):
                 kwargs['LIBS'] = [kwargs['LIBS']]

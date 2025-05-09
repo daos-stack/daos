@@ -652,7 +652,7 @@ pipeline {
                                        stash_opt: true,
                                        scons_args: sconsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       test_coverage: params.CI_CODE_COVERAGE))
+                                       code_coverage: params.CI_CODE_COVERAGE))
                     }
                     post {
                         unsuccessful {
