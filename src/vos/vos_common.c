@@ -975,7 +975,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path)
+vos_self_nvme_init(const char *vos_path, bool init_spdk)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -1001,12 +1001,11 @@ vos_self_nvme_init(const char *vos_path)
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
-		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
-				   VOS_NVME_NR_TARGET, true);
+		rc = bio_nvme_init_ext(NULL, VOS_NVME_NUMA_NODE, 0, 0, VOS_NVME_NR_TARGET, true,
+				       init_spdk);
 	} else {
-		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
-				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
-				   VOS_NVME_NR_TARGET, true);
+		rc = bio_nvme_init_ext(nvme_conf, VOS_NVME_NUMA_NODE, VOS_NVME_MEM_SIZE,
+				       VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET, true, init_spdk);
 		close(fd);
 	}
 
@@ -1055,7 +1054,7 @@ vos_self_fini(void)
 #define LMMDB_PATH	"/var/daos/"
 
 int
-vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init)
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool init_spdk)
 {
 	char		*evt_mode;
 	int		 rc = 0;
@@ -1080,11 +1079,9 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 		goto out;
 	}
 #endif
-	if (nvme_init) {
-		rc = vos_self_nvme_init(db_path);
-		if (rc)
-			goto failed;
-	}
+	rc = vos_self_nvme_init(db_path, init_spdk);
+	if (rc)
+		goto failed;
 
 	rc = vos_mod_init();
 	if (rc)
