@@ -206,11 +206,6 @@ dc_obj_init(void)
 
 	iov_frag_size = IOV_FRAG_SIZE_DEF;
 	d_getenv_uint("DAOS_IOV_FRAG_SIZE", &iov_frag_size);
-	if (iov_frag_size == 0) {
-		D_INFO("IOV fragment merging is disabled\n");
-	} else {
-		D_INFO("IOV fragment size merge threshold set to %u\n", iov_frag_size);
-	}
 
 	iov_frag_count = IOV_FRAG_COUNT_DEF;
 	d_getenv_uint("DAOS_IOV_FRAG_COUNT", &iov_frag_count);
@@ -218,9 +213,13 @@ dc_obj_init(void)
 		D_WARN("Invalid IOV fragment count threshold: %u (minimum %u). Using default: %u\n",
 		       iov_frag_count, IOV_FRAG_COUNT_MIN, IOV_FRAG_COUNT_DEF);
 		iov_frag_count = IOV_FRAG_COUNT_DEF;
-	} else {
-		D_INFO("IOV fragment count merge threshold set to %u\n", iov_frag_count);
 	}
+	if (iov_frag_size == 0)
+		D_INFO("IOV fragment merging is disabled. Fragment count threshold: %u\n",
+		       iov_frag_count);
+	else
+		D_INFO("IOV fragment merging enabled (size threshold: %u, count threshold: %u)\n",
+		       iov_frag_size, iov_frag_count);
 
 	tx_verify_rdg = false;
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
