@@ -350,7 +350,7 @@ pipeline {
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',

@@ -340,7 +340,7 @@ class CoreFileProcessing():
             self.log.debug("Going to refresh caches and try again")
             cmd_prefix = ["sudo", "dnf"]
             if self.is_el() or "suse" in self.distro_info.name.lower():
-                cmd_prefix.append("--enablerepo=*debug*")
+                cmd_prefix.append("--enablerepo=*artifactory-debuginfo*")
             cmds.insert(0, cmd_prefix + ["clean", "all"])
             cmds.insert(1, cmd_prefix + ["makecache"])
             for cmd in cmds:

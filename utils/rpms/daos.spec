@@ -639,6 +639,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon May 12 2025  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-9
+- Bump lua-lmod version to >=8.7.36
+- Bump lmod version to >=8.7.36
+- Bump mpich version to 4.1~a1
+- Bump python3-mpi4py-tests version to >= 3.1.6
+- Add openmpi requiremnent for daos-client-tests on Leap.
+
 * Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8
 - Add support of the libasan
 
