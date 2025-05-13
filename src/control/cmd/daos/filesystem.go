@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,10 +22,13 @@ import "C"
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"math"
 	"strings"
 	"unsafe"
+
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func dfsError(rc C.int) error {
@@ -192,14 +196,12 @@ func fsModifyAttr(cmd *fsAttrCmd, op uint32, updateAP func(*C.struct_cmd_args_s)
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_RW)
-
 	ap.fs_op = op
 	if updateAP != nil {
 		updateAP(ap)
 	}
 
-	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -266,9 +268,8 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	defer deallocCmdArgs()
 
 	ap.fs_op = C.FS_GET_ATTR
-	flags := C.uint(C.DAOS_COO_RO)
 
-	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadOnly, ap)
 	if err != nil {
 		return err
 	}
@@ -400,10 +401,8 @@ func (cmd *fsFixEntryCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_EX)
-
 	ap.fs_op = C.FS_CHECK
-	cleanup, err := cmd.resolveAndConnect(flags, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagExclusive, ap)
 	if err != nil {
 		return errors.Wrapf(err, "failed fs fix-entry")
 	}
@@ -440,7 +439,7 @@ func (cmd *fsFixSBCmd) Execute(_ []string) error {
 	defer deallocCmdArgs()
 
 	ap.fs_op = C.FS_CHECK
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_EX, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagExclusive, ap)
 	if err != nil {
 		return err
 	}
@@ -485,7 +484,7 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 	defer deallocCmdArgs()
 
 	ap.fs_op = C.FS_CHECK
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_EX, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagExclusive, ap)
 	if err != nil {
 		return err
 	}
@@ -691,7 +690,7 @@ func (cmd *fsChmodCmd) Execute(_ []string) error {
 
 	ap.object_mode = cmd.ModeBits.Mode
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return errors.Wrapf(err, "failed to connect")
 	}
