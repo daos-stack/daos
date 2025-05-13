@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,6 +38,9 @@ obj_mod_init(void)
 		D_ERROR("failed to obj_ec_codec_init\n");
 		goto out_class;
 	}
+
+	/* Enforce server protocol when reusing client stack during rebuild */
+	dc_obj_proto_version = DAOS_OBJ_VERSION;
 
 	return 0;
 
