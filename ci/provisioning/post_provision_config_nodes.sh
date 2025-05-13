@@ -62,7 +62,7 @@ if lspci | grep -i nvme; then
 fi
 
 # FOR now limit to 2 devices per CPU NUMA node
-: "${DAOS_CI_NVME_NUMA_LIMIT:=1}"
+: "${DAOS_CI_NVME_NUMA_LIMIT:=2}"
 
 function mount_nvme_drive {
     local drive="$1"
