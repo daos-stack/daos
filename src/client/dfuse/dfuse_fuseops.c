@@ -96,8 +96,13 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	dfuse_show_flags(dfuse_info, conn->capable, conn->want);
 
 	conn->time_gran            = 1;
-	conn->max_background       = 16;
-	conn->congestion_threshold = 8;
+
+	/**
+	 * Set to the maximum allowed to regular users.
+	 * Can be changed via fuse kernel module parameters.
+	 */
+	conn->max_background       = 65536;
+	conn->congestion_threshold = 65536;
 
 	DFUSE_TRA_INFO(dfuse_info, "max_background %d", conn->max_background);
 	DFUSE_TRA_INFO(dfuse_info, "congestion_threshold %d", conn->congestion_threshold);

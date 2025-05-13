@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -518,6 +518,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
+%{_bindir}/tune-dfuse.sh
 %{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdaos_self_test.so
 %{_libdir}/libdfs.so
@@ -637,6 +638,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Apr 18 2025 Johann Lombardi <johann.lombardi@hpe.com> 2.7.101-9
+- Add tune-dfuse.sh script to bump readahead and max dirty ratio
+
 * Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8
 - Add support of the libasan
 
