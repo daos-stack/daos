@@ -748,9 +748,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 
 			// test with typical meminfo values
-			mi := &common.MemInfo{}
-			mi.MemTotalKiB = (50 * humanize.GiByte) / humanize.KiByte
-			mi.HugepageSizeKiB = 2048
+			smi := &common.SysMemInfo{}
+			smi.MemTotalKiB = (50 * humanize.GiByte) / humanize.KiByte
+			smi.HugepageSizeKiB = 2048
 
 			osSetenv = func(string, string) error {
 				return nil
@@ -768,7 +768,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				}, nil
 			}
 
-			if err = processConfig(log, cfg, mockFabIfSet, mi, mockIfLookup,
+			if err = processConfig(log, cfg, mockFabIfSet, smi, mockIfLookup,
 				mockAffSrc); err != nil {
 				t.Fatal(err)
 			}
@@ -817,9 +817,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner, nil)
 
-			mi.HugepagesFree = tc.hugepagesFree
+			smi.HugepagesFree = tc.hugepagesFree
 
-			gotMemChkErr := updateHugeMemValues(srv, ei, mi)
+			gotMemChkErr := updateHugeMemValues(srv, ei, smi)
 			test.CmpErr(t, tc.expMemChkErr, gotMemChkErr)
 			if tc.expMemChkErr != nil {
 				return
@@ -1017,9 +1017,9 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
 			cfg = tc.srvCfgExtra(cfg)
 
-			mi := &common.MemInfo{}
-			mi.HugepageSizeKiB = 2048
-			mi.MemAvailableKiB = (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte
+			smi := &common.SysMemInfo{}
+			smi.HugepageSizeKiB = 2048
+			smi.MemAvailableKiB = (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte
 
 			if len(cfg.Engines) == 0 {
 				t.Fatal("test expects at least one engine in config")
@@ -1047,7 +1047,7 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotErr := checkEngineTmpfsMem(srv, instance, mi)
+			gotErr := checkEngineTmpfsMem(srv, instance, smi)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

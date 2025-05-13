@@ -19,15 +19,15 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
-func TestCommon_parseMemInfoT(t *testing.T) {
+func TestCommon_parseMemInfo(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input     string
-		expOut    *MemInfoT
+		expOut    *MemInfo
 		expFreeMB int
 		expErr    error
 	}{
 		"none parsed": {
-			expOut: &MemInfoT{
+			expOut: &MemInfo{
 				NumaNodeIndex: -1,
 			},
 			expFreeMB: 0,
@@ -43,7 +43,7 @@ HugePages_Rsvd:        0
 HugePages_Surp:        0
 Hugepagesize:       2048 kB
 			`,
-			expOut: &MemInfoT{
+			expOut: &MemInfo{
 				NumaNodeIndex:   -1,
 				HugepagesTotal:  1024,
 				HugepagesFree:   1023,
@@ -62,7 +62,7 @@ HugePages_Rsvd:        0
 HugePages_Surp:        0
 Hugepagesize:       1048576 kB
 			`,
-			expOut: &MemInfoT{
+			expOut: &MemInfo{
 				NumaNodeIndex:   -1,
 				HugepagesTotal:  16,
 				HugepagesFree:   16,
@@ -86,7 +86,7 @@ Hugepagesize:       1 GB
 		t.Run(name, func(t *testing.T) {
 			rdr := strings.NewReader(tc.input)
 
-			gotOut, gotErr := parseMemInfoT(rdr)
+			gotOut, gotErr := parseMemInfo(rdr)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -96,7 +96,7 @@ Hugepagesize:       1 GB
 				t.Fatalf("unexpected output (-want, +got)\n%s\n", diff)
 			}
 
-			mi := &MemInfo{MemInfoT: *gotOut}
+			mi := &SysMemInfo{MemInfo: *gotOut}
 			if mi.HugepagesFreeMB() != tc.expFreeMB {
 				t.Fatalf("expected FreeMB() to be %d, got %d",
 					tc.expFreeMB, mi.HugepagesFreeMB())
@@ -130,14 +130,14 @@ func TestCommon_GetMemInfo(t *testing.T) {
 		// Mock file tree, map contains source file to destination dir locations.
 		files  map[string]string
 		expErr error
-		expOut *MemInfo
+		expOut *SysMemInfo
 	}{
 		"no numa nodes": {
 			files: map[string]string{
 				"meminfo": pathRootProc,
 			},
-			expOut: &MemInfo{
-				MemInfoT: MemInfoT{
+			expOut: &SysMemInfo{
+				MemInfo: MemInfo{
 					NumaNodeIndex:   -1,
 					HugepagesTotal:  2560,
 					HugepagesFree:   2560,
@@ -146,7 +146,7 @@ func TestCommon_GetMemInfo(t *testing.T) {
 					MemFreeKiB:      182740080,
 					MemAvailableKiB: 184708468,
 				},
-				NumaNodes: []MemInfoT{},
+				NumaNodes: []MemInfo{},
 			},
 		},
 		"dual numa nodes": {
@@ -157,8 +157,8 @@ func TestCommon_GetMemInfo(t *testing.T) {
 				"meminfo_1": filepath.Join(pathRootSys, "devices", "system", "node",
 					"node1"),
 			},
-			expOut: &MemInfo{
-				MemInfoT: MemInfoT{
+			expOut: &SysMemInfo{
+				MemInfo: MemInfo{
 					NumaNodeIndex:   -1,
 					HugepagesTotal:  2560,
 					HugepagesFree:   2560,
@@ -167,7 +167,7 @@ func TestCommon_GetMemInfo(t *testing.T) {
 					MemFreeKiB:      182740080,
 					MemAvailableKiB: 184708468,
 				},
-				NumaNodes: []MemInfoT{
+				NumaNodes: []MemInfo{
 					{
 						HugepagesTotal: 2048,
 						HugepagesFree:  2048,
@@ -210,7 +210,7 @@ func TestCommon_GetMemInfo(t *testing.T) {
 				}
 			}
 
-			gotOut, gotErr := GetMemInfo()
+			gotOut, gotErr := GetSysMemInfo()
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

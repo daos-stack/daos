@@ -530,7 +530,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					ScmNamespaces: storage.ScmNamespaces{
 						storage.MockScmNamespace(0),
 					},
-					MemInfo: MockMemInfo(),
+					SysMemInfo: MockSysMemInfo(),
 				},
 			},
 		},
@@ -1457,14 +1457,14 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 			nd := &networkDetails{
 				NumaIfaces: tc.numaIfaces,
 			}
-			mi := &common.MemInfo{}
-			mi.HugepageSizeKiB = 2048
-			mi.MemTotalKiB = tc.memTotal / humanize.KiByte
+			smi := &common.SysMemInfo{}
+			smi.HugepageSizeKiB = 2048
+			smi.MemTotalKiB = tc.memTotal / humanize.KiByte
 			sd := &storageDetails{
-				MemInfo:  mi,
-				NumaSCMs: tc.numaPMems,
-				NumaSSDs: tc.numaSSDs,
-				scmCls:   storage.ClassDcpm,
+				SysMemInfo: smi,
+				NumaSCMs:   tc.numaPMems,
+				NumaSSDs:   tc.numaSSDs,
+				scmCls:     storage.ClassDcpm,
 			}
 			if tc.scmCls.String() != "" {
 				sd.scmCls = tc.scmCls

@@ -422,7 +422,7 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
-func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+func updateHugeMemValues(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
 	ei.RLock()
 	ec := ei.runner.GetConfig()
 	eIdx := ec.Index
@@ -436,20 +436,20 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
-	pageSizeMiB := mi.HugepageSizeKiB / humanize.KiByte // kib to mib
+	pageSizeMiB := smi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
-	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
+	memSizeFreeMiB := smi.HugepagesFree * pageSizeMiB
 
 	// If free hugepage mem is not enough to meet requested number of hugepages, log notice and
 	// set mem_size engine parameter to free value. Otherwise set to requested value.
 	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %+v)", memSizeReqMiB,
-		pageSizeMiB, *mi)
+		pageSizeMiB, *smi)
 	if memSizeFreeMiB < memSizeReqMiB {
 		srv.log.Noticef("The amount of hugepage memory allocated for engine %d does not "+
 			"meet nr_hugepages requested in config: want %s (%d hugepages), got %s ("+
 			"%d hugepages)", ei, humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)),
 			nrPagesRequired, humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)),
-			mi.HugepagesFree)
+			smi.HugepagesFree)
 		ei.setMemSize(memSizeFreeMiB)
 	} else {
 		ei.setMemSize(memSizeReqMiB)
@@ -494,7 +494,7 @@ func cleanSpdkResources(srv *server, pciAddrs []string) error {
 // RAM-disk sizes set in the storage config.
 //
 // Note that check is to be performed after hugepages have been allocated, as such the available
-// memory MemInfo value will show that Hugetlb has already been allocated (and therefore no longer
+// memory SysMemInfo value will show that Hugetlb has already been allocated (and therefore no longer
 // available) so don't need to take into account hugepage allowances during calculation.
 func checkMemForRamdisk(log logging.Logger, memRamdisks, memAvail uint64) error {
 	memRequired := (memRamdisks / 100) * uint64(memCheckThreshold)
@@ -515,7 +515,7 @@ func checkMemForRamdisk(log logging.Logger, memRamdisks, memAvail uint64) error 
 	return nil
 }
 
-func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+func checkEngineTmpfsMem(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
 	sc, err := ei.storage.GetScmConfig()
 	if err != nil {
 		return err
@@ -526,7 +526,7 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	}
 
 	memRamdisk := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
-	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
+	memAvail := uint64(smi.MemAvailableKiB) * humanize.KiByte
 
 	// In the event that tmpfs was already mounted, we need to verify that it
 	// is the correct size and that the memory usage still makes sense.
@@ -613,18 +613,18 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Retrieve up-to-date meminfo to check resource availability.
-		mi, err := common.GetMemInfo()
+		smi, err := common.GetSysMemInfo()
 		if err != nil {
 			return err
 		}
 
 		// Update engine memory related config parameters before starting.
-		if err := updateHugeMemValues(srv, engine, mi); err != nil {
+		if err := updateHugeMemValues(srv, engine, smi); err != nil {
 			return errors.Wrap(err, "updating engine memory parameters")
 		}
 
 		// Check available RAM can satisfy tmpfs size before starting a new engine.
-		if err := checkEngineTmpfsMem(srv, engine, mi); err != nil {
+		if err := checkEngineTmpfsMem(srv, engine, smi); err != nil {
 			return errors.Wrap(err, "check ram available for engine tmpfs")
 		}
 
