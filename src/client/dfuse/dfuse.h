@@ -560,6 +560,9 @@ struct dfuse_cont {
 
 	/* Set to true if the inode was allocated to this structure, so should be kept on close*/
 	bool                    dfc_save_ino;
+
+	/* Toggle metrics enablement for IL clients using this container */
+	ATOMIC bool                   dfc_metrics_enabled;
 };
 
 #define dfs_entry core.dfcc_entry
@@ -938,6 +941,17 @@ dfuse_loop(struct dfuse_info *dfuse_info);
 	} while (0)
 
 #define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
+
+#define DFUSE_REPLY_OK(_oh, req)                                                                   \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(_oh, "Returning OK to complete ioctl");                            \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
+		__rc  = fuse_reply_ioctl(req, 0, NULL, 0);                                         \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_ioctl() error");                               \
+	} while (0)
 
 /**
  * Inode handle.
