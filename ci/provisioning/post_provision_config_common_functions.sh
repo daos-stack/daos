@@ -327,7 +327,7 @@ update_repos() {
     local file
     for file in "$REPOS_DIR"/*.repo; do
         [[ $file == *"artifactory"* ]] && continue
-        [ -e "$file" ] || breaki
+        [ -e "$file" ] || break
         # empty the file but keep it around so that updates don't recreate it
         true > "$file"
     done
