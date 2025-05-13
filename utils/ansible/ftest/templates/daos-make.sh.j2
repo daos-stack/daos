@@ -27,6 +27,7 @@ MAKE_EXE=make
 WGET_EXE=wget
 PYTHON_EXE=python3.11
 PIP_EXE=pip
+BEAR_EXE=bear
 
 CLUSH_OPTS="-bL -S"
 
@@ -228,7 +229,7 @@ fi
 
 info "Building DAOS from source tree $DAOS_SOURCE_DIR"
 # NOTE Dependencies will not be build as 'no' is default value of the --build-deps option
-if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
+if ! run env MPI_PKG=any "$BEAR_EXE" --append --output "$DAOS_SOURCE_DIR/compile_commands.json" -- "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build"
 fi
 
