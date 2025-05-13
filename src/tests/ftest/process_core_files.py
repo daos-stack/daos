@@ -319,7 +319,7 @@ class CoreFileProcessing():
         self.log.debug("Now install a few pkgs that debuginfo-install wouldn't")
         cmd = ["sudo", "dnf", "-y"]
         if self.is_el() or "suse" in self.distro_info.name.lower():
-            cmd.append("--enablerepo=*debug*")
+            cmd.append("--enablerepo=*artifactory-debuginfo*")
         cmd.append("install")
         for pkg in install_pkgs:
             try:
