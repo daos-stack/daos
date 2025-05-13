@@ -81,6 +81,10 @@ The inventory should also contain a set of mandatory and optional variables.
 - **daos\_hugepages\_nb**: optional variable (default value: 4096) only used by the nodes of the
   *daos\_servers* group.  This variable defines the number of hugepages to be allocated by the linux
   kernel.
+- **daos\_ofi\_interface**: optional variable (default value: None) defining the network interface
+  to use with the launch.py python script.
+- **daos_http_proxy**: optional variable defining the http proxy to use for downloading external
+  dependencies
 
 Different file format (e.g. YAML, INI, etc.) and file tree structure are supported to define an
 ansible inventory.  The following simple ansible inventory describe for example in one YAML file
@@ -90,6 +94,7 @@ a simple DAOS functional platform composed of two nodes which are assuming sever
 all:
   vars:
     daos_runtime_dir: /home/foo/daos
+    daos_http_proxy: http://myproxy.net:8080
   children:
     daos_dev:
       vars:
@@ -117,13 +122,16 @@ ansible-inventory --graph --vars --inventory my-inventory.yml
   |  |--wolf-999
   |  |  |--{daos_hugepages_nb = 8182}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
+  |  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |--@daos_dev:
   |  |--wolf-666
   |  |  |--{daos_hugepages_nb = 8182}
   |  |  |--{daos_ofi_interface = eth0}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
   |  |  |--{daos_source_dir = /home/foo/work/daos}
+  |  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |  |--{daos_ofi_interface = eth0}
+  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |  |--{daos_source_dir = /home/foo/work/daos}
   |--@daos_servers:
   |  |--wolf-666
@@ -131,9 +139,11 @@ ansible-inventory --graph --vars --inventory my-inventory.yml
   |  |  |--{daos_ofi_interface = eth0}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
   |  |  |--{daos_source_dir = /home/foo/work/daos}
+  |  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |  |--wolf-999
   |  |  |--{daos_hugepages_nb = 8182}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
+  |  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |  |--{daos_hugepages_nb = 8182}
   |--@ungrouped:
   |--{daos_runtime_dir = /home/foo/daos}
