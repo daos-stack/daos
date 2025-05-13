@@ -33,7 +33,6 @@ daos_common_deps:
 
 daos_dev_deps:
   rpms:
-    - daos-raft-devel
     - daxctl-devel
     - gcc-gfortran
     - libaec-devel
