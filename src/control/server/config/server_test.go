@@ -1181,13 +1181,13 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			// Apply test case changes to basic config
 			cfg := tc.extraConfig(baseCfg(t, log, testFile))
 
-			mi := &common.MemInfo{}
-			mi.HugepageSizeKiB = defHpSizeKb
+			smi := &common.SysMemInfo{}
+			smi.HugepageSizeKiB = defHpSizeKb
 			if tc.zeroHpSize {
-				mi.HugepageSizeKiB = 0
+				smi.HugepageSizeKiB = 0
 			}
 
-			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
+			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, smi))
 			if tc.expErr != nil {
 				return
 			}
@@ -1376,11 +1376,11 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			if val > math.MaxInt {
 				t.Fatal("int overflow")
 			}
-			mi := &common.MemInfo{}
-			mi.HugepageSizeKiB = 2048
-			mi.MemTotalKiB = int(val)
+			smi := &common.SysMemInfo{}
+			smi.HugepageSizeKiB = 2048
+			smi.MemTotalKiB = int(val)
 
-			test.CmpErr(t, tc.expErr, cfg.SetRamdiskSize(log, mi))
+			test.CmpErr(t, tc.expErr, cfg.SetRamdiskSize(log, smi))
 			if tc.expErr != nil {
 				return
 			}

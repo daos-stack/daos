@@ -427,7 +427,7 @@ func getStorageSet(ctx context.Context, req ConfGenerateRemoteReq) (*HostStorage
 
 	req.Log.Debugf("Storage hardware is consistent for hosts %s:\n\t%s\n\t%s\n\t%s",
 		storageSet.HostSet.String(), hostStorage.ScmNamespaces.Summary(),
-		hostStorage.NvmeDevices.Summary(), hostStorage.MemInfo.Summary())
+		hostStorage.NvmeDevices.Summary(), hostStorage.SysMemInfo.Summary())
 
 	return storageSet, nil
 }
@@ -502,10 +502,10 @@ func (nsm numaSSDsMap) fromNVMe(ssds storage.NvmeControllers) error {
 }
 
 type storageDetails struct {
-	NumaSCMs numaSCMsMap
-	NumaSSDs numaSSDsMap
-	MemInfo  *common.MemInfo
-	scmCls   storage.Class
+	NumaSCMs   numaSCMsMap
+	NumaSSDs   numaSSDsMap
+	SysMemInfo *common.SysMemInfo
+	scmCls     storage.Class
 }
 
 // getStorageDetails retrieves mappings of NUMA node to PMem and NVMe SSD devices.  Returns storage
@@ -514,8 +514,8 @@ func getStorageDetails(req ConfGenerateReq, numaCount int, hs *HostStorage) (*st
 	if hs == nil {
 		return nil, errors.New("nil HostStorage")
 	}
-	if hs.MemInfo == nil {
-		return nil, errors.New("nil HostStorage.MemInfo")
+	if hs.SysMemInfo == nil {
+		return nil, errors.New("nil HostStorage.SysMemInfo")
 	}
 
 	sd := storageDetails{
@@ -523,10 +523,10 @@ func getStorageDetails(req ConfGenerateReq, numaCount int, hs *HostStorage) (*st
 		NumaSSDs: make(numaSSDsMap),
 		scmCls:   storage.ClassDcpm,
 	}
-	sd.MemInfo = &common.MemInfo{}
-	sd.MemInfo.HugepageSizeKiB = hs.MemInfo.HugepageSizeKiB
-	sd.MemInfo.MemTotalKiB = hs.MemInfo.MemTotalKiB
-	if sd.MemInfo.HugepageSizeKiB == 0 {
+	sd.SysMemInfo = &common.SysMemInfo{}
+	sd.SysMemInfo.HugepageSizeKiB = hs.SysMemInfo.HugepageSizeKiB
+	sd.SysMemInfo.MemTotalKiB = hs.SysMemInfo.MemTotalKiB
+	if sd.SysMemInfo.HugepageSizeKiB == 0 {
 		return nil, errors.New("requires nonzero HugepageSizeKiB")
 	}
 
@@ -539,7 +539,7 @@ func getStorageDetails(req ConfGenerateReq, numaCount int, hs *HostStorage) (*st
 		if numaCount <= 0 {
 			return nil, errors.New("requires nonzero numaCount")
 		}
-		if sd.MemInfo.MemTotalKiB == 0 {
+		if sd.SysMemInfo.MemTotalKiB == 0 {
 			return nil, errors.New("requires nonzero MemTotalKiB")
 		}
 
