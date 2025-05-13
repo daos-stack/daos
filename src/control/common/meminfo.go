@@ -28,11 +28,11 @@ var (
 	regexpNodeTxt = regexp.MustCompile(`Node \d+ `)
 )
 
-// GetMemInfoFn is an alias for a function that returns memory information.
-type GetMemInfoFn func() (*MemInfo, error)
+// GetSysMemInfoFn is an alias for a function that returns memory information.
+type GetSysMemInfoFn func() (*SysMemInfo, error)
 
-// MemInfoT contains system memory details gathered from meminfo files.
-type MemInfoT struct {
+// MemInfo contains system memory details gathered from meminfo files.
+type MemInfo struct {
 	NumaNodeIndex   int `json:"numa_node_index"`
 	HugepagesTotal  int `json:"hugepages_total" hash:"ignore"`
 	HugepagesFree   int `json:"hugepages_free" hash:"ignore"`
@@ -45,14 +45,14 @@ type MemInfoT struct {
 	MemUsedKiB      int `json:"mem_used_kb" hash:"ignore"`
 }
 
-// MemInfo contains information about system memory.
-type MemInfo struct {
-	MemInfoT             // Overall info.
-	NumaNodes []MemInfoT // Per-NUMA-node info.
+// SysMemInfo contains information about system memory.
+type SysMemInfo struct {
+	MemInfo             // Overall info.
+	NumaNodes []MemInfo // Per-NUMA-node info.
 }
 
 // Summary reports basic total system memory stats.
-func (mi *MemInfo) Summary() string {
+func (mi *SysMemInfo) Summary() string {
 	if mi == nil {
 		return "<nil>"
 	}
@@ -73,7 +73,7 @@ func (mi *MemInfo) Summary() string {
 
 // HugepagesTotalMB reports total hugepage memory for a system calculated from default size
 // hugepages.
-func (mi *MemInfo) HugepagesTotalMB() int {
+func (mi *SysMemInfo) HugepagesTotalMB() int {
 	if mi == nil {
 		return 0
 	}
@@ -81,7 +81,7 @@ func (mi *MemInfo) HugepagesTotalMB() int {
 }
 
 // HugepagesFreeMB reports free hugepage memory for a system calculated from default size hugepages.
-func (mi *MemInfo) HugepagesFreeMB() int {
+func (mi *SysMemInfo) HugepagesFreeMB() int {
 	if mi == nil {
 		return 0
 	}
@@ -96,7 +96,7 @@ func parseInt(a string, i *int) {
 	*i = v
 }
 
-func processNodeLine(nodeStr, txt string, mi *MemInfoT) (string, error) {
+func processNodeLine(nodeStr, txt string, mi *MemInfo) (string, error) {
 	idStr := strings.Split(nodeStr, " ")[1]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -112,8 +112,8 @@ func processNodeLine(nodeStr, txt string, mi *MemInfoT) (string, error) {
 	return strings.Replace(txt, nodeStr, "", 1), nil
 }
 
-func parseMemInfoT(input io.Reader) (*MemInfoT, error) {
-	mi := new(MemInfoT)
+func parseMemInfo(input io.Reader) (*MemInfo, error) {
+	mi := new(MemInfo)
 
 	mi.NumaNodeIndex = -1
 
@@ -175,24 +175,24 @@ func parseMemInfoT(input io.Reader) (*MemInfoT, error) {
 	return mi, scn.Err()
 }
 
-func getMemInfo(path string) (*MemInfoT, error) {
+func getMemInfo(path string) (*MemInfo, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	return parseMemInfoT(f)
+	return parseMemInfo(f)
 }
 
-func getMemInfoNodes() ([]MemInfoT, error) {
+func getMemInfoNodes() ([]MemInfo, error) {
 	path := filepath.Join(pathRootSys, "devices", "system", "node", "node*")
 	matches, err := filepath.Glob(path)
 	if err != nil {
 		return nil, errors.Wrap(err, "filepath glob")
 	}
 
-	nodeInfos := []MemInfoT{}
+	nodeInfos := []MemInfo{}
 	for _, match := range matches {
 		f, err := os.Stat(match)
 		if err != nil {
@@ -221,18 +221,18 @@ func getMemInfoNodes() ([]MemInfoT, error) {
 	return nodeInfos, nil
 }
 
-// GetMemInfo reads /proc/meminfo and returns information about system hugepages and memory (RAM).
+// GetSysMemInfo reads /proc/meminfo and returns information about system hugepages and memory (RAM).
 // Per-NUMA-node stats are then retrieved from /sys/devices/system/node/node*/meminfo and stored
 // under NumaNodes.
-func GetMemInfo() (*MemInfo, error) {
-	mi := new(MemInfo)
+func GetSysMemInfo() (*SysMemInfo, error) {
+	mi := new(SysMemInfo)
 
 	path := filepath.Join(pathRootProc, "meminfo")
 	mit, err := getMemInfo(path)
 	if err != nil {
 		return nil, err
 	}
-	mi.MemInfoT = *mit
+	mi.MemInfo = *mit
 
 	mi.NumaNodes, err = getMemInfoNodes()
 	if err != nil {

@@ -22,7 +22,8 @@ message StorageScanReq {
 	ScanScmReq scm = 2;
 }
 
-message MemInfo {
+message SysMemInfo
+{
 	uint64 hugepages_total = 1;
 	uint64 hugepages_free = 2;
 	uint64 hugepages_reserved = 3;
@@ -36,7 +37,7 @@ message MemInfo {
 message StorageScanResp {
 	ScanNvmeResp nvme = 1;
 	ScanScmResp scm = 2;
-	MemInfo mem_info = 3;
+	SysMemInfo   sys_mem_info = 3;
 }
 
 message StorageFormatReq {
