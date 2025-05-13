@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1340,7 +1341,7 @@ req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 	return rc;
 }
 
-#define MAX_SCHED_REQ_NUM	(1 << 20)
+#define MAX_SCHED_REQ_NUM       (1 << 16)
 #define RPC_ROUND_TRIP_TIME	(100)	/* in msecs */
 
 static bool
