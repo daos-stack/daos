@@ -319,7 +319,8 @@ class CoreFileProcessing():
         self.log.debug("Now install a few pkgs that debuginfo-install wouldn't")
         cmd = ["sudo", "dnf", "-y"]
         if self.is_el() or "suse" in self.distro_info.name.lower():
-            cmd.append("--enablerepo=*artifactory-debuginfo*")
+            cmd.append("--enablerepo=*debug*")
+            cmd.append("--disablerepo='epel-modular-debuginfo,epel-testing-debuginfo,epel-testing-modular-debuginfo'")
         cmd.append("install")
         for pkg in install_pkgs:
             try:
@@ -340,7 +341,8 @@ class CoreFileProcessing():
             self.log.debug("Going to refresh caches and try again")
             cmd_prefix = ["sudo", "dnf"]
             if self.is_el() or "suse" in self.distro_info.name.lower():
-                cmd_prefix.append("--enablerepo=*artifactory-debuginfo*")
+                cmd_prefix.append("--enablerepo=*debug*")
+                cmd.append("--disablerepo='epel-modular-debuginfo,epel-testing-debuginfo,epel-testing-modular-debuginfo'")
             cmds.insert(0, cmd_prefix + ["clean", "all"])
             cmds.insert(1, cmd_prefix + ["makecache"])
             for cmd in cmds:
