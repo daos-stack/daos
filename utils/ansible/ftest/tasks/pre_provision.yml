@@ -13,6 +13,43 @@
   with_first_found:
     - "{{ playbook_dir }}/vars/{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version }}.yml"
 
+- name: Configure http proxy
+  become: true
+  when: daos_http_proxy is defined
+  block:
+    - name: "Configuring http proxy PAM environment"
+      lineinfile:
+        path: /etc/environment
+        regexp: "^{{ item }}="
+        line: "{{ item }}={{ daos_http_proxy }}"
+      loop_control:
+        label: "Setting environment variable {{ item }}"
+      loop:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - http_proxy
+        - https_proxy
+
+    - name: "Configuring no http proxy PAM environment"
+      lineinfile:
+        path: /etc/environment
+        regexp: "^{{ item }}="
+        line: "{{ item }}=localhost,127.0.0.1"
+      loop_control:
+        label: "Setting environment variable {{ item }}"
+      loop:
+        - NO_PROXY
+        - no_proxy
+
+    - name: "Configuring shell environment"
+      template:
+        src: proxy.sh.j2
+        dest: /etc/profile.d/proxy.sh
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+
 - name: Set includedir in sudoers
   become: true
   lineinfile:
