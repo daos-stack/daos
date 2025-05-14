@@ -235,11 +235,12 @@ Requires: lbzip2
 Requires: attr
 Requires: ior
 Requires: go >= 1.21
+# Require lmod fix for https://github.com/TACC/Lmod/issues/687
 %if (0%{?suse_version} >= 1315)
-Requires: lua-lmod
+Requires: lua-lmod >= 8.7.36
 Requires: libcapstone-devel
 %else
-Requires: Lmod
+Requires: Lmod >= 8.7.36
 Requires: capstone-devel
 %endif
 Requires: pciutils-devel
@@ -261,6 +262,7 @@ Requires: hdf5-%{openmpi}-tests
 Requires: hdf5-vol-daos-%{openmpi}-tests
 Requires: MACSio-%{openmpi}
 Requires: simul-%{openmpi}
+Requires: %{openmpi}
 
 %description client-tests-openmpi
 This is the package needed to run the DAOS client test suite openmpi tools
@@ -271,14 +273,14 @@ BuildArch: noarch
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
 Requires: mpifileutils-mpich
 Requires: testmpio
-Requires: mpich
+Requires: mpich = 4.1~a1
 Requires: ior
 Requires: hdf5-mpich-tests
 Requires: hdf5-vol-daos-mpich-tests
 Requires: MACSio-mpich
 Requires: simul-mpich
 Requires: romio-tests
-Requires: python3-mpi4py-tests
+Requires: python3-mpi4py-tests >= 3.1.6
 
 %description client-tests-mpich
 This is the package needed to run the DAOS client test suite mpich tools
