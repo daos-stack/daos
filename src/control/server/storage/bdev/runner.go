@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,7 +22,6 @@ import (
 
 const (
 	spdkSetupPath      = "../share/daos/control/setup_spdk.sh"
-	defaultNrHugepages = 1024 // default number applied by SPDK
 	nrHugepagesEnv     = "_NRHUGE"
 	hugeNodeEnv        = "_HUGENODE"
 	targetUserEnv      = "_TARGET_USER"
@@ -102,19 +102,18 @@ func (s *spdkSetupScript) run(args ...string) error {
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
-	// Always use min number of hugepages otherwise devices cannot be accessed.
-	nrHugepages := req.HugepageCount
-	if nrHugepages <= 0 {
-		nrHugepages = defaultNrHugepages
-	}
-
 	s.env = map[string]string{
 		"PATH":          os.Getenv("PATH"),
 		pciBlockListEnv: req.PCIBlockList,
 		targetUserEnv:   req.TargetUser,
 		pciAllowListEnv: req.PCIAllowList,
-		nrHugepagesEnv:  fmt.Sprintf("%d", nrHugepages),
-		hugeNodeEnv:     req.HugeNodes,
+	}
+
+	if req.HugepageCount != 0 {
+		s.env[nrHugepagesEnv] = fmt.Sprintf("%d", req.HugepageCount)
+	}
+	if req.HugeNodes != "" {
+		s.env[hugeNodeEnv] = req.HugeNodes
 	}
 
 	if req.DisableVFIO {
