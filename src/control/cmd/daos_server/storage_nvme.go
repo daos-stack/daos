@@ -14,8 +14,11 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -123,10 +126,6 @@ func updateNVMePrepReqFromCfg(log logging.Logger, cfg *config.Server, req *stora
 	}
 
 	req.DisableVFIO = req.DisableVFIO || cfg.DisableVFIO
-
-	if req.HugepageCount == 0 && cfg.NrHugepages > 0 {
-		req.HugepageCount = cfg.NrHugepages
-	}
 
 	if err := updateNVMePrepReqAllowedFromCfg(log, cfg, req); err != nil {
 		return err
@@ -236,7 +235,7 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 	return nil
 }
 
-func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
+func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, smi *common.SysMemInfo) error {
 	cmd.Debug("Prepare locally-attached NVMe storage...")
 
 	if cmd.config != nil && cmd.config.DisableHugepages {
@@ -247,6 +246,20 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
+	// Set hugepage allocations in prepare request. As evaluating engine affinity requires
+	// various prerequisite steps to be performed (as in server service start-up) we don't want
+	// to incorrectly assign hugepages to NUMA nodes here (because of not having fully evaluated
+	// engine affinity). Instead skip hugepage config processing and simply ensure we have
+	// enough to perform NVMe discovery. This introduces some inconsistency in terms of ignoring
+	// config parameters but more importantly should prevent inaccurate allocations.
+
+	if req.HugepageCount < spdk.ScanMinHugepageCount {
+		req.HugepageCount = spdk.ScanMinHugepageCount
+	}
+	if err := server.SetHugeNodes(cmd.Logger, nil, smi, &req); err != nil {
+		return errors.Wrap(err, "setting hugenodes in bdev prep request")
+	}
+
 	cmd.Tracef("nvme prepare request parameters: %+v", req)
 
 	// Prepare NVMe device access.
@@ -255,7 +268,7 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	return errors.Wrap(err, "nvme prepare backend")
 }
 
-func (cmd *prepareNVMeCmd) Execute(_ []string) (err error) {
+func (cmd *prepareNVMeCmd) Execute(_ []string) error {
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
 
 	req := storage.BdevPrepareRequest{
@@ -266,7 +279,12 @@ func (cmd *prepareNVMeCmd) Execute(_ []string) (err error) {
 		DisableVFIO:   cmd.DisableVFIO,
 	}
 
-	return prepareNVMe(req, &cmd.nvmeCmd)
+	smi, err := common.GetSysMemInfo()
+	if err != nil {
+		return errors.Wrap(err, "get meminfo")
+	}
+
+	return prepareNVMe(req, &cmd.nvmeCmd, smi)
 }
 
 type resetNVMeCmd struct {
@@ -406,7 +424,7 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 	return isVMDEnabled(cmd.config)
 }
 
-func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
+func scanNVMe(cmd *scanNVMeCmd, smi *common.SysMemInfo) (_ *storage.BdevScanResponse, errOut error) {
 	if cmd.getVMDState() {
 		cmd.ctlSvc.WithVMDEnabled()
 	}
@@ -430,7 +448,7 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 	}
 
 	if !cmd.SkipPrep {
-		if err := prepareNVMe(reqPrep, &cmd.nvmeCmd); err != nil {
+		if err := prepareNVMe(reqPrep, &cmd.nvmeCmd, smi); err != nil {
 			return nil, errors.Wrap(err, "nvme prep before scan failed, try with "+
 				"--skip-prep after manual nvme prepare")
 		}
@@ -456,7 +474,12 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 func (cmd *scanNVMeCmd) Execute(_ []string) (err error) {
 	cmd.Debugf("executing scan nvme command: %+v", cmd)
 
-	resp, err := scanNVMe(cmd)
+	smi, err := common.GetSysMemInfo()
+	if err != nil {
+		return errors.Wrap(err, "get meminfo")
+	}
+
+	resp, err := scanNVMe(cmd, smi)
 	if err != nil {
 		return errors.Wrap(err, "nvme scan backend")
 	}

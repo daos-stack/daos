@@ -993,7 +993,6 @@ func TestBackend_prepare_reset(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 				},
@@ -1095,7 +1094,6 @@ func TestBackend_prepare_reset(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 				},
