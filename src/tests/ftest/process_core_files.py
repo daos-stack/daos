@@ -294,7 +294,8 @@ class CoreFileProcessing():
                          "python36", "openmpi3", "gcc"])
                 elif self.is_el() and int(self.distro_info.version) >= 8:
                     dnf_args.extend(
-                        ["libpmemobj", "python3", "openmpi", "gcc"])
+                        ["libpmemobj", "python3", "openmpi", "gcc", 'libpmem', "ndctl-libs",
+                         "daxctl-libs", "libgcc", "systemd-libs"])
                 else:
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
@@ -332,7 +333,7 @@ class CoreFileProcessing():
 
         retry = False
         for cmd in cmds:
-            if not run_local(self.log, " ".join(cmd), True, 120).passed:
+            if not run_local(self.log, " ".join(cmd)).passed:
                 # got an error, so abort this list of commands and re-run
                 # it with a dnf clean, makecache first
                 retry = True
