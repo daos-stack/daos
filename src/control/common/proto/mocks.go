@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -116,9 +117,9 @@ var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
 	{Uuid: "12345678-1234-1234-1234-cba987654321", SvcReps: []uint32{0}},
 }
 
-// MockPBMemInfo returns a mock MemInfo result.
-func MockPBMemInfo() *ctlpb.MemInfo {
-	return &ctlpb.MemInfo{
+// MockPBSysMemInfo returns a mock SysMemInfo result.
+func MockPBSysMemInfo() *ctlpb.SysMemInfo {
+	return &ctlpb.SysMemInfo{
 		HugepagesTotal:    1024,
 		HugepagesFree:     512,
 		HugepagesReserved: 64,

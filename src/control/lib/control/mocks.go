@@ -276,7 +276,7 @@ func mockHostStorageSet(t *testing.T, hosts string, pbResp *ctlpb.StorageScanRes
 	if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hss.HostStorage.ScmNamespaces); err != nil {
 		t.Fatal(err)
 	}
-	if err := convert.Types(pbResp.GetMemInfo(), &hss.HostStorage.MemInfo); err != nil {
+	if err := convert.Types(pbResp.GetSysMemInfo(), &hss.HostStorage.SysMemInfo); err != nil {
 		t.Fatal(err)
 	}
 
@@ -306,18 +306,20 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 	return hsm
 }
 
-// MockMemInfo returns a mock MemInfo result.
-func MockMemInfo() *common.MemInfo {
-	return &common.MemInfo{
-		HugepagesTotal:  1024,
-		HugepagesFree:   512,
-		HugepagesRsvd:   64,
-		HugepagesSurp:   32,
-		HugepageSizeKiB: 2048,
-		MemTotalKiB:     (humanize.GiByte * 4) / humanize.KiByte,
-		MemFreeKiB:      (humanize.GiByte * 1) / humanize.KiByte,
-		MemAvailableKiB: (humanize.GiByte * 2) / humanize.KiByte,
-	}
+// MockSysMemInfo returns a mock SysMemInfo result. Note that per-NUMA stats are not populated in this
+// mock.
+func MockSysMemInfo() *common.SysMemInfo {
+	mi := &common.SysMemInfo{}
+	mi.HugepagesTotal = 1024
+	mi.HugepagesFree = 512
+	mi.HugepagesRsvd = 64
+	mi.HugepagesSurp = 32
+	mi.HugepageSizeKiB = 2048
+	mi.MemTotalKiB = (humanize.GiByte * 4) / humanize.KiByte
+	mi.MemFreeKiB = (humanize.GiByte * 1) / humanize.KiByte
+	mi.MemAvailableKiB = (humanize.GiByte * 2) / humanize.KiByte
+
+	return mi
 }
 
 func mockNvmeCtrlrWithSmd(roleBits int, varIdx ...int32) *storage.NvmeController {
@@ -331,9 +333,9 @@ func mockNvmeCtrlrWithSmd(roleBits int, varIdx ...int32) *storage.NvmeController
 
 func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	pbSsr := &ctlpb.StorageScanResp{
-		Nvme:    &ctlpb.ScanNvmeResp{},
-		Scm:     &ctlpb.ScanScmResp{},
-		MemInfo: commonpb.MockPBMemInfo(),
+		Nvme:       &ctlpb.ScanNvmeResp{},
+		Scm:        &ctlpb.ScanScmResp{},
+		SysMemInfo: commonpb.MockPBSysMemInfo(),
 	}
 
 	nvmeControllers := storage.NvmeControllers{
@@ -554,13 +556,13 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "1gbHugepages":
 		ssr = MockServerScanResp(t, "withSpaceUsage")
-		ssr.MemInfo.HugepageSizeKb = humanize.GiByte / humanize.KiByte // specified in kib
+		ssr.SysMemInfo.HugepageSizeKb = humanize.GiByte / humanize.KiByte // specified in kib
 	case "badPciAddr":
 		ssr.Nvme.Ctrlrs[0].PciAddr = "foo.bar"
 	case "noHugepageSz":
-		ssr.MemInfo.HugepageSizeKb = 0
+		ssr.SysMemInfo.HugepageSizeKb = 0
 	case "noMemTotal":
-		ssr.MemInfo.MemTotalKb = 0
+		ssr.SysMemInfo.MemTotalKb = 0
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
