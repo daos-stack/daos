@@ -2434,7 +2434,7 @@ rebuild_fini_one(void *arg)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	/* The pool child could be stopped */
+	/* The ds_pool_child is already stopped */
 	if (dpc == NULL)
 		return 0;
 
@@ -2668,9 +2668,9 @@ rebuild_prepare_one(void *data)
 	int				 rc = 0;
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	/* The pool child could be stopped */
+	/* Local ds_pool_child isn't started yet, return a retry-able error */
 	if (dpc == NULL)
-		return 0;
+		return -DER_STALE;
 
 	if (unlikely(dpc->spc_no_storage))
 		D_GOTO(put, rc = 0);
@@ -2830,7 +2830,9 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rpt->rt_rebuild_fence = d_hlc_get();
-	rc = dss_task_collective(rebuild_prepare_one, rpt, 0);
+	rc                    = ds_pool_task_collective(rpt->rt_pool_uuid,
+							PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+							rebuild_prepare_one, rpt, 0);
 	if (rc) {
 		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);
