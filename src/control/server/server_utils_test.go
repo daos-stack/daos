@@ -885,7 +885,7 @@ func TestServer_cleanEngineSpdkResources(t *testing.T) {
 			sp := sysprov.NewMockSysProvider(log, nil)
 
 			srv.ctlSvc = &ControlService{
-				StorageControlService: *NewMockStorageControlService(log, nil, //cfg.Engines,
+				StorageControlService: *NewMockStorageControlService(log, nil,
 					sp, scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
 					mbp, nil),
 				srvCfg: cfg,
