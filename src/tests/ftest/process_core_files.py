@@ -320,8 +320,7 @@ class CoreFileProcessing():
         cmd = ["sudo", "dnf", "-y"]
         if self.is_el() or "suse" in self.distro_info.name.lower():
             cmd.append("--enablerepo=*debug*")
-            cmd.append("--disablerepo='epel-modular-debuginfo,epel-testing-debuginfo,"
-                       "epel-testing-modular-debuginfo'")
+            cmd.append("--disablerepo='epel-*'")
         cmd.append("install")
         for pkg in install_pkgs:
             try:
@@ -343,8 +342,7 @@ class CoreFileProcessing():
             cmd_prefix = ["sudo", "dnf"]
             if self.is_el() or "suse" in self.distro_info.name.lower():
                 cmd_prefix.append("--enablerepo=*debug*")
-                cmd.append("--disablerepo='epel-modular-debuginfo,epel-testing-debuginfo,"
-                           "epel-testing-modular-debuginfo'")
+                cmd_prefix.append("--disablerepo='epel-*'")
             cmds.insert(0, cmd_prefix + ["clean", "all"])
             cmds.insert(1, cmd_prefix + ["makecache"])
             for cmd in cmds:
