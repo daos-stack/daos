@@ -1,3 +1,9 @@
+daos (2.7.101-9) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Start to deprecate traditional RPM/deb builds in favor of fpm approach
+
+ -- Jeff Olivier <jeffolivier@google.com>  Thu, 01 May 2025 14:12:00 -0700
+
 daos (2.7.101-8) unstable; urgency=medium
   [ Cedric Koch-Hofer]
   * Add support of the libasan
