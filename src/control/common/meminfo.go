@@ -52,40 +52,40 @@ type SysMemInfo struct {
 }
 
 // Summary reports basic total system memory stats.
-func (mi *SysMemInfo) Summary() string {
-	if mi == nil {
+func (smi *SysMemInfo) Summary() string {
+	if smi == nil {
 		return "<nil>"
 	}
 
 	var msgsHuge []string
-	for _, nn := range mi.NumaNodes {
+	for _, nn := range smi.NumaNodes {
 		msgsHuge = append(msgsHuge, fmt.Sprintf("node-%d total/free: %d/%d", nn.NumaNodeIndex,
 			nn.HugepagesTotal, nn.HugepagesFree))
 	}
 	msgHuge := strings.Join(msgsHuge, ", ")
 
 	return fmt.Sprintf("hugepage size: %s, %smem total/free/available: %s/%s/%s",
-		humanize.IBytes(uint64(mi.HugepageSizeKiB*humanize.KiByte)), msgHuge,
-		humanize.IBytes(uint64(mi.MemTotalKiB*humanize.KiByte)),
-		humanize.IBytes(uint64(mi.MemFreeKiB*humanize.KiByte)),
-		humanize.IBytes(uint64(mi.MemAvailableKiB*humanize.KiByte)))
+		humanize.IBytes(uint64(smi.HugepageSizeKiB*humanize.KiByte)), msgHuge,
+		humanize.IBytes(uint64(smi.MemTotalKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(smi.MemFreeKiB*humanize.KiByte)),
+		humanize.IBytes(uint64(smi.MemAvailableKiB*humanize.KiByte)))
 }
 
 // HugepagesTotalMB reports total hugepage memory for a system calculated from default size
 // hugepages.
-func (mi *SysMemInfo) HugepagesTotalMB() int {
-	if mi == nil {
+func (smi *SysMemInfo) HugepagesTotalMB() int {
+	if smi == nil {
 		return 0
 	}
-	return (mi.HugepagesTotal * mi.HugepageSizeKiB) / 1024
+	return (smi.HugepagesTotal * smi.HugepageSizeKiB) / 1024
 }
 
 // HugepagesFreeMB reports free hugepage memory for a system calculated from default size hugepages.
-func (mi *SysMemInfo) HugepagesFreeMB() int {
-	if mi == nil {
+func (smi *SysMemInfo) HugepagesFreeMB() int {
+	if smi == nil {
 		return 0
 	}
-	return (mi.HugepagesFree * mi.HugepageSizeKiB) / 1024
+	return (smi.HugepagesFree * smi.HugepageSizeKiB) / 1024
 }
 
 func parseInt(a string, i *int) {

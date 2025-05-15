@@ -16,8 +16,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -31,6 +33,11 @@ var (
 	defaultSingleAddrList = test.MockPCIAddr(1)
 	spaceSepMultiAddrList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1), storage.BdevPciAddrSep, test.MockPCIAddr(2))
 	currentUsername       string
+
+	defSysMemInfo = func() *common.SysMemInfo {
+		return control.MockSysMemInfo()
+	}
+	defHugeNodesStr = fmt.Sprintf("'nodes_hp[0]=%d'", defSysMemInfo().HugepagesTotal)
 )
 
 func getCurrentUsername(t *testing.T) string {
@@ -73,16 +80,19 @@ func getMockNvmeCmdInit(log logging.Logger, bmbc bdev.MockBackendConfig, sc *con
 }
 
 func TestDaosServer_prepareNVMe(t *testing.T) {
-	// bdev req parameters
-	testNrHugepages := 42
-	// bdev mock commands
+	testHugeNodesStr := func(n int) string {
+		return fmt.Sprintf("'nodes_hp[0]=%d'", n)
+	}
 	newPrepCmd := func() *prepareNVMeCmd {
 		pdc := &prepareNVMeCmd{
-			NrHugepages:  testNrHugepages,
 			PCIBlockList: defaultMultiAddrList,
 		}
 		pdc.Args.PCIAllowList = defaultSingleAddrList
 		return pdc
+	}
+	mockConfig := func() *config.Server {
+		c := config.Server{}
+		return &c
 	}
 
 	for name, tc := range map[string]struct {
@@ -90,6 +100,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 		cfg           *config.Server
 		bmbc          bdev.MockBackendConfig
 		iommuDisabled bool
+		memInfo       *common.SysMemInfo
 		expErr        error
 		expPrepCall   *storage.BdevPrepareRequest
 	}{
@@ -97,81 +108,206 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			cfg:    new(config.Server).WithDisableHugepages(true),
 			expErr: storage.FaultHugepagesDisabled,
 		},
-		"no devices; success": {
+		"bad block pci address": {
+			prepCmd: &prepareNVMeCmd{
+				PCIBlockList: "invalid-pci-address",
+			},
+			expErr: errors.New("unexpected pci address"),
+		},
+		"bad allow pci address": {
+			prepCmd: func() *prepareNVMeCmd {
+				pc := prepareNVMeCmd{}
+				pc.Args.PCIAllowList = "invalid-pci-address"
+				return &pc
+			}(),
+			expErr: errors.New("unexpected pci address"),
+		},
+		"no meminfo specified": {
+			expErr: errors.New("nil *common.SysMemInfo"),
+		},
+		"cli nr_hugepages unset; zero total global": {
+			cfg:     new(config.Server).WithNrHugepages(1024),
+			memInfo: &common.SysMemInfo{},
 			expPrepCall: &storage.BdevPrepareRequest{
 				// always set in local storage prepare to allow automatic detection
 				EnableVMD: true,
+				HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
+			},
+		},
+		"cli nr_hugepages unset; zero total numa": {
+			cfg: new(config.Server).WithNrHugepages(1024),
+			memInfo: &common.SysMemInfo{
+				NumaNodes: []common.MemInfo{
+					{HugepagesTotal: 0},
+				},
+			},
+			expPrepCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
+				HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
+			},
+		},
+		"cli nr_hugepages set insufficient; zero total numa": {
+			cfg: new(config.Server).WithNrHugepages(1024),
+			prepCmd: &prepareNVMeCmd{
+				NrHugepages: 64,
+			},
+			memInfo: &common.SysMemInfo{
+				NumaNodes: []common.MemInfo{
+					{HugepagesTotal: 0},
+				},
+			},
+			expPrepCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
+				HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
+			},
+		},
+		"cli nr_hugepages set; zero total numa": {
+			cfg: new(config.Server).WithNrHugepages(1024),
+			prepCmd: &prepareNVMeCmd{
+				NrHugepages: 512,
+			},
+			memInfo: &common.SysMemInfo{
+				NumaNodes: []common.MemInfo{
+					{HugepagesTotal: 0},
+				},
+			},
+			expPrepCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
+				HugeNodes: testHugeNodesStr(512),
+			},
+		},
+		"cli nr_hugepages unset; sufficient total global": {
+			cfg: new(config.Server).WithNrHugepages(1024),
+			memInfo: &common.SysMemInfo{
+				MemInfo: common.MemInfo{
+					HugepagesTotal: 2048,
+				},
+			},
+			expPrepCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
+				// Value matching what already exists to avoid shrinking allocation.
+				HugeNodes: testHugeNodesStr(2048),
+			},
+		},
+		"cli nr_hugepages unset; sufficient total numa": {
+			cfg: new(config.Server).WithNrHugepages(1024),
+			memInfo: &common.SysMemInfo{
+				MemInfo: common.MemInfo{
+					HugepagesTotal: 2048,
+				},
+				NumaNodes: []common.MemInfo{
+					{HugepagesTotal: 2046},
+				},
+			},
+			expPrepCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
+				// Per-NUMA value used.
+				HugeNodes: testHugeNodesStr(2046),
+			},
+		},
+		"cli nr_hugepages set; exceeds total numa": {
+			cfg: new(config.Server).WithNrHugepages(1024),
+			prepCmd: &prepareNVMeCmd{
+				NrHugepages: 2050,
+			},
+			memInfo: &common.SysMemInfo{
+				MemInfo: common.MemInfo{
+					HugepagesTotal: 2048,
+				},
+				NumaNodes: []common.MemInfo{
+					{HugepagesTotal: 2046},
+				},
+			},
+			expPrepCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
+				// Requested value used.
+				HugeNodes: testHugeNodesStr(2050),
+			},
+		},
+		"no devices; success": {
+			memInfo: defSysMemInfo(),
+			expPrepCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
+				HugeNodes: testHugeNodesStr(1024),
 			},
 		},
 		"succeeds; user params": {
 			prepCmd: newPrepCmd(),
+			memInfo: defSysMemInfo(),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: testNrHugepages,
-				PCIAllowList:  defaultSingleAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				EnableVMD:     true,
+				HugeNodes:    testHugeNodesStr(defSysMemInfo().HugepagesTotal),
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
+				EnableVMD:    true,
 			},
 		},
 		"succeeds; different target user; multi allow list": {
 			prepCmd: newPrepCmd().WithTargetUser("bob").WithPCIAllowList(defaultMultiAddrList),
+			memInfo: defSysMemInfo(),
 			expPrepCall: &storage.BdevPrepareRequest{
-				TargetUser:    "bob",
-				HugepageCount: testNrHugepages,
-				PCIAllowList:  spaceSepMultiAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				EnableVMD:     true,
+				TargetUser:   "bob",
+				HugeNodes:    testHugeNodesStr(defSysMemInfo().HugepagesTotal),
+				PCIAllowList: spaceSepMultiAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
+				EnableVMD:    true,
 			},
 		},
 		"fails; user params": {
 			prepCmd: newPrepCmd(),
+			memInfo: defSysMemInfo(),
 			bmbc: bdev.MockBackendConfig{
 				PrepareErr: errors.New("backend prep setup failed"),
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: testNrHugepages,
-				PCIAllowList:  defaultSingleAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				EnableVMD:     true,
+				HugeNodes:    testHugeNodesStr(defSysMemInfo().HugepagesTotal),
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
+				EnableVMD:    true,
 			},
 			expErr: errors.New("backend prep setup failed"),
 		},
 		"non-root; vfio disabled": {
 			prepCmd: newPrepCmd().WithDisableVFIO(true),
+			memInfo: defSysMemInfo(),
 			expErr:  errors.New("VFIO can not be disabled"),
 		},
 		"non-root; iommu not detected": {
 			iommuDisabled: true,
+			memInfo:       defSysMemInfo(),
 			expErr:        errors.New("no IOMMU capability detected"),
 		},
 		"root; vfio disabled; iommu not detected": {
 			prepCmd:       newPrepCmd().WithTargetUser("root").WithDisableVFIO(true),
+			memInfo:       defSysMemInfo(),
 			iommuDisabled: true,
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: testNrHugepages,
-				TargetUser:    "root",
-				PCIAllowList:  defaultSingleAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				DisableVFIO:   true,
+				TargetUser:   "root",
+				HugeNodes:    testHugeNodesStr(defSysMemInfo().HugepagesTotal),
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
+				DisableVFIO:  true,
 			},
 		},
 		"config parameters ignored as cmd settings already exist": {
 			prepCmd: newPrepCmd(),
+			memInfo: defSysMemInfo(),
 			cfg: new(config.Server).
 				WithEngines(engine.NewConfig().
 					WithStorage(storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(test.MockPCIAddr(8)))).
 				WithBdevExclude(test.MockPCIAddr(9)).
-				WithNrHugepages(1024),
+				WithNrHugepages(2048),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: testNrHugepages,
-				PCIAllowList:  defaultSingleAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				EnableVMD:     true,
+				HugeNodes:    testHugeNodesStr(defSysMemInfo().HugepagesTotal),
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
+				EnableVMD:    true,
 			},
 		},
 		"config parameters applied; disable vmd": {
 			prepCmd: &prepareNVMeCmd{},
+			memInfo: defSysMemInfo(),
 			cfg: new(config.Server).WithEngines(
 				engine.NewConfig().
 					WithStorage(storage.NewTierConfig().
@@ -186,7 +322,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				WithNrHugepages(1024).
 				WithDisableVMD(true),
 			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 1024,
+				HugeNodes: testHugeNodesStr(defSysMemInfo().HugepagesTotal),
 				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
 					test.MockPCIAddr(8)),
 				PCIBlockList: test.MockPCIAddr(9),
@@ -194,12 +330,15 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 		},
 		"config parameters applied; disable vfio": {
 			prepCmd: newPrepCmd(),
+			memInfo: defSysMemInfo(),
 			cfg:     new(config.Server).WithDisableVFIO(true),
 			expErr:  errors.New("can not be disabled if running as non-root"),
 		},
 		"nil config; parameters not applied (simulates effect of --ignore-config)": {
 			prepCmd: &prepareNVMeCmd{},
+			memInfo: defSysMemInfo(),
 			expPrepCall: &storage.BdevPrepareRequest{
+				HugeNodes: testHugeNodesStr(defSysMemInfo().HugepagesTotal),
 				EnableVMD: true,
 			},
 		},
@@ -207,6 +346,10 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.cfg == nil {
+				tc.cfg = mockConfig()
+			}
 
 			mbb, mockInitFn := getMockNvmeCmdInit(log, tc.bmbc, tc.cfg)
 
@@ -232,7 +375,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				DisableVFIO:   tc.prepCmd.DisableVFIO,
 			}
 
-			gotErr := prepareNVMe(req, &tc.prepCmd.nvmeCmd)
+			gotErr := prepareNVMe(req, &tc.prepCmd.nvmeCmd, tc.memInfo)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()
@@ -595,6 +738,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 		cfg           *config.Server
 		iommuDisabled bool
 		skipPrep      bool
+		memInfo       *common.SysMemInfo
 		expPrepCalls  []storage.BdevPrepareRequest
 		expResetCalls []storage.BdevPrepareRequest
 		bmbc          bdev.MockBackendConfig
@@ -615,11 +759,22 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				},
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), EnableVMD: true},
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+					HugeNodes:  defHugeNodesStr,
+				},
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+					Reset_:     true,
+				},
 			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
@@ -652,6 +807,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 					TargetUser:   getCurrentUsername(t),
 					EnableVMD:    true,
 					PCIAllowList: spaceSepMultiAddrList,
+					HugeNodes:    defHugeNodesStr,
 				},
 				{
 					CleanSpdkHugepages: true,
@@ -686,11 +842,20 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				(&engine.Config{}).WithStorage(),
 			).WithDisableVMD(true),
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t)},
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					HugeNodes:  defHugeNodesStr,
+				},
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), Reset_: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					Reset_:     true,
+				},
 			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
@@ -705,11 +870,22 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				},
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), EnableVMD: true},
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+					HugeNodes:  defHugeNodesStr,
+				},
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+					Reset_:     true,
+				},
 			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
@@ -738,7 +914,11 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			gotResp, gotErr := scanNVMe(tc.scanCmd)
+			if tc.memInfo == nil {
+				tc.memInfo = defSysMemInfo()
+			}
+
+			gotResp, gotErr := scanNVMe(tc.scanCmd, tc.memInfo)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

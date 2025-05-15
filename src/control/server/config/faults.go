@@ -87,10 +87,15 @@ var (
 		"the fault domain path may have a maximum of 2 levels below the root",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
-	FaultConfigHugepagesDisabledWithBdevs = serverConfigFault(
-		code.ServerConfigHugepagesDisabledWithBdevs,
-		"hugepages cannot be disabled if bdevs have been specified in config",
+	FaultConfigHugepagesDisabledWithNvmeBdevs = serverConfigFault(
+		code.ServerConfigHugepagesDisabledWithNvmeBdevs,
+		"hugepages cannot be disabled if nvme-bdevs have been specified in config",
 		"either set false (or remove) disable_hugepages parameter or remove nvme storage assignment in config and restart the control server",
+	)
+	FaultConfigHugepagesDisabledWithNrSet = serverConfigFault(
+		code.ServerConfigHugepagesDisabledWithNrSet,
+		"hugepages cannot be disabled if non-zero number has been specified in config",
+		"either set false (or remove) disable_hugepages parameter or remove nr_hugepages assignment in config and restart the control server",
 	)
 	FaultConfigControlMetadataNoPath = serverConfigFault(
 		code.ServerConfigControlMetadataNoPath,
@@ -251,6 +256,16 @@ func FaultConfigRamdiskOverMaxMem(confSize, ramSize, memRamdiskMin uint64) *faul
 		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
 			"or manually set to a value between %s and %s in the config file",
 			humanize.IBytes(memRamdiskMin), humanize.IBytes(ramSize)),
+	)
+}
+
+// FaultConfigEngineNUMAImbalance creates a fault indicating that engines are not distributed evenly
+// across NUMA nodes.
+func FaultConfigEngineNUMAImbalance(nodeMap map[int]int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigEngineNUMAImbalance,
+		fmt.Sprintf("uneven distribution of engines across NUMA nodes %v", nodeMap),
+		"distribute engines evenly across numa-nodes in server config file and restart server",
 	)
 }
 
