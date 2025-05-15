@@ -240,6 +240,7 @@ struct crt_event_cb_priv {
 	ENV(FI_UNIVERSE_SIZE)                                                                      \
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
 	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \
+	ENV(SWIM_SUBGROUP_SIZE)                                                                    \
 	ENV(SWIM_SUSPECT_TIMEOUT)                                                                  \
 	ENV_STR(SWIM_TRAFFIC_CLASS)                                                                \
 	ENV_STR(UCX_IB_FORK_INIT)
@@ -432,9 +433,7 @@ struct crt_context {
 	pthread_mutex_t		 cc_mutex;
 
 	/** timeout per-context */
-	uint32_t		 cc_timeout_sec;
-	/** HLC time of last received RPC */
-	uint64_t		 cc_last_unpack_hlc;
+	uint32_t                 cc_timeout_sec;
 
 	/** Per-context statistics (server-side only) */
 	/** Total number of timed out requests, of type counter */
