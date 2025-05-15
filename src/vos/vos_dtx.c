@@ -13,6 +13,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos_srv/vos.h>
+#include <daos_errno.h>
 #include <daos/common.h>
 #include "vos_layout.h"
 #include "vos_internal.h"
@@ -2942,28 +2943,29 @@ out:
 }
 
 int
-vos_dtx_aggregate(daos_handle_t coh)
+vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max)
 {
-	struct vos_tls			*tls = vos_tls_get(false);
-	struct vos_container		*cont;
-	struct vos_cont_df		*cont_df;
-	struct umem_instance		*umm;
-	struct vos_dtx_blob_df		*dbd;
-	struct vos_dtx_blob_df		*tmp;
-	uint64_t			 epoch;
-	umem_off_t			 dbd_off;
-	umem_off_t			 next = UMOFF_NULL;
-	int				 count = 0;
-	int				 rc;
-	int				 i;
+	struct vos_tls         *tls = vos_tls_get(false);
+	struct vos_container   *cont;
+	struct vos_cont_df     *cont_df;
+	struct umem_instance   *umm;
+	struct vos_dtx_blob_df *dbd;
+	struct vos_dtx_blob_df *tmp;
+	uint64_t                epoch;
+	umem_off_t              dbd_off;
+	umem_off_t              next           = UMOFF_NULL;
+	int                     count          = 0;
+	bool                    update_reindex = false;
+	int                     rc;
+	int                     i;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
 	cont_df = cont->vc_cont_df;
 	dbd_off = cont_df->cd_dtx_committed_head;
-	umm = vos_cont2umm(cont);
-	epoch = cont_df->cd_newest_aggregated;
+	umm     = vos_cont2umm(cont);
+	epoch   = cont_df->cd_newest_aggregated;
 
 	dbd = umem_off2ptr(umm, dbd_off);
 	if (dbd == NULL || dbd->dbd_count == 0)
@@ -2975,66 +2977,83 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to TX begin for DTX aggregation "UMOFF_PF": "
-			DF_RC"\n", UMOFF_P(dbd_off), DP_RC(rc));
+		D_ERROR("Failed to TX begin for DTX aggregation " UMOFF_PF ": " DF_RC "\n",
+			UMOFF_P(dbd_off), DP_RC(rc));
 		return rc;
 	}
 
 	for (i = 0; i < dbd->dbd_count; i++) {
-		struct vos_dtx_cmt_ent_df	*dce_df;
-		d_iov_t				 kiov;
+		struct vos_dtx_cmt_ent_df *dce_df;
+		d_iov_t                    kiov;
 
 		dce_df = &dbd->dbd_committed_data[i];
+		if (ep_max != NULL && *ep_max < dce_df->dce_epoch)
+			break;
+		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
+		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ, &kiov, NULL);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			D_ERROR("Failed to remove entry for DTX aggregation " UMOFF_PF ": " DF_RC
+				"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			break;
+		}
 		if (epoch < dce_df->dce_epoch)
 			epoch = dce_df->dce_epoch;
-		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
-		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-				   &kiov, NULL);
-		if (rc != 0 && rc != -DER_NONEXIST) {
-			D_ERROR("Failed to remove entry for DTX aggregation "
-				UMOFF_PF": "DF_RC"\n",
-				UMOFF_P(dbd_off), DP_RC(rc));
-			goto out;
-		}
+		++count;
 	}
+	if (rc == -DER_NONEXIST)
+		rc = -DER_SUCCESS;
 
-	count = dbd->dbd_count;
+	if (count < dbd->dbd_count) {
+		size_t buf_len;
+
+		buf_len = (dbd->dbd_count - count) * sizeof(dbd->dbd_committed_data[0]);
+		memmove(&dbd->dbd_committed_data[0], &dbd->dbd_committed_data[count], buf_len);
+	}
+	dbd->dbd_count -= count;
 
 	if (epoch != cont_df->cd_newest_aggregated) {
-		rc = umem_tx_add_ptr(umm, &cont_df->cd_newest_aggregated,
-				     sizeof(cont_df->cd_newest_aggregated));
-		if (rc != 0) {
-			D_ERROR("Failed to refresh epoch for DTX aggregation "UMOFF_PF": "DF_RC"\n",
-				UMOFF_P(dbd_off), DP_RC(rc));
+		int rc1;
+
+		rc1 = umem_tx_add_ptr(umm, &cont_df->cd_newest_aggregated,
+				      sizeof(cont_df->cd_newest_aggregated));
+		if (rc1 != 0) {
+			D_ERROR("Failed to refresh epoch for DTX aggregation " UMOFF_PF ": " DF_RC
+				"\n",
+				UMOFF_P(dbd_off), DP_RC(rc1));
+			if (rc == 0)
+				rc = rc1;
 			goto out;
 		}
 
 		cont_df->cd_newest_aggregated = epoch;
 	}
 
-	next = dbd->dbd_next;
-	tmp = umem_off2ptr(umm, next);
+	if (dbd->dbd_count > 0)
+		goto out;
+
+	update_reindex = true;
+	next           = dbd->dbd_next;
+	tmp            = umem_off2ptr(umm, next);
 	if (tmp == NULL) {
 		/* The last blob for committed DTX blob. */
-		D_ASSERT(cont_df->cd_dtx_committed_tail ==
-			 cont_df->cd_dtx_committed_head);
+		D_ASSERT(cont_df->cd_dtx_committed_tail == cont_df->cd_dtx_committed_head);
 
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_tail,
 				     sizeof(cont_df->cd_dtx_committed_tail));
 		if (rc != 0) {
-			D_ERROR("Failed to update tail for DTX aggregation "
-				UMOFF_PF": "DF_RC"\n",
+			D_ERROR("Failed to update tail for DTX aggregation " UMOFF_PF ": " DF_RC
+				"\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
 			goto out;
 		}
 
 		cont_df->cd_dtx_committed_tail = UMOFF_NULL;
 	} else {
-		rc = umem_tx_add_ptr(umm, &tmp->dbd_prev,
-				     sizeof(tmp->dbd_prev));
+		rc = umem_tx_add_ptr(umm, &tmp->dbd_prev, sizeof(tmp->dbd_prev));
 		if (rc != 0) {
-			D_ERROR("Failed to update prev for DTX aggregation "
-				UMOFF_PF": "DF_RC"\n",
+			D_ERROR("Failed to update prev for DTX aggregation " UMOFF_PF ": " DF_RC
+				"\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
 			goto out;
 		}
@@ -3045,8 +3064,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_head,
 			     sizeof(cont_df->cd_dtx_committed_head));
 	if (rc != 0) {
-		D_ERROR("Failed to update head for DTX aggregation "
-			UMOFF_PF": "DF_RC"\n",
+		D_ERROR("Failed to update head for DTX aggregation " UMOFF_PF ": " DF_RC "\n",
 			UMOFF_P(dbd_off), DP_RC(rc));
 		goto out;
 	}
@@ -3057,14 +3075,11 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 out:
 	rc = umem_tx_end(umm, rc);
-	if (rc == 0) {
-		if (cont->vc_cmt_dtx_reindex_pos == dbd_off)
-			cont->vc_cmt_dtx_reindex_pos = next;
-
-		cont->vc_dtx_committed_count -= count;
-		cont->vc_pool->vp_dtx_committed_count -= count;
-		d_tm_dec_gauge(tls->vtl_committed, count);
-	}
+	if (rc == 0 && update_reindex && cont->vc_cmt_dtx_reindex_pos == dbd_off)
+		cont->vc_cmt_dtx_reindex_pos = next;
+	cont->vc_dtx_committed_count -= count;
+	cont->vc_pool->vp_dtx_committed_count -= count;
+	d_tm_dec_gauge(tls->vtl_committed, count);
 
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
 		  "Release DTX committed blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
