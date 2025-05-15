@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,7 +83,7 @@
  * Version 1 corresponds to 2.2 (aggregation optimizations)
  * Version 2 corresponds to 2.4 (dynamic evtree, checksum scrubbing)
  * Version 3 corresponds to 2.6 (root embedded values, pool service operations tracking KVS)
- * Version 4 corresponds to 2.8 (SV gang allocation)
+ * Version 4 corresponds to 2.8 (SV gang allocation, server pool/cont hdls)
  */
 #define DAOS_POOL_GLOBAL_VERSION 4
 
@@ -203,5 +204,21 @@ void dc_pool_abandon_map_refresh_task(tse_task_t *task);
 
 int
 dc_pool_mark_all_slave(void);
+
+static inline void
+dc_pool_init_backoff_seq(struct d_backoff_seq *seq)
+{
+	int rc;
+
+	rc = d_backoff_seq_init(seq, 1 /* nzeros */, 16 /* factor */, 8 << 10 /* next (us) */,
+				4 << 20 /* max (us) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: " DF_RC "\n", DP_RC(rc));
+}
+
+static inline void
+dc_pool_fini_backoff_seq(struct d_backoff_seq *seq)
+{
+	d_backoff_seq_fini(seq);
+}
 
 #endif /* __DD_POOL_H__ */

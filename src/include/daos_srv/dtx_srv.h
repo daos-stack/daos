@@ -192,6 +192,8 @@ struct dtx_sub_status {
 struct dtx_coll_entry {
 	struct dtx_id			 dce_xid;
 	uint32_t			 dce_ver;
+	uint32_t                         dce_min_rank;
+	uint32_t                         dce_max_rank;
 	uint32_t			 dce_refs;
 	d_rank_list_t			*dce_ranks;
 	uint8_t				*dce_hints;
@@ -305,7 +307,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 		 uint32_t flags, struct dtx_memberships *mbs, struct dtx_coll_entry *dce,
 		 struct dtx_leader_handle **p_dlh);
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int result);
 
 typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
 				  int rc);

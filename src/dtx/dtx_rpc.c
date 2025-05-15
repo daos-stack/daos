@@ -56,6 +56,7 @@ struct dtx_req_args {
 	uuid_t				 dra_po_uuid;
 	/* container UUID */
 	uuid_t				 dra_co_uuid;
+	uint32_t                         dra_version;
 	/* The count of sub requests. */
 	int				 dra_length;
 	/* The collective RPC result. */
@@ -261,8 +262,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		din = crt_req_get(req);
 		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
 		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
-		din->di_epoch = epoch;
-		din->di_dtx_array.ca_count = drr->drr_count;
+		din->di_epoch               = epoch;
+		din->di_version             = dra->dra_version;
+		din->di_dtx_array.ca_count  = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 		if (drr->drr_flags != NULL) {
 			din->di_flags.ca_count = drr->drr_count;
@@ -666,7 +668,8 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 	dra->dra_cmt_list = cmt_list;
 	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
-	dra->dra_opc = opc;
+	dra->dra_version  = pool->sp_map_version;
+	dra->dra_opc      = opc;
 	uuid_copy(dra->dra_po_uuid, pool->sp_uuid);
 	uuid_copy(dra->dra_co_uuid, cont->sc_uuid);
 
@@ -1480,6 +1483,8 @@ struct dtx_coll_rpc_args {
 	struct dtx_id		 dcra_xid;
 	uint32_t		 dcra_opc;
 	uint32_t		 dcra_ver;
+	uint32_t                 dcra_min_rank;
+	uint32_t                 dcra_max_rank;
 	daos_epoch_t		 dcra_epoch;
 	d_rank_list_t		*dcra_ranks;
 	uint8_t			*dcra_hints;
@@ -1536,6 +1541,8 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 	uuid_copy(dci->dci_co_uuid, dcra->dcra_cont->sc_uuid);
 	dci->dci_xid = dcra->dcra_xid;
 	dci->dci_version = dcra->dcra_ver;
+	dci->dci_min_rank        = dcra->dcra_min_rank;
+	dci->dci_max_rank        = dcra->dcra_max_rank;
 	dci->dci_epoch = dcra->dcra_epoch;
 	dci->dci_hints.ca_count = dcra->dcra_hint_sz;
 	dci->dci_hints.ca_arrays = dcra->dcra_hints;
@@ -1581,6 +1588,8 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	dcra->dcra_xid = dce->dce_xid;
 	dcra->dcra_opc = opc;
 	dcra->dcra_ver = dce->dce_ver;
+	dcra->dcra_min_rank = dce->dce_min_rank;
+	dcra->dcra_max_rank = dce->dce_max_rank;
 	dcra->dcra_epoch = epoch;
 	dcra->dcra_ranks = dce->dce_ranks;
 	dcra->dcra_hints = dce->dce_hints;

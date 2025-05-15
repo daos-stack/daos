@@ -57,12 +57,16 @@ enum dtx_operation {
 #undef X
 
 /* DTX RPC input fields */
+/* clang-format off */
 #define DAOS_ISEQ_DTX							\
 	((uuid_t)		(di_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(di_co_uuid)		CRT_VAR)	\
 	((uint64_t)		(di_epoch)		CRT_VAR)	\
+	((uint32_t)		(di_version)		CRT_VAR)	\
+	((uint32_t)		(di_padding)		CRT_VAR)	\
 	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)	\
 	((uint32_t)		(di_flags)		CRT_ARRAY)
+/* clang-format on */
 
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
@@ -77,14 +81,18 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * dci_hints is sparse array, one per engine, sorted against the rank ID.
  * It can hold more than 19K engines inline RPC body.
  */
+/* clang-format off */
 #define DAOS_ISEQ_COLL_DTX						\
 	((uuid_t)		(dci_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(dci_co_uuid)		CRT_VAR)	\
 	((struct dtx_id)	(dci_xid)		CRT_VAR)	\
 	((uint32_t)		(dci_version)		CRT_VAR)	\
+	((uint32_t)		(dci_min_rank)		CRT_VAR)	\
+	((uint32_t)		(dci_max_rank)		CRT_VAR)	\
 	((uint32_t)		(dci_padding)		CRT_VAR)	\
 	((uint64_t)		(dci_epoch)		CRT_VAR)	\
 	((uint8_t)		(dci_hints)		CRT_ARRAY)
+/* clang-format on */
 
 /* DTX collective RPC output fields */
 #define DAOS_OSEQ_COLL_DTX						\

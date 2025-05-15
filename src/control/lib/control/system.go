@@ -134,6 +134,7 @@ type SystemJoinReq struct {
 	InstanceIdx          uint32              `json:"idx"`
 	Incarnation          uint64              `json:"incarnation"`
 	CheckMode            bool                `json:"check_mode"`
+	Replace              bool                `json:"replace"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -371,6 +372,7 @@ type SystemStartReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
+	IgnoreAdminExcluded bool // Ignore AdminExcluded ranks in the Ranks/Hosts lists
 }
 
 // SystemStartResp contains the request response.
@@ -419,9 +421,10 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 	}
 
 	pbReq := &mgmtpb.SystemStartReq{
-		Hosts: req.Hosts.String(),
-		Ranks: req.Ranks.String(),
-		Sys:   req.getSystem(rpcClient),
+		Hosts:               req.Hosts.String(),
+		Ranks:               req.Ranks.String(),
+		Sys:                 req.getSystem(rpcClient),
+		IgnoreAdminExcluded: req.IgnoreAdminExcluded,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
@@ -442,7 +445,9 @@ type SystemStopReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
-	Force bool
+	Force               bool
+	Full                bool
+	IgnoreAdminExcluded bool // Ignore any ranks in the rank/host list in the AdminExcluded state
 }
 
 // SystemStopResp contains the request response.
@@ -490,12 +495,22 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	if req == nil {
 		return nil, errors.Errorf("nil %T request", req)
 	}
+	if req.Force && req.Full {
+		return nil, errors.New("force and full options may not be mixed")
+	}
+	if req.Full && req.Hosts.String() != "" {
+		return nil, errors.New("full and hosts options may not be mixed")
+	}
+	if req.Full && req.Ranks.String() != "" {
+		return nil, errors.New("full and ranks options may not be mixed")
+	}
 
 	pbReq := &mgmtpb.SystemStopReq{
-		Hosts: req.Hosts.String(),
-		Ranks: req.Ranks.String(),
-		Sys:   req.getSystem(rpcClient),
-		Force: req.Force,
+		Hosts:               req.Hosts.String(),
+		Ranks:               req.Ranks.String(),
+		Sys:                 req.getSystem(rpcClient),
+		Force:               !req.Full, // Force used unless full graceful shutdown requested.
+		IgnoreAdminExcluded: req.IgnoreAdminExcluded,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
@@ -589,6 +604,9 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 
 	resp := new(SystemExcludeResp)
 	return resp, convertMSResponse(ur, resp)
+
+	// DAOS-17289 TODO: Perform SystemDrain with Exclude flag set in request so that PoolExclude
+	//                  gets called for each of the rank's pools.
 }
 
 // SystemDrainReq contains the inputs for the system drain request.
