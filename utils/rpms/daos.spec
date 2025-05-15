@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       9%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -235,11 +235,12 @@ Requires: lbzip2
 Requires: attr
 Requires: ior
 Requires: go >= 1.21
+# Require lmod fix for https://github.com/TACC/Lmod/issues/687
 %if (0%{?suse_version} >= 1315)
-Requires: lua-lmod
+Requires: lua-lmod >= 8.7.36
 Requires: libcapstone-devel
 %else
-Requires: Lmod
+Requires: Lmod >= 8.7.36
 Requires: capstone-devel
 %endif
 Requires: pciutils-devel
@@ -261,6 +262,7 @@ Requires: hdf5-%{openmpi}-tests
 Requires: hdf5-vol-daos-%{openmpi}-tests
 Requires: MACSio-%{openmpi}
 Requires: simul-%{openmpi}
+Requires: %{openmpi}
 
 %description client-tests-openmpi
 This is the package needed to run the DAOS client test suite openmpi tools
@@ -271,14 +273,14 @@ BuildArch: noarch
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
 Requires: mpifileutils-mpich
 Requires: testmpio
-Requires: mpich
+Requires: mpich = 4.1~a1
 Requires: ior
 Requires: hdf5-mpich-tests
 Requires: hdf5-vol-daos-mpich-tests
 Requires: MACSio-mpich
 Requires: simul-mpich
 Requires: romio-tests
-Requires: python3-mpi4py-tests
+Requires: python3-mpi4py-tests >= 3.1.6
 
 %description client-tests-mpich
 This is the package needed to run the DAOS client test suite mpich tools
@@ -641,8 +643,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Apr 3 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-9
+* Thu Apr 3 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-10
 - Changing the default log location to /var/log/daos from /tmp
+
+* Mon May 12 2025  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-9
+- Bump lua-lmod version to >=8.7.36
+- Bump lmod version to >=8.7.36
+- Bump mpich version to 4.1~a1
+- Bump python3-mpi4py-tests version to >= 3.1.6
+- Add openmpi requiremnent for daos-client-tests on Leap.
 
 * Fri Mar 21 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-8
 - Add support of the libasan
