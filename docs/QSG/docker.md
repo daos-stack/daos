@@ -72,7 +72,7 @@ $ sysctl -p
 
 ### Base DAOS Image
 
-The first image to create is the `daos-base` image which is not intetended to be used as it, but as
+The first image to create is the `daos-base` image which is not intended to be used as is, but as
 a base image for building the other three daos images.  The easiest way is to use the `docker
 compose` sub command from a local DAOS source file tree.  The first step is to update the docker
 environment file "utils/docker/examples/.env" according to the targeted DAOS system.  The following
