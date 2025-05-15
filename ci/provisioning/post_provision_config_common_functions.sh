@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2022-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eux
 
 : "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
@@ -8,6 +13,11 @@ set -eux
 : "${BUILD_URL:=Not_in_jenkins}"
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
+: "${JENKINS_URL:=https://jenkins.example.com}"
+domain1="${JENKINS_URL#https://}"
+mail_domain="${domain1%%/*}"
+: "${EMAIL_DOMAIN:=$mail_domain}"
+: "${DAOS_DEVOPS_EMAIL:="$HOSTNAME"@"$EMAIL_DOMAIN"}"
 
 # functions common to more than one distro specific provisioning
 url_to_repo() {
@@ -47,17 +57,6 @@ add_repo() {
         fi
         DNF_REPO_ARGS+=" --enablerepo=$repo_name"
     fi
-}
-
-add_group_repo() {
-    local match="$1"
-
-    add_repo "$match" "$DAOS_STACK_GROUP_REPO"
-    group_repo_post
-}
-
-add_local_repo() {
-    add_repo 'argobots' "$DAOS_STACK_LOCAL_REPO" false
 }
 
 disable_gpg_check() {
@@ -107,9 +106,6 @@ retry_dnf() {
                 # non-experimental one after trying twice with the experimental one
                 set_local_repo "${repo_servers[1]}"
                 dnf -y makecache
-                if [ -n "${POWERTOOLSREPO:-}" ]; then
-                    POWERTOOLSREPO=${POWERTOOLSREPO/${repo_servers[0]}/${repo_servers[1]}}
-                fi
             fi
             sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
         fi
@@ -117,6 +113,10 @@ retry_dnf() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server "
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return 1
 
@@ -140,7 +140,7 @@ send_mail() {
         echo "Host:  $HOSTNAME"
         echo ""
         echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$recipients"
+    } 2>&1 | mail -s "$subject" -r "$DAOS_DEVOPS_EMAIL" "$recipients"
     set -x
 }
 
@@ -186,6 +186,10 @@ retry_cmd() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command retry failed in $STAGE_NAME after $attempt attempts"
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return 1
 }
@@ -217,6 +221,10 @@ timeout_cmd() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command timeout failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command timeout failed in $STAGE_NAME after $attempt attempts"
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return "$rc"
 }
@@ -229,6 +237,7 @@ fetch_repo_config() {
     local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
     local repopath="${REPOS_DIR}/$repo_file"
     if ! curl -f -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
+        echo "Failed to fetch repo file $REPO_FILE_URL$repo_file.repo"
         return 1
     fi
 
@@ -274,8 +283,13 @@ set_local_repo() {
             # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
             # used for daos packages
             dnf -y config-manager \
-                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
+        else
+            dnf -y config-manager \
+                --enable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
         fi
+        dnf -y config-manager \
+            --enable daos-stack-deps-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
     fi
 
     dnf repolist
@@ -290,6 +304,7 @@ update_repos() {
         if ! fetch_repo_config "$repo_server"; then
             # leave the existing on-image repo config alone if the repo fetch fails
             send_mail "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
+            echo "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
             return 1
         fi
     done
@@ -306,8 +321,12 @@ update_repos() {
 
     # successfully grabbed them all, so replace the entire $REPOS_DIR
     # content with them
+
+    # This is not working right on a second run.
+    # using a quick hack to stop deleting a critical repo
     local file
     for file in "$REPOS_DIR"/*.repo; do
+        [[ $file == *"artifactory"* ]] && continue
         [ -e "$file" ] || break
         # empty the file but keep it around so that updates don't recreate it
         true > "$file"
@@ -395,6 +414,7 @@ post_provision_config_nodes() {
     fi
     if ! "${cmd[@]}"; then
         dump_repos
+        echo "Failed to upgrade packages"
         return 1
     fi
 
@@ -413,35 +433,12 @@ post_provision_config_nodes() {
         if ! retry_dnf 360 install "${inst_rpms[@]/%/${DAOS_VERSION:-}}"; then
             rc=${PIPESTATUS[0]}
             dump_repos
+            echo "Failed to install packages"
             return "$rc"
         fi
     fi
 
     if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
-        # Need this module file
-        version="$(rpm -q --qf "%{version}" openmpi)"
-        mkdir -p /etc/modulefiles/mpi/
-        cat << EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
-#%Module 1.0
-#
-#  OpenMPI module for use with 'environment-modules' package:
-#
-conflict		mpi
-prepend-path 		PATH 		/usr/mpi/gcc/openmpi-$version/bin
-prepend-path 		LD_LIBRARY_PATH /usr/mpi/gcc/openmpi-$version/lib64
-prepend-path 		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-$version/lib64/pkgconfig
-prepend-path		MANPATH		/usr/mpi/gcc/openmpi-$version/share/man
-setenv 			MPI_BIN		/usr/mpi/gcc/openmpi-$version/bin
-setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-$version/etc
-setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-$version/lib64
-setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-$version/include
-setenv	 		MPI_LIB		/usr/mpi/gcc/openmpi-$version/lib64
-setenv			MPI_MAN			/usr/mpi/gcc/openmpi-$version/share/man
-setenv			MPI_COMPILER	openmpi-x86_64
-setenv			MPI_SUFFIX	_openmpi
-setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
-EOF
-
         printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
     fi
 

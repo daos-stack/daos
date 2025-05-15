@@ -213,12 +213,15 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
-        booleanParam(name: 'CI_SKIP_CANCEL_PREV_BUILD',
+        booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
                      defaultValue: false,
                      description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
+        string(name: 'CI_SCONS_ARGS',
+               defaultValue: '',
+               description: 'Arguments for scons when building DAOS')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
@@ -281,6 +284,9 @@ pipeline {
         booleanParam(name: 'CI_TEST_LEAP15_RPMs',
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
+                     defaultValue: false,
+                     description: 'Skip all functional test stages (Test)')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
@@ -301,6 +307,9 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_TEST_SKIP',
+                     defaultValue: false,
+                     description: 'Skip Functional Hardware (Test Hardware) stage')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
@@ -341,7 +350,7 @@ pipeline {
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
@@ -361,9 +370,6 @@ pipeline {
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
-        string(name: 'CI_SCONS_ARGS',
-               defaultValue: '',
-               description: 'Arguments for scons when building DAOS')
     }
 
     stages {
@@ -418,7 +424,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_SKIP_CANCEL_PREV_BUILD', false)  && !skipStage() }
+                expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
             }
             steps {
                 cancelPreviousBuilds()
@@ -624,7 +630,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 8') {
+                stage('Build on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !params.CI_el8_NOBUILD && !skipStage() }
@@ -844,7 +850,9 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
+                // Above not working, always skipping functional VM tests.
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -1108,7 +1116,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
             }
             steps {
                 script {
