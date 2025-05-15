@@ -330,7 +330,7 @@ properties have been introduced:
 
 - the redundancy factor (rd\_fac) that describes the number of concurrent engine
   exclusions that objects in the container are protected against. The rd\_fac value
-  is an integer between 0 (no data protection) and 5 (support up to 5
+  is an integer between 0 (no data protection) and 4 (support up to 4
   simultaneous failures).
 - a `health` property representing whether any object content might have been
   lost due to cascading engine failures. The value of this property can be
