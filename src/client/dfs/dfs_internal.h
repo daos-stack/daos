@@ -13,6 +13,9 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <daos/common.h>
+#include <gurt/shm_alloc.h>
+#include <gurt/shm_dict.h>
+#include <gurt/shm_utils.h>
 #include <daos.h>
 #include <daos_fs.h>
 
@@ -142,28 +145,38 @@ struct dfs_obj {
 	};
 	/** link to the dfs mount cache */
 	dfs_dcache_t    *dc;
-	/** Entry in the hash table of the DFS cache */
-	d_list_t         dc_entry;
 	/** cached stbuf info */
 	struct stat      dc_stbuf;
-	/** indicates whether we need to retrieve the file size for the stbuf cache */
+	/** indicates if we need to retrieve the file size for the stbuf cache */
 	bool             dc_stated;
-	/** Reference counter used to manage memory deallocation */
-	_Atomic uint32_t dc_ref;
-	/** True iff this record was deleted from the hash table */
-	atomic_flag      dc_deleted;
-	/** Entry in the garbage collector list */
-	d_list_t         dc_entry_gc;
-	/** True iff this record is not in the garbage collector list */
-	bool             dc_deleted_gc;
-	/** Expiration date of the record */
-	struct timespec  dc_expire_gc;
-	/** Key prefix used by its child directory */
-	char             dc_key_child_prefix[DCACHE_KEY_PREF_SIZE];
-	/** Length of the hash key used to compute the hash index */
-	size_t           dc_key_len;
-	/** the hash key used to compute the hash index */
-	char             dc_key[];
+	union {
+		/** SHM cache */
+		struct {
+			struct d_shm_ht_rec_loc rec_loc;
+		} shm;
+
+		/** Dram cache */
+		struct {
+			/** Entry in the hash table of the DFS cache */
+			d_list_t         dc_entry;
+			/** Reference counter used to manage memory deallocation */
+			_Atomic uint32_t dc_ref;
+			/** True iff this record was deleted from the hash table */
+			atomic_flag      dc_deleted;
+			/** Entry in the garbage collector list */
+			d_list_t         dc_entry_gc;
+			/** True iff this record is not in the garbage collector list */
+			bool             dc_deleted_gc;
+			/** Expiration date of the record */
+			struct timespec  dc_expire_gc;
+			/** Key prefix used by its child directory */
+			char             dc_key_child_prefix[DCACHE_KEY_PREF_SIZE];
+			/** Length of the hash key used to compute the hash index */
+			size_t           dc_key_len;
+			/** the hash key used to compute the hash index */
+			char             dc_key[];
+		} dh;
+	};
 };
 
 enum {
@@ -483,7 +496,7 @@ int
 release_int(dfs_obj_t *obj);
 
 int
-dcache_create(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
+dcache_create(dfs_t *dfs, int type, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
 	      uint32_t gc_reclaim_max);
 int
 dcache_destroy(dfs_t *dfs);
@@ -503,5 +516,12 @@ void
 drec_del_at(dfs_dcache_t *dcache, dfs_obj_t *rec);
 int
 drec_del(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent);
+
+enum { DFS_CACHE_SHM, DFS_CACHE_DRAM };
+
+int
+dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size);
+int
+dfs_obj_deserialize(const char *buf, size_t buf_size, struct dfs_obj *obj);
 
 #endif /* __DFS_INTERNAL_H__ */
