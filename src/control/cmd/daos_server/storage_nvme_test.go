@@ -20,7 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -132,7 +131,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			expPrepCall: &storage.BdevPrepareRequest{
 				// always set in local storage prepare to allow automatic detection
 				EnableVMD: true,
-				HugeNodes: testHugeNodesStr(spdk.ScanMinHugepageCount),
+				HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
 			},
 		},
 		"cli nr_hugepages unset; zero total numa": {
@@ -144,7 +143,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
 				EnableVMD: true,
-				HugeNodes: testHugeNodesStr(spdk.ScanMinHugepageCount),
+				HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
 			},
 		},
 		"cli nr_hugepages set insufficient; zero total numa": {
@@ -159,7 +158,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
 				EnableVMD: true,
-				HugeNodes: testHugeNodesStr(spdk.ScanMinHugepageCount),
+				HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
 			},
 		},
 		"cli nr_hugepages set; zero total numa": {

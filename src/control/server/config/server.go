@@ -24,7 +24,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -36,6 +35,10 @@ const (
 	defaultConfigPath   = "../etc/daos_server.yml"
 	ConfigOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
+
+	// ScanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
+	// SPDK memory requirements when performing a NVMe device scan.
+	ScanMinHugepageCount = 128
 )
 
 // SupportConfig is defined here to avoid a import cycle
@@ -560,11 +563,11 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, hugepageSizeKiB int) error
 		// Hugepages disabled and so zero nr_hugepages requested in config.
 		return nil
 	} else if minHugepages == 0 {
-		if cfg.NrHugepages < spdk.ScanMinHugepageCount {
+		if cfg.NrHugepages < ScanMinHugepageCount {
 			log.Infof("No hugepages required as zero configured engine targets, setting "+
 				"minimum (%d) in config to enable NVMe device discovery",
-				spdk.ScanMinHugepageCount)
-			cfg.NrHugepages = spdk.ScanMinHugepageCount
+				ScanMinHugepageCount)
+			cfg.NrHugepages = ScanMinHugepageCount
 		} else {
 			log.Infof("No hugepages required as zero configured engine targets, "+
 				"configurd value (%d) will be used to enable NVMe device discovery",

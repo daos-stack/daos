@@ -8,10 +8,8 @@
 package spdk
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -19,12 +17,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
-)
-
-const (
-	// ScanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
-	// SPDK memory requirements when performing a NVMe device scan.
-	ScanMinHugepageCount = 128
 )
 
 // FormatResult struct mirrors C.struct_wipe_res_t and describes the results of a format operation
@@ -153,61 +145,4 @@ func resultPCIAddresses(results []*FormatResult) []string {
 	}
 
 	return common.DedupeStringSlice(pciAddrs)
-}
-
-// GetHugeNodesStr builds HUGENODE string to be used to allocate hugepages through SPDK setup
-// script. For each NUMA node request max(existing, configured) hugepages.
-func GetHugeNodesStr(log logging.Logger, perNumaNrWant int, smi *common.SysMemInfo, numaNodes ...int) (string, error) {
-	// Map of NUMA-node to nr_hugepages to set for the node
-	nodeNrs := map[int]int{}
-
-	if len(numaNodes) == 0 {
-		return "", errors.New("no numa-nodes supplied")
-	}
-
-	for _, nID := range numaNodes {
-		if nID < 0 {
-			return "", errors.New("invalid negative numa-node supplied")
-		}
-		for _, nn := range smi.NumaNodes {
-			if nn.NumaNodeIndex != nID {
-				continue
-			}
-			// Ensure that if there is already sufficient number allocated then the
-			// script will request the existing number which results in a no-op
-			// rather than increasing or reducing the allocation.
-			// FIXME DAOS-16921: SPDK https://review.spdk.io/c/spdk/spdk/+/25831 adds
-			//                   SKIP_HUGE which can be used to simplify this logic.
-			if nn.HugepagesTotal >= perNumaNrWant {
-				nodeNrs[nID] = nn.HugepagesTotal
-			} else {
-				nodeNrs[nID] = perNumaNrWant
-			}
-		}
-	}
-
-	// Handle exception where per-NUMA meminfo is missing.
-	if len(nodeNrs) == 0 {
-		if smi.HugepagesTotal >= perNumaNrWant {
-			nodeNrs[0] = smi.HugepagesTotal
-		} else {
-			nodeNrs[0] = perNumaNrWant
-		}
-		log.Errorf("No per-NUMA meminfo found, allocating %d hugepages on NUMA node 0",
-			nodeNrs[0])
-	}
-
-	nodeNrsKeys := []int{}
-	for k := range nodeNrs {
-		nodeNrsKeys = append(nodeNrsKeys, k)
-	}
-	sort.Ints(nodeNrsKeys)
-
-	// Build string for req.HugeNodes e.g. "HUGENODE='nodes_hp[0]=2048,nodes_hp[1]=512'"
-	hnStrs := []string{}
-	for _, nID := range nodeNrsKeys {
-		hnStrs = append(hnStrs, fmt.Sprintf("nodes_hp[%d]=%d", nID, nodeNrs[nID]))
-	}
-
-	return fmt.Sprintf("'%s'", strings.Join(hnStrs, ",")), nil
 }

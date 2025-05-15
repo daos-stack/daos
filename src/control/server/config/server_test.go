@@ -25,7 +25,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -1244,19 +1243,19 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 					),
 				)
 			},
-			expCfgNrHugepages: spdk.ScanMinHugepageCount,
+			expCfgNrHugepages: ScanMinHugepageCount,
 		},
 		"insufficient hugepages set in config; no engines configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithEngines().WithNrHugepages(spdk.ScanMinHugepageCount - 1)
+				return c.WithEngines().WithNrHugepages(ScanMinHugepageCount - 1)
 			},
-			expCfgNrHugepages: spdk.ScanMinHugepageCount,
+			expCfgNrHugepages: ScanMinHugepageCount,
 		},
 		"sufficient hugepages set in config; no engines configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithEngines().WithNrHugepages(spdk.ScanMinHugepageCount + 1)
+				return c.WithEngines().WithNrHugepages(ScanMinHugepageCount + 1)
 			},
-			expCfgNrHugepages: spdk.ScanMinHugepageCount + 1,
+			expCfgNrHugepages: ScanMinHugepageCount + 1,
 		},
 		"md-on-ssd enabled with explicit role assignment; zero total system hugepages": {
 			extraConfig: func(c *Server) *Server {

@@ -16,7 +16,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -253,8 +252,8 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, smi *common.SysMe
 	// enough to perform NVMe discovery. This introduces some inconsistency in terms of ignoring
 	// config parameters but more importantly should prevent inaccurate allocations.
 
-	if req.HugepageCount < spdk.ScanMinHugepageCount {
-		req.HugepageCount = spdk.ScanMinHugepageCount
+	if req.HugepageCount < config.ScanMinHugepageCount {
+		req.HugepageCount = config.ScanMinHugepageCount
 	}
 	if err := server.SetHugeNodes(cmd.Logger, nil, smi, &req); err != nil {
 		return errors.Wrap(err, "setting hugenodes in bdev prep request")
