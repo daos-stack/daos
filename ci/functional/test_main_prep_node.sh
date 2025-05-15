@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -10,6 +11,11 @@ set -eux
 : "${OPERATIONS_EMAIL:=}"
 : "${STAGE_NAME:=Unknown}"
 : "${BUILD_URL:=Unknown}"
+: "${JENKINS_URL:=https://jenkins.example.com}"
+domain1="${JENKINS_URL#https://}"
+mail_domain="${domain1%%/*}"
+: "${EMAIL_DOMAIN:=$mail_domain}"
+: "${DAOS_DEVOPS_EMAIL:="$HOSTNAME"@"$EMAIL_DOMAIN"}"
 
 result=0
 mail_message=''
@@ -22,6 +28,7 @@ testfails=0
 myhost="${HOSTNAME%%.*}"
 : "${NODELIST:=$myhost}"
 mynodenum=0
+
 # in order for junit test names to be consistent between test runs
 # Need to use the position number of the host in the node list for
 # the junit report.
@@ -42,7 +49,7 @@ function do_mail {
     # shellcheck disable=SC2059
     build_info="BUILD_URL = $BUILD_URL$nl STAGE = $STAGE_NAME$nl$nl"
     mail -s "Hardware check failed after reboot!" \
-         -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL" \
+         -r "$DAOS_DEVOPS_EMAIL" "$OPERATIONS_EMAIL" \
          <<< "$build_info$mail_message"
     set -x
 }
@@ -63,17 +70,27 @@ set +x
 while IFS= read -r line; do
     ((opa_count++)) || true
 done < <(lspci -mm | grep "Omni-Path")
+echo "Found $opa_count Omni-Path adapters."
 if [ "$opa_count" -gt 0 ]; then
     ((ib_count=opa_count)) || true
 fi
 
+last_pci_bus=''
 while IFS= read -r line; do
+    pci_bus="${line%.*}"
+    if [ "$pci_bus" == "$last_pci_bus" ]; then
+        # We only use one interface on a dual interface HBA
+        # Fortunately lspci appears to group them together
+        continue
+    fi
+    last_pci_bus="$pci_bus"
     mlnx_type="${line##*ConnectX-}"
     mlnx_type="${mlnx_type%]*}"
     if [ "$mlnx_type" -ge 6 ]; then
         ((hdr_count++)) || true
     fi
-done < <(lspci -mm | grep "ConnectX")
+done < <(lspci -mm | grep "ConnectX" | grep -i "infiniband" )
+echo "Found $hdr_count Mellanox HDR adapters."
 if [ "$hdr_count" -gt 0 ]; then
     ((ib_count=hdr_count)) || true
 fi
@@ -85,33 +102,66 @@ if [ "$hdr_count" -gt 0 ] && [ "$opa_count" -gt 0 ]; then
 $hdr_count Mellanox HDR ConnectX adapters,
 and
 $opa_count Omni-Path adapters.
-The Onmi-Path adapters will not be used."
+The Omni-Path adapters will not be used."
     mail_message+="${nl}${ib_message}${nl}"
     echo "$ib_message"
 fi
 set -x
 
+# Wait for at least the expected IB devices to show up.
+# in the case of dual port HBAs, not all IB devices will
+# show up.
+# For some unknown reason, sometimes IB devices will not show up
+# except in the lspci output unless an ip link set up command for
+# at least one device that should be present shows up.
+good_ibs=()
 function do_wait_for_ib {
+    local ib_devs=("$@")
+    local working_ib
     ib_timeout=300 # 5 minutes
     retry_wait=10 # seconds
     timeout=$((SECONDS + ib_timeout))
     while [ "$SECONDS" -lt "$timeout" ]; do
-      ip link set up "$1" || true
-      sleep 2
-      if ip addr show "$1" | grep "inet "; then
-        return 0
-      fi
-      sleep ${retry_wait}
+        for ib_dev in "${ib_devs[@]}"; do
+            ip link set up "$ib_dev" || true
+        done
+        sleep 2
+        working_ib=0
+        good_ibs=()
+        for ib_dev in "${ib_devs[@]}"; do
+            if ip addr show "$ib_dev" | grep "inet "; then
+                good_ibs+=("$ib_dev")
+                ((working_ib++)) || true
+            fi
+            # With udev rules, the ib adapter name has the numa
+            # affinity in its name.  On a single adapter system
+            # we do not have an easy way to know what that
+            # adapter name is in the case of a udev rule, so we have to try
+            # both possible names.
+            if [ "$working_ib" -ge "$ib_count" ]; then
+                return 0
+            fi
+        done
+        sleep ${retry_wait}
     done
     return 1
 }
 
-# First check for infinband devices
-for i in $(seq 0 $((ib_count-1))); do
-    ((testruns++)) || true
-    testcases+="  <testcase name=\"Infiniband $i Working Node $mynodenum\">${nl}"
-    iface="ib$i"
-    if do_wait_for_ib "$iface"; then
+# Migrating to using udev rules for network devices
+if [ -e /etc/udev/rules.d/70-persistent-ipoib.rules ]; then
+    ib_list=('ib_cpu0_0' 'ib_cpu1_0')
+else
+    ib_list=('ib0')
+    if [ "$ib_count" -gt 1 ]; then
+        ib_list+=('ib1')
+    fi
+fi
+
+function check_ib_devices {
+    local ib_devs=("$@")
+    for iface in "${ib_devs[@]}"; do
+        ((testruns++)) || true
+        testcases+="  <testcase name=\"Infiniband $iface Working Node $mynodenum\">${nl}"
         set +x
         if ! ip addr show "$iface" | grep "inet "; then
             ib_message="$({
@@ -136,31 +186,31 @@ for i in $(seq 0 $((ib_count-1))); do
             cat "/sys/class/net/$iface/device/numa_node"
         fi
         set -x
+        testcases+="  </testcase>$nl"
+    done
+}
+
+
+# First check for InfiniBand devices
+if [ "$ib_count" -gt 0 ]; then
+    if do_wait_for_ib "${ib_list[@]}"; then
+        echo "Found at least $ib_count working devices in" "${ib_list[@]}"
+        # All good, generate Junit report
+        check_ib_devices "${good_ibs[@]}"
     else
-        ib_message="Failed to bring up interface $iface on $HOSTNAME. "
-        mail_message+="${nl}${ib_message}${nl}"
-        echo "$ib_message"
-        ((testfails++)) || true
-        testcases+="    <error message=\"$iface down\" type=\"error\">
-      <![CDATA[ $ib_message ]]>
-    </error>$nl"
-        result=1
+        # Something wrong, generate Junit report and update e-mail
+        check_ib_devices "${ib_list[@]}"
     fi
-    testcases+="  </testcase>$nl"
-done
+fi
 
 # having -x just makes the console log harder to read.
-set +x
-if [ -e /sys/class/net/ib1 ]; then
-    # now check for pmem & NVMe drives when ib1 is present.
+# set +x
+if [ "$ib_count" -ge 2 ]; then
+    # now check for pmem & NVMe drives when multiple ib are present.
     # ipmctl show -dimm should show an even number of drives, all healthy
-    dimm_count=0
-    while IFS= read -r line; do
-        if [[ "$line" != *"| Healthy "* ]]; then continue; fi
-        ((dimm_count++)) || true
-    done < <(ipmctl show -dimm)
+    dimm_count=$(ipmctl show -dimm | grep Healthy -c)
     if [ "$dimm_count" -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
-       # Not fatal, the PMEM DIMM should be replaced when downtime can be
+       # May not be fatal, the PMEM DIMM should be replaced when downtime can be
        # scheduled for this system.
        dimm_message="FAIL: Wrong number $dimm_count healthy PMEM DIMMs seen."
        mail_message+="$nl$dimm_message$nl$(ipmctl show -dimm)$nl"
@@ -184,7 +234,7 @@ if [ -e /sys/class/net/ib1 ]; then
         testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $nvme_message ]]>
     </error>$nl"
-       result=1
+       result=3
     else
        echo "OK: Found $dimm_rcount DIMM PMEM regions."
     fi
@@ -211,23 +261,15 @@ if [ -e /sys/class/net/ib1 ]; then
         testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $nvme_message$nl$nvme_devices ]]>
     </error>$nl"
-       result=1
+       result=4
     else
        echo "OK: Even number ($nvme_count) of NVMe devices seen."
     fi
     testcases+="  </testcase>$nl"
 
     # All storage found by lspci should also be in lsblk report
-    lsblk_nvme=0
-    lsblk_pmem=0
-    while IFS= read -r line; do
-        if [[ "$line" = nvme* ]];then
-            ((lsblk_nvme++)) || true
-        fi
-        if [[ "$line" = pmem* ]];then
-            ((lsblk_pmem++)) || true
-        fi
-    done < <(lsblk)
+    lsblk_nvme=$(lsblk | grep nvme -c)
+    lsblk_pmem=$(lsblk | grep pmem -c)
 
     ((testruns++)) || true
     testcases+="  <testcase name=\"NVMe lsblk Count Node $mynodenum\">${nl}"
@@ -238,7 +280,7 @@ if [ -e /sys/class/net/ib1 ]; then
         testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $lsblk_nvme_msg ]]>
     </error>$nl"
-       result=1
+       result=5
     else
        echo "OK: All $nvme_count NVMe devices are in lsblk report."
     fi
@@ -253,7 +295,7 @@ if [ -e /sys/class/net/ib1 ]; then
         testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $lsblk_pmem_msg ]]>
     </error>$nl"
-       result=1
+       result=6
     else
        echo "OK: All $dimm_rcount PMEM devices are in lsblk report."
     fi
@@ -294,5 +336,9 @@ $testcases</testsuite>$nl"
 echo "$junit_xml" > "./hardware_prep_node_results.xml"
 
 do_mail
+
+if [ "$result" -ne 0 ]; then
+    echo "Check failure $result"
+fi
 
 exit $result
