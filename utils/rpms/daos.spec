@@ -643,7 +643,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Apr 3 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-10
+* Thu May 15 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-10
 - Changing the default log location to /var/log/daos from /tmp
 
 * Mon May 12 2025  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-9
