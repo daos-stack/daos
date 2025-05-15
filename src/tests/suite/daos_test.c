@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -476,6 +477,10 @@ main(int argc, char **argv)
 			goto exit;
 		}
 	}
+
+	/* Enable checksum by force for test purpose. */
+	dt_csum_type          = DAOS_PROP_CO_CSUM_CRC16;
+	dt_csum_server_verify = true;
 
 	if (strlen(tests) == 0) {
 		strncpy(tests, all_tests, sizeof(TESTS));
