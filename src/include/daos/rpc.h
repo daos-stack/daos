@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +18,7 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 #include <cart/api.h>
+#include <daos_version.h>
 
 /* Opcode registered in crt will be
  * client/server | mod_id | rpc_version | op_code
@@ -129,8 +131,10 @@ struct daos_req_comm_in {
 struct daos_req_comm_out {
 	/** Enqueue ID of the request returned to client, for server overloaded retry */
 	uint64_t	req_out_enqueue_id;
+	daos_version_t  req_out_version;
+	uint32_t        req_out_padding;
 	/** Reserved for future extension */
-	uint64_t	req_out_paddings[4];
+	uint64_t        req_out_paddings[3];
 };
 
 

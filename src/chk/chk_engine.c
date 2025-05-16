@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1986,6 +1987,11 @@ chk_engine_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 	d_rank_list_t			*rank_list = NULL;
 	uint32_t			 cbk_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	int				 rc = 0;
+	uint8_t                          chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	/* Check leader has already verified related parameters, trust them. */
 
@@ -2055,7 +2061,7 @@ reset:
 
 	memset(cbk, 0, sizeof(*cbk));
 	cbk->cb_magic = CHK_BK_MAGIC_ENGINE;
-	cbk->cb_version = DAOS_CHK_VERSION;
+	cbk->cb_version = chk_ver;
 	cbk_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 
 init:
@@ -2924,9 +2930,14 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 			goto out;
 
 		if (rc == -DER_NONEXIST) {
+			uint8_t chk_ver;
+
+			rc = chk_rpc_protocol(&chk_ver);
+			if (rc)
+				goto out;
 			memset(&new, 0, sizeof(new));
 			new.cb_magic = CHK_BK_MAGIC_POOL;
-			new.cb_version = DAOS_CHK_VERSION;
+			new.cb_version            = chk_ver;
 			new.cb_gen = ins->ci_bk.cb_gen;
 			new.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
 			new.cb_time.ct_start_time = time(NULL);
