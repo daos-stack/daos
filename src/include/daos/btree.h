@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -487,7 +488,7 @@ enum btr_feats {
 	 *  tree class
 	 */
 	BTR_FEAT_DYNAMIC_ROOT = (1 << 2),
-	/** Skip rebalance leaf when delete some record from the leaf. */
+	/** Skip rebalance leaf when delete some record from the leaf. Obsolete, DAOS-17148. */
 	BTR_FEAT_SKIP_LEAF_REBAL = (1 << 3),
 	/** Tree supports embedded root. */
 	BTR_FEAT_EMBED_FIRST = (1 << 4),
