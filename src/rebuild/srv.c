@@ -1195,6 +1195,11 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	d_rank_list_t		*excluded = NULL;
 	crt_rpc_t		*rpc;
 	int			rc;
+	uint8_t                  rebuild_ver;
+
+	rc = rebuild_rpc_protocol(&rebuild_ver);
+	if (rc)
+		return rc;
 
 	/* There might be some other ranks being queued for reintegration,
 	 * but not included in this reintegration, so let's exclude those
@@ -1241,10 +1246,8 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		map_ranks_fini(&up_ranks);
 	}
 
-	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
-				  pool, DAOS_REBUILD_MODULE,
-				  REBUILD_OBJECTS_SCAN, DAOS_REBUILD_VERSION,
-				  &rpc, NULL, excluded, NULL);
+	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx, pool, DAOS_REBUILD_MODULE,
+				  REBUILD_OBJECTS_SCAN, rebuild_ver, &rpc, NULL, excluded, NULL);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB " pool map broadcast failed", DP_RB_RGT(rgt));
 		D_GOTO(out, rc);
@@ -2965,3 +2968,5 @@ struct dss_module rebuild_module = {
     .sm_key         = &rebuild_module_key,
     .sm_mod_ops     = &rebuild_mod_ops,
 };
+
+DEFINE_RPC_PROTOCOL(rebuild, DAOS_REBUILD_MODULE);
