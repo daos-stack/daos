@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,5 +77,8 @@ CRT_RPC_DECLARE(rsvc_start, DAOS_ISEQ_RSVC_START, DAOS_OSEQ_RSVC_START)
 	((int32_t)		(soo_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(rsvc_stop, DAOS_ISEQ_RSVC_STOP, DAOS_OSEQ_RSVC_STOP)
+
+int
+ds_rsvc_rpc_protocol(uint8_t *rsvc_ver);
 
 #endif /* __RSVC_RPC_H__ */

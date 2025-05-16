@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -461,17 +462,31 @@ struct daos_module_metrics obj_metrics = {
     .dmm_nr_metrics = obj_metrics_count,
 };
 
-struct dss_module obj_module = {
-	.sm_name	= "obj",
-	.sm_mod_id	= DAOS_OBJ_MODULE,
-	.sm_ver		= DAOS_OBJ_VERSION,
-	.sm_init	= obj_mod_init,
-	.sm_fini	= obj_mod_fini,
-	.sm_proto_count	= 2,
-	.sm_proto_fmt	= {&obj_proto_fmt_v9, &obj_proto_fmt_v10},
-	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
-	.sm_handlers	= {obj_handlers_v9, obj_handlers_v10},
-	.sm_key		= &obj_module_key,
-	.sm_mod_ops	= &ds_obj_mod_ops,
-	.sm_metrics	= &obj_metrics,
+/* fake it now, since rolling upgrade not supported since 2.8 */
+static struct dss_module_version_map obj_ver_v9 = {
+    .module_version   = DAOS_OBJ_VERSION - 1,
+    .protocol_version = DAOS_VERSION_PROTOCAL - 1,
 };
+
+static struct dss_module_version_map obj_ver_v10 = {
+    .module_version   = DAOS_OBJ_VERSION,
+    .protocol_version = DAOS_VERSION_PROTOCAL,
+};
+
+struct dss_module obj_module = {
+    .sm_name        = "obj",
+    .sm_mod_id      = DAOS_OBJ_MODULE,
+    .sm_ver         = DAOS_OBJ_VERSION,
+    .sm_init        = obj_mod_init,
+    .sm_fini        = obj_mod_fini,
+    .sm_proto_count = 2,
+    .sm_proto_fmt   = {&obj_proto_fmt_v9, &obj_proto_fmt_v10},
+    .sm_cli_count   = {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
+    .sm_handlers    = {obj_handlers_v9, obj_handlers_v10},
+    .sm_ver_table   = {&obj_ver_v9, &obj_ver_v10},
+    .sm_key         = &obj_module_key,
+    .sm_mod_ops     = &ds_obj_mod_ops,
+    .sm_metrics     = &obj_metrics,
+};
+
+DEFINE_DS_RPC_PROTOCOL(obj);

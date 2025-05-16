@@ -2291,8 +2291,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	tgt_ep.ep_tag = tx->tx_leader_tag;
 	tgt_ep.ep_rank = tx->tx_leader_rank;
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep,
-			    DAOS_OBJ_RPC_CPD, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_CPD, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

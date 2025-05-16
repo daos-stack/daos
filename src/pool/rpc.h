@@ -905,16 +905,14 @@ CRT_RPC_DECLARE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT
 /* clang-format on */
 
 static inline int
-pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
-		const uuid_t pi_uuid, const uuid_t pi_hdl, uint64_t *req_timep, crt_rpc_t **req)
+pool_req_create_common(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		       uint8_t proto_ver, const uuid_t pi_uuid, const uuid_t pi_hdl,
+		       uint64_t *req_timep, crt_rpc_t **req)
 {
 	int                    rc;
 	crt_opcode_t           opcode;
 	static __thread uuid_t cli_id;
-	int                    proto_ver;
 	struct pool_op_in     *in;
-
-	proto_ver = dc_pool_proto_version ? dc_pool_proto_version : DAOS_POOL_VERSION;
 
 	if (uuid_is_null(cli_id))
 		uuid_generate(cli_id);
@@ -936,12 +934,53 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	if (req_timep && (*req_timep == 0))
 		*req_timep = d_hlc_get();
 
-	D_ASSERT(proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
 	if (req_timep) {
 		uuid_copy(in->pi_cli_id, cli_id);
 		in->pi_time = *req_timep;
 	}
 	return 0;
+}
+
+int
+ds_pool_rpc_protocol(uint8_t *obj_ver);
+
+static inline int
+ds_pool_encode_opc(crt_opcode_t *opc)
+{
+	int     rc;
+	uint8_t rpc_ver;
+
+	rc = ds_pool_rpc_protocol(&rpc_ver);
+	if (rc)
+		return rc;
+	*opc = DAOS_RPC_OPCODE(*opc, DAOS_POOL_MODULE, rpc_ver);
+
+	return 0;
+}
+
+static inline int
+dc_pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		   const uuid_t pi_uuid, const uuid_t pi_hdl, uint64_t *req_timep, crt_rpc_t **req)
+{
+	D_ASSERT(dc_pool_proto_version != 0);
+	D_ASSERT(dc_pool_proto_version >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
+	return pool_req_create_common(crt_ctx, tgt_ep, opc, dc_pool_proto_version, pi_uuid, pi_hdl,
+				      req_timep, req);
+}
+
+static inline int
+ds_pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		   const uuid_t pi_uuid, const uuid_t pi_hdl, uint64_t *req_timep, crt_rpc_t **req)
+{
+	int     rc;
+	uint8_t rpc_ver;
+
+	rc = ds_pool_rpc_protocol(&rpc_ver);
+	if (rc)
+		return rc;
+	D_ASSERT(rpc_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
+	return pool_req_create_common(crt_ctx, tgt_ep, opc, rpc_ver, pi_uuid, pi_hdl, req_timep,
+				      req);
 }
 
 uint64_t
