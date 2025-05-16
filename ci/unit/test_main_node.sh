@@ -93,5 +93,31 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
+utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
+                   $SUDO_ARG
+
+# Generate code coverage report if at least one gcda file was generated
+# Possibly limit this to finding a single match
+if [[ -n $(find build -name "*.gcda") ]]; then
+    # python3.6 does not like deactivate with -u set, later versions are OK with it however.
+    set +u
+    deactivate
+    set -u
+
+    # Run gcovr in a python 3.11 environment
+    python3.11 -m venv venv-code-coverage
+    # shellcheck disable=SC1091
+    source venv-code-coverage/bin/activate
+    touch venv-code-coverage/pip.conf
+    pip config set global.progress_bar off
+    pip config set global.no_color true
+    pip install --upgrade pip
+    pip install --requirement requirements-code-coverage.txt
+    
+    mkdir -p "${test_log_dir}/code_coverage"
+    gcovr -o "${test_log_dir}/code_coverage/code_coverage_report.html" --html-details --gcov-ignore-parse-errors
+    # Eventually remove this one and only generate json files per stage.
+    gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors
+fi
 HTTPS_PROXY="${HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
