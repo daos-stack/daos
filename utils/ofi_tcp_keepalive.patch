@@ -12,17 +12,6 @@ index 6d2cbe029..eeeae5599 100644
  struct xnet_uring {
  	struct fid fid;
  	ofi_io_uring_t ring;
-@@ -774,8 +777,8 @@ do {						\
- 	ofi_straddr(_src_buf, &_src_len, ofi_translate_addr_format(ofi_sa_family(_src_addr)),	\
- 		    _src_addr);									\
- 												\
--	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n", _buf, _src_buf,	\
--		fi_strerror(err));								\
-+	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "ep %p state %u error on %s From %s : %s\n",	\
-+		ep, ep->state, _buf, _src_buf, fi_strerror(err));				\
- } while(0)
- 
- #endif //_XNET_H_
 diff --git a/prov/tcp/src/xnet_cm.c b/prov/tcp/src/xnet_cm.c
 index 1ae35d27d..64d66922a 100644
 --- a/prov/tcp/src/xnet_cm.c
