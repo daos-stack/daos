@@ -12,7 +12,7 @@
 #include <errno.h>
 
 #include "shm_internal.h"
-#include <gurt/shm_dict.h>
+#include <gurt/shm_utils.h>
 
 /* the address of shared memory region */
 extern struct d_shm_hdr *d_shm_head;
@@ -659,7 +659,8 @@ shm_ht_rec_find(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len_key,
 
 void *
 shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len_key,
-		       const char *val, const int len_value, d_shm_ht_rec_loc_t link_loc, int *err)
+		       const char *val, const int len_value, d_shm_ht_rec_loc_t link_loc,
+		       bool *created, int *err)
 {
 	unsigned int    hash;
 	unsigned int    idx;
@@ -673,6 +674,8 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 	int             rc;
 	d_shm_ht_head_t ht_head;
 
+	if (created)
+		*created = false;
 	*err = SHM_HT_SUCCESS;
 	if (!shm_ht_is_usable(shm_ht_loc)) {
 		/* immediately return error if ht is not usable */
@@ -734,10 +737,18 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 	value = (char *)rec + sizeof(struct d_shm_ht_rec) + len_key + rec->len_padding;
 
 	if (strcmp(val, INIT_KEY_VALUE_MUTEX) == 0) {
-		/* value holds a pthread mutex lock */
+		/* value holds a mutex */
 		rc = shm_mutex_init((d_shm_mutex_t *)value);
 		if (rc != 0) {
 			DS_ERROR(rc, "shm_mutex_init() failed");
+			*err = rc;
+			goto err;
+		}
+	} else if (strcmp(val, INIT_KEY_VALUE_RWLOCK) == 0) {
+		/* value holds a rwlock */
+		rc = shm_rwlock_init((d_shm_rwlock_t *)value);
+		if (rc != 0) {
+			DS_ERROR(rc, "shm_rwlock_init() failed");
 			*err = rc;
 			goto err;
 		}
@@ -762,6 +773,8 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 	if (link_loc)
 		link_loc->ht_rec = rec;
 	shm_mutex_unlock(&(p_ht_lock[idx_lock]));
+	if (created)
+		*created = true;
 	return value;
 
 err:
