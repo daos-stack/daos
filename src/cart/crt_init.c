@@ -718,6 +718,14 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			crt_gdata.cg_thread_mode_single = thread_mode_single;
 		}
 
+		if (opt && opt->cio_progress_legacy) {
+			crt_gdata.cg_progress_legacy = opt->cio_progress_legacy;
+		} else {
+			bool progress_legacy = false;
+			crt_env_get(D_PROGRESS_LEGACY, &progress_legacy);
+			crt_gdata.cg_progress_legacy = progress_legacy;
+		}
+
 		if (opt && opt->cio_auth_key)
 			auth_key = opt->cio_auth_key;
 		else {
