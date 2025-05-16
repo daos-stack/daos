@@ -131,16 +131,3 @@ index 3fc566b7d..f72d923fe 100644
  	ep->state = XNET_CONNECTING;
  	ret = ofi_bsock_connect(&ep->bsock, ep->addr,
  				(socklen_t) ofi_sizeofaddr(ep->addr));
-diff --git a/prov/tcp/src/xnet_rdm_cm.c b/prov/tcp/src/xnet_rdm_cm.c
-index 4dfc96650..e73170445 100644
---- a/prov/tcp/src/xnet_rdm_cm.c
-+++ b/prov/tcp/src/xnet_rdm_cm.c
-@@ -367,6 +367,8 @@ ssize_t xnet_get_conn(struct xnet_rdm *rdm, fi_addr_t addr,
- 		/* Force progress for apps that simply retry sending without
- 		 * trying to drive progress in between.
- 		 */
-+		FI_WARN_SPARSE(&xnet_prov, FI_LOG_EP_CTRL, "conn %p ep %p/%d.\n",
-+			       *conn, (*conn)->ep, (*conn)->ep->state);
- 		xnet_run_progress(xnet_rdm2_progress(rdm), false);
- 		return -FI_EAGAIN;
- 	}
