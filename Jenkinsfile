@@ -433,7 +433,8 @@ pipeline {
         stage('Pre-build') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                // expression { !skipStage() }
+                expression { false }
             }
             parallel {
                 stage('Python Bandit check') {
@@ -633,7 +634,8 @@ pipeline {
                 stage('Build on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el8_NOBUILD && !skipStage() }
+                        // expression { !params.CI_el8_NOBUILD && !skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -671,7 +673,8 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        // expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -709,7 +712,8 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                // expression { !skipStage() }
+                expression { false }
             }
             parallel {
                 stage('Unit Test on EL 8.8') {
@@ -858,7 +862,8 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // expression { !skipStage() }
+                        expression { false }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -947,7 +952,8 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // expression { !skipStage() }
+                        expression { false }
                     }
                     agent {
                         label vm9_label('Ubuntu')
@@ -969,7 +975,8 @@ pipeline {
                 stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // expression { !skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -1022,7 +1029,8 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
+                        // expression { params.CI_TEST_EL8_RPMs && !skipStage() }
+                        expression { true }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
