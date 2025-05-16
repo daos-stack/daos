@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+#  Copyright 2020-2022 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 
 post_provision_config_nodes() {
     # should we port this to Ubuntu or just consider $CONFIG_POWER_ONLY dead?
@@ -12,15 +18,7 @@ post_provision_config_nodes() {
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi
     codename=$(lsb_release -s -c)
-    if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
-        add-apt-repository \
-            "deb $REPOSITORY_URL/$DAOS_STACK_GROUP_REPO $codename"
-    fi
-
-    if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
-        echo "deb [trusted=yes] $REPOSITORY_URL/$DAOS_STACK_LOCAL_REPO $codename main" >> /etc/apt/sources.list
-    fi
-
+    echo "$codename"
     if [ -n "$INST_REPOS" ]; then
         for repo in $INST_REPOS; do
             branch="master"
