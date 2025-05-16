@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 # This is a script to be run by the ci/unit/test_main.sh to run a test
 # on a CI node.
 
@@ -21,6 +26,7 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
+: "${BULLSEYE:=}"
 if [ -n "$BULLSEYE" ]; then
     pushd "${SL_SRC_DIR}/bullseye"
     set +x
@@ -47,6 +53,7 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts/
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 # set CMOCKA envs here
+: "${WITH_VALGRIND:=}"
 export CMOCKA_MESSAGE_OUTPUT=xml
 if [[ -z ${WITH_VALGRIND} ]]; then
     export CMOCKA_XML_FILE="${SL_SRC_DIR}/test_results/%g.xml"
@@ -112,3 +119,5 @@ if [[ -n $(find build -name "*.gcda") ]]; then
     # Eventually remove this one and only generate json files per stage.
     gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors
 fi
+HTTPS_PROXY="${HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
+    --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
