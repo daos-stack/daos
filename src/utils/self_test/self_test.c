@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,8 +197,9 @@ static void print_results(struct st_latency *latencies,
 	/* Iterate over each rank / tag pair */
 	local_rep = 0;
 	do {
-		uint32_t rank = latencies[local_rep].rank;
-		uint32_t tag = latencies[local_rep].tag;
+		uint32_t rank      = latencies[local_rep].rank;
+		uint32_t tag       = latencies[local_rep].tag;
+		uint32_t rep_count = test_params->rep_count;
 		uint32_t start_idx = local_rep;
 		uint32_t last_idx;
 		uint32_t median_idx;
@@ -213,27 +215,27 @@ static void print_results(struct st_latency *latencies,
 				num_failed++;
 
 			local_rep++;
-			if (local_rep >= test_params->rep_count)
+			if (local_rep >= rep_count)
 				break;
 		}
 		last_idx = local_rep - 1;
-		D_ASSERT(start_idx + num_failed <= last_idx);
-
-		/* Compute median index */
-		median_idx = start_idx + num_failed +
-			(last_idx - start_idx - num_failed) / 2;
-		D_ASSERT(median_idx <= last_idx);
-		D_ASSERT(median_idx >= start_idx + num_failed);
+		D_ASSERT(start_idx + num_failed <= last_idx + 1);
 
 		printf("\t\t%u:%u - ", rank, tag);
+		if (start_idx + num_failed == last_idx + 1) {
+			printf("NA\n");
+		} else {
+			/* Compute median index */
+			median_idx =
+			    start_idx + num_failed + (last_idx - start_idx - num_failed) / 2;
+			D_ASSERT(median_idx <= last_idx);
+			D_ASSERT(median_idx >= start_idx + num_failed);
 
-		/* At least some messages to this endpoint succeeded */
-		if (start_idx + num_failed <= last_idx)
-			printf("%ld", latencies[median_idx].val / 1000);
+			printf("%ld\n", latencies[median_idx].val / 1000);
+		}
 
-		printf("\n");
 		if (num_failed > 0)
-			printf("\t\t\tFailures: %u\n", num_failed);
+			printf("\t\t\tFailures: %u/%u\n", num_failed, last_idx - start_idx + 1);
 		print_fail_counts(&latencies[start_idx], num_failed, "\t\t\t");
 
 	} while (local_rep < test_params->rep_count);
