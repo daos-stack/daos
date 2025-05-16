@@ -310,9 +310,12 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 			goto cancel;
 		}
 
-		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
+		dru          = &dth->dth_rsrvds[dth->dth_rsrvd_cnt];
 		dru->dru_scm = *rsrvd_scmp;
-		*rsrvd_scmp = NULL;
+		if (*rsrvd_scmp != NULL) {
+			*rsrvd_scmp = NULL;
+			dth->dth_rsrvd_cnt++;
+		}
 
 		D_INIT_LIST_HEAD(&dru->dru_nvme);
 		d_list_splice_init(nvme_exts, &dru->dru_nvme);
