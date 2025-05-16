@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -89,7 +90,8 @@ exit:
 }
 
 int
-vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t psize, size_t meta_size)
+vts_ctx_init(struct vos_test_ctx *tcx, uint64_t scm_sz, uint64_t meta_sz, uint64_t data_sz,
+	     unsigned int flags)
 {
 	int rc;
 
@@ -107,8 +109,8 @@ vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t psize, size_t meta_size)
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, meta_size,
-           0 /* flags */, 0 /* version */, &tcx->tc_po_hdl);
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, scm_sz, data_sz, meta_sz, flags,
+			     0 /* version */, &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vpool create %s failed with error : %d\n",
 			    tcx->tc_po_name, rc);
@@ -137,12 +139,6 @@ vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t psize, size_t meta_size)
  failed:
 	vts_ctx_fini(tcx);
 	return rc;
-}
-
-int
-vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
-{
-	return vts_ctx_init_ex(tcx, psize, 0);
 }
 
 void
