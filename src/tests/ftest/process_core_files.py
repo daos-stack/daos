@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -266,6 +266,8 @@ class CoreFileProcessing():
         cmds = []
 
         # -debuginfo packages that don't get installed with debuginfo-install
+        self.log.debug("Installing -debuginfo packages that don't get installed",
+                       " with debuginfo-install")
         for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5',
                     'libabt0' if "suse" in self.distro_info.name.lower() else "argobots",
                     'libfabric', 'hdf5-vol-daos', 'hdf5-vol-daos-mpich',
@@ -281,6 +283,7 @@ class CoreFileProcessing():
             cmds.append(["sudo", "rm", "-f", path])
 
         if self.USE_DEBUGINFO_INSTALL:
+            self.log.debug("self.USE_DEBUGINFO_INSTALL")
             dnf_args = ["--nobest", "--exclude", "ompi-debuginfo"]
             if os.getenv("TEST_RPMS", 'false') == 'true':
                 if "suse" in self.distro_info.name.lower():
@@ -313,9 +316,11 @@ class CoreFileProcessing():
         # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
         # Now install a few pkgs that debuginfo-install wouldn't
+        self.log.debug("Now install a few pkgs that debuginfo-install wouldn't")
         cmd = ["sudo", "dnf", "-y"]
         if self.is_el() or "suse" in self.distro_info.name.lower():
             cmd.append("--enablerepo=*debug*")
+            cmd.append("--disablerepo='epel-*'")
         cmd.append("install")
         for pkg in install_pkgs:
             try:
@@ -327,7 +332,7 @@ class CoreFileProcessing():
 
         retry = False
         for cmd in cmds:
-            if not run_local(self.log, " ".join(cmd)).passed:
+            if not run_local(self.log, " ".join(cmd), True, 120).passed:
                 # got an error, so abort this list of commands and re-run
                 # it with a dnf clean, makecache first
                 retry = True
@@ -337,11 +342,13 @@ class CoreFileProcessing():
             cmd_prefix = ["sudo", "dnf"]
             if self.is_el() or "suse" in self.distro_info.name.lower():
                 cmd_prefix.append("--enablerepo=*debug*")
+                cmd_prefix.append("--disablerepo='epel-*'")
             cmds.insert(0, cmd_prefix + ["clean", "all"])
             cmds.insert(1, cmd_prefix + ["makecache"])
             for cmd in cmds:
                 if not run_local(self.log, " ".join(cmd)).passed:
                     break
+        self.log.info("Installing debuginfo packages for stacktrace creation - DONE")
 
     def is_el(self):
         """Determine if the distro is EL based.
