@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eux
 
 export PS4='+ ${HOSTNAME%%.*}:${BASH_SOURCE:+$BASH_SOURCE:}$LINENO:${FUNCNAME:+$FUNCNAME():} '
@@ -24,11 +29,37 @@ source ci/junit.sh
 : "${MLNX_VER_NUM:=24.04-0.6.6.0}"
 
 : "${DISTRO:=EL_7}"
-DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
-DSG_REPO_var="DAOS_STACK_${DISTRO}_GROUP_REPO"
-DSA_REPO_var="DAOS_STACK_${DISTRO}_APPSTREAM_REPO"
 
 retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
+
+function create_host_file() {
+        local node_string="$1"
+        local output_file="${2:-./hosts}"
+        local input_file="${3:-}"
+        rm -rf "$output_file" 2>/dev/null
+        if [ -n "$input_file" ]; then
+                cp "$input_file" "$output_file"
+        fi
+        IFS=',' read -ra NODES <<< "$node_string"
+        for node in "${NODES[@]}"; do
+                ip_address=$(nslookup "$node" 2>/dev/null | awk '/^Address: / {print $2}' | head -n 1)
+                long_name=$(nslookup "$node" 2>/dev/null | awk '/^Name:/ {print $2}' | head -n 1)
+                if [ -n "$ip_address" ] && [ -n "$long_name" ]; then
+                        echo "$ip_address $long_name $node" >> "$output_file"
+                else
+                        echo "ERROR: Could not resolve $node"
+                        return 1
+                fi
+        done
+        return 0
+}
+
+if create_host_file "$NODESTRING" "./hosts" "/etc/hosts"; then
+  retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ./hosts --dest=/etc/hosts
+else
+  echo "ERROR: Failed to create host file"
+fi
+
 
 # shellcheck disable=SC2001
 sanitized_commit_message="$(echo "$COMMIT_MESSAGE" | sed -e 's/\(["\$]\)/\\\1/g')"
@@ -42,9 +73,6 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            GPG_KEY_URLS=\"${GPG_KEY_URLS:-}\"
            REPOSITORY_URL=\"${REPOSITORY_URL:-}\"
            JENKINS_URL=\"${JENKINS_URL:-}\"
-           DAOS_STACK_LOCAL_REPO=\"${!DSL_REPO_var}\"
-           DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var:-}\"
-           DAOS_STACK_EL_8_APPSTREAM_REPO=\"${!DSA_REPO_var:-}\"
            DISTRO=\"$DISTRO\"
            DAOS_STACK_RETRY_DELAY_SECONDS=\"$DAOS_STACK_RETRY_DELAY_SECONDS\"
            DAOS_STACK_RETRY_COUNT=\"$DAOS_STACK_RETRY_COUNT\"
