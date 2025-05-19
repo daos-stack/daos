@@ -73,7 +73,7 @@ class RebuildMdtest(MdtestBase):
 
         self.log_step("Kill 1 random rank")
         times["kill_rank"] = datetime.now()
-        self.server_managers[0].stop_random_rank(force=True)
+        self.server_managers[0].stop_random_rank(self.random, force=True)
 
         self.log_step("Wait for rebuild to start")
         self.pool.wait_for_rebuild_to_start(interval=rebuild_check_inverval)
