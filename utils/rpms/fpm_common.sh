@@ -81,7 +81,7 @@ list_files() {
   target_dir="${tmp}${TARGET_PATH}"
   mkdir -p "${target_dir}"
   # shellcheck disable=SC2068
-  readarray -t tmparray <<< "$(ls -1 -d "$@")"
+  readarray -t tmparray <<< "$(ls -1 -d $@)"
   listvar=()
   directories=()
   for file in "${tmparray[@]}"; do
