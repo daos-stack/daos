@@ -4722,7 +4722,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 				continue;
 			}
 			/* Detect need for iov_buf_len normalization */
-			if (update && iov->iov_len < iov->iov_buf_len)
+			if (iov->iov_len < iov->iov_buf_len)
 				dup = true;
 			count++;
 
@@ -4812,8 +4812,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 				iov_dup  = &sg_dup->sg_iovs[sgl_idx++];
 				iov      = &sg->sg_iovs[j++];
 				*iov_dup = *iov;
-				if (update)
-					iov_dup->iov_buf_len = iov_dup->iov_len;
+				iov_dup->iov_buf_len = iov_dup->iov_len;
 				continue;
 			}
 			/* Calculate merge range within size constraints */
@@ -4860,8 +4859,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			merged_iov = &sgls_dup[i].sg_iovs[sgl_idx++];
 			d_iov_set(merged_iov, merged_buf, merged_buf_size);
 			merged_iov->iov_len = merged_size;
-			if (update)
-				merged_iov->iov_buf_len = merged_iov->iov_len;
+			merged_iov->iov_buf_len = merged_iov->iov_len;
 		}
 		sg_dup->sg_nr = sgl_idx;
 	}
