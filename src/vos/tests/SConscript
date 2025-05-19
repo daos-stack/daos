@@ -51,7 +51,8 @@ def scons():
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     tenv.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
 
-    libraries = ['uuid', 'bio', 'gurt', 'cmocka', 'daos_common_pmem', 'daos_tests', 'vos', 'abt']
+    libraries = ['uuid', 'bio', 'gurt', 'cmocka', 'daos_common_pmem', 'daos_tests', 'vos', 'abt',
+                 'ssl']
 
     tenv.require('spdk')
     bio_ut_src = ['bio_ut.c', 'wal_ut.c']
