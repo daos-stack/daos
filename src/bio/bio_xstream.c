@@ -1611,8 +1611,8 @@ static int
 bio_xsctxt_init_by_config(struct common_cp_arg *cp_arg)
 {
 	struct subsystem_init_arg *init_arg;
-	void                     *json_data;
-	size_t                    json_data_size;
+	void                      *json_data;
+	size_t                     json_data_size;
 
 	json_data = spdk_posix_file_load_from_name(nvme_glb.bd_nvme_conf, &json_data_size);
 	if (json_data == NULL) {
