@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -103,6 +104,7 @@ struct rebuild_tgt_pool_tracker {
 
 struct rebuild_server_status {
 	d_rank_t	rank;
+	double          last_update;
 	uint32_t	dtx_resync_version;
 	uint32_t	scan_done:1,
 			pull_done:1;
@@ -122,8 +124,11 @@ struct rebuild_global_pool_tracker {
 
 	/** rebuild status for each server */
 	struct rebuild_server_status *rgt_servers;
-	double                         *rgt_servers_last_update;
-	double                          rgt_last_warn;
+
+	/** timestamps for the global operation */
+	double rgt_last_warn_ts;          /* time of most recent warning log for "slow engines" */
+	double rgt_scan_warn_deadline_ts; /* time after which to warn that scan may be hung */
+	double rgt_pull_warn_deadline_ts; /* time after which to warn that pull may be hung */
 
 	/** indirect indices for binary search by rank */
 	struct rebuild_server_status  **rgt_servers_sorted;

@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -43,8 +44,7 @@ class EcodDisabledRebuild(ErasureCodeIor):
 
         # Kill the last server rank and wait for 20 seconds, Rebuild is disabled
         # so data should not be rebuild
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
-                                           force=True)
+        self.server_managers[0].stop_ranks([self.server_count - 1], force=True)
         time.sleep(20)
 
         # Read IOR data and verify for different EC object and different sizes
@@ -55,7 +55,7 @@ class EcodDisabledRebuild(ErasureCodeIor):
         if self.server_count >= 5:
             # Kill the another server rank and wait for 20 seconds,Rebuild will
             # not happens because i's disabled.Read/verify data with Parity 2.
-            self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([self.server_count - 2], force=True)
             time.sleep(20)
 
             # Read IOR data and verify for different EC object and different sizes

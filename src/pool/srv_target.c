@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -240,9 +240,9 @@ flush_ult(void *arg)
 		} else if (rc) {	/* This pool doesn't have NVMe partition */
 			sleep_ms = 60000;
 		} else if (sched_req_space_check(child->spc_flush_req) == SCHED_SPACE_PRESS_NONE) {
-			sleep_ms = 5000;
+			sleep_ms = 500;
 		} else {
-			sleep_ms = (nr_flushed < nr_flush) ? 1000 : 0;
+			sleep_ms = (nr_flushed < nr_flush) ? 50 : 0;
 		}
 
 		if (dss_ult_exiting(child->spc_flush_req))
@@ -460,7 +460,7 @@ pool_child_recreate(struct ds_pool_child *child)
 	rc = vos_pool_create(path, child->spc_uuid, 0 /* scm_sz */,
 			     pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 			     pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
-			     0 /* flags */, vos_df_version, NULL);
+			     VOS_POF_FOR_RECREATE /* flags */, vos_df_version, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 

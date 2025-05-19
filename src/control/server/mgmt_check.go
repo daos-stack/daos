@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,7 +52,7 @@ func (svc *mgmtSvc) checkerIsEnabled() bool {
 	value, err := system.GetMgmtProperty(svc.sysdb, checkerEnabledKey)
 	if err != nil {
 		if !system.IsNotLeader(err) && !system.IsErrSystemAttrNotFound(err) &&
-			!system.IsNotReplica(err) {
+			!system.IsNotReplica(err) && !errors.Is(err, system.ErrUninitialized) {
 			svc.log.Errorf("failed to get checker enabled value: %s", err)
 		}
 		return false

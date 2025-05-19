@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1598,8 +1599,8 @@ ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p)
 			D_GOTO(failed, rc);
 	} else {
 		/* create a ULT and schedule it on xstream-0 */
-		rc = dss_ult_execute(cont_pool_svc_ult, &ia, NULL, NULL,
-				     DSS_XS_SYS, DSS_ULT_DEEP_STACK, 0);
+		rc = dss_ult_execute(cont_pool_svc_ult, &ia, NULL, NULL, DSS_XS_SYS, 0,
+				     DSS_DEEP_STACK_SZ);
 		if (rc)
 			D_GOTO(failed, rc);
 	}

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -127,9 +128,9 @@ class RebuildTestBase(TestWithServers):
         """Start the rebuild process."""
         # Exclude the rank from the pool to initiate rebuild
         if isinstance(self.inputs.rank.value, list):
-            self.server_managers[0].stop_ranks(self.inputs.rank.value, self.d_log, force=True)
+            self.server_managers[0].stop_ranks(self.inputs.rank.value, force=True)
         else:
-            self.server_managers[0].stop_ranks([self.inputs.rank.value], self.d_log, force=True)
+            self.server_managers[0].stop_ranks([self.inputs.rank.value], force=True)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start(1)

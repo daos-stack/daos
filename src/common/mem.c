@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,8 +37,7 @@ struct umem_tx_stage_item {
 
 #ifdef DAOS_PMEM_BUILD
 
-static int  daos_md_backend      = DAOS_MD_PMEM;
-static bool daos_disable_bmem_v2 = false;
+static int daos_md_backend = DAOS_MD_PMEM;
 #define UMM_SLABS_CNT 16
 
 /** Initializes global settings for the pmem objects.
@@ -51,8 +51,7 @@ umempobj_settings_init(bool md_on_ssd)
 {
 	int					rc;
 	enum pobj_arenas_assignment_type	atype;
-	unsigned int				md_mode = DAOS_MD_BMEM;
-	unsigned int                            md_disable_bmem_v2 = 0;
+	unsigned int                            md_mode = DAOS_MD_BMEM_V2;
 
 	if (!md_on_ssd) {
 		daos_md_backend = DAOS_MD_PMEM;
@@ -83,12 +82,6 @@ umempobj_settings_init(bool md_on_ssd)
 		return -DER_INVAL;
 	};
 
-	d_getenv_uint("DAOS_MD_DISABLE_BMEM_V2", &md_disable_bmem_v2);
-	if (md_disable_bmem_v2 && (md_mode != DAOS_MD_BMEM))
-		D_INFO("Ignoring DAOS_MD_DISABLE_BMEM_V2 tunable");
-	else
-		daos_disable_bmem_v2 = md_disable_bmem_v2;
-
 	daos_md_backend = md_mode;
 	return 0;
 }
@@ -97,12 +90,6 @@ int
 umempobj_get_backend_type(void)
 {
 	return daos_md_backend;
-}
-
-bool
-umempobj_allow_md_bmem_v2()
-{
-	return !daos_disable_bmem_v2;
 }
 
 int
@@ -127,7 +114,7 @@ umempobj_backend_type2class_id(int backend)
 size_t
 umempobj_pgsz(int backend)
 {
-	if (backend == DAOS_MD_BMEM_V2)
+	if (backend != DAOS_MD_PMEM)
 		return dav_obj_pgsz_v2();
 	else
 		return (1UL << 12);

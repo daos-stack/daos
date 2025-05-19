@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -826,24 +827,14 @@ crt_issue_uri_lookup_retry(crt_context_t ctx,
 	int		rc;
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-
-	/* IF PSRs are specified cycle through them, else use members */
-	if (grp_priv->gp_psr_ranks)
-		membs = grp_priv->gp_psr_ranks;
-	else
-		membs = grp_priv_get_membs(grp_priv);
+	membs = grp_priv_get_membs(grp_priv);
 
 	/* Note: membership can change between uri lookups, but we don't need
 	 * to handle this case, as it should be rare and will result in rank
 	 * being either repeated or skipped
 	 */
-	if (!membs || membs->rl_nr <= 1 || rpc_priv->crp_ul_idx == -1) {
-		contact_rank = grp_priv->gp_psr_rank;
-	} else {
-		rpc_priv->crp_ul_idx = (rpc_priv->crp_ul_idx + 1) %
-				       membs->rl_nr;
-		contact_rank = membs->rl_ranks[rpc_priv->crp_ul_idx];
-	}
+	rpc_priv->crp_ul_idx = (rpc_priv->crp_ul_idx + 1) % membs->rl_nr;
+	contact_rank         = membs->rl_ranks[rpc_priv->crp_ul_idx];
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
@@ -1026,22 +1017,13 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 
-	if (grp_priv->gp_psr_ranks)
-		membs = grp_priv->gp_psr_ranks;
-	else
-		membs = grp_priv_get_membs(grp_priv);
+	membs = grp_priv_get_membs(grp_priv);
 
-	if (!membs || membs->rl_nr == 0) {
-		/* If list is not set, default to legacy psr */
-		contact_rank = grp_priv->gp_psr_rank;
-		*ret_idx = -1;
-	} else {
-		/* Pick random rank from the list */
-		*ret_idx = d_rand() % membs->rl_nr;
-		contact_rank = membs->rl_ranks[*ret_idx];
+	/* Pick random rank from the list */
+	*ret_idx     = d_rand() % membs->rl_nr;
+	contact_rank = membs->rl_ranks[*ret_idx];
 
-		D_DEBUG(DB_ALL, "URI lookup rank chosen: %d\n", contact_rank);
-	}
+	D_DEBUG(DB_ALL, "URI lookup rank chosen: %d\n", contact_rank);
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
@@ -1269,38 +1251,6 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 			RPC_ERROR(rpc_priv, "crt_req_fill_tgt_uri() failed, " DF_RC "\n",
 				  DP_RC(rc));
 		D_GOTO(out, rc);
-	}
-
-	/*
-	 * If the target endpoint is the PSR and it's not already in the address
-	 * cache, insert the URI of the PSR to the address cache.
-	 * Did it in crt_grp_attach(), in the case that this context created
-	 * later can insert it here.
-	 */
-	if (base_addr == NULL && !crt_is_service()) {
-		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank && dst_tag == 0) {
-			D_STRNDUP(uri, grp_priv->gp_psr_uri, CRT_ADDR_STR_MAX_LEN);
-			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-
-			if (uri == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
-			base_addr = uri;
-			rc        = crt_grp_lc_uri_insert(grp_priv, tgt_ep->ep_rank, 0, uri);
-			if (rc != 0) {
-				D_ERROR("crt_grp_lc_uri_insert() failed rc=%d\n", rc);
-				D_GOTO(out, rc);
-			}
-
-			rc = crt_req_fill_tgt_uri(rpc_priv, uri);
-			if (rc != 0) {
-				RPC_ERROR(rpc_priv, "tgt_uri='%s' fill failed\n", uri);
-				D_GOTO(out, rc);
-			}
-		} else {
-			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-		}
 	}
 
 out:

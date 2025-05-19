@@ -1,5 +1,6 @@
 """
   (C) Copyright 2023-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -334,7 +335,7 @@ class VerifyPoolSpace(TestWithServers):
         #  - With MD on SSD the control plane will unmount /mnt/daos0 when the rank is stopped
         description = 'all pools after stopping rank 1'
         self.log_step(f'Checking {description}', True)
-        self.server_managers[0].stop_ranks([1], self.d_log)
+        self.server_managers[0].stop_ranks([1])
         status = self.server_managers[0].verify_expected_states()
         if not status['expected']:
             self.fail("Rank 1 was not stopped")

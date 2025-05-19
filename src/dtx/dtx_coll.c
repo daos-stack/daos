@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -106,6 +107,43 @@ out:
 	D_ASSERT(rc == ABT_SUCCESS);
 }
 
+static void
+dtx_coll_find_rank_range(struct pl_map *map, struct pl_obj_layout *layout, uint32_t version,
+			 uint32_t *min_rank, uint32_t *max_rank)
+{
+	struct pool_target *target;
+	d_rank_t            my_rank = dss_self_rank();
+	int                 rc;
+	int                 i;
+
+	for (i = 0, *min_rank = -1, *max_rank = 0; i < layout->ol_nr; i++) {
+		if (layout->ol_shards[i].po_target == -1 || layout->ol_shards[i].po_shard == -1)
+			continue;
+
+		rc = pool_map_find_target(map->pl_poolmap, layout->ol_shards[i].po_target, &target);
+		D_ASSERT(rc == 1);
+
+		/* Skip current leader rank. */
+		if (target->ta_comp.co_rank == my_rank)
+			continue;
+
+		/* Skip the target that (re-)joined the system after the DTX. */
+		if (target->ta_comp.co_ver > version)
+			continue;
+
+		/* Skip non-healthy one. */
+		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
+		    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
+		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
+			continue;
+
+		if (*min_rank > target->ta_comp.co_rank)
+			*min_rank = target->ta_comp.co_rank;
+		if (*max_rank < target->ta_comp.co_rank)
+			*max_rank = target->ta_comp.co_rank;
+	}
+}
+
 int
 dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dtx_memberships *mbs,
 	      uint32_t my_tgtid, uint32_t dtx_ver, uint32_t pm_ver, bool for_check, bool need_hint,
@@ -118,6 +156,7 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 	struct dtx_coll_target	*dct;
 	struct dtx_coll_entry	*dce = NULL;
 	struct daos_obj_md	 md = { 0 };
+	uint32_t                *ranks;
 	uint32_t		 rank_nr;
 	d_rank_t		 my_rank = dss_self_rank();
 	d_rank_t		 max_rank = 0;
@@ -198,7 +237,33 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 		}
 	}
 
-	rank_nr = pool_map_rank_nr(map->pl_poolmap);
+	md.omd_id       = oid.id_pub;
+	md.omd_ver      = pm_ver;
+	md.omd_fdom_lvl = dct->dct_fdom_lvl;
+	md.omd_pda      = dct->dct_pda;
+	md.omd_pdom_lvl = dct->dct_pdom_lvl;
+
+	rc = pl_obj_place(map, oid.id_layout_ver, &md, DAOS_OO_RW, NULL, &layout);
+	if (rc != 0) {
+		D_ERROR("Failed to load object layout for " DF_OID " in pool " DF_UUID "\n",
+			DP_OID(oid.id_pub), DP_UUID(po_uuid));
+		goto out;
+	}
+
+	if (likely(mbs->dm_flags & DMF_RANK_RANGE)) {
+		ranks             = dtx_coll_mbs_rankrange(mbs);
+		dce->dce_min_rank = ranks[0];
+		dce->dce_max_rank = ranks[1];
+	} else {
+		/*
+		 * Only for handling the existing old collective DTX entry, relative rare case.
+		 * So it is no matter to double scan the object layout.
+		 */
+		dtx_coll_find_rank_range(map, layout, dtx_ver, &dce->dce_min_rank,
+					 &dce->dce_max_rank);
+	}
+
+	rank_nr = dce->dce_max_rank - dce->dce_min_rank + 1;
 	if (unlikely(rank_nr == 1))
 		D_GOTO(out, rc = 0);
 
@@ -213,25 +278,17 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 	for (i = 0; i < rank_nr; i++)
 		dce->dce_hints[i] = (uint8_t)(-1);
 
-	md.omd_id = oid.id_pub;
-	md.omd_ver = pm_ver;
-	md.omd_fdom_lvl = dct->dct_fdom_lvl;
-	md.omd_pda = dct->dct_pda;
-	md.omd_pdom_lvl = dct->dct_pdom_lvl;
-
-	rc = pl_obj_place(map, oid.id_layout_ver, &md, DAOS_OO_RW, NULL, &layout);
-	if (rc != 0) {
-		D_ERROR("Failed to load object layout for "DF_OID" in pool "DF_UUID"\n",
-			DP_OID(oid.id_pub), DP_UUID(po_uuid));
-		goto out;
-	}
-
 	for (i = 0, j = 0; i < layout->ol_nr && j < rank_nr - 1; i++) {
 		if (layout->ol_shards[i].po_target == -1 || layout->ol_shards[i].po_shard == -1)
 			continue;
 
 		rc = pool_map_find_target(map->pl_poolmap, layout->ol_shards[i].po_target, &target);
 		D_ASSERT(rc == 1);
+
+		/* Skip the one out of rank range. */
+		if (target->ta_comp.co_rank < dce->dce_min_rank ||
+		    target->ta_comp.co_rank > dce->dce_max_rank)
+			continue;
 
 		/* Skip current leader rank. */
 		if (target->ta_comp.co_rank == my_rank)
@@ -247,8 +304,9 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
 			continue;
 
-		if (dce->dce_hints[target->ta_comp.co_rank] == (uint8_t)(-1)) {
-			dce->dce_hints[target->ta_comp.co_rank] = target->ta_comp.co_index;
+		if (dce->dce_hints[target->ta_comp.co_rank - dce->dce_min_rank] == (uint8_t)(-1)) {
+			dce->dce_hints[target->ta_comp.co_rank - dce->dce_min_rank] =
+			    target->ta_comp.co_index;
 			dce->dce_ranks->rl_ranks[j++] = target->ta_comp.co_rank;
 			if (max_rank < target->ta_comp.co_rank)
 				max_rank = target->ta_comp.co_rank;
@@ -268,7 +326,8 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 		dce->dce_hint_sz = 0;
 	} else {
 		dce->dce_ranks->rl_nr = j;
-		dce->dce_hint_sz = max_rank + 1;
+		dce->dce_max_rank     = max_rank;
+		dce->dce_hint_sz      = dce->dce_max_rank - dce->dce_min_rank + 1;
 	}
 
 out:

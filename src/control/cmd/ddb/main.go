@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -182,7 +183,10 @@ Example Paths:
 	app := createGrumbleApp(ctx)
 
 	if opts.Args.VosPath != "" {
-		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") && !strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") {
+		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
 			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
 			if err := ddbOpen(ctx, string(opts.Args.VosPath), opts.WriteMode); err != nil {
 				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
@@ -225,7 +229,7 @@ Example Paths:
 	// Print the version upon entry
 	log.Infof("ddb version %s", build.DaosVersion)
 	// app.Run() uses the os.Args so need to clear them before running
-	os.Args = args
+	os.Args = []string{}
 	result := app.Run()
 	// make sure pool is closed
 	if ddbPoolIsOpen(ctx) {

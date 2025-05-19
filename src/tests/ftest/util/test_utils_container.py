@@ -60,7 +60,7 @@ def remove_container(test, container):
         list: a list of any errors detected when removing the container
     """
     error_list = []
-    test.test_log.info("Destroying container %s", str(container))
+    test.log.info("Destroying container %s", str(container))
 
     # Ensure messages are logged
     container.silent.value = False
@@ -75,7 +75,7 @@ def remove_container(test, container):
     try:
         container.destroy(force=1)
     except (DaosApiError, TestFail) as error:
-        test.test_log.info(f'  {str(error)}')
+        test.log.info(f'  {str(error)}')
         error_list.append(f'Error destroying container {container.identifier}: {str(error)}')
 
     # Restore raising exceptions for any failed command

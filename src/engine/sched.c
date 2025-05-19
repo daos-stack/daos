@@ -206,42 +206,48 @@ struct pressure_ratio {
 };
 
 static struct pressure_ratio pressure_gauge[] = {
-	{	/* free space > 40%, no space pressure */
-		.pr_free	= 40,
-		.pr_gc_ratio	= 10,
-		.pr_delay	= 0,
-		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
-	},
-	{	/* free space > 30% */
-		.pr_free	= 30,
-		.pr_gc_ratio	= 20,
-		.pr_delay	= 4000, /* msecs */
-		.pr_pressure	= 1,
-	},
-	{	/* free space > 20% */
-		.pr_free	= 20,
-		.pr_gc_ratio	= 30,
-		.pr_delay	= 6000, /* msecs */
-		.pr_pressure	= 2,
-	},
-	{	/* free space > 10% */
-		.pr_free	= 10,
-		.pr_gc_ratio	= 40,
-		.pr_delay	= 8000, /* msecs */
-		.pr_pressure	= 3,
-	},
-	{	/* free space > 5% */
-		.pr_free	= 5,
-		.pr_gc_ratio	= 50,
-		.pr_delay	= 10000, /* msecs */
-		.pr_pressure	= 4,
-	},
-	{	/* free space <= 5% */
-		.pr_free	= 0,
-		.pr_gc_ratio	= 60,
-		.pr_delay	= 12000, /* msecs */
-		.pr_pressure	= 5,
-	},
+    {
+	/* free space > 40%, no space pressure */
+	.pr_free     = 40,
+	.pr_gc_ratio = 10,
+	.pr_delay    = 0,
+	.pr_pressure = SCHED_SPACE_PRESS_NONE,
+    },
+    {
+	/* free space > 30% */
+	.pr_free     = 30,
+	.pr_gc_ratio = 30,
+	.pr_delay    = 4000, /* msecs */
+	.pr_pressure = 1,
+    },
+    {
+	/* free space > 20% */
+	.pr_free     = 20,
+	.pr_gc_ratio = 45,
+	.pr_delay    = 6000, /* msecs */
+	.pr_pressure = 2,
+    },
+    {
+	/* free space > 10% */
+	.pr_free     = 10,
+	.pr_gc_ratio = 60,
+	.pr_delay    = 8000, /* msecs */
+	.pr_pressure = 3,
+    },
+    {
+	/* free space > 5% */
+	.pr_free     = 5,
+	.pr_gc_ratio = 75,
+	.pr_delay    = 10000, /* msecs */
+	.pr_pressure = 4,
+    },
+    {
+	/* free space <= 5% */
+	.pr_free     = 0,
+	.pr_gc_ratio = 90,
+	.pr_delay    = 12000, /* msecs */
+	.pr_pressure = 5,
+    },
 };
 
 static inline unsigned int

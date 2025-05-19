@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,9 +150,9 @@ struct daos_obj_md {
 	uint32_t		omd_fdom_lvl;
 	/* Performance domain affinity */
 	uint32_t		omd_pda;
-	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_GRP.
+	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_PERF.
 	 * Now will enable the performance domain feature only when omd_pdom_lvl set as
-	 * PO_COMP_TP_GRP and with PO_COMP_TP_GRP layer in pool map.
+	 * PO_COMP_TP_PERF and with PO_COMP_TP_PERF layer in pool map.
 	 */
 	uint32_t		omd_pdom_lvl;
 };
@@ -323,8 +324,10 @@ struct pl_obj_layout;
 
 int obj_class_init(void);
 void obj_class_fini(void);
-struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid,
-					       uint32_t *nr_grps);
+struct daos_oclass_attr *
+daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps);
+struct daos_oclass_attr              *
+daos_oclass_id2attr(daos_oclass_id_t oid, uint32_t *nr_grps);
 int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca);
 int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 			      daos_oclass_id_t cid, uint32_t args);

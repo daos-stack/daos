@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -338,6 +339,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	if (log) {
 		vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 		rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, dth == NULL, &loh);
+		D_ASSERTF(rc != -DER_NONEXIST, "Uncorrectable incarnation log corruption detected");
 		if (rc != 0)
 			return rc;
 

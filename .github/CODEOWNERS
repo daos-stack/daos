@@ -40,7 +40,9 @@ site_scons/ @daos-stack/dev-build-owners @daos-stack/dev-build-watchers
 utils/sl @daos-stack/dev-build-owners @daos-stack/dev-build-watchers
 
 # ftest-watchers: files affecting functional tests
+# pydaos/raw is client code only used by ftest
 src/tests/ftest @daos-stack/ftest-owners @daos-stack/ftest-watchers
+src/client/pydaos/raw @daos-stack/ftest-owners @daos-stack/ftest-watchers
 
 # telem-watchers: Changes related to the telemetry library
 src/utils/daos_metrics @daos-stack/telem-watchers

@@ -1,11 +1,13 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter
-from general_utils import get_log_file, pcmd
+from general_utils import get_log_file
+from run_utils import run_remote
 
 
 class MacsioCommand(ExecutableCommand):
@@ -467,7 +469,9 @@ class MacsioCommand(ExecutableCommand):
         macsio_files = (self.log_file_name.value, self.timings_file_name.value)
         for macsio_file in macsio_files:
             if macsio_file:
-                self.log.info("Output from %s", macsio_file)
-                pcmd(hosts, "cat {}".format(macsio_file), timeout=30)
+                # DAOS-17157 - this needs error checking but is currently failing
+                run_remote(self.log, hosts, f"cat {macsio_file}", timeout=30)
+                # if not result.passed:
+                #     status = False
 
         return status

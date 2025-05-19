@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -68,9 +69,10 @@ class ObjOpenBadParam(TestWithServers):
             obj.open()
         except DaosApiError as error:
             if code not in str(error):
-                self.d_log.error(f"Object open {case} expecting {code} but not seen")
-                self.d_log.error(traceback.format_exc())
-                self.fail(f"Object open {case} expecting {code} but not seen")
+                msg = f"Object open {case} expecting {code} but not seen"
+                self.log.error(msg)
+                self.log.error(traceback.format_exc())
+                self.fail(msg)
 
     def test_bad_obj_handle(self):
         """JIRA ID: DAOS-1320

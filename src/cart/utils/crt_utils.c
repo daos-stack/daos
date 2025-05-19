@@ -580,10 +580,6 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_group_psr_set(*grp, (*rank_list)->rl_ranks[0]);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
 out:
 	if (rc != 0 && opts.assert_on_error) {
 		D_ERROR("Asserting due to an error\n");
