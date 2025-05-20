@@ -61,8 +61,9 @@ class OSAOnlineReintegration(OSAUtils):
         # Create a pool
         pool = {}
 
-        if multiple_ranks is True:
-            rank = ",".join(map(str, random.sample(list(self.server_managers[0].ranks.keys()), k=2)))
+        if multiple_ranks:
+            ranklist = list(self.server_managers[0].ranks.keys())
+            rank = ",".join(map(str, self.random.sample(ranklist), k=2))
             # For multiple rank testing, we need RP_3G1 for IOR to complete.
             oclass = "RP_3G1"
         else:

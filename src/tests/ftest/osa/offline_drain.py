@@ -39,7 +39,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             data (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             oclass (str): DAOS object class (eg: RP_2G1,etc)
-            multiple_ranks (bool) : Perform multiple ranks testing (Default: False)
+            multiple_ranks (bool): Perform multiple ranks testing (Default: False)
         """
         # Create a pool
         pool = {}
@@ -50,7 +50,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
 
         # For testing multiple ranks as dmg parameters, use a list of ranks.
         if multiple_ranks:
-            self.ranks = ",".join(map(str, random.sample(list(self.server_managers[0].ranks.keys()), k=2)))
+            ranklist = list(self.server_managers[0].ranks.keys())
+            self.ranks = ",".join(map(str, self.random.sample(ranklist), k=2))
         else:
             self.ranks = self.random.choice(list(self.server_managers[0].ranks.keys()))
 
