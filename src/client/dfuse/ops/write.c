@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,17 +34,13 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	struct dfuse_event   *ev;
-	uint64_t              eqt_idx;
 	bool                  wb_cache = false;
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_WRITE);
 
 	oh->doh_linear_read = false;
 
-	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
-
-	eqt = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
-
+	eqt = pick_eqt(dfuse_info);
 	if (oh->doh_ie->ie_dfs->dfc_wb_cache) {
 		D_RWLOCK_RDLOCK(&oh->doh_ie->ie_wlock);
 		wb_cache = true;
