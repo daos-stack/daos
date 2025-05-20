@@ -1298,9 +1298,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				CleanSpdkLockfiles: true,
 			},
-			expResp: &storage.BdevPrepareResponse{
-				LockfilesRemoved: []string{},
-			},
+			expResp: &storage.BdevPrepareResponse{},
 		},
 		"prepare setup; clean lockfiles fail; empty allow list": {
 			req: storage.BdevPrepareRequest{
@@ -1309,9 +1307,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 			nvme: &spdk.NvmeImpl{
 				LocksDir: testDir,
 			},
-			expResp: &storage.BdevPrepareResponse{
-				LockfilesRemoved: []string{},
-			},
+			expResp: &storage.BdevPrepareResponse{},
 		},
 		"prepare setup; lock file clean": {
 			req: storage.BdevPrepareRequest{

@@ -236,6 +236,28 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 	return nil
 }
 
+// Clean hugepages for non-existent processes. Remove lockfiles for any devices specified in request
+// or all in config if none specified in config. Honor both allow and block lists when processing
+// removal of lockfiles.
+func cleanSpdkResources(log logging.Logger, req storage.BdevPrepareRequest, cmd *nvmeCmd) {
+	cleanReq := storage.BdevPrepareRequest{
+		CleanSpdkHugepages: true,
+		CleanSpdkLockfiles: true,
+		PCIAllowList:       req.PCIAllowList,
+		PCIBlockList:       req.PCIBlockList,
+	}
+
+	msg := "cleanup spdk resources"
+
+	cleanResp, err := cmd.ctlSvc.NvmePrepare(cleanReq)
+	if err != nil {
+		log.Error(errors.Wrap(err, msg).Error())
+	} else {
+		log.Debugf("%s: %d hugepages and lockfiles %v removed", msg,
+			cleanResp.NrHugepagesRemoved, cleanResp.LockfilesRemoved)
+	}
+}
+
 func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	cmd.Debug("Prepare locally-attached NVMe storage...")
 
@@ -246,6 +268,8 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
+
+	cleanSpdkResources(cmd.Logger, req, cmd)
 
 	cmd.Tracef("nvme prepare request parameters: %+v", req)
 
@@ -299,7 +323,7 @@ func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
 	return cmd
 }
 
-func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
+func resetNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	cmd.Debug("Reset locally-attached NVMe storage...")
 
 	// For the moment assume that lockfile and hugepage cleanup should be skipped if hugepages
@@ -308,50 +332,22 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 		return storage.FaultHugepagesDisabled
 	}
 
-	// Clean hugepages for non-existent processes. Remove lockfiles for any devices specified
-	// in request or all in config if none specified in config. Honor both allow and block lists
-	// when processing removal of lockfiles.
-	cleanReq := storage.BdevPrepareRequest{
-		CleanSpdkHugepages: true,
-		CleanSpdkLockfiles: true,
-		PCIAllowList:       resetReq.PCIAllowList,
-		PCIBlockList:       resetReq.PCIBlockList,
-	}
-	if err := sanitizePCIAddrLists(&cleanReq); err != nil {
-		return errors.Wrap(err, "sanitizing cli input pci address lists")
-	}
-	if cmd.config != nil {
-		if err := updateNVMePrepReqAllowedFromCfg(cmd, cmd.config, &cleanReq); err != nil {
-			return err
-		}
-		if err := updateNVMePrepReqBlockedFromCfg(cmd, cmd.config, &cleanReq); err != nil {
-			return err
-		}
-	}
-
-	msg := "cleanup hugepages before nvme reset"
-
-	if resp, err := cmd.ctlSvc.NvmePrepare(cleanReq); err != nil {
-		cmd.Errorf("%s", errors.Wrap(err, msg))
-	} else {
-		cmd.Debugf("%s: %d hugepages and lockfiles %v removed", msg,
-			resp.NrHugepagesRemoved, resp.LockfilesRemoved)
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &resetReq); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
+	cleanSpdkResources(cmd.Logger, req, cmd)
+
 	// Apply request parameter field values required specifically for reset operation.
-	resetReq.HugepageCount = 0
-	resetReq.HugeNodes = ""
-	resetReq.CleanSpdkHugepages = false
-	resetReq.CleanSpdkLockfiles = false
-	resetReq.Reset_ = true
+	req.HugepageCount = 0
+	req.HugeNodes = ""
+	req.CleanSpdkHugepages = false
+	req.CleanSpdkLockfiles = false
+	req.Reset_ = true
 
-	cmd.Tracef("nvme reset request parameters: %+v", resetReq)
+	cmd.Tracef("nvme reset request parameters: %+v", req)
 
-	resetResp, err := cmd.ctlSvc.NvmePrepare(resetReq)
+	resetResp, err := cmd.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		return errors.Wrap(err, "nvme reset backend")
 	}
@@ -365,13 +361,13 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	//            inaccessible from both OS and SPDK. Workaround is to run nvme scan
 	//            --ignore-config to reset driver bindings.
 	if resetResp.VMDPrepared {
-		resetReq.PCIAllowList = ""
-		resetReq.PCIBlockList = ""
-		resetReq.EnableVMD = false // Prevents VMD endpoints being auto populated
+		req.PCIAllowList = ""
+		req.PCIBlockList = ""
+		req.EnableVMD = false // Prevents VMD endpoints being auto populated
 
-		cmd.Tracef("vmd second nvme reset request parameters: %+v", resetReq)
+		cmd.Tracef("vmd second nvme reset request parameters: %+v", req)
 
-		if _, err := cmd.ctlSvc.NvmePrepare(resetReq); err != nil {
+		if _, err := cmd.ctlSvc.NvmePrepare(req); err != nil {
 			return errors.Wrap(err, "nvme reset backend")
 		}
 	}

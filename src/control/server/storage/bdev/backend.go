@@ -222,18 +222,22 @@ func createSpdkLockfileAddrCheckFunc(allowed *hardware.PCIAddressSet) spdk.Lockf
 
 // Skip addresses in block list if present then supply address check function that can detect VMD
 // backing device addresses during clean operation.
-func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) (err error) {
+func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) error {
 	inAllowList, err := hardware.NewPCIAddressSetFromString(req.PCIAllowList)
 	if err != nil {
-		return
+		return err
 	}
 	inBlockList, err := hardware.NewPCIAddressSetFromString(req.PCIBlockList)
 	if err != nil {
-		return
+		return err
 	}
 	// Remove blocked VMD addresses from allow list.
 	allowedAddresses := inAllowList.Difference(inBlockList)
 
+	if allowedAddresses.IsEmpty() {
+		sb.log.Trace("clean spdk lockfiles skipped, zero devices selected")
+		return nil
+	}
 	sb.log.Debugf("clean spdk lockfiles for devices %v", allowedAddresses)
 
 	lfAddrCheckFn := createSpdkLockfileAddrCheckFunc(allowedAddresses)

@@ -461,14 +461,12 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	return nil
 }
 
+// Clean SPDK resources, both lockfiles and orphaned hugepages. Orphaned hugepages will be cleaned
+// whether or not device PCI addresses are supplied.
 func cleanSpdkResources(srv *server, pciAddrs []string) error {
 	// For the moment assume that both lockfile and hugepage cleanup should be skipped if
 	// hugepages have been disabled in the server config.
 	if srv.cfg.DisableHugepages {
-		return nil
-	}
-
-	if len(pciAddrs) == 0 {
 		return nil
 	}
 
