@@ -63,7 +63,7 @@ class OSAOnlineReintegration(OSAUtils):
 
         if multiple_ranks:
             ranklist = list(self.server_managers[0].ranks.keys())
-            rank = ",".join(map(str, self.random.sample(ranklist), k=2))
+            rank = ",".join(map(str, self.random.sample(ranklist, k=2)))
             # For multiple rank testing, we need RP_3G1 for IOR to complete.
             oclass = "RP_3G1"
         else:
