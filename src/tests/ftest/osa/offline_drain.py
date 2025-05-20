@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
-
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
@@ -33,7 +31,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
 
     def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0,
-                               multiple_ranks=None):
+                               multiple_ranks=False):
         """Run the offline drain without data.
 
         Args:
@@ -41,7 +39,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             data (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             oclass (str): DAOS object class (eg: RP_2G1,etc)
-            multiple_ranks (list) : List multiple ranks for drain testing (Default: None)
+            multiple_ranks (bool) : Perform multiple ranks testing (Default: False)
         """
         # Create a pool
         pool = {}
@@ -51,11 +49,13 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # For testing multiple ranks as dmg parameters, use a list of ranks.
-        if multiple_ranks is True:
-            self.ranks = self.multiple_ranks
+        if multiple_ranks:
+            self.ranks = ",".join(map(str, random.sample(list(self.server_managers[0].ranks.keys()), k=2)))
+        else:
+            self.ranks = self.random.choice(list(self.server_managers[0].ranks.keys()))
 
         # Exclude target : random two targets  (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
+        exc = self.random.randint(0, 6)
         target_list.append(exc)
         target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])
@@ -277,5 +277,4 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=OSAOfflineDrain,test_osa_offline_drain_with_multiple_ranks
         """
         self.log.info("Offline Drain : Test with multiple ranks")
-        multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
-        self.run_offline_drain_test(1, data=True, multiple_ranks=multiple_ranks)
+        self.run_offline_drain_test(1, data=True, multiple_ranks=True)

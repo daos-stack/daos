@@ -100,8 +100,6 @@ checksum:
   test_with_checksum: false
 snapshot:
   test_with_snapshot: true
-multiple_ranks:
-  rank_list: ["1,2"]
 test_ranks:
   rank_list: ["2", "5"]
 pool_capacity:

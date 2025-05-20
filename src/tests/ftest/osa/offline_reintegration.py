@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
-
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
@@ -83,12 +81,12 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
-        # Exclude ranks 0 and 3 from a random pool
-        # Exclude ranks 0 and 3 from a random pool
-        if multiple_ranks is True:
-            ranks = ["0,3"]
+        # Exclude ranks from a random pool
+        if multiple_ranks:
+            ranks = ",".join(map(str, random.sample(list(self.server_managers[0].ranks.keys()), k=2)))
         else:
-            ranks = [0, 3]
+            ranks = self.random.choice(list(self.server_managers[0].ranks.keys()))
+
         self.pool = random.choice(pools)  # nosec
         for loop in range(0, self.loop_test_cnt):
             self.log.info(

@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import queue
-import random
 import threading
 import time
 
@@ -61,15 +60,14 @@ class OSAOnlineReintegration(OSAUtils):
         test_seq = self.ior_test_sequence[0]
         # Create a pool
         pool = {}
-        exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         if multiple_ranks is True:
-            rank = "0,3"
+            rank = ",".join(map(str, random.sample(list(self.server_managers[0].ranks.keys()), k=2)))
             # For multiple rank testing, we need RP_3G1 for IOR to complete.
             oclass = "RP_3G1"
         else:
-            # Exclude one rank : other than rank 0.
-            rank = random.randint(1, exclude_servers)  # nosec
+            # Exclude one rank
+            rank = self.random.choice(list(self.server_managers[0].ranks.keys()))
 
         # Start the daos_racer thread
         if racer is True:
