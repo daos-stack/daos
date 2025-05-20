@@ -174,15 +174,6 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	return true;
 }
 
-static struct dfuse_eq *
-pick_eqt(struct dfuse_info *dfuse_info)
-{
-	uint64_t eqt_idx;
-
-	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
-	return &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
-}
-
 /**
  * Check for open matching reads, if there are multiple readers of the same file offset
  * then chain future requests off the first one to avoid extra network round-trips.  This

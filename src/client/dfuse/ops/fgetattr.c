@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +31,6 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 {
 	struct dfuse_info  *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_event *ev;
-	uint64_t            eqt_idx;
 	struct dfuse_eq    *eqt;
 	int                 rc;
 
@@ -40,8 +40,7 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 		return;
 	}
 
-	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
-	eqt     = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
+	eqt = pick_eqt(dfuse_info);
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
