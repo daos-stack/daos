@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1482,7 +1483,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 			phy_ent->pe_csum_info = ent_in->ei_csum;
 			D_ALLOC(phy_ent->pe_csum_info.cs_csum, phy_ent->pe_csum_info.cs_buf_len);
 			if (phy_ent->pe_csum_info.cs_csum == NULL)
-				return -DER_NOMEM;
+				D_GOTO(abort, rc = -DER_NOMEM);
 			phy_ent->pe_csum_free = true;
 			memcpy(phy_ent->pe_csum_info.cs_csum, ent_in->ei_csum.cs_csum,
 			       phy_ent->pe_csum_info.cs_buf_len);
