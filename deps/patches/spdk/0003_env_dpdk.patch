@@ -1,0 +1,12 @@
+diff --git a/module/env_dpdk/Makefile b/module/env_dpdk/Makefile
+index ab88a81c4..e1ed30f96 100644
+--- a/module/env_dpdk/Makefile
++++ b/module/env_dpdk/Makefile
+@@ -11,6 +11,7 @@ SO_MINOR := 0
+ 
+ C_SRCS = env_dpdk_rpc.c
+ LIBNAME = env_dpdk_rpc
++LOCAL_SYS_LIBS = -lssl
+ 
+ SPDK_MAP_FILE = $(SPDK_ROOT_DIR)/mk/spdk_blank.map
+ 
