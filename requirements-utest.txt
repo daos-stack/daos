@@ -6,3 +6,4 @@ PyYAML
 # pytest
 # for pydaos.torch module
 torch
+yaml
