@@ -258,10 +258,8 @@ agg_del_sv(daos_handle_t ih, struct vos_agg_param *agg_param,
 		return rc;
 
 	rc = vos_iter_process(ih, VOS_ITER_PROC_OP_DELETE, NULL);
-	if (rc != 0)
-		rc = umem_tx_abort(umm, rc);
-	else
-		rc = umem_tx_commit(umm);
+
+	rc = umem_tx_end(umm, rc);
 
 	if (rc) {
 		D_ERROR("Failed to delete entry: "DF_RC"\n", DP_RC(rc));
@@ -1579,10 +1577,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 		goto abort;
 	}
 abort:
-	if (rc)
-		rc = umem_tx_abort(vos_obj2umm(obj), rc);
-	else
-		rc = umem_tx_commit(vos_obj2umm(obj));
+	rc = umem_tx_end(vos_obj2umm(obj), rc);
 
 	return rc;
 }
