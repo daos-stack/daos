@@ -49,11 +49,11 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # For testing multiple ranks as dmg parameters, use a list of ranks.
+        ranklist = list(self.server_managers[0].ranks.keys())
         if multiple_ranks:
-            ranklist = list(self.server_managers[0].ranks.keys())
-            self.ranks = ",".join(map(str, self.random.sample(ranklist, k=2)))
+            self.ranks = self.random.sample(ranklist, k=2)
         else:
-            self.ranks = self.random.choice(list(self.server_managers[0].ranks.keys()))
+            self.ranks = self.random.sample(ranklist, k=1)
 
         # Exclude target : random two targets  (target idx : 0-7)
         exc = self.random.randint(0, 6)

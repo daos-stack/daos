@@ -61,14 +61,14 @@ class OSAOnlineReintegration(OSAUtils):
         # Create a pool
         pool = {}
 
+        ranklist = list(self.server_managers[0].ranks.keys())
         if multiple_ranks:
-            ranklist = list(self.server_managers[0].ranks.keys())
-            rank = ",".join(map(str, self.random.sample(ranklist, k=2)))
+            rank = self.random.sample(ranklist, k=2)
             # For multiple rank testing, we need RP_3G1 for IOR to complete.
             oclass = "RP_3G1"
         else:
             # Exclude one rank
-            rank = self.random.choice(list(self.server_managers[0].ranks.keys()))
+            rank = self.random.sample(ranklist, k=1)
 
         # Start the daos_racer thread
         if racer is True:
