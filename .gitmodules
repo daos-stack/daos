@@ -28,6 +28,8 @@
 [submodule "spdk"]
 	path = deps/spdk
 	url = https://github.com/spdk/spdk.git
+	shallow = true
 [submodule "mercury"]
 	path = deps/mercury
 	url = https://github.com/mercury-hpc/mercury.git
+	
