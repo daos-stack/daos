@@ -5671,10 +5671,12 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	rc = obj_csum_fetch(obj, args, obj_auxi);
-	if (rc != 0) {
-		D_ERROR("obj_csum_fetch error: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_task, rc);
+	if (!(args->extra_flags & DIOF_FOR_DATA_VERIFICATION)) {
+		rc = obj_csum_fetch(obj, args, obj_auxi);
+		if (rc != 0) {
+			D_ERROR("obj_csum_fetch error: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_task, rc);
+		}
 	}
 
 	if (!obj_auxi->io_retry && !obj_auxi->is_ec_obj)

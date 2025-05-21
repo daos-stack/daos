@@ -392,6 +392,15 @@ out:
 	return rc;
 }
 
+static inline void
+dc_tx_bulk_free(crt_bulk_t *hdl)
+{
+	if (hdl != NULL && *hdl != CRT_BULK_NULL) {
+		crt_bulk_free(*hdl);
+		*hdl = CRT_BULK_NULL;
+	}
+}
+
 static void
 dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 {
@@ -406,11 +415,8 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 
 		csummer = tx->tx_co->dc_csummer;
 		if (dcu->dcu_flags & ORF_CPD_BULK) {
-			for (i = 0; i < dcsr->dcsr_nr; i++) {
-				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
-					crt_bulk_free(dcu->dcu_bulks[i]);
-			}
-
+			for (i = 0; i < dcsr->dcsr_nr; i++)
+				dc_tx_bulk_free(&dcu->dcu_bulks[i]);
 			D_FREE(dcu->dcu_bulks);
 		}
 
@@ -521,12 +527,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	/* Keep 'tx_set_resend'. */
 
 	if (tx->tx_reqs.dcs_type == DCST_BULK_REQ) {
-		if (tx->tx_reqs_bulk.dcb_bulk != NULL) {
-			if (tx->tx_reqs_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_reqs_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_reqs_bulk.dcb_bulk);
-		}
-
+		dc_tx_bulk_free(&tx->tx_reqs_bulk.dcb_bulk);
 		D_FREE(tx->tx_reqs_bulk.dcb_iov.iov_buf);
 	}
 
@@ -538,11 +539,12 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 
 	if (tx->tx_head.dcs_type == DCST_BULK_HEAD) {
-		if (tx->tx_head_bulk.dcb_bulk != NULL) {
-			if (tx->tx_head_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_head_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_head_bulk.dcb_bulk);
-		}
+		struct dtx_memberships *mbs = tx->tx_head_bulk.dcb_iov.iov_buf;
+
+		D_ASSERTF(tx->tx_head_bulk.dcb_size == sizeof(*mbs) + mbs->dm_data_size,
+			  "MBS data corrupted after CPD RPC: total %u, mbs_size %u, data_len %u\n",
+			  tx->tx_head_bulk.dcb_size, (uint32_t)sizeof(*mbs), mbs->dm_data_size);
+		dc_tx_bulk_free(&tx->tx_head_bulk.dcb_bulk);
 		/* Free MBS buffer. */
 		D_FREE(tx->tx_head_bulk.dcb_iov.iov_buf);
 	} else {
@@ -555,12 +557,19 @@ dc_tx_cleanup(struct dc_tx *tx)
 	tx->tx_head.dcs_buf = NULL;
 
 	if (tx->tx_disp.dcs_type == DCST_BULK_ENT) {
-		if (tx->tx_disp_bulk.dcb_bulk != NULL) {
-			if (tx->tx_disp_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_disp_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_disp_bulk.dcb_bulk);
-		}
+		struct daos_cpd_req_idx *dcri;
+		void                    *end;
+		void                    *pos;
+
 		dcde = tx->tx_disp_bulk.dcb_iov.iov_buf;
+		dcri = (void *)dcde + sizeof(*dcde) * tx->tx_disp.dcs_nr;
+		end  = (void *)dcde + tx->tx_disp_bulk.dcb_size;
+		pos  = dcri + dcde[0].dcde_read_cnt + dcde[0].dcde_write_cnt;
+		D_ASSERTF(pos <= end,
+			  "BULK_ENT corrupted after transfer: len %u, ent_nr %u, rq_cnt %u/%u\n",
+			  (uint32_t)tx->tx_disp_bulk.dcb_size, tx->tx_disp.dcs_nr,
+			  dcde[0].dcde_read_cnt, dcde[0].dcde_write_cnt);
+		dc_tx_bulk_free(&tx->tx_disp_bulk.dcb_bulk);
 	} else {
 		dcde = tx->tx_disp.dcs_buf;
 	}
@@ -575,11 +584,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 
 	if (tx->tx_tgts.dcs_type == DCST_BULK_TGT) {
-		if (tx->tx_tgts_bulk.dcb_bulk != NULL) {
-			if (tx->tx_tgts_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_tgts_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_tgts_bulk.dcb_bulk);
-		}
+		dc_tx_bulk_free(&tx->tx_tgts_bulk.dcb_bulk);
 		D_FREE(tx->tx_tgts_bulk.dcb_iov.iov_buf);
 		tx->tx_tgts.dcs_buf = NULL;
 	} else {
@@ -1779,15 +1784,23 @@ dc_tx_cpd_body_bulk(struct daos_cpd_sg *dcs, struct daos_cpd_bulk *dcb,
 	dcb->dcb_sgl.sg_nr_out = 1;
 	dcb->dcb_sgl.sg_iovs = &dcb->dcb_iov;
 
-	rc = obj_bulk_prep(&dcb->dcb_sgl, 1, true, CRT_BULK_RO, task, &dcb->dcb_bulk);
-	if (rc == 0) {
-		dcs->dcs_type = type;
-		dcs->dcs_nr = nr;
-		dcs->dcs_buf = dcb;
-	} else {
+	rc = crt_bulk_create(daos_task2ctx(task), &dcb->dcb_sgl, CRT_BULK_RO, &dcb->dcb_bulk);
+	if (rc != 0)
+		goto out;
+
+	rc = crt_bulk_bind(dcb->dcb_bulk, daos_task2ctx(task));
+	if (rc != 0)
+		goto out;
+
+	dcs->dcs_type = type;
+	dcs->dcs_buf  = dcb;
+	dcs->dcs_nr   = nr;
+
+out:
+	if (rc != 0) {
+		dc_tx_bulk_free(&dcb->dcb_bulk);
 		dcb->dcb_iov.iov_buf = NULL;
 	}
-
 	return rc;
 }
 
@@ -2061,7 +2074,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	shard_tgts[0].st_flags = dtrgs[leader_dtrg_idx].dtrg_flags;
 
 	for (i = 0, j = 1; i < tgt_cnt; i++) {
-		if (dtrgs[i].dtrg_req_idx == NULL || i == leader_dtrg_idx)
+		if (dtrgs[i].dtrg_req_idx == NULL)
 			continue;
 
 		ddt->ddt_id = i;
@@ -2080,6 +2093,8 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		shard_tgts[j].st_flags = dtrgs[i].dtrg_flags;
 		j++;
 	}
+
+	D_ASSERT(j == act_tgt_cnt);
 
 	if (act_grp_cnt == 1) {
 		/* We do not need the group information if all the targets are
@@ -2161,6 +2176,30 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
 	}
 
+	size = sizeof(*shard_tgts) * act_tgt_cnt;
+
+	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
+		rc = dc_tx_cpd_body_bulk(&tx->tx_tgts, &tx->tx_tgts_bulk, task, shard_tgts,
+					 size, act_tgt_cnt, DCST_BULK_TGT);
+		if (rc != 0)
+			goto out;
+	} else {
+		tx->tx_tgts.dcs_type = DCST_TGT;
+		tx->tx_tgts.dcs_nr = act_tgt_cnt;
+		tx->tx_tgts.dcs_buf = shard_tgts;
+
+		body_size += dc_tx_cpd_adjust_size(size);
+		if (body_size >= DAOS_BULK_LIMIT)
+			D_WARN("The TX "DF_DTI" is too large (4): %u/%u\n",
+			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
+	}
+
+	/*
+	 * Reset shard_tgts, related buffer will be released via tx->tx_tgts.dcs_buf or
+	 * tx->tx_tgts_bulk.dcb_iov.iov_buf in dc_tx_cleanup().
+	 */
+	shard_tgts = NULL;
+
 	size = sizeof(*dcdes) * act_tgt_cnt;
 	for (i = 0; i < act_tgt_cnt; i++)
 		size += sizeof(*dcri) * (dcdes[i].dcde_read_cnt + dcdes[i].dcde_write_cnt);
@@ -2204,30 +2243,6 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	 * tx->tx_disp_bulk.dcb_iov.iov_buf in dc_tx_cleanup().
 	 */
 	dcdes = NULL;
-
-	size = sizeof(*shard_tgts) * act_tgt_cnt;
-
-	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
-		rc = dc_tx_cpd_body_bulk(&tx->tx_tgts, &tx->tx_tgts_bulk, task, shard_tgts,
-					 size, act_tgt_cnt, DCST_BULK_TGT);
-		if (rc != 0)
-			goto out;
-	} else {
-		tx->tx_tgts.dcs_type = DCST_TGT;
-		tx->tx_tgts.dcs_nr = act_tgt_cnt;
-		tx->tx_tgts.dcs_buf = shard_tgts;
-
-		body_size += dc_tx_cpd_adjust_size(size);
-		if (body_size >= DAOS_BULK_LIMIT)
-			D_WARN("The TX "DF_DTI" is too large (4): %u/%u\n",
-			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
-	}
-
-	/*
-	 * Reset shard_tgts, related buffer will be released via tx->tx_tgts.dcs_buf or
-	 * tx->tx_tgts_bulk.dcb_iov.iov_buf in dc_tx_cleanup().
-	 */
-	shard_tgts = NULL;
 
 	dc_tx_dump(tx);
 
