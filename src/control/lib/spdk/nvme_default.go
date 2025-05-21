@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -43,6 +44,15 @@ func realRemove(name string) error {
 	return os.Remove(name)
 }
 
+// Clean implements the method of the same name for the Nvme interface on the NvmeImpl struct.
+func (n *NvmeImpl) Clean(log logging.Logger, pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
+	if n == nil {
+		return nil, errors.New("nil NvmeImpl")
+	}
+
+	return cleanLockfiles(log, n.LocksDir, pciAddrChecker, realRemove)
+}
+
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
 // accessible by SPDK on a given host.
 //
@@ -55,7 +65,7 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 		return nil, errors.New("nil NvmeImpl")
 	}
 
-	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
+	ctrlrs, errCollect := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := make([]string, 0, len(ctrlrs))
 	for _, c := range ctrlrs {
@@ -63,7 +73,9 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 		pciAddrs = append(pciAddrs, c.PciAddr)
 	}
 
-	return ctrlrs, wrapCleanError(err, cleanLockfiles(log, realRemove, pciAddrs...))
+	errRemLocks := cleanKnownLockfiles(log, n, pciAddrs...)
+
+	return ctrlrs, wrapCleanError(errCollect, errRemLocks)
 }
 
 // Format devices available through SPDK, destructive operation!
@@ -75,13 +87,15 @@ func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 		return nil, errors.New("nil NvmeImpl")
 	}
 
-	results, err := collectFormatResults(C.nvme_wipe_namespaces(),
+	results, errCollect := collectFormatResults(C.nvme_wipe_namespaces(),
 		"NVMe Format(): C.nvme_wipe_namespaces()")
 
 	pciAddrs := resultPCIAddresses(results)
 	log.Debugf("formatted nvme ssds: %v", pciAddrs)
 
-	return results, wrapCleanError(err, cleanLockfiles(log, realRemove, pciAddrs...))
+	errRemLocks := cleanKnownLockfiles(log, n, pciAddrs...)
+
+	return results, wrapCleanError(errCollect, errRemLocks)
 }
 
 // Update updates the firmware image via SPDK in a given slot on the device.
@@ -98,10 +112,12 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
-	_, err := collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
+	_, errCollect := collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
 		"NVMe Update(): C.nvme_fwupdate")
 
-	return wrapCleanError(err, cleanLockfiles(log, realRemove, ctrlrPciAddr))
+	errRemLocks := cleanKnownLockfiles(log, n, ctrlrPciAddr)
+
+	return wrapCleanError(errCollect, errRemLocks)
 }
 
 // c2GoController is a private translation function.
