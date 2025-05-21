@@ -5,6 +5,8 @@ def scons():
     """Execute build"""
     Import('denv', 'vts_objs')
 
+    # build dtx_tests
+
     libraries = ['abt', 'bio', 'dtx', 'vos', 'gurt', 'daos_common_pmem', 'cmocka', 'pthread',
                  'uuid', 'cart', 'daos_tests']
 
@@ -19,10 +21,35 @@ def scons():
 
     test_src = ['dtx_tests.c', 'sched_mock.c', 'ult_mock.c', 'srv_mock.c', 'pl_map_mock.c',
                 '../../common/tls.c', 'dts_utils.c', 'dts_local.c', 'dts_local_rdb.c',
-                'dts_structs.c', vts_objs]
+                vts_objs]
     dtx_tests = tenv.d_program('dtx_tests', test_src, LIBS=libraries)
 
-    tenv.Install('$PREFIX/bin/', [dtx_tests])
+    # build dtx_ut
+
+    libraries = ['abt', 'bio', 'cmocka', 'daos_common_pmem', 'gurt', 'uuid', 'vea', 'pthread']
+
+    tenv = denv.Clone()
+    tenv.Append(CPPPATH=[Dir('../../vos').srcnode()])
+    tenv.require('pmdk')
+    tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    tenv.Append(OBJPREFIX="c_")
+
+    # Required for vos_dtx_discard_invalid() tests.
+    # These functions are validated by their respective unit tests.
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ilog_is_valid'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_irec_is_valid'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=evt_desc_is_valid'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_lookup'])
+
+    vos_src = Glob('../../vos/*.c')
+
+    test_src = ['dtx_ut.c', 'dts_discard_invalid.c', 'dts_structs.c',
+                'srv_mock.c', 'sched_mock.c']
+    dtx_ut = tenv.d_program('dtx_ut', test_src + vos_src, LIBS=libraries)
+
+    # install both
+
+    tenv.Install('$PREFIX/bin/', [dtx_tests, dtx_ut])
 
 
 if __name__ == "SCons.Script":
