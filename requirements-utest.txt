@@ -1,9 +1,8 @@
 tabulate
 junit_xml
 pyxattr
-PyYAML
+pyyaml
 # Disabled for now because of DAOS-14688
 # pytest
 # for pydaos.torch module
 torch
-yaml
