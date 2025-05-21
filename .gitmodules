@@ -1,30 +1,39 @@
 [submodule "raft"]
 	path = src/rdb/raft
 	url = https://github.com/daos-stack/raft.git
+	shallow = true
 [submodule "argobots"]
 	path = deps/argobots
 	url = https://github.com/pmodels/argobots.git
+	shallow = true
 [submodule "fused"]
 	path = deps/fused
 	url = https://github.com/daos-stack/fused.git
+	shallow = true
 [submodule "ofi"]
 	path = deps/ofi
 	url = https://github.com/ofiwg/libfabric.git
+	shallow = true
 [submodule "ucx"]
 	path = deps/ucx
 	url = https://github.com/openucx/ucx.git
+	shallow = true
 [submodule "pmdk"]
 	path = deps/pmdk
 	url = https://github.com/pmem/pmdk.git
+	shallow = true
 [submodule "isal"]
 	path = deps/isal
 	url = https://github.com/intel/isa-l.git
+	shallow = true
 [submodule "isal_crypto"]
 	path = deps/isal_crypto
 	url = https://github.com/intel/isa-l_crypto.git
+	shallow = true
 [submodule "protobufc"]
 	path = deps/protobufc
 	url = https://github.com/protobuf-c/protobuf-c.git
+	shallow = true
 [submodule "spdk"]
 	path = deps/spdk
 	url = https://github.com/spdk/spdk.git
@@ -32,4 +41,5 @@
 [submodule "mercury"]
 	path = deps/mercury
 	url = https://github.com/mercury-hpc/mercury.git
+	shallow = true
 	
