@@ -107,8 +107,9 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 		"no devices; success": {
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					CleanSpdkHugepages: true,
-					CleanSpdkLockfiles: true,
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
 				},
 				{
 					// always set in local storage prepare to allow automatic detection
@@ -264,8 +265,9 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			prepCmd: &prepareNVMeCmd{},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					CleanSpdkHugepages: true,
-					CleanSpdkLockfiles: true,
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
 				},
 				{
 					EnableVMD: true,
@@ -359,8 +361,9 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		},
 		"no devices; success": {
 			expCleanCall: &storage.BdevPrepareRequest{
-				CleanSpdkHugepages: true,
-				CleanSpdkLockfiles: true,
+				CleanSpdkHugepages:    true,
+				CleanSpdkLockfiles:    true,
+				CleanSpdkLockfilesAny: true,
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -520,8 +523,9 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		"nil config; parameters not applied (simulates effect of --ignore-config)": {
 			resetCmd: &resetNVMeCmd{},
 			expCleanCall: &storage.BdevPrepareRequest{
-				CleanSpdkHugepages: true,
-				CleanSpdkLockfiles: true,
+				CleanSpdkHugepages:    true,
+				CleanSpdkLockfiles:    true,
+				CleanSpdkLockfilesAny: true,
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -666,12 +670,27 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				},
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
-				{TargetUser: getCurrentUsername(t), EnableVMD: true},
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+				},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+					Reset_:     true,
+				},
 			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
@@ -743,12 +762,25 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				(&engine.Config{}).WithStorage(),
 			).WithDisableVMD(true),
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
-				{TargetUser: getCurrentUsername(t)},
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
+				{
+					TargetUser: getCurrentUsername(t),
+				},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), Reset_: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					Reset_:     true,
+				},
 			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
@@ -763,9 +795,20 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				},
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
-				{TargetUser: getCurrentUsername(t), EnableVMD: true},
-				{CleanSpdkHugepages: true, CleanSpdkLockfiles: true},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+				},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},

@@ -230,24 +230,24 @@ func spdkLockfileAddrCheckAllowAll(_ string) (bool, error) {
 }
 
 // Skip addresses in block list if present then supply address check function that can detect VMD
-// backing device addresses during clean operation. Differentiate between an empty allow list due to
-// filter combinations (all devices present in block list) from situation where no devices are
-// selected in cli or config lists. In the latter case, all lockfiles should be removed.
+// backing device addresses during clean operation. If CleanSpdkLockfilesAny set, all lockfiles
+// should be removed.
 func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) error {
-	inAllowList, err := hardware.NewPCIAddressSetFromString(req.PCIAllowList)
-	if err != nil {
-		return err
-	}
-	inBlockList, err := hardware.NewPCIAddressSetFromString(req.PCIBlockList)
-	if err != nil {
-		return err
-	}
-
 	var lfAddrCheckFn spdk.LockfileAddrCheckFn
-	if inAllowList.IsEmpty() && inBlockList.IsEmpty() {
-		// Remove all lockfiles if no filter lists have been supplied.
+
+	if req.CleanSpdkLockfilesAny {
+		// Remove all lockfiles.
 		lfAddrCheckFn = spdkLockfileAddrCheckAllowAll
 	} else {
+		inAllowList, err := hardware.NewPCIAddressSetFromString(req.PCIAllowList)
+		if err != nil {
+			return err
+		}
+		inBlockList, err := hardware.NewPCIAddressSetFromString(req.PCIBlockList)
+		if err != nil {
+			return err
+		}
+
 		// Remove blocked VMD addresses from allow list.
 		allowedAddresses := inAllowList.Difference(inBlockList)
 
@@ -260,10 +260,11 @@ func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp 
 		lfAddrCheckFn = createSpdkLockfileAddrCheckFunc(allowedAddresses)
 	}
 
-	resp.LockfilesRemoved, err = sb.binding.Clean(sb.log, lfAddrCheckFn)
+	locksRemoved, err := sb.binding.Clean(sb.log, lfAddrCheckFn)
 	if err != nil {
 		return err
 	}
+	resp.LockfilesRemoved = locksRemoved
 
 	return nil
 }

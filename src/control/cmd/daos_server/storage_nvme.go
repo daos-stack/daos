@@ -237,14 +237,22 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 }
 
 // Clean hugepages for non-existent processes. Remove lockfiles for any devices specified in request
-// or all in config if none specified in config. Honor both allow and block lists when processing
-// removal of lockfiles.
+// or config. Clean all lockfiles if none have been specified on cli or in config. Honor both allow
+// and block lists when processing removal of lockfiles.
 func cleanSpdkResources(log logging.Logger, req storage.BdevPrepareRequest, cmd *nvmeCmd) {
 	cleanReq := storage.BdevPrepareRequest{
 		CleanSpdkHugepages: true,
 		CleanSpdkLockfiles: true,
-		PCIAllowList:       req.PCIAllowList,
-		PCIBlockList:       req.PCIBlockList,
+	}
+
+	// Differentiate between an empty allow list due to filter combinations (all allowed devices
+	// also present in block list) from situation where no devices are selected in cli or config
+	// lists. In the latter case, all lockfiles should be removed.
+	if req.PCIAllowList == "" && req.PCIBlockList == "" {
+		cleanReq.CleanSpdkLockfilesAny = true
+	} else {
+		cleanReq.PCIAllowList = req.PCIAllowList
+		cleanReq.PCIBlockList = req.PCIBlockList
 	}
 
 	msg := "cleanup spdk resources"

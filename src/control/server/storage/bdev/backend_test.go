@@ -1310,9 +1310,26 @@ func TestBackend_prepare_reset(t *testing.T) {
 				spdk.LockfilePrefix + "0000:03:00.0",
 			},
 		},
-		"prepare setup; lockfile clean; empty allow and block lists; clean all": {
+		"prepare setup; lockfile clean; empty allow and block lists; clean skipped": {
 			req: storage.BdevPrepareRequest{
 				CleanSpdkLockfiles: true,
+			},
+			lockfileAddrs: mockAddrList(1, 2, 3),
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: nil,
+			},
+			expLocksRemaining: []string{
+				spdk.LockfilePrefix + "0000:01:00.0",
+				spdk.LockfilePrefix + "0000:02:00.0",
+				spdk.LockfilePrefix + "0000:03:00.0",
+			},
+		},
+		"prepare setup; lockfile clean all; filter lists ignored": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles:    true,
+				CleanSpdkLockfilesAny: true,
+				PCIAllowList:          mockAddrListStr(1, 2, 3),
+				PCIBlockList:          mockAddrListStr(1, 2),
 			},
 			lockfileAddrs: mockAddrList(1, 2, 3),
 			expResp: &storage.BdevPrepareResponse{
@@ -1351,10 +1368,8 @@ func TestBackend_prepare_reset(t *testing.T) {
 					CleanErr: errors.New(msgRemFail),
 				},
 			},
-			expResp: &storage.BdevPrepareResponse{
-				LockfilesRemoved: []string{},
-			},
-			expErr: errors.New("clean spdk lockfiles: " + msgRemFail),
+			expResp: &storage.BdevPrepareResponse{},
+			expErr:  errors.New("clean spdk lockfiles: " + msgRemFail),
 			expLocksRemaining: []string{
 				spdk.LockfilePrefix + "0000:01:00.0",
 				spdk.LockfilePrefix + "0000:02:00.0",
