@@ -101,7 +101,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
 CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
+#define DTX_YIELD_CYCLE         32
 
 /* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
