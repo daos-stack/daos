@@ -1,0 +1,38 @@
+#
+# Copyright 2018-2022, Intel Corporation
+#
+# 'recipe' for Docker for test summary.
+#
+
+ARG FVERSION=latest
+FROM fedora:$FVERSION
+# Needed for later use of FVERSION
+ARG FVERSION
+LABEL maintainer="daos@daos.groups.io"
+
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
+
+# Use local repo server if present
+ARG REPO_FILE_URL
+ARG DAOS_LAB_CA_FILE_URL
+
+# script to install OS updates basic tools and daos dependencies
+# COPY ./utils/scripts/install-fedora.sh /tmp/install.sh
+# script to setup local repo if available
+COPY ./utils/scripts/helpers/repo-helper-fedora.sh /tmp/repo-helper.sh
+RUN chmod +x /tmp/repo-helper.sh &&                 \
+    /tmp/repo-helper.sh &&                          \
+    rm -f /tmp/repo-helper.sh
+
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
+COPY requirements-code-coverage.txt ./
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install -r requirements-code-coverage.txt
+
+ARG CB1
