@@ -2981,7 +2981,8 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 	struct vos_dtx_blob_df		*dbd;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
-	int				 rc = 0;
+	int                              rc  = 0;
+	int                              cnt = 0;
 	int				 i;
 
 	cont = vos_hdl2cont(coh);
@@ -3022,6 +3023,8 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 			goto out;
 		}
 
+		cnt++;
+
 		/* The committed DTX entry is already in the index.
 		 * Related re-index logic can stop.
 		 */
@@ -3037,6 +3040,12 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 	cont->vc_cmt_dtx_reindex_pos = dbd->dbd_next;
 
 out:
+	if (cnt > 0) {
+		cont->vc_dtx_committed_count += cnt;
+		cont->vc_pool->vp_dtx_committed_count += cnt;
+		d_tm_inc_gauge(vos_tls_get(false)->vtl_committed, cnt);
+	}
+
 	if (rc > 0) {
 		cont->vc_cmt_dtx_reindex_pos = UMOFF_NULL;
 		cont->vc_cmt_dtx_indexed = 1;
