@@ -1784,7 +1784,7 @@ static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[14] =
     offsetof(Ctl__SmdDevice, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2079,7 +2079,7 @@ static const ProtobufCFieldDescriptor ctl__smd_pool_resp__pool__field_descriptor
     offsetof(Ctl__SmdPoolResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2091,7 +2091,7 @@ static const ProtobufCFieldDescriptor ctl__smd_pool_resp__pool__field_descriptor
     offsetof(Ctl__SmdPoolResp__Pool, blobs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -2284,7 +2284,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__pool__field_descripto
     offsetof(Ctl__SmdQueryResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2296,7 +2296,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__pool__field_descripto
     offsetof(Ctl__SmdQueryResp__Pool, blobs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
