@@ -22,11 +22,7 @@ jobs:
   # so regressions will be detected but not annotated.
   isort:
     name: Python isort
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -49,11 +45,7 @@ jobs:
 
   shell-check:
     name: ShellCheck
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -71,11 +63,7 @@ jobs:
 
   log-check:
     name: Logging macro checking
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -86,11 +74,7 @@ jobs:
 
   ftest-tags:
     name: Ftest tag check
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -98,11 +82,7 @@ jobs:
         run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
   flake8-lint:
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     name: Flake8 check
     steps:
       - name: Check out source repository
@@ -136,11 +116,7 @@ jobs:
 
   doxygen:
     name: Doxygen
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -161,11 +137,7 @@ jobs:
 
   pylint:
     name: Pylint check
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -185,11 +157,7 @@ jobs:
 
   codespell:
     name: Codespell
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -208,11 +176,7 @@ jobs:
 
   clang-format:
     name: Clang Format
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -231,11 +195,7 @@ jobs:
 
   yaml-lint:
     name: Yamllint check
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Check out source repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -252,11 +212,7 @@ jobs:
 
   copyright:
     name: Copyright check
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     steps:
       - name: Check out source repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -270,11 +226,7 @@ jobs:
 
   linting-summary:
     name: Linting Summary
-<<<<<<< Updated upstream
-    runs-on: gcp
-=======
     runs-on: [build, gcp]
->>>>>>> Stashed changes
     needs:
       - isort
       - shell-check
