@@ -104,9 +104,13 @@ def main():
         help="git target to as reference diff")
     args = parser.parse_args()
 
-    commit_pragmas = gen_commit_pragmas(git_merge_base('HEAD', args.target))
-    for pragma, value in commit_pragmas.items():
-        print(f'{pragma}: {value}')
+    try:
+        commit_pragmas = gen_commit_pragmas(git_merge_base('HEAD', args.target))
+        for pragma, value in commit_pragmas.items():
+            print(f'{pragma}: {value}')
+    except Exception:  # pylint: disable=broad-except
+        # DAOS-16678 - skip until resolved
+        pass
 
 
 if __name__ == '__main__':
