@@ -281,6 +281,13 @@ struct vos_gc_info {
 	uint32_t	gi_last_pinned;
 };
 
+/* Inline checkpointing context */
+struct vos_chkpt_context {
+	uint64_t vcc_committed_id;
+	uint64_t vcc_total_blks;
+	uint64_t vcc_used_blks;
+};
+
 /**
  * VOS pool (DRAM)
  */
@@ -301,6 +308,8 @@ struct vos_pool {
 	bool			vp_rdb;
 	/** caller specifies pool is small (for sys space reservation) */
 	bool			vp_small;
+	/** caller does checkpointing periodically */
+	bool                     vp_ext_chkpt;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */
@@ -345,6 +354,8 @@ struct vos_pool {
 	unsigned int		 vp_space_rb;
 	/* GC runtime for pool */
 	struct vos_gc_info	 vp_gc_info;
+	/* Inline checkpointing context */
+	struct vos_chkpt_context vp_chkpt_ctxt;
 };
 
 /**
