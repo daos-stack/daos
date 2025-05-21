@@ -7,16 +7,8 @@ on:
       - master
       - 'release/*'
   pull_request:
-    paths:
-      - .github/workflows/landing-builds.yml
-      - 'utils/docker/Dockerfile.*'
-      - 'utils/scripts/install-*.sh'
-      - 'utils/scripts/helpers/*'
-      - utils/ci/**
-      - ci/**
-      - requirements-build.txt
-      - requirements-utest.txt
-      - utils/build.config
+    # paths:
+    #   - fake.foo
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -40,6 +32,8 @@ jobs:
   Prepare:
     name: Create Docker images
     runs-on: ubuntu-24.04
+    permissions:
+      packages: write
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -69,26 +63,21 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 500
       - name: Setup git hash
-        run: ./ci/gha_helper.py --single
+        run: ./ci/gha_helper.py
         id: commit-hash
-      - name: Setup docker cache
-        uses: jpribyl/action-docker-layer-caching@v0.1.1
-        with:
-          key: ${{ steps.commit-hash.outputs.key }}
-          restore-keys: ${{ steps.commit-hash.outputs.restore }}
-          concurrency: 1
       - name: Prepare base image in Docker
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DAOS_DEPS_BUILD=no
-                            --build-arg DEPS_JOBS
-                            --build-arg BASE_DISTRO
-      - name: Build dependencies in Docker
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DAOS_BUILD=no
-                            --build-arg DEPS_JOBS
-                            --build-arg BASE_DISTRO
-      - name: Prune images not required for build.
-        run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
+        uses: whoan/docker-build-with-cache-action@v8.1
+        env:
+          DOCKER_BUILDKIT: 0
+        with:
+          image_name: ${{ steps.commit-hash.outputs.image_name }}
+          image_tag: ${{ steps.commit-hash.outputs.image_tag }}
+          username: "${{ github.repository_owner }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"
+          registry: ghcr.io
+          push_image_and_stages: true # on:push # only update for landing runs
+          dockerfile: utils/docker/Dockerfile.${{ matrix.base }}
+          build_extra_args: '{"--build-arg": ["DAOS_BUILD=no", "DEPS_JOBS", "BASE_DISTRO"]}'
 
   Build-and-test:
     name: Run DAOS/NLT tests
@@ -98,6 +87,7 @@ jobs:
       # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
       checks: write
       pull-requests: write
+      packages: read
     strategy:
       matrix:
         distro: [ubuntu]
@@ -117,23 +107,21 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 500
       - name: Setup git hash
-        run: ./ci/gha_helper.py --single
+        run: ./ci/gha_helper.py
         id: commit-hash
-      - uses: jpribyl/action-docker-layer-caching@v0.1.1
-        continue-on-error: true
+      - name: Update dependencies in image
+        uses: whoan/docker-build-with-cache-action@v8.1
+        env:
+          DOCKER_BUILDKIT: 0
         with:
-          key: ${{ steps.commit-hash.outputs.key }}
-          restore-keys: |
-            ${{ steps.commit-hash.outputs.restore }}
-            ${{ steps.commit-hash.outputs.restore_prev }}
-          skip-save: true
-      - name: Update dependencies in image.
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DAOS_BUILD=no
-                            --build-arg DEPS_JOBS
-                            --build-arg BASE_DISTRO
-                            --build-arg DAOS_KEEP_SRC=yes
-                            --tag build-image
+          image_name: ${{ steps.commit-hash.outputs.image_name }}
+          image_tag: ${{ steps.commit-hash.outputs.image_tag }}
+          username: "${{ github.repository_owner }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"
+          registry: ghcr.io
+          push_image_and_stages: false
+          dockerfile: utils/docker/Dockerfile.${{ matrix.base }}
+          build_extra_args: '{"--build-arg": ["DAOS_BUILD=no", "DEPS_JOBS", "BASE_DISTRO", "DAOS_KEEP_SRC=yes"], "--tag": "build-image"}'
       - name: Build and Test
         run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
               --env COMPILER --env DEPS_JOBS --user root:root build-image
@@ -186,16 +174,21 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 500
       - name: Setup git hash
-        run: ./ci/gha_helper.py --single
+        run: ./ci/gha_helper.py
         id: commit-hash
-      - uses: jpribyl/action-docker-layer-caching@v0.1.1
-        continue-on-error: true
+      - name: Update base image
+        uses: whoan/docker-build-with-cache-action@v8.1
+        env:
+          DOCKER_BUILDKIT: 0
         with:
-          key: ${{ steps.commit-hash.outputs.key }}
-          restore-keys: |
-            ${{ steps.commit-hash.outputs.restore }}
-            ${{ steps.commit-hash.outputs.restore_prev }}
-          skip-save: true
+          image_name: ${{ steps.commit-hash.outputs.image_name }}
+          image_tag: ${{ steps.commit-hash.outputs.image_tag }}
+          username: "${{ github.repository_owner }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"
+          registry: ghcr.io
+          push_image_and_stages: false
+          dockerfile: utils/docker/Dockerfile.${{ matrix.base }}
+          build_extra_args: '{"--build-arg": ["DEPS_JOBS", "BASE_DISTRO", "DAOS_DEPS_BUILD=no"]}'
       - name: Build in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -232,6 +225,7 @@ jobs:
 
   Build-branch:
     name: Build DAOS
+    if: false
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
