@@ -81,12 +81,16 @@ fi
 rm -rf "$test_log_dir"
 
 # Use default python as that's where storage_estimator is installed.
-python3 -m venv venv
+python3.11 -m venv venv
+# temp cp
+ls -la /usr/lib64/python3.*/site-packages/storage_estimator
+cp -r /usr/lib64/python3.6/site-packages/storage_estimator venv/lib/python3.11/site-packages/
+
 # shellcheck disable=SC1091
 source venv/bin/activate
-# touch venv/pip.conf
-# pip config set global.progress_bar off
-# pip config set global.no_color true
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip config set global.no_color true
 
 pip install --upgrade pip
 pip install --requirement requirements-utest.txt
@@ -99,19 +103,19 @@ utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$te
 # Generate code coverage report if at least one gcda file was generated
 # Possibly limit this to finding a single match
 if [[ -n $(find build -name "*.gcda") ]]; then
-    # python3.6 does not like deactivate with -u set, later versions are OK with it however.
-    set +u
-    deactivate
-    set -u
+    # # python3.6 does not like deactivate with -u set, later versions are OK with it however.
+    # set +u
+    # deactivate
+    # set -u
 
-    # Run gcovr in a python 3.11 environment
-    python3.11 -m venv venv-code-coverage
-    # shellcheck disable=SC1091
-    source venv-code-coverage/bin/activate
-    touch venv-code-coverage/pip.conf
-    pip config set global.progress_bar off
-    pip config set global.no_color true
-    pip install --upgrade pip
+    # # Run gcovr in a python 3.11 environment
+    # python3.11 -m venv venv-code-coverage
+    # # shellcheck disable=SC1091
+    # source venv-code-coverage/bin/activate
+    # touch venv-code-coverage/pip.conf
+    # pip config set global.progress_bar off
+    # pip config set global.no_color true
+    # pip install --upgrade pip
     pip install --requirement requirements-code-coverage.txt
     
     mkdir -p "${test_log_dir}/code_coverage"
