@@ -1294,29 +1294,40 @@ func TestBackend_prepare_reset(t *testing.T) {
 			expErr:         errors.New("clean failed"),
 			expHpCleanCall: defaultHpCleanCall,
 		},
-		"prepare setup; lock file clean; empty allow list": {
+		"prepare setup; lockfile clean; block list cancels allowed; clean skipped": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       mockAddrListStr(1, 2, 3),
+				PCIBlockList:       mockAddrListStr(1, 2, 3, 4),
+			},
+			lockfileAddrs: mockAddrList(1, 2, 3),
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: nil,
+			},
+			expLocksRemaining: []string{
+				spdk.LockfilePrefix + "0000:01:00.0",
+				spdk.LockfilePrefix + "0000:02:00.0",
+				spdk.LockfilePrefix + "0000:03:00.0",
+			},
+		},
+		"prepare setup; lockfile clean; empty allow and block lists; clean all": {
 			req: storage.BdevPrepareRequest{
 				CleanSpdkLockfiles: true,
 			},
-			expResp: &storage.BdevPrepareResponse{},
-		},
-		"prepare setup; clean lockfiles fail; empty allow list": {
-			req: storage.BdevPrepareRequest{
-				CleanSpdkLockfiles: true,
+			lockfileAddrs: mockAddrList(1, 2, 3),
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: []string{
+					filepath.Join(testDir, spdk.LockfilePrefix+"0000:01:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"0000:02:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"0000:03:00.0"),
+				},
 			},
-			nvme: &spdk.NvmeImpl{
-				LocksDir: testDir,
-			},
-			expResp: &storage.BdevPrepareResponse{},
 		},
-		"prepare setup; lock file clean": {
+		"prepare setup; lockfile clean": {
 			req: storage.BdevPrepareRequest{
 				CleanSpdkLockfiles: true,
 				PCIAllowList:       mockAddrListStr(1, 2, 3),
 				PCIBlockList:       mockAddrListStr(1),
-			},
-			nvme: &spdk.NvmeImpl{
-				LocksDir: testDir,
 			},
 			lockfileAddrs: mockAddrList(1, 2, 3),
 			expResp: &storage.BdevPrepareResponse{
@@ -1350,7 +1361,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 				spdk.LockfilePrefix + "0000:03:00.0",
 			},
 		},
-		"prepare setup; lock file clean; vmd enabled": {
+		"prepare setup; lockfile clean; vmd enabled": {
 			req: storage.BdevPrepareRequest{
 				CleanSpdkLockfiles: true,
 				PCIAllowList:       "0000:05:05.5 0000:d5:05.5",
@@ -1360,9 +1371,6 @@ func TestBackend_prepare_reset(t *testing.T) {
 				"050505:07:00.0", "050505:09:00.0", "050505:11:00.0", "050505:14:00.0",
 				"5d0505:03:00.0", "d50505:01:00.0",
 			),
-			nvme: &spdk.NvmeImpl{
-				LocksDir: testDir,
-			},
 			expResp: &storage.BdevPrepareResponse{
 				LockfilesRemoved: []string{
 					filepath.Join(testDir, spdk.LockfilePrefix+"050505:07:00.0"),
@@ -1387,8 +1395,14 @@ func TestBackend_prepare_reset(t *testing.T) {
 
 			sss, calls := mockScriptRunner(t, log, tc.mbc)
 			if tc.nvme == nil {
-				tc.nvme = &spdk.MockNvmeImpl{
-					Cfg: spdk.MockNvmeCfg{},
+				if tc.lockfileAddrs != nil {
+					tc.nvme = &spdk.NvmeImpl{
+						LocksDir: testDir,
+					}
+				} else {
+					tc.nvme = &spdk.MockNvmeImpl{
+						Cfg: spdk.MockNvmeCfg{},
+					}
 				}
 			}
 			sb := &spdkBackend{

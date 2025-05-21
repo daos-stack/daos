@@ -68,6 +68,13 @@ type removeFn func(name string) error
 // cleanLockfiles removes SPDK lockfiles after binding operations. Takes function which decides
 // which of the found lock files to remove based on the address appended to the filename.
 func cleanLockfiles(log logging.Logger, dir string, pciAddrChecker LockfileAddrCheckFn, remove removeFn) ([]string, error) {
+	if pciAddrChecker == nil {
+		return nil, errors.Errorf("nil %T", pciAddrChecker)
+	}
+	if remove == nil {
+		return nil, errors.Errorf("nil %T", remove)
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, errors.Wrapf(err, "reading spdk lockfile directory %q", dir)

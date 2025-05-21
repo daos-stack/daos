@@ -109,6 +109,10 @@ func TestSpdk_cleanLockfiles(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			if err := test.RemoveContents(t, testDir); err != nil {
+				t.Fatal(err)
+			}
+
 			removeCalls := []string{}
 
 			mockAddrCheck := func(addr string) (bool, error) {
