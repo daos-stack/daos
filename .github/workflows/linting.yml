@@ -22,7 +22,7 @@ jobs:
   # so regressions will be detected but not annotated.
   isort:
     name: Python isort
-    runs-on: gcp-test
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -45,7 +45,7 @@ jobs:
 
   shell-check:
     name: ShellCheck
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -63,7 +63,7 @@ jobs:
 
   log-check:
     name: Logging macro checking
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -74,7 +74,7 @@ jobs:
 
   ftest-tags:
     name: Ftest tag check
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -82,7 +82,7 @@ jobs:
         run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
   flake8-lint:
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     name: Flake8 check
     steps:
       - name: Check out source repository
@@ -116,7 +116,7 @@ jobs:
 
   doxygen:
     name: Doxygen
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -137,7 +137,7 @@ jobs:
 
   pylint:
     name: Pylint check
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -157,7 +157,7 @@ jobs:
 
   codespell:
     name: Codespell
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -172,7 +172,7 @@ jobs:
 
   clang-format:
     name: Clang Format
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -191,7 +191,7 @@ jobs:
 
   yaml-lint:
     name: Yamllint check
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out source repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -208,7 +208,7 @@ jobs:
 
   copyright:
     name: Copyright check
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out source repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -222,7 +222,7 @@ jobs:
 
   linting-summary:
     name: Linting Summary
-    runs-on: gcp-test
+    runs-on: ubuntu-24.04
     needs:
       - isort
       - shell-check
