@@ -264,6 +264,9 @@ pipeline {
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on Leap 15')
+        booleanParam(name: 'CI_CODE_COVERAGE',
+                     defaultValue: true,
+                     description: 'Run with code coverage analysis')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -335,9 +338,6 @@ pipeline {
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
-        booleanParam(name: 'CI_CODE_COVERAGE',
-                     defaultValue: true,
-                     description: 'Run with code coverage analysis')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
