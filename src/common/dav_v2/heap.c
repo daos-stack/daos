@@ -97,7 +97,7 @@ struct mbrt_qbs {
 struct soemb_rt {
 	struct mbrt    *svec[SOEMB_ACTIVE_CNT];
 	int             cur_idx;
-	int             fur_idx;
+	int             far_idx;
 	struct mbrt_qbs qbs;
 };
 
@@ -401,7 +401,7 @@ soemb_init(struct soemb_rt *smbrt)
 	memset(smbrt->svec, 0, sizeof(struct mbrt *) * SOEMB_ACTIVE_CNT);
 	mbrt_qbs_init(&smbrt->qbs);
 	smbrt->cur_idx = 0;
-	smbrt->fur_idx = 0;
+	smbrt->far_idx = 0;
 }
 
 static void
@@ -780,6 +780,32 @@ heap_soemb_active_iter_init(struct palloc_heap *heap)
 	heap->rt->smbrt.cur_idx = 0;
 }
 
+static int
+heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id);
+
+static struct mbrt *
+heap_soemb_passive_get(struct palloc_heap *heap)
+{
+	struct soemb_rt *smbrt = &heap->rt->smbrt;
+	struct mbrt     *mb    = NULL;
+	int              ret;
+	uint32_t         mb_id;
+
+	mb = mbrt_qbs_getmb(&smbrt->qbs, 0);
+	if (mb)
+		return mb;
+
+	ret = heap_create_soe_mb(heap, &mb_id);
+	if (ret == 0)
+		return heap_mbrt_get_mb(heap, mb_id);
+
+	mb = mbrt_qbs_getmb(&smbrt->qbs, 1);
+	if (mb)
+		return mb;
+
+	return 0;
+}
+
 uint32_t
 heap_soemb_active_get(struct palloc_heap *heap)
 {
@@ -789,35 +815,36 @@ heap_soemb_active_get(struct palloc_heap *heap)
 	if (heap->rt->nzones_e == 0)
 		return 0;
 
-	if (smbrt->cur_idx > smbrt->fur_idx)
-		smbrt->fur_idx = smbrt->cur_idx;
+	if (smbrt->cur_idx > smbrt->far_idx)
+		smbrt->far_idx = smbrt->cur_idx;
 
 	if (smbrt->cur_idx < SOEMB_ACTIVE_CNT) {
 		mb = smbrt->svec[smbrt->cur_idx];
-		smbrt->cur_idx++;
+		if (mb == NULL) {
+			mb = heap_soemb_passive_get(heap);
+			if (mb == NULL)
+				return 0;
+			smbrt->svec[smbrt->cur_idx] = mb;
+		}
+		if (mb) {
+			smbrt->cur_idx++;
+			return mb->mb_id;
+		}
 	}
-
-	if (mb)
-		return mb->mb_id;
-
 	return 0;
 }
 
-static int
-heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id);
-
 void
-heap_soemb_reserve(struct palloc_heap *heap)
+heap_soemb_active_update(struct palloc_heap *heap)
 {
-	int              i, ret;
-	uint32_t         mb_id;
-	struct mbrt     *mb;
+	int              i;
+	struct mbrt     *mb    = NULL;
 	struct soemb_rt *smbrt = &heap->rt->smbrt;
 
 	if (heap->rt->nzones_e == 0)
 		return;
 
-	if (smbrt->fur_idx > 1) {
+	if (smbrt->far_idx > 1) {
 		mb = smbrt->svec[0];
 		if (mb)
 			mbrt_qbs_insertmb(&smbrt->qbs, mb);
@@ -827,28 +854,7 @@ heap_soemb_reserve(struct palloc_heap *heap)
 		}
 
 		smbrt->svec[SOEMB_ACTIVE_CNT - 1] = NULL;
-		smbrt->fur_idx                    = 0;
-	}
-
-	for (i = 0; i < SOEMB_ACTIVE_CNT; i++) {
-		if (smbrt->svec[i] != NULL)
-			continue;
-		mb = mbrt_qbs_getmb(&smbrt->qbs, 0);
-		if (mb) {
-			smbrt->svec[i] = mb;
-			break;
-		}
-		ret = heap_create_soe_mb(heap, &mb_id);
-		if (ret == 0) {
-			smbrt->svec[i] = heap_mbrt_get_mb(heap, mb_id);
-			break;
-		}
-		mb = mbrt_qbs_getmb(&smbrt->qbs, 1);
-		if (mb) {
-			smbrt->svec[i] = mb;
-			break;
-		}
-		break;
+		smbrt->far_idx                    = 0;
 	}
 	smbrt->cur_idx = 0;
 }
@@ -1450,6 +1456,7 @@ heap_populate_bucket(struct palloc_heap *heap, struct bucket *bucket)
 
 	heap_zone_init(heap, zone_id, 0, 0);
 	heap_mark_zone_used_persist(heap, zone_id);
+	heap_incr_empty_nemb_cnt(heap);
 
 reclaim_garbage:
 	heap_reclaim_zone_garbage(heap, bucket, zone_id);
@@ -2130,7 +2137,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rc = heap_get_next_unused_zone(heap, &zone_id);
 	if (rc) {
 		D_ERROR("Failed to obtain free zone for evictable mb");
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2138,7 +2145,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	mb = heap_mbrt_setup_mb(heap, zone_id);
 	if (mb == NULL) {
 		ERR("Failed to setup mbrt for zone %u\n", zone_id);
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2227,7 +2234,7 @@ heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rc = heap_get_next_unused_zone(heap, &zone_id);
 	if (rc) {
 		D_ERROR("Failed to obtain free zone for evictable mb");
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2235,7 +2242,7 @@ heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	mb = heap_mbrt_setup_mb(heap, zone_id);
 	if (mb == NULL) {
 		ERR("Failed to setup mbrt for zone %u\n", zone_id);
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2701,7 +2708,7 @@ heap_force_recycle(struct palloc_heap *heap)
 	struct bucket *defb;
 	struct mbrt   *mb;
 	uint32_t       zone_id;
-	uint32_t       max_reclaim = heap->rt->empty_nemb_gcth * 2;
+	uint32_t       max_reclaim = HEAP_NEMB_EMPTY_THRESHOLD * 2;
 
 	mb   = heap_mbrt_get_mb(heap, 0);
 
