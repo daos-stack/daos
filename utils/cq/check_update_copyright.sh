@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
 #  Copyright 2025 Hewlett Packard Enterprise Development LP

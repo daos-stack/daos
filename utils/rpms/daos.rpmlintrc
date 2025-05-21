@@ -54,3 +54,12 @@ addFilter("daos-client-tests\.x86_64: E: devel-dependency capstone-devel")
 addFilter("daos-client-tests\.x86_64: E: explicit-lib-dependency lib(capstone|ndctl|protobuf-c)-devel")
 addFilter("daos-client-tests\.x86_64: E: devel-dependency libcapstone-devel")
 addFilter("daos-client-tests\.x86_64: E: devel-dependency fuse3-devel")
+
+# ignore no %check section warning
+addFilter("W: no-%check-section")
+
+# Disable spelling errors for now.  Ideally allow specific words
+addFilter("E: spelling-error")
+
+# Set warnings as errors to work with updated rpmlintMockResults.groovy
+setBadness('warning', 1000)

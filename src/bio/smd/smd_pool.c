@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,7 +48,8 @@ smd_pool_find_tgt(struct smd_pool *pool, int tgt_id)
 }
 
 static int
-pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name, uint64_t blob_sz)
+pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name, uint64_t blob_sz,
+	     bool recreate)
 {
 	struct smd_pool	pool;
 	struct d_uuid	id;
@@ -87,7 +88,8 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 		pool.sp_tgts[pool.sp_tgt_cnt] = tgt_id;
 		pool.sp_blobs[pool.sp_tgt_cnt] = blob_id;
 		pool.sp_tgt_cnt += 1;
-		if (!strncmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX))
+		if (!strncmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX) &&
+		    !recreate)
 			pool.sp_flags |= SMD_POOL_IN_CREATION;
 
 	} else if (rc == -DER_NONEXIST) {
@@ -96,7 +98,8 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 		pool.sp_tgt_cnt	 = 1;
 		pool.sp_blob_sz  = blob_sz;
 		pool.sp_flags = 0;
-		if (!strncmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX))
+		if (!strncmp(table_name, TABLE_POOLS[SMD_DEV_TYPE_META], SMD_DEV_NAME_MAX) &&
+		    !recreate)
 			pool.sp_flags |= SMD_POOL_IN_CREATION;
 
 	} else {
@@ -117,17 +120,17 @@ out:
 }
 
 int
-smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
-		 enum smd_dev_type st, uint64_t blob_sz)
+smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, enum smd_dev_type st,
+		 uint64_t blob_sz, bool recreate)
 {
-	return pool_add_tgt(pool_id, tgt_id, blob_id, TABLE_POOLS[st], blob_sz);
+	return pool_add_tgt(pool_id, tgt_id, blob_id, TABLE_POOLS[st], blob_sz, recreate);
 }
 
 int
-smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
-		enum smd_dev_type st, uint64_t blob_sz)
+smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, enum smd_dev_type st,
+		uint64_t blob_sz, bool recreate)
 {
-	return pool_add_tgt(pool_id, tgt_id, blob_id, TABLE_RDBS[st], blob_sz);
+	return pool_add_tgt(pool_id, tgt_id, blob_id, TABLE_RDBS[st], blob_sz, recreate);
 }
 
 static int

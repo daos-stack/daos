@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -103,7 +104,7 @@ Ranks Action Result
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -357,7 +358,7 @@ Unknown 3 ranks: 7-9
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -451,7 +452,7 @@ Unknown 3 hosts: foo[7-9]
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -606,7 +607,7 @@ Unknown 3 hosts: foo[7-9]
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

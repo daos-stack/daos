@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,6 +190,8 @@ struct dtx_sub_status {
 struct dtx_coll_entry {
 	struct dtx_id			 dce_xid;
 	uint32_t			 dce_ver;
+	uint32_t                         dce_min_rank;
+	uint32_t                         dce_max_rank;
 	uint32_t			 dce_refs;
 	d_rank_list_t			*dce_ranks;
 	uint8_t				*dce_hints;
@@ -231,13 +234,13 @@ struct dtx_leader_handle {
 	/* Elements for collective DTX. */
 	struct dtx_coll_entry		*dlh_coll_entry;
 	/* How many normal sub request. */
-	uint32_t			dlh_normal_sub_cnt;
+	int32_t                          dlh_normal_sub_cnt;
 	/* How many delay forward sub request. */
-	uint32_t			dlh_delay_sub_cnt;
+	int32_t                          dlh_delay_sub_cnt;
 	/* The index of the first target that forward sub-request to. */
-	uint32_t			dlh_forward_idx;
+	int32_t                          dlh_forward_idx;
 	/* The count of the targets that forward sub-request to. */
-	uint32_t			dlh_forward_cnt;
+	int32_t                          dlh_forward_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
 };
@@ -300,7 +303,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 		 uint32_t flags, struct dtx_memberships *mbs, struct dtx_coll_entry *dce,
 		 struct dtx_leader_handle **p_dlh);
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int result);
 
 typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
 				  int rc);

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,6 +56,7 @@ struct dtx_req_args {
 	uuid_t				 dra_po_uuid;
 	/* container UUID */
 	uuid_t				 dra_co_uuid;
+	uint32_t                         dra_version;
 	/* The count of sub requests. */
 	int				 dra_length;
 	/* The collective RPC result. */
@@ -260,8 +262,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		din = crt_req_get(req);
 		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
 		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
-		din->di_epoch = epoch;
-		din->di_dtx_array.ca_count = drr->drr_count;
+		din->di_epoch               = epoch;
+		din->di_version             = dra->dra_version;
+		din->di_dtx_array.ca_count  = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 		if (drr->drr_flags != NULL) {
 			din->di_flags.ca_count = drr->drr_count;
@@ -665,7 +668,8 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 	dra->dra_cmt_list = cmt_list;
 	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
-	dra->dra_opc = opc;
+	dra->dra_version  = pool->sp_map_version;
+	dra->dra_opc      = opc;
 	uuid_copy(dra->dra_po_uuid, pool->sp_uuid);
 	uuid_copy(dra->dra_co_uuid, cont->sc_uuid);
 
@@ -720,6 +724,8 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 		length = dca->dca_count;
 	}
 
+	dca->dca_chore.cho_func     = dtx_rpc_helper;
+	dca->dca_chore.cho_priority = 1;
 	dca->dca_drr = d_list_entry(dca->dca_head.next, struct dtx_req_rec, drr_link);
 
 	/*
@@ -728,8 +734,8 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 	 * to reduce the whole network peak load and the pressure on related peers.
 	 */
 	while (length > 0) {
-		if (length > DTX_RPC_STEP_LENGTH && opc != DTX_CHECK)
-			dca->dca_steps = DTX_RPC_STEP_LENGTH;
+		if (length > DTX_PRI_RPC_STEP_LENGTH && opc != DTX_CHECK)
+			dca->dca_steps = DTX_PRI_RPC_STEP_LENGTH;
 		else
 			dca->dca_steps = length;
 
@@ -742,7 +748,9 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 				goto out;
 			}
 
-			rc = dss_chore_delegate(&dca->dca_chore, dtx_rpc_helper);
+			dca->dca_chore.cho_credits = dca->dca_steps;
+			dca->dca_chore.cho_hint    = NULL;
+			rc                         = dss_chore_register(&dca->dca_chore);
 			if (rc != 0) {
 				ABT_eventual_free(&dca->dca_chore_eventual);
 				goto out;
@@ -754,10 +762,11 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 			rc = ABT_eventual_free(&dca->dca_chore_eventual);
 			D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_free: %d\n", rc);
 		} else {
-			dss_chore_diy(&dca->dca_chore, dtx_rpc_helper);
+			dss_chore_diy(&dca->dca_chore);
 		}
 
 		rc = dtx_req_wait(&dca->dca_dra);
+		dss_chore_deregister(&dca->dca_chore);
 		if (rc == 0 || rc == -DER_NONEXIST)
 			goto next;
 
@@ -781,9 +790,9 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 			 */
 			break;
 		case DTX_REFRESH:
-			D_ASSERTF(length < DTX_RPC_STEP_LENGTH,
-				  "Too long list for DTX refresh: %u vs %u\n",
-				  length, DTX_RPC_STEP_LENGTH);
+			D_ASSERTF(length < DTX_PRI_RPC_STEP_LENGTH,
+				  "Too long list for DTX refresh: %u vs %u\n", length,
+				  DTX_PRI_RPC_STEP_LENGTH);
 			break;
 		default:
 			D_ASSERTF(0, "Invalid DTX opc %u\n", opc);
@@ -1474,6 +1483,8 @@ struct dtx_coll_rpc_args {
 	struct dtx_id		 dcra_xid;
 	uint32_t		 dcra_opc;
 	uint32_t		 dcra_ver;
+	uint32_t                 dcra_min_rank;
+	uint32_t                 dcra_max_rank;
 	daos_epoch_t		 dcra_epoch;
 	d_rank_list_t		*dcra_ranks;
 	uint8_t			*dcra_hints;
@@ -1530,6 +1541,8 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 	uuid_copy(dci->dci_co_uuid, dcra->dcra_cont->sc_uuid);
 	dci->dci_xid = dcra->dcra_xid;
 	dci->dci_version = dcra->dcra_ver;
+	dci->dci_min_rank        = dcra->dcra_min_rank;
+	dci->dci_max_rank        = dcra->dcra_max_rank;
 	dci->dci_epoch = dcra->dcra_epoch;
 	dci->dci_hints.ca_count = dcra->dcra_hint_sz;
 	dci->dci_hints.ca_arrays = dcra->dcra_hints;
@@ -1575,10 +1588,15 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	dcra->dcra_xid = dce->dce_xid;
 	dcra->dcra_opc = opc;
 	dcra->dcra_ver = dce->dce_ver;
+	dcra->dcra_min_rank = dce->dce_min_rank;
+	dcra->dcra_max_rank = dce->dce_max_rank;
 	dcra->dcra_epoch = epoch;
 	dcra->dcra_ranks = dce->dce_ranks;
 	dcra->dcra_hints = dce->dce_hints;
 	dcra->dcra_hint_sz = dce->dce_hint_sz;
+
+	dcra->dcra_chore.cho_func     = dtx_coll_rpc_helper;
+	dcra->dcra_chore.cho_priority = 1;
 
 	rc = ABT_future_create(1, NULL, &dcra->dcra_future);
 	if (rc != ABT_SUCCESS) {
@@ -1588,9 +1606,16 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	}
 
 	if (dss_has_enough_helper()) {
-		rc = dss_chore_delegate(&dcra->dcra_chore, dtx_coll_rpc_helper);
+		/* The cho_credits maybe over-estimated, no matter. */
+		dcra->dcra_chore.cho_credits = dcra->dcra_ranks->rl_nr < DTX_COLL_TREE_WIDTH
+						   ? dcra->dcra_ranks->rl_nr
+						   : DTX_COLL_TREE_WIDTH;
+		dcra->dcra_chore.cho_hint    = NULL;
+		rc                           = dss_chore_register(&dcra->dcra_chore);
+		if (rc != 0)
+			ABT_future_free(&dcra->dcra_future);
 	} else {
-		dss_chore_diy(&dcra->dcra_chore, dtx_coll_rpc_helper);
+		dss_chore_diy(&dcra->dcra_chore);
 		rc = 0;
 	}
 
@@ -1608,6 +1633,7 @@ dtx_coll_rpc_post(struct dtx_coll_rpc_args *dcra, int ret)
 			 "Collective DTX wait req for opc %u, future %p done, rc %d, result %d\n",
 			 dcra->dcra_opc, dcra->dcra_future, rc, dcra->dcra_result);
 		ABT_future_free(&dcra->dcra_future);
+		dss_chore_deregister(&dcra->dcra_chore);
 	}
 
 	return ret != 0 ? ret : dcra->dcra_result;

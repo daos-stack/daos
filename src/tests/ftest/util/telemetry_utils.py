@@ -1,5 +1,7 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025 Google LLC
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -191,6 +193,9 @@ class TelemetryUtils():
         "engine_sched_total_reject",
         *_gen_stats_metrics("engine_sched_cycle_duration"),
         *_gen_stats_metrics("engine_sched_cycle_size")]
+    ENGINE_DTX_METRICS = [
+        "engine_io_dtx_chore_retry",
+        "engine_io_dtx_invalid"]
     ENGINE_DMABUFF_METRICS = [
         "engine_dmabuff_total_chunks",
         "engine_dmabuff_used_chunks_io",
@@ -457,6 +462,7 @@ class TelemetryUtils():
         """
         all_metrics_names = list(self.ENGINE_EVENT_METRICS)
         all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
+        all_metrics_names.extend(self.ENGINE_DTX_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
         all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)

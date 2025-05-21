@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,9 +14,6 @@
 static void crt_epi_destroy(struct crt_ep_inflight *epi);
 static int context_quotas_init(crt_context_t crt_ctx);
 static int context_quotas_finalize(crt_context_t crt_ctx);
-
-static inline int get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
-static inline void put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
 
 static struct crt_ep_inflight *
 epi_link2ptr(d_list_t *rlink)
@@ -522,8 +520,8 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_CERROR(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
-				   "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
+			RPC_CWARN(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
+				  "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: "
@@ -1194,8 +1192,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
-	int                              err_to_print  = 0;
-	int                              left_to_print = 0;
+	bool                             print_once = false;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1223,47 +1220,26 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-	/* Limit logging when many rpcs time-out at the same time */
-	d_list_for_each_entry(rpc_priv, &timeout_list, crp_tmp_link_timeout) {
-		left_to_print++;
-	}
-
-	/* TODO: might expose via env in future */
-	err_to_print = 1;
-
 	/* handle the timeout RPCs */
 	while ((rpc_priv =
 		    d_list_pop_entry(&timeout_list, struct crt_rpc_priv, crp_tmp_link_timeout))) {
-		/*
-		 * This error is annoying and fills the logs. For now prevent bursts of timeouts
-		 * happening at the same time.
-		 *
-		 * Ideally we would also limit to 1 error per target. Can keep track of it in per
-		 * target cache used for hg_addrs.
-		 *
-		 * Extra lookup cost of cache entry would be ok as this is an error case
-		 **/
+		/* NB: The reason that the error message is printed at INFO
+		 * level is because the user should know how serious the error
+		 * is and they will print the RPC error at appropriate level */
+		if (!print_once) {
+			print_once = true;
 
-		if (err_to_print > 0) {
-			RPC_ERROR(rpc_priv,
-				  "ctx_id %d, (status: %#x) timed out (%d seconds), "
-				  "target (%d:%d)\n",
-				  crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
-				  rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
-			err_to_print--;
-			left_to_print--;
-
-			if (err_to_print == 0 && left_to_print > 0)
-				D_ERROR(" %d more rpcs timed out. rest logged at INFO level\n",
-					left_to_print);
-
+			RPC_WARN(rpc_priv,
+				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "target (%d:%d)\n",
+				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
 		} else {
 			RPC_INFO(rpc_priv,
 				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
 				 "target (%d:%d)\n",
 				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
 				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
-			left_to_print--;
 		}
 
 		crt_req_timeout_hdlr(rpc_priv);
@@ -2115,6 +2091,11 @@ context_quotas_init(crt_context_t crt_ctx)
 	quotas->limit[CRT_QUOTA_RPCS]   = crt_gdata.cg_rpc_quota;
 	quotas->current[CRT_QUOTA_RPCS] = 0;
 	quotas->enabled[CRT_QUOTA_RPCS] = crt_gdata.cg_rpc_quota > 0 ? true : false;
+
+	quotas->limit[CRT_QUOTA_BULKS]   = crt_gdata.cg_bulk_quota;
+	quotas->current[CRT_QUOTA_BULKS] = 0;
+	quotas->enabled[CRT_QUOTA_BULKS] = crt_gdata.cg_bulk_quota > 0 ? true : false;
+
 out:
 	return rc;
 }
@@ -2186,7 +2167,24 @@ out:
 	return rc;
 }
 
-static inline int
+/* bump tracked usage of the resource by 1 without checking for limits  */
+void
+record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
+{
+	struct crt_context *ctx = crt_ctx;
+
+	D_ASSERTF(ctx != NULL, "NULL context\n");
+	D_ASSERTF(quota >= 0 && quota < CRT_QUOTA_COUNT, "Invalid quota\n");
+
+	/* If quotas not enabled or unlimited quota */
+	if (!ctx->cc_quotas.enabled[quota] || ctx->cc_quotas.limit[quota] == 0)
+		return;
+
+	atomic_fetch_add(&ctx->cc_quotas.current[quota], 1);
+}
+
+/* returns 0 if resource is available or -DER_QUOTA_LIMIT otherwise */
+int
 get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;
@@ -2211,7 +2209,8 @@ get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	return rc;
 }
 
-static inline void
+/* return resource back */
+void
 put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;

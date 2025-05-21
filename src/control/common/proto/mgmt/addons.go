@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -121,12 +122,12 @@ func (r *PoolDrainReq) SetUUID(id uuid.UUID) {
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.
-func (r *PoolReintegrateReq) SetSvcRanks(rl []uint32) {
+func (r *PoolReintReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
 // SetUUID sets the request's ID to a UUID.
-func (r *PoolReintegrateReq) SetUUID(id uuid.UUID) {
+func (r *PoolReintReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
 

@@ -1,7 +1,7 @@
 # About DAOS Git hooks
 
 Githooks are a [well documented](https://git-scm.com/docs/githooks) feature
-of git that enable various local exectubles to be run during various stages of
+of git that enable various local executables to be run during various stages of
 the git workflow.
 
 The DAOS repo contains several built-in githooks that are intended
@@ -43,8 +43,12 @@ the version output, it will fail.  Try running
 `<root>/site_scons/site_tools/extra/extra.py` to check.
 2. pylint
 3. flake8
-4. yamllint
-5. gofmt
+4. isort
+5. yamllint
+6. gofmt or golang-go
+7. codespell
+8. scons
+9. gh
 
 There is a daos wrapper around pylint at `utils/cq/daos_pylint.py` which will perform standard
 pylint checks whilst managing scons and PYTHONPATH setup changes automatically.  Installing

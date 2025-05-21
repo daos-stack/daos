@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -167,7 +168,7 @@ class Test(avocadoTest):
                     "ERROR: The env variable DAOS_TEST_RANDOM_SEED "
                     "does not define a valid integer: got='{}'".format(env_seed))
         self.log.info("Test.random seed = %d", self.rand_seed)
-        self.random = random.Random(self.rand_seed)
+        self.random = random.Random(self.rand_seed)     # nosec
 
     def add_test_data(self, filename, data):
         """Add a file to the test variant specific data directory.

@@ -20,7 +20,9 @@
 
 // The trusted-pipeline-lib daosLatestVersion() method will convert this into a number
 /* groovylint-disable-next-line CompileStatic, VariableName */
-String next_version = 'release/2.6'
+String next_version() {
+    return 'release/2.6'
+}
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -74,7 +76,9 @@ Map nlt_test() {
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+String sanitized_JOB_NAME() {
+    return JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+}
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -155,7 +159,6 @@ pipeline {
     agent { label 'lightweight' }
 
     environment {
-        BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = '-ici_key'
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
@@ -202,9 +205,15 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
+        booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
+                     defaultValue: false,
+                     description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
+        string(name: 'CI_SCONS_ARGS',
+               defaultValue: '',
+               description: 'Arguments for scons when building DAOS')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
@@ -240,18 +249,36 @@ pipeline {
         booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build DEB packages for Ubuntu 20')
+        booleanParam(name: 'CI_el8_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on EL 8')
+        booleanParam(name: 'CI_leap15_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit Test on EL 8 test stage')
+        booleanParam(name: 'CI_NLT_TEST',
+                     defaultValue: true,
+                     description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
+        booleanParam(name: 'CI_TEST_EL8_RPMs',
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on EL 8 test stage')
+        booleanParam(name: 'CI_TEST_LEAP15_RPMs',
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on Leap 15 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
+                     defaultValue: false,
+                     description: 'Skip all functional test stages (Test)')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
@@ -272,6 +299,9 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_TEST_SKIP',
+                     defaultValue: false,
+                     description: 'Skip Functional Hardware (Test Hardware) stage')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
@@ -312,7 +342,7 @@ pipeline {
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
@@ -386,7 +416,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
             }
             steps {
                 cancelPreviousBuilds()
@@ -405,10 +435,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.code_scanning'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.code_scanning'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
+                            additionalBuildArgs dockerBuildArgs(add_repos: false) +
+                                                ' --build-arg FVERSION=37'
                         }
                     }
                     steps {
@@ -444,14 +474,13 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'packaging/Dockerfile.mockbuild'
-                            dir 'utils/rpms'
+                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
                             label 'docker_runner'
                             args '--group-add mock'     +
                                  ' --cap-add=SYS_ADMIN' +
+                                 ' --privileged=true'   +
                                  ' -v /scratch:/scratch'
                             additionalBuildArgs dockerBuildArgs()
-
                         }
                     }
                     steps {
@@ -484,8 +513,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'packaging/Dockerfile.mockbuild'
-                            dir 'utils/rpms'
+                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
                             label 'docker_runner'
                             args '--group-add mock'     +
                                  ' --cap-add=SYS_ADMIN' +
@@ -523,13 +551,14 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'packaging/Dockerfile.mockbuild'
-                            dir 'utils/rpms'
+                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
                             label 'docker_runner'
                             args '--group-add mock'     +
                                  ' --cap-add=SYS_ADMIN' +
+                                 ' --privileged=true'   +
                                  ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
+                            additionalBuildArgs dockerBuildArgs() +
+                                '--build-arg FVERSION=37'
                         }
                     }
                     steps {
@@ -555,15 +584,17 @@ pipeline {
                         }
                     }
                 }
+                /* This stage is commented out until it can be replaced
+                with code for building the current Ubuntu release. */
                 stage('Build DEB on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // expression { !skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
-                            filename 'packaging/Dockerfile.ubuntu.20.04'
-                            dir 'utils/rpms'
+                            filename 'utils/rpms/packaging/Dockerfile.ubuntu'
                             label 'docker_runner'
                             args '--cap-add=SYS_ADMIN'
                             additionalBuildArgs dockerBuildArgs()
@@ -591,10 +622,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 8') {
+                stage('Build on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !params.CI_el8_NOBUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -603,7 +634,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -629,50 +660,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 8 Bullseye') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'yes',
-                                       stash_opt: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh label: 'Save failed Bullseye logs',
-                               script: '''if [ -f config.log ]; then
-                                          mv config.log config.log-el8-covc
-                                       fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-covc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -681,7 +672,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15" +
+                                                " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --build-arg COMPILER=icc'
                         }
                     }
@@ -760,7 +751,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { params.CI_NLT_TEST && !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -797,34 +788,6 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test Bullseye on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     ignore_failure: true,
-                                     inst_repos: prRepos(),
-                                     inst_rpms: unitPackages()))
-                    }
-                    post {
-                        always {
-                            // This is only set while dealing with issues
-                            // caused by code coverage instrumentation affecting
-                            // test results, and while code coverage is being
-                            // added.
-                            unitTestPost ignore_failure: true,
-                                         artifacts: ['covc_test_logs/', 'covc_vm_test/**']
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit test Bullseye on EL 8.8')
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
@@ -880,7 +843,9 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
+                // Above not working, always skipping functional VM tests.
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -895,7 +860,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -917,7 +882,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -939,7 +904,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -961,7 +926,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -984,7 +949,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1050,7 +1015,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1058,7 +1023,7 @@ pipeline {
                     steps {
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version))
+                                    daos_pkg_version: daosPackagesVersion(next_version()))
                         )
                     }
                     post {
@@ -1070,7 +1035,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1085,7 +1050,7 @@ pipeline {
                                 name: 'Test RPMs on Leap 15.5',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
-                                next_version: next_version,
+                                next_version: next_version(),
                                 stage_tags: '',
                                 default_tags: 'test_daos_management',
                                 nvme: 'auto',
@@ -1099,7 +1064,7 @@ pipeline {
                                 test_tag: 'test_daos_management',
                                 ftest_arg: '--yaml_extension single_host',
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1110,7 +1075,7 @@ pipeline {
                     } */
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version))
+                                    daos_pkg_version: daosPackagesVersion(next_version()))
                         )
                     }
                     post {
@@ -1133,7 +1098,7 @@ pipeline {
                 job_step_update(
                     storagePrepTest(
                         inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version, 'tests-internal')))
+                        inst_rpms: functionalPackages(1, next_version(), 'tests-internal')))
             }
             post {
                 cleanup {
@@ -1144,7 +1109,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
             }
             steps {
                 script {
@@ -1153,7 +1118,7 @@ pipeline {
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1165,7 +1130,7 @@ pipeline {
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
@@ -1178,7 +1143,7 @@ pipeline {
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1191,7 +1156,7 @@ pipeline {
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1204,7 +1169,7 @@ pipeline {
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
@@ -1218,7 +1183,7 @@ pipeline {
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1231,7 +1196,7 @@ pipeline {
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1243,7 +1208,7 @@ pipeline {
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version,
+                            next_version: next_version(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1255,45 +1220,6 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
-        stage('Test Report') {
-            parallel {
-                stage('Bullseye Report on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable') +
-                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        // The coverage_healthy is primarily set here
-                        // while the code coverage feature is being implemented.
-                        job_step_update(
-                            cloverReportPublish(
-                                coverage_stashes: ['el8-covc-unit-cov',
-                                                   'func-vm-cov',
-                                                   'func-hw-medium-cov',
-                                                   'func-hw-large-cov'],
-                                coverage_healthy: [methodCoverage: 0,
-                                                   conditionalCoverage: 0,
-                                                   statementCoverage: 0],
-                                ignore_failure: true))
-                    }
-                    post {
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                } // stage('Bullseye Report on EL 8')
-            } // parallel
-        } // stage ('Test Report')
     } // stages
     post {
         always {

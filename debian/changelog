@@ -1,8 +1,32 @@
-daos (2.6.3-4) unstable; urgency=medium
+daos (2.6.3-8) unstable; urgency=medium
   [ Jan Michalski ]
   * Add ddb_ut and dtx_ut to the server-tests package
 
- -- Jan Michalski <jan-marian.michalski@hpe.com>  Thu, 13 Feb 2025 11:39:00 +0000
+ -- Jan Michalski <jan-marian.michalski@hpe.com>  Wed, 21 May 2025 15:00:00 +0000
+
+daos (2.6.3-7) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove raft as an external dependence
+
+ -- Jeff Olivier <jeffolivier@google.com>  Fri, 11 Apr 2025 14:28:00 +0000
+
+daos (2.6.3-6) unstable; urgency=medium
+  [ Cedric Koch-Hofer]
+  * Update BR: argobots to 1.2
+
+ -- Cedric Koch-Hofer <cedric.koch-hofer@intel.com>  Tue, 08 Apr 2025 11:06:00 -0700
+
+daos (2.6.3-5) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove Ubuntu server packaging
+
+ -- Jeff Olivier <jeffolivier@google.com>  Wed, 19 Mar 2025 20:20:00 -0500
+
+daos (2.6.3-4) unstable; urgency=medium
+  [ Saurabh Tandan ]
+  * Fourth release candidate for 2.6.3
+
+ -- Saurabh Tandan <saurabh.tandan@hpe.com>  Wed, 19 Mar 2025 12:18:00 -0700
 
 daos (2.6.3-3) unstable; urgency=medium
   [ Phillip Henderson ]

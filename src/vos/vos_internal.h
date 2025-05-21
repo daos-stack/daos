@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -374,6 +375,8 @@ struct vos_container {
 				vc_cmt_dtx_indexed:1;
 	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
+	/* The latest pool map version that DTX resync has been done. */
+	uint32_t                vc_dtx_resync_ver;
 };
 
 struct vos_dtx_act_ent {
@@ -453,6 +456,8 @@ struct vos_dtx_cmt_ent {
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
+
+#define EVT_DESC_MAGIC          0xbeefdead
 
 extern uint64_t vos_evt_feats;
 

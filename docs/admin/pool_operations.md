@@ -189,7 +189,7 @@ with the following information for each pool:
   the difference storage targets is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
   by some storage targets while space is still available on others.
-- the number of disabled targets (0 here) and the number of targets that
+- The number of disabled targets (0 here) and the number of targets that
   the pool was originally configured with (total).
 
 The --verbose option provides more detailed information including the
@@ -805,23 +805,70 @@ surviving engine.
 
 ### Manual Exclusion
 
-An operator can exclude one or more engines or targets from a specific DAOS pool
-using the rank the target resides, as well as the target idx on that rank.
-If a target idx list is not provided, all targets on the engine rank will be excluded.
+An operator can exclude one or more engines or targets from a specific DAOS pool using the rank(s)
+where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx list is
+not provided, all selected targets on the engine rank(s) will be excluded.
 
-To exclude a target from a pool:
+To exclude multiple targets on a single rank from a pool:
 
 ```bash
-$ dmg pool exclude --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+$ dmg pool exclude --ranks=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool target exclude command accepts 2 parameters:
+To exclude multiple targets on multiple ranks from a pool:
 
-* The engine rank of the target(s) to be excluded.
-* The target indices of the targets to be excluded from that engine rank (optional).
+```bash
+$ dmg pool exclude --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+```
+
+The pool target exclude command accepts 4 parameters:
+
+* The label or UUID of the pool that the targets will be excluded.
+* The engine rank(s) of the target(s) to be excluded. This can be a single integer or a list of
+  comma-separated ranges e.g. "1" or "1-9,10,12-19".
+* The target indices of the targets to be excluded from each specified engine rank (optional).
+* The force flag which can be used to override RF check as documented below (optional, use with
+  caution).
 
 Upon successful manual exclusion, the self-healing mechanism will be triggered
 to restore redundancy on the remaining engines.
+
+!!! note
+    Exclusion may compromise the Pool Redundancy Factor (RF), potentially leading
+    to data loss. If this is the case, the command will refuse to perform the exclusion
+    and return the error code -DER_RF. You can proceed with the exclusion by specifying
+    the --force option. Please note that forcing the operation may result in data loss,
+    and it is strongly recommended to verify the RF status before proceeding.
+
+#### System Exclude
+
+To exclude ranks or hosts from all pools that they belong to, the 'dmg system exclude'
+command can be used. The command takes either a host-set or rank-set. Requesting a
+host-set excludes all ranks on selected hosts.
+
+To exclude a set of hosts from all pools:
+
+```Bash
+$ dmg system exclude --rank-hosts foo-[001-100]
+```
+
+To exclude a set of ranks from all pools:
+
+```Bash
+$ dmg system exclude --ranks 1-100
+```
+
+Selected ranks will be set to `AdminExcluded` state in system membership (as shown in output of
+`dmg system query` command). This will exclude all rank targets from all pools and render the ranks
+unusable in pools until `dmg system clear-exclude --ranks=${rank_range_list}` is run to return the
+ranks to the previous (normally `Excluded`) state. Then the engine can be restarted to rejoin the
+system and will enter the `Joined` state and ready to be reintegrated into pools.
+
+Engine state can be queryed via the system membership using:
+
+```bash
+$ dmg system query
+```
 
 ### Drain
 
@@ -837,16 +884,45 @@ data would not be integrated into a rebuild and would be lost.
 Drain operation is not allowed if there are other ongoing rebuild operations, otherwise
 it will return -DER_BUSY.
 
-To drain a target from a pool:
+An operator can drain one or more engines or targets from a specific DAOS pool using the rank(s)
+where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx list is
+not provided, all selected targets on the engine rank(s) will be drained.
+
+To drain multiple targets on a single rank from a pool:
 
 ```bash
-$ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} $DAOS_POOL
+$ dmg pool drain --ranks=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool target drain command accepts 2 parameters:
+To drain multiple targets on multiple ranks from a pool:
 
-* The engine rank of the target(s) to be drained.
-* The target indices of the targets to be drained from that engine rank (optional).
+```bash
+$ dmg pool drain --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+```
+
+The pool target drain command accepts 3 parameters:
+
+* The label or UUID of the pool that the targets to be drained.
+* The engine rank(s) of the target(s) to be drained. This can be a single integer or a list of
+  comma-separated ranges e.g. "1" or "1-9,10,12-19".
+* The target indices of the targets to be drained from each specified engine rank (optional).
+
+#### System Drain
+
+To drain ranks or hosts from all pools that they belong to, the 'dmg system drain'
+command can be used. The command takes either a host-set or rank-set:
+
+To drain a set of hosts from all pools (drains all ranks on selected hosts):
+
+```Bash
+$ dmg system drain --rank-hosts foo-[001-100]
+```
+
+To drain a set of ranks from all pools:
+
+```Bash
+$ dmg system drain --ranks 1-100
+```
 
 ### Reintegration
 
@@ -858,15 +934,28 @@ supplying a target idx list, or reintegrate an entire engine rank by omitting th
 Reintegrate operation is not allowed if there are other ongoing rebuild operations,
 otherwise it will return -DER_BUSY.
 
-```
-$ dmg pool reintegrate $DAOS_POOL --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
+An operator can reintegrate one or more engines or targets from a specific DAOS pool using the
+rank(s) where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx
+list is not provided, all selected targets on the engine rank(s) will be reintegrated.
+
+To reintegrate multiple targets on a single rank from a pool:
+
+```bash
+$ dmg pool reintegrate --ranks=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool reintegrate command accepts 3 parameters:
+To reintegrate multiple targets on multiple ranks from a pool:
+
+```bash
+$ dmg pool reintegrate --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+```
+
+The pool target reintegrate command accepts 3 parameters:
 
 * The label or UUID of the pool that the targets will be reintegrated into.
-* The engine rank of the affected targets.
-* The target indices of the targets to be reintegrated on that engine rank (optional).
+* The engine rank(s) of the target(s) to be reintegrated. This can be a single integer or a list of
+  comma-separated ranges e.g. "1" or "1-9,10,12-19".
+* The target indices of the targets to be reintegrated from each specified engine rank (optional).
 
 When rebuild is triggered it will list the operations and their related engines/targets
 by their engine rank and target index.
@@ -882,16 +971,32 @@ Target (rank 5 idx 1) is down.
 These should be the same values used when reintegrating the targets.
 
 ```
-$ dmg pool reintegrate $DAOS_POOL --rank=5 --target-idx=0,1
+$ dmg pool reintegrate $DAOS_POOL --ranks=5 --target-idx=0,1
 ```
 
 !!! warning
-    While dmg pool query and list show how many targets are disabled for each
-    pool, there is currently no way to list the targets that have actually
-    been disabled. As a result, it is recommended for now to try to reintegrate
-    all engine ranks one after the other via `for i in seq $NR_RANKs; do dmg
-    pool reintegrate --rank=$i; done`. This limitation will be addressed in the
-    next release.
+    While dmg pool query and list show how many targets are disabled for each pool, there is
+    currently no way to list the targets that have actually been disabled. As a result, it is
+    recommended for now to try to reintegrate all engine ranks reported as disabled in
+    `dmg pool query`. The string output after "Disabled ranks:" in the pool query output can
+    be used as the `--ranks=<disabled_ranks>` option value in `dmg pool reintegrate` command.
+
+#### System Reintegrate
+
+To reintegrate ranks or hosts from all pools that they belong to, the 'dmg system reintegrate'
+command can be used. The command takes either a host-set or rank-set. Selecting a host-set reintegrates all ranks on selected hosts.
+
+To reintegrate a set of hosts from all pools:
+
+```Bash
+$ dmg system reintegrate --rank-hosts foo-[001-100]
+```
+
+To reintegrate a set of ranks from all pools:
+
+```Bash
+$ dmg system reintegrate --ranks 1-100
+```
 
 ## Pool Extension
 
