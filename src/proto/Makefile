@@ -80,39 +80,23 @@ $(PROTOC):
 
 GOPATH ?= $(shell go env GOPATH)
 PROTOC_GEN_GO_PKG := google.golang.org/protobuf
-PROTOC_GEN_GO_IMP := $(PROTOC_GEN_GO_PKG)/cmd/protoc-gen-go
+PROTOC_GEN_GO_CMD := $(PROTOC_GEN_GO_PKG)/cmd/protoc-gen-go
 PROTOC_GEN_GO_MOD_TAG = $(shell awk '/$(subst /,\/,$(PROTOC_GEN_GO_PKG))/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
 PROTOC_GEN_GO_TAG ?= $(PROTOC_GEN_GO_MOD_TAG)
-PROTOC_GEN_GO := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_IMP))
+PROTOC_GEN_GO := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_CMD))
 
 $(PROTOC_GEN_GO): $(PROTOC)
 	@echo "Installing protobuf generator ($(PROTOC_GEN_GO_TAG)) for Go..."
-	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) ] &&\
-		cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
-		git checkout master || true
-	go get -u $(PROTOC_GEN_GO_IMP) &&\
-	cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
-	git checkout $(PROTOC_GEN_GO_TAG) &&\
-	go install $(PROTOC_GEN_GO_IMP)
+	go install $(PROTOC_GEN_GO_CMD)@$(PROTOC_GEN_GO_TAG)
 
 PROTOC_GEN_GO_GRPC_PKG := google.golang.org/grpc
-PROTOC_GEN_GO_GRPC_IMP := $(PROTOC_GEN_GO_GRPC_PKG)/cmd/protoc-gen-go-grpc
-PROTOC_GEN_GO_GRPC_MOD_TAG = $(shell awk '/$(subst /,\/,$(PROTOC_GEN_GO_GRPC_PKG))/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
-PROTOC_GEN_GO_GRPC_TAG ?= $(PROTOC_GEN_GO_GRPC_MOD_TAG)
-PROTOC_GEN_GO_GRPC := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_GRPC_IMP))
+PROTOC_GEN_GO_GRPC_CMD := $(PROTOC_GEN_GO_GRPC_PKG)/cmd/protoc-gen-go-grpc
+PROTOC_GEN_GO_GRPC_TAG ?= latest
+PROTOC_GEN_GO_GRPC := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_GRPC_CMD))
 
 $(PROTOC_GEN_GO_GRPC): $(PROTOC)
 	@echo "Installing gRPC protobuf generator ($(PROTOC_GEN_GO_GRPC_TAG)) for Go..."
-#	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) ] &&\
-#		cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
-#		git checkout master || true
-#	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) ] &&\
-#		cd $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) &&\
-#		git checkout master || true
-#	go get -u $(PROTOC_GEN_GO_GRPC_IMP) &&\
-#	cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
-#	git checkout $(PROTOC_GEN_GO_GRPC_TAG) &&\
-#	go install $(PROTOC_GEN_GO_GRPC_IMP)
+	go install $(PROTOC_GEN_GO_GRPC_CMD)@$(PROTOC_GEN_GO_GRPC_TAG)
 
 clean-gen:
 	rm -f $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC)
