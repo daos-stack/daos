@@ -105,6 +105,85 @@ Hugepagesize:       1 GB
 	}
 }
 
+func createMemInfoTestFile(t *testing.T, extDataDir, srcName, dstDir string) {
+	srcPath := filepath.Join(extDataDir, srcName)
+	if _, err := os.Stat(srcPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dstDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	dstPath := filepath.Join(dstDir, "meminfo")
+	test.CopyFile(t, srcPath, dstPath)
+	if _, err := os.Stat(dstPath); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCommon_getMemInfoNodes(t *testing.T) {
+	extTestDataDir := "./testdata"
+
+	testDir, clean := test.CreateTestDir(t)
+	defer clean()
+
+	pathRootSysOrig := pathRootSys
+	pathRootSys = filepath.Join(testDir, "sys")
+	defer func() {
+		pathRootSys = pathRootSysOrig
+	}()
+
+	for name, tc := range map[string]struct {
+		skipCreate bool
+		expNodes   []MemInfo
+		expErr     error
+	}{
+		"zero nodes found": {
+			skipCreate: true,
+			expNodes:   []MemInfo{},
+		},
+		"two nodes found": {
+			expNodes: []MemInfo{
+				{
+					HugepagesTotal: 2048,
+					HugepagesFree:  2048,
+					MemTotalKiB:    97673756,
+					MemFreeKiB:     87210384,
+					MemUsedKiB:     10463372,
+				},
+				{
+					NumaNodeIndex:  1,
+					HugepagesTotal: 512,
+					HugepagesFree:  512,
+					MemTotalKiB:    99030076,
+					MemFreeKiB:     95526628,
+					MemUsedKiB:     3503448,
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !tc.skipCreate {
+				createMemInfoTestFile(t, extTestDataDir, "meminfo_0",
+					filepath.Join(pathRootSys, "devices", "system", "node",
+						"node0"))
+				createMemInfoTestFile(t, extTestDataDir, "meminfo_1",
+					filepath.Join(pathRootSys, "devices", "system", "node",
+						"node1"))
+			}
+
+			gotNodes, gotErr := getMemInfoNodes()
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expNodes, gotNodes); diff != "" {
+				t.Fatalf("unexpected output (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestCommon_GetMemInfo(t *testing.T) {
 	extTestDataDir := "./testdata"
 
@@ -195,19 +274,8 @@ func TestCommon_GetMemInfo(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			for src, dst := range tc.files {
-				srcPath := filepath.Join(extTestDataDir, src)
-				if _, err := os.Stat(srcPath); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.MkdirAll(dst, 0750); err != nil {
-					t.Fatal(err)
-				}
-				dstPath := filepath.Join(dst, "meminfo")
-				test.CopyFile(t, srcPath, dstPath)
-				if _, err := os.Stat(dstPath); err != nil {
-					t.Fatal(err)
-				}
+			for srcName, dstDir := range tc.files {
+				createMemInfoTestFile(t, extTestDataDir, srcName, dstDir)
 			}
 
 			gotOut, gotErr := GetSysMemInfo()

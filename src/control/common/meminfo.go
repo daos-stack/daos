@@ -47,8 +47,8 @@ type MemInfo struct {
 
 // SysMemInfo contains information about system memory.
 type SysMemInfo struct {
-	MemInfo             // Overall info.
-	NumaNodes []MemInfo // Per-NUMA-node info.
+	MemInfo   `json:",inline"` // Overall info.
+	NumaNodes []MemInfo        `json:"numa_nodes"` // Per-NUMA-node info.
 }
 
 // Summary reports basic total system memory stats.
@@ -186,7 +186,7 @@ func getMemInfo(path string) (*MemInfo, error) {
 }
 
 func getMemInfoNodes() ([]MemInfo, error) {
-	path := filepath.Join(pathRootSys, "devices", "system", "node", "node*")
+	path := filepath.Join(pathRootSys, "devices", "system", "node", "node*", "meminfo")
 	matches, err := filepath.Glob(path)
 	if err != nil {
 		return nil, errors.Wrap(err, "filepath glob")
@@ -198,17 +198,11 @@ func getMemInfoNodes() ([]MemInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !f.IsDir() {
-			continue
+		if f.IsDir() {
+			return nil, errors.Errorf("expected %s to be a file but got dir", match)
 		}
 
-		// Skip if directory name isn't node*.
-		if !regexpNodeDir.MatchString(filepath.Base(match)) {
-			continue
-		}
-
-		nodeMemInfoPath := filepath.Join(match, "meminfo")
-		mi, err := getMemInfo(nodeMemInfoPath)
+		mi, err := getMemInfo(match)
 		if err != nil {
 			return nil, err
 		}

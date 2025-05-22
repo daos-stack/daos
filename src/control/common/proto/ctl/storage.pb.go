@@ -82,25 +82,121 @@ func (x *StorageScanReq) GetScm() *ScanScmReq {
 	return nil
 }
 
+type MemInfo struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	NumaNodeIndex    uint32 `protobuf:"varint,1,opt,name=numa_node_index,json=numaNodeIndex,proto3" json:"numa_node_index,omitempty"`
+	HugepagesTotal   uint64 `protobuf:"varint,2,opt,name=hugepages_total,json=hugepagesTotal,proto3" json:"hugepages_total,omitempty"`
+	HugepagesFree    uint64 `protobuf:"varint,3,opt,name=hugepages_free,json=hugepagesFree,proto3" json:"hugepages_free,omitempty"`
+	HugepagesSurplus uint64 `protobuf:"varint,4,opt,name=hugepages_surplus,json=hugepagesSurplus,proto3" json:"hugepages_surplus,omitempty"`
+	MemTotalKb       uint64 `protobuf:"varint,5,opt,name=mem_total_kb,json=memTotalKb,proto3" json:"mem_total_kb,omitempty"`
+	MemFreeKb        uint64 `protobuf:"varint,6,opt,name=mem_free_kb,json=memFreeKb,proto3" json:"mem_free_kb,omitempty"`
+	MemUsedKb        uint64 `protobuf:"varint,7,opt,name=mem_used_kb,json=memUsedKb,proto3" json:"mem_used_kb,omitempty"`
+}
+
+func (x *MemInfo) Reset() {
+	*x = MemInfo{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ctl_storage_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *MemInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MemInfo) ProtoMessage() {}
+
+func (x *MemInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_storage_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MemInfo.ProtoReflect.Descriptor instead.
+func (*MemInfo) Descriptor() ([]byte, []int) {
+	return file_ctl_storage_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *MemInfo) GetNumaNodeIndex() uint32 {
+	if x != nil {
+		return x.NumaNodeIndex
+	}
+	return 0
+}
+
+func (x *MemInfo) GetHugepagesTotal() uint64 {
+	if x != nil {
+		return x.HugepagesTotal
+	}
+	return 0
+}
+
+func (x *MemInfo) GetHugepagesFree() uint64 {
+	if x != nil {
+		return x.HugepagesFree
+	}
+	return 0
+}
+
+func (x *MemInfo) GetHugepagesSurplus() uint64 {
+	if x != nil {
+		return x.HugepagesSurplus
+	}
+	return 0
+}
+
+func (x *MemInfo) GetMemTotalKb() uint64 {
+	if x != nil {
+		return x.MemTotalKb
+	}
+	return 0
+}
+
+func (x *MemInfo) GetMemFreeKb() uint64 {
+	if x != nil {
+		return x.MemFreeKb
+	}
+	return 0
+}
+
+func (x *MemInfo) GetMemUsedKb() uint64 {
+	if x != nil {
+		return x.MemUsedKb
+	}
+	return 0
+}
+
 type SysMemInfo struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	HugepagesTotal    uint64 `protobuf:"varint,1,opt,name=hugepages_total,json=hugepagesTotal,proto3" json:"hugepages_total,omitempty"`
-	HugepagesFree     uint64 `protobuf:"varint,2,opt,name=hugepages_free,json=hugepagesFree,proto3" json:"hugepages_free,omitempty"`
-	HugepagesReserved uint64 `protobuf:"varint,3,opt,name=hugepages_reserved,json=hugepagesReserved,proto3" json:"hugepages_reserved,omitempty"`
-	HugepagesSurplus  uint64 `protobuf:"varint,4,opt,name=hugepages_surplus,json=hugepagesSurplus,proto3" json:"hugepages_surplus,omitempty"`
-	HugepageSizeKb    uint32 `protobuf:"varint,5,opt,name=hugepage_size_kb,json=hugepageSizeKb,proto3" json:"hugepage_size_kb,omitempty"`
-	MemTotalKb        uint64 `protobuf:"varint,6,opt,name=mem_total_kb,json=memTotalKb,proto3" json:"mem_total_kb,omitempty"`
-	MemFreeKb         uint64 `protobuf:"varint,7,opt,name=mem_free_kb,json=memFreeKb,proto3" json:"mem_free_kb,omitempty"`
-	MemAvailableKb    uint64 `protobuf:"varint,8,opt,name=mem_available_kb,json=memAvailableKb,proto3" json:"mem_available_kb,omitempty"`
+	HugepagesTotal    uint64     `protobuf:"varint,1,opt,name=hugepages_total,json=hugepagesTotal,proto3" json:"hugepages_total,omitempty"`
+	HugepagesFree     uint64     `protobuf:"varint,2,opt,name=hugepages_free,json=hugepagesFree,proto3" json:"hugepages_free,omitempty"`
+	HugepagesReserved uint64     `protobuf:"varint,3,opt,name=hugepages_reserved,json=hugepagesReserved,proto3" json:"hugepages_reserved,omitempty"`
+	HugepagesSurplus  uint64     `protobuf:"varint,4,opt,name=hugepages_surplus,json=hugepagesSurplus,proto3" json:"hugepages_surplus,omitempty"`
+	HugepageSizeKb    uint32     `protobuf:"varint,5,opt,name=hugepage_size_kb,json=hugepageSizeKb,proto3" json:"hugepage_size_kb,omitempty"`
+	MemTotalKb        uint64     `protobuf:"varint,6,opt,name=mem_total_kb,json=memTotalKb,proto3" json:"mem_total_kb,omitempty"`
+	MemFreeKb         uint64     `protobuf:"varint,7,opt,name=mem_free_kb,json=memFreeKb,proto3" json:"mem_free_kb,omitempty"`
+	MemAvailableKb    uint64     `protobuf:"varint,8,opt,name=mem_available_kb,json=memAvailableKb,proto3" json:"mem_available_kb,omitempty"`
+	NumaNodes         []*MemInfo `protobuf:"bytes,9,rep,name=numa_nodes,json=numaNodes,proto3" json:"numa_nodes,omitempty"`
 }
 
 func (x *SysMemInfo) Reset() {
 	*x = SysMemInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_storage_proto_msgTypes[1]
+		mi := &file_ctl_storage_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -113,7 +209,7 @@ func (x *SysMemInfo) String() string {
 func (*SysMemInfo) ProtoMessage() {}
 
 func (x *SysMemInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[1]
+	mi := &file_ctl_storage_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -126,7 +222,7 @@ func (x *SysMemInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SysMemInfo.ProtoReflect.Descriptor instead.
 func (*SysMemInfo) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{1}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *SysMemInfo) GetHugepagesTotal() uint64 {
@@ -185,6 +281,13 @@ func (x *SysMemInfo) GetMemAvailableKb() uint64 {
 	return 0
 }
 
+func (x *SysMemInfo) GetNumaNodes() []*MemInfo {
+	if x != nil {
+		return x.NumaNodes
+	}
+	return nil
+}
+
 type StorageScanResp struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -198,7 +301,7 @@ type StorageScanResp struct {
 func (x *StorageScanResp) Reset() {
 	*x = StorageScanResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_storage_proto_msgTypes[2]
+		mi := &file_ctl_storage_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -211,7 +314,7 @@ func (x *StorageScanResp) String() string {
 func (*StorageScanResp) ProtoMessage() {}
 
 func (x *StorageScanResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[2]
+	mi := &file_ctl_storage_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -224,7 +327,7 @@ func (x *StorageScanResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageScanResp.ProtoReflect.Descriptor instead.
 func (*StorageScanResp) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{2}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *StorageScanResp) GetNvme() *ScanNvmeResp {
@@ -262,7 +365,7 @@ type StorageFormatReq struct {
 func (x *StorageFormatReq) Reset() {
 	*x = StorageFormatReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_storage_proto_msgTypes[3]
+		mi := &file_ctl_storage_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -275,7 +378,7 @@ func (x *StorageFormatReq) String() string {
 func (*StorageFormatReq) ProtoMessage() {}
 
 func (x *StorageFormatReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[3]
+	mi := &file_ctl_storage_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +391,7 @@ func (x *StorageFormatReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageFormatReq.ProtoReflect.Descriptor instead.
 func (*StorageFormatReq) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{3}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *StorageFormatReq) GetNvme() *FormatNvmeReq {
@@ -331,7 +434,7 @@ type StorageFormatResp struct {
 func (x *StorageFormatResp) Reset() {
 	*x = StorageFormatResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_storage_proto_msgTypes[4]
+		mi := &file_ctl_storage_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -344,7 +447,7 @@ func (x *StorageFormatResp) String() string {
 func (*StorageFormatResp) ProtoMessage() {}
 
 func (x *StorageFormatResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[4]
+	mi := &file_ctl_storage_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -357,7 +460,7 @@ func (x *StorageFormatResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageFormatResp.ProtoReflect.Descriptor instead.
 func (*StorageFormatResp) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{4}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StorageFormatResp) GetCrets() []*NvmeControllerResult {
@@ -385,7 +488,7 @@ type NvmeRebindReq struct {
 func (x *NvmeRebindReq) Reset() {
 	*x = NvmeRebindReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_storage_proto_msgTypes[5]
+		mi := &file_ctl_storage_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -398,7 +501,7 @@ func (x *NvmeRebindReq) String() string {
 func (*NvmeRebindReq) ProtoMessage() {}
 
 func (x *NvmeRebindReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[5]
+	mi := &file_ctl_storage_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -411,7 +514,7 @@ func (x *NvmeRebindReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NvmeRebindReq.ProtoReflect.Descriptor instead.
 func (*NvmeRebindReq) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{5}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *NvmeRebindReq) GetPciAddr() string {
@@ -432,7 +535,7 @@ type NvmeRebindResp struct {
 func (x *NvmeRebindResp) Reset() {
 	*x = NvmeRebindResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_storage_proto_msgTypes[6]
+		mi := &file_ctl_storage_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -445,7 +548,7 @@ func (x *NvmeRebindResp) String() string {
 func (*NvmeRebindResp) ProtoMessage() {}
 
 func (x *NvmeRebindResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[6]
+	mi := &file_ctl_storage_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -458,7 +561,7 @@ func (x *NvmeRebindResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NvmeRebindResp.ProtoReflect.Descriptor instead.
 func (*NvmeRebindResp) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{6}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *NvmeRebindResp) GetState() *ResponseState {
@@ -481,7 +584,7 @@ type NvmeAddDeviceReq struct {
 func (x *NvmeAddDeviceReq) Reset() {
 	*x = NvmeAddDeviceReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_storage_proto_msgTypes[7]
+		mi := &file_ctl_storage_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -494,7 +597,7 @@ func (x *NvmeAddDeviceReq) String() string {
 func (*NvmeAddDeviceReq) ProtoMessage() {}
 
 func (x *NvmeAddDeviceReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[7]
+	mi := &file_ctl_storage_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -507,7 +610,7 @@ func (x *NvmeAddDeviceReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NvmeAddDeviceReq.ProtoReflect.Descriptor instead.
 func (*NvmeAddDeviceReq) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{7}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *NvmeAddDeviceReq) GetPciAddr() string {
@@ -542,7 +645,7 @@ type NvmeAddDeviceResp struct {
 func (x *NvmeAddDeviceResp) Reset() {
 	*x = NvmeAddDeviceResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_storage_proto_msgTypes[8]
+		mi := &file_ctl_storage_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -555,7 +658,7 @@ func (x *NvmeAddDeviceResp) String() string {
 func (*NvmeAddDeviceResp) ProtoMessage() {}
 
 func (x *NvmeAddDeviceResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[8]
+	mi := &file_ctl_storage_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -568,7 +671,7 @@ func (x *NvmeAddDeviceResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NvmeAddDeviceResp.ProtoReflect.Descriptor instead.
 func (*NvmeAddDeviceResp) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{8}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *NvmeAddDeviceResp) GetState() *ResponseState {
@@ -592,28 +695,48 @@ var file_ctl_storage_proto_rawDesc = []byte{
 	0x53, 0x63, 0x61, 0x6e, 0x4e, 0x76, 0x6d, 0x65, 0x52, 0x65, 0x71, 0x52, 0x04, 0x6e, 0x76, 0x6d,
 	0x65, 0x12, 0x21, 0x0a, 0x03, 0x73, 0x63, 0x6d, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f,
 	0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x53, 0x63, 0x61, 0x6e, 0x53, 0x63, 0x6d, 0x52, 0x65, 0x71, 0x52,
-	0x03, 0x73, 0x63, 0x6d, 0x22, 0xce, 0x02, 0x0a, 0x0a, 0x53, 0x79, 0x73, 0x4d, 0x65, 0x6d, 0x49,
-	0x6e, 0x66, 0x6f, 0x12, 0x27, 0x0a, 0x0f, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73,
-	0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0e, 0x68, 0x75,
-	0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x12, 0x25, 0x0a, 0x0e,
-	0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x5f, 0x66, 0x72, 0x65, 0x65, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x04, 0x52, 0x0d, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x46,
-	0x72, 0x65, 0x65, 0x12, 0x2d, 0x0a, 0x12, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73,
-	0x5f, 0x72, 0x65, 0x73, 0x65, 0x72, 0x76, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x04, 0x52,
-	0x11, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x52, 0x65, 0x73, 0x65, 0x72, 0x76,
-	0x65, 0x64, 0x12, 0x2b, 0x0a, 0x11, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x5f,
-	0x73, 0x75, 0x72, 0x70, 0x6c, 0x75, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x04, 0x52, 0x10, 0x68,
-	0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x53, 0x75, 0x72, 0x70, 0x6c, 0x75, 0x73, 0x12,
-	0x28, 0x0a, 0x10, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x5f, 0x73, 0x69, 0x7a, 0x65,
-	0x5f, 0x6b, 0x62, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0e, 0x68, 0x75, 0x67, 0x65, 0x70,
-	0x61, 0x67, 0x65, 0x53, 0x69, 0x7a, 0x65, 0x4b, 0x62, 0x12, 0x20, 0x0a, 0x0c, 0x6d, 0x65, 0x6d,
-	0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x5f, 0x6b, 0x62, 0x18, 0x06, 0x20, 0x01, 0x28, 0x04, 0x52,
-	0x0a, 0x6d, 0x65, 0x6d, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x4b, 0x62, 0x12, 0x1e, 0x0a, 0x0b, 0x6d,
-	0x65, 0x6d, 0x5f, 0x66, 0x72, 0x65, 0x65, 0x5f, 0x6b, 0x62, 0x18, 0x07, 0x20, 0x01, 0x28, 0x04,
-	0x52, 0x09, 0x6d, 0x65, 0x6d, 0x46, 0x72, 0x65, 0x65, 0x4b, 0x62, 0x12, 0x28, 0x0a, 0x10, 0x6d,
-	0x65, 0x6d, 0x5f, 0x61, 0x76, 0x61, 0x69, 0x6c, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x6b, 0x62, 0x18,
-	0x08, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0e, 0x6d, 0x65, 0x6d, 0x41, 0x76, 0x61, 0x69, 0x6c, 0x61,
-	0x62, 0x6c, 0x65, 0x4b, 0x62, 0x22, 0x8f, 0x01, 0x0a, 0x0f, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67,
+	0x03, 0x73, 0x63, 0x6d, 0x22, 0x90, 0x02, 0x0a, 0x07, 0x4d, 0x65, 0x6d, 0x49, 0x6e, 0x66, 0x6f,
+	0x12, 0x26, 0x0a, 0x0f, 0x6e, 0x75, 0x6d, 0x61, 0x5f, 0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x69, 0x6e,
+	0x64, 0x65, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0d, 0x6e, 0x75, 0x6d, 0x61, 0x4e,
+	0x6f, 0x64, 0x65, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x12, 0x27, 0x0a, 0x0f, 0x68, 0x75, 0x67, 0x65,
+	0x70, 0x61, 0x67, 0x65, 0x73, 0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x04, 0x52, 0x0e, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x54, 0x6f, 0x74, 0x61,
+	0x6c, 0x12, 0x25, 0x0a, 0x0e, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x5f, 0x66,
+	0x72, 0x65, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0d, 0x68, 0x75, 0x67, 0x65, 0x70,
+	0x61, 0x67, 0x65, 0x73, 0x46, 0x72, 0x65, 0x65, 0x12, 0x2b, 0x0a, 0x11, 0x68, 0x75, 0x67, 0x65,
+	0x70, 0x61, 0x67, 0x65, 0x73, 0x5f, 0x73, 0x75, 0x72, 0x70, 0x6c, 0x75, 0x73, 0x18, 0x04, 0x20,
+	0x01, 0x28, 0x04, 0x52, 0x10, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x53, 0x75,
+	0x72, 0x70, 0x6c, 0x75, 0x73, 0x12, 0x20, 0x0a, 0x0c, 0x6d, 0x65, 0x6d, 0x5f, 0x74, 0x6f, 0x74,
+	0x61, 0x6c, 0x5f, 0x6b, 0x62, 0x18, 0x05, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x6d, 0x65, 0x6d,
+	0x54, 0x6f, 0x74, 0x61, 0x6c, 0x4b, 0x62, 0x12, 0x1e, 0x0a, 0x0b, 0x6d, 0x65, 0x6d, 0x5f, 0x66,
+	0x72, 0x65, 0x65, 0x5f, 0x6b, 0x62, 0x18, 0x06, 0x20, 0x01, 0x28, 0x04, 0x52, 0x09, 0x6d, 0x65,
+	0x6d, 0x46, 0x72, 0x65, 0x65, 0x4b, 0x62, 0x12, 0x1e, 0x0a, 0x0b, 0x6d, 0x65, 0x6d, 0x5f, 0x75,
+	0x73, 0x65, 0x64, 0x5f, 0x6b, 0x62, 0x18, 0x07, 0x20, 0x01, 0x28, 0x04, 0x52, 0x09, 0x6d, 0x65,
+	0x6d, 0x55, 0x73, 0x65, 0x64, 0x4b, 0x62, 0x22, 0xfb, 0x02, 0x0a, 0x0a, 0x53, 0x79, 0x73, 0x4d,
+	0x65, 0x6d, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x27, 0x0a, 0x0f, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61,
+	0x67, 0x65, 0x73, 0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52,
+	0x0e, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x12,
+	0x25, 0x0a, 0x0e, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x5f, 0x66, 0x72, 0x65,
+	0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0d, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67,
+	0x65, 0x73, 0x46, 0x72, 0x65, 0x65, 0x12, 0x2d, 0x0a, 0x12, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61,
+	0x67, 0x65, 0x73, 0x5f, 0x72, 0x65, 0x73, 0x65, 0x72, 0x76, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x11, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x52, 0x65, 0x73,
+	0x65, 0x72, 0x76, 0x65, 0x64, 0x12, 0x2b, 0x0a, 0x11, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67,
+	0x65, 0x73, 0x5f, 0x73, 0x75, 0x72, 0x70, 0x6c, 0x75, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x04,
+	0x52, 0x10, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x73, 0x53, 0x75, 0x72, 0x70, 0x6c,
+	0x75, 0x73, 0x12, 0x28, 0x0a, 0x10, 0x68, 0x75, 0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x5f, 0x73,
+	0x69, 0x7a, 0x65, 0x5f, 0x6b, 0x62, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0e, 0x68, 0x75,
+	0x67, 0x65, 0x70, 0x61, 0x67, 0x65, 0x53, 0x69, 0x7a, 0x65, 0x4b, 0x62, 0x12, 0x20, 0x0a, 0x0c,
+	0x6d, 0x65, 0x6d, 0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x5f, 0x6b, 0x62, 0x18, 0x06, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x0a, 0x6d, 0x65, 0x6d, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x4b, 0x62, 0x12, 0x1e,
+	0x0a, 0x0b, 0x6d, 0x65, 0x6d, 0x5f, 0x66, 0x72, 0x65, 0x65, 0x5f, 0x6b, 0x62, 0x18, 0x07, 0x20,
+	0x01, 0x28, 0x04, 0x52, 0x09, 0x6d, 0x65, 0x6d, 0x46, 0x72, 0x65, 0x65, 0x4b, 0x62, 0x12, 0x28,
+	0x0a, 0x10, 0x6d, 0x65, 0x6d, 0x5f, 0x61, 0x76, 0x61, 0x69, 0x6c, 0x61, 0x62, 0x6c, 0x65, 0x5f,
+	0x6b, 0x62, 0x18, 0x08, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0e, 0x6d, 0x65, 0x6d, 0x41, 0x76, 0x61,
+	0x69, 0x6c, 0x61, 0x62, 0x6c, 0x65, 0x4b, 0x62, 0x12, 0x2b, 0x0a, 0x0a, 0x6e, 0x75, 0x6d, 0x61,
+	0x5f, 0x6e, 0x6f, 0x64, 0x65, 0x73, 0x18, 0x09, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x63,
+	0x74, 0x6c, 0x2e, 0x4d, 0x65, 0x6d, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x09, 0x6e, 0x75, 0x6d, 0x61,
+	0x4e, 0x6f, 0x64, 0x65, 0x73, 0x22, 0x8f, 0x01, 0x0a, 0x0f, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67,
 	0x65, 0x53, 0x63, 0x61, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x12, 0x25, 0x0a, 0x04, 0x6e, 0x76, 0x6d,
 	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x53, 0x63,
 	0x61, 0x6e, 0x4e, 0x76, 0x6d, 0x65, 0x52, 0x65, 0x73, 0x70, 0x52, 0x04, 0x6e, 0x76, 0x6d, 0x65,
@@ -676,44 +799,46 @@ func file_ctl_storage_proto_rawDescGZIP() []byte {
 	return file_ctl_storage_proto_rawDescData
 }
 
-var file_ctl_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_ctl_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_ctl_storage_proto_goTypes = []interface{}{
 	(*StorageScanReq)(nil),       // 0: ctl.StorageScanReq
-	(*SysMemInfo)(nil),           // 1: ctl.SysMemInfo
-	(*StorageScanResp)(nil),      // 2: ctl.StorageScanResp
-	(*StorageFormatReq)(nil),     // 3: ctl.StorageFormatReq
-	(*StorageFormatResp)(nil),    // 4: ctl.StorageFormatResp
-	(*NvmeRebindReq)(nil),        // 5: ctl.NvmeRebindReq
-	(*NvmeRebindResp)(nil),       // 6: ctl.NvmeRebindResp
-	(*NvmeAddDeviceReq)(nil),     // 7: ctl.NvmeAddDeviceReq
-	(*NvmeAddDeviceResp)(nil),    // 8: ctl.NvmeAddDeviceResp
-	(*ScanNvmeReq)(nil),          // 9: ctl.ScanNvmeReq
-	(*ScanScmReq)(nil),           // 10: ctl.ScanScmReq
-	(*ScanNvmeResp)(nil),         // 11: ctl.ScanNvmeResp
-	(*ScanScmResp)(nil),          // 12: ctl.ScanScmResp
-	(*FormatNvmeReq)(nil),        // 13: ctl.FormatNvmeReq
-	(*FormatScmReq)(nil),         // 14: ctl.FormatScmReq
-	(*NvmeControllerResult)(nil), // 15: ctl.NvmeControllerResult
-	(*ScmMountResult)(nil),       // 16: ctl.ScmMountResult
-	(*ResponseState)(nil),        // 17: ctl.ResponseState
+	(*MemInfo)(nil),              // 1: ctl.MemInfo
+	(*SysMemInfo)(nil),           // 2: ctl.SysMemInfo
+	(*StorageScanResp)(nil),      // 3: ctl.StorageScanResp
+	(*StorageFormatReq)(nil),     // 4: ctl.StorageFormatReq
+	(*StorageFormatResp)(nil),    // 5: ctl.StorageFormatResp
+	(*NvmeRebindReq)(nil),        // 6: ctl.NvmeRebindReq
+	(*NvmeRebindResp)(nil),       // 7: ctl.NvmeRebindResp
+	(*NvmeAddDeviceReq)(nil),     // 8: ctl.NvmeAddDeviceReq
+	(*NvmeAddDeviceResp)(nil),    // 9: ctl.NvmeAddDeviceResp
+	(*ScanNvmeReq)(nil),          // 10: ctl.ScanNvmeReq
+	(*ScanScmReq)(nil),           // 11: ctl.ScanScmReq
+	(*ScanNvmeResp)(nil),         // 12: ctl.ScanNvmeResp
+	(*ScanScmResp)(nil),          // 13: ctl.ScanScmResp
+	(*FormatNvmeReq)(nil),        // 14: ctl.FormatNvmeReq
+	(*FormatScmReq)(nil),         // 15: ctl.FormatScmReq
+	(*NvmeControllerResult)(nil), // 16: ctl.NvmeControllerResult
+	(*ScmMountResult)(nil),       // 17: ctl.ScmMountResult
+	(*ResponseState)(nil),        // 18: ctl.ResponseState
 }
 var file_ctl_storage_proto_depIdxs = []int32{
-	9,  // 0: ctl.StorageScanReq.nvme:type_name -> ctl.ScanNvmeReq
-	10, // 1: ctl.StorageScanReq.scm:type_name -> ctl.ScanScmReq
-	11, // 2: ctl.StorageScanResp.nvme:type_name -> ctl.ScanNvmeResp
-	12, // 3: ctl.StorageScanResp.scm:type_name -> ctl.ScanScmResp
-	1,  // 4: ctl.StorageScanResp.sys_mem_info:type_name -> ctl.SysMemInfo
-	13, // 5: ctl.StorageFormatReq.nvme:type_name -> ctl.FormatNvmeReq
-	14, // 6: ctl.StorageFormatReq.scm:type_name -> ctl.FormatScmReq
-	15, // 7: ctl.StorageFormatResp.crets:type_name -> ctl.NvmeControllerResult
-	16, // 8: ctl.StorageFormatResp.mrets:type_name -> ctl.ScmMountResult
-	17, // 9: ctl.NvmeRebindResp.state:type_name -> ctl.ResponseState
-	17, // 10: ctl.NvmeAddDeviceResp.state:type_name -> ctl.ResponseState
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	10, // 0: ctl.StorageScanReq.nvme:type_name -> ctl.ScanNvmeReq
+	11, // 1: ctl.StorageScanReq.scm:type_name -> ctl.ScanScmReq
+	1,  // 2: ctl.SysMemInfo.numa_nodes:type_name -> ctl.MemInfo
+	12, // 3: ctl.StorageScanResp.nvme:type_name -> ctl.ScanNvmeResp
+	13, // 4: ctl.StorageScanResp.scm:type_name -> ctl.ScanScmResp
+	2,  // 5: ctl.StorageScanResp.sys_mem_info:type_name -> ctl.SysMemInfo
+	14, // 6: ctl.StorageFormatReq.nvme:type_name -> ctl.FormatNvmeReq
+	15, // 7: ctl.StorageFormatReq.scm:type_name -> ctl.FormatScmReq
+	16, // 8: ctl.StorageFormatResp.crets:type_name -> ctl.NvmeControllerResult
+	17, // 9: ctl.StorageFormatResp.mrets:type_name -> ctl.ScmMountResult
+	18, // 10: ctl.NvmeRebindResp.state:type_name -> ctl.ResponseState
+	18, // 11: ctl.NvmeAddDeviceResp.state:type_name -> ctl.ResponseState
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_ctl_storage_proto_init() }
@@ -738,7 +863,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SysMemInfo); i {
+			switch v := v.(*MemInfo); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -750,7 +875,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StorageScanResp); i {
+			switch v := v.(*SysMemInfo); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -762,7 +887,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StorageFormatReq); i {
+			switch v := v.(*StorageScanResp); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -774,7 +899,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StorageFormatResp); i {
+			switch v := v.(*StorageFormatReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -786,7 +911,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*NvmeRebindReq); i {
+			switch v := v.(*StorageFormatResp); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -798,7 +923,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*NvmeRebindResp); i {
+			switch v := v.(*NvmeRebindReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -810,7 +935,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*NvmeAddDeviceReq); i {
+			switch v := v.(*NvmeRebindResp); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -822,6 +947,18 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*NvmeAddDeviceReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_storage_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*NvmeAddDeviceResp); i {
 			case 0:
 				return &v.state
@@ -840,7 +977,7 @@ func file_ctl_storage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_ctl_storage_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
