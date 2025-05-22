@@ -162,6 +162,10 @@ func TestCommon_getMemInfoNodes(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			if err := test.RemoveContents(t, pathRootSys); err != nil {
+				t.Fatal(err)
+			}
+
 			if !tc.skipCreate {
 				createMemInfoTestFile(t, extTestDataDir, "meminfo_0",
 					filepath.Join(pathRootSys, "devices", "system", "node",
