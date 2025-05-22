@@ -26,7 +26,7 @@ source ci/provisioning/post_provision_config_common_functions.sh
 source ci/junit.sh
 
 
-: "${MLNX_VER_NUM:=24.04-0.6.6.0}"
+: "${DOCA_OFED_VER_NUM:=3.0.0}"
 
 : "${DISTRO:=EL_7}"
 
