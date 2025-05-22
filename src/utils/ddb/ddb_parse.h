@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,5 +50,9 @@ int ddb_parse_key(const char *input, daos_key_t *key);
  * expected to be.
  */
 int ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id);
+
+/* Parse a string representing a date into an epoch */
+int
+ddb_date2epoch(const char *date, uint64_t *epoch);
 
 #endif /** __DAOS_DDB_PARSE_H */
