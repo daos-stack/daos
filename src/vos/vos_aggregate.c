@@ -1832,6 +1832,10 @@ out:
 	return rc;
 }
 
+/*
+ * This number is derived from real test result, merging this number of recx roughly
+ * consume < 2MB WAL space in md-on-ssd mode.
+ */
 #define MW_MAX_MERGE_CNT 25000
 
 static bool
