@@ -59,8 +59,8 @@ type HostStorage struct {
 	// to achieve some goal (SCM prep, etc.)
 	RebootRequired bool `json:"reboot_required"`
 
-	// MemInfo contains information about the host's hugepages.
-	MemInfo *common.MemInfo `json:"mem_info"`
+	// SysMemInfo contains information about the host's RAM and hugepages.
+	SysMemInfo *common.SysMemInfo `json:"mem_info"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -243,7 +243,7 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		}
 	}
 
-	if err := convert.Types(pbResp.GetMemInfo(), &hs.MemInfo); err != nil {
+	if err := convert.Types(pbResp.GetSysMemInfo(), &hs.SysMemInfo); err != nil {
 		return err
 	}
 

@@ -23,6 +23,17 @@ message StorageScanReq {
 }
 
 message MemInfo {
+	uint32 numa_node_index = 1;
+	uint64 hugepages_total = 2;
+	uint64 hugepages_free = 3;
+	uint64 hugepages_surplus = 4;
+	uint64 mem_total_kb = 5;
+	uint64 mem_free_kb = 6;
+	uint64 mem_used_kb = 7;
+}
+
+message SysMemInfo
+{
 	uint64 hugepages_total = 1;
 	uint64 hugepages_free = 2;
 	uint64 hugepages_reserved = 3;
@@ -31,12 +42,13 @@ message MemInfo {
 	uint64 mem_total_kb = 6;
 	uint64 mem_free_kb = 7;
 	uint64 mem_available_kb = 8;
+	repeated MemInfo numa_nodes = 9;
 }
 
 message StorageScanResp {
 	ScanNvmeResp nvme = 1;
 	ScanScmResp scm = 2;
-	MemInfo mem_info = 3;
+	SysMemInfo   sys_mem_info = 3;
 }
 
 message StorageFormatReq {
