@@ -439,7 +439,7 @@ post_provision_config_nodes() {
     fi
 
     if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
-        printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
+        printf 'MOFED_VERSION=%s\n' "$DOCA_OFED_VER_NUM" >> /etc/do-release
     fi
 
     distro_custom
