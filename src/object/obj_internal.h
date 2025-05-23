@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -359,6 +360,11 @@ struct shard_list_args {
 	daos_anchor_t		*la_anchor;
 	daos_anchor_t		*la_akey_anchor;
 	daos_anchor_t		*la_dkey_anchor;
+};
+
+struct tgt_list_entry {
+	int      tgt_id;
+	d_list_t link;
 };
 
 struct obj_auxi_list_recx {
@@ -840,7 +846,8 @@ obj_retry_error(int err)
 	       err == -DER_GRPVER || err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN || err == -DER_NEED_TX ||
 	       err == -DER_NOTLEADER || err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
-	       err == -DER_CHKPT_BUSY || err == -DER_OVERLOAD_RETRY || daos_crt_network_error(err);
+	       err == -DER_CHKPT_BUSY || err == -DER_OVERLOAD_RETRY || err == -DER_RECONNECT ||
+	       daos_crt_network_error(err);
 }
 
 static inline bool
@@ -906,6 +913,10 @@ dc_sgl_out_set(d_sg_list_t *sgl, daos_size_t data_size)
 	}
 }
 
+int
+obj_gather_tgt_ids(d_list_t *head, struct dc_object *obj, uint64_t dkey_hash);
+int
+obj_create_ping_task(tse_sched_t *sched, daos_handle_t ph, d_list_t *tgt_list, tse_task_t **taskp);
 void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
 struct dc_object *obj_addref(struct dc_object *obj);
