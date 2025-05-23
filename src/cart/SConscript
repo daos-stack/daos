@@ -110,7 +110,7 @@ def scons():
                       custom_tests={'HasFirewallSupport': check_hg_firewall_def})
     # pylint: disable-next=no-member
     if not check.HasFirewallSupport():
-        denv.AppendUnique(CFLAGS=['-DHG_HOSTFIREWALL=0xdeadbeaf'])
+        denv.AppendUnique(CCFLAGS=['-DHG_HOSTFIREWALL=0xdeadbeaf'])
     check.Finish()
 
     Default(cart_lib)
