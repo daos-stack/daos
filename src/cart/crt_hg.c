@@ -99,6 +99,38 @@ crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
 	return 0;
 }
 
+int
+crt_hgret_2_der(int hg_ret)
+{
+	switch (hg_ret) {
+	case HG_SUCCESS:
+		return 0;
+	case HG_TIMEOUT:
+		return -DER_TIMEDOUT;
+	case HG_INVALID_ARG:
+		return -DER_INVAL;
+	case HG_MSGSIZE:
+	case HG_OVERFLOW:
+		return -DER_OVERFLOW;
+	case HG_NOMEM:
+		return -DER_NOMEM;
+	case HG_CANCELED:
+		return -DER_CANCELED;
+	case HG_BUSY:
+		return -DER_BUSY;
+	case HG_FAULT:
+	case HG_PROTOCOL_ERROR:
+		return -DER_HG_FATAL;
+	case HG_PERMISSION:
+	case HG_ACCESS:
+		return -DER_NO_PERM;
+	case HG_HOSTFIREWALL:
+		return -DER_RECONNECT;
+	default:
+		return -DER_HG;
+	};
+}
+
 crt_provider_t
 crt_prov_str_to_prov(const char *prov_str)
 {
