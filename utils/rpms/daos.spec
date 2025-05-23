@@ -59,6 +59,7 @@ BuildRequires: boost-devel
 %endif
 %if %{with server}
 BuildRequires: libpmemobj-devel >= 2.1.0
+%endif
 BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
