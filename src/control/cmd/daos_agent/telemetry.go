@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,11 +18,11 @@ import (
 
 func startPrometheusExporter(ctx context.Context, log logging.Logger, cs *promexp.ClientSource, cfg *Config) (func(), error) {
 	expCfg := &promexp.ExporterConfig{
-		Port:  cfg.TelemetryPort,
+		Port:  cfg.Telemetry.Port,
 		Title: "DAOS Client Telemetry",
 		Register: func(ctx context.Context, log logging.Logger) error {
 			c, err := promexp.NewClientCollector(ctx, log, cs, &promexp.CollectorOpts{
-				RetainDuration: cfg.TelemetryRetain,
+				RetainDuration: cfg.Telemetry.Retain,
 			})
 			if err != nil {
 				return err
