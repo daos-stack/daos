@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,16 +9,6 @@ package main
 
 /*
 #include "util.h"
-
-void
-free_ace_list(char **str, size_t str_count)
-{
-	int i;
-
-	for (i = 0; i < str_count; i++)
-		D_FREE(str[i]);
-	D_FREE(str);
-}
 
 uid_t
 invalid_uid(void)
@@ -42,94 +33,26 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
-
-func getAclStrings(e *C.struct_daos_prop_entry) (out []string) {
-	acl := (*C.struct_daos_acl)(C.get_dpe_val_ptr(e))
-	if acl == nil {
-		return
-	}
-
-	var aces **C.char
-	var acesNr C.size_t
-
-	rc := C.daos_acl_to_strs(acl, &aces, &acesNr)
-	if err := daosError(rc); err != nil || aces == nil {
-		return
-	}
-	defer C.free_ace_list(aces, acesNr)
-
-	for _, ace := range (*[1 << 30]*C.char)(unsafe.Pointer(aces))[:acesNr:acesNr] {
-		out = append(out, C.GoString(ace))
-	}
-
-	return
-}
-
-func aclStringer(e *C.struct_daos_prop_entry, name string) string {
-	if e == nil {
-		return propNotFound(name)
-	}
-
-	return strings.Join(getAclStrings(e), ", ")
-}
-
-func getContAcl(hdl C.daos_handle_t) ([]*property, func(), error) {
-	expPropNr := 3 // ACL, user, group
-
-	var props *C.daos_prop_t
-	rc := C.daos_cont_get_acl(hdl, &props, nil)
-	if err := daosError(rc); err != nil {
-		return nil, nil, err
-	}
-	if props.dpp_nr != C.uint(expPropNr) {
-		return nil, nil, errors.Errorf("invalid number of ACL props (%d != %d)",
-			props.dpp_nr, expPropNr)
-	}
-
-	entries := createPropSlice(props, expPropNr)
-	outProps := make([]*property, len(entries))
-	for i, entry := range entries {
-		switch entry.dpe_type {
-		case C.DAOS_PROP_CO_ACL:
-			outProps[i] = &property{
-				entry:       &entries[i],
-				toString:    aclStringer,
-				Name:        "acl",
-				Description: "Access Control List",
-			}
-		case C.DAOS_PROP_CO_OWNER:
-			outProps[i] = &property{
-				entry:       &entries[i],
-				toString:    strValStringer,
-				Name:        "user",
-				Description: "User",
-			}
-		case C.DAOS_PROP_CO_OWNER_GROUP:
-			outProps[i] = &property{
-				entry:       &entries[i],
-				toString:    strValStringer,
-				Name:        "group",
-				Description: "Group",
-			}
-		}
-	}
-
-	return outProps, func() { C.daos_prop_free(props) }, nil
-}
 
 type aclCmd struct {
 	existingContainerCmd
 }
 
-func (cmd *aclCmd) getACL(ap *C.struct_cmd_args_s) (*control.AccessControlList, error) {
-	props, cleanup, err := getContAcl(ap.cont)
+func (cmd *aclCmd) getACL() (*control.AccessControlList, error) {
+	aclPropNames := []string{
+		daos.ContainerPropACL.String(),
+		daos.ContainerPropOwner.String(),
+		daos.ContainerPropGroup.String(),
+	}
+	propList, err := cmd.container.GetProperties(cmd.MustLogCtx(), aclPropNames...)
 	if err != nil {
 		return nil, err
 	}
-	defer cleanup()
+	defer propList.Free()
 
-	return convertACLProps(props), nil
+	return convertACLProps(propList.Properties()), nil
 }
 
 func (cmd *aclCmd) outputACL(out io.Writer, acl *control.AccessControlList, verbose bool) error {
@@ -154,7 +77,7 @@ func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -173,7 +96,7 @@ func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
 			cmd.ContainerID())
 	}
 
-	acl, err := cmd.getACL(ap)
+	acl, err := cmd.getACL()
 	if err != nil {
 		return errors.Wrap(err, "unable to fetch updated ACL")
 	}
@@ -244,7 +167,7 @@ func (cmd *containerUpdateACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -257,7 +180,7 @@ func (cmd *containerUpdateACLCmd) Execute(args []string) error {
 			cmd.ContainerID())
 	}
 
-	acl, err := cmd.getACL(ap)
+	acl, err := cmd.getACL()
 	if err != nil {
 		return errors.Wrap(err, "unable to fetch updated ACL")
 	}
@@ -278,7 +201,7 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -300,7 +223,7 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 			cmd.ContainerID())
 	}
 
-	acl, err := cmd.getACL(ap)
+	acl, err := cmd.getACL()
 	if err != nil {
 		return errors.Wrap(err, "unable to fetch updated ACL")
 	}
@@ -308,17 +231,17 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 	return cmd.outputACL(os.Stdout, acl, false)
 }
 
-func convertACLProps(props []*property) (acl *control.AccessControlList) {
+func convertACLProps(props []*daos.ContainerProperty) (acl *control.AccessControlList) {
 	acl = new(control.AccessControlList)
 
 	for _, prop := range props {
-		switch prop.entry.dpe_type {
-		case C.DAOS_PROP_CO_ACL:
-			acl.Entries = strings.Split(prop.toString(prop.entry, "acls"), ", ")
-		case C.DAOS_PROP_CO_OWNER:
-			acl.Owner = prop.toString(prop.entry, "owner")
-		case C.DAOS_PROP_CO_OWNER_GROUP:
-			acl.OwnerGroup = prop.toString(prop.entry, "group")
+		switch prop.Type {
+		case daos.ContainerPropACL:
+			acl.Entries = strings.Split(prop.StringValue(), ", ")
+		case daos.ContainerPropOwner:
+			acl.Owner = prop.StringValue()
+		case daos.ContainerPropGroup:
+			acl.OwnerGroup = prop.StringValue()
 		}
 	}
 
@@ -340,15 +263,15 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadOnly, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	acl, err := cmd.getACL(ap)
+	acl, err := cmd.getACL()
 	if err != nil {
-		return errors.Wrapf(err, "failed to query ACL for container %s", cmd.contUUID)
+		return errors.Wrapf(err, "failed to query ACL for container %s", cmd.ContainerID())
 	}
 
 	if cmd.File != "" {
@@ -398,7 +321,7 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndOpen(daos.ContainerOpenFlagReadWrite, ap)
 	if err != nil {
 		return err
 	}
@@ -421,21 +344,16 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 		defer C.free(unsafe.Pointer(group))
 	}
 
-	props, entries, err := allocProps(3)
+	propList, err := cmd.container.GetProperties(cmd.MustLogCtx(), daos.ContainerPropLayoutType.String())
 	if err != nil {
 		return err
 	}
-	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
-	props.dpp_nr++
-	defer func() { C.daos_prop_free(props) }()
+	defer propList.Free()
 
-	rc := C.daos_cont_query(cmd.cContHandle, nil, props, nil)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to query container %s", cmd.ContainerID())
-	}
+	entries := propList.Properties()
 
-	lType := C.get_dpe_val(&entries[0])
-	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
+	lType := daos.ContainerLayout(entries[0].GetValue())
+	if lType == daos.ContainerLayoutPOSIX {
 		uid := C.invalid_uid()
 		gid := C.invalid_gid()
 		if cmd.NoCheck {

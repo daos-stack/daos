@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,15 +66,10 @@ struct dfs_metrics {
 	struct d_tm_node_t *dm_read_bytes;
 	struct d_tm_node_t *dm_write_bytes;
 	struct d_tm_node_t *dm_mount_time;
+	struct d_tm_node_t *dm_dump_time;
 };
 
 bool
-dfs_metrics_enabled();
-
-void
-dfs_metrics_init(dfs_t *dfs);
-
-void
-dfs_metrics_fini(dfs_t *dfs);
+dfs_metrics_should_init(dfs_t *dfs);
 
 #endif /* __DFS_METRICS_H__ */

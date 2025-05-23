@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,9 +30,12 @@
 #define DFUSE_COUNT_QUERY_CMD    (DFUSE_IOCTL_REPLY_BASE + 10)
 #define DFUSE_IOCTL_EVICT_NR     (DFUSE_IOCTL_REPLY_BASE + 11)
 #define DFUSE_IOCTL_STAT_NR      (DFUSE_IOCTL_REPLY_BASE + 12)
+#define DFUSE_IOCTL_METRICS_NR    (DFUSE_IOCTL_REPLY_BASE + 13)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
+/** Client metrics are enabled */
+#define DFUSE_IOCTL_FLAGS_METRICS (0x2)
 
 /* Core IOCTL reply */
 struct dfuse_il_reply {
@@ -44,10 +48,11 @@ struct dfuse_il_reply {
 
 /* Query for global pool/container handle sizes */
 struct dfuse_hs_reply {
-	int    fsr_version;
-	size_t fsr_pool_size;
-	size_t fsr_cont_size;
-	size_t fsr_dfs_size;
+	int      fsr_version;
+	size_t   fsr_pool_size;
+	size_t   fsr_cont_size;
+	size_t   fsr_dfs_size;
+	uint64_t fsr_flags;
 };
 
 /* Query for global dfs/object handle sizes */
@@ -97,5 +102,8 @@ struct dfuse_stat {
 
 #define DFUSE_IOCTL_DFUSE_EVICT                                                                    \
 	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_EVICT_NR, struct dfuse_mem_query))
+
+/* Toggle metrics on/off for this container */
+#define DFUSE_IOCTL_METRICS_TOGGLE ((int)_IOW(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_METRICS_NR, bool))
 
 #endif /* __DFUSE_IOCTL_H__ */
