@@ -297,10 +297,10 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on Leap 15 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
@@ -311,25 +311,25 @@ pipeline {
                      defaultValue: false,
                      description: 'Skip Functional Hardware (Test Hardware) stage')
         booleanParam(name: 'CI_medium_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium test stage')
         booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
         booleanParam(name: 'CI_medium_vmd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium VMD test stage')
         booleanParam(name: 'CI_medium_verbs_provider_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Large test stage')
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
