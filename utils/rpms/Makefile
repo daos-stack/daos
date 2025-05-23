@@ -19,7 +19,7 @@ ifeq ($(ON_TAG),false)
 BUILD_DEFINES     := --define "relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
 endif
 
-RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
+RPM_BUILD_OPTIONS := $(BUILD_DEFINES) $(BUILD_FLAGS)
 
 dist: $(SOURCES)
 
