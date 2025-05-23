@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -350,6 +351,7 @@ pl_hop_rec_addref(struct d_hash_table *htab, d_list_t *link)
 
 	D_SPIN_LOCK(&map->pl_lock);
 	map->pl_ref++;
+	D_ASSERTF(map->pl_ref > 0, "refct overflow: %d\n", map->pl_ref);
 	D_SPIN_UNLOCK(&map->pl_lock);
 }
 
