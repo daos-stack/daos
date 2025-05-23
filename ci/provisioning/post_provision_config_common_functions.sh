@@ -93,6 +93,10 @@ retry_dnf() {
                 # shellcheck disable=SC2154
                 send_mail "Command retry successful in $STAGE_NAME after $((attempt + 1)) attempts using ${repo_servers[0]} as initial repo server " \
                           "Command:  ${args[*]}\nAttempts: $attempt\nStatus:   $rc"
+                echo "Command retry successful in $STAGE_NAME after $((attempt + 1)) attempts using ${repo_servers[0]} as initial repo server "
+                echo "Command:  ${args[*]}"
+                echo "Attempts: $attempt"
+                echo "Status:   $rc"
             fi
             return 0
         fi
@@ -157,6 +161,9 @@ monitor_cmd() {
     if [ "$duration" -gt "$threshold" ]; then
         send_mail "Command exceeded ${threshold}s in $STAGE_NAME" \
                     "Command:  $*\nReal time: $duration"
+        echo "Command exceeded ${threshold}s in $STAGE_NAME"
+        echo "Command:  $*"
+        echo "Real time: $duration"
     fi
     return 0
 }
@@ -173,6 +180,10 @@ retry_cmd() {
             if [ $attempt -gt 0 ]; then
                 send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
                           "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+                echo "Command retry successful in $STAGE_NAME after $attempt attempts"
+                echo "Command:  $*"
+                echo "Attempts: $attempt"
+                echo "Status:   $rc"
             fi
             return 0
         fi
@@ -206,6 +217,10 @@ timeout_cmd() {
             if [ $attempt -gt 0 ]; then
                 send_mail "Command timeout successful in $STAGE_NAME after $attempt attempts" \
                           "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+                echo "Command timeout successful in $STAGE_NAME after $attempt attempts"
+                echo "Command:  $*"
+                echo "Attempts: $attempt"
+                echo "Status:   $rc"
             fi
             return 0
         fi
