@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3035,6 +3036,11 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, uint32_t tgt_off,
 					size);
 			D_ASSERTF(idx < total, "idx %d total %u "DF_RECX"\n",
 				  idx, total, DP_RECX(recxs[i]));
+
+			D_DEBUG(DB_TRACE, "Convert recx for shard %u from [" DF_X64 "=>" DF_X64
+				"], [" DF_X64 "=>" DF_X64 "]\n", tgt_off, tgt_recxs[idx].rx_idx,
+				daos_off, tgt_recxs[idx].rx_nr, daos_size);
+
 			tgt_recxs[idx].rx_idx = daos_off;
 			tgt_recxs[idx].rx_nr = daos_size;
 			if (recx_ephs != NULL)
