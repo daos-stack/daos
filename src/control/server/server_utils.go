@@ -317,7 +317,7 @@ func getHugeNodesStr(log logging.Logger, perNumaNrWant int, smi *common.SysMemIn
 		hnStrs = append(hnStrs, fmt.Sprintf("nodes_hp[%d]=%d", nID, nodeNrs[nID]))
 	}
 
-	return fmt.Sprintf("'%s'", strings.Join(hnStrs, ",")), nil
+	return fmt.Sprintf("%s", strings.Join(hnStrs, ",")), nil
 }
 
 // SetHugeNodes derives HUGENODE string to be used to allocate hugepages across NUMA nodes in spdk
@@ -343,7 +343,7 @@ func SetHugeNodes(log logging.Logger, srvCfg *config.Server, smi *common.SysMemI
 
 	perNumaNrWant := nrHugepages / len(nodes)
 
-	log.Tracef("attempting to allocate %d hugepages on nodes %v", perNumaNrWant, nodes)
+	log.Debugf("attempting to allocate %d hugepages on nodes %v", perNumaNrWant, nodes)
 
 	hnStr, err := getHugeNodesStr(log, perNumaNrWant, smi, nodes...)
 	if err != nil {
@@ -352,7 +352,7 @@ func SetHugeNodes(log logging.Logger, srvCfg *config.Server, smi *common.SysMemI
 	req.HugeNodes = hnStr
 	req.HugepageCount = 0 // HugeNodes will be used instead to specify per-NUMA allocations.
 
-	log.Tracef("sending HUGENODE=%q to SPDK setup script", req.HugeNodes)
+	log.Debugf("sending HUGENODE=%q to SPDK setup script", req.HugeNodes)
 
 	return nil
 }
