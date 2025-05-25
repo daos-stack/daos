@@ -123,7 +123,6 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		D_DEBUG(DB_ALL, "Exceeded bulk limit, deferring bulk handle %p allocation\n",
 			ret_hdl);
 		ret_hdl->bound       = false;
-		ret_hdl->sgl         = *sgl;
 		ret_hdl->bulk_perm   = bulk_perm;
 		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
 		ret_hdl->crt_ctx     = crt_ctx;
