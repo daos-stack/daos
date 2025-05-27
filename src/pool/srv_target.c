@@ -472,7 +472,7 @@ out:
 
 }
 
-struct ds_pool_flags {
+struct ds_pool_flags_arg {
 	struct ds_pool *pool;
 	uint32_t        disable_rebuild : 1, disable_dtx_resync : 1, immutable : 1;
 };
@@ -480,7 +480,7 @@ struct ds_pool_flags {
 static void
 apply_pool_flags(void *arg)
 {
-	struct ds_pool_flags *set_arg = arg;
+	struct ds_pool_flags_arg *set_arg = arg;
 
 	if (set_arg->disable_rebuild)
 		set_arg->pool->sp_disable_rebuild = 1;
@@ -491,7 +491,7 @@ apply_pool_flags(void *arg)
 }
 
 int
-ds_pool_apply_flags(struct ds_pool_flags *args)
+ds_pool_apply_flags(struct ds_pool_flags_arg *args)
 {
 	ABT_thread thread;
 	int        rc;
@@ -516,7 +516,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	struct dss_module_info	*info = dss_get_module_info();
 	char			*path;
 	int			 rc;
-	struct ds_pool_flags     set_args = {0};
+	struct ds_pool_flags_arg set_args = {0};
 
 	D_ASSERTF(*child->spc_state == POOL_CHILD_NEW, "state:%u", *child->spc_state);
 	D_ASSERT(!d_list_empty(&child->spc_list));
