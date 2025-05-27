@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -109,9 +110,20 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc == -DER_QUOTA_LIMIT) {
-		D_DEBUG(DB_ALL, "Exceeded bulk limit, deferring bulk handle allocation\n");
+		int i;
+
+		D_ALLOC_ARRAY(ret_hdl->iovs, sgl->sg_nr);
+		if (ret_hdl->iovs == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		for (i = 0; i < sgl->sg_nr; i++)
+			ret_hdl->iovs[i] = sgl->sg_iovs[i];
+		ret_hdl->sgl.sg_nr     = sgl->sg_nr;
+		ret_hdl->sgl.sg_nr_out = sgl->sg_nr_out;
+		ret_hdl->sgl.sg_iovs   = ret_hdl->iovs;
+
+		D_DEBUG(DB_ALL, "Exceeded bulk limit, deferring bulk handle %p allocation\n",
+			ret_hdl);
 		ret_hdl->bound       = false;
-		ret_hdl->sgl         = *sgl;
 		ret_hdl->bulk_perm   = bulk_perm;
 		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
 		ret_hdl->crt_ctx     = crt_ctx;
@@ -125,6 +137,9 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
 	if (rc != 0) {
 		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
+		if (ret_hdl->iovs != NULL)
+			D_FREE(ret_hdl->iovs);
+
 		D_FREE(ret_hdl);
 		D_GOTO(out, rc);
 	}
@@ -216,7 +231,11 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 	if (bulk->crt_ctx)
 		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 out:
-	D_FREE(bulk);
+	if (bulk != NULL) {
+		if (bulk->iovs)
+			D_FREE(bulk->iovs);
+		D_FREE(bulk);
+	}
 	return rc;
 }
 
