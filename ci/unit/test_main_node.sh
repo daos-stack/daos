@@ -83,9 +83,9 @@ rm -rf "$test_log_dir"
 # Use default python as that's where storage_estimator is installed.
 python3.11 -m venv venv
 # temp cp for debug
-ls -la /usr/lib64/
+# ls -la /usr/lib64/
 # ls -la /usr/lib64/python3.6/site-packages/storage_estimator
-cp -r /usr/lib64/python3.6/site-packages/storage_estimator venv/lib/python3.11/site-packages/
+# cp -r /usr/lib64/python3.6/site-packages/storage_estimator venv/lib/python3.11/site-packages/
 
 # shellcheck disable=SC1091
 source venv/bin/activate
