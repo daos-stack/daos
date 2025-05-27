@@ -3571,7 +3571,7 @@ merge_key(struct dc_object *obj, d_list_t *head, char *key, int key_size)
 
 	d_list_for_each_entry(key_one, head, key_list) {
 		if (key_size == key_one->key.iov_len &&
-		    strncmp(key_one->key.iov_buf, key, key_size) == 0) {
+		    memcmp(key_one->key.iov_buf, key, key_size) == 0) {
 			return 0;
 		}
 	}
@@ -6137,6 +6137,16 @@ sub_anchors_prep(struct obj_auxi_args *obj_auxi, int shards_nr)
 		D_ASSERTF(nr >= shards_nr, "nr %d shards_nr %d\n", nr, shards_nr);
 		buf_size /= shards_nr;
 		nr /= shards_nr;
+	} else if ((obj_auxi->opc == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
+		    obj_auxi->opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) &&
+		   shards_nr > 2 && nr >= shards_nr * 4) {
+		/* for EC object key enumerate, enumerate less keys from each shard
+		 * to avoid duplicate enumerate.
+		 */
+		int tmp_nr = shards_nr / 2;
+
+		nr       = roundup(nr / tmp_nr, 4);
+		buf_size = roundup(buf_size / tmp_nr, 64);
 	}
 
 	obj_auxi->sub_anchors = 1;
