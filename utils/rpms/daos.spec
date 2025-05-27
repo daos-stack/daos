@@ -622,7 +622,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Dec 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.3-9
+* Wed May 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.3-9
 - Switch libfuse3 to libfused
 
 * Mon May 12 2025  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.3-8
