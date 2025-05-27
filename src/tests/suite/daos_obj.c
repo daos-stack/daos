@@ -2539,7 +2539,8 @@ io_simple_update_client_unreachable(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
 
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY, "test_update dkey client unreachable",
+	io_simple_internal(state, oid, 100000, DAOS_IOD_ARRAY,
+			   "test_update dkey client unreachable",
 			   "test_update akey client unreachable");
 }
 

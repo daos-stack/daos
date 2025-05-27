@@ -1438,6 +1438,8 @@ ping_tgt_task(tse_task_t *task)
 	pool_hdl                      = arg->pool_hdl;
 	tgt_id                        = arg->tgt_id;
 
+	D_DEBUG(DB_TRACE, "calling dc_pool_ping_target with pool handle %lu and tgt id %d",
+		pool_hdl.cookie, tgt_id);
 	rc = dc_pool_ping_target(tgt_id, pool_hdl, task);
 	if (rc != 0) {
 		D_ERROR("failed to ping target " DF_RC "\n", DP_RC(rc));
@@ -1456,72 +1458,6 @@ ping_task_abort(tse_task_t *task, void *arg)
 	return 0;
 }
 
-/*
- * Arg of ping_task
- */
-struct ping_task_arg {
-	daos_handle_t     pool_hdl;
-	struct dc_object *obj;
-	uint64_t          dkey_hash;
-};
-
-static int
-ping_task(tse_task_t *task)
-{
-	daos_handle_t         pool_hdl;
-	struct dc_object     *obj;
-	int                   first_target;
-	int                   grp_idx;
-	int                   i;
-	int                   target;
-	int                   tgt_id;
-	int                   rc = 0;
-	d_list_t              ping_task_list;
-	tse_sched_t          *sched = tse_task2sched(task);
-
-	struct ping_task_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
-	pool_hdl                  = arg->pool_hdl;
-	obj                       = arg->obj;
-
-	D_INIT_LIST_HEAD(&ping_task_list);
-
-	grp_idx      = obj_dkey2grpidx(obj, arg->dkey_hash, obj->cob_version);
-	first_target = grp_idx * obj->cob_grp_size;
-
-	for (i = 0, target = first_target; i < obj->cob_grp_size; i++, target++) {
-		struct ping_tgt_task_arg *a;
-		tse_task_t               *ping_task = NULL;
-		tgt_id = obj->cob_shards->do_shards[target].do_pl_shard.po_target;
-
-		rc = tse_task_create(ping_tgt_task, sched, NULL, &ping_task);
-		if (rc != 0) {
-			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
-
-			DL_ERROR(rc, "failed to create task");
-			tse_task_complete(ping_task, rc);
-			return rc;
-		}
-		a           = tse_task_buf_embedded(ping_task, sizeof(*a));
-		a->pool_hdl = pool_hdl;
-		a->tgt_id   = tgt_id;
-
-		rc = dc_task_depend(task, 1, &ping_task);
-		if (rc != 0) {
-			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
-
-			DL_ERROR(rc, "failed to depend ping_task on task");
-			tse_task_complete(ping_task, rc);
-			return rc;
-		}
-
-		tse_task_list_add(ping_task, &ping_task_list);
-	}
-
-	tse_task_list_sched(&ping_task_list, false);
-
-	return 0;
-}
-
 /**
  * Destroy a ping task that has not been scheduled yet, typically
  * for error handling purposes.
@@ -1533,57 +1469,57 @@ abandon_ping_task(tse_task_t *task)
 }
 
 int
-create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *obj,
-		 uint64_t dkey_hash, tse_task_t **task)
+obj_create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, d_list_t *tgt_list,
+		     tse_task_t **task)
 {
-	struct dc_pool       *pool;
-	tse_task_t           *t;
-	int                   rc;
-	struct ping_task_arg *a;
+	int                    rc = 0;
+	d_list_t               ping_task_list;
+	struct tgt_list_entry *entry;
 
-	pool = dc_hdl2pool(pool_hdl);
-	if (pool == NULL) {
-		DL_ERROR(-DER_NO_HDL, "failed to find pool handle " DF_X64 "", pool_hdl.cookie);
-		return -DER_NO_HDL;
+	D_INIT_LIST_HEAD(&ping_task_list);
+
+	d_list_for_each_entry(entry, tgt_list, link) {
+		struct ping_tgt_task_arg *a;
+		tse_task_t               *ping_task = NULL;
+
+		D_DEBUG(DB_TRACE, "creating ping_tgt_task for tgt ID %d", entry->tgt_id);
+
+		rc = tse_task_create(ping_tgt_task, sched, NULL, &ping_task);
+		if (rc != 0) {
+			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
+
+			DL_ERROR(rc, "failed to create task");
+			goto cleanup;
+		}
+
+		D_DEBUG(DB_TRACE, "created ping_tgt_task for tgt ID %d", entry->tgt_id);
+
+		a           = tse_task_buf_embedded(ping_task, sizeof(*a));
+		a->pool_hdl = pool_hdl;
+		a->tgt_id   = entry->tgt_id;
+
+		rc = dc_task_depend(*task, 1, &ping_task);
+		if (rc != 0) {
+			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
+
+			DL_ERROR(rc, "failed to depend ping_task on task");
+			tse_task_complete(ping_task, rc);
+			goto cleanup;
+		}
+
+		D_DEBUG(DB_TRACE, "depended task on ping_tgt_task for tgt ID %d", entry->tgt_id);
+
+		tse_task_list_add(ping_task, &ping_task_list);
 	}
 
-	rc = tse_task_create(ping_task, sched, NULL, &t);
-	if (rc != 0) {
-		DL_ERROR(rc,
-			 "failed to create ping_task for pool handle " DF_X64
-			 "and object ID " DF_OID "",
-			 pool_hdl.cookie, DP_OID(obj->cob_md.omd_id));
-		dc_pool_put(pool);
-		return rc;
+	tse_task_list_sched(&ping_task_list, false);
+
+cleanup:
+	while ((entry = d_list_pop_entry(tgt_list, struct tgt_list_entry, link))) {
+		D_FREE(entry);
 	}
 
-	a            = tse_task_buf_embedded(t, sizeof(*a));
-	a->pool_hdl  = pool_hdl;
-	a->obj       = obj;
-	a->dkey_hash = dkey_hash;
-
-	*task = t;
-	dc_pool_put(pool);
-	return 0;
-}
-
-int
-obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash, tse_task_t **taskp)
-{
-	struct dc_pool *pool;
-	daos_handle_t   ph;
-	int             rc = 0;
-
-	pool = obj->cob_pool;
-	D_ASSERT(pool != NULL);
-
-	dc_pool2hdl_noref(pool, &ph);
-
-	rc = create_ping_task(sched, ph, obj, dkey_hash, taskp);
-	if (rc != 0)
-		return rc;
-
-	return 0;
+	return rc;
 }
 
 int
@@ -1933,6 +1869,43 @@ dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inp
 	return delay;
 }
 
+int
+obj_gather_tgt_ids(d_list_t *head, struct dc_object *obj, uint64_t dkey_hash)
+{
+	int                    first_target;
+	int                    grp_idx;
+	int                    i;
+	int                    target;
+	int                    tgt_id;
+	struct tgt_list_entry *entry;
+	int                    rc;
+
+	// Get list of targets
+	grp_idx      = obj_dkey2grpidx(obj, dkey_hash, obj->cob_version);
+	first_target = grp_idx * obj->cob_grp_size;
+
+	for (i = 0, target = first_target; i < obj->cob_grp_size; i++, target++) {
+		D_ALLOC_PTR(entry);
+		if (entry == NULL)
+			D_GOTO(err, rc = -DER_NOMEM);
+
+		tgt_id        = obj->cob_shards->do_shards[target].do_pl_shard.po_target;
+		entry->tgt_id = tgt_id;
+
+		d_list_add(&entry->link, head);
+	}
+
+	return 0;
+err:
+	while ((entry = d_list_pop_entry(head, struct tgt_list_entry, link))) {
+		D_FREE(entry);
+	}
+
+	DL_ERROR(rc, "failed to gather target IDs before pinging targets");
+
+	return rc;
+}
+
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
@@ -1952,7 +1925,25 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		if (rc != 0)
 			D_GOTO(err, rc);
 	} else if (result == -DER_RECONNECT) {
-		rc = obj_tgt_ping_task(sched, obj, obj_auxi->dkey_hash, &required_task);
+		d_list_t      tgt_list_head;
+		daos_handle_t ph;
+
+		D_DEBUG(DB_TRACE, "got err DER_RECONNECT");
+
+		D_ASSERT(obj->cob_pool != NULL);
+		dc_pool2hdl_noref(obj->cob_pool, &ph);
+
+		D_INIT_LIST_HEAD(&tgt_list_head);
+
+		D_DEBUG(DB_TRACE, "before obj_gather_tgt_ids");
+
+		rc = obj_gather_tgt_ids(&tgt_list_head, obj, obj_auxi->dkey_hash);
+		if (rc != 0)
+			D_GOTO(err, rc);
+
+		D_DEBUG(DB_TRACE, "before obj_create_ping_task");
+
+		rc = obj_create_ping_task(sched, ph, &tgt_list_head, &task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}
@@ -2001,8 +1992,6 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 err:
 	if (is_pool_task && required_task) {
 		dc_pool_abandon_map_refresh_task(required_task);
-	} else if (required_task) {
-		abandon_ping_task(required_task);
 	}
 
 	task->dt_result = result; /* restore the original error */
@@ -5228,6 +5217,9 @@ obj_task_init(tse_task_t *task, int opc, uint32_t map_ver, daos_handle_t th,
 		D_DEBUG(DB_IO, "task %p, convert to dtx opc %d\n", task, opc);
 		return 0;
 	}
+
+	D_DEBUG(DB_TRACE, "before registering task comp cb for obj_comp_cb");
+
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
 	if (rc) {
 		D_ERROR("task %p, register_comp_cb "DF_RC"\n", task, DP_RC(rc));

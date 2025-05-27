@@ -362,6 +362,11 @@ struct shard_list_args {
 	daos_anchor_t		*la_dkey_anchor;
 };
 
+struct tgt_list_entry {
+	int      tgt_id;
+	d_list_t link;
+};
+
 struct obj_auxi_list_recx {
 	daos_recx_t	recx;
 	daos_epoch_t	recx_eph;
@@ -908,6 +913,10 @@ dc_sgl_out_set(d_sg_list_t *sgl, daos_size_t data_size)
 	}
 }
 
+int
+obj_gather_tgt_ids(d_list_t *head, struct dc_object *obj, uint64_t dkey_hash);
+int
+obj_create_ping_task(tse_sched_t *sched, daos_handle_t ph, d_list_t *tgt_list, tse_task_t **taskp);
 void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
 struct dc_object *obj_addref(struct dc_object *obj);
