@@ -1392,12 +1392,11 @@ $ dmg pool reintegrate $DAOS_POOL --ranks=5 --target-idx=0,1
 ```
 
 !!! warning
-    While dmg pool query and list show how many targets are disabled for each
-    pool, there is currently no way to list the targets that have actually
-    been disabled. As a result, it is recommended for now to try to reintegrate
-    all engine ranks one after the other via `for i in seq $NR_RANKs; do dmg
-    pool reintegrate --ranks=$i; done`. This limitation will be addressed in the
-    next release.
+    While dmg pool query and list show how many targets are disabled for each pool, there is
+    currently no way to list the targets that have actually been disabled. As a result, it is
+    recommended for now to try to reintegrate all engine ranks reported as disabled in
+    `dmg pool query`. The string output after "Disabled ranks:" in the pool query output can
+    be used as the `--ranks=<disabled_ranks>` option value in `dmg pool reintegrate` command.
 
 #### System Reintegrate
 
