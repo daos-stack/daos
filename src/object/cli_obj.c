@@ -21,6 +21,7 @@
 #include <daos_types.h>
 #include <daos_obj.h>
 #include "obj_rpc.h"
+#include <daos/rpc.h>
 #include "obj_internal.h"
 #include "cli_csum.h"
 
@@ -845,6 +846,7 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	grp_size = obj_get_grp_size(obj);
+
 	D_ASSERT(grp_size > 0);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
@@ -854,7 +856,6 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 			obj->cob_version, map_ver, pool_map_ver);
 		return -DER_STALE;
 	}
-
 	D_ASSERT(obj->cob_shards_nr >= grp_size);
 
 	grp_idx = obj_pl_grp_idx(obj->cob_layout_version, hash,
@@ -1404,6 +1405,187 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	return 0;
 }
 
+static void
+obj_task_complete(tse_task_t *task, int rc)
+{
+	/* in tse_task_complete only over-write task->dt_result if it is zero, but for some
+	 * cases need to overwrite task->dt_result's retry-able result if get new different
+	 * failure to avoid possible dead loop of retry or assertion.
+	 */
+	if (rc != 0 && task->dt_result != 0 &&
+	    (obj_retry_error(task->dt_result) || task->dt_result == -DER_FETCH_AGAIN ||
+	     task->dt_result == -DER_TGT_RETRY))
+		task->dt_result = rc;
+
+	tse_task_complete(task, rc);
+}
+
+/*
+ * Arg of ping_tgt_task
+ */
+struct ping_tgt_task_arg {
+	daos_handle_t pool_hdl;
+	int           tgt_id;
+};
+
+static int
+ping_tgt_task(tse_task_t *task)
+{
+	daos_handle_t             pool_hdl;
+	int                       tgt_id;
+	int                       rc;
+	struct ping_tgt_task_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
+	pool_hdl                      = arg->pool_hdl;
+	tgt_id                        = arg->tgt_id;
+
+	rc = dc_pool_ping_target(tgt_id, pool_hdl, task);
+	if (rc != 0) {
+		D_ERROR("failed to ping target " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+
+	return 0;
+}
+
+static int
+ping_task_abort(tse_task_t *task, void *arg)
+{
+	int rc = *((int *)arg);
+
+	obj_task_complete(task, rc);
+	return 0;
+}
+
+/*
+ * Arg of ping_task
+ */
+struct ping_task_arg {
+	daos_handle_t     pool_hdl;
+	struct dc_object *obj;
+	uint64_t          dkey_hash;
+};
+
+static int
+ping_task(tse_task_t *task)
+{
+	daos_handle_t         pool_hdl;
+	struct dc_object     *obj;
+	int                   first_target;
+	int                   grp_idx;
+	int                   i;
+	int                   target;
+	int                   tgt_id;
+	int                   rc = 0;
+	d_list_t              ping_task_list;
+	tse_sched_t          *sched = tse_task2sched(task);
+
+	struct ping_task_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
+	pool_hdl                  = arg->pool_hdl;
+	obj                       = arg->obj;
+
+	D_INIT_LIST_HEAD(&ping_task_list);
+
+	grp_idx      = obj_dkey2grpidx(obj, arg->dkey_hash, obj->cob_version);
+	first_target = grp_idx * obj->cob_grp_size;
+
+	for (i = 0, target = first_target; i < obj->cob_grp_size; i++, target++) {
+		struct ping_tgt_task_arg *a;
+		tse_task_t               *ping_task = NULL;
+		tgt_id = obj->cob_shards->do_shards[target].do_pl_shard.po_target;
+
+		rc = tse_task_create(ping_tgt_task, sched, NULL, &ping_task);
+		if (rc != 0) {
+			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
+
+			DL_ERROR(rc, "failed to create task");
+			tse_task_complete(ping_task, rc);
+			return rc;
+		}
+		a           = tse_task_buf_embedded(ping_task, sizeof(*a));
+		a->pool_hdl = pool_hdl;
+		a->tgt_id   = tgt_id;
+
+		rc = dc_task_depend(task, 1, &ping_task);
+		if (rc != 0) {
+			tse_task_list_traverse(&ping_task_list, ping_task_abort, &rc);
+
+			DL_ERROR(rc, "failed to depend ping_task on task");
+			tse_task_complete(ping_task, rc);
+			return rc;
+		}
+
+		tse_task_list_add(ping_task, &ping_task_list);
+	}
+
+	tse_task_list_sched(&ping_task_list, false);
+
+	return 0;
+}
+
+/**
+ * Destroy a ping task that has not been scheduled yet, typically
+ * for error handling purposes.
+ */
+void
+abandon_ping_task(tse_task_t *task)
+{
+	tse_task_complete(task, -DER_CANCELED);
+}
+
+int
+create_ping_task(tse_sched_t *sched, daos_handle_t pool_hdl, struct dc_object *obj,
+		 uint64_t dkey_hash, tse_task_t **task)
+{
+	struct dc_pool       *pool;
+	tse_task_t           *t;
+	int                   rc;
+	struct ping_task_arg *a;
+
+	pool = dc_hdl2pool(pool_hdl);
+	if (pool == NULL) {
+		DL_ERROR(-DER_NO_HDL, "failed to find pool handle " DF_X64 "", pool_hdl.cookie);
+		return -DER_NO_HDL;
+	}
+
+	rc = tse_task_create(ping_task, sched, NULL, &t);
+	if (rc != 0) {
+		DL_ERROR(rc,
+			 "failed to create ping_task for pool handle " DF_X64
+			 "and object ID " DF_OID "",
+			 pool_hdl.cookie, DP_OID(obj->cob_md.omd_id));
+		dc_pool_put(pool);
+		return rc;
+	}
+
+	a            = tse_task_buf_embedded(t, sizeof(*a));
+	a->pool_hdl  = pool_hdl;
+	a->obj       = obj;
+	a->dkey_hash = dkey_hash;
+
+	*task = t;
+	dc_pool_put(pool);
+	return 0;
+}
+
+int
+obj_tgt_ping_task(tse_sched_t *sched, struct dc_object *obj, uint64_t dkey_hash, tse_task_t **taskp)
+{
+	struct dc_pool *pool;
+	daos_handle_t   ph;
+	int             rc = 0;
+
+	pool = obj->cob_pool;
+	D_ASSERT(pool != NULL);
+
+	dc_pool2hdl_noref(pool, &ph);
+
+	rc = create_ping_task(sched, ph, obj, dkey_hash, taskp);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
+
 int
 dc_obj_register_class(tse_task_t *task)
 {
@@ -1758,22 +1940,30 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
+	tse_task_t       *required_task = NULL;
+	bool              is_pool_task  = false;
 	uint32_t          delay     = 0;
 	int		  result = task->dt_result;
 	int		  rc;
 
 	if (pmap_stale) {
-		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
+		is_pool_task = true;
+		rc           = obj_pool_query_task(sched, obj, 0, &pool_task);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	} else if (result == -DER_RECONNECT) {
+		rc = obj_tgt_ping_task(sched, obj, obj_auxi->dkey_hash, &required_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}
 
 	if (obj_auxi->io_retry) {
-		if (pool_task != NULL) {
-			rc = dc_task_depend(task, 1, &pool_task);
+		if (required_task != NULL) {
+			rc = dc_task_depend(task, 1, &required_task);
 			if (rc != 0) {
 				D_ERROR("Failed to add dependency on pool "
-					 "query task (%p)\n", pool_task);
+					"query task (%p)\n",
+					required_task);
 				D_GOTO(err, rc);
 			}
 		}
@@ -1800,38 +1990,26 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		*io_task_reinited = true;
 	}
 
-	if (pool_task != NULL)
+	if (required_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
-		tse_task_schedule(pool_task, obj_auxi->io_retry);
+		tse_task_schedule(required_task, obj_auxi->io_retry);
 
 	D_DEBUG(DB_IO, "Retrying task=%p/%d for err=%d, io_retry=%d\n",
 		task, task->dt_result, result, obj_auxi->io_retry);
 
 	return 0;
 err:
-	if (pool_task)
-		dc_pool_abandon_map_refresh_task(pool_task);
+	if (is_pool_task && required_task) {
+		dc_pool_abandon_map_refresh_task(required_task);
+	} else if (required_task) {
+		abandon_ping_task(required_task);
+	}
 
 	task->dt_result = result; /* restore the original error */
 	obj_auxi->io_retry = 0;
 	D_ERROR("Failed to retry task=%p(err=%d), io_retry=%d, rc "DF_RC"\n",
 		task, result, obj_auxi->io_retry, DP_RC(rc));
 	return rc;
-}
-
-static void
-obj_task_complete(tse_task_t *task, int rc)
-{
-	/* in tse_task_complete only over-write task->dt_result if it is zero, but for some
-	 * cases need to overwrite task->dt_result's retry-able result if get new different
-	 * failure to avoid possible dead loop of retry or assertion.
-	 */
-	if (rc != 0 && task->dt_result != 0 &&
-	    (obj_retry_error(task->dt_result) || task->dt_result == -DER_FETCH_AGAIN ||
-	     task->dt_result == -DER_TGT_RETRY))
-		task->dt_result = rc;
-
-	tse_task_complete(task, rc);
 }
 
 static int

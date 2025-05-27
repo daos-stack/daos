@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -723,6 +724,54 @@ warmup_cb(const struct crt_cb_info *info)
 	sem = (sem_t *)info->cci_arg;
 
 	sem_post(sem);
+}
+
+int
+dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl, tse_task_t *task)
+{
+	struct pool_target *tgts;
+	crt_endpoint_t      ep;
+	crt_rpc_t          *rpc = NULL;
+	int                 idx;
+	crt_opcode_t        opcode;
+	struct dc_pool     *pool;
+	crt_context_t       ctx;
+	int                 rc = 0;
+
+	pool = dc_hdl2pool(pool_hdl);
+	pool_map_find_target(pool->dp_map, tgt_id, &tgts);
+
+	ctx = daos_task2ctx(task);
+
+	idx = 0;
+	if (tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWN ||
+	    tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWNOUT) {
+		tse_task_complete(task, rc);
+		goto out;
+	}
+
+	ep.ep_grp  = pool->dp_sys->sy_group;
+	ep.ep_rank = tgts[idx].ta_comp.co_rank;
+	ep.ep_tag  = daos_rpc_tag(DAOS_REQ_TGT, tgts[idx].ta_comp.co_index);
+	opcode     = DAOS_RPC_OPCODE(POOL_TGT_WARMUP, DAOS_POOL_MODULE,
+                                 dc_pool_proto_version ? dc_pool_proto_version : DAOS_POOL_VERSION);
+	rc         = crt_req_create(ctx, &ep, opcode, &rpc);
+	if (rc != 0) {
+		tse_task_complete(task, rc);
+		DL_ERROR(rc, "Failed to allocate req");
+		goto out;
+	}
+
+	rc = daos_rpc_send(rpc, task);
+	if (rc != 0) {
+		tse_task_complete(task, rc);
+		DL_ERROR(rc, "Failed to ping rank=%d:%d", ep.ep_rank, ep.ep_tag);
+		goto out;
+	}
+	rc = 0;
+out:
+	dc_pool_put(pool);
+	return rc;
 }
 
 /*

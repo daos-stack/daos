@@ -2700,6 +2700,10 @@ ds_pool_tgt_warmup_handler(crt_rpc_t *rpc)
 
 	in       = crt_req_get(rpc);
 	bulk_cli = in->tw_bulk;
+	if (bulk_cli == CRT_BULK_NULL) {
+		goto out_bulk_null;
+	}
+
 	rc       = crt_bulk_get_len(bulk_cli, &len);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -2745,5 +2749,6 @@ out:
 	D_FREE(buf);
 	if (rc)
 		D_ERROR("rpc failed, " DF_RC "\n", DP_RC(rc));
+out_bulk_null:
 	crt_reply_send(rpc);
 }
