@@ -111,6 +111,21 @@
 #
 #disable_srx: false
 #
+#
+## Libfabric: Disable Client Firewall Mode
+## Without Client Firewall Mode (CFM), TCP clients behind a firewall may
+## not function properly for bulk transfer I/Os due to implementation
+## details in the underlying network provider. By default, CFM is disabled.
+## Keeping the feature disabled results in behavior that requires an open
+## network path from servers to initiate unrelated TCP connections back to clients.
+## Enabling the feature removes the requirement of keeping an open network path
+## for servers to establish TCP connections to clients.
+## NB: Has no effect on non-TCP configurations.
+#
+## default: true
+#disable_client_firewall_mode: false
+#
+#
 ## CART: Fabric authorization key
 ## If the fabric requires an authorization key, set it here to
 ## be used on the server and clients.

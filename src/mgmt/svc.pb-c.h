@@ -313,11 +313,23 @@ struct  _Mgmt__ClientNetHint
    * Provider index - anything > 0 is a secondary provider
    */
   uint32_t provider_idx;
+  /*
+   * Client is behind a firewall
+   */
+  protobuf_c_boolean client_firewall_mode;
 };
-#define MGMT__CLIENT_NET_HINT__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_net_hint__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL, 0 }
-
+#define MGMT__CLIENT_NET_HINT__INIT                                                                \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__client_net_hint__descriptor),                              \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 NULL,                                                                                     \
+	 0,                                                                                        \
+	 0}
 
 struct  _Mgmt__BuildInfo
 {
