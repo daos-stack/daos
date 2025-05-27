@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -620,8 +621,7 @@ inplace_test(struct lru_arg *ts_arg, uint32_t idx, uint64_t key1, uint64_t key2)
 	bool			 found;
 	int			 rc;
 
-	rc = lrua_allocx_inplace(ts_arg->array, idx, key1,
-				 &entry);
+	rc = lrua_allocx_inplace(NULL, ts_arg->array, idx, key1, &entry);
 	assert_rc_equal(rc, 0);
 	assert_non_null(entry);
 	assert_true(entry->magic1 == MAGIC1);

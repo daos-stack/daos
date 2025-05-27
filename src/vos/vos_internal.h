@@ -145,6 +145,7 @@ enum {
 extern unsigned int vos_agg_nvme_thresh;
 extern bool vos_dkey_punch_propagate;
 extern bool vos_skip_old_partial_dtx;
+extern bool vos_diag_mode;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -1084,7 +1085,8 @@ struct vos_iterator {
 	 * mutual exclusion between aggregation and object discard.
 	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
-	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1;
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1,
+	    it_for_check : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1365,6 +1367,8 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_for_check)
+		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
 }
 
