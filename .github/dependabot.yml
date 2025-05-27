@@ -14,8 +14,6 @@ updates:
       python-packages:
         patterns:
           - "*"
-    assignees:
-      - daos-stack/actions-watchers
     commit-message:
       prefix: "Test-tag: pr,vm \n"
 
@@ -29,8 +27,6 @@ updates:
       gha-versions:
         patterns:
           - "*"
-    assignees:
-      - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
 
@@ -44,7 +40,5 @@ updates:
       gha-versions:
         patterns:
           - "*"
-    assignees:
-      - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
