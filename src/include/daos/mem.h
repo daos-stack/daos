@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -790,7 +792,7 @@ umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 
 /* Type of memory actions */
 enum {
-	UMEM_ACT_NOOP			= 0,
+	UMEM_ACT_NOOP = 0,
 	/** copy appended payload to specified storage address */
 	UMEM_ACT_COPY,
 	/** copy payload addressed by @ptr to specified storage address */
@@ -807,6 +809,7 @@ enum {
 	UMEM_ACT_CLR_BITS,
 	/** it's checksum of the specified address */
 	UMEM_ACT_CSUM,
+	UMEM_ACT_MAX,
 };
 
 /**
