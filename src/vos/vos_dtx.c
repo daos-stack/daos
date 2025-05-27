@@ -2887,17 +2887,29 @@ vos_dtx_act_reindex(struct vos_container *cont)
 					" is invalid\n", dae_df->dae_lid);
 				D_GOTO(out, rc = -DER_IO);
 			}
-			rc = lrua_allocx_inplace(cont->vc_dtx_array,
-					 dae_df->dae_lid - DTX_LID_RESERVED,
-					 dae_df->dae_epoch, &dae);
+			rc = lrua_allocx_inplace(umm, cont->vc_dtx_array,
+						 dae_df->dae_lid - DTX_LID_RESERVED,
+						 dae_df->dae_epoch, &dae);
 			if (rc != 0) {
 				if (rc == -DER_NOMEM) {
-					D_ERROR("Not enough memory for DTX "
-						"table\n");
+					D_ERROR("Not enough memory for DTX " DF_DTI "reindex\n",
+						DP_DTI(&dae_df->dae_xid));
 				} else {
-					D_ERROR("Corruption in DTX table found,"
-						" lid=%d is invalid rc="DF_RC
-						"\n", dae_df->dae_lid,
+					/*
+					 * NOTE: Under diagnose mode (usually for DDB purpose),
+					 *	 ignore the DTX conflict to allow the container
+					 *	 to be opened, then it will be fixed/handled by
+					 *	 subsequent operation if possible.
+					 */
+					if (rc == -DER_NO_PERM && unlikely(vos_diag_mode)) {
+						D_WARN("Ignore conflict for " DF_DTI ", lid %u\n",
+						       DP_DTI(&dae_df->dae_xid), dae_df->dae_lid);
+						continue;
+					}
+
+					D_ERROR("Corruption for active DTX " DF_DTI " reindex, "
+						"lid %u: " DF_RC "\n",
+						DP_DTI(&dae_df->dae_xid), dae_df->dae_lid,
 						DP_RC(rc));
 					rc = -DER_IO;
 				}
@@ -3301,9 +3313,57 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth)
 	}
 }
 
+static void
+vos_lru_dtx_conflict(struct umem_instance *umm, void *arg)
+{
+	struct vos_dtx_act_ent *dae = arg;
+	struct dtx_daos_target *ddt;
+	char                    buf[80];
+	char                   *ptr = buf;
+	int                     cnt = DAE_TGT_CNT(dae);
+	int                     rc;
+	int                     i;
+
+	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae)))
+		ddt = DAE_MBS_INLINE(dae);
+	else
+		ddt = umem_off2ptr(umm, DAE_MBS_OFF(dae));
+
+	D_WARN("Detect conflict for the following DTX:\n"
+	       "xid: " DF_DTI "\n"
+	       "lid: %u\n"
+	       "oid: " DF_UOID "\n"
+	       "epoch: " DF_U64 "\n"
+	       "flags: %x\n"
+	       "mbs_flags: %x\n"
+	       "version: %u\n"
+	       "rec_cnt: %u\n"
+	       "tgt_cnt: %u\n"
+	       "participants:",
+	       DP_DTI(&DAE_XID(dae)), DAE_LID(dae), DP_UOID(DAE_OID(dae)), DAE_EPOCH(dae),
+	       DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), DAE_VER(dae), DAE_REC_CNT(dae), cnt);
+
+	while (cnt >= 8) {
+		D_WARN("%8u%8u%8u%8u%8u%8u%8u%8u\n", ddt[0].ddt_id, ddt[1].ddt_id, ddt[2].ddt_id,
+		       ddt[3].ddt_id, ddt[4].ddt_id, ddt[5].ddt_id, ddt[6].ddt_id, ddt[7].ddt_id);
+		cnt -= 8;
+		ddt += 8;
+	}
+
+	if (cnt > 0) {
+		for (i = 0; i < cnt; i++) {
+			rc = snprintf(ptr, 79 - 8 * i, "%8u", ddt[i].ddt_id);
+			D_ASSERT(rc > 0);
+			ptr += rc;
+		}
+		D_WARN("%s\n", buf);
+	}
+}
+
 static const struct lru_callbacks lru_dtx_cache_cbs = {
-	.lru_on_alloc = vos_lru_alloc_track,
-	.lru_on_free = vos_lru_free_track,
+    .lru_on_alloc    = vos_lru_alloc_track,
+    .lru_on_free     = vos_lru_free_track,
+    .lru_on_conflict = vos_lru_dtx_conflict,
 };
 
 int

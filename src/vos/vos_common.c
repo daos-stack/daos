@@ -695,6 +695,9 @@ vos_mod_init(void)
 	d_getenv_bool("DAOS_SKIP_OLD_PARTIAL_DTX", &vos_skip_old_partial_dtx);
 	D_INFO("%s old partial committed DTX record\n", vos_skip_old_partial_dtx ? "Skip" : "Keep");
 
+	d_getenv_bool("DAOS_DIAG_MODE", &vos_diag_mode);
+	D_INFO("VOS disgnose mode is %s\n", vos_diag_mode ? "enabled" : "disabled");
+
 	return rc;
 }
 
@@ -1005,6 +1008,16 @@ vos_self_fini(void)
 }
 
 #define LMMDB_PATH	"/var/daos/"
+
+/*
+ * NOTE: Set environment "DAOS_DIAG_MODE" will enable giagnose mode in VOS. That will allow the
+ *	 pool/container to be opened even if with some corruption or conflict. Then subsequent
+ *	 operation will have chance to fix/handle related issue. But there may be corruption or
+ *	 inconsistency in the pool/container, then it must be careful to enable DAOS_DIAG_MODE.
+ *
+ *	 It is usually used for DDB purpose.
+ */
+bool vos_diag_mode;
 
 int
 vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init)

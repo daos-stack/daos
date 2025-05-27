@@ -15,6 +15,7 @@
 #define __LRU_ARRAY__
 
 #include <daos/common.h>
+#include <daos/mem.h>
 
 struct lru_callbacks {
 	/** Called when an entry is going to be evicted from cache */
@@ -27,6 +28,8 @@ struct lru_callbacks {
 	void	(*lru_on_alloc)(void *arg, daos_size_t size);
 	/** Called on free of any LRU entries */
 	void	(*lru_on_free)(void *arg, daos_size_t size);
+	/** Called on conflict being detected. */
+	void (*lru_on_conflict)(struct umem_instance *umm, void *arg);
 };
 
 struct lru_entry {
@@ -397,10 +400,10 @@ lrua_alloc_(struct lru_array *array, uint32_t *idx, void **entryp)
  *		-DER_NO_PERM	Attempted to overwrite existing entry
  *		-DER_INVAL	Index is not in range of array
  */
-#define lrua_allocx_inplace(array, idx, key, entryp)	\
-	lrua_allocx_inplace_(array, idx, key, (void **)(entryp))
+#define lrua_allocx_inplace(umm, array, idx, key, entryp)                                          \
+	lrua_allocx_inplace_(umm, array, idx, key, (void **)(entryp))
 static inline int
-lrua_allocx_inplace_(struct lru_array *array, uint32_t idx, uint64_t key,
+lrua_allocx_inplace_(struct umem_instance *umm, struct lru_array *array, uint32_t idx, uint64_t key,
 		     void **entryp)
 {
 	struct lru_entry	*entry;
@@ -430,7 +433,9 @@ lrua_allocx_inplace_(struct lru_array *array, uint32_t idx, uint64_t key,
 
 	entry = &sub->ls_table[ent_idx];
 	if (entry->le_key != key && entry->le_key != 0) {
-		D_ERROR("Cannot allocated idx %d in place\n", idx);
+		D_ERROR("Cannot allocated idx %u, key " DF_U64 " in place\n", idx, key);
+		if (array->la_cbs.lru_on_conflict != NULL && umm != NULL)
+			array->la_cbs.lru_on_conflict(umm, entry->le_payload);
 		return -DER_NO_PERM;
 	}
 
