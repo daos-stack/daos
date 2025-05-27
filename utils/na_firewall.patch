@@ -1,0 +1,799 @@
+From eb907af28d7163e0d1a996d5679628a452a69379 Mon Sep 17 00:00:00 2001
+From: Jinshan Xiong <jinshanx@google.com>
+Date: Tue, 6 May 2025 11:10:25 -0700
+Subject: [PATCH] NA OFI: firewall support
+
+Backport firewall support for PR: #787, commit a16623f, #793 from upstream.
+
+Signed-off-by: Jinshan Xiong <jinshanx@google.com>
+---
+ src/mercury_bulk.c       | 56 ++++++++++++++++++----------------
+ src/mercury_bulk.h       |  7 +++--
+ src/mercury_bulk_proc.h  |  4 ---
+ src/mercury_core.c       | 20 ++++++-------
+ src/mercury_core.h       | 12 ++++----
+ src/mercury_core_types.h |  1 +
+ src/mercury_private.h    | 14 +++++++++
+ src/mercury_proc_bulk.c  |  3 +-
+ src/na/CMakeLists.txt    | 10 +++++++
+ src/na/na.c              |  7 +++--
+ src/na/na.h              |  6 ++--
+ src/na/na_config.h.in    |  1 +
+ src/na/na_ofi.c          | 65 ++++++++++++++++++++++++++--------------
+ src/na/na_psm.c          |  6 ++--
+ src/na/na_sm.c           |  8 ++---
+ src/na/na_types.h        |  9 +++++-
+ src/na/na_ucx.c          |  8 ++---
+ src/na/version.txt       |  2 +-
+ 18 files changed, 150 insertions(+), 89 deletions(-)
+
+diff --git a/src/mercury_bulk.c b/src/mercury_bulk.c
+index 57ce933..4d7223b 100644
+--- a/src/mercury_bulk.c
++++ b/src/mercury_bulk.c
+@@ -25,12 +25,6 @@
+ /* Limit for number of segments statically allocated */
+ #define HG_BULK_STATIC_MAX (8)
+ 
+-/* Additional internal bulk flags (can hold up to 8 bits) */
+-#define HG_BULK_ALLOC (1 << 4) /* memory is allocated */
+-#define HG_BULK_BIND  (1 << 5) /* address is bound to segment */
+-#define HG_BULK_REGV  (1 << 6) /* single registration for multiple segments */
+-#define HG_BULK_VIRT  (1 << 7) /* addresses are virtual */
+-
+ /* Op ID status bits */
+ #define HG_BULK_OP_COMPLETED (1 << 0)
+ #define HG_BULK_OP_CANCELED  (1 << 1)
+@@ -294,7 +288,7 @@ hg_bulk_deregister(
+  * Get serialize size.
+  */
+ static hg_size_t
+-hg_bulk_get_serialize_size(struct hg_bulk *hg_bulk, uint8_t flags);
++hg_bulk_get_serialize_size(struct hg_bulk *hg_bulk, unsigned long flags);
+ 
+ /**
+  * Get serialize size of NA memory descriptors.
+@@ -307,8 +301,8 @@ hg_bulk_get_serialize_size_mem_descs(
+  * Serialize bulk handle.
+  */
+ static hg_return_t
+-hg_bulk_serialize(
+-    void *buf, hg_size_t buf_size, uint8_t flags, struct hg_bulk *hg_bulk);
++hg_bulk_serialize(void *buf, hg_size_t buf_size, unsigned long flags,
++    struct hg_bulk *hg_bulk);
+ 
+ /**
+  * Serialize NA memory descriptors.
+@@ -429,9 +423,9 @@ static hg_return_t
+ hg_bulk_transfer_na(hg_bulk_op_t op, na_addr_t *na_origin_addr,
+     uint8_t origin_id, const struct hg_bulk_segment *origin_segments,
+     uint32_t origin_count, na_mem_handle_t **origin_mem_handles,
+-    uint8_t origin_flags, hg_size_t origin_offset,
++    uint32_t origin_flags, hg_size_t origin_offset,
+     const struct hg_bulk_segment *local_segments, uint32_t local_count,
+-    na_mem_handle_t **local_mem_handles, uint8_t local_flags,
++    na_mem_handle_t **local_mem_handles, uint32_t local_flags,
+     hg_size_t local_offset, hg_size_t size,
+     struct hg_bulk_op_id *hg_bulk_op_id);
+ 
+@@ -848,6 +842,11 @@ hg_bulk_bind(struct hg_bulk *hg_bulk, hg_core_context_t *core_context)
+ 
+     /* Set flags */
+     hg_bulk->desc.info.flags |= HG_BULK_BIND;
++    if (NA_Has_opt_feature(hg_bulk->na_class, NA_OPT_FIREWALL_ADDR)) {
++        hg_bulk->desc.info.flags |= HG_BULK_FIREWALL_ADDR;
++        HG_LOG_SUBSYS_DEBUG(
++            bulk, "This host is behind firewall: %x", hg_bulk->desc.info.flags);
++    }
+ 
+     return HG_SUCCESS;
+ 
+@@ -975,7 +974,7 @@ error:
+ 
+ /*---------------------------------------------------------------------------*/
+ static hg_size_t
+-hg_bulk_get_serialize_size(struct hg_bulk *hg_bulk, uint8_t flags)
++hg_bulk_get_serialize_size(struct hg_bulk *hg_bulk, unsigned long flags)
+ {
+     struct hg_bulk_desc_info *desc_info = &hg_bulk->desc.info;
+     hg_size_t ret = 0;
+@@ -1063,7 +1062,7 @@ hg_bulk_get_serialize_size_mem_descs(
+ /*---------------------------------------------------------------------------*/
+ static hg_return_t
+ hg_bulk_serialize(
+-    void *buf, hg_size_t buf_size, uint8_t flags, struct hg_bulk *hg_bulk)
++    void *buf, hg_size_t buf_size, unsigned long flags, struct hg_bulk *hg_bulk)
+ {
+     struct hg_bulk_segment *segments = HG_BULK_SEGMENTS(hg_bulk);
+     char *buf_ptr = (char *) buf;
+@@ -1072,7 +1071,7 @@ hg_bulk_serialize(
+     hg_return_t ret;
+ 
+     /* Always reset bulk alloc flag (only local) */
+-    desc_info.flags &= (~HG_BULK_ALLOC & 0xff);
++    desc_info.flags &= (uint32_t) ~HG_BULK_ALLOC;
+ 
+     /* Add eager flag to descriptor if requested and bulk handle is read-only,
+      * is not virtual (i.e., points to local data), and memory is not on device.
+@@ -1083,7 +1082,7 @@ hg_bulk_serialize(
+         HG_LOG_SUBSYS_DEBUG(bulk, "HG_BULK_EAGER flag set");
+         desc_info.flags |= HG_BULK_EAGER;
+     } else
+-        desc_info.flags &= (~HG_BULK_EAGER & 0xff);
++        desc_info.flags &= (uint32_t) ~HG_BULK_EAGER;
+ 
+ #ifdef NA_HAS_SM
+     /* Add SM flag */
+@@ -1091,7 +1090,7 @@ hg_bulk_serialize(
+         HG_LOG_SUBSYS_DEBUG(bulk, "HG_BULK_SM flag set");
+         desc_info.flags |= HG_BULK_SM;
+     } else
+-        desc_info.flags &= (~HG_BULK_SM & 0xff);
++        desc_info.flags &= (uint32_t) ~HG_BULK_SM;
+ #endif
+ 
+     HG_LOG_SUBSYS_DEBUG(bulk,
+@@ -1387,6 +1386,7 @@ hg_bulk_deserialize(hg_core_class_t *core_class, struct hg_bulk **hg_bulk_p,
+     /* Address information */
+     if (hg_bulk->desc.info.flags & HG_BULK_BIND) {
+         hg_size_t serialize_size;
++        uint64_t addr_flags = 0;
+ 
+         HG_LOG_SUBSYS_DEBUG(
+             bulk, "HG_BULK_BIND flag set, deserializing address information");
+@@ -1394,8 +1394,15 @@ hg_bulk_deserialize(hg_core_class_t *core_class, struct hg_bulk **hg_bulk_p,
+         HG_BULK_DECODE(
+             error, ret, buf_ptr, buf_size_left, &serialize_size, hg_size_t);
+ 
+-        ret = HG_Core_addr_deserialize(
+-            hg_bulk->core_class, &hg_bulk->addr, buf_ptr, buf_size_left);
++        if (hg_bulk->desc.info.flags & HG_BULK_FIREWALL_ADDR) {
++            HG_LOG_SUBSYS_DEBUG(bulk,
++                "Bind bulk address is behind firewall: %x\n",
++                hg_bulk->desc.info.flags);
++            addr_flags |= NA_ADDR_FIREWALL;
++        }
++
++        ret = HG_Core_addr_deserialize(hg_bulk->core_class, &hg_bulk->addr,
++            buf_ptr, buf_size_left, addr_flags);
+         HG_CHECK_SUBSYS_HG_ERROR(
+             bulk, error, ret, "Could not deserialize address");
+         buf_ptr += serialize_size;
+@@ -1920,8 +1927,8 @@ hg_bulk_transfer(hg_core_context_t *core_context, hg_cb_t callback, void *arg,
+         HG_BULK_SEGMENTS(hg_bulk_local);
+     uint32_t origin_count = hg_bulk_origin->desc.info.segment_count,
+              local_count = hg_bulk_local->desc.info.segment_count;
+-    uint8_t origin_flags = hg_bulk_origin->desc.info.flags;
+-    uint8_t local_flags = hg_bulk_local->desc.info.flags;
++    uint32_t origin_flags = hg_bulk_origin->desc.info.flags;
++    uint32_t local_flags = hg_bulk_local->desc.info.flags;
+     struct hg_bulk_op_id *hg_bulk_op_id = NULL;
+     struct hg_bulk_op_pool *hg_bulk_op_pool =
+         hg_core_context_get_bulk_op_pool(core_context);
+@@ -2143,9 +2150,9 @@ static hg_return_t
+ hg_bulk_transfer_na(hg_bulk_op_t op, na_addr_t *na_origin_addr,
+     uint8_t origin_id, const struct hg_bulk_segment *origin_segments,
+     uint32_t origin_count, na_mem_handle_t **origin_mem_handles,
+-    uint8_t origin_flags, hg_size_t origin_offset,
++    uint32_t origin_flags, hg_size_t origin_offset,
+     const struct hg_bulk_segment *local_segments, uint32_t local_count,
+-    na_mem_handle_t **local_mem_handles, uint8_t local_flags,
++    na_mem_handle_t **local_mem_handles, uint32_t local_flags,
+     hg_size_t local_offset, hg_size_t size, struct hg_bulk_op_id *hg_bulk_op_id)
+ {
+     hg_bulk_na_op_id_t *hg_bulk_na_op_ids;
+@@ -2707,7 +2714,7 @@ HG_Bulk_get_serialize_size(hg_bulk_t handle, unsigned long flags)
+     HG_CHECK_ERROR_NORET(
+         handle == HG_BULK_NULL, error, "NULL bulk handle passed");
+ 
+-    ret = hg_bulk_get_serialize_size((struct hg_bulk *) handle, flags & 0xff);
++    ret = hg_bulk_get_serialize_size((struct hg_bulk *) handle, flags);
+ 
+     HG_LOG_SUBSYS_DEBUG(bulk,
+         "Serialize size with flags eager=%d, sm=%d, is %" PRIu64
+@@ -2736,8 +2743,7 @@ HG_Bulk_serialize(
+         (void *) handle, (flags & HG_BULK_EAGER) ? true : false,
+         (flags & HG_BULK_SM) ? true : false);
+ 
+-    ret = hg_bulk_serialize(
+-        buf, buf_size, flags & 0xff, (struct hg_bulk *) handle);
++    ret = hg_bulk_serialize(buf, buf_size, flags, (struct hg_bulk *) handle);
+     HG_CHECK_SUBSYS_HG_ERROR(bulk, error, ret, "Could not serialize handle");
+ 
+     return HG_SUCCESS;
+diff --git a/src/mercury_bulk.h b/src/mercury_bulk.h
+index 5ff1cd2..837367d 100644
+--- a/src/mercury_bulk.h
++++ b/src/mercury_bulk.h
+@@ -19,7 +19,7 @@
+ /*****************/
+ 
+ /* The memory attributes associated with the bulk handle
+- * can be defined as read only, write only or read-write */
++ * can be defined as read only, write only or read-write. */
+ #define HG_BULK_READ_ONLY  (1 << 0)
+ #define HG_BULK_WRITE_ONLY (1 << 1)
+ #define HG_BULK_READWRITE  (HG_BULK_READ_ONLY | HG_BULK_WRITE_ONLY)
+@@ -344,7 +344,7 @@ HG_Bulk_cancel(hg_op_id_t op_id);
+ struct hg_bulk_desc_info {
+     hg_size_t len;          /* Size of region */
+     uint32_t segment_count; /* Segment count */
+-    uint8_t flags;          /* Flags of operation access */
++    uint32_t flags;         /* Flags of operation access */
+ };
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -365,7 +365,8 @@ HG_Bulk_get_segment_count(hg_bulk_t handle)
+ static HG_INLINE uint8_t
+ HG_Bulk_get_flags(hg_bulk_t handle)
+ {
+-    return ((struct hg_bulk_desc_info *) handle)->flags;
++    /* This will return only read&write flags */
++    return ((struct hg_bulk_desc_info *) handle)->flags & 0x3;
+ }
+ 
+ #ifdef __cplusplus
+diff --git a/src/mercury_bulk_proc.h b/src/mercury_bulk_proc.h
+index 68f2256..20ab2a9 100644
+--- a/src/mercury_bulk_proc.h
++++ b/src/mercury_bulk_proc.h
+@@ -18,10 +18,6 @@
+ /* Public Macros */
+ /*****************/
+ 
+-/* Additional internal bulk flags (can hold up to 8 bits) */
+-#define HG_BULK_EAGER (1 << 2) /* embeds data along descriptor */
+-#define HG_BULK_SM    (1 << 3) /* bulk transfer through shared-memory */
+-
+ /*********************/
+ /* Public Prototypes */
+ /*********************/
+diff --git a/src/mercury_core.c b/src/mercury_core.c
+index 3c17763..0defcdb 100644
+--- a/src/mercury_core.c
++++ b/src/mercury_core.c
+@@ -682,7 +682,7 @@ hg_core_addr_serialize(void *buf, hg_size_t buf_size, uint8_t flags,
+ static hg_return_t
+ hg_core_addr_deserialize(struct hg_core_private_class *hg_core_class,
+     struct hg_core_private_addr **hg_core_addr_p, const void *buf,
+-    hg_size_t buf_size);
++    hg_size_t buf_size, uint64_t flags);
+ 
+ /**
+  * Determine which NA component should be used.
+@@ -3257,7 +3257,7 @@ error:
+ static hg_return_t
+ hg_core_addr_deserialize(struct hg_core_private_class *hg_core_class,
+     struct hg_core_private_addr **hg_core_addr_p, const void *buf,
+-    hg_size_t buf_size)
++    hg_size_t buf_size, uint64_t flags)
+ {
+     struct hg_core_private_addr *hg_core_addr = NULL;
+     const char *buf_ptr = (const char *) buf;
+@@ -3273,9 +3273,9 @@ hg_core_addr_deserialize(struct hg_core_private_class *hg_core_class,
+         &hg_core_addr->na_addr_serialize_size, size_t);
+ 
+     if (hg_core_addr->na_addr_serialize_size != 0) {
+-        na_return_t na_ret =
+-            NA_Addr_deserialize(hg_core_class->core_class.na_class,
+-                &hg_core_addr->core_addr.na_addr, buf_ptr, buf_size_left);
++        na_return_t na_ret = NA_Addr_deserialize(
++            hg_core_class->core_class.na_class,
++            &hg_core_addr->core_addr.na_addr, buf_ptr, buf_size_left, flags);
+         HG_CHECK_SUBSYS_ERROR(addr, na_ret != NA_SUCCESS, error, ret,
+             (hg_return_t) na_ret, "Could not deserialize NA address (%s)",
+             NA_Error_to_string(na_ret));
+@@ -3291,9 +3291,9 @@ hg_core_addr_deserialize(struct hg_core_private_class *hg_core_class,
+         &hg_core_addr->na_sm_addr_serialize_size, size_t);
+ 
+     if (hg_core_addr->na_sm_addr_serialize_size != 0) {
+-        na_return_t na_ret =
+-            NA_Addr_deserialize(hg_core_class->core_class.na_sm_class,
+-                &hg_core_addr->core_addr.na_sm_addr, buf_ptr, buf_size_left);
++        na_return_t na_ret = NA_Addr_deserialize(
++            hg_core_class->core_class.na_sm_class,
++            &hg_core_addr->core_addr.na_sm_addr, buf_ptr, buf_size_left, flags);
+         HG_CHECK_SUBSYS_ERROR(addr, na_ret != NA_SUCCESS, error, ret,
+             (hg_return_t) na_ret, "Could not deserialize NA SM address (%s)",
+             NA_Error_to_string(na_ret));
+@@ -6742,7 +6742,7 @@ error:
+ /*---------------------------------------------------------------------------*/
+ hg_return_t
+ HG_Core_addr_deserialize(hg_core_class_t *hg_core_class, hg_core_addr_t *addr_p,
+-    const void *buf, hg_size_t buf_size)
++    const void *buf, hg_size_t buf_size, uint64_t flags)
+ {
+     hg_return_t ret;
+ 
+@@ -6757,7 +6757,7 @@ HG_Core_addr_deserialize(hg_core_class_t *hg_core_class, hg_core_addr_t *addr_p,
+ 
+     ret =
+         hg_core_addr_deserialize((struct hg_core_private_class *) hg_core_class,
+-            (struct hg_core_private_addr **) addr_p, buf, buf_size);
++            (struct hg_core_private_addr **) addr_p, buf, buf_size, flags);
+     HG_CHECK_SUBSYS_HG_ERROR(addr, error, ret,
+         "Could not deserialize address from (%p, %zu)", buf, (size_t) buf_size);
+ 
+diff --git a/src/mercury_core.h b/src/mercury_core.h
+index d9dd83d..18986d2 100644
+--- a/src/mercury_core.h
++++ b/src/mercury_core.h
+@@ -747,18 +747,20 @@ HG_Core_addr_serialize(
+  * \param addr_p [OUT]          pointer to abstract address
+  * \param buf [IN]              pointer to buffer used for deserialization
+  * \param buf_size [IN]         buffer size
++ * \param flags [IN]            extra flags to describe the address
+  *
+  * \return HG_SUCCESS or corresponding HG error code
+  */
+ HG_PUBLIC hg_return_t
+ HG_Core_addr_deserialize(hg_core_class_t *hg_core_class, hg_core_addr_t *addr_p,
+-    const void *buf, hg_size_t buf_size);
++    const void *buf, hg_size_t buf_size, uint64_t flags);
+ 
+ /**
+- * Initiate a new HG RPC using the specified function ID and the local/remote
+- * target defined by addr. The HG handle created can be used to query input
+- * and output buffers, as well as issuing the RPC by using HG_Core_forward().
+- * After completion the handle must be freed using HG_Core_destroy().
++ * Initiate a new HG RPC using the specified function ID and the
++ * local/remote target defined by addr. The HG handle created can be used to
++ * query input and output buffers, as well as issuing the RPC by using
++ * HG_Core_forward(). After completion the handle must be freed using
++ * HG_Core_destroy().
+  *
+  * \param context [IN]          pointer to HG core context
+  * \param addr [IN]             target address
+diff --git a/src/mercury_core_types.h b/src/mercury_core_types.h
+index 0488bdc..73f9e24 100644
+--- a/src/mercury_core_types.h
++++ b/src/mercury_core_types.h
+@@ -145,6 +145,7 @@ struct hg_init_info {
+     X(HG_TIMEOUT)        /*!< operation reached timeout */                     \
+     X(HG_CANCELED)       /*!< operation canceled */                            \
+     X(HG_IO_ERROR)       /*!< I/O error */                                     \
++    X(HG_HOSTFIREWALL)   /*!< Host unreachable due to firewall */              \
+     X(HG_CHECKSUM_ERROR) /*!< checksum error */                                \
+     X(HG_NA_ERROR)       /*!< generic NA error */                              \
+     X(HG_OTHER_ERROR)    /*!< generic HG error */                              \
+diff --git a/src/mercury_private.h b/src/mercury_private.h
+index 0710016..82bde1a 100644
+--- a/src/mercury_private.h
++++ b/src/mercury_private.h
+@@ -90,6 +90,20 @@ struct hg_bulk_op_pool;
+         ((type *) ((char *) ptr - offsetof(type, member)))
+ #endif
+ 
++/**
++ * Definition of hg_bulk_desc_info::flags
++ *
++ * Additional internal bulk flags
++ * bit 0 ~ 3 are for public use.
++ */
++#define HG_BULK_EAGER         (1 << 2) /* embeds data along descriptor */
++#define HG_BULK_SM            (1 << 3) /* bulk transfer through shared-memory */
++#define HG_BULK_ALLOC         (1 << 4) /* memory is allocated */
++#define HG_BULK_BIND          (1 << 5) /* address is bound to segment */
++#define HG_BULK_REGV          (1 << 6) /* single registration for multiple segments */
++#define HG_BULK_VIRT          (1 << 7) /* addresses are virtual */
++#define HG_BULK_FIREWALL_ADDR (1 << 8) /* if the origin is behind firewall */
++
+ /*********************/
+ /* Public Prototypes */
+ /*********************/
+diff --git a/src/mercury_proc_bulk.c b/src/mercury_proc_bulk.c
+index 4fdde91..c5cd407 100644
+--- a/src/mercury_proc_bulk.c
++++ b/src/mercury_proc_bulk.c
+@@ -8,6 +8,7 @@
+ #include "mercury_proc_bulk.h"
+ #include "mercury_bulk_proc.h"
+ #include "mercury_error.h"
++#include "mercury_private.h"
+ 
+ /****************/
+ /* Local Macros */
+@@ -36,7 +37,7 @@ hg_proc_hg_bulk_t(hg_proc_t proc, void *data)
+ 
+     switch (hg_proc_get_op(proc)) {
+         case HG_ENCODE: {
+-            uint8_t flags = 0;
++            uint32_t flags = 0;
+             bool try_eager = false; /* Flag will not be set if bulk handle does
+                                        not support it */
+ 
+diff --git a/src/na/CMakeLists.txt b/src/na/CMakeLists.txt
+index bc8666d..6203b3d 100644
+--- a/src/na/CMakeLists.txt
++++ b/src/na/CMakeLists.txt
+@@ -210,6 +210,16 @@ if(NA_USE_OFI)
+       ${NA_OFI_INT_LIB_DEPENDENCIES}
+     )
+   endif()
++  check_c_source_compiles(
++    "
++    #include <rdma/fi_endpoint.h>
++    int main(void) {
++      (void) FI_OPT_FIREWALL_ADDR;
++      return 0;
++    }
++    "
++    NA_OFI_HAS_FIREWALL_ADDR
++  )
+ endif()
+ 
+ # UCX
+diff --git a/src/na/na.c b/src/na/na.c
+index 781f4c8..9f7c49c 100644
+--- a/src/na/na.c
++++ b/src/na/na.c
+@@ -1420,8 +1420,8 @@ error:
+ 
+ /*---------------------------------------------------------------------------*/
+ na_return_t
+-NA_Addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr_p, const void *buf, size_t buf_size)
++NA_Addr_deserialize(na_class_t *na_class, na_addr_t **addr_p, const void *buf,
++    size_t buf_size, uint64_t flags)
+ {
+     na_return_t ret;
+ 
+@@ -1439,7 +1439,8 @@ NA_Addr_deserialize(
+         ret, NA_OPNOTSUPPORTED,
+         "addr_deserialize plugin callback is not defined");
+ 
+-    ret = na_class->ops->addr_deserialize(na_class, addr_p, buf, buf_size);
++    ret =
++        na_class->ops->addr_deserialize(na_class, addr_p, buf, buf_size, flags);
+     NA_CHECK_SUBSYS_NA_ERROR(addr, error, ret,
+         "Could not deserialize addr from buffer (%p, %zu)", buf, buf_size);
+ 
+diff --git a/src/na/na.h b/src/na/na.h
+index 779f3ef..3288152 100644
+--- a/src/na/na.h
++++ b/src/na/na.h
+@@ -394,8 +394,8 @@ NA_Addr_serialize(
+  * \return NA_SUCCESS or corresponding NA error code
+  */
+ NA_PUBLIC na_return_t
+-NA_Addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr_p, const void *buf, size_t buf_size);
++NA_Addr_deserialize(na_class_t *na_class, na_addr_t **addr_p, const void *buf,
++    size_t buf_size, uint64_t flags);
+ 
+ /**
+  * Get the maximum size of messages supported by unexpected send/recv.
+@@ -1037,7 +1037,7 @@ struct na_class_ops {
+     na_return_t (*addr_serialize)(
+         na_class_t *na_class, void *buf, size_t buf_size, na_addr_t *addr);
+     na_return_t (*addr_deserialize)(na_class_t *na_class, na_addr_t **addr_p,
+-        const void *buf, size_t buf_size);
++        const void *buf, size_t buf_size, uint64_t flags);
+     size_t (*msg_get_max_unexpected_size)(const na_class_t *na_class);
+     size_t (*msg_get_max_expected_size)(const na_class_t *na_class);
+     size_t (*msg_get_unexpected_header_size)(const na_class_t *na_class);
+diff --git a/src/na/na_config.h.in b/src/na/na_config.h.in
+index 9a12275..de7feb3 100644
+--- a/src/na/na_config.h.in
++++ b/src/na/na_config.h.in
+@@ -102,6 +102,7 @@
+ #cmakedefine NA_OFI_HAS_EXT_CXI_H
+ #cmakedefine NA_OFI_GNI_HAS_UDREG
+ #cmakedefine NA_OFI_HAS_TAG_RPC
++#cmakedefine NA_OFI_HAS_FIREWALL_ADDR
+ 
+ /* NA SM */
+ #cmakedefine NA_HAS_SM
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index 78da7f1..8bf1a71 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -980,7 +980,7 @@ na_ofi_raw_addr_deserialize(int addr_format, union na_ofi_raw_addr *addr,
+ static na_return_t
+ na_ofi_addr_key_lookup(struct na_ofi_class *na_ofi_class,
+     struct na_ofi_addr_key *addr_key, fi_addr_t fi_auth_key,
+-    struct na_ofi_addr **na_ofi_addr_p);
++    struct na_ofi_addr **na_ofi_addr_p, uint64_t flags);
+ 
+ /**
+  * Key hash for hash table.
+@@ -1020,7 +1020,7 @@ na_ofi_addr_map_lookup(
+ static na_return_t
+ na_ofi_addr_map_insert(struct na_ofi_class *na_ofi_class,
+     struct na_ofi_map *na_ofi_map, struct na_ofi_addr_key *addr_key,
+-    fi_addr_t fi_auth_key, struct na_ofi_addr **na_ofi_addr_p);
++    fi_addr_t fi_auth_key, struct na_ofi_addr **na_ofi_addr_p, uint64_t flags);
+ 
+ /**
+  * Remove addr key from map.
+@@ -1814,8 +1814,8 @@ na_ofi_addr_serialize(
+ 
+ /* addr_deserialize */
+ static na_return_t
+-na_ofi_addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr_p, const void *buf, size_t buf_size);
++na_ofi_addr_deserialize(na_class_t *na_class, na_addr_t **addr_p,
++    const void *buf, size_t buf_size, uint64_t flags);
+ 
+ /* msg_get_max_unexpected_size */
+ static NA_INLINE size_t
+@@ -2226,6 +2226,11 @@ na_ofi_errno_to_na(int rc)
+         case FI_EADDRNOTAVAIL:
+             ret = NA_ADDRNOTAVAIL;
+             break;
++#ifdef NA_OFI_HAS_FIREWALL_ADDR
++        case FI_EFIREWALLADDR:
++            ret = NA_HOSTFIREWALL;
++            break;
++#endif
+         case FI_ENETDOWN:
+         case FI_ENETUNREACH:
+         case FI_ECONNABORTED:
+@@ -3038,7 +3043,7 @@ error:
+ static na_return_t
+ na_ofi_addr_key_lookup(struct na_ofi_class *na_ofi_class,
+     struct na_ofi_addr_key *addr_key, fi_addr_t fi_auth_key,
+-    struct na_ofi_addr **na_ofi_addr_p)
++    struct na_ofi_addr **na_ofi_addr_p, uint64_t flags)
+ {
+     struct na_ofi_addr *na_ofi_addr = NULL;
+     na_return_t ret;
+@@ -3056,7 +3061,7 @@ na_ofi_addr_key_lookup(struct na_ofi_class *na_ofi_class,
+         /* Insert new entry and create new address if needed */
+         na_ret = na_ofi_addr_map_insert(na_ofi_class,
+             &na_ofi_class->domain->addr_map, addr_key, fi_auth_key,
+-            &na_ofi_addr);
++            &na_ofi_addr, flags);
+         NA_CHECK_SUBSYS_ERROR(addr, na_ret != NA_SUCCESS && na_ret != NA_EXIST,
+             error, ret, na_ret, "Could not insert new address");
+     }
+@@ -3139,10 +3144,11 @@ na_ofi_addr_map_lookup(
+ static na_return_t
+ na_ofi_addr_map_insert(struct na_ofi_class *na_ofi_class,
+     struct na_ofi_map *na_ofi_map, struct na_ofi_addr_key *addr_key,
+-    fi_addr_t fi_auth_key, struct na_ofi_addr **na_ofi_addr_p)
++    fi_addr_t fi_auth_key, struct na_ofi_addr **na_ofi_addr_p,
++    uint64_t NA_UNUSED flags)
+ {
+     struct na_ofi_addr *na_ofi_addr = NULL;
+-    uint64_t flags = 0;
++    uint64_t fi_flags = 0;
+     na_return_t ret = NA_SUCCESS;
+     bool addr_map_exist = false;
+     int rc;
+@@ -3189,19 +3195,23 @@ na_ofi_addr_map_insert(struct na_ofi_class *na_ofi_class,
+         } else
+             na_ofi_addr->fi_auth_key = fi_auth_key;
+ 
+-        flags |= FI_AUTH_KEY;
++        fi_flags |= FI_AUTH_KEY;
+         /* Input of fi_av_insert(), output will be actual fi_addr_t */
+         na_ofi_addr->fi_addr = na_ofi_addr->fi_auth_key;
+     } else if (na_ofi_class->domain->av_user_id) {
+-        flags |= FI_AV_USER_ID;
++        fi_flags |= FI_AV_USER_ID;
+         /* Input of fi_av_insert(), output will be actual fi_addr_t */
+         na_ofi_addr->fi_addr = (fi_addr_t) na_ofi_addr;
+     }
+ #endif
+ 
++#ifdef NA_OFI_HAS_FIREWALL_ADDR
++    fi_flags |= (flags & NA_ADDR_FIREWALL) ? FI_FIREWALL_ADDR : 0;
++#endif
++
+     /* Insert addr into AV if key not found */
+     rc = fi_av_insert(na_ofi_class->domain->fi_av, &na_ofi_addr->addr_key.addr,
+-        1, &na_ofi_addr->fi_addr, flags, NULL);
++        1, &na_ofi_addr->fi_addr, fi_flags, NULL);
+     NA_CHECK_SUBSYS_ERROR(addr, rc < 1, error, ret, na_ofi_errno_to_na(-rc),
+         "fi_av_insert() failed, inserted: %d", rc);
+ 
+@@ -5513,7 +5523,7 @@ na_ofi_endpoint_get_src_addr(struct na_ofi_class *na_ofi_class)
+ 
+     /* Lookup/insert self address so that we can use it to send to ourself */
+     ret = na_ofi_addr_map_insert(na_ofi_class, &na_ofi_class->domain->addr_map,
+-        &addr_key, FI_ADDR_NOTAVAIL, &na_ofi_class->endpoint->src_addr);
++        &addr_key, FI_ADDR_NOTAVAIL, &na_ofi_class->endpoint->src_addr, 0);
+     NA_CHECK_SUBSYS_NA_ERROR(addr, error, ret, "Could not insert src address");
+ 
+     na_ofi_addr_ref_incr(na_ofi_class->endpoint->src_addr);
+@@ -6713,7 +6723,7 @@ na_ofi_cq_process_fi_src_err(struct na_ofi_class *na_ofi_class,
+ 
+     /* Lookup key and create new addr if it does not exist */
+     ret = na_ofi_addr_key_lookup(
+-        na_ofi_class, &addr_key, src_err->fi_auth_key, na_ofi_addr_p);
++        na_ofi_class, &addr_key, src_err->fi_auth_key, na_ofi_addr_p, 0);
+     NA_CHECK_SUBSYS_NA_ERROR(addr, error, ret, "Could not lookup address");
+ 
+     NA_LOG_SUBSYS_DEBUG(addr, "Retrieved address for FI addr %" PRIu64,
+@@ -6757,7 +6767,7 @@ na_ofi_cq_process_raw_src_addr(struct na_ofi_class *na_ofi_class,
+ 
+     /* Lookup key and create new addr if it does not exist */
+     ret = na_ofi_addr_key_lookup(
+-        na_ofi_class, &addr_key, fi_auth_key, na_ofi_addr_p);
++        na_ofi_class, &addr_key, fi_auth_key, na_ofi_addr_p, 0);
+     NA_CHECK_SUBSYS_NA_ERROR(addr, error, ret, "Could not lookup address");
+ 
+     NA_LOG_SUBSYS_DEBUG(addr, "Retrieved address for FI addr %" PRIu64,
+@@ -7671,10 +7681,9 @@ na_ofi_initialize(
+             NA_PROTONOSUPPORT, "FI_MULTI_RECV is not supported by provider");
+         na_ofi_class->opt_features |= NA_OPT_MULTI_RECV;
+     }
+-    if (na_ofi_class->fi_info->caps & FI_SOURCE_ERR) {
+-        na_ofi_class->cq_poll = na_ofi_cq_poll_fi_source;
+-    } else
+-        na_ofi_class->cq_poll = na_ofi_cq_poll_no_source;
++    na_ofi_class->cq_poll = (na_ofi_class->fi_info->caps & FI_SOURCE_ERR)
++                                ? na_ofi_cq_poll_fi_source
++                                : na_ofi_cq_poll_no_source;
+ 
+     /* Open fabric */
+     ret = na_ofi_fabric_open(
+@@ -7752,6 +7761,18 @@ na_ofi_initialize(
+     }
+ #endif
+ 
++#ifdef NA_OFI_HAS_FIREWALL_ADDR
++    {
++        int val = 0;
++        size_t len = sizeof(int);
++        ret = fi_getopt(&na_ofi_class->endpoint->fi_ep->fid, FI_OPT_ENDPOINT,
++            FI_OPT_FIREWALL_ADDR, &val, &len);
++        if (ret == 0 && val != 0) {
++            na_ofi_class->opt_features |= NA_OPT_FIREWALL_ADDR;
++        }
++    }
++#endif
++
+     /* Get address from endpoint */
+     ret = na_ofi_endpoint_get_src_addr(na_ofi_class);
+     NA_CHECK_SUBSYS_NA_ERROR(
+@@ -8065,7 +8086,7 @@ na_ofi_addr_lookup(na_class_t *na_class, const char *name, na_addr_t **addr_p)
+      * When using auth keys, peers must either share the same global key or use
+      * the same base key when using FI_AV_AUTH_KEY to be able to communicate. */
+     ret = na_ofi_addr_key_lookup(
+-        na_ofi_class, &addr_key, FI_ADDR_NOTAVAIL, &na_ofi_addr);
++        na_ofi_class, &addr_key, FI_ADDR_NOTAVAIL, &na_ofi_addr, 0);
+     NA_CHECK_SUBSYS_NA_ERROR(
+         addr, error, ret, "Could not lookup address key for %s", name);
+ 
+@@ -8189,8 +8210,8 @@ error:
+ 
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+-na_ofi_addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr_p, const void *buf, size_t buf_size)
++na_ofi_addr_deserialize(na_class_t *na_class, na_addr_t **addr_p,
++    const void *buf, size_t buf_size, uint64_t flags)
+ {
+     struct na_ofi_class *na_ofi_class = NA_OFI_CLASS(na_class);
+     struct na_ofi_addr_key addr_key;
+@@ -8241,7 +8262,7 @@ na_ofi_addr_deserialize(
+ 
+     /* Lookup key and create new addr if it does not exist */
+     ret = na_ofi_addr_key_lookup(
+-        na_ofi_class, &addr_key, fi_auth_key, &na_ofi_addr);
++        na_ofi_class, &addr_key, fi_auth_key, &na_ofi_addr, flags);
+     NA_CHECK_SUBSYS_NA_ERROR(addr, error, ret, "Could not lookup address key");
+ 
+     *addr_p = (na_addr_t *) na_ofi_addr;
+diff --git a/src/na/na_psm.c b/src/na/na_psm.c
+index 5d73e91..ced4feb 100644
+--- a/src/na/na_psm.c
++++ b/src/na/na_psm.c
+@@ -369,7 +369,7 @@ na_psm_op_destroy(na_class_t *na_class, na_op_id_t *op_id);
+  *
+  * note: the psm library timeouts do not sleep, they spin in a poll loop
+  */
+-#define SEC_TO_NSEC(X) ((X) *1000000000LL)
++#define SEC_TO_NSEC(X) ((X) * 1000000000LL)
+ 
+ /*
+  * psm_enc64: break a uint64 up into two uint32s and encode each in network
+@@ -1828,8 +1828,8 @@ na_psm_addr_serialize(
+  * is holding a reference to the address.
+  */
+ static na_return_t
+-na_psm_addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr, const void *buf, size_t buf_size)
++na_psm_addr_deserialize(na_class_t *na_class, na_addr_t **addr, const void *buf,
++    size_t buf_size, uint64_t NA_UNUSED flags)
+ {
+     uint64_t i64epid;
+     na_return_t ret;
+diff --git a/src/na/na_sm.c b/src/na/na_sm.c
+index daa3ea1..4bfe336 100644
+--- a/src/na/na_sm.c
++++ b/src/na/na_sm.c
+@@ -966,8 +966,8 @@ na_sm_addr_serialize(
+ 
+ /* addr_deserialize */
+ static na_return_t
+-na_sm_addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr_p, const void *buf, size_t buf_size);
++na_sm_addr_deserialize(na_class_t *na_class, na_addr_t **addr_p,
++    const void *buf, size_t buf_size, uint64_t flags);
+ 
+ /* msg_get_max_unexpected_size */
+ static NA_INLINE size_t
+@@ -4603,8 +4603,8 @@ done:
+ 
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+-na_sm_addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr_p, const void *buf, size_t buf_size)
++na_sm_addr_deserialize(na_class_t *na_class, na_addr_t **addr_p,
++    const void *buf, size_t buf_size, uint64_t NA_UNUSED flags)
+ {
+     struct na_sm_endpoint *na_sm_endpoint = &NA_SM_CLASS(na_class)->endpoint;
+     struct na_sm_addr *na_sm_addr = NULL;
+diff --git a/src/na/na_types.h b/src/na/na_types.h
+index 351087c..a978a56 100644
+--- a/src/na/na_types.h
++++ b/src/na/na_types.h
+@@ -33,6 +33,11 @@ enum na_addr_format {
+     NA_ADDR_NATIVE  /* Use native addressing when available */
+ };
+ 
++/* Flags for addr_deserialize() */
++enum na_addr_flags {
++    NA_ADDR_FIREWALL = (1 << 0),
++};
++
+ /* Traffic class */
+ enum na_traffic_class {
+     NA_TC_UNSPEC,           /* Leave it upon plugin to choose */
+@@ -152,6 +157,7 @@ struct na_protocol_info {
+     X(NA_TIMEOUT)        /*!< operation reached timeout */                     \
+     X(NA_CANCELED)       /*!< operation canceled */                            \
+     X(NA_IO_ERROR)       /*!< I/O error */                                     \
++    X(NA_HOSTFIREWALL)   /*!< Host unreachable due to firewall */              \
+     X(NA_RETURN_MAX)
+ 
+ #define X(a) a,
+@@ -219,7 +225,8 @@ typedef void (*na_cb_t)(const struct na_cb_info *callback_info);
+ #define NA_VERSION_LT(v1, v2)    (v1 < v2)
+ 
+ /* Optional plugin dependent features that can be queried */
+-#define NA_OPT_MULTI_RECV (1 << 0) /* multi-recv */
++#define NA_OPT_MULTI_RECV    (1 << 0) /* multi-recv */
++#define NA_OPT_FIREWALL_ADDR (1 << 1) /* firewall address */
+ 
+ /* Max timeout */
+ #define NA_MAX_IDLE_TIME (3600 * 1000)
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index f8fbb23..77b4094 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -798,8 +798,8 @@ na_ucx_addr_serialize(
+ 
+ /* addr_deserialize */
+ static na_return_t
+-na_ucx_addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr_p, const void *buf, size_t buf_size);
++na_ucx_addr_deserialize(na_class_t *na_class, na_addr_t **addr_p,
++    const void *buf, size_t buf_size, uint64_t flags);
+ 
+ /* msg_get_max_unexpected_size */
+ static NA_INLINE size_t
+@@ -3668,8 +3668,8 @@ done:
+ 
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+-na_ucx_addr_deserialize(
+-    na_class_t *na_class, na_addr_t **addr_p, const void *buf, size_t buf_size)
++na_ucx_addr_deserialize(na_class_t *na_class, na_addr_t **addr_p,
++    const void *buf, size_t buf_size, uint64_t NA_UNUSED flags)
+ {
+     struct na_ucx_class *na_ucx_class = NA_UCX_CLASS(na_class);
+     struct na_ucx_addr *na_ucx_addr = NULL;
+diff --git a/src/na/version.txt b/src/na/version.txt
+index 0062ac9..09b254e 100644
+--- a/src/na/version.txt
++++ b/src/na/version.txt
+@@ -1 +1 @@
+-5.0.0
++6.0.0
+-- 
+2.43.5
+
