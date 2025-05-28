@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -146,9 +147,10 @@ struct vos_pool_df {
  * array value that is changed in the transaction (DTX).
  */
 enum vos_dtx_record_types {
-	DTX_RT_ILOG	= 1,
-	DTX_RT_SVT	= 2,
-	DTX_RT_EVT	= 3,
+	DTX_RT_UNKNOWN = 0,
+	DTX_RT_ILOG    = 1,
+	DTX_RT_SVT     = 2,
+	DTX_RT_EVT     = 3,
 };
 
 #define DTX_INLINE_REC_CNT	4
