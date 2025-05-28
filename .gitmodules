@@ -1,3 +1,33 @@
 [submodule "raft"]
 	path = src/rdb/raft
 	url = https://github.com/daos-stack/raft.git
+[submodule "argobots"]
+	path = deps/argobots
+	url = https://github.com/pmodels/argobots.git
+[submodule "fused"]
+	path = deps/fused
+	url = https://github.com/daos-stack/fused.git
+[submodule "ofi"]
+	path = deps/ofi
+	url = https://github.com/ofiwg/libfabric.git
+[submodule "ucx"]
+	path = deps/ucx
+	url = https://github.com/openucx/ucx.git
+[submodule "pmdk"]
+	path = deps/pmdk
+	url = https://github.com/pmem/pmdk.git
+[submodule "isal"]
+	path = deps/isal
+	url = https://github.com/intel/isa-l.git
+[submodule "isal_crypto"]
+	path = deps/isal_crypto
+	url = https://github.com/intel/isa-l_crypto.git
+[submodule "protobufc"]
+	path = deps/protobufc
+	url = https://github.com/protobuf-c/protobuf-c.git
+[submodule "spdk"]
+	path = deps/spdk
+	url = https://github.com/spdk/spdk.git
+[submodule "mercury"]
+	path = deps/mercury
+	url = https://github.com/mercury-hpc/mercury.git
