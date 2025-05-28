@@ -93,7 +93,7 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 	 * multiple of the EC cell size. Find the next multiple of EC_CELL_SIZE greater than
 	 * DFS_DEFAULT_CHUNK_SIZE.
 	 */
-	if (*cs < DFS_DEFAULT_CHUNK_SIZE) {
+	if (base < DFS_DEFAULT_CHUNK_SIZE) {
 		int nchunks;
 
 		nchunks = DFS_DEFAULT_CHUNK_SIZE / base;
