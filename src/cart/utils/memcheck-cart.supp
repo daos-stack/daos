@@ -11,6 +11,14 @@
     fun:_dl_open
 }
 {
+   _dl_fini leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fini
+   ...
+}
+{
    FI leak 6
    Memcheck:Leak
    match-leak-kinds: possible

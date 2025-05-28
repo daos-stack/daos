@@ -169,7 +169,7 @@ build_package() {
 
   depends=()
   create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
-  pkgname="${name}-${VERSION}-${RELEASE}.${DISTRO:-el8}.${ARCH}.${output_type}"
+  pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
   fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
