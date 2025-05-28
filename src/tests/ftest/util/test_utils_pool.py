@@ -724,7 +724,7 @@ class TestPool(TestDaosApiBase):
             dict: json output of dmg pool set-prop command
 
         """
-        return self.dmg.pool_set_prop(pool=self.identifier, *args, **kwargs)
+        return self.dmg.pool_set_prop(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def get_prop(self, *args, **kwargs):
