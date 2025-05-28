@@ -1157,6 +1157,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
+    def system_get_prop(self, properties=None):
+        """Call dmg system get-prop.
+
+        Args:
+            properties (str, optional): Comma separated properties to get.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "get-prop"), properties=properties)
+
     def system_leader_query(self):
         """Call dmg system leader-query.
 
@@ -1267,6 +1282,33 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(
             ("system", "rebuild", "stop"), verbose=verbose, force=force)
+
+    def system_self_heal_eval(self):
+        """Call dmg system self-heal eval.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "self-heal", "eval"))
+
+    def system_set_prop(self, properties=None):
+        """Call dmg system set-prop.
+
+        Args:
+            properties (str): properties in the form of key:val[,key:val...]
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "set-prop"), properties=properties)
 
     def system_start(self, ranks=None, ignore_admin_excluded=False):
         """Start the system.

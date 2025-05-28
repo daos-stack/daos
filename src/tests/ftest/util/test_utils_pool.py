@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -96,8 +96,9 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None
 
     # Add a step to remove this pool when the test completes and ensure their is enough time for the
     # pool destroy to be attempted - accounting for a possible dmg command timeout
-    test.increment_timeout(POOL_TIMEOUT_INCREMENT)
-    test.register_cleanup(remove_pool, test=test, pool=pool)
+    if pool.register_cleanup.value is True:
+        test.increment_timeout(POOL_TIMEOUT_INCREMENT)
+        test.register_cleanup(remove_pool, test=test, pool=pool)
 
     return pool
 
@@ -305,6 +306,8 @@ class TestPool(TestDaosApiBase):
 
         # Parameter to control running 'dmg storage query usage --show_usable' if pool create fails
         self.query_on_create_error = BasicParameter(None, False)
+
+        self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
         self.pool = None
         self.info = None
@@ -724,7 +727,7 @@ class TestPool(TestDaosApiBase):
             dict: json output of dmg pool set-prop command
 
         """
-        return self.dmg.pool_set_prop(pool=self.identifier, *args, **kwargs)
+        return self.dmg.pool_set_prop(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def get_prop(self, *args, **kwargs):
@@ -1623,3 +1626,26 @@ class TestPool(TestDaosApiBase):
         response = self.query_data['response']
 
         assert_dict_subset(expected_response, response)
+
+    def verify_query_targets_state(self, ranks, expected_target_state):
+        """Verify all targets are in the expected state with dmg pool query-targets.
+
+        Args:
+            ranks (list): The list of ranks to verify.
+            expected_target_state (str): The expected target state.
+
+        Raises:
+            AssertionError: if the pool query-targets response does not match expected values
+
+        """
+        def _all_targets_in_state(infos):
+            for target, info in enumerate(infos):
+                if info['target_state'] != expected_target_state:
+                    raise AssertionError(
+                        f'Expected target {target} to be in state {expected_target_state}, '
+                        f'but current state is {info["target_state"]}')
+            return True
+
+        for rank in ranks:
+            response = self.query_targets(rank=rank)['response']
+            assert_dict_subset({'Infos': _all_targets_in_state}, response)

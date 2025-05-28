@@ -1,0 +1,30 @@
+hosts:
+  test_servers: 7
+  test_clients: 1
+
+timeout: 800
+
+skip_add_log_msg: true
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+
+pool:
+  size: 10G
+  properties: rd_fac:2
+  pool_query_timeout: 30
+  register_cleanup: False  # if something goes wrong, this will likely fail
+
+test:
+  scenarios_to_verify:
+    - all
