@@ -35,8 +35,8 @@ list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/libspdk*.so.*" \
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-22.0"
-list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-22.0/lib*.so.*"
+TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-24.1"
+list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-24.1/lib*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 

@@ -1117,7 +1117,7 @@ class _Component():
             if os.path.exists(patch_path):
                 continue
             if "https://" not in raw:
-                raw = os.path.join(Dir('#').abspath, raw)
+                raw = os.path.join(Dir('#').abspath, f'deps/patches/{self.name}', raw)
                 shutil.copy(raw, patch_path)
                 patches[patch_path] = patch_subdir
                 continue
