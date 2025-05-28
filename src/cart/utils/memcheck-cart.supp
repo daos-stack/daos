@@ -19,6 +19,14 @@
    ...
 }
 {
+   _dl_fixup leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fixup
+   ...
+}
+{
    FI leak 6
    Memcheck:Leak
    match-leak-kinds: possible
