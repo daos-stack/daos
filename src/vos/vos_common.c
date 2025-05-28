@@ -594,13 +594,12 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 		if (rc)
 			D_WARN("Failed to create vos obj cnt: "DF_RC"\n", DP_RC(rc));
 
+		rc = d_tm_add_metric(&tls->vtl_lru_alloc_size, D_TM_GAUGE,
+				     "Active DTX table LRU size", "byte",
+				     "mem/vos/vos_lru_size/tgt_%d", tgt_id);
+		if (rc)
+			D_WARN("Failed to create LRU alloc size: " DF_RC "\n", DP_RC(rc));
 	}
-
-	rc = d_tm_add_metric(&tls->vtl_lru_alloc_size, D_TM_GAUGE,
-			     "Active DTX table LRU size", "byte",
-			     "mem/vos/vos_lru_size/tgt_%d", tgt_id);
-	if (rc)
-		D_WARN("Failed to create LRU alloc size: "DF_RC"\n", DP_RC(rc));
 
 	return tls;
 failed:
@@ -627,6 +626,17 @@ struct dss_module_key vos_module_key = {
 };
 
 daos_epoch_t	vos_start_epoch = DAOS_EPOCH_MAX;
+
+/*
+ * NOTE: Set environment "DAOS_DIAG_MODE" (as non-zero) will enable diagnose mode in VOS.
+ *       That will allow the pool/container to be opened even if with some corruption or
+ *       conflict. Then subsequent operation will have chance to fix/handle related issue.
+ *       But since there may be corruption or inconsistency in the pool/container even if
+ *       engine started under diagnose mode, so must be careful to enable DAOS_DIAG_MODE.
+ *
+ *	 It is usually used for DDB or recovery purpose.
+ */
+unsigned int    vos_diag_mode;
 
 static int
 vos_mod_init(void)
@@ -694,6 +704,16 @@ vos_mod_init(void)
 	 */
 	d_getenv_bool("DAOS_SKIP_OLD_PARTIAL_DTX", &vos_skip_old_partial_dtx);
 	D_INFO("%s old partial committed DTX record\n", vos_skip_old_partial_dtx ? "Skip" : "Keep");
+
+	vos_diag_mode = VOS_DIAG_DEF;
+	d_getenv_uint("DAOS_DIAG_MODE", &vos_diag_mode);
+	if (vos_diag_mode >= VOS_DIAG_MAX) {
+		D_WARN("Invalid DAOS diagnose mode %d. Valid values: %u (non-diagnose by default), "
+		       "%u (only check), %u (check and repair)\n",
+		       vos_diag_mode, VOS_DIAG_DEF, VOS_DIAG_CHECK, VOS_DIAG_REPAIR);
+		vos_diag_mode = VOS_DIAG_DEF;
+	}
+	D_INFO("Set VOS disgnose mode as %d\n", vos_diag_mode);
 
 	return rc;
 }
