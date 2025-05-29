@@ -14,6 +14,8 @@ on:
   push:
     branches: ["master"]
   pull_request:
+    paths:
+      - fake.foo
 
 # Declare default permissions as nothing.
 permissions: {}
