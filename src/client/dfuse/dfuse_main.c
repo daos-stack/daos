@@ -21,6 +21,7 @@
 
 #include "dfuse.h"
 
+#include <daos/job.h>
 #include <daos_fs.h>
 #include <daos_api.h>
 #include <daos_uns.h>
@@ -405,6 +406,30 @@ check_fd_mountpoint(const char *mountpoint)
 	return fd;
 }
 
+#define DEFAULT_DFUSE_JOBID "dfuse"
+
+static void
+set_dfuse_jobid()
+{
+	char *jobid_env = NULL;
+
+	d_agetenv_str(&jobid_env, JOBID_ENV);
+	if (jobid_env == NULL) {
+		D_STRNDUP_S(jobid_env, DEFAULT_JOBID_ENV);
+	} else {
+		char *tmp_env = jobid_env;
+
+		D_STRNDUP(jobid_env, tmp_env, MAX_ENV_NAME);
+		d_freeenv_str(&tmp_env);
+	}
+	if (jobid_env == NULL)
+		return;
+
+	/* set it if it's not already set */
+	d_setenv(jobid_env, DEFAULT_DFUSE_JOBID, 0);
+	d_freeenv_str(&jobid_env);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -446,6 +471,7 @@ main(int argc, char **argv)
 					     {0, 0, 0, 0}};
 
 	d_signal_stack_enable(true);
+	set_dfuse_jobid();
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
