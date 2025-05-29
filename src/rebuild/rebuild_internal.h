@@ -310,9 +310,6 @@ struct rebuild_iv {
 
 };
 
-#define SCAN_YIELD_FREQ		4096
-#define SCAN_OBJ_YIELD_CNT	128
-
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
 rebuild_tls_get()
