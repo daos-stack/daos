@@ -1,0 +1,260 @@
+diff --git a/src/na/CMakeLists.txt b/src/na/CMakeLists.txt
+index 5c4ec2f..625c07c 100644
+--- a/src/na/CMakeLists.txt
++++ b/src/na/CMakeLists.txt
+@@ -82,9 +82,10 @@ if(NA_USE_DYNAMIC_PLUGINS)
+   if(NOT BUILD_SHARED_LIBS)
+     message(FATAL_ERROR "Using dynamic plugins requires BUILD_SHARED_LIBS to be ON.")
+   endif()
++  cmake_path(SET NA_PLUGIN_RELATIVE_PATH ${NA_INSTALL_PLUGIN_DIR})
++  cmake_path(RELATIVE_PATH NA_PLUGIN_RELATIVE_PATH BASE_DIRECTORY ${NA_INSTALL_LIB_DIR})
++  message(STATUS "NA plugin install directory: ${NA_INSTALL_PLUGIN_DIR} (relative path to libraries: ${NA_PLUGIN_RELATIVE_PATH})")
+   set(NA_HAS_DYNAMIC_PLUGINS 1)
+-  set(NA_DEFAULT_PLUGIN_PATH ${NA_INSTALL_PLUGIN_DIR} CACHE PATH "Default path used to load plugins.")
+-  mark_as_advanced(NA_DEFAULT_PLUGIN_PATH)
+ endif()
+ 
+ # BMI
+diff --git a/src/na/na.c b/src/na/na.c
+index 781f4c8..b60d305 100644
+--- a/src/na/na.c
++++ b/src/na/na.c
+@@ -20,6 +20,9 @@
+ #        include <Windows.h>
+ #    else
+ #        include <dirent.h>
++#        include <errno.h>
++#        include <limits.h>
++#        include <link.h>
+ #    endif
+ #endif
+ 
+@@ -138,6 +141,10 @@ na_plugin_check_protocol(const struct na_class_ops *const class_ops[],
+     const struct na_class_ops **ops_p);
+ 
+ #ifdef NA_HAS_DYNAMIC_PLUGINS
++/* Resolve plugin search path */
++static na_return_t
++na_plugin_resolve_path(const char *offset, char *path, size_t path_size);
++
+ /* Scan a given path and return a list of plugins */
+ static na_return_t
+ na_plugin_scan_path(const char *path, struct na_plugin_entry **entries_p);
+@@ -265,15 +272,26 @@ static void
+ na_initialize(void)
+ {
+     const char *plugin_path = getenv("NA_PLUGIN_PATH");
++    char resolved_path[NA_PLUGIN_PATH_MAX];
+     na_return_t ret;
+ 
+-    if (plugin_path == NULL)
+-        plugin_path = NA_DEFAULT_PLUGIN_PATH;
++    if (plugin_path == NULL) {
++        ret = na_plugin_resolve_path(
++            NA_PLUGIN_RELATIVE_PATH, resolved_path, sizeof(resolved_path));
++        NA_CHECK_SUBSYS_NA_ERROR(cls, done, ret,
++            "Could not resolve plugin path using offset (%s)",
++            NA_PLUGIN_RELATIVE_PATH);
++        plugin_path = resolved_path;
++    }
+ 
+     ret = na_plugin_scan_path(plugin_path, &na_plugin_dynamic_g);
+     NA_CHECK_SUBSYS_WARNING(fatal, ret != NA_SUCCESS,
+-        "No plugin found in path (%s), consider setting NA_PLUGIN_PATH.",
++        "No usable plugin found in path (%s), consider setting NA_PLUGIN_PATH "
++        "if path indicated is not valid.",
+         plugin_path);
++
++done:
++    return;
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -472,6 +490,44 @@ error:
+ /*---------------------------------------------------------------------------*/
+ #ifdef NA_HAS_DYNAMIC_PLUGINS
+ #    ifdef _WIN32
++#        define PATH_MAX       MAX_PATH
++#        define realpath(N, R) _fullpath((R), (N), PATH_MAX)
++#    endif
++static na_return_t
++na_plugin_resolve_path(const char *offset, char *path, size_t path_size)
++{
++    static int placeholder;
++    char libpath[PATH_MAX];
++    char *slash;
++    na_return_t ret;
++    int rc;
++
++    rc = hg_dl_get_path(&placeholder, path, path_size);
++    NA_CHECK_SUBSYS_ERROR(
++        cls, rc != 0, error, ret, NA_NOENTRY, "hg_dl_get_path() failed");
++
++    NA_CHECK_SUBSYS_ERROR(cls, realpath(path, libpath) == NULL, error, ret,
++        NA_NOENTRY, "realpath() failed, %s", strerror(errno));
++
++    slash = strrchr(libpath, '/');
++    NA_CHECK_SUBSYS_ERROR(cls, slash == NULL, error, ret, NA_INVALID_ARG,
++        "Could not find last '/' in %s", libpath);
++    *slash = '\0';
++
++    rc = snprintf(path, path_size, "%s/%s", libpath, offset);
++    NA_CHECK_SUBSYS_ERROR(cls, rc < 0 || rc > (int) path_size, error, ret,
++        NA_OVERFLOW,
++        "snprintf() failed or name truncated, rc: %d (expected %zu)", rc,
++        path_size);
++
++    return NA_SUCCESS;
++
++error:
++    return ret;
++}
++
++/*---------------------------------------------------------------------------*/
++#    ifdef _WIN32
+ static na_return_t
+ na_plugin_scan_path(const char *path, struct na_plugin_entry **entries_p)
+ {
+@@ -494,7 +550,7 @@ na_plugin_scan_path(const char *path, struct na_plugin_entry **entries_p)
+     struct dirent **plugin_list;
+     struct na_plugin_entry *entries = NULL;
+     na_return_t ret;
+-    int n, n_entries = 0;
++    int n, opened_plugins = 0;
+ 
+     n = scandir(path, &plugin_list, na_plugin_filter, alphasort);
+     NA_CHECK_SUBSYS_ERROR(
+@@ -504,16 +560,20 @@ na_plugin_scan_path(const char *path, struct na_plugin_entry **entries_p)
+         (struct na_plugin_entry *) calloc((size_t) n + 1, sizeof(*entries));
+     NA_CHECK_SUBSYS_ERROR(cls, entries == NULL, error, ret, NA_NOMEM,
+         "Could not allocate %d plugin entries", n);
+-    n_entries = n;
+ 
+     while (n--) {
+         ret = na_plugin_open(path, plugin_list[n]->d_name, &entries[n]);
+         free(plugin_list[n]);
+-        NA_CHECK_SUBSYS_NA_ERROR(cls, error, ret, "Could not open plugin (%s)",
+-            plugin_list[n]->d_name);
++        if (ret == NA_SUCCESS)
++            opened_plugins++;
++        else
++            NA_CHECK_SUBSYS_NA_ERROR(
++                cls, error, ret, "Could not open plugin (%s)", plugin_list[n]->d_name);
+     }
+ 
+     free(plugin_list);
++    NA_CHECK_SUBSYS_ERROR(cls, opened_plugins == 0, error, ret, NA_NOENTRY,
++        "No usable plugin found in path (%s)", path);
+ 
+     *entries_p = entries;
+ 
+@@ -521,19 +581,11 @@ na_plugin_scan_path(const char *path, struct na_plugin_entry **entries_p)
+ 
+ error:
+     if (n > 0) {
+-        if (entries != NULL) {
+-            int i;
+-
+-            /* close entry */
+-            for (i = n + 1; i < n_entries; i++)
+-                na_plugin_close(&entries[i]);
+-            free(entries);
+-        }
+-
+         while (n--)
+             free(plugin_list[n]);
+         free(plugin_list);
+     }
++    free(entries);
+ 
+     return ret;
+ }
+diff --git a/src/na/na_config.h.in b/src/na/na_config.h.in
+index 30d0e08..50dd443 100644
+--- a/src/na/na_config.h.in
++++ b/src/na/na_config.h.in
+@@ -80,7 +80,7 @@
+ #    define NA_PLUGIN
+ #    define NA_PLUGIN_VISIBILITY NA_PRIVATE
+ #endif
+-#cmakedefine NA_DEFAULT_PLUGIN_PATH "@NA_DEFAULT_PLUGIN_PATH@"
++#cmakedefine NA_PLUGIN_RELATIVE_PATH "@NA_PLUGIN_RELATIVE_PATH@"
+ 
+ /* Build Options */
+ #cmakedefine NA_HAS_DEBUG
+diff --git a/src/util/CMakeLists.txt b/src/util/CMakeLists.txt
+index 44fe6b9..32f51d1 100644
+--- a/src/util/CMakeLists.txt
++++ b/src/util/CMakeLists.txt
+@@ -193,6 +193,7 @@ configure_file(
+ #------------------------------------------------------------------------------
+ set(MERCURY_UTIL_SRCS
+   ${CMAKE_CURRENT_SOURCE_DIR}/mercury_atomic_queue.c
++  ${CMAKE_CURRENT_SOURCE_DIR}/mercury_dl.c
+   ${CMAKE_CURRENT_SOURCE_DIR}/mercury_dlog.c
+   ${CMAKE_CURRENT_SOURCE_DIR}/mercury_event.c
+   ${CMAKE_CURRENT_SOURCE_DIR}/mercury_hash_table.c
+diff --git a/src/util/mercury_dl.h b/src/util/mercury_dl.h
+index b86932a..0cda094 100644
+--- a/src/util/mercury_dl.h
++++ b/src/util/mercury_dl.h
+@@ -62,6 +62,18 @@ hg_dl_close(HG_DL_HANDLE handle);
+ static HG_UTIL_INLINE void *
+ hg_dl_sym(HG_DL_HANDLE handle, const char *name);
+ 
++/**
++ * Retrieve library path.
++ *
++ * \param addr [IN]             address of the symbol
++ * \param path [OUT]            buffer to store the path
++ * \param path_size [IN]        size of the buffer
++ *
++ * \return Non-negative on success or negative on failure
++ */
++HG_UTIL_PUBLIC int
++hg_dl_get_path(const void *addr, char *path, size_t path_size);
++
+ /*---------------------------------------------------------------------------*/
+ static HG_UTIL_INLINE const char *
+ hg_dl_error(void)
+diff --git a/src/util/mercury_dl.c b/src/util/mercury_dl.c
+new file mode 100644
+index 0000000..6ed4666
+--- /dev/null
++++ b/src/util/mercury_dl.c
+@@ -0,0 +1,35 @@
++/**
++ * Copyright (c) 2013-2022 UChicago Argonne, LLC and The HDF Group.
++ * Copyright (c) 2022-2023 Intel Corporation.
++ *
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++
++#if !defined(_WIN32) && !defined(_GNU_SOURCE)
++#    define _GNU_SOURCE
++#endif
++#include "mercury_dl.h"
++
++#include <string.h>
++
++/*---------------------------------------------------------------------------*/
++int
++hg_dl_get_path(const void *addr, char *path, size_t path_size)
++{
++#ifdef _WIN32
++    HMODULE module;
++    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
++                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
++            (LPCSTR) addr, &module))
++        return GetModuleFileNameA(module, path, (DWORD) path_size);
++#else
++    Dl_info info;
++    if (dladdr(addr, &info) && info.dli_fname) {
++        strncpy(path, info.dli_fname, path_size);
++        path[path_size - 1] = '\0';
++        return HG_UTIL_SUCCESS;
++    }
++#endif
++
++    return HG_UTIL_FAIL;
++}
