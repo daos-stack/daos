@@ -85,7 +85,7 @@ python3.11 -m venv venv
 # temp cp for debug
 # ls -la /usr/lib64/
 # ls -la /usr/lib64/python3.6/site-packages/storage_estimator
-# cp -r /usr/lib64/python3.6/site-packages/storage_estimator venv/lib/python3.11/site-packages/
+cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib/python3.11/site-packages/
 
 # shellcheck disable=SC1091
 source venv/bin/activate
@@ -97,6 +97,7 @@ pip install --upgrade pip
 pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
+# pip install /opt/daos/lib64/python3.6/site-packages/storage_estimator
 
 utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
                    $SUDO_ARG
