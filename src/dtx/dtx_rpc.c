@@ -251,11 +251,16 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 	crt_opcode_t		 opc;
 	struct dtx_in		*din = NULL;
 	int			 rc;
+	uint8_t                  rpc_ver;
+
+	rc = dtx_rpc_protocol(&rpc_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = drr->drr_rank;
 	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, drr->drr_tag);
-	opc = DAOS_RPC_OPCODE(dra->dra_opc, DAOS_DTX_MODULE, DAOS_DTX_VERSION);
+	opc            = DAOS_RPC_OPCODE(dra->dra_opc, DAOS_DTX_MODULE, rpc_ver);
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc == 0) {
@@ -295,6 +300,7 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		  "DTX req for opc %x to %d/%d (req %p future %p) sent epoch "DF_X64,
 		  dra->dra_opc, drr->drr_rank, drr->drr_tag, req, dra->dra_future, epoch);
 
+out:
 	if (rc != 0) {
 		drr->drr_local_fail = 1;
 		if (drr->drr_comp == 0) {
@@ -1523,11 +1529,15 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 	crt_rpc_t		*req = NULL;
 	struct dtx_coll_in	*dci;
 	int			 rc;
+	uint8_t                  rpc_ver;
+
+	rc = dtx_rpc_protocol(&rpc_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, dcra->dcra_ranks,
-				  DAOS_RPC_OPCODE(dcra->dcra_opc, DAOS_DTX_MODULE,
-						  DAOS_DTX_VERSION),
-				  NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,
+				  DAOS_RPC_OPCODE(dcra->dcra_opc, DAOS_DTX_MODULE, rpc_ver), NULL,
+				  NULL, CRT_RPC_FLAG_FILTER_INVERT,
 				  crt_tree_topo(CRT_TREE_KNOMIAL, DTX_COLL_TREE_WIDTH), &req);
 	if (rc != 0) {
 		D_ERROR("crt_corpc_req_create failed for coll DTX ("DF_DTI") RPC %u: "DF_RC"\n",

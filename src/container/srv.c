@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -146,6 +147,11 @@ struct daos_module_metrics cont_metrics = {
     .dmm_nr_metrics = ds_cont_metrics_count,
 };
 
+static struct dss_module_version_map cont_ver_v8 = {
+    .module_version   = DAOS_CONT_VERSION,
+    .protocol_version = DAOS_VERSION_PROTOCAL,
+};
+
 struct dss_module cont_module = {
     .sm_name        = "cont",
     .sm_mod_id      = DAOS_CONT_MODULE,
@@ -156,6 +162,9 @@ struct dss_module cont_module = {
     .sm_proto_fmt   = {&cont_proto_fmt_v7, &cont_proto_fmt_v8},
     .sm_cli_count   = {CONT_PROTO_CLI_COUNT, CONT_PROTO_CLI_COUNT},
     .sm_handlers    = {cont_handlers_v7, cont_handlers_v8},
+    .sm_ver_table   = {&cont_ver_v8},
     .sm_key         = &cont_module_key,
     .sm_metrics     = &cont_metrics,
 };
+
+DEFINE_DS_RPC_PROTOCOL(cont);

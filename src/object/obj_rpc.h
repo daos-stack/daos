@@ -796,8 +796,7 @@ CRT_RPC_DECLARE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUN
 CRT_RPC_DECLARE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
 
 static inline int
-obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
-	       crt_rpc_t **req)
+dc_obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, crt_rpc_t **req)
 {
 	crt_opcode_t opcode;
 
@@ -806,6 +805,29 @@ obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE,
 				 dc_obj_proto_version ? dc_obj_proto_version : DAOS_OBJ_VERSION);
+	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_IO, tgt_ep->ep_tag);
+
+	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+}
+
+int
+ds_obj_rpc_protocol(uint8_t *obj_ver);
+
+static inline int
+ds_obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, crt_rpc_t **req)
+{
+	crt_opcode_t opcode;
+	uint8_t      rpc_ver;
+	int          rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_REQ_CREATE_TIMEOUT))
+		return -DER_TIMEDOUT;
+
+	rc = ds_obj_rpc_protocol(&rpc_ver);
+	if (rc)
+		return rc;
+
+	opcode         = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, rpc_ver);
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_IO, tgt_ep->ep_tag);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);

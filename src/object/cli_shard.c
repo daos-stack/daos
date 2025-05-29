@@ -1,5 +1,6 @@
 /*
  *  (C) Copyright 2016-2024 Intel Corporation.
+ *  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -437,7 +438,7 @@ dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
 
 	opc = opc_get(rpc->cr_opc);
 	D_ASSERTF(opc == DAOS_OBJ_RPC_FETCH, "bad opc 0x%x\n", opc);
-	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &csum_rpc);
+	rc = dc_obj_req_create(daos_task2ctx(task), tgt_ep, opc, &csum_rpc);
 	if (rc) {
 		D_ERROR("Failed to create csum report request, task %p.\n",
 			task);
@@ -1118,7 +1119,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" "DF_KEY" rank:%d tag:%d eph "
 		DF_U64"\n", req, opc, DP_UOID(shard->do_id), DP_KEY(dkey),
 		tgt_ep.ep_rank, tgt_ep.ep_tag, auxi->epoch.oe_value);
@@ -1363,7 +1364,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		opc, tgt_ep.ep_rank, tgt_ep.ep_tag, obj_args->flags,
 		args->pa_auxi.epoch.oe_value);
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1486,7 +1487,7 @@ dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *arg
 	tgt_ep.ep_rank = shard->do_target_rank;
 	tgt_ep.ep_tag = shard->do_target_idx;
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_COLL_PUNCH, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_COLL_PUNCH, &req);
 	if (rc != 0)
 		goto out;
 
@@ -1548,7 +1549,7 @@ dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *arg
 out_req:
 	/* -1 for crt_req_addref(). */
 	crt_req_decref(req);
-	/* -1 for obj_req_create(). */
+	/* -1 for dc_obj_req_create(). */
 	crt_req_decref(req);
 out:
 	D_ERROR("DAOS_OBJ_RPC_COLL_PUNCH RPC failed for "DF_UOID" with DTX "
@@ -1962,7 +1963,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	D_DEBUG(DB_IO, "opc %d "DF_UOID" rank %d tag %d\n",
 		opc, DP_UOID(obj_shard->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
@@ -2191,7 +2192,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 
 	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n", tgt_ep.ep_rank, tgt_ep.ep_tag);
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2343,7 +2344,7 @@ dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uin
 
 	D_DEBUG(DB_IO, "OBJ_COLL_QUERY_RPC, rank=%d tag=%d.\n", tgt_ep.ep_rank, tgt_ep.ep_tag);
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_COLL_QUERY, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_COLL_QUERY, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2520,7 +2521,7 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	D_DEBUG(DB_IO, "OBJ_SYNC_RPC, rank=%d tag=%d.\n",
 		tgt_ep.ep_rank, tgt_ep.ep_tag);
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2688,7 +2689,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	D_DEBUG(DB_IO, "opc %d "DF_UOID" rank %d tag %d\n",
 		opc, DP_UOID(obj_shard->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 

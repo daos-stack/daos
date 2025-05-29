@@ -115,7 +115,19 @@ fini(void)
 static int
 setup(void)
 {
-	bool start = true;
+	bool    start = true;
+	uint8_t rpc_ver;
+	int     rc;
+
+	/*
+	 * Server reuse client stack to issue some pool rpc.
+	 */
+	rc = ds_pool_rpc_protocol(&rpc_ver);
+	if (rc) {
+		D_ERROR("failed to get rpc protocol: %d\n", rc);
+		return rc;
+	}
+	dc_pool_proto_version = rpc_ver;
 
 	if (!engine_in_check()) {
 		d_getenv_bool("DAOS_START_POOL_SVC", &start);
@@ -225,6 +237,11 @@ struct daos_module_metrics pool_metrics = {
     .dmm_nr_metrics = ds_pool_metrics_count,
 };
 
+static struct dss_module_version_map pool_ver_v7 = {
+    .module_version   = DAOS_POOL_VERSION,
+    .protocol_version = DAOS_VERSION_PROTOCAL,
+};
+
 struct dss_module pool_module = {
     .sm_name        = "pool",
     .sm_mod_id      = DAOS_POOL_MODULE,
@@ -237,6 +254,9 @@ struct dss_module pool_module = {
     .sm_proto_fmt   = {&pool_proto_fmt_v6, &pool_proto_fmt_v7},
     .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
     .sm_handlers    = {pool_handlers_v6, pool_handlers_v7},
+    .sm_ver_table   = {&pool_ver_v7},
     .sm_key         = &pool_module_key,
     .sm_metrics     = &pool_metrics,
 };
+
+DEFINE_DS_RPC_PROTOCOL(pool);
