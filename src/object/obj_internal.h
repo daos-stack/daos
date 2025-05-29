@@ -1085,6 +1085,24 @@ void obj_class_fini(void);
 #define IOV_FRAG_COUNT_DEF      128
 #define IOV_FRAG_COUNT_MIN      16
 
+static inline void
+obj_init_iov_fragment_params()
+{
+	d_getenv_uint("DAOS_IOV_FRAG_SIZE", &iov_frag_size);
+	d_getenv_uint("DAOS_IOV_FRAG_COUNT", &iov_frag_count);
+	if (iov_frag_count < IOV_FRAG_COUNT_MIN) {
+		D_WARN("Invalid IOV fragment count threshold: %u (minimum %u). Using default: %u\n",
+		       iov_frag_count, IOV_FRAG_COUNT_MIN, IOV_FRAG_COUNT_DEF);
+		iov_frag_count = IOV_FRAG_COUNT_DEF;
+	}
+	if (iov_frag_size == 0)
+		D_INFO("IOV fragment merging is disabled. Fragment count threshold: %u\n",
+		       iov_frag_count);
+	else
+		D_INFO("IOV fragment merging enabled (size threshold: %u, count threshold: %u)\n",
+		       iov_frag_size, iov_frag_count);
+}
+
 struct obj_query_merge_args {
 	struct daos_oclass_attr	*oqma_oca;
 	daos_unit_oid_t		 oqma_oid;
