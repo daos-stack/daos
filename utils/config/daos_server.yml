@@ -1,3 +1,5 @@
+## (C) Copyright 2025 Google LLC
+
 ## DAOS server configuration file.
 #
 ## Location of this configuration file is determined by first checking for the
@@ -112,8 +114,10 @@
 #disable_srx: false
 #
 #
-## Libfabric: Disable Client Firewall Mode
-## Without Client Firewall Mode (CFM), TCP clients behind a firewall may
+## Libfabric: Client Behind Firewall
+## Enable if clients are behind firewall, usually in cloud environment.
+##
+## Without Client Firewall Mode, TCP clients behind a firewall may
 ## not function properly for bulk transfer I/Os due to implementation
 ## details in the underlying network provider. By default, CFM is disabled.
 ## Keeping the feature disabled results in behavior that requires an open
