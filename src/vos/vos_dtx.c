@@ -445,9 +445,7 @@ vos_dtx_table_register(void)
 		return rc;
 	}
 
-	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE,
-				   BTR_FEAT_SKIP_LEAF_REBAL,
-				   &dtx_committed_btr_ops);
+	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE, 0, &dtx_committed_btr_ops);
 	if (rc != 0)
 		D_ERROR("Failed to register DTX committed dbtree: %d\n", rc);
 
