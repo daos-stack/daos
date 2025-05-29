@@ -55,7 +55,7 @@ class DaosAgentYamlParameters(YamlParameters):
         # daos_agent parameters:
         #   - runtime_dir: <str>, e.g. /var/run/daos_agent
         #       Use the given directory for creating Unix domain sockets
-        #   - log_file: <str>, e.g. /var/log/daos_client/daos_agent.log
+        #   - log_file: <str>, e.g. /var/log/daos/daos_agent.log
         #       Full path and name of the DAOS agent logfile.
         #   - control_log_mask: <str>, one of: error, info, debug
         #       Specifies the log level for agent logs.

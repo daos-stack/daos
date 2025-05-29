@@ -392,8 +392,6 @@ install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 %endif
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
-mkdir -p %{buildroot}/%{_var}/log/daos_server
-mkdir -p %{buildroot}/%{_var}/log/daos_client
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
 sed -i -e '1s/env //' %{buildroot}%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
@@ -410,6 +408,12 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
+# Ensure %{buildroot}/%{_var}/log/daos exists
+if [ ! -d %{buildroot}/%{_var}/log/daos ]; then
+    mkdir -p %{buildroot}/%{_var}/log/daos
+    chown daos_server.daos_daemons %{buildroot}/%{_var}/log/daos
+    chmod 775 %{buildroot}/%{_var}/log/daos
+fi
 
 %post server
 %{?run_ldconfig}
@@ -431,6 +435,11 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
+# Ensure %{buildroot}/%{_var}/log/daos exists
+if [ ! -d %{buildroot}/%{_var}/log/daos ]; then
+    mkdir -p %{buildroot}/%{_var}/log/daos
+    chmod 775 %{buildroot}/%{_var}/log/daos
+fi
 
 %post client
 %systemd_post %{agent_svc_name}
