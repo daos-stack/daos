@@ -2053,3 +2053,29 @@ crt_req_origin_addr_get(crt_rpc_t *rpc_pub)
 	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
 	return crt_rpc_priv_get_origin_addr(rpc_priv);
 }
+
+char *
+crt_bulk_origin_addr_get(struct crt_bulk_desc *bulk_desc)
+{
+	struct crt_bulk    *crt_bulk = bulk_desc->bd_remote_hdl;
+	struct crt_context *crt_ctx  = bulk_desc->bd_rpc->cr_ctx;
+	char                addr[48];
+	hg_size_t           addr_size = 48;
+	int                 rc;
+
+	if (crt_bulk->bulk_orig_uri != NULL)
+		return crt_bulk->bulk_orig_uri;
+
+	rc = HG_Addr_to_string(crt_ctx->cc_hg_ctx.chc_hgcla, addr, (hg_size_t *)&addr_size,
+			       HG_Bulk_get_addr(crt_bulk->hg_bulk_hdl));
+	if (rc != 0)
+		return "NONE";
+
+	D_ALLOC(crt_bulk->bulk_orig_uri, addr_size);
+	if (crt_bulk->bulk_orig_uri == NULL)
+		return "NOMEM";
+
+	memcpy(crt_bulk->bulk_orig_uri, addr, addr_size);
+
+	return crt_bulk->bulk_orig_uri;
+}
