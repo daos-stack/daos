@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,6 +42,10 @@ func (hlc HLC) String() string {
 
 func (hlc HLC) ToTime() time.Time {
 	return time.Unix(0, hlc.Nanoseconds())
+}
+
+func (hlc HLC) IsZero() bool {
+	return hlc == 0 || hlc.String() == ZeroHLCDate
 }
 
 func (hlc HLC) MarshalJSON() ([]byte, error) {

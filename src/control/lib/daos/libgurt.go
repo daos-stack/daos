@@ -1,4 +1,6 @@
 //
+// (C) Copyright 2025 Google LLC
+//
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 //go:build !test_stubs
