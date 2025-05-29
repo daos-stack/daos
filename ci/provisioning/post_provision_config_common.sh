@@ -34,8 +34,8 @@ fi
 # shellcheck disable=SC2034
 EXCLUDE_UPGRADE=mercury,daos,daos-\*
 if rpm -qa | grep mlnx; then
-    # packages not to allow upgrading if MLNX OFED is installed
-    EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*,\*ucx\*
+    # packages not to allow upgrading if DOCA OFED is installed
+    EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*,\*doca\*,\*ucx\*
 fi
 case "$ID_LIKE" in
     *rhel*)

@@ -35,8 +35,8 @@ distro_custom() {
 }
 
 install_mofed() {
-    if [ -z "$MLNX_VER_NUM" ]; then
-        echo "MLNX_VER_NUM is not set"
+    if [ -z "$DOCA_OFED_VER_NUM" ]; then
+        echo "DOCA_VER_NUM is not set"
         env
         exit 1
     fi
@@ -67,7 +67,7 @@ install_mofed() {
     fi
 
     # Add a repo to install Mellanox_OFED RPMS
-    : "${ARTIFACTORY_URL:=https://artifactory.dc.hpdd.intel.com/artifactory/}"
+    : "${ARTIFACTORY_URL:=https://artifactory.daos.hpc.amslabs.hpecorp.net/artifactory/}"
     # Temporary fix
     if  [[ ${ARTIFACTORY_URL} != *"/artifactory" ]]; then
         ARTIFACTORY_URL="${ARTIFACTORY_URL}artifactory"
@@ -75,12 +75,12 @@ install_mofed() {
     mellanox_proxy="${ARTIFACTORY_URL}/mellanox-proxy/mlnx_ofed/"
     mellanox_key_url="${ARTIFACTORY_URL}/mlnx_ofed/RPM-GPG-KEY-Mellanox"
     rpm --import "$mellanox_key_url"
-    repo_url="$mellanox_proxy$MLNX_VER_NUM/rhel$gversion/x86_64/"
+    repo_url="$mellanox_proxy$DOCA_OFED_VER_NUM/rhel$gversion/x86_64/"
     dnf -y config-manager --add-repo="$repo_url"
     dnf -y config-manager --save --setopt="$(url_to_repo "$repo_url")".gpgcheck=1
     dnf repolist || true
 
-    time dnf -y install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem
+    time dnf -y install doca-ofed
 
     # now, upgrade firmware
     time dnf -y install mlnx-fw-updater
@@ -93,7 +93,7 @@ install_mofed() {
         dnf remove -y perftest || true
     fi
     if $stream; then
-        dnf list --showduplicates ucx-knem
+     dnf list --showduplicates ucx-knem
         dnf remove -y ucx-knem || true
     fi
 
