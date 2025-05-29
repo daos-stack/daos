@@ -68,6 +68,14 @@
    ...
 }
 {
+   dlerror_run leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dlerror_run
+   ...
+}
+{
    _dl_fixup leak
    Memcheck:Leak
    match-leak-kinds: reachable
