@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,8 +33,8 @@ const (
 	defaultFiPort         = 31416
 	defaultFiPortInterval = 1000
 	defaultTargetCount    = 16
-	defaultEngineLogFile  = "/tmp/daos_engine"
-	defaultControlLogFile = "/tmp/daos_server.log"
+	defaultEngineLogFile  = "/var/log/daos/daos_engine"
+	defaultControlLogFile = "/var/log/daos/daos_server.log"
 	minNrSSDs             = 1
 	minDMABuffer          = 1024
 	numaCoreUsage         = 0.8 // fraction of numa cores to use for targets

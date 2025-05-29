@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -246,9 +247,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVMD(true).    // vmd enabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
 		WithControlLogMask(common.ControlLogLevelError).
-		WithControlLogFile("/tmp/daos_server.log").
-		WithHelperLogFile("/tmp/daos_server_helper.log").
-		WithFirmwareHelperLogFile("/tmp/daos_firmware_helper.log").
+		WithControlLogFile("/var/log/daos/daos_server.log").
+		WithHelperLogFile("/var/log/daos/daos_server_helper.log").
+		WithFirmwareHelperLogFile("/var/log/daos/daos_firmware_helper.log").
 		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
@@ -289,7 +290,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithPinnedNumaNode(0).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
-			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogFile("/var/log/daos/daos_engine.0.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAutoFaultyCriteria(true, 100, 200),
@@ -316,7 +317,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithCrtTimeout(30).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
-			WithLogFile("/tmp/daos_engine.1.log").
+			WithLogFile("/var/log/daos/daos_engine.1.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAutoFaultyCriteria(false, 0, 0),
@@ -419,7 +420,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 		WithControlMetadata(storage.ControlMetadata{
 			Path: "/var/daos/config",
 		}).
-		WithControlLogFile("/tmp/daos_server.log").
+		WithControlLogFile("/var/log/daos/daos_server.log").
 		WithTelemetryPort(9191).
 		WithFabricProvider("ofi+tcp").
 		WithMgmtSvcReplicas("example1", "example2", "example3")
@@ -452,7 +453,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+tcp").
 			WithPinnedNumaNode(0).
 			WithEnvVars("FI_SOCKETS_CONN_TIMEOUT=2000", "FI_SOCKETS_MAX_CONN_RETRY=1").
-			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogFile("/var/log/daos/daos_engine.0.log").
 			WithLogMask("INFO"),
 	}
 
