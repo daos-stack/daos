@@ -651,6 +651,8 @@ enum daos_io_flags {
 	DIOF_FOR_FORCE_DEGRADE = 0x400,
 	/* reverse enumeration for recx */
 	DIOF_RECX_REVERSE = 0x800,
+	/* For data consistency verification. */
+	DIOF_FOR_DATA_VERIFICATION = 0x1000,
 };
 
 /**
