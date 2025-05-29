@@ -242,7 +242,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithDisableVMD(true).    // vmd enabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
-		WithDisableClientFirewallMode(false).
+		WithClientFirewallMode(true).
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_server_helper.log").

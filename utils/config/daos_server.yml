@@ -122,8 +122,8 @@
 ## for servers to establish TCP connections to clients.
 ## NB: Has no effect on non-TCP configurations.
 #
-## default: true
-#disable_client_firewall_mode: false
+## default: false
+#client_behind_firewall: true
 #
 #
 ## CART: Fabric authorization key

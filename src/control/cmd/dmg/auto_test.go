@@ -594,7 +594,7 @@ disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 core_dump_filter: 19
-disable_client_firewall_mode: true
+client_behind_firewall: false
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+verbs

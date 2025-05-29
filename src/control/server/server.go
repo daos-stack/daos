@@ -417,8 +417,8 @@ func (srv *server) setupGrpc() error {
 	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
 	for i, p := range providers {
 		clientFirewallMode := false
-		if srv.cfg.DisableClientFirewallMode != nil {
-			clientFirewallMode = !(*srv.cfg.DisableClientFirewallMode)
+		if srv.cfg.ClientFirewallMode != nil {
+			clientFirewallMode = *srv.cfg.ClientFirewallMode
 		}
 
 		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
