@@ -871,6 +871,8 @@ func MockServerCfg(provider string, ecs []*engine.Config) *config.Server {
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider(provider).
 		WithDisableVMD(false).
+		WithDisableHotplug(false).
+		WithMgmtSvcReplicas(fmt.Sprintf("localhost:%d", build.DefaultControlPort)).
 		WithEngines(ecs...)
 }
 
