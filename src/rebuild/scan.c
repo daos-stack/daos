@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -127,6 +128,13 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		    rc != -DER_OVERLOAD_RETRY && rc != -DER_AGAIN &&
 		    !daos_crt_network_error(rc)))
 			break;
+
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			rc = -DER_SHUTDOWN;
+			DL_INFO(rc, DF_RB ": give up ds_object_migrate_send, shutdown rebuild",
+				DP_RB_RPT(rpt));
+			break;
+		}
 
 		/* otherwise let's retry */
 		D_DEBUG(DB_REBUILD, DF_UUID" retry send object to tgt_id %d\n",
@@ -391,14 +399,15 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 
 #define LOCAL_ARRAY_SIZE	128
 #define NUM_SHARDS_STEP_INCREASE	64
+
+#define SCAN_YIELD_CNT                  128
 /* The structure for scan per xstream */
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
 	struct cont_props		co_props;
 	int				snapshot_cnt;
-	uint32_t			yield_freq;
-	int32_t				obj_yield_cnt;
+	int32_t                          yield_cnt;
 	struct ds_cont_child		*cont_child;
 };
 
@@ -670,6 +679,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	unsigned int			*shards = NULL;
 	struct daos_oclass_attr		*oc_attr;
 	uint32_t			grp_size;
+	uint32_t                         grp_nr;
 	int				rebuild_nr = 0;
 	d_rank_t			myrank;
 	int				i;
@@ -698,6 +708,9 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	grp_size = daos_oclass_grp_size(oc_attr);
+	grp_nr   = daos_obj_id2grp_nr(oid.id_pub);
+	/* appropriate yield based on shard number */
+	arg->yield_cnt -= roundup(grp_size * grp_nr, 128) / 128;
 
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
@@ -764,7 +777,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		if (rc)
 			D_GOTO(out, rc);
 
-		arg->obj_yield_cnt--;
+		arg->yield_cnt--;
 	}
 
 out:
@@ -777,14 +790,12 @@ out:
 	if (map != NULL)
 		pl_map_decref(map);
 
-	if (--arg->yield_freq == 0 || arg->obj_yield_cnt <= 0) {
+	if (--arg->yield_cnt <= 0) {
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild yield: %d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
-		arg->yield_freq = SCAN_YIELD_FREQ;
-		arg->obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
+		arg->yield_cnt = SCAN_YIELD_CNT;
 		if (rc == 0)
 			dss_sleep(0);
-		*acts |= VOS_ITER_CB_YIELD;
 	}
 
 	return rc;
@@ -857,6 +868,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc) {
 		D_ERROR("Container "DF_UUID", ds_cont_fetch_snaps failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		if (rc == -DER_CONT_NONEXIST) {
+			DL_ERROR(rc, DF_CONT " skip orphan container",
+				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+			rc = 0;
+		}
 		D_GOTO(close, rc);
 	}
 
@@ -864,6 +880,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc) {
 		D_ERROR("Container "DF_UUID", ds_cont_get_props failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		if (rc == -DER_CONT_NONEXIST) {
+			DL_ERROR(rc, DF_CONT " skip orphan container",
+				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+			rc = 0;
+		}
 		D_GOTO(close, rc);
 	}
 
@@ -1019,8 +1040,7 @@ rebuild_scanner(void *data)
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	arg.rpt = rpt;
-	arg.yield_freq = SCAN_YIELD_FREQ;
-	arg.obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
+	arg.yield_cnt  = SCAN_YIELD_CNT;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 rebuild_container_scan_cb, NULL, &arg, NULL);
 	if (rc < 0)
@@ -1122,7 +1142,7 @@ void
 rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
-	struct rebuild_scan_out		*ro;
+	struct rebuild_scan_out         *rso;
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	int				 rc;
@@ -1273,9 +1293,9 @@ out:
 			rpt_delete(rpt);
 		rpt_put(rpt);
 	}
-	ro = crt_reply_get(rpc);
-	ro->rso_status = rc;
-	ro->rso_stable_epoch = d_hlc_get();
+	rso                   = crt_reply_get(rpc);
+	rso->rso_status       = rc;
+	rso->rso_stable_epoch = d_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
 
