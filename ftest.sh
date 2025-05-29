@@ -1,7 +1,7 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2016-2022 Intel Corporation.
-#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+#  * Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 #  */
@@ -113,6 +113,7 @@ args="${1:-quick}"
 shift || true
 args+=" $*"
 
+_HTTPS_PROXY=${HTTPS_PROXY:-}
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
@@ -128,6 +129,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      LAUNCH_OPT_ARGS=\"$LAUNCH_OPT_ARGS\"
      WITH_VALGRIND=\"$WITH_VALGRIND\"
      STAGE_NAME=\"$STAGE_NAME\"
+     HTTPS_PROXY=\"$_HTTPS_PROXY\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
     if ${SETUP_ONLY:-false}; then
