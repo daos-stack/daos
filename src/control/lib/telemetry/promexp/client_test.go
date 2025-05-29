@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -151,15 +152,14 @@ func TestPromExp_NewClientCollector(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			parent := test.MustLogContext(t, log)
+			parent := test.MustLogContext(t)
 			ctx, cs, err := NewClientSource(parent)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer telemetry.Fini()
+
+			log := logging.FromContext(ctx)
 			result, err := NewClientCollector(ctx, log, cs, tc.opts)
 
 			test.CmpErr(t, tc.expErr, err)

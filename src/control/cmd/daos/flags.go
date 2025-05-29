@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +14,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 /*
@@ -195,7 +198,7 @@ func (f *ConsModeFlag) String() string {
 	case C.DFS_BALANCED:
 		return "balanced"
 	default:
-		return fmt.Sprintf("unknown mode %d", f.Mode)
+		return fmt.Sprintf("unknown mode %d (valid: relaxed, balanced)", f.Mode)
 	}
 }
 
@@ -210,7 +213,7 @@ func (f *ConsModeFlag) UnmarshalFlag(fv string) error {
 	case "balanced":
 		f.Mode = C.DFS_BALANCED
 	default:
-		return errors.Errorf("unknown consistency mode %q", fv)
+		return errors.Errorf("unknown consistency mode %q (valid: relaxed, balanced)", fv)
 	}
 
 	f.Set = true
@@ -219,14 +222,11 @@ func (f *ConsModeFlag) UnmarshalFlag(fv string) error {
 
 type ContTypeFlag struct {
 	Set  bool
-	Type C.ushort
+	Type daos.ContainerLayout
 }
 
 func (f *ContTypeFlag) String() string {
-	cTypeStr := [16]C.char{}
-	C.daos_unparse_ctype(f.Type, &cTypeStr[0])
-
-	return C.GoString(&cTypeStr[0])
+	return f.Type.String()
 }
 
 func (f *ContTypeFlag) UnmarshalFlag(fv string) error {
@@ -234,12 +234,8 @@ func (f *ContTypeFlag) UnmarshalFlag(fv string) error {
 		return errors.New("empty container type")
 	}
 
-	cTypeStr := C.CString(strings.ToUpper(fv))
-	defer freeString(cTypeStr)
-
-	C.daos_parse_ctype(cTypeStr, &f.Type)
-	if f.Type == C.DAOS_PROP_CO_LAYOUT_UNKNOWN {
-		return errors.Errorf("unknown container type %q", fv)
+	if err := f.Type.FromString(fv); err != nil {
+		return err
 	}
 
 	f.Set = true
