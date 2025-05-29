@@ -1,0 +1,703 @@
+From aae6e11503d804847b0c4d6219bdf46b39717d07 Mon Sep 17 00:00:00 2001
+From: Jinshan Xiong <jinshanx@google.com>
+Date: Mon, 31 Mar 2025 11:29:47 -0700
+Subject: [PATCH] prov/tcp: firewall support
+
+Combined patch for the PRs: #10912, #10922, #10949, #10955
+from upstream.
+
+Signed-off-by: Jinshan Xiong <jinshanx@google.com>
+---
+ include/ofi_util.h         |  5 +-
+ include/rdma/fabric.h      |  1 +
+ include/rdma/fi_endpoint.h |  1 +
+ include/rdma/fi_errno.h    |  1 +
+ man/fi_av.3.md             | 10 ++++
+ man/fi_errno.3.md          |  3 ++
+ prov/rxm/src/rxm_conn.c    |  5 +-
+ prov/tcp/src/xnet.h        |  9 ++++
+ prov/tcp/src/xnet_cm.c     |  8 ----
+ prov/tcp/src/xnet_ep.c     |  4 +-
+ prov/tcp/src/xnet_init.c   |  4 ++
+ prov/tcp/src/xnet_rdm.c    |  8 ++++
+ prov/tcp/src/xnet_rdm_cm.c | 96 +++++++++++++++++++++++++++-----------
+ prov/util/src/rxm_av.c     | 61 +++++++++++++-----------
+ prov/util/src/util_av.c    |  2 +-
+ src/fabric.c               |  1 +
+ 16 files changed, 152 insertions(+), 67 deletions(-)
+
+diff --git a/include/ofi_util.h b/include/ofi_util.h
+index 62c5615c3..8dd871864 100644
+--- a/include/ofi_util.h
++++ b/include/ofi_util.h
+@@ -925,9 +925,12 @@ struct util_peer_addr {
+ 	int index;
+ 	int refcnt;
+ 	union ofi_sock_ip addr;
++	char str_addr[OFI_ADDRSTRLEN];
++	bool firewall_addr;
+ };
+ 
+-struct util_peer_addr *util_get_peer(struct rxm_av *av, const void *addr);
++struct util_peer_addr *util_get_peer(struct rxm_av *av, const void *addr,
++				     uint64_t flags);
+ void util_put_peer(struct util_peer_addr *peer);
+ 
+ /* All peer addresses, whether they've been inserted into the AV
+diff --git a/include/rdma/fabric.h b/include/rdma/fabric.h
+index 874564f94..f44aebb53 100644
+--- a/include/rdma/fabric.h
++++ b/include/rdma/fabric.h
+@@ -163,6 +163,7 @@ typedef struct fid *fid_t;
+ #define FI_PEER_TRANSFER	(1ULL << 36)
+ #define FI_MR_DMABUF		(1ULL << 40)
+ #define FI_AV_USER_ID		(1ULL << 41)
++#define FI_FIREWALL_ADDR	(1ULL << 42)
+ #define FI_PEER			(1ULL << 43)
+ /* #define FI_XPU_TRIGGER		(1ULL << 44) */
+ #define FI_HMEM_HOST_ALLOC	(1ULL << 45)
+diff --git a/include/rdma/fi_endpoint.h b/include/rdma/fi_endpoint.h
+index d01ca770f..99e7b1550 100644
+--- a/include/rdma/fi_endpoint.h
++++ b/include/rdma/fi_endpoint.h
+@@ -78,6 +78,7 @@ enum {
+ 	FI_OPT_INJECT_TAGGED_SIZE,	/* size_t */
+ 	FI_OPT_INJECT_RMA_SIZE,		/* size_t */
+ 	FI_OPT_INJECT_ATOMIC_SIZE,	/* size_t */
++	FI_OPT_FIREWALL_ADDR,           /* bool */
+ };
+ 
+ /*
+diff --git a/include/rdma/fi_errno.h b/include/rdma/fi_errno.h
+index f5af121ec..9ae416d49 100644
+--- a/include/rdma/fi_errno.h
++++ b/include/rdma/fi_errno.h
+@@ -195,6 +195,7 @@ enum {
+ 	FI_EOVERRUN	 = 268, /* Queue has been overrun */
+ 	FI_ENORX	 = 269, /* Receiver not ready, no receive buffers available */
+ 	FI_ENOMR	 = 270, /* No more memory registrations available */
++	FI_EFIREWALLADDR = 271, /* Host unreachable because it is behind firewall */
+ 	FI_ERRNO_MAX
+ };
+ 
+diff --git a/man/fi_av.3.md b/man/fi_av.3.md
+index 9e606a411..65573a6da 100644
+--- a/man/fi_av.3.md
++++ b/man/fi_av.3.md
+@@ -428,6 +428,16 @@ fi_av_set_user_id.
+ 
+   See the user ID section below.
+ 
++- *FI_FIREWALL_ADDR*
++: This flag indicates that the address is behind a firewall and outgoing
++  connections are not allowed. If there is not an existing connection and the
++  provider is unable to circumvent the firewall, an FI_EFIREWALLADDR error
++  should be expected. If multiple addresses are being inserted simultaneously,
++  the flag applies to all of them. Additionally, it is possible that a
++  connection is available at insertion time, but is later torn down. Future
++  reconnects triggered by operations on the ep (fi_send, for example) may also
++  fail with the same error.
++
+ ## fi_av_insertsvc
+ 
+ The fi_av_insertsvc call behaves similar to fi_av_insert, but allows the
+diff --git a/man/fi_errno.3.md b/man/fi_errno.3.md
+index 476fbce6c..110100131 100644
+--- a/man/fi_errno.3.md
++++ b/man/fi_errno.3.md
+@@ -187,6 +187,9 @@ const char *fi_strerror(int errno);
+ *FI_ENOMR*
+ : Memory registration limit exceeded
+ 
++*FI_EFIREWALLADDR*
++: Host address unreachable due to firewall
++
+ # SEE ALSO
+ 
+ [`fabric`(7)](fabric.7.html)
+diff --git a/prov/rxm/src/rxm_conn.c b/prov/rxm/src/rxm_conn.c
+index afe603234..4b1b7627a 100644
+--- a/prov/rxm/src/rxm_conn.c
++++ b/prov/rxm/src/rxm_conn.c
+@@ -463,6 +463,9 @@ ssize_t rxm_get_conn(struct rxm_ep *ep, fi_addr_t addr, struct rxm_conn **conn)
+ 		return 0;
+ 	}
+ 
++	if ((*peer)->firewall_addr)
++		return -FI_EFIREWALLADDR;
++
+ 	ret = rxm_connect(*conn);
+ 
+ 	/* If the progress function encounters an error trying to establish
+@@ -660,7 +663,7 @@ rxm_process_connreq(struct rxm_ep *ep, struct rxm_eq_cm_entry *cm_entry)
+ 	ofi_addr_set_port(&peer_addr.sa, cm_entry->data.connect.port);
+ 
+ 	av = container_of(ep->util_ep.av, struct rxm_av, util_av);
+-	peer = util_get_peer(av, &peer_addr);
++	peer = util_get_peer(av, &peer_addr, 0);
+ 	if (!peer) {
+ 		RXM_WARN_ERR(FI_LOG_EP_CTRL, "util_get_peer", -FI_ENOMEM);
+ 		goto reject;
+diff --git a/prov/tcp/src/xnet.h b/prov/tcp/src/xnet.h
+index 6d2cbe029..42f89549a 100644
+--- a/prov/tcp/src/xnet.h
++++ b/prov/tcp/src/xnet.h
+@@ -119,6 +119,8 @@ extern int xnet_max_saved;
+ extern size_t xnet_max_saved_size;
+ extern size_t xnet_max_inject;
+ extern size_t xnet_buf_size;
++extern int xnet_firewall_addr;
++
+ struct xnet_xfer_entry;
+ struct xnet_ep;
+ struct xnet_rdm;
+@@ -269,6 +271,13 @@ struct xnet_ep {
+ 	xnet_profile_t *profile;
+ };
+ 
++/* Must be castable to struct fi_eq_cm_entry */
++struct xnet_cm_entry {
++	fid_t fid;
++	struct fi_info *info;
++	uint8_t data[XNET_MAX_CM_DATA_SIZE];
++};
++
+ struct xnet_event {
+ 	struct slist_entry list_entry;
+ 	struct xnet_rdm *rdm;
+diff --git a/prov/tcp/src/xnet_cm.c b/prov/tcp/src/xnet_cm.c
+index 1ae35d27d..c7b250b6e 100644
+--- a/prov/tcp/src/xnet_cm.c
++++ b/prov/tcp/src/xnet_cm.c
+@@ -38,14 +38,6 @@
+ #include <sys/types.h>
+ #include <ofi_util.h>
+ 
+-
+-/* Must be castable to struct fi_eq_cm_entry */
+-struct xnet_cm_entry {
+-	fid_t			fid;
+-	struct fi_info		*info;
+-	uint8_t			data[XNET_MAX_CM_DATA_SIZE];
+-};
+-
+ /* The underlying socket has the POLLIN event set.  The entire
+  * CM message should be readable, as it fits within a single MTU
+  * and is the first data transferred over the socket.
+diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
+index 3fc566b7d..829bd2c6e 100644
+--- a/prov/tcp/src/xnet_ep.c
++++ b/prov/tcp/src/xnet_ep.c
+@@ -272,7 +272,7 @@ xnet_ep_accept(struct fid_ep *ep_fid, const void *param, size_t paramlen)
+ 	struct xnet_progress *progress;
+ 	struct xnet_ep *ep;
+ 	struct xnet_conn_handle *conn;
+-	struct fi_eq_cm_entry cm_entry;
++	struct xnet_cm_entry cm_entry;
+ 	int ret;
+ 
+ 	FI_DBG(&xnet_prov, FI_LOG_EP_CTRL, "accepting endpoint connection\n");
+@@ -313,6 +313,8 @@ xnet_ep_accept(struct fid_ep *ep_fid, const void *param, size_t paramlen)
+ 
+ 	cm_entry.fid = &ep->util_ep.ep_fid.fid;
+ 	cm_entry.info = NULL;
++	if (paramlen)
++		memcpy(cm_entry.data, param, paramlen);
+ 	ret = xnet_eq_write(ep->util_ep.eq, FI_CONNECTED, &cm_entry,
+ 			    sizeof(cm_entry), 0);
+ 	if (ret < 0) {
+diff --git a/prov/tcp/src/xnet_init.c b/prov/tcp/src/xnet_init.c
+index 90f1bc96c..349113584 100644
+--- a/prov/tcp/src/xnet_init.c
++++ b/prov/tcp/src/xnet_init.c
+@@ -79,6 +79,7 @@ int xnet_max_saved = 64;
+ size_t xnet_max_inject = XNET_DEF_INJECT;
+ size_t xnet_buf_size = XNET_DEF_BUF_SIZE;
+ size_t xnet_max_saved_size = SIZE_MAX;
++int xnet_firewall_addr = 0;
+ 
+ 
+ static void xnet_init_env(void)
+@@ -194,6 +195,9 @@ static void xnet_init_env(void)
+ 			"Enable io_uring support if available (default: %d)", xnet_io_uring);
+ 	fi_param_get_bool(&xnet_prov, "io_uring",
+ 			 &xnet_io_uring);
++
++	fi_param_define(&xnet_prov, "firewall_addr", FI_PARAM_BOOL, "if this node is behind firewall");
++	fi_param_get_bool(&xnet_prov, "firewall_addr", &xnet_firewall_addr);
+ }
+ 
+ static void xnet_fini(void)
+diff --git a/prov/tcp/src/xnet_rdm.c b/prov/tcp/src/xnet_rdm.c
+index 346aeab9a..6f8b4a55c 100644
+--- a/prov/tcp/src/xnet_rdm.c
++++ b/prov/tcp/src/xnet_rdm.c
+@@ -653,6 +653,14 @@ static int xnet_rdm_getopt(struct fid *fid, int level, int optname,
+ 		*((size_t *) optval) = rdm->srx->min_multi_recv_size;
+ 		*optlen = sizeof(size_t);
+ 		break;
++	case FI_OPT_FIREWALL_ADDR:
++		if (*optlen < sizeof(int)) {
++			*optlen = sizeof(int);
++			return -FI_ETOOSMALL;
++		}
++		*((int *) optval) = xnet_firewall_addr;
++		*optlen = sizeof(int);
++		break;
+ 	default:
+ 		return -FI_ENOPROTOOPT;
+ 	}
+diff --git a/prov/tcp/src/xnet_rdm_cm.c b/prov/tcp/src/xnet_rdm_cm.c
+index 4dfc96650..85ec6f587 100644
+--- a/prov/tcp/src/xnet_rdm_cm.c
++++ b/prov/tcp/src/xnet_rdm_cm.c
+@@ -30,14 +30,13 @@
+  * SOFTWARE.
+  */
+ 
++#include <poll.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <poll.h>
+ 
++#include "xnet.h"
+ #include <ofi.h>
+ #include <ofi_util.h>
+-#include "xnet.h"
+-
+ 
+ /* Include cm_msg with connect() data.  If the connection is accepted,
+  * return the version.  The returned version must be <= the requested
+@@ -46,11 +45,20 @@
+  */
+ struct xnet_rdm_cm {
+ 	uint8_t version;
+-	uint8_t resv;
++	uint8_t features;
+ 	uint16_t port;
+ 	uint32_t pid;
+ };
+ 
++/*
++ * RDM feature flag xnet_rdm_cm::features, bit wised.
++ */
++enum {
++	XNET_RDM_FIREWALL_ADDR = 1 << 0,
++	XNET_RDM_RESERVED = 1 << 7,
++};
++#define XNET_RDM_FEATURES (XNET_RDM_FIREWALL_ADDR)
++
+ static int xnet_match_event(struct slist_entry *item, const void *arg)
+ {
+ 	struct xnet_event *event;
+@@ -108,40 +116,44 @@ static int xnet_bind_conn(struct xnet_rdm *rdm, struct xnet_ep *ep)
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = fi_ep_bind(&ep->util_ep.ep_fid,
+-			 &rdm->util_ep.rx_cq->cq_fid.fid, FI_RECV);
++	ret = fi_ep_bind(&ep->util_ep.ep_fid, &rdm->util_ep.rx_cq->cq_fid.fid,
++			 FI_RECV);
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = fi_ep_bind(&ep->util_ep.ep_fid,
+-			 &rdm->util_ep.tx_cq->cq_fid.fid, FI_SEND);
++	ret = fi_ep_bind(&ep->util_ep.ep_fid, &rdm->util_ep.tx_cq->cq_fid.fid,
++			 FI_SEND);
+ 	if (ret)
+ 		return ret;
+ 
+ 	if (rdm->util_ep.cntrs[CNTR_RX]) {
+ 		ret = fi_ep_bind(&ep->util_ep.ep_fid,
+-				 &rdm->util_ep.cntrs[CNTR_RX]->cntr_fid.fid, FI_RECV);
++				 &rdm->util_ep.cntrs[CNTR_RX]->cntr_fid.fid,
++				 FI_RECV);
+ 		if (ret)
+ 			return ret;
+ 	}
+ 
+ 	if (rdm->util_ep.cntrs[CNTR_TX]) {
+ 		ret = fi_ep_bind(&ep->util_ep.ep_fid,
+-				 &rdm->util_ep.cntrs[CNTR_TX]->cntr_fid.fid, FI_SEND);
++				 &rdm->util_ep.cntrs[CNTR_TX]->cntr_fid.fid,
++				 FI_SEND);
+ 		if (ret)
+ 			return ret;
+ 	}
+ 
+ 	if (rdm->util_ep.cntrs[CNTR_RD]) {
+ 		ret = fi_ep_bind(&ep->util_ep.ep_fid,
+-				 &rdm->util_ep.cntrs[CNTR_RD]->cntr_fid.fid, FI_READ);
++				 &rdm->util_ep.cntrs[CNTR_RD]->cntr_fid.fid,
++				 FI_READ);
+ 		if (ret)
+ 			return ret;
+ 	}
+ 
+ 	if (rdm->util_ep.cntrs[CNTR_WR]) {
+ 		ret = fi_ep_bind(&ep->util_ep.ep_fid,
+-				 &rdm->util_ep.cntrs[CNTR_WR]->cntr_fid.fid, FI_WRITE);
++				 &rdm->util_ep.cntrs[CNTR_WR]->cntr_fid.fid,
++				 FI_WRITE);
+ 		if (ret)
+ 			return ret;
+ 	}
+@@ -166,7 +178,6 @@ static int xnet_bind_conn(struct xnet_rdm *rdm, struct xnet_ep *ep)
+ 	ep->util_ep.tx_op_flags = rdm->util_ep.tx_op_flags;
+ 	ep->util_ep.rx_op_flags = rdm->util_ep.rx_op_flags;
+ 
+-
+ 	return 0;
+ }
+ 
+@@ -227,14 +238,15 @@ static int xnet_rdm_connect(struct xnet_conn *conn)
+ 
+ 	msg.version = XNET_RDM_VERSION;
+ 	msg.pid = htonl((uint32_t) getpid());
+-	msg.resv = 0;
++	msg.features = xnet_firewall_addr ? XNET_RDM_FIREWALL_ADDR : 0;
+ 	msg.port = htons(ofi_addr_get_port(&conn->rdm->addr.sa));
+ 
+-	ofi_straddr_dbg(&xnet_prov, FI_LOG_EP_CTRL, "rdm addr", &conn->rdm->addr);
++	ofi_straddr_dbg(&xnet_prov, FI_LOG_EP_CTRL, "rdm addr",
++			&conn->rdm->addr);
+ 	ofi_straddr_dbg(&xnet_prov, FI_LOG_EP_CTRL, "src addr", info->src_addr);
+ 
+-	ret = fi_connect(&conn->ep->util_ep.ep_fid, info->dest_addr,
+-			 &msg, sizeof msg);
++	ret = fi_connect(&conn->ep->util_ep.ep_fid, info->dest_addr, &msg,
++			 sizeof msg);
+ 	if (ret) {
+ 		XNET_WARN_ERR(FI_LOG_EP_CTRL, "fi_connect", ret);
+ 		goto err;
+@@ -294,8 +306,8 @@ void xnet_freeall_conns(struct xnet_rdm *rdm)
+ 	}
+ }
+ 
+-static struct xnet_conn *
+-xnet_alloc_conn(struct xnet_rdm *rdm, struct util_peer_addr *peer)
++static struct xnet_conn *xnet_alloc_conn(struct xnet_rdm *rdm,
++					 struct util_peer_addr *peer)
+ {
+ 	struct xnet_conn *conn;
+ 	struct rxm_av *av;
+@@ -317,8 +329,8 @@ xnet_alloc_conn(struct xnet_rdm *rdm, struct util_peer_addr *peer)
+ 	return conn;
+ }
+ 
+-static struct xnet_conn *
+-xnet_add_conn(struct xnet_rdm *rdm, struct util_peer_addr *peer)
++static struct xnet_conn *xnet_add_conn(struct xnet_rdm *rdm,
++				       struct util_peer_addr *peer)
+ {
+ 	struct xnet_conn *conn;
+ 
+@@ -358,6 +370,14 @@ ssize_t xnet_get_conn(struct xnet_rdm *rdm, fi_addr_t addr,
+ 		return -FI_ENOMEM;
+ 
+ 	if (!(*conn)->ep) {
++		if ((*peer)->firewall_addr) {
++			FI_WARN(&xnet_prov, FI_LOG_EP_CTRL,
++				"warn: peer %s is behind firewall\n",
++				(*peer)->str_addr);
++
++			return -FI_EFIREWALLADDR;
++		}
++
+ 		ret = xnet_rdm_connect(*conn);
+ 		if (ret)
+ 			return ret;
+@@ -426,6 +446,7 @@ static void xnet_process_connreq(struct fi_eq_cm_entry *cm_entry)
+ 	struct util_peer_addr *peer;
+ 	struct xnet_conn *conn;
+ 	struct rxm_av *av;
++	uint64_t flags;
+ 	int ret, cmp;
+ 
+ 	assert(cm_entry->fid->fclass == FI_CLASS_PEP);
+@@ -437,8 +458,9 @@ static void xnet_process_connreq(struct fi_eq_cm_entry *cm_entry)
+ 	       cm_entry->info->dest_addrlen);
+ 	ofi_addr_set_port(&peer_addr.sa, ntohs(msg->port));
+ 
++	flags = (msg->features & XNET_RDM_FIREWALL_ADDR) ? FI_FIREWALL_ADDR : 0;
+ 	av = container_of(rdm->util_ep.av, struct rxm_av, util_av);
+-	peer = util_get_peer(av, &peer_addr);
++	peer = util_get_peer(av, &peer_addr, flags);
+ 	if (!peer) {
+ 		XNET_WARN_ERR(FI_LOG_EP_CTRL, "util_get_peer", -FI_ENOMEM);
+ 		goto reject;
+@@ -487,7 +509,8 @@ static void xnet_process_connreq(struct fi_eq_cm_entry *cm_entry)
+ 		 * CONNREQ event.  The peer has already accepted the current
+ 		 * connection.
+ 		 */
+-		if (!conn->remote_pid || (conn->remote_pid == ntohl(msg->pid))) {
++		if (!conn->remote_pid ||
++		    (conn->remote_pid == ntohl(msg->pid))) {
+ 			FI_INFO(&xnet_prov, FI_LOG_EP_CTRL,
+ 				"simultaneous, reject peer\n");
+ 			goto put;
+@@ -512,6 +535,13 @@ accept:
+ 	if (ret)
+ 		goto free;
+ 
++	if ((msg->features & ~XNET_RDM_FEATURES) != 0) {
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL,
++			"peer: %s requested unsupported features: %x\n",
++			peer->str_addr, msg->features & ~XNET_RDM_FEATURES);
++	}
++	msg->features &= XNET_RDM_FEATURES;
++
+ 	msg->pid = htonl((uint32_t) getpid());
+ 	xnet_set_rdm_version(msg);
+ 	xnet_set_protocol(conn->ep, msg);
+@@ -535,11 +565,24 @@ reject:
+ 	fi_freeinfo(cm_entry->info);
+ }
+ 
++static void xnet_process_connected(struct fi_eq_cm_entry *cm_entry)
++{
++	struct xnet_conn *conn;
++	struct xnet_rdm_cm *msg;
++
++	conn = cm_entry->fid->context;
++	msg = (struct xnet_rdm_cm *) cm_entry->data;
++	conn->remote_pid = ntohl(msg->pid);
++	xnet_set_protocol(conn->ep, msg);
++
++	FI_INFO(&xnet_prov, FI_LOG_EP_CTRL, "peer %s feature supported: %x\n",
++		conn->peer->str_addr, msg->features);
++}
++
+ void xnet_handle_event_list(struct xnet_progress *progress)
+ {
+ 	struct xnet_event *event;
+ 	struct slist_entry *item;
+-	struct xnet_rdm_cm *msg;
+ 	struct xnet_conn *conn;
+ 
+ 	assert(ofi_genlock_held(&progress->rdm_lock));
+@@ -555,10 +598,7 @@ void xnet_handle_event_list(struct xnet_progress *progress)
+ 			xnet_process_connreq(&event->cm_entry);
+ 			break;
+ 		case FI_CONNECTED:
+-			conn = event->cm_entry.fid->context;
+-			msg = (struct xnet_rdm_cm *) event->cm_entry.data;
+-			conn->remote_pid = ntohl(msg->pid);
+-			xnet_set_protocol(conn->ep, msg);
++			xnet_process_connected(&event->cm_entry);
+ 			break;
+ 		case FI_SHUTDOWN:
+ 			conn = event->cm_entry.fid->context;
+diff --git a/prov/util/src/rxm_av.c b/prov/util/src/rxm_av.c
+index a921b3f09..4d9f0d3f4 100644
+--- a/prov/util/src/rxm_av.c
++++ b/prov/util/src/rxm_av.c
+@@ -33,7 +33,6 @@
+ #include "ofi_util.h"
+ #include "uthash.h"
+ 
+-
+ size_t rxm_av_max_peers(struct rxm_av *av)
+ {
+ 	size_t cnt;
+@@ -62,12 +61,13 @@ void rxm_av_free_conn(struct rxm_av *av, void *conn_ctx)
+ 
+ static int rxm_addr_compare(struct ofi_rbmap *map, void *key, void *data)
+ {
+-	return memcmp(&((struct util_peer_addr *) data)->addr, key,
++	return memcmp(
++		&((struct util_peer_addr *) data)->addr, key,
+ 		container_of(map, struct rxm_av, addr_map)->util_av.addrlen);
+ }
+ 
+-static struct util_peer_addr *
+-rxm_alloc_peer(struct rxm_av *av, const void *addr)
++static struct util_peer_addr *rxm_alloc_peer(struct rxm_av *av,
++					     const void *addr)
+ {
+ 	struct util_peer_addr *peer;
+ 
+@@ -81,6 +81,11 @@ rxm_alloc_peer(struct rxm_av *av, const void *addr)
+ 	peer->fi_addr = FI_ADDR_NOTAVAIL;
+ 	peer->refcnt = 1;
+ 	memcpy(&peer->addr, addr, av->util_av.addrlen);
++	peer->firewall_addr = false;
++
++	size_t len = sizeof(peer->str_addr);
++	(void) av->util_av.av_fid.ops->straddr(&av->util_av.av_fid, addr,
++					       peer->str_addr, &len);
+ 
+ 	if (ofi_rbmap_insert(&av->addr_map, &peer->addr, peer, &peer->node)) {
+ 		ofi_ibuf_free(peer);
+@@ -98,8 +103,8 @@ static void rxm_free_peer(struct util_peer_addr *peer)
+ 	ofi_ibuf_free(peer);
+ }
+ 
+-struct util_peer_addr *
+-util_get_peer(struct rxm_av *av, const void *addr)
++struct util_peer_addr *util_get_peer(struct rxm_av *av, const void *addr,
++				     uint64_t flags)
+ {
+ 	struct util_peer_addr *peer;
+ 	struct ofi_rbnode *node;
+@@ -113,6 +118,9 @@ util_get_peer(struct rxm_av *av, const void *addr)
+ 		peer = rxm_alloc_peer(av, addr);
+ 	}
+ 
++	if (peer)
++		peer->firewall_addr |= !!(flags & FI_FIREWALL_ADDR);
++
+ 	ofi_mutex_unlock(&av->util_av.lock);
+ 	return peer;
+ }
+@@ -141,9 +149,8 @@ void rxm_ref_peer(struct util_peer_addr *peer)
+ 	ofi_mutex_unlock(&peer->av->util_av.lock);
+ }
+ 
+-static void
+-rxm_set_av_context(struct rxm_av *av, fi_addr_t fi_addr,
+-		   struct util_peer_addr *peer)
++static void rxm_set_av_context(struct rxm_av *av, fi_addr_t fi_addr,
++			       struct util_peer_addr *peer)
+ {
+ 	struct util_peer_addr **peer_ctx;
+ 
+@@ -151,8 +158,7 @@ rxm_set_av_context(struct rxm_av *av, fi_addr_t fi_addr,
+ 	*peer_ctx = peer;
+ }
+ 
+-static void
+-rxm_put_peer_addr(struct rxm_av *av, fi_addr_t fi_addr)
++static void rxm_put_peer_addr(struct rxm_av *av, fi_addr_t fi_addr)
+ {
+ 	struct util_peer_addr **peer;
+ 
+@@ -165,7 +171,7 @@ rxm_put_peer_addr(struct rxm_av *av, fi_addr_t fi_addr)
+ 
+ static int
+ rxm_av_add_peers(struct rxm_av *av, const void *addr, size_t count,
+-		 fi_addr_t *fi_addr)
++		 fi_addr_t *fi_addr, uint64_t flags)
+ {
+ 	struct util_peer_addr *peer;
+ 	const void *cur_addr;
+@@ -174,7 +180,7 @@ rxm_av_add_peers(struct rxm_av *av, const void *addr, size_t count,
+ 
+ 	for (i = 0; i < count; i++) {
+ 		cur_addr = ((char *) addr + i * av->util_av.addrlen);
+-		peer = util_get_peer(av, cur_addr);
++		peer = util_get_peer(av, cur_addr, flags);
+ 		if (!peer)
+ 			goto err;
+ 
+@@ -193,8 +199,8 @@ err:
+ 			cur_fi_addr = fi_addr[i];
+ 		} else {
+ 			cur_addr = ((char *) addr + i * av->util_av.addrlen);
+-			cur_fi_addr = ofi_av_lookup_fi_addr(&av->util_av,
+-							    cur_addr);
++			cur_fi_addr =
++				ofi_av_lookup_fi_addr(&av->util_av, cur_addr);
+ 		}
+ 		if (cur_fi_addr != FI_ADDR_NOTAVAIL) {
+ 			ofi_mutex_lock(&av->util_av.lock);
+@@ -228,8 +234,8 @@ static int rxm_av_remove(struct fid_av *av_fid, fi_addr_t *fi_addr,
+ 	 */
+ 	ofi_mutex_lock(&av->util_av.lock);
+ 	for (i = count - 1; i >= 0; i--) {
+-		FI_INFO(av->util_av.prov, FI_LOG_AV,
+-			"fi_addr %" PRIu64 "\n", fi_addr[i]);
++		FI_INFO(av->util_av.prov, FI_LOG_AV, "fi_addr %" PRIu64 "\n",
++			fi_addr[i]);
+ 		av_entry = ofi_bufpool_get_ibuf(av->util_av.av_entry_pool,
+ 						fi_addr[i]);
+ 		if (!av_entry)
+@@ -286,7 +292,7 @@ static int rxm_av_insert(struct fid_av *av_fid, const void *addr, size_t count,
+ 	if (!av->util_av.eq)
+ 		count = ret;
+ 
+-	ret = rxm_av_add_peers(av, addr, count, fi_addr);
++	ret = rxm_av_add_peers(av, addr, count, fi_addr, flags);
+ 	if (ret) {
+ 		/* If insert was async, ofi_ip_av_insert() will have written
+ 		 * an event to the EQ with the number of insertions.  For
+@@ -330,7 +336,7 @@ static int rxm_av_insertsym(struct fid_av *av_fid, const char *node,
+ 	if (ret > 0 && ret < count)
+ 		count = ret;
+ 
+-	ret = rxm_av_add_peers(av, addr, count, fi_addr);
++	ret = rxm_av_add_peers(av, addr, count, fi_addr, flags);
+ 	if (ret) {
+ 		/* See comment in rxm_av_insert. */
+ 		rxm_av_remove(av_fid, fi_addr, count, flags);
+@@ -344,23 +350,24 @@ static int rxm_av_insertsym(struct fid_av *av_fid, const char *node,
+ int rxm_av_insertsvc(struct fid_av *av, const char *node, const char *service,
+ 		     fi_addr_t *fi_addr, uint64_t flags, void *context)
+ {
+-	return rxm_av_insertsym(av, node, 1, service, 1, fi_addr, flags, context);
++	return rxm_av_insertsym(av, node, 1, service, 1, fi_addr, flags,
++				context);
+ }
+ 
+-static const char *
+-rxm_av_straddr(struct fid_av *av_fid, const void *addr, char *buf, size_t *len)
++static const char *rxm_av_straddr(struct fid_av *av_fid, const void *addr,
++				  char *buf, size_t *len)
+ {
+ 	return ofi_ip_av_straddr(av_fid, addr, buf, len);
+ }
+ 
+-int rxm_av_lookup(struct fid_av *av_fid, fi_addr_t fi_addr,
+-		  void *addr, size_t *addrlen)
++int rxm_av_lookup(struct fid_av *av_fid, fi_addr_t fi_addr, void *addr,
++		  size_t *addrlen)
+ {
+ 	return ofi_ip_av_lookup(av_fid, fi_addr, addr, addrlen);
+ }
+ 
+ int rxm_av_set(struct fid_av *av_fid, struct fi_av_set_attr *attr,
+-               struct fid_av_set **av_set_fid, void *context)
++	       struct fid_av_set **av_set_fid, void *context)
+ {
+ 	struct rxm_av *rxm_av;
+ 
+@@ -428,8 +435,8 @@ int rxm_util_av_open(struct fid_domain *domain_fid, struct fi_av_attr *attr,
+ 		return -FI_ENOMEM;
+ 
+ 	ret = ofi_bufpool_create(&av->peer_pool, sizeof(struct util_peer_addr),
+-				 0, 0, 0, OFI_BUFPOOL_INDEXED |
+-				 OFI_BUFPOOL_NO_TRACK);
++				 0, 0, 0,
++				 OFI_BUFPOOL_INDEXED | OFI_BUFPOOL_NO_TRACK);
+ 	if (ret)
+ 		goto free;
+ 
+diff --git a/prov/util/src/util_av.c b/prov/util/src/util_av.c
+index 46c6216c3..6a3522825 100644
+--- a/prov/util/src/util_av.c
++++ b/prov/util/src/util_av.c
+@@ -270,7 +270,7 @@ int ofi_verify_av_insert(struct util_av *av, uint64_t flags, void *context)
+ 		}
+ 	}
+ 
+-	if (flags & ~(FI_MORE | FI_SYNC_ERR)) {
++	if (flags & ~(FI_MORE | FI_SYNC_ERR | FI_FIREWALL_ADDR)) {
+ 		FI_WARN(av->prov, FI_LOG_AV, "unsupported flags\n");
+ 		return -FI_EBADFLAGS;
+ 	}
+diff --git a/src/fabric.c b/src/fabric.c
+index 1d890ed16..7226fdabc 100644
+--- a/src/fabric.c
++++ b/src/fabric.c
+@@ -1633,6 +1633,7 @@ static const char *const errstr[] = {
+ 	[FI_EOVERRUN - FI_ERRNO_OFFSET] = "Queue has been overrun",
+ 	[FI_ENORX - FI_ERRNO_OFFSET] = "Receiver not ready, no receive buffers available",
+ 	[FI_ENOMR - FI_ERRNO_OFFSET] = "Memory registration limit exceeded",
++	[FI_EFIREWALLADDR - FI_ERRNO_OFFSET] = "Host unreacheable due to firewall",
+ };
+ 
+ __attribute__((visibility ("default"),EXTERNALLY_VISIBLE))
+-- 
+2.43.5
+
