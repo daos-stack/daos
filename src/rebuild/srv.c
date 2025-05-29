@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -793,7 +794,8 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		struct rebuild_task *task;
 
 		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
-			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
+			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0 &&
+			    task->dst_schedule_time != (uint64_t)(-1)) {
 				status->rs_state = DRS_IN_PROGRESS;
 				D_GOTO(out, rc);
 			}
