@@ -586,6 +586,12 @@ ds_mgmt_init()
 	if (rc != 0)
 		return rc;
 
+	rc = ds_mgmt_pbl_create();
+	if (rc != 0) {
+		ds_mgmt_system_module_fini();
+		return rc;
+	}
+
 	D_DEBUG(DB_MGMT, "successful init call\n");
 	return 0;
 }
@@ -593,8 +599,8 @@ ds_mgmt_init()
 static int
 ds_mgmt_fini()
 {
+	ds_mgmt_pbl_destroy();
 	ds_mgmt_system_module_fini();
-
 	D_DEBUG(DB_MGMT, "successful fini call\n");
 	return 0;
 }
