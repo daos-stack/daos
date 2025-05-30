@@ -76,3 +76,98 @@ out:
 		d_rank_list_free(ranks);
 	return rc;
 }
+
+static struct d_uuid *pool_blacklist;
+static int            pool_blacklist_len;
+
+static int
+pbl_append(char *uuid_str)
+{
+	uuid_t         uuid;
+	struct d_uuid *p;
+	int            rc;
+
+	rc = uuid_parse(uuid_str, uuid);
+	if (rc != 0)
+		return -DER_INVAL;
+
+	/* Grow pool_blacklist by one element. */
+	D_REALLOC_ARRAY(p, pool_blacklist, pool_blacklist_len, pool_blacklist_len + 1);
+	if (p == NULL)
+		return -DER_NOMEM;
+	pool_blacklist = p;
+	pool_blacklist_len++;
+
+	uuid_copy(pool_blacklist[pool_blacklist_len - 1].uuid, uuid);
+	return 0;
+}
+
+int
+ds_mgmt_pbl_create(void)
+{
+	char *name = "DAOS_POOL_BLACKLIST";
+	char *value;
+	char *uuid_str;
+	char *c;
+	int   rc;
+
+	rc = d_agetenv_str(&value, name);
+	if (rc == -DER_NONEXIST)
+		return 0;
+	else if (rc != 0)
+		return rc;
+
+	/* Parse the comma-separated UUID strings in value. */
+	uuid_str = value;
+	c        = value;
+	for (;;) {
+		bool eov = false;
+
+		/*
+		 * If c points to ',', we are at the end of uuid_str; if c
+		 * points to '\0', we are not only at the end of uuid_str but
+		 * also at the end of value.
+		 */
+		if (*c == ',')
+			*c = '\0';
+		else if (*c == '\0')
+			eov = true;
+
+		/* If we are at the end of uuid_str, append it to pool_blacklist. */
+		if (*c == '\0') {
+			rc = pbl_append(uuid_str);
+			if (rc != 0) {
+				DL_ERROR(rc, "failed to parse pool UUID in %s: '%s'", name,
+					 uuid_str);
+				break;
+			}
+			/* If we are also at the end of value, the work is finished. */
+			if (eov)
+				break;
+			uuid_str = c + 1;
+		}
+
+		c++;
+	}
+
+	d_freeenv_str(&value);
+	return rc;
+}
+
+bool
+ds_mgmt_pbl_has_pool(uuid_t uuid)
+{
+	int i;
+
+	for (i = 0; i < pool_blacklist_len; i++)
+		if (uuid_compare(pool_blacklist[i].uuid, uuid) == 0)
+			return true;
+	return false;
+}
+
+void
+ds_mgmt_pbl_destroy(void)
+{
+	D_FREE(pool_blacklist);
+	pool_blacklist_len = 0;
+}
