@@ -8,7 +8,7 @@ mgmt_svc_replicas: ['example1', 'example2', 'example3']
 # port: 10001
 provider: ofi+tcp
 control_log_mask: DEBUG
-control_log_file: /tmp/daos_server.log
+control_log_file: /var/log/daos/daos_server.log
 
 telemetry_port: 9191
 
@@ -35,7 +35,7 @@ engines:
     fabric_iface: eth0
     fabric_iface_port: 31316
     log_mask: ERR
-    log_file: /tmp/daos_engine.0.log
+    log_file: /var/log/daos/daos_engine.0.log
 
     # Environment variable values should be supplied without encapsulating quotes.
     env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
@@ -67,7 +67,7 @@ engines:
     fabric_iface: eth1
     fabric_iface_port: 31416
     log_mask: ERR
-    log_file: /tmp/daos_engine.1.log
+    log_file: /var/log/daos/daos_engine.1.log
 
     env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
       - FI_SOCKETS_MAX_CONN_RETRY=1

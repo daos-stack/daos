@@ -1,3 +1,19 @@
+daos (2.7.101-10) unstable; urgency=medium
+  [ Samirkumar Raval ]
+  * Changing the default log location to /var/log/daos from /tmp
+
+ -- Samirkumar Raval <samirkumar.raval@hpe.com>  Thu, 29 May 2025 10:00:00 +0000
+
+daos (2.7.101-9) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * Bump lua-lmod version to >=8.7.36
+  * Bump lmod version to >=8.7.36
+  * Bump mpich version to 4.1~a1
+  * Bump python3-mpi4py-tests version to >= 3.1.6
+  * Add openmpi requiremnent for daos-client-tests on Leap.
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com> Mon, 12 May 2025 12:00:00 +0200
+
 daos (2.7.101-8) unstable; urgency=medium
   [ Cedric Koch-Hofer]
   * Add support of the libasan
