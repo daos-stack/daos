@@ -113,8 +113,10 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		int i;
 
 		D_ALLOC_ARRAY(ret_hdl->iovs, sgl->sg_nr);
-		if (ret_hdl->iovs == NULL)
+		if (ret_hdl->iovs == NULL) {
+			D_FREE(ret_hdl);
 			D_GOTO(out, rc = -DER_NOMEM);
+		}
 		for (i = 0; i < sgl->sg_nr; i++)
 			ret_hdl->iovs[i] = sgl->sg_iovs[i];
 		ret_hdl->sgl.sg_nr     = sgl->sg_nr;
