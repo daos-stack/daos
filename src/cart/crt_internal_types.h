@@ -238,6 +238,7 @@ struct crt_event_cb_priv {
 	ENV(D_QUOTA_RPCS)                                                                          \
 	ENV(D_QUOTA_BULKS)                                                                         \
 	ENV(FI_OFI_RXM_USE_SRX)                                                                    \
+	ENV(FI_TCP_FIREWALL_ADDR)                                                                  \
 	ENV(FI_UNIVERSE_SIZE)                                                                      \
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
 	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -281,7 +282,7 @@ typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
 		  uint64_t *remote_offs, uint8_t *skips, daos_handle_t ioh, d_sg_list_t **sgls,
-		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg);
+		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg, bool check_conn);
 int obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count);
 int obj_tgt_query(struct obj_tgt_query_args *otqa, uuid_t po_uuid, uuid_t co_hdl, uuid_t co_uuid,
 		  daos_unit_oid_t oid, daos_epoch_t epoch, daos_epoch_t epoch_first,
