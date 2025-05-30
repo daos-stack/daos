@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -212,7 +213,8 @@ extern "C" {
 	ACTION(DER_DIV_BY_ZERO,	Division by zero)						   \
 	/** Target is overload, retry RPC */							   \
 	ACTION(DER_OVERLOAD_RETRY, "retry later because of overloaded service")			   \
-	ACTION(DER_NOT_RESUME, Cannot resume former DAOS check instance)
+	ACTION(DER_NOT_RESUME, Cannot resume former DAOS check instance)			   \
+	ACTION(DER_CONT_NONEXIST, The specified container does not exist)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
