@@ -158,6 +158,29 @@ ilog_persist(daos_handle_t loh, const struct ilog_id *id);
 int
 ilog_abort(daos_handle_t loh, const struct ilog_id *id);
 
+/** Validate the provided ilog.
+ *
+ * Note: It is designed for catastrophic recovery. Not to perform at run-time.
+ *
+ * \param	loh[in]		Open log handle
+ * \param	log_id[in]	Identifier for log entry
+ *
+ * \return true if ilog is valid.
+ **/
+bool
+ilog_is_valid(daos_handle_t loh, struct ilog_id *log_id);
+
+/** Replace TX local ID for specified ilog entry
+ *
+ *  \param	loh[in]		Open log handle
+ *  \param	log_id[in]	Identifier for log entry
+ *  \param	tx_id[in]	New TX LID for the log entry
+ *
+ *  \return 0 on success, error code on failure
+ */
+int
+ilog_entry_replace(daos_handle_t loh, struct ilog_id *log_id, uint32_t tx_id);
+
 /** Incarnation log entry description */
 struct ilog_entry {
 	/** The epoch and tx_id for the log entry */
@@ -319,19 +342,5 @@ ilog_is_punch(const struct ilog_entry *entry)
 	return entry->ie_id.id_punch_minor_eph >
 		entry->ie_id.id_update_minor_eph;
 }
-
-/** Validate the provided ilog.
- *
- * Note: It is designed for catastrophic recovery. Not to perform at run-time.
- *
- * \param	umm[in]		unified memory class instance
- * \param	rec[in]		offset of the ilog
- * \param	dtx_lid[in]	expected local DTX id
- * \param	epoch[in]	expected epoch
- *
- * \return true if ilog is valid.
- **/
-bool
-ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch);
 
 #endif /* __ILOG_H__ */

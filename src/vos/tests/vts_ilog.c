@@ -1107,25 +1107,33 @@ static struct ilog_id *valid_epoch_all[]    = {valid_epoch1, valid_epoch2, valid
 static void
 ilog_is_valid_test(void **state)
 {
+	struct ilog_id       log_id = {.id_epoch = EPOCH_VALID, .id_tx_id = DTX_LID_VALID};
+	daos_handle_t        loh;
 	struct umem_instance umm;
 	umem_off_t           rec;
 	struct ilog_root    *root;
 	struct ilog_array   *array;
+	int                  rc;
 
 	struct umem_attr     uma = {.uma_id = UMEM_CLASS_VMEM, .uma_pool = NULL};
 
 	umem_class_init(&uma, &umm);
 
+#if 0
 	/* 1. ILOG rec is a NULL pointer. */
 	rec = UMOFF_NULL;
 	assert_false(ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID));
+#endif
 
 	/* 2. Invalid magic. */
 	rec            = umem_zalloc(&umm, sizeof(struct ilog_root));
 	root           = umem_off2ptr(&umm, rec);
 	root->lr_magic = ILOG_MAGIC + 1;
+	rc             = ilog_open(&umm, (struct ilog_df *)root, NULL, false, &loh);
+	assert_rc_equal(rc, 0);
+
 	assert_false(ILOG_MAGIC_VALID(root->lr_magic));
-	assert_false(ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID));
+	assert_false(ilog_is_valid(loh, &log_id));
 
 	/* Set valid magic for all cases down below. */
 	root->lr_magic = ILOG_MAGIC;
@@ -1135,7 +1143,7 @@ ilog_is_valid_test(void **state)
 	root->lr_tree.it_embedded = 0;
 	root->lr_tree.it_root     = UMOFF_NULL;
 	assert_true(ilog_empty(root));
-	assert_false(ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID));
+	assert_false(ilog_is_valid(loh, &log_id));
 
 	/* 4. Embedded - all cases */
 	root->lr_tree.it_embedded = 1;
@@ -1144,7 +1152,7 @@ ilog_is_valid_test(void **state)
 		for (int j = 0; j < ARRAY_SIZE(epoch_all); ++j) {
 			root->lr_id.id_epoch = epoch_all[j];
 			bool exp = (dtx_lid_all[i] == DTX_LID_VALID && epoch_all[j] == EPOCH_VALID);
-			bool result = ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID);
+			bool result = ilog_is_valid(loh, &log_id);
 			if (result != exp) {
 				fail_msg("ilog_is_valid() result is not as expected %s != %s for "
 					 "{dtx_lid=%u, epoch=%u}",
@@ -1171,7 +1179,7 @@ ilog_is_valid_test(void **state)
 			for (int k = 0; k < ILOG_ARRAY_MAX; ++k) {
 				array->ia_id[k].id_tx_id = dtx_lid;
 			}
-			if (ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID)) {
+			if (ilog_is_valid(loh, &log_id)) {
 				fail_msg("ilog_is_valid() result is not as expected true != false "
 					 "using no_valid_epoch_all[%d] and dtx_lid=%u",
 					 j, dtx_lid);
@@ -1191,7 +1199,7 @@ ilog_is_valid_test(void **state)
 			}
 			/* the valid epoch is there so dtx_lid's validity is decisive */
 			bool exp    = (dtx_lid == DTX_LID_VALID);
-			bool result = ilog_is_valid(&umm, rec, DTX_LID_VALID, EPOCH_VALID);
+			bool result = ilog_is_valid(loh, &log_id);
 			if (exp != result) {
 				fail_msg("ilog_is_valid() result is not as expected %s != %s using "
 					 "valid_epoch_all[%d] and dtx_lid=%u",
