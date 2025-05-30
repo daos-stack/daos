@@ -39,8 +39,8 @@ func TestDrpc_Hello_Integration(t *testing.T) {
 		},
 		"large message": {
 			method:      MethodGreeting,
-			name:        strings.Repeat("a", drpc.MaxMsgSize),
-			expGreeting: fmt.Sprintf("Hello %s", strings.Repeat("a", drpc.MaxMsgSize)),
+			name:        strings.Repeat("a", drpc.MaxChunkSize),
+			expGreeting: fmt.Sprintf("Hello %s", strings.Repeat("a", drpc.MaxChunkSize)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

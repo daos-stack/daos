@@ -14,9 +14,7 @@
  * Using a packetsocket over the unix domain socket means that we receive
  * a whole message at a time without knowing its size. So for this reason
  * we need to restrict the maximum message size so we can preallocate a
- * buffer to put all of the information in. This value is also defined in
- * the corresponding control plane file drpc_server.go. If changed here
- * it must be changed in that file as well
+ * buffer to put all of the information in.
  */
 #define UNIXCOMM_MAXMSGSIZE (1 << 17)
 
