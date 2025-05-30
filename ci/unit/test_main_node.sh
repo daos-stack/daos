@@ -85,7 +85,8 @@ python3.11 -m venv venv
 # temp cp for debug
 # ls -la /usr/lib64/
 ls -la /opt/daos/lib64/python3.6/site-packages/storage_estimator
-cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib/python3.11/site-packages/
+# cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib/python3.11/site-packages/
+cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib64/python3.11/site-packages/
 
 # shellcheck disable=SC1091
 source venv/bin/activate
