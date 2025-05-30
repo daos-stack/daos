@@ -3,6 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+/* Copyright 2025 Google LLC
  * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
@@ -51,7 +52,7 @@ Map nlt_test() {
                script: "grep -E '<error( |>)' ${filesList.join(' ')} || true",
                returnStdout: true
         if (rcs) {
-            vfail = 1
+            vgfail = 1
         }
         String suite = sanitizedStageName()
         junitSimpleReport suite: suite,
@@ -124,6 +125,10 @@ void fixup_rpmlintrc() {
     }
 
     writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
+}
+
+boolean new_rpms() {
+    return cachedCommitPragma(pragma: "New-RPM", def_val: false)
 }
 
 String vm9_label(String distro) {
@@ -478,7 +483,7 @@ pipeline {
                 stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !new_rpms() }
                     }
                     agent {
                         dockerfile {
@@ -517,7 +522,7 @@ pipeline {
                 stage('Build RPM on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !new_rpms() }
                     }
                     agent {
                         dockerfile {
@@ -555,7 +560,7 @@ pipeline {
                 stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !new_rpms() }
                     }
                     agent {
                         dockerfile {
@@ -656,6 +661,11 @@ pipeline {
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
+                        success {
+                            if (new_rpms()) {
+                                buildRpmPost condition: 'success', rpmlint: false
+                            }
+                        }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
                                       mv config.log config.log-el8-gcc
