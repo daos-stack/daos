@@ -79,9 +79,9 @@ class StartSubcommandTest(RecoveryTestBase):
         if not repair_reports:
             self.fail("Checker didn't detect any inconsistency!")
         fault_msg = repair_reports[0]["msg"]
-        ORPHAN_POOL = "orphan pool"
-        if ORPHAN_POOL not in fault_msg:
-            msg = (f"Checker didn't detect the {ORPHAN_POOL} (1)! Fault msg = "
+        orphan_pool = "orphan pool"
+        if orphan_pool not in fault_msg:
+            msg = (f"Checker didn't detect the {orphan_pool} (1)! Fault msg = "
                    f"{fault_msg}")
             self.fail(msg)
 
@@ -125,8 +125,8 @@ class StartSubcommandTest(RecoveryTestBase):
         if not repair_reports:
             self.fail("Checker didn't detect any inconsistency!")
         fault_msg = repair_reports[0]["msg"]
-        if ORPHAN_POOL not in fault_msg:
-            msg = (f"Checker didn't detect the {ORPHAN_POOL} (2)! Fault msg = "
+        if orphan_pool not in fault_msg:
+            msg = (f"Checker didn't detect the {orphan_pool} (2)! Fault msg = "
                    f"{fault_msg}")
             dmg_command.check_disable()
             self.fail(msg)
