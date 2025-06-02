@@ -83,10 +83,9 @@ rm -rf "$test_log_dir"
 # Use default python as that's where storage_estimator is installed.
 python3.11 -m venv venv
 # temp cp for debug
-# ls -la /usr/lib64/
-ls -la /opt/daos/lib64/python3.6/site-packages/storage_estimator
-# cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib/python3.11/site-packages/
+ls -la /usr/lib64/
 cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib64/python3.11/site-packages/
+cp -r /opt/daos/lib64/daos_srv/libvos_size.so venv/lib64/
 
 # shellcheck disable=SC1091
 source venv/bin/activate
