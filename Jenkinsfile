@@ -131,6 +131,12 @@ boolean new_rpms() {
     return cachedCommitPragma(pragma: "New-RPM", def_val: false)
 }
 
+void uploadNewRPMs() {
+    if (new_rpms()) {
+        buildRpmPost condition: 'success', rpmlint: false
+    }
+}
+
 String vm9_label(String distro) {
     return cachedCommitPragma(pragma: distro + '-VM9-label',
                               def_val: cachedCommitPragma(pragma: 'VM9-label',
@@ -662,9 +668,7 @@ pipeline {
                     }
                     post {
                         success {
-                            if (new_rpms()) {
-                                buildRpmPost condition: 'success', rpmlint: false
-                            }
+                            uploadNewRPMs()
                         }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
