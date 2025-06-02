@@ -128,7 +128,7 @@ void fixup_rpmlintrc() {
 }
 
 boolean new_rpms() {
-    return cachedCommitPragma(pragma: "New-RPM", def_val: false)
+    return cachedCommitPragma(pragma: "New-RPM", def_val: 'false')
 }
 
 void uploadNewRPMs() {
