@@ -7,6 +7,7 @@ import random
 import string
 import subprocess  # nosec
 import sys
+from argparse import ArgumentParser
 from os.path import join
 
 BUILD_FILES = ['site_scons/prereq_tools',
@@ -37,32 +38,27 @@ def set_output(key, value):
 
 def main():
     """Parse git history to load caches for GHA"""
-    # Try and use the right hash key.  For chained PRs on release branches this won't be correct
-    # however most of the time it should be right, and the build should still work on cache miss
-    # although it will take longer.
-    base_ref = os.getenv('GITHUB_BASE_REF', None)
-    if base_ref:
-        # If it's a PR check if it's against a release, if so use it else use master.
-        if base_ref.startswith('release/'):
-            target_branch = base_ref
-        else:
-            target_branch = 'master'
-    else:
-        # If this isn't a PR then it must be a landing build, so simply use the branch name.
-        target_branch = os.getenv('GITHUB_REF_NAME')
+    parser = ArgumentParser()
+    parser.add_argument(
+        '--base-distro',
+        type=str,
+        default=os.getenv('BASE_DISTRO'),
+        help='name of the distro being build default=%(default)s')
+    parser.add_argument(
+        '--base-ref',
+        type=str,
+        default=os.getenv('GITHUB_BASE_REF'),
+        help='base reference default=%(default)s')
+    args = parser.parse_args()
 
-    single = '--single' in sys.argv
+    cmd = ['git', 'rev-list', '--abbrev-commit', '--max-count=1']
 
-    # The base distro, this is the name of the distro being built, and therefore the name of the
-    # hash key, but it may not be the name of the dockerfile.
-    base_distro = os.getenv('BASE_DISTRO', None)
+    if args.base_ref:
+        # Assume this is a PR if we have a base reference.
+        # For non-landing builds, filter out anything older than 1 hour
+        # to reduce the chance of a cache miss if the latest is not pushed yet
+        cmd.append('--until="$(date --date "- 1 hour" +"%D %T")"')
 
-    cmd = ['git', 'rev-list', '--abbrev-commit']
-
-    if single:
-        cmd.append('--max-count=1')
-    else:
-        cmd.append('--max-count=2')
     cmd.extend(['HEAD', '--'])
     cmd.extend(BUILD_FILES)
 
@@ -70,8 +66,8 @@ def main():
     for fname in BUILD_FILES:
         assert os.path.exists(fname)
 
-    if base_distro:
-        docker_distro = os.getenv('DOCKER_BASE', base_distro)
+    if args.base_distro:
+        docker_distro = os.getenv('DOCKER_BASE', args.base_distro)
 
         dockerfile = f'utils/docker/Dockerfile.{docker_distro}'
         assert os.path.exists(dockerfile)
@@ -84,50 +80,24 @@ def main():
         cmd.append(dockerfile)
     else:
         cmd.append('utils/docker')
-        base_distro = ''
+        args.base_distro = ''
 
+    # Imbed the SHA of the latest build changes in the image name.
     rc = subprocess.run(cmd, check=True, capture_output=True)
-    commits = rc.stdout.decode('utf-8').strip()
+    build_sha = rc.stdout.decode('utf-8').strip() or 'unknown'
+    image_name = f'bc-{args.base_distro}-{build_sha}'
+    image_name = image_name.replace(":", "-").replace("/", "-")
+    set_output('image_name', image_name)
 
-    if single:
-        build_hash = commits
+    if args.base_ref:
+        # Assume this is a PR if we have a base reference.
+        # Use the latest tag for PRs
+        set_output('image_tag', 'latest')
     else:
-        lines = commits.splitlines()
-        if len(lines):
-            build_hash = lines.pop(0)
-        else:
-            build_hash = 'unknown'
-
-    if single:
-        # Landings builds, embed the current commit in the hash name, load either the exact commit
-        # or the most recent build with the same build scripts.
+        # Using the current SHA as the tag for landing runs
         rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
         commit_hash = rc.stdout.decode('utf-8').strip()
-
-        key = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}-{{hash}}'
-        set_output('key', key)
-
-        restore = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}'
-        set_output('restore', restore)
-
-        restore_prev = 'bc-{target_branch}-{base_distro}-{build_hash}'
-        set_output('restore_prev', restore_prev)
-
-    else:
-        # PR builds.  Do not embed the current commit in the hash name, load the most recent build
-        # scripts, and fall back to the most recent version of the build script from the last week
-        # or anything if that isn't found.
-        key = f'bc-{target_branch}-{base_distro}-{build_hash}-{{hash}}'
-        set_output('key', key)
-
-        restore = f'bc-{target_branch}-{base_distro}-{build_hash}'
-        set_output('restore', restore)
-
-        if len(lines):
-            restore_prev = f'bc-{target_branch}-{base_distro}-{lines[0]}'
-        else:
-            restore_prev = f'bc-{target_branch}-{base_distro}-'
-        set_output('restore_prev', restore_prev)
+        set_output('image_tag', commit_hash)
 
 
 if __name__ == '__main__':

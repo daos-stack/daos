@@ -2,6 +2,8 @@ name: Unit testing
 
 on:
   pull_request:
+    paths:
+      - fake.foo
 
 permissions: {}
 
