@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,7 +25,7 @@ func printHostStorageMapVerbose(hsm control.HostStorageMap, out io.Writer, opts 
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 		fmt.Fprintf(out, "HugePage Size: %d KB\n\n",
-			hss.HostStorage.MemInfo.HugepageSizeKiB)
+			hss.HostStorage.SysMemInfo.HugepageSizeKiB)
 		if len(hss.HostStorage.ScmNamespaces) == 0 {
 			if err := PrintScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
 				return err
