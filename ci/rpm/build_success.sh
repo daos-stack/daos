@@ -54,4 +54,4 @@ else
   fi)
 fi
 
-creterepo "$artdir"
+createrepo "$artdir"
