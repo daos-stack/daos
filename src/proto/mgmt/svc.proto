@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -91,6 +92,7 @@ message ClientNetHint {
 	int32 srv_srx_set = 7;		// Server SRX setting (-1, 0, 1; -1 == unset)
 	repeated string env_vars = 8;	// Client-side environment variables to set
 	uint32 provider_idx = 9;	// Provider index - anything > 0 is a secondary provider
+	bool            client_firewall_mode = 10; // Client is behind a firewall
 }
 
 message BuildInfo

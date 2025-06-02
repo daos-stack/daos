@@ -188,36 +188,8 @@ void crt_provider_get_ctx_list_and_num(bool primary, crt_provider_t provider, d_
 char* crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx);
 struct crt_na_config*
 crt_provider_get_na_config(bool primary, crt_provider_t provider);
-
-static inline int
-crt_hgret_2_der(int hg_ret)
-{
-	switch (hg_ret) {
-	case HG_SUCCESS:
-		return 0;
-	case HG_TIMEOUT:
-		return -DER_TIMEDOUT;
-	case HG_INVALID_ARG:
-		return -DER_INVAL;
-	case HG_MSGSIZE:
-	case HG_OVERFLOW:
-		return -DER_OVERFLOW;
-	case HG_NOMEM:
-		return -DER_NOMEM;
-	case HG_CANCELED:
-		return -DER_CANCELED;
-	case HG_BUSY:
-		return -DER_BUSY;
-	case HG_FAULT:
-	case HG_PROTOCOL_ERROR:
-		return -DER_HG_FATAL;
-	case HG_PERMISSION:
-	case HG_ACCESS:
-		return -DER_NO_PERM;
-	default:
-		return -DER_HG;
-	};
-}
+int
+crt_hgret_2_der(int hg_ret);
 
 static inline int
 crt_der_2_hgret(int der)

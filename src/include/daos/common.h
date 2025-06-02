@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -700,6 +701,8 @@ daos_quiet_error(int err)
 void
 daos_fail_loc_set(uint64_t id);
 void
+daos_fail_loc_set_private(uint64_t id);
+void
 daos_fail_loc_reset(void);
 void
 daos_fail_value_set(uint64_t val);
@@ -926,6 +929,11 @@ enum {
 #define DAOS_WAL_NO_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x100)
 #define DAOS_WAL_FAIL_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x101)
 #define DAOS_MEM_FAIL_CHECKPOINT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x102)
+
+/* Fault for when the server cannot reach the client */
+#define DAOS_CLIENT_UNREACHABLE          (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x103)
+#define DAOS_CLIENT_UNREACHABLE_CPD_BODY (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x104)
+#define DAOS_FIREWALL_ERROR              (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x105)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
