@@ -19,6 +19,7 @@ dnf --nodocs install \
     clang \
     clang-tools-extra \
     cmake \
+    createrepo \
     CUnit-devel \
     daxctl-devel \
     diffutils \
