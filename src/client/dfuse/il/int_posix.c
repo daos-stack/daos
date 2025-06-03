@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -127,6 +128,9 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 		return 0;
 
 	if (cont->ioc_dfs != NULL) {
+		if (cont->ioc_metrics_enabled)
+			dfs_metrics_fini(cont->ioc_dfs);
+
 		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		rc = dfs_umount(cont->ioc_dfs);
 		if (rc != 0) {
@@ -671,6 +675,11 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 		DFUSE_LOG_WARNING("Failed to use dfs handle: %d (%s)", rc, strerror(rc));
 		D_FREE(iov.iov_buf);
 		return rc;
+	}
+
+	if ((hs_reply.fsr_flags & DFUSE_IOCTL_FLAGS_METRICS) != 0) {
+		cont->ioc_metrics_enabled = true;
+		dfs_metrics_init(cont->ioc_dfs);
 	}
 
 	DFUSE_TRA_UP(cont->ioc_dfs, &ioil_iog, "dfs");

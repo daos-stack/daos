@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +9,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -23,7 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -36,7 +35,6 @@ type testInfoCacheParams struct {
 	disableFabricCache     bool
 	disableAttachInfoCache bool
 	enableClientTelemetry  bool
-	retainClientTelemetry  bool
 	ctlInvoker             control.Invoker
 	cachedItems            []cache.Item
 }
@@ -57,9 +55,6 @@ func newTestInfoCache(t *testing.T, log logging.Logger, params testInfoCachePara
 		client:          params.ctlInvoker,
 		cache:           c,
 	}
-
-	ic.clientTelemetryEnabled.Store(params.enableClientTelemetry)
-	ic.clientTelemetryRetain.Store(params.retainClientTelemetry)
 
 	if ic.netIfaces == nil {
 		ic.netIfaces = func() ([]net.Interface, error) {
@@ -738,14 +733,6 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			NetDevClass: uint32(hardware.Ether),
 		},
 	}
-	telemEnabledResp := copyGetAttachInfoResp(ctlResp)
-	telemEnabledResp.ClientNetHint.EnvVars = append(telemEnabledResp.ClientNetHint.EnvVars,
-		fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
-	)
-	telemRetainedResp := copyGetAttachInfoResp(telemEnabledResp)
-	telemRetainedResp.ClientNetHint.EnvVars = append(telemRetainedResp.ClientNetHint.EnvVars,
-		fmt.Sprintf("%s=1", telemetry.ClientMetricsRetainEnv),
-	)
 
 	for name, tc := range map[string]struct {
 		getInfoCache func(logging.Logger) *InfoCache
@@ -779,40 +766,6 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			remoteErr: errors.New("mock remote"),
 			expErr:    errors.New("mock remote"),
 			expRemote: true,
-		},
-		"cache disabled; client telemetry enabled": {
-			getInfoCache: func(l logging.Logger) *InfoCache {
-				return newTestInfoCache(t, l, testInfoCacheParams{
-					disableAttachInfoCache: true,
-					enableClientTelemetry:  true,
-				})
-			},
-			remoteResp: copyGetAttachInfoResp(ctlResp),
-			expResp:    telemEnabledResp,
-			expRemote:  true,
-		},
-		"cache enabled; client telemetry enabled": {
-			getInfoCache: func(l logging.Logger) *InfoCache {
-				return newTestInfoCache(t, l, testInfoCacheParams{
-					enableClientTelemetry: true,
-				})
-			},
-			remoteResp: copyGetAttachInfoResp(ctlResp),
-			expResp:    telemEnabledResp,
-			expRemote:  true,
-			expCached:  true,
-		},
-		"cache enabled; client telemetry enabled; client telemetry retained": {
-			getInfoCache: func(l logging.Logger) *InfoCache {
-				return newTestInfoCache(t, l, testInfoCacheParams{
-					enableClientTelemetry: true,
-					retainClientTelemetry: true,
-				})
-			},
-			remoteResp: copyGetAttachInfoResp(ctlResp),
-			expResp:    telemRetainedResp,
-			expRemote:  true,
-			expCached:  true,
 		},
 		"enabled but empty": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
