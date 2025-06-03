@@ -72,6 +72,7 @@ COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh utils/scripts/copy_files.sh
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -79,6 +80,7 @@ COPY --chown=daos_server:daos_server utils/build.config utils/
 ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_TARGET_TYPE=release
+ARG DAOS_PACKAGES_BUILD=yes
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -97,6 +99,17 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
               TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
+
+COPY --chown=daos_server:daos_server utils/rpms utils/rpms
+COPY --chown=daos_server:daos_server utils/sl utils/sl
+
+# Build third party RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
+	export DISTRO="el9" &&                                                  \
+	utils/rpms/build_packages.sh deps &&                                    \
+	mkdir -p /home/daos/rpms &&                                             \
+	mv *.rpm /home/daos/rpms;                                               \
+    }
 USER root:root
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
@@ -114,8 +127,11 @@ LABEL DAOS=true
 WORKDIR /home/daos/daos/
 COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
 COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
+COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/config utils/config
+COPY --chown=daos_server:daos_server utils/certs utils/certs
+COPY --chown=daos_server:daos_server utils/completion utils/completion
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -126,10 +142,21 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
-              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+              FIRMWARE_MGMT=1 BUILD_TYPE=$DAOS_BUILD_TYPE                  \
+	      TARGET_TYPE=$DAOS_TARGET_TYPE &&                             \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
         cp -r utils/config/examples /opt/daos;                             \
+    }
+
+COPY --chown=daos_server:daos_server utils utils
+
+# Build DAOS RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
+	export DISTRO="el9" &&                                             \
+	utils/rpms/build_packages.sh daos &&                               \
+	mkdir -p /home/daos/rpms &&                                        \
+	cp *.rpm /home/daos/rpms;                                          \
     }
 
 # Set environment variables
