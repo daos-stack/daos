@@ -657,7 +657,7 @@ fi
 %endif
 
 %changelog
-* Tue June 3 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-11
+* Mon June 2 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-11
 - Changing the default log location to /var/log/daos from /tmp
 
 * Mon May 19 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-10

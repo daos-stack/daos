@@ -2,7 +2,7 @@ daos (2.7.101-11) unstable; urgency=medium
   [ Samirkumar Raval ]
   * Changing the default log location to /var/log/daos from /tmp
 
- -- Samirkumar Raval <samirkumar.raval@hpe.com>  Tue, 3 June 2025 10:00:00 +0000
+ -- Samirkumar Raval <samirkumar.raval@hpe.com>  Mon, 2 June 2025 10:00:00 +0000
 
 daos (2.7.101-10) unstable; urgency=medium
   [ Jeff Olivier ]
@@ -12,7 +12,6 @@ daos (2.7.101-10) unstable; urgency=medium
 
 daos (2.7.101-9) unstable; urgency=medium
   [Tomasz Gromadzki ]
-
   * Changes in rpm spec only
 
  -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com> Mon, 12 May 2025 14:00:00 -0700
