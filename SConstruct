@@ -476,6 +476,7 @@ def scons():
     prereqs.run_build(opts)
 
     if GetOption('build_deps') == 'only':
+        prereqs.save_build_info()
         print('Exiting because --build-deps=only was set')
         Exit(0)
 
