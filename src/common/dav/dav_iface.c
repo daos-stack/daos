@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,6 +62,8 @@ persist_dav_phdr(dav_obj_t *hdl)
 	mo_wal_persist(&hdl->p_ops, hdl->do_phdr, offsetof(struct dav_phdr, dp_unused));
 }
 
+static uint32_t dav_mmap_opt;
+
 static dav_obj_t *
 dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct umem_store *store)
 {
@@ -71,9 +74,40 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	uint64_t   num_pages;
 	int        persist_hdr = 0;
 	int        err         = 0;
+	int        sfd         = fd;
+	int        mflags      = MAP_SHARED;
 	int        rc;
 
-	base = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	if (dav_mmap_opt == 0) {
+		d_getenv_uint("DAOS_MMAP_OPT", &dav_mmap_opt);
+		if (dav_mmap_opt == 0)
+			dav_mmap_opt = 1;
+		D_INFO("DAOS_MMAP_OPT = %u", dav_mmap_opt);
+	}
+	switch (dav_mmap_opt) {
+	case 1:
+		mflags = MAP_SHARED;
+		break;
+	case 2:
+		mflags = MAP_PRIVATE;
+		break;
+	case 3:
+		sfd    = -1;
+		mflags = MAP_PRIVATE | MAP_ANONYMOUS;
+		break;
+	case 4:
+		sfd    = -1;
+		mflags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE;
+		break;
+	case 5:
+		sfd    = -1;
+		mflags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB;
+		break;
+	default:
+		mflags = MAP_SHARED;
+	}
+
+	base = mmap(NULL, sz, PROT_READ | PROT_WRITE, mflags, sfd, 0);
 	if (base == MAP_FAILED) {
 		return NULL;
 	}
