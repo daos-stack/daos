@@ -4,6 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %bcond_without server
+%bcond_without olddaos
 
 %if %{with server}
 %global daos_build_args FIRMWARE_MGMT=yes
@@ -23,13 +24,16 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       10%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
+
+# only use for source rpm with new build
+%if %{with olddaos}
 %if (0%{?rhel} >= 8)
 BuildRequires: python3-scons >= 2.4
 %else
@@ -138,6 +142,7 @@ Requires: openssl
 # suffice
 Requires: mercury >= %{mercury_version}
 
+%endif
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -150,6 +155,7 @@ data protection with self healing on top of commodity hardware, end-
 to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost.
 
+%if %{with olddaos}
 %if %{with server}
 %package server
 Summary: The DAOS server
@@ -648,10 +654,15 @@ fi
 %files mofed-shim
 %doc README.md
 # No files in a shim package
+%endif
 
 %changelog
-* Thu May 29 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-10
+* Tue June 3 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-11
 - Changing the default log location to /var/log/daos from /tmp
+
+* Mon May 19 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-10
+- Start to deprecate this file being used to build DAOS but rather only source
+  RPM
 
 * Mon May 12 2025  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-9
 - Bump lua-lmod version to >=8.7.36

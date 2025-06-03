@@ -23,6 +23,7 @@ dnf --nodocs install \
     daxctl-devel \
     diffutils \
     e2fsprogs \
+    fdupes \
     file \
     flex \
     fuse3 \
@@ -33,6 +34,7 @@ dnf --nodocs install \
     golang \
     graphviz \
     help2man \
+    hdf5-devel \
     hwloc-devel \
     java-1.8.0-openjdk \
     json-c-devel \
@@ -40,7 +42,11 @@ dnf --nodocs install \
     libasan \
     libcmocka-devel \
     libevent-devel \
+    libibverbs-devel \
     libiscsi-devel \
+    libnl3-devel \
+    libpsm2-devel \
+    librdmacm-devel \
     libtool \
     libtool-ltdl-devel \
     libunwind-devel \
@@ -55,6 +61,7 @@ dnf --nodocs install \
     numactl-devel \
     openmpi-devel \
     openssl-devel \
+    pandoc \
     patch \
     patchelf \
     pciutils \
@@ -62,12 +69,20 @@ dnf --nodocs install \
     protobuf-c-devel \
     python3-devel \
     python3-pip \
+    rpm-build \
     sg3_utils \
+    squashfs-tools \
     sudo \
     systemd \
     valgrind-devel \
     which \
     yasm
+
+ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
+dnf --nodocs install \
+    "@ruby:${ruby_version}" \
+    rubygems \
+    rubygem-json
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
@@ -85,3 +100,5 @@ if [ -e /etc/fedora-release ]; then
 else
         dnf install maven
 fi
+
+gem install fpm
