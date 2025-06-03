@@ -216,11 +216,11 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	D_FREE(dae->dae_records);
 	dae->dae_rec_cap = 0;
 	DAE_REC_CNT(dae) = 0;
-	dae->dae_need_release = 0;
 
 	if (!keep_df) {
-		dae->dae_df_off = UMOFF_NULL;
-		dae->dae_dbd = NULL;
+		dae->dae_need_release = 0;
+		dae->dae_df_off       = UMOFF_NULL;
+		dae->dae_dbd          = NULL;
 	}
 }
 
@@ -1254,21 +1254,26 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		  DF_U64 ", boundary " DF_U64 "\n", entry, epoch, cont->vc_solo_dtx_epoch);
 
 	if (intent == DAOS_INTENT_PURGE) {
-		uint64_t	now = daos_gettime_coarse();
+		uint32_t age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
+		uint64_t now;
 
 		/*
-		 * The DTX entry still references related data record,
-		 * then we cannot (vos) aggregate related data record.
-		 * Report warning per each 10 seconds to avoid log flood.
+		 * Don't print warning message for fresh record, since INTENT_PURGE could
+		 * be used for fresh record in normal cases. (see vos_ilog_is_punched()).
 		 */
-		if (now - cont->vc_agg_busy_ts > 10) {
-			D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u) still references "
-			       "the modification, cannot be (VOS) aggregated\n",
-			       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae),
-			       (unsigned int)d_hlc_age2sec(DAE_XID(dae).dti_hlc));
-			cont->vc_agg_busy_ts = now;
-		}
+		if (age <= 10)
+			return ALB_AVAILABLE_DIRTY;
 
+		/* Rate limit on such warning messages */
+		now = daos_gettime_coarse();
+		if (now <= cont->vc_agg_busy_ts + 10)
+			return ALB_AVAILABLE_DIRTY;
+
+		/* VOS aggregation is trying to reclaim data record being referenced by DTX */
+		D_WARN("DTX " DF_DTI " (state:%u, flags:%x, age:%u, type:%u) is still inuse!\n",
+		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae), age, type);
+
+		cont->vc_agg_busy_ts = now;
 		return ALB_AVAILABLE_DIRTY;
 	}
 
@@ -1355,6 +1360,12 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		d_list_for_each_entry(dsp, &dth->dth_share_act_list, dsp_link) {
 			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
 				   sizeof(struct dtx_id)) == 0) {
+				if (dsp->dsp_status == -DER_INPROGRESS)
+					return dtx_inprogress(dae, dth, true, true, 9);
+
+				if (unlikely(dsp->dsp_status != 0))
+					return dsp->dsp_status;
+
 				if (!dtx_is_valid_handle(dth) ||
 				    intent == DAOS_INTENT_IGNORE_NONCOMMITTED)
 					return ALB_UNAVAILABLE;
@@ -1934,9 +1945,6 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (DAE_FLAGS(dae) & DTE_ORPHAN)
 			return -DER_TX_UNCERTAIN;
 
-		if (pm_ver != NULL)
-			*pm_ver = DAE_VER(dae);
-
 		if (dck != NULL) {
 			dck->oid = DAE_OID(dae);
 			dck->dkey_hash = DAE_DKEY_HASH(dae);
@@ -1976,28 +1984,42 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			 */
 			if (!(DAE_FLAGS(dae) & DTE_LEADER))
 				return -DER_INPROGRESS;
+		} else {
+			/* Not committable yet, related RPC handler ULT is still running. */
+			if (dae->dae_dth != NULL)
+				return -DER_INPROGRESS;
 
-			return vos_dae_is_prepare(dae) ? DTX_ST_PREPARED : DTX_ST_INITED;
-		}
+			if (epoch != NULL) {
+				daos_epoch_t e = *epoch;
 
-		/* Not committable yet, related RPC handler ULT is still running. */
-		if (dae->dae_dth != NULL)
-			return -DER_INPROGRESS;
+				*epoch = DAE_EPOCH(dae);
+				if (e != 0) {
+					if (e > DAE_EPOCH(dae))
+						return -DER_MISMATCH;
 
-		if (epoch != NULL) {
-			daos_epoch_t	e = *epoch;
-
-			*epoch = DAE_EPOCH(dae);
-			if (e != 0) {
-				if (e > DAE_EPOCH(dae))
-					return -DER_MISMATCH;
-
-				if (e < DAE_EPOCH(dae))
-					return -DER_TX_RESTART;
+					if (e < DAE_EPOCH(dae))
+						return -DER_TX_RESTART;
+				}
 			}
 		}
 
-		return vos_dae_is_prepare(dae) ? DTX_ST_PREPARED : DTX_ST_INITED;
+		if (!vos_dae_is_prepare(dae))
+			return DTX_ST_INITED;
+
+		if (pm_ver == NULL)
+			return DTX_ST_PREPARED;
+
+		if (*pm_ver <= cont->vc_dtx_resync_ver) {
+			if (!for_refresh)
+				*pm_ver = DAE_VER(dae);
+			return DTX_ST_PREPARED;
+		}
+
+		/*
+		 * Before DTX resync completed, it is not sure whether related DTX is
+		 * committable or not, then have to ask DTX refresh sponsor to retry.
+		 */
+		return -DER_INPROGRESS;
 	}
 
 	if (rc == -DER_NONEXIST) {
@@ -2762,6 +2784,20 @@ cmt:
 				break;
 			}
 		}
+	}
+}
+
+void
+vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver)
+{
+	struct vos_container *cont = vos_hdl2cont(coh);
+
+	D_ASSERT(cont != NULL);
+
+	if (likely(cont->vc_dtx_resync_ver < ver)) {
+		D_INFO("Update resync version %u => %u for container " DF_UUID "\n",
+		       cont->vc_dtx_resync_ver, ver, DP_UUID(cont->vc_id));
+		cont->vc_dtx_resync_ver = ver;
 	}
 }
 
