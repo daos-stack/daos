@@ -749,7 +749,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: prRepos(),
                                      inst_rpms: unitPackages()))
@@ -818,9 +818,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/**/*.log',
-                                                     'unit_test_memcheck_logs/code_coverage'],
+                            unitTestPost artifacts: ['unit_test_memcheck_logs/'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
@@ -836,7 +834,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 180,
+                            unitTest(timeout_time: 250,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -844,9 +842,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
-                                                     'unit_test_memcheck_bdev_logs/**/*.log',
-                                                     'unit_test_memcheck_logs/code_coverage'],
+                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs/'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
                             job_status_update()
                         }
