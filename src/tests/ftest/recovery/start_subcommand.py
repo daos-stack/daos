@@ -1,5 +1,4 @@
 """
-  (C) Copyright 2024 Intel Corporation.
   (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -25,7 +24,7 @@ class StartSubcommandTest(RecoveryTestBase):
     :avocado: recursive
     """
 
-    def test_reset(self):
+    def test_check_start_reset(self):
         """Test dmg check start --reset subcommand.
 
         See the state diagram attached to the ticket.
@@ -48,7 +47,7 @@ class StartSubcommandTest(RecoveryTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=recovery,cat_recov,start_subcommand
+        :avocado: tags=recovery,cat_recov
         :avocado: tags=StartSubcommandTest,test_reset
         """
         # 1. Create a pool.
@@ -106,12 +105,7 @@ class StartSubcommandTest(RecoveryTestBase):
         remove_result = run_remote(
             log=self.log, hosts=self.hostlist_servers, command=command)
         if not remove_result.passed:
-            self.fail(f"Failed to remove {pool_path} from {self.hostlist_servers}")
-        success_nodes = remove_result.passed_hosts
-        if self.hostlist_servers != success_nodes:
-            msg = (f"Failed to remove pool directory! All = {self.hostlist_servers}, "
-                   f"Success = {success_nodes}")
-            self.fail(msg)
+            self.fail(f"Failed to remove {pool_path} from {remove_result.failed_hosts}")
 
         # 7. Start the checker without --reset.
         self.log_step("Start the checker without --reset.")
