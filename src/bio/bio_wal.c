@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1198,14 +1199,26 @@ tx_known_committed(struct wal_super_info *si, uint64_t tx_id)
 	return (wal_id_cmp(si, tx_id, si->si_commit_id) <= 0);
 }
 
+static inline void
+dump_tx_hdr(struct wal_trans_head *hdr, char *msg)
+{
+	D_ERROR("%s: magic:%x, gen:%u, id:" DF_U64 ", ents:%u, payload:%u\n", msg, hdr->th_magic,
+		hdr->th_gen, hdr->th_id, hdr->th_tot_ents, hdr->th_tot_payload);
+}
+
 static int
 verify_tx_hdr(struct wal_super_info *si, struct wal_trans_head *hdr, uint64_t tx_id)
 {
 	bool	committed = tx_known_committed(si, tx_id);
 
 	if (hdr->th_magic != WAL_HDR_MAGIC) {
-		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Mismatched WAL head magic, %x != %x\n",
-			 hdr->th_magic, WAL_HDR_MAGIC);
+		D_CDEBUG(committed, DLOG_ERR, DB_IO,
+			 "Mismatched WAL head magic, %x != %x, "
+			 "tx_id:" DF_U64 ", commit_id:" DF_U64 "/%u, ckp_id:" DF_U64 "/%u\n",
+			 hdr->th_magic, WAL_HDR_MAGIC, tx_id, si->si_commit_id, si->si_commit_blks,
+			 si->si_ckp_id, si->si_ckp_blks);
+		if (committed)
+			dump_tx_hdr(hdr, "Bad tx header");
 		return committed ? -DER_INVAL : 1;
 	}
 
@@ -1235,6 +1248,7 @@ verify_tx_hdr(struct wal_super_info *si, struct wal_trans_head *hdr, uint64_t tx
 		return -DER_INVAL;
 	}
 
+	dump_tx_hdr(hdr, "Good tx header");
 	return 0;
 }
 
@@ -1795,7 +1809,7 @@ out:
 			wrs->wrs_tx_cnt = total_tx;
 		}
 	} else {
-		D_ERROR("WAL replay failed, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("WAL replay failed, " DF_RC ", nr_replayed:%u\n", DP_RC(rc), nr_replayed);
 	}
 
 	D_FREE(dbuf);
