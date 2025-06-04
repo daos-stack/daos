@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -238,15 +239,15 @@ static void
 print_dtx_active_test(void **state)
 {
 	struct dv_dtx_active_entry entry = {
-		.ddtx_id = {.dti_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}, .dti_hlc = 0x1234},
-		.ddtx_handle_time = 12345690,
-		.ddtx_epoch = 99,
-		.ddtx_grp_cnt = 3,
-		.ddtx_ver = 1,
-		.ddtx_rec_cnt = 1,
-		.ddtx_mbs_flags = 1,
-		.ddtx_flags = 0,
-		.ddtx_oid = g_oids[0],
+	    .ddtx_xid = {.dti_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}, .dti_hlc = 0x1234},
+	    .ddtx_handle_time = 12345690,
+	    .ddtx_epoch       = 99,
+	    .ddtx_grp_cnt     = 3,
+	    .ddtx_ver         = 1,
+	    .ddtx_rec_cnt     = 1,
+	    .ddtx_mbs_flags   = 1,
+	    .ddtx_flags       = 0,
+	    .ddtx_oid         = g_oids[0],
 	};
 
 	ddb_print_dtx_active(&g_ctx, &entry);
