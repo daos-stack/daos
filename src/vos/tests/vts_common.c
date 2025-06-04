@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -107,8 +108,8 @@ vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t psize, size_t meta_size)
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, meta_size,
-           0 /* flags */, 0 /* version */, &tcx->tc_po_hdl);
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, (25UL << 30), meta_size,
+			     0 /* flags */, 0 /* version */, &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vpool create %s failed with error : %d\n",
 			    tcx->tc_po_name, rc);
