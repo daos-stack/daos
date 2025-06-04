@@ -854,7 +854,7 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
+                // expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
