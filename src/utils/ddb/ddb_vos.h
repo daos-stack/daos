@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -172,15 +173,18 @@ struct dv_dtx_committed_entry {
 };
 
 struct dv_dtx_active_entry {
-	struct dtx_id	ddtx_id;
-	daos_epoch_t	ddtx_handle_time;
-	daos_epoch_t	ddtx_epoch;
-	uint32_t	ddtx_grp_cnt;
-	uint32_t	ddtx_ver;
-	uint32_t	ddtx_rec_cnt;
-	uint16_t	ddtx_mbs_flags;
-	uint16_t	ddtx_flags;
-	daos_unit_oid_t ddtx_oid;
+	struct dtx_id           ddtx_xid;
+	daos_epoch_t            ddtx_handle_time;
+	daos_epoch_t            ddtx_epoch;
+	uint32_t                ddtx_grp_cnt;
+	uint32_t                ddtx_ver;
+	uint32_t                ddtx_rec_cnt;
+	uint16_t                ddtx_mbs_flags;
+	uint16_t                ddtx_flags;
+	daos_unit_oid_t         ddtx_oid;
+	uint32_t                ddtx_lid;
+	uint32_t                ddtx_tgt_cnt;
+	struct dtx_daos_target *ddtx_ddt;
 };
 
 typedef int (*dv_dtx_cmt_handler)(struct dv_dtx_committed_entry *entry, void *cb_arg);
