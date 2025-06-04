@@ -63,6 +63,9 @@ func (smi *SysMemInfo) Summary() string {
 			nn.HugepagesTotal, nn.HugepagesFree))
 	}
 	msgHuge := strings.Join(msgsHuge, ", ")
+	if msgHuge != "" {
+		msgHuge += ", "
+	}
 
 	return fmt.Sprintf("hugepage size: %s, %smem total/free/available: %s/%s/%s",
 		humanize.IBytes(uint64(smi.HugepageSizeKiB*humanize.KiByte)), msgHuge,

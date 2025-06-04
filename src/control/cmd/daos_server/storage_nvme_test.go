@@ -147,7 +147,8 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 					CleanSpdkLockfilesAny: true,
 				},
 				{
-					// always set in local storage prepare to allow automatic detection
+					// Always set in local storage prepare to allow automatic
+					// detection.
 					EnableVMD: true,
 					HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
 				},
@@ -231,8 +232,9 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				},
 				{
 					EnableVMD: true,
-					// Value matching what already exists to avoid shrinking allocation.
-					HugeNodes: testHugeNodesStr(2048),
+					// No per-NUMA meminfo, revert to legacy hugepage
+					// calculation which results in shrinking the allocation.
+					HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
 				},
 			},
 		},

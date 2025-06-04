@@ -266,43 +266,41 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 // getHugeNodesStr builds HUGENODE string to be used to allocate hugepages through SPDK setup
 // script. For each NUMA node request max(existing, configured) hugepages.
 func getHugeNodesStr(log logging.Logger, perNumaNrWant int, smi *common.SysMemInfo, numaNodes ...int) (string, error) {
-	// Map of NUMA-node to nr_hugepages to set for the node
-	nodeNrs := map[int]int{}
-
 	if len(numaNodes) == 0 {
 		return "", errors.New("no numa-nodes supplied")
 	}
+
+	nodeNrs := make(map[int]int) // How many nr_hugepages to be set for each NUMA-node.
 
 	for _, nID := range numaNodes {
 		if nID < 0 {
 			return "", errors.New("invalid negative numa-node supplied")
 		}
+
+		found := false
 		for _, nn := range smi.NumaNodes {
 			if nn.NumaNodeIndex != nID {
 				continue
 			}
 			// Ensure that if there is already sufficient number allocated then the
-			// script will request the existing number which results in a no-op
-			// rather than increasing or reducing the allocation.
+			// script will request the existing number which results in a no-op.
+			//
 			// FIXME DAOS-16921: SPDK https://review.spdk.io/c/spdk/spdk/+/25831 adds
 			//                   SKIP_HUGE which can be used to simplify this logic.
 			if nn.HugepagesTotal >= perNumaNrWant {
-				nodeNrs[nID] = nn.HugepagesTotal
+				nodeNrs[nID] = nn.HugepagesTotal // Maintain
 			} else {
-				nodeNrs[nID] = perNumaNrWant
+				nodeNrs[nID] = perNumaNrWant // Grow
 			}
+			found = true
+			break
 		}
-	}
 
-	// Handle exception where per-NUMA meminfo is missing.
-	if len(nodeNrs) == 0 {
-		if smi.HugepagesTotal >= perNumaNrWant {
-			nodeNrs[0] = smi.HugepagesTotal
-		} else {
-			nodeNrs[0] = perNumaNrWant
+		// Handle case where per-NUMA meminfo is missing. If not available, fall-back to
+		// legacy behavior where requested number of pages are set for each NUMA.
+		if !found {
+			nodeNrs[nID] = perNumaNrWant
 		}
-		log.Errorf("No per-NUMA meminfo found, allocating %d hugepages on NUMA node 0",
-			nodeNrs[0])
 	}
 
 	nodeNrsKeys := []int{}
@@ -464,12 +462,23 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, smi *common.SysMemInfo
 	}
 	ei.RUnlock()
 
+	// Calculate how many engines exist on each NUMA node.
+	nodes, err := srv.cfg.GetNumaNodes()
+	if err != nil {
+		return errors.Wrap(err, "get engine numa nodes from server config")
+	}
+	enginesPerNuma := len(srv.cfg.Engines) / len(nodes)
+	if enginesPerNuma == 0 {
+		return errors.New("invalid zero engines-per-numa")
+	}
+
 	// Allocate based on per-NUMA hugepages. Fallback to global stats if per-NUMA not available.
 	nrPagesRequired := smi.HugepagesTotal / len(srv.cfg.Engines)
 	nrPagesFree := smi.HugepagesFree
 	for _, nn := range smi.NumaNodes {
 		if nn.NumaNodeIndex == int(ec.Storage.NumaNodeIndex) {
-			nrPagesRequired = nn.HugepagesTotal
+			// Need to divide total pages on NUMA-node by number of engines-per-NUMA.
+			nrPagesRequired = nn.HugepagesTotal / enginesPerNuma
 			nrPagesFree = nn.HugepagesFree
 			break
 		}
