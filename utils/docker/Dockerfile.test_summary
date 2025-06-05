@@ -4,11 +4,19 @@
 # 'recipe' for Docker for test summary.
 #
 
-ARG FVERSION=latest
-FROM fedora:$FVERSION
-# Needed for later use of FVERSION
-ARG FVERSION
+# ARG FVERSION=latest
+# FROM fedora:$FVERSION
+# # Needed for later use of FVERSION
+# ARG FVERSION
+# LABEL maintainer="daos@daos.groups.io"
+
+# Pull base imageAdd commentMore actions
+ARG POINT_RELEASE=
+ARG BASE_DISTRO=rockylinux/rockylinux:8$POINT_RELEASE
+FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
+# Needed for later use of BASE_DISTRO
+ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
