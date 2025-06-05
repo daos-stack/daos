@@ -10,7 +10,7 @@ from recovery_test_base import RecoveryTestBase
 from run_utils import run_remote
 
 
-class StartSubcommandTest(RecoveryTestBase):
+class DMGCheckStartSubcommandTest(RecoveryTestBase):
     """Test dmg check start subcommands.
 
     Subcommand list. (Not all subcommands are tested here.)
@@ -48,7 +48,7 @@ class StartSubcommandTest(RecoveryTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery,cat_recov
-        :avocado: tags=StartSubcommandTest,test_reset
+        :avocado: tags=DMGCheckStartSubcommandTest,test_check_start_reset
         """
         # 1. Create a pool.
         self.log_step("Create a pool")
