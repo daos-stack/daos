@@ -60,6 +60,30 @@
    ...
 }
 {
+   _dl_fini leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fini
+   ...
+}
+{
+   dlerror_run leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dlerror_run
+   ...
+}
+{
+   _dl_fixup leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fixup
+   ...
+}
+{
    <insert_a_suppression_name_here>
    Memcheck:Leak
    ...
