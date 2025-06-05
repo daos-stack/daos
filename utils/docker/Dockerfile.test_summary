@@ -3,7 +3,6 @@
 #
 # 'recipe' for Docker for test summary.
 #
-
 # ARG FVERSION=latest
 # FROM fedora:$FVERSION
 # # Needed for later use of FVERSION
