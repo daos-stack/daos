@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -730,7 +731,7 @@ static uint64_t
 metrics_region_size(int num_tgts)
 {
 	const uint64_t	est_std_metrics = 1024; /* high estimate to allow for pool links */
-	const uint64_t	est_tgt_metrics = 128; /* high estimate */
+	const uint64_t  est_tgt_metrics = 1024; /* high estimate */
 
 	return (est_std_metrics + est_tgt_metrics * num_tgts) * D_TM_METRIC_SIZE;
 }
