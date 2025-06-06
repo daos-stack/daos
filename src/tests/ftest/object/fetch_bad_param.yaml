@@ -1,5 +1,6 @@
 hosts:
   test_servers: 2
+  test_clients: 1
 timeouts:
   test_null_ptrs: 240
 server_config:
