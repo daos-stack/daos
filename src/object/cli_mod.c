@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +25,9 @@
 unsigned int	obj_coll_thd;
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 int		dc_obj_proto_version;
+
+unsigned int    iov_frag_count = IOV_FRAG_COUNT_DEF;
+unsigned int    iov_frag_size  = IOV_FRAG_SIZE_DEF;
 
 static void *
 dc_obj_tls_init(int tags, int xs_id, int pid)
@@ -199,6 +203,8 @@ dc_obj_init(void)
 		}
 		D_INFO("Set object collective operation threshold as %u\n", obj_coll_thd);
 	}
+
+	obj_init_iov_fragment_params();
 
 	tx_verify_rdg = false;
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
