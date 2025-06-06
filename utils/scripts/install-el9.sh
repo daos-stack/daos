@@ -75,6 +75,7 @@ dnf --nodocs install \
     sudo \
     valgrind-devel \
     which \
+    ncurses-devel \
     yasm
 
 ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
