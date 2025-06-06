@@ -129,14 +129,6 @@ func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	)
 }
 
-func FaultEngineNUMAImbalance(nodeMap map[int]int) *fault.Fault {
-	return serverFault(
-		code.ServerConfigEngineNUMAImbalance,
-		fmt.Sprintf("uneven distribution of engines across NUMA nodes %v", nodeMap),
-		"config requires an equal number of engines assigned to each NUMA node",
-	)
-}
-
 func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	return serverFault(
 		code.ServerScmUnmanaged,

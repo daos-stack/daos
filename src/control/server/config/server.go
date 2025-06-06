@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 
 	"github.com/dustin/go-humanize"
@@ -34,6 +35,10 @@ const (
 	defaultConfigPath   = "../etc/daos_server.yml"
 	ConfigOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
+
+	// ScanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
+	// SPDK memory requirements when performing a NVMe device scan.
+	ScanMinHugepageCount = 128
 )
 
 // SupportConfig is defined here to avoid a import cycle
@@ -479,15 +484,13 @@ func hugePageBytes(hpNr, hpSz int) uint64 {
 	return uint64(hpNr*hpSz) * humanize.KiByte
 }
 
-// SetNrHugepages calculates minimum based on total target count if using nvme.
-func (cfg *Server) SetNrHugepages(log logging.Logger, smi *common.SysMemInfo) error {
-	var cfgTargetCount int
-	var sysXSCount int
+// getTgtCounts returns target count totals for a server config file.
+func (cfg *Server) getTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount int) {
 	for idx, ec := range cfg.Engines {
 		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
 			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
 
-		// Calculate overall target count if NVMe is enabled.
+		// Calculate overall target count if bdevs exist in config.
 		if ec.Storage.Tiers.HaveBdevs() {
 			cfgTargetCount += ec.TargetCount
 			if ec.Storage.Tiers.HasBdevRoleMeta() {
@@ -503,40 +506,128 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, smi *common.SysMemInfo) er
 		log.Debug(msg)
 	}
 
-	if cfgTargetCount <= 0 {
-		return nil // no nvme, no hugepages required
-	}
+	return
+}
 
-	if cfg.DisableHugepages {
-		return FaultConfigHugepagesDisabledWithBdevs
+func (cfg *Server) getMinNrHugepages(log logging.Logger, hpSizeKiB int) (int, error) {
+	cfgTargetCount, sysXSCount := cfg.getTgtCounts(log)
+
+	if cfgTargetCount == 0 {
+		return 0, nil
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
-	minHugepages, err := storage.CalcMinHugepages(smi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
+	minHugepages, err := storage.CalcMinHugepages(hpSizeKiB, cfgTargetCount+sysXSCount)
+	if err != nil {
+		return 0, err
+	}
+
+	var msgSysXS string
+	if sysXSCount > 0 {
+		msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+	}
+	log.Tracef("calculated min %d nr_hugepages based on %d targets%s",
+		minHugepages, cfgTargetCount, msgSysXS)
+
+	return minHugepages, nil
+}
+
+// SetNrHugepages calculates minimum based on total target count if using nvme. Handle scenarios for
+// disabling hugepages and no configured bdevs by setting config request value (NrHugepages)
+// appropriately. Hugepage allocation requests will be validated in prepBdevStorage().
+func (cfg *Server) SetNrHugepages(log logging.Logger, hugepageSizeKiB int) error {
+	minHugepages, err := cfg.getMinNrHugepages(log, hugepageSizeKiB)
 	if err != nil {
 		return err
 	}
 
-	// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
-	// that the configured amount is sufficient.
-	if cfg.NrHugepages == 0 {
-		var msgSysXS string
-		if sysXSCount > 0 {
-			msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+	// Allow emulated NVMe configurations either with or without hugepages enabled.
+
+	if cfg.DisableHugepages {
+		if cfg.NrHugepages != 0 {
+			// Number of hugepages set in config and hugepages disabled.
+			return FaultConfigHugepagesDisabledWithNrSet
 		}
-		log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugepages,
-			cfgTargetCount, msgSysXS)
+		if cfg.GetBdevConfigs().HaveRealNVMe() {
+			// Real NVMe SSDs assigned in config but hugepages disabled.
+			return FaultConfigHugepagesDisabledWithNvmeBdevs
+		}
+		if minHugepages != 0 {
+			log.Notice("Hugepages have been disabled but DAOS targets will still be " +
+				"assigned to bdevs. This usage model is experimental so caution " +
+				"is advised!")
+		} else {
+			log.Noticef("Hugepages have been disabled, NVMe operations may not succeed")
+		}
+
+		// Hugepages disabled and so zero nr_hugepages requested in config.
+		return nil
+	} else if minHugepages == 0 {
+		if cfg.NrHugepages < ScanMinHugepageCount {
+			log.Infof("No hugepages required as zero configured engine targets, setting "+
+				"minimum (%d) in config to enable NVMe device discovery",
+				ScanMinHugepageCount)
+			cfg.NrHugepages = ScanMinHugepageCount
+		} else {
+			log.Infof("No hugepages required as zero configured engine targets, "+
+				"configurd value (%d) will be used to enable NVMe device discovery",
+				cfg.NrHugepages)
+		}
+
+		// Zero tgts on bdevs and min allocation for discovery mode requested in cfg.
+		return nil
+	}
+
+	// Create a target request number in config based on calculated requirements or verify that
+	// a preset value meets the calculated requirement.
+
+	if cfg.NrHugepages == 0 {
 		cfg.NrHugepages = minHugepages
-		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
-			humanize.IBytes(hugePageBytes(minHugepages, smi.HugepageSizeKiB)))
-	} else if cfg.NrHugepages < minHugepages {
-		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
-			"if this is not intentional update the 'nr_hugepages' config "+
-			"parameter or remove and it will be automatically calculated",
-			cfg.NrHugepages, minHugepages)
+		log.Debugf("nr_hugepages auto-set to %d (%s)", cfg.NrHugepages,
+			humanize.IBytes(hugePageBytes(cfg.NrHugepages, hugepageSizeKiB)))
+	} else {
+		log.Debugf("nr_hugepages has been set in server config to %d (%s)", cfg.NrHugepages,
+			humanize.IBytes(hugePageBytes(cfg.NrHugepages, hugepageSizeKiB)))
+		if cfg.NrHugepages < minHugepages {
+			log.Noticef("%d nr_hugepages (set in config file) is less than recommended "+
+				"%d, if this is not intentional update the 'nr_hugepages' config "+
+				"parameter or remove and it will be automatically calculated",
+				cfg.NrHugepages, minHugepages)
+		}
 	}
 
 	return nil
+}
+
+// GetNumaNodes returns in use NUMA nodes based on engine configurations. Detects the number of
+// engine configs assigned to each NUMA node and return error if engines are distributed unevenly
+// across NUMA nodes. Otherwise return sorted list of NUMA nodes in use. Configurations where all
+// engines are on a single NUMA node will be allowed.
+func (cfg *Server) GetNumaNodes() ([]int, error) {
+	hasBdevs := cfg.GetBdevConfigs().HaveBdevs()
+
+	// If engine configs have no bdevs configured then return early with NUMA-0 only.
+	if !hasBdevs {
+		return []int{0}, nil
+	}
+
+	nodeMap := make(map[int]int)
+	for _, ec := range cfg.Engines {
+		nodeMap[int(ec.Storage.NumaNodeIndex)] += 1
+	}
+
+	var lastCount int
+	nodes := make([]int, 0, len(cfg.Engines))
+	for k, v := range nodeMap {
+		if lastCount != 0 && v != lastCount {
+			return nil, FaultConfigEngineNUMAImbalance(nodeMap)
+		}
+		lastCount = v
+		nodes = append(nodes, k)
+	}
+	sort.Ints(nodes)
+
+	return nodes, nil
 }
 
 // CalcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
@@ -640,16 +731,6 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, smi *common.SysMemInfo) er
 	return nil
 }
 
-// GetBdevCfgs retrieves bdev tier configs from all engine components of the server config.
-func (cfg *Server) GetBdevCfgs() storage.TierConfigs {
-	var bdevCfgs storage.TierConfigs
-	for _, engineCfg := range cfg.Engines {
-		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
-	}
-
-	return bdevCfgs
-}
-
 // Validate asserts that config meets minimum requirements.
 func (cfg *Server) Validate(log logging.Logger) (err error) {
 	msg := "validating config file"
@@ -747,7 +828,7 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 
 	// Verify bdev_exclude doesn't clash with any configured bdev.
-	pciAddrs := cfg.GetBdevCfgs().NVMeBdevs().Devices()
+	pciAddrs := cfg.GetBdevConfigs().NVMeBdevs().Devices()
 	for _, a := range pciAddrs {
 		if common.Includes(cfg.BdevExclude, a) {
 			return FaultConfigBdevExcludeClash
@@ -947,4 +1028,17 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	}
 
 	return nil
+}
+
+// GetBdevConfigs retrieves all engine bdev storage tier configs from a server configuration.
+func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
+	if cfg == nil {
+		return
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
+	}
+
+	return
 }
