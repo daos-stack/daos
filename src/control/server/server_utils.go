@@ -447,10 +447,10 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-// Hugepage allocations have been calculated and requested from kernel in prepBdevStorage so
-// allocate total hugemem across engines and verify there are enough free hugepages to satisfy
-// requirements before setting mem_size and hugepage_size parameters for engine.
-func updateHugeMemValues(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
+// Per-NUMA hugepage allocations have been calculated and requested from kernel in prepBdevStorage
+// so now set mem-size values for engines and verify there are enough free hugepages to satisfy
+// typical DMA buffer requirements.
+func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
 	ei.RLock()
 	ec := ei.runner.GetConfig()
 	eIdx := ec.Index
@@ -462,29 +462,16 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, smi *common.SysMemInfo
 	}
 	ei.RUnlock()
 
-	// Calculate how many engines exist on each NUMA node.
-	nodes, err := srv.cfg.GetNumaNodes()
-	if err != nil {
-		return errors.Wrap(err, "get engine numa nodes from server config")
-	}
-	enginesPerNuma := len(srv.cfg.Engines) / len(nodes)
-	if enginesPerNuma == 0 {
-		return errors.New("invalid zero engines-per-numa")
-	}
+	// Mem-size for each engine to be calculated based on server config total hugepage
+	// requirements. Mem-size should be the same for each engine to avoid performance imbalance
+	// and will act as memory cap to stop DMA buffer growing beyond mem-size.
+	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
 
-	// Allocate based on per-NUMA hugepages. Fallback to global stats if per-NUMA not available.
-	nrPagesRequired := smi.HugepagesTotal / len(srv.cfg.Engines)
+	// Global (rather than per-NUMA) meminfo stats used to verify sufficient free hugepages as
+	// engines should be started even if hugemem has to be used across NUMA boundaries.
 	nrPagesFree := smi.HugepagesFree
-	for _, nn := range smi.NumaNodes {
-		if nn.NumaNodeIndex == int(ec.Storage.NumaNodeIndex) {
-			// Need to divide total pages on NUMA-node by number of engines-per-NUMA.
-			nrPagesRequired = nn.HugepagesTotal / enginesPerNuma
-			nrPagesFree = nn.HugepagesFree
-			break
-		}
-	}
 
-	// Calculate mem_size per I/O engine (in MB) from total number of hugepages.
+	// Calculate mem_size per I/O engine (in MB) based on number of pages required per engine.
 	pageSizeMiB := smi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := nrPagesFree * pageSizeMiB
@@ -667,7 +654,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Update engine memory related config parameters before starting.
-		if err := updateHugeMemValues(srv, engine, smi); err != nil {
+		if err := setEngineMemSize(srv, engine, smi); err != nil {
 			return errors.Wrap(err, "updating engine memory parameters")
 		}
 
