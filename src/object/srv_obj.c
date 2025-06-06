@@ -2,7 +2,6 @@
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -5265,11 +5264,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	struct daos_cpd_bulk		**dcbs = NULL;
 	struct daos_cpd_bulk		 *dcb = NULL;
 	crt_bulk_t			 *bulks = NULL;
-	d_sg_list_t			**sgls = NULL;
-	struct daos_cpd_sub_head	 *dcsh;
-	struct daos_cpd_disp_ent	 *dcde;
-	struct daos_cpd_req_idx		 *dcri;
-	void				 *end;
+	d_sg_list_t                     **sgls  = NULL;
 	uint32_t			  total = 0;
 	uint32_t			  count = 0;
 	int				  rc = 0;
@@ -5352,21 +5347,31 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < count; i++) {
-		bulks[i] = *dcbs[i]->dcb_bulk;
+		bulks[i] = dcbs[i]->dcb_bulk;
 		sgls[i] = &dcbs[i]->dcb_sgl;
 	}
 
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL, DAOS_HDL_INVAL,
-			       sgls, count, count, NULL);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, true, bulks, NULL, NULL, DAOS_HDL_INVAL, sgls,
+			       count, count, NULL);
 	if (rc != 0)
 		goto out;
 
 	for (i = 0; i < count; i++) {
+		D_ASSERTF(dcbs[i]->dcb_size == dcbs[i]->dcb_iov.iov_len, "Bad bulk: %u vs %u\n",
+			  dcbs[i]->dcb_size, (uint32_t)dcbs[i]->dcb_iov.iov_len);
+
 		switch (dcbs[i]->dcb_type) {
-		case DCST_BULK_HEAD:
-			dcsh = &dcbs[i]->dcb_head;
+		case DCST_BULK_HEAD: {
+			struct daos_cpd_sub_head *dcsh = &dcbs[i]->dcb_head;
+
 			dcsh->dcsh_mbs = dcbs[i]->dcb_iov.iov_buf;
+			D_ASSERTF(dcsh->dcsh_mbs->dm_data_size ==
+				      dcbs[i]->dcb_iov.iov_len - sizeof(*dcsh->dcsh_mbs),
+				  "Invalid bulk MBS data for CPD RPC on %s: %u vs %u\n",
+				  leader ? "leader" : "follower", dcsh->dcsh_mbs->dm_data_size,
+				  (uint32_t)(dcbs[i]->dcb_iov.iov_len - sizeof(*dcsh->dcsh_mbs)));
 			break;
+		}
 		case DCST_BULK_REQ:
 			rc = crt_proc_create(dss_get_module_info()->dmi_ctx,
 					     dcbs[i]->dcb_iov.iov_buf, dcbs[i]->dcb_iov.iov_len,
@@ -5386,17 +5391,36 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 					goto out;
 			}
 			break;
-		case DCST_BULK_ENT:
+		case DCST_BULK_ENT: {
+			struct daos_cpd_disp_ent *dcde;
+			struct daos_cpd_req_idx  *dcri;
+			void                     *end;
+
 			dcde = dcbs[i]->dcb_iov.iov_buf;
 			dcri = dcbs[i]->dcb_iov.iov_buf + sizeof(*dcde) * dcbs[i]->dcb_item_nr;
-			end = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
+			end  = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
 
 			for (j = 0; j < dcbs[i]->dcb_item_nr; j++) {
 				dcde[j].dcde_reqs = dcri;
 				dcri += dcde[j].dcde_read_cnt + dcde[j].dcde_write_cnt;
-				D_ASSERT((void *)dcri <= end);
+				D_ASSERTF((void *)dcri <= end,
+					  "Invalid bulk ENT data for CPD RPC on %s: pos %u, rd %u, "
+					  "wr %u, nr %u, size %u, base %p, cur %p, end %p\n",
+					  leader ? "leader" : "follower", j, dcde[j].dcde_read_cnt,
+					  dcde[j].dcde_write_cnt, dcbs[i]->dcb_item_nr,
+					  dcbs[i]->dcb_size, dcde, dcri, end);
 			}
 			break;
+		}
+		case DCST_BULK_TGT: {
+			struct daos_shard_tgt *tgts = dcbs[i]->dcb_iov.iov_buf;
+
+			D_ASSERTF(dss_self_rank() == tgts[0].st_rank &&
+				      dss_get_module_info()->dmi_tgt_id == tgts[0].st_tgt_idx,
+				  "Invalid bulk tgt data on %u: rank %u, tgt_idx %u\n",
+				  dss_self_rank(), tgts[0].st_rank, tgts[0].st_tgt_idx);
+			break;
+		}
 		default:
 			break;
 		}
