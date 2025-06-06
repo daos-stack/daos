@@ -46,6 +46,9 @@ RUN pwd
 RUN ls -al
 COPY ./requirements-code-coverage.txt /tmp/
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install -r /tmp/requirements-code-coverage.txt
+    # python3 -m pip --no-cache-dir install -r /tmp/requirements-code-coverage.txt
+    python3 -m pip --no-cache-dir install gcovr && \
+    python3 -m pip --no-cache-dir install pyyaml && \
+    python3 -m pip --no-cache-dir install junit_xml
 
 ARG CB1
