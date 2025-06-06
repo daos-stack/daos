@@ -562,6 +562,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->oit_iter.it_for_migration = 1;
 	if (cont->vc_pool->vp_sysdb)
 		oiter->oit_iter.it_for_sysdb = 1;
+	if (param->ip_flags & VOS_IT_FOR_CHECK)
+		oiter->oit_iter.it_for_check = 1;
 
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oiter->oit_hdl);
 	if (rc)
