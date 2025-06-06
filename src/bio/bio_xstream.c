@@ -213,8 +213,9 @@ init_chk_cnt()
 }
 
 int
-bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
+bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
+		  unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect,
+		  bool init_spdk)
 {
 	char		*env;
 	int		 rc, fd;
@@ -326,6 +327,9 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		bio_numa_node = SPDK_ENV_SOCKET_ID_ANY;
 	}
 
+	if (!init_spdk)
+		return 0;
+
 	nvme_glb.bd_mem_size = mem_size;
 	if (nvme_conf) {
 		D_STRNDUP(nvme_glb.bd_nvme_conf, nvme_conf, strlen(nvme_conf));
@@ -363,6 +367,14 @@ free_mutex:
 	ABT_mutex_free(&nvme_glb.bd_mutex);
 
 	return rc;
+}
+
+int
+bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
+	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
+{
+	return bio_nvme_init_ext(nvme_conf, numa_node, mem_size, hugepage_size, tgt_nr,
+				 bypass_health_collect, true);
 }
 
 static void
