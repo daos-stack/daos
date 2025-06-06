@@ -571,8 +571,10 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx))
+		if (dss_xstream_exiting(dx)) {
+			rc = 0;
 			break;
+		}
 
 		ABT_thread_yield();
 	}
@@ -609,6 +611,7 @@ signal:
 		ABT_cond_signal(xstream_data.xd_ult_init);
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 	}
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc, "stopping");
 }
 
 static inline struct dss_xstream *
@@ -1048,8 +1051,10 @@ dss_start_xs_id(int tag, int xs_id)
 	}
 
 	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);
-	if (rc)
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to start one xstream: tag=%x xs_id=%d", tag, xs_id);
 		return rc;
+	}
 
 	return 0;
 }
