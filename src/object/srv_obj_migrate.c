@@ -1536,8 +1536,7 @@ post:
 			 * the rebuild and retry.
 			 */
 			rc = -DER_STALE;
-			D_DEBUG(DB_REBUILD,
-				DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
+			D_ERROR(DF_RB ": lxzlxz " DF_UOID " %p dkey " DF_KEY " " DF_KEY
 				      " nr %d/%d eph " DF_U64 " " DF_RC "\n",
 				DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone,
 				DP_KEY(&mrone->mo_dkey), DP_KEY(&iods[i].iod_name), iod_num, i,
@@ -1612,8 +1611,10 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 						mrone->mo_iods_update_ephs_from_parity[i][j],
 						DIOF_EC_RECOV_FROM_PARITY | DIOF_FOR_MIGRATION,
 						ds_cont);
-			if (rc != 0)
+			if (rc != 0) {
+				DL_ERROR(rc, "lxzlxz");
 				D_GOTO(out, rc);
+			}
 		}
 	}
 
@@ -1626,14 +1627,25 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		daos_iod_t	iod;
 
 		for (j = 0; j < mrone->mo_iods[i].iod_nr; j++) {
+			daos_size_t lxz_size;
+
 			iod = mrone->mo_iods[i];
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods[i].iod_recxs[j];
+			lxz_size      = iod.iod_size;
 			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1,
 							 mrone->mo_epoch,
 							 mrone->mo_iods_update_ephs[i][j],
 							 DIOF_FOR_MIGRATION, ds_cont);
 			if (rc < 0) {
+				D_ERROR("lxzlxz" DF_UOID " mrone %p dkey " DF_KEY "akey " DF_KEY
+					" eph " DF_U64 ",i %d,j %d,mo_iod_num %d,"
+					"iod_nr %d, punch epoch " DF_U64 ", iod_size %zu, rc %d\n",
+					DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
+					DP_KEY(&mrone->mo_iods[i].iod_name),
+					mrone->mo_iods_update_ephs[i][j], i, j, mrone->mo_iod_num,
+					mrone->mo_iods[i].iod_nr, mrone->mo_akey_punch_ephs[i],
+					lxz_size, rc);
 				if (rc == -DER_VOS_PARTIAL_UPDATE) {
 					/* In some cases, EC aggregation failed to delete the
 					 * replicate recx, then during rebuild these replicate
@@ -1698,11 +1710,10 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 			continue;
 		}
 
-		D_DEBUG(DB_REBUILD,
-			DF_RB ": " DF_UOID " mrone %p punch dkey " DF_KEY "akey " DF_KEY
-			      " eph " DF_U64 "\n",
+		D_ERROR(DF_RB ": lxzlxz" DF_UOID " mrone %p punch dkey " DF_KEY "akey " DF_KEY
+			      " eph " DF_U64 ", i %d, mo_iod_num %d\n",
 			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
-			DP_KEY(&mrone->mo_iods[i].iod_name), eph);
+			DP_KEY(&mrone->mo_iods[i].iod_name), eph, i, mrone->mo_iod_num);
 
 		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid,
 				   eph, tls->mpt_version,
