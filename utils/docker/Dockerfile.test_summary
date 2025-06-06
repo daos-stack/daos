@@ -43,14 +43,14 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 #     python3 -m pip --no-cache-dir install -r requirements-code-coverage.txt
 
 # COPY ./requirements-code-coverage.txt /tmp/
-# RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-#     # python3 -m pip --no-cache-dir install -r /tmp/requirements-code-coverage.txt
-#     python3 -m pip --no-cache-dir install gcovr && \
-#     python3 -m pip --no-cache-dir install pyyaml && \
-#     python3 -m pip --no-cache-dir install junit_xml
-
-COPY requirements-code-coverage.txt ./
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install -r requirements-code-coverage.txt
+    # python3 -m pip --no-cache-dir install -r /tmp/requirements-code-coverage.txt
+    python3 -m pip --no-cache-dir install gcovr && \
+    python3 -m pip --no-cache-dir install pyyaml && \
+    python3 -m pip --no-cache-dir install junit_xml
+
+# COPY requirements-code-coverage.txt ./
+# RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+#     python3 -m pip --no-cache-dir install -r requirements-code-coverage.txt
 
 ARG CB1
