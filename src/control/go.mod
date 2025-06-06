@@ -6,8 +6,6 @@ module github.com/daos-stack/daos/src/control
 // Scons uses this file to extract the minimum version.
 go 1.21
 
-//toolchain go1.23.0
-
 require (
 	github.com/Jille/raft-grpc-transport v1.2.0
 	github.com/desertbit/grumble v1.1.3

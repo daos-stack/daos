@@ -450,7 +450,7 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 // Per-NUMA hugepage allocations have been calculated and requested from kernel in prepBdevStorage
 // so now set mem-size values for engines and verify there are enough free hugepages to satisfy
 // typical DMA buffer requirements.
-func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
+func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) {
 	ei.RLock()
 	ec := ei.runner.GetConfig()
 	eIdx := ec.Index
@@ -458,7 +458,7 @@ func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) e
 	if ec.Storage.Tiers.Bdevs().Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", eIdx)
 		ei.RUnlock()
-		return nil
+		return
 	}
 	ei.RUnlock()
 
@@ -492,8 +492,6 @@ func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) e
 		pageSizeMiB, smi.Summary())
 	ei.setMemSize(memSizeMiB)
 	ei.setHugepageSz(pageSizeMiB)
-
-	return nil
 }
 
 // Clean SPDK resources, both lockfiles and orphaned hugepages. Orphaned hugepages will be cleaned
@@ -654,9 +652,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Update engine memory related config parameters before starting.
-		if err := setEngineMemSize(srv, engine, smi); err != nil {
-			return errors.Wrap(err, "updating engine memory parameters")
-		}
+		setEngineMemSize(srv, engine, smi)
 
 		// Check available RAM can satisfy tmpfs size before starting a new engine.
 		if err := checkEngineTmpfsMem(srv, engine, smi); err != nil {
