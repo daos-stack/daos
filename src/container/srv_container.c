@@ -5675,9 +5675,9 @@ out:
 
 		prop = cqo->cqo_prop;
 	} else if ((opc == CONT_OPEN) || (opc == CONT_OPEN_BYLABEL)) {
-		struct cont_open_out *cout = crt_reply_get(rpc);
+		struct cont_open_out *co_out = crt_reply_get(rpc);
 
-		prop = cout->coo_prop;
+		prop = co_out->coo_prop;
 	}
 
 	out->co_rc = rc;
