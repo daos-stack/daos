@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -489,6 +490,9 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 }
 
 int rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
+
+int
+    rdb_rpc_protocol(uint8_t *rpc_protcol);
 
 /* rdb_tx.c *******************************************************************/
 

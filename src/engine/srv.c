@@ -23,6 +23,7 @@
 #include <daos/sys_db.h>
 #include <daos_errno.h>
 #include <daos_mgmt.h>
+#include <daos_version.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
 #include <daos_srv/vos.h>
@@ -416,6 +417,8 @@ dss_srv_handler(void *arg)
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
+	/* TODO: get version from MS-DB */
+	daos_version_pack(&dmi->dmi_version);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_open_list);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_close_list);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_pool_list);

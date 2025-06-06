@@ -402,8 +402,8 @@ dc_cont_create(tse_task_t *task)
 		goto err_tpriv;
 	}
 	uuid_clear(null_hdl_uuid);
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, pool->dp_pool_hdl, args->uuid,
-			     null_hdl_uuid, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, pool->dp_pool_hdl,
+				args->uuid, null_hdl_uuid, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_tpriv, rc);
@@ -541,8 +541,8 @@ dc_cont_destroy(tse_task_t *task)
 	}
 	opc = label ? CONT_DESTROY_BYLABEL : CONT_DESTROY;
 	uuid_clear(null_hdl_uuid);
-	rc = cont_req_create(daos_task2ctx(task), &ep, opc, pool->dp_pool_hdl, uuid, null_hdl_uuid,
-			     &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, opc, pool->dp_pool_hdl, uuid,
+				null_hdl_uuid, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_tpriv, rc);
@@ -950,8 +950,9 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 				DP_CONT(pool->dp_pool, tpriv->cont->dc_uuid), DP_RC(rc));
 		goto err;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, cont_op, pool->dp_pool_hdl,
-			     tpriv->cont->dc_uuid, tpriv->cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, cont_op, pool->dp_pool_hdl,
+				tpriv->cont->dc_uuid, tpriv->cont->dc_cont_hdl, &tpriv->rq_time,
+				&rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		goto err;
@@ -1211,8 +1212,8 @@ dc_cont_close(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_tpriv;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, pool->dp_pool_hdl, cont->dc_uuid,
-			     cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, pool->dp_pool_hdl,
+				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		goto err_tpriv;
@@ -1480,8 +1481,8 @@ dc_cont_query(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_tpriv;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, pool->dp_pool_hdl, cont->dc_uuid,
-			     cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, pool->dp_pool_hdl,
+				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_tpriv, rc);
@@ -1661,8 +1662,8 @@ dc_cont_set_prop(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_tpriv;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, pool->dp_pool_hdl,
-			     cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, pool->dp_pool_hdl,
+				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_tpriv, rc);
@@ -1799,8 +1800,8 @@ dc_cont_update_acl(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_tpriv;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, pool->dp_pool_hdl,
-			     cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, pool->dp_pool_hdl,
+				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_tpriv, rc);
@@ -1936,8 +1937,8 @@ dc_cont_delete_acl(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_tpriv;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, pool->dp_pool_hdl,
-			     cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, pool->dp_pool_hdl,
+				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_tpriv, rc);
@@ -2103,8 +2104,8 @@ dc_cont_alloc_oids(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, pool->dp_pool_hdl,
-			     cont->dc_uuid, cont->dc_cont_hdl, NULL /* req_timep */, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, pool->dp_pool_hdl,
+				cont->dc_uuid, cont->dc_cont_hdl, NULL /* req_timep */, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
@@ -2551,8 +2552,9 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 		goto out;
 	}
 
-	rc = cont_req_create(ctx, &ep, opcode, args->cra_pool->dp_pool_hdl, args->cra_cont->dc_uuid,
-			     args->cra_cont->dc_cont_hdl, &tpriv->rq_time, &args->cra_rpc);
+	rc = dc_cont_req_create(ctx, &ep, opcode, args->cra_pool->dp_pool_hdl,
+				args->cra_cont->dc_uuid, args->cra_cont->dc_cont_hdl,
+				&tpriv->rq_time, &args->cra_rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		cont_req_cleanup(CLEANUP_TASK_PRIV, task, true /* free_tpriv */, args);

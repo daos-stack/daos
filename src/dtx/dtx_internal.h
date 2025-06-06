@@ -325,4 +325,7 @@ enum dtx_cos_flags {
 	DCF_COLL		= (1 << 2),
 };
 
+int
+dtx_rpc_protocol(uint8_t *rsvc_ver);
+
 #endif /* __DTX_INTERNAL_H__ */

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1095,15 +1096,14 @@ cont_acl_delete_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver
 }
 
 static inline int
-cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, uuid_t ci_pool_hdl,
-		uuid_t ci_uuid, uuid_t ci_hdl, uint64_t *req_timep, crt_rpc_t **req)
+cont_req_create_common(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		       uint8_t proto_ver, uuid_t ci_pool_hdl, uuid_t ci_uuid, uuid_t ci_hdl,
+		       uint64_t *req_timep, crt_rpc_t **req)
 {
 	int                rc;
 	crt_opcode_t       opcode;
-	int                proto_ver;
 	struct cont_op_in *in;
 
-	proto_ver = dc_cont_proto_version ? dc_cont_proto_version : DAOS_CONT_VERSION;
 	opcode    = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, proto_ver);
 	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_CONT, tgt_ep->ep_tag);
@@ -1133,4 +1133,35 @@ cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 	return rc;
 }
+
+int
+ds_cont_rpc_protocol(uint8_t *cont_ver);
+
+static inline int
+dc_cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		   uuid_t ci_pool_hdl, uuid_t ci_uuid, uuid_t ci_hdl, uint64_t *req_timep,
+		   crt_rpc_t **req)
+{
+	D_ASSERT(dc_cont_proto_version != 0);
+
+	return cont_req_create_common(crt_ctx, tgt_ep, opc, dc_cont_proto_version, ci_pool_hdl,
+				      ci_uuid, ci_hdl, req_timep, req);
+}
+
+static inline int
+ds_cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		   uuid_t ci_pool_hdl, uuid_t ci_uuid, uuid_t ci_hdl, uint64_t *req_timep,
+		   crt_rpc_t **req)
+{
+	uint8_t proto_ver;
+	int     rc;
+
+	rc = ds_cont_rpc_protocol(&proto_ver);
+	if (rc)
+		return rc;
+
+	return cont_req_create_common(crt_ctx, tgt_ep, opc, proto_ver, ci_pool_hdl, ci_uuid, ci_hdl,
+				      req_timep, req);
+}
+
 #endif /* __CONTAINER_RPC_H__ */

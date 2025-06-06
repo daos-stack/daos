@@ -586,6 +586,11 @@ static struct daos_rpc_handler dtx_handlers[] = {
 
 #undef X
 
+static struct dss_module_version_map dtx_ver_map = {
+    .module_version   = DAOS_DTX_VERSION,
+    .protocol_version = DAOS_VERSION_PROTOCAL,
+};
+
 struct dss_module dtx_module = {
     .sm_name        = "dtx",
     .sm_mod_id      = DAOS_DTX_MODULE,
@@ -597,6 +602,9 @@ struct dss_module dtx_module = {
     .sm_proto_fmt   = {&dtx_proto_fmt},
     .sm_cli_count   = {0},
     .sm_handlers    = {dtx_handlers},
+    .sm_ver_table   = {&dtx_ver_map},
     .sm_key         = &dtx_module_key,
     .sm_metrics     = &dtx_metrics,
 };
+
+DEFINE_RPC_PROTOCOL(dtx);

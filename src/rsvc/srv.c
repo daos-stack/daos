@@ -1194,9 +1194,15 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
 {
 	struct dss_module_info *info = dss_get_module_info();
 	crt_opcode_t		opc_full;
+	uint8_t                 rsvc_ver;
+	int                     rc;
+
+	rc = ds_rsvc_rpc_protocol(&rsvc_ver);
+	if (rc)
+		return rc;
 
 	D_ASSERT(!filter_invert || filter_ranks != NULL);
-	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, DAOS_RSVC_VERSION);
+	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, rsvc_ver);
 	return crt_corpc_req_create(info->dmi_ctx, NULL /* grp */,
 				    filter_ranks, opc_full,
 				    NULL /* co_bulk_hdl */, NULL /* priv */,
@@ -1473,6 +1479,11 @@ rsvc_module_fini(void)
 	return 0;
 }
 
+static struct dss_module_version_map rsvc_ver_map = {
+    .module_version   = DAOS_RSVC_VERSION,
+    .protocol_version = DAOS_VERSION_PROTOCAL,
+};
+
 struct dss_module rsvc_module = {
     .sm_name        = "rsvc",
     .sm_mod_id      = DAOS_RSVC_MODULE,
@@ -1482,6 +1493,9 @@ struct dss_module rsvc_module = {
     .sm_fini        = rsvc_module_fini,
     .sm_proto_fmt   = {&rsvc_proto_fmt},
     .sm_cli_count   = {0},
+    .sm_ver_table   = {&rsvc_ver_map},
     .sm_handlers    = {rsvc_handlers},
     .sm_key         = NULL,
 };
+
+DEFINE_DS_RPC_PROTOCOL(rsvc);
