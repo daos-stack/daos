@@ -10,10 +10,10 @@ from recovery_test_base import RecoveryTestBase
 from run_utils import run_remote
 
 
-class DMGCheckStartSubcommandTest(RecoveryTestBase):
-    """Test dmg check start subcommands.
+class DMGCheckStartOptionsTest(RecoveryTestBase):
+    """Test dmg check start options.
 
-    Subcommand list. (Not all subcommands are tested here.)
+    Options list. (Not all options are tested here.)
     -n, --dry-run           Scan only; do not initiate repairs.
     -r, --reset             Reset the system check state.
     -f, --failout=[on|off]  Stop on failure.
@@ -25,7 +25,7 @@ class DMGCheckStartSubcommandTest(RecoveryTestBase):
     """
 
     def test_check_start_reset(self):
-        """Test dmg check start --reset subcommand.
+        """Test dmg check start --reset.
 
         See the state diagram attached to the ticket.
 
@@ -48,7 +48,7 @@ class DMGCheckStartSubcommandTest(RecoveryTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery,cat_recov
-        :avocado: tags=DMGCheckStartSubcommandTest,test_check_start_reset
+        :avocado: tags=DMGCheckStartOptionsTest,test_check_start_reset
         """
         # 1. Create a pool.
         self.log_step("Create a pool")
