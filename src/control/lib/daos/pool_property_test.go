@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +9,7 @@
 package daos_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -16,7 +19,28 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
-func TestControl_PoolPropertyValue(t *testing.T) {
+func TestDaos_LabelIsValid(t *testing.T) {
+	// Not intended to be exhaustive. Just some basic smoke tests
+	// to verify that we can call the C function and get sensible
+	// results.
+	for name, tc := range map[string]struct {
+		label     string
+		expResult bool
+	}{
+		"zero-length fails": {"", false},
+		"overlength fails":  {strings.Repeat("x", daos.MaxLabelLength+1), false},
+		"uuid fails":        {"54f26bfd-628f-4762-a28a-1c42bcb6565b", false},
+		"max-length ok":     {strings.Repeat("x", daos.MaxLabelLength), true},
+		"valid chars ok":    {"this:is_a_valid-label.", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotResult := daos.LabelIsValid(tc.label)
+			test.AssertEqual(t, tc.expResult, gotResult, "unexpected label check result")
+		})
+	}
+}
+
+func TestDaos_PoolPropertyValue(t *testing.T) {
 	strPtr := func(in string) *string {
 		return &in
 	}
@@ -76,7 +100,7 @@ func TestControl_PoolPropertyValue(t *testing.T) {
 	}
 }
 
-func TestControl_PoolProperties(t *testing.T) {
+func TestDaos_PoolProperties(t *testing.T) {
 	for name, tc := range map[string]struct {
 		name    string
 		value   string
@@ -239,7 +263,7 @@ func TestControl_PoolProperties(t *testing.T) {
 		"perf_domain-invalid": {
 			name:   "perf_domain",
 			value:  "bad domain",
-			expErr: errors.New(`invalid value "bad domain" for perf_domain (valid: group,root)`),
+			expErr: errors.New(`invalid value "bad domain" for perf_domain (valid: group,node,rank,root,target)`),
 		},
 		"reintegration-valid": {
 			name:    "reintegration",

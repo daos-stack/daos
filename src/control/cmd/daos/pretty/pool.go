@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,7 +33,7 @@ func getTierNameText(tierIdx int) string {
 }
 
 // PrintPoolInfo generates a human-readable representation of the supplied
-// PoolQueryResp struct and writes it to the supplied io.Writer.
+// PoolInfo struct and writes it to the supplied io.Writer.
 func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 	if pi == nil {
 		return errors.Errorf("nil %T", pi)
@@ -285,4 +287,36 @@ func PrintPoolList(pools []*daos.PoolInfo, out io.Writer, verbose bool) error {
 	}
 
 	return printPoolList(pools, out)
+}
+
+// PrintAttributes generates a human-readable representation of the supplied
+// list of daos.Attributes and writes it to the supplied io.Writer.
+func PrintAttributes(out io.Writer, header string, attrs ...*daos.Attribute) {
+	fmt.Fprintf(out, "%s\n", header)
+
+	if len(attrs) == 0 {
+		fmt.Fprintln(out, "  No attributes found.")
+		return
+	}
+
+	nameTitle := "Name"
+	valueTitle := "Value"
+	titles := []string{nameTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, attr := range attrs {
+		row := txtfmt.TableRow{}
+		row[nameTitle] = attr.Name
+		if len(attr.Value) != 0 {
+			row[valueTitle] = string(attr.Value)
+			if len(titles) == 1 {
+				titles = append(titles, valueTitle)
+			}
+		}
+		table = append(table, row)
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
 }

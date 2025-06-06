@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,54 +12,87 @@ import (
 	"testing"
 
 	"github.com/dustin/go-humanize"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/daos-stack/daos/src/control/lib/ui"
-	"github.com/daos-stack/daos/src/control/logging"
+)
+
+var (
+	runSelfTestResult []*daos.SelfTestResult
+	runSelfTestErr    error
 )
 
 func RunSelfTest(ctx context.Context, cfg *daos.SelfTestConfig) ([]*daos.SelfTestResult, error) {
-	return []*daos.SelfTestResult{}, nil
+	return runSelfTestResult, runSelfTestErr
 }
 
 func TestDaos_netTestCmdExecute(t *testing.T) {
-	// Quickie smoke test for the UI -- will flesh out later.
-	var opts cliOptions
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-	args := []string{
-		"health", "net-test",
-		"--ranks", "0-3",
-		"--tags", "4-9",
-		"--size", "20 MiB",
-		"--rep-count", "2222",
-		"--bytes", "--verbose",
-	}
-	expArgs := netTestCmd{}
-	expArgs.Ranks.Replace(ranklist.MustCreateRankSet("0-3"))
-	expArgs.Tags.Replace(ranklist.MustCreateRankSet("4-9"))
-	expArgs.XferSize.Bytes = 20 * humanize.MiByte
-	expArgs.RepCount = 2222
-	expArgs.Verbose = true
-	expArgs.TpsBytes = true
+	baseArgs := test.JoinArgs(nil, "health", "net-test")
 
-	if err := parseOpts(args, &opts, log); err != nil {
-		t.Fatal(err)
+	for name, tc := range map[string]struct {
+		args    []string
+		expArgs netTestCmd
+		expErr  error
+	}{
+		"all set (long)": {
+			args: test.JoinArgs(baseArgs,
+				"--ranks", "0-3",
+				"--tags", "4-9",
+				"--size", "20 MiB",
+				"--rep-count", "2222",
+				"--max-inflight", "1234",
+				"--bytes", "--verbose",
+			),
+			expArgs: func() netTestCmd {
+				cmd := netTestCmd{}
+				cmd.Ranks.Replace(ranklist.MustCreateRankSet("0-3"))
+				cmd.Tags.Replace(ranklist.MustCreateRankSet("4-9"))
+				cmd.XferSize.Bytes = 20 * humanize.MiByte
+				cmd.RepCount = 2222
+				cmd.MaxInflight = 1234
+				cmd.Verbose = true
+				cmd.TpsBytes = true
+				return cmd
+			}(),
+		},
+		"all set (short)": {
+			args: test.JoinArgs(baseArgs,
+				"-r", "0-3",
+				"-t", "4-9",
+				"-s", "20 MiB",
+				"-c", "2222",
+				"-m", "1234",
+				"-y", "-v",
+			),
+			expArgs: func() netTestCmd {
+				cmd := netTestCmd{}
+				cmd.Ranks.Replace(ranklist.MustCreateRankSet("0-3"))
+				cmd.Tags.Replace(ranklist.MustCreateRankSet("4-9"))
+				cmd.XferSize.Bytes = 20 * humanize.MiByte
+				cmd.RepCount = 2222
+				cmd.MaxInflight = 1234
+				cmd.Verbose = true
+				cmd.TpsBytes = true
+				return cmd
+			}(),
+		},
+		"selftest fails": {
+			args:   []string{"health", "net-test"},
+			expErr: errors.New("whoops"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.expErr != nil {
+				prevErr := runSelfTestErr
+				t.Cleanup(func() {
+					runSelfTestErr = prevErr
+				})
+				runSelfTestErr = tc.expErr
+			}
+
+			runCmdTest(t, tc.args, tc.expArgs, tc.expErr, "Health.NetTest")
+		})
 	}
-	cmpOpts := cmp.Options{
-		cmpopts.IgnoreUnexported(netTestCmd{}),
-		cmp.Comparer(func(a, b ranklist.RankSet) bool {
-			return a.String() == b.String()
-		}),
-		cmp.Comparer(func(a, b ui.ByteSizeFlag) bool {
-			return a.String() == b.String()
-		}),
-		cmpopts.IgnoreTypes(cmdutil.LogCmd{}, cmdutil.JSONOutputCmd{}),
-	}
-	test.CmpAny(t, "health net-test args", expArgs, opts.Health.NetTest, cmpOpts...)
 }
