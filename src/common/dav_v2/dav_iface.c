@@ -61,6 +61,8 @@ dav_uc_callback(int evt_type, void *arg, uint32_t zid)
 	return 0;
 }
 
+static uint32_t dav_mmap_opt;
+
 static dav_obj_t *
 dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct umem_store *store)
 {
@@ -70,6 +72,37 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	int                     rc;
 	struct heap_zone_limits hzl;
 	struct zone            *z0;
+	int                     mflags = MAP_SHARED;
+	int                     sfd    = fd;
+
+	if (dav_mmap_opt == 0) {
+		d_getenv_uint("DAOS_MMAP_OPT", &dav_mmap_opt);
+		if (dav_mmap_opt == 0)
+			dav_mmap_opt = 1;
+		D_INFO("DAOS_MMAP_OPT = %u", dav_mmap_opt);
+	}
+	switch (dav_mmap_opt) {
+	case 1:
+		mflags = MAP_SHARED;
+		break;
+	case 2:
+		mflags = MAP_PRIVATE;
+		break;
+	case 3:
+		sfd    = -1;
+		mflags = MAP_PRIVATE | MAP_ANONYMOUS;
+		break;
+	case 4:
+		sfd    = -1;
+		mflags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE;
+		break;
+	case 5:
+		sfd    = -1;
+		mflags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB;
+		break;
+	default:
+		mflags = MAP_SHARED;
+	}
 
 	hzl = heap_get_zone_limits(store->stor_size, scm_sz, 100);
 
@@ -93,7 +126,7 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		D_WARN("scm size %lu exceeds metablob size %lu, some scm will be unused", scm_sz,
 		       store->stor_size);
 
-	mmap_base = mmap(NULL, scm_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	mmap_base = mmap(NULL, scm_sz, PROT_READ | PROT_WRITE, mflags, sfd, 0);
 	if (mmap_base == MAP_FAILED)
 		return NULL;
 
