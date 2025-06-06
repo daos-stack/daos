@@ -24,6 +24,7 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 	struct daos_prop_entry  *dpe;
 	uint64_t                 ec_cell_size;
 	uint32_t                 nr_grps;
+	daos_size_t              base;
 	int                      rc;
 
 	/** No EC above RF 2, use default CS */
@@ -84,10 +85,28 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 		daos_prop_free(pool_prop);
 	}
 
-	/** set the DFS chunk size to the 2 x the EC cell size x the number of data cells */
-	*cs = oc_attr->u.ec.e_k * ec_cell_size * 2;
-	D_DEBUG(DB_TRACE, "Setting the DFS chunk size of the container to %zu (%zu x %d x 2)\n",
-		*cs, ec_cell_size, oc_attr->u.ec.e_k);
+	/** set the DFS chunk size to the the EC cell size x the number of data cells */
+	base = oc_attr->u.ec.e_k * ec_cell_size;
+
+	/*
+	 * If the chunk size is still < than the default chunk size, bump it to be >=, but still a
+	 * multiple of the EC cell size. Find the next multiple of EC_CELL_SIZE greater than
+	 * DFS_DEFAULT_CHUNK_SIZE.
+	 */
+	if (base < DFS_DEFAULT_CHUNK_SIZE) {
+		int nchunks;
+
+		nchunks = DFS_DEFAULT_CHUNK_SIZE / base;
+		if (DFS_DEFAULT_CHUNK_SIZE % base != 0)
+			nchunks++;
+		D_DEBUG(DB_TRACE,
+			"Calculated chunk size (%zu) is smaller than %d, bump it by x %d\n", base,
+			DFS_DEFAULT_CHUNK_SIZE, nchunks);
+		*cs = nchunks * base;
+	} else {
+		*cs = base * 2;
+	}
+	D_DEBUG(DB_TRACE, "Setting the DFS chunk size of the container to %zu\n", *cs);
 	return 0;
 }
 
