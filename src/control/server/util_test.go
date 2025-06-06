@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -77,12 +78,12 @@ func (cfg *mockDrpcClientConfig) setResponseDelay(duration time.Duration) {
 }
 
 type mockDrpcCall struct {
-	Method drpc.Method
+	Method int32
 	Body   []byte
 }
 
 func (c *mockDrpcCall) String() string {
-	return fmt.Sprintf("%s: (%v)", c.Method, c.Body)
+	return fmt.Sprintf("method %d: (%v)", c.Method, c.Body)
 }
 
 type mockDrpcCalls struct {
@@ -127,7 +128,7 @@ func (c *mockDrpcClient) Close() error {
 	return c.cfg.CloseError
 }
 
-func (c *mockDrpcClient) CalledMethods() (methods []drpc.Method) {
+func (c *mockDrpcClient) CalledMethods() (methods []int32) {
 	for _, call := range c.calls.get() {
 		methods = append(methods, call.Method)
 	}
@@ -136,11 +137,7 @@ func (c *mockDrpcClient) CalledMethods() (methods []drpc.Method) {
 
 func (c *mockDrpcClient) SendMsg(_ context.Context, call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
-	method, err := drpc.ModuleMgmt.GetMethod(call.GetMethod())
-	if err != nil {
-		return nil, err
-	}
-	c.calls.add(&mockDrpcCall{method, call.Body})
+	c.calls.add(&mockDrpcCall{call.GetMethod(), call.Body})
 
 	<-time.After(c.cfg.ResponseDelay)
 

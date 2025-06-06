@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -251,7 +252,7 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		svc.log.Errorf("failed to save the policies used: %s", err.Error())
 	}
 
-	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStart, req)
+	dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerStart, req)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +309,7 @@ func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopRe
 		return nil, err
 	}
 
-	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStop, req)
+	dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerStop, req)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +342,7 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 	reports := []*chkpb.CheckReport{}
 
 	if !req.Shallow {
-		dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerQuery, req)
+		dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerQuery, req)
 		if err != nil {
 			return nil, err
 		}
@@ -537,7 +538,7 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, errors.Errorf("invalid action %s (must be one of %s)", req.Act, f.ValidChoicesString())
 	}
 
-	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerAction, req)
+	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerAction, req)
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package drpc
 
 import (
 	"context"
+	"io"
 	"net"
 	"os"
 	"sync"
@@ -50,8 +52,20 @@ func (d *DomainSocketServer) closeSession(s *Session) {
 // listenSession runs the listening loop for a Session. It listens for incoming
 // dRPC calls and processes them.
 func (d *DomainSocketServer) listenSession(ctx context.Context, s *Session) {
+	logCtx, err := logging.ToContext(ctx, d.log)
+	if err != nil {
+		// The most likely reason for this to happen is that a logger is already embedded in the
+		// context. If we shift to using loggers passed in context more generally on the server side,
+		// there's no need to do it here.
+		d.log.Errorf("failed to embed logger in context for dRPC session: %s", err.Error())
+		logCtx = ctx
+	}
+
 	for {
-		if err := s.ProcessIncomingMessage(ctx); err != nil {
+		if err := s.ProcessIncomingMessage(logCtx); err != nil {
+			if !errors.Is(err, io.EOF) {
+				d.log.Errorf("processing dRPC message failed: %s", err.Error())
+			}
 			d.closeSession(s)
 			break
 		}
@@ -81,6 +95,7 @@ func (d *DomainSocketServer) Listen(ctx context.Context) {
 		d.sessionsMutex.Lock()
 		d.sessions[conn] = c
 		d.sessionsMutex.Unlock()
+
 		go d.listenSession(ctx, c)
 	}
 }
