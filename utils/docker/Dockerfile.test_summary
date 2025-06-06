@@ -42,8 +42,6 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 # RUN python3 -m pip --no-cache-dir install --upgrade pip && \
 #     python3 -m pip --no-cache-dir install -r requirements-code-coverage.txt
 
-RUN pwd
-RUN ls -al
 COPY ./requirements-code-coverage.txt /tmp/
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     # python3 -m pip --no-cache-dir install -r /tmp/requirements-code-coverage.txt
