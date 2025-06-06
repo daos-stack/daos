@@ -1212,7 +1212,8 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 static void
 crt_context_timeout_check(struct crt_context *crt_ctx)
 {
-	struct crt_rpc_priv		*rpc_priv;
+	static uint64_t                  ts_prev = 0;
+	struct crt_rpc_priv             *rpc_priv;
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
@@ -1225,6 +1226,12 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
+
+	if (ts_prev == 0)
+		D_INFO("called for the first time\n");
+	else if (ts_now - ts_prev > 1e6 /* us */)
+		D_WARN("not called for " DF_U64 " us\n", ts_now - ts_prev);
+	ts_prev = ts_now;
 
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	while (1) {

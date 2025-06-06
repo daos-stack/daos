@@ -419,6 +419,9 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 
 	D_ASSERT(crt_is_service());
 
+	RPC_INFO(rpc_priv, "%lu: incoming RPC: ep_rank=%u swim_id=%lu\n",
+		 self_id, rpc->cr_ep.ep_rank, rpc_in->swim_id);
+
 	crt_swim_update_last_unpack_hlc(csm, hlc);
 
 	from_id = rpc_priv->crp_req_hdr.cch_src_rank;
