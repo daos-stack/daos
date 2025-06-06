@@ -24,7 +24,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       10%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -414,6 +414,12 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
+# Ensure /var/log/daos exists
+if [ ! -d /var/log/daos ]; then
+    mkdir -p /var/log/daos
+    chown daos_server.daos_daemons /var/log/daos
+    chmod 775 /var/log/daos
+fi
 
 %post server
 %{?run_ldconfig}
@@ -435,6 +441,11 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
+# Ensure /var/log/daos exists
+if [ ! -d /var/log/daos ]; then
+    mkdir -p /var/log/daos
+    chmod 775 /var/log/daos
+fi
 
 %post client
 %systemd_post %{agent_svc_name}
@@ -646,6 +657,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %endif
 
 %changelog
+* Mon June 2 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-11
+- Changing the default log location to /var/log/daos from /tmp
+
 * Mon May 19 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-10
 - Start to deprecate this file being used to build DAOS but rather only source
   RPM
