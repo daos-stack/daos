@@ -2385,6 +2385,15 @@ crt_req_get_proto_ver(crt_rpc_t *req);
 char *
 crt_req_origin_addr_get(crt_rpc_t *rpc);
 
+/**
+ * Get the bulk transfer origin address.
+ *
+ * \param[in] bulk_desc		pointer to bulk transfer desc
+ * \return			the origin address of the bulk
+ */
+char *
+crt_bulk_origin_addr_get(struct crt_bulk_desc *bulk_desc);
+
 void
 crt_hg_reset_log_level();
 
