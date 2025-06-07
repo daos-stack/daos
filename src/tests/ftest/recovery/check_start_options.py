@@ -70,7 +70,7 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
         self.log_step("Verify that the orphan pool is detected.")
         repair_reports = None
         for _ in range(8):
-            check_query_out = self.get_dmg_command().check_query()
+            check_query_out = dmg_command.check_query()
             if check_query_out["response"]["status"] == "RUNNING":
                 repair_reports = check_query_out["response"]["reports"]
                 break
@@ -139,7 +139,7 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
         repair_reports = None
         check_completed = False
         for _ in range(8):
-            check_query_out = self.get_dmg_command().check_query()
+            check_query_out = dmg_command.check_query()
             if check_query_out["response"]["status"] == "COMPLETED":
                 # "reports" field is expected to be None.
                 repair_reports = check_query_out["response"]["reports"]
