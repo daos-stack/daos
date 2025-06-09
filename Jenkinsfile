@@ -131,9 +131,9 @@ boolean new_rpms() {
     return cachedCommitPragma(pragma: "New-RPM", def_val: 'false')
 }
 
-void uploadNewRPMs() {
+void uploadNewRPMs(String target, String stage) {
     if (new_rpms()) {
-        buildRpmPost condition: 'success', rpmlint: false
+        buildRpmPost target: target, condition: stage, rpmlint: false
     }
 }
 
@@ -668,7 +668,7 @@ pipeline {
                     }
                     post {
                         success {
-                            uploadNewRPMs()
+                            uploadNewRPMs('success', 'el8')
                         }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
@@ -678,6 +678,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
+                            uploadNewRPMs('cleanup', 'el8')
                             job_status_update()
                         }
                     }
