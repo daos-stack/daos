@@ -111,7 +111,6 @@ if [[ -n $(find build -name "*.gcda") ]]; then
     # set +u
     # deactivate
     # set -u
-
     # # Run gcovr in a python 3.11 environment
     # python3.11 -m venv venv-code-coverage
     # # shellcheck disable=SC1091
