@@ -237,11 +237,6 @@ struct daos_module_metrics pool_metrics = {
     .dmm_nr_metrics = ds_pool_metrics_count,
 };
 
-static struct dss_module_version_map pool_ver_v7 = {
-    .module_version   = DAOS_POOL_VERSION,
-    .protocol_version = DAOS_VERSION_PROTOCAL,
-};
-
 struct dss_module pool_module = {
     .sm_name        = "pool",
     .sm_mod_id      = DAOS_POOL_MODULE,
@@ -254,9 +249,8 @@ struct dss_module pool_module = {
     .sm_proto_fmt   = {&pool_proto_fmt_v6, &pool_proto_fmt_v7},
     .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
     .sm_handlers    = {pool_handlers_v6, pool_handlers_v7},
-    .sm_ver_table   = {&pool_ver_v7},
     .sm_key         = &pool_module_key,
     .sm_metrics     = &pool_metrics,
 };
 
-DEFINE_DS_RPC_PROTOCOL(pool);
+DEFINE_DS_RPC_PROTOCOL(pool, DAOS_POOL_MODULE);

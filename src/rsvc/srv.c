@@ -1479,11 +1479,6 @@ rsvc_module_fini(void)
 	return 0;
 }
 
-static struct dss_module_version_map rsvc_ver_map = {
-    .module_version   = DAOS_RSVC_VERSION,
-    .protocol_version = DAOS_VERSION_PROTOCAL,
-};
-
 struct dss_module rsvc_module = {
     .sm_name        = "rsvc",
     .sm_mod_id      = DAOS_RSVC_MODULE,
@@ -1493,9 +1488,8 @@ struct dss_module rsvc_module = {
     .sm_fini        = rsvc_module_fini,
     .sm_proto_fmt   = {&rsvc_proto_fmt},
     .sm_cli_count   = {0},
-    .sm_ver_table   = {&rsvc_ver_map},
     .sm_handlers    = {rsvc_handlers},
     .sm_key         = NULL,
 };
 
-DEFINE_DS_RPC_PROTOCOL(rsvc);
+DEFINE_DS_RPC_PROTOCOL(rsvc, DAOS_RSVC_MODULE);

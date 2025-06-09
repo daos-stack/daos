@@ -626,11 +626,6 @@ ds_mgmt_cleanup()
 	return ds_mgmt_svc_stop();
 }
 
-static struct dss_module_version_map mgmt_ver_map = {
-    .module_version   = DAOS_MGMT_VERSION,
-    .protocol_version = DAOS_VERSION_PROTOCAL,
-};
-
 struct dss_module mgmt_module = {
     .sm_name          = "mgmt",
     .sm_mod_id        = DAOS_MGMT_MODULE,
@@ -643,8 +638,7 @@ struct dss_module mgmt_module = {
     .sm_proto_fmt     = {&mgmt_proto_fmt_v3, &mgmt_proto_fmt_v4},
     .sm_cli_count     = {MGMT_PROTO_CLI_COUNT, MGMT_PROTO_CLI_COUNT},
     .sm_handlers      = {mgmt_handlers_v3, mgmt_handlers_v4},
-    .sm_ver_table     = {&mgmt_ver_map},
     .sm_drpc_handlers = mgmt_drpc_handlers,
 };
 
-DEFINE_DS_RPC_PROTOCOL(mgmt);
+DEFINE_DS_RPC_PROTOCOL(mgmt, DAOS_MGMT_MODULE);

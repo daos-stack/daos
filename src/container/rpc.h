@@ -24,8 +24,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ * Please increment DAOS_CONT_VERSION whenever the protocol is changed.
  */
-#define DAOS_CONT_VERSION              8
 /* version in which metadata open/modify times, number of handles were added to open, query RPCs */
 #define CONT_PROTO_VER_WITH_MDTIMES    7
 #define CONT_PROTO_VER_WITH_NHANDLES   7

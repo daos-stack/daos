@@ -64,11 +64,6 @@ rdb_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	return 0;
 }
 
-static struct dss_module_version_map rdb_ver_map = {
-    .module_version   = DAOS_RDB_VERSION,
-    .protocol_version = DAOS_VERSION_PROTOCAL,
-};
-
 static struct dss_module_ops rdb_mod_ops = {
 	.dms_get_req_attr = rdb_get_req_attr,
 };
@@ -82,8 +77,7 @@ struct dss_module rdb_module = {.sm_name        = "rdb",
 				.sm_proto_fmt   = {&rdb_proto_fmt},
 				.sm_cli_count   = {0},
 				.sm_handlers    = {rdb_handlers},
-				.sm_ver_table   = {&rdb_ver_map},
 				.sm_key         = NULL,
 				.sm_mod_ops     = &rdb_mod_ops};
 
-DEFINE_RPC_PROTOCOL(rdb);
+DEFINE_RPC_PROTOCOL(rdb, DAOS_RDB_MODULE);

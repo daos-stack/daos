@@ -365,11 +365,6 @@ static struct daos_rpc_handler chk_handlers[] = {
 
 #undef X
 
-static struct dss_module_version_map chk_ver = {
-    .module_version   = DAOS_CHK_VERSION,
-    .protocol_version = DAOS_VERSION_PROTOCAL,
-};
-
 struct dss_module chk_module = {
     .sm_name        = "chk",
     .sm_mod_id      = DAOS_CHK_MODULE,
@@ -380,9 +375,8 @@ struct dss_module chk_module = {
     .sm_cleanup     = ds_chk_cleanup,
     .sm_proto_count = 1,
     .sm_proto_fmt   = {&chk_proto_fmt},
-    .sm_ver_table   = {&chk_ver},
     .sm_cli_count   = {0},
     .sm_handlers    = {chk_handlers},
 };
 
-DEFINE_RPC_PROTOCOL(chk);
+DEFINE_RPC_PROTOCOL(chk, DAOS_CHK_MODULE);

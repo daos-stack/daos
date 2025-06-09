@@ -31,8 +31,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
+ * Please increment DAOS_OBJ_VERSION whenever the protocol is changed.
  */
-#define DAOS_OBJ_VERSION 10
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */

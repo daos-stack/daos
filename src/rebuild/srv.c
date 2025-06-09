@@ -2934,11 +2934,6 @@ rebuild_cleanup(void)
 	return 0;
 }
 
-static struct dss_module_version_map rebuild_ver_map = {
-    .module_version   = DAOS_REBUILD_VERSION,
-    .protocol_version = DAOS_VERSION_PROTOCAL,
-};
-
 struct dss_module rebuild_module = {
     .sm_name        = "rebuild",
     .sm_mod_id      = DAOS_REBUILD_MODULE,
@@ -2950,8 +2945,7 @@ struct dss_module rebuild_module = {
     .sm_proto_fmt   = {&rebuild_proto_fmt},
     .sm_cli_count   = {0},
     .sm_handlers    = {rebuild_handlers},
-    .sm_ver_table   = {&rebuild_ver_map},
     .sm_key         = &rebuild_module_key,
 };
 
-DEFINE_RPC_PROTOCOL(rebuild);
+DEFINE_RPC_PROTOCOL(rebuild, DAOS_REBUILD_MODULE);

@@ -22,8 +22,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ * Please increment DAOS_DTX_VERSION whenever the protocol is changed.
  */
-#define DAOS_DTX_VERSION	4
 
 /** VOS reserves highest two minor epoch values for internal use so we must
  *  limit the number of dtx sub modifications to avoid conflict.

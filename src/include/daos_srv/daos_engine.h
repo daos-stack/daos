@@ -359,12 +359,6 @@ struct dss_module_ops {
 int srv_profile_stop();
 int srv_profile_start(char *path, int avg);
 
-/* Structure defining a single module version to daos protocol version mapping */
-struct dss_module_version_map {
-	uint8_t module_version;   /**< Module version number */
-	uint8_t protocol_version; /**< Corresponding daos protocol version */
-};
-
 /**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
@@ -402,9 +396,7 @@ struct dss_module {
 	/* Array of the count of RPCs which are dedicated for client nodes only */
 	uint32_t			sm_cli_count[2];
 	/* Array of RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler		*sm_handlers[2];
-	/* Module version and system protocol version mapping table */
-	struct dss_module_version_map   *sm_ver_table[2];
+	struct daos_rpc_handler         *sm_handlers[2];
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
 	struct dss_drpc_handler		*sm_drpc_handlers;
 
@@ -817,37 +809,28 @@ engine_in_check(void);
  * @brief Selects the appropriate module version based on the protocol version
  * for server side rpc.
  *
- * @param maps          Pointer to the module's version mapping table
  * @param module_ver    Output parameter for the selected module version
  * @return 0 or negative error
  */
 static inline int
-dss_select_module_version(struct dss_module_version_map **maps, uint8_t *module_ver)
+dss_select_module_version(int module_id, uint8_t *module_ver)
 {
 	struct dss_module_info *dmi          = dss_get_module_info();
 	uint8_t                 protocol_ver = daos_version_get_protocol(&dmi->dmi_version);
 
-	/* Search for exact protocol version match */
-	for (uint8_t i = 0; i < 2; i++) {
-		if (maps[i] && maps[i]->protocol_version == protocol_ver) {
-			*module_ver = maps[i]->module_version;
-			return 0;
-		}
-	}
-
-	return -DER_NOTSUPPORTED;
+	return daos_get_module_version(module_id, protocol_ver, module_ver);
 }
 
-#define DEFINE_DS_RPC_PROTOCOL(module_prefix)                                                      \
+#define DEFINE_DS_RPC_PROTOCOL(module_prefix, module_id)                                           \
 	int ds_##module_prefix##_rpc_protocol(uint8_t *version)                                    \
 	{                                                                                          \
-		return dss_select_module_version(module_prefix##_module.sm_ver_table, version);    \
+		return dss_select_module_version(module_id, version);                              \
 	}
 
-#define DEFINE_RPC_PROTOCOL(module_prefix)                                                         \
+#define DEFINE_RPC_PROTOCOL(module_prefix, module_id)                                              \
 	int module_prefix##_rpc_protocol(uint8_t *version)                                         \
 	{                                                                                          \
-		return dss_select_module_version(module_prefix##_module.sm_ver_table, version);    \
+		return dss_select_module_version(module_id, version);                              \
 	}
 
 #endif /* __DSS_API_H__ */

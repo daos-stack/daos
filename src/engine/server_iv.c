@@ -313,6 +313,7 @@ iv_entry_alloc(struct ds_iv_ns *ns, struct ds_iv_class *class,
 	if (rc)
 		D_GOTO(free, rc);
 
+	entry->iv_key.version = key->version;
 	entry->ns = ns;
 	entry->iv_valid = false;
 	entry->iv_class = class;
