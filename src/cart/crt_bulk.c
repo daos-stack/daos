@@ -232,12 +232,12 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 	if (bulk->crt_ctx)
 		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 
-	if (bulk->bulk_orig_uri)
-		D_FREE(bulk->bulk_orig_uri);
 out:
 	if (bulk != NULL) {
 		if (bulk->iovs)
 			D_FREE(bulk->iovs);
+		if (bulk->bulk_orig_uri)
+			D_FREE(bulk->bulk_orig_uri);
 		D_FREE(bulk);
 	}
 	return rc;
