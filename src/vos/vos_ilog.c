@@ -277,6 +277,11 @@ vos_ilog_fetch_internal(struct umem_instance *umm, daos_handle_t coh, uint32_t i
 		return rc;
 	}
 
+	if (vos_ilog_failout(ilog, intent)) {
+		D_ERROR("Try to access corrupted target ilog\n");
+		return -DER_DATA_LOSS;
+	}
+
 init:
 	info->ii_uncommitted = 0;
 	info->ii_create = 0;
@@ -487,6 +492,8 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	/** Do a fetch first.  The log may already exist */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont), DAOS_INTENT_PUNCH,
 			    ilog, epr->epr_hi, bound, has_cond, NULL, parent, info);
+	if (rc == -DER_DATA_LOSS)
+		return rc;
 
 	if (rc == -DER_TX_RESTART || info->ii_uncertain_create)
 		return -DER_TX_RESTART;
@@ -552,6 +559,27 @@ punch_log:
 }
 
 int
+vos_ilog_set_flags_(struct vos_container *cont, struct ilog_df *ilog, daos_epoch_t epoch,
+		    uint32_t flags)
+{
+	struct ilog_desc_cbs cbs;
+	daos_handle_t        loh;
+	int                  rc;
+
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, false, &loh);
+	if (rc == 0) {
+		rc = ilog_set_flags(loh, epoch, flags);
+		ilog_close(loh);
+	}
+
+	VOS_TX_LOG_FAIL(rc, "Could not set flags %x for ilog %p at " DF_X64 ": " DF_RC "\n", flags,
+			ilog, epoch, DP_RC(rc));
+
+	return rc;
+}
+
+int
 vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_range_t *epr,
 		   bool discard, bool uncommitted_only, const struct vos_punch_record *parent_punch,
 		   struct vos_ilog_info *info)
@@ -574,8 +602,8 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_ran
 	if (rc != 0)
 		return rc;
 
-	return vos_ilog_fetch(umm, coh, DAOS_INTENT_PURGE, ilog, epr->epr_hi, 0, false,
-			      &punch_rec, NULL, info);
+	return vos_ilog_fetch(umm, coh, discard ? DAOS_INTENT_DISCARD : DAOS_INTENT_PURGE, ilog,
+			      epr->epr_hi, 0, false, &punch_rec, NULL, info);
 }
 
 bool
