@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -870,6 +871,8 @@ bio_set_hotplug_filter(const char *nvme_conf)
 	if (rc != 0)
 		return rc;
 
+	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter, %X-%X\n",
+		hotplug_busid_range.begin, hotplug_busid_range.end);
 	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	return rc;
