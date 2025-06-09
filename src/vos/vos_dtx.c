@@ -216,11 +216,11 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	D_FREE(dae->dae_records);
 	dae->dae_rec_cap = 0;
 	DAE_REC_CNT(dae) = 0;
-	dae->dae_need_release = 0;
 
 	if (!keep_df) {
-		dae->dae_df_off = UMOFF_NULL;
-		dae->dae_dbd = NULL;
+		dae->dae_need_release = 0;
+		dae->dae_df_off       = UMOFF_NULL;
+		dae->dae_dbd          = NULL;
 	}
 }
 
