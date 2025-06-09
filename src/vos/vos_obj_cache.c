@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -377,6 +378,9 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 	if (obj->obj_df) {
+		if (unlikely(intent == DAOS_INTENT_MARK))
+			goto out;
+
 		D_DEBUG(DB_TRACE, "looking up object ilog");
 		if (create || intent == DAOS_INTENT_PUNCH)
 			vos_ilog_ts_ignore(vos_obj2umm(obj),
@@ -417,6 +421,9 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
+	if (unlikely(intent == DAOS_INTENT_MARK))
+		goto out;
+
 	if (vos_obj_op_conflict(obj, flags, intent, create)) {
 		/** Cleanup so unit test that triggers doesn't corrupt the state */
 		vos_obj_release(occ, obj, 0, false);
@@ -436,8 +443,14 @@ check_object:
 
 	D_ASSERT(obj_p != NULL);
 
-	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
+	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL)
 		goto out;
+
+	if (intent == DAOS_INTENT_PUNCH) {
+		if (unlikely(ilog_is_corrupted(&obj->obj_df->vo_ilog)))
+			D_GOTO(failed, rc = -DER_DATA_LOSS);
+		goto out;
+	}
 
 	if (!create) {
 		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),

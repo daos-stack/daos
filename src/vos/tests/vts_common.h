@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -138,6 +139,8 @@ int run_ilog_tests(const char *cfg);
 int run_csum_extent_tests(const char *cfg);
 int run_mvcc_tests(const char *cfg);
 int run_wal_tests(const char *cfg);
+int
+run_mark_tests(const char *cfg);
 int
 run_vos_command(const char *arg0, const char *cmd);
 

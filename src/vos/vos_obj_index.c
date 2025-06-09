@@ -888,7 +888,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 
 	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont, oid,
 			  &oiter->oit_epr, iter->it_bound, base_flag | VOS_OBJ_NO_HOLD,
-			  DAOS_INTENT_PURGE, NULL, NULL);
+			  range_discard ? DAOS_INTENT_DISCARD : DAOS_INTENT_PURGE, NULL, NULL);
 	if (rc != 0) {
 		/** -DER_BUSY means the object is in-use already.  We will after a yield in this
 		 * case.
