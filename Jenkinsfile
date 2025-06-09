@@ -668,7 +668,7 @@ pipeline {
                     }
                     post {
                         success {
-                            uploadNewRPMs('success', 'el8')
+                            uploadNewRPMs('el8', 'success')
                         }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
@@ -678,7 +678,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
-                            uploadNewRPMs('cleanup', 'el8')
+                            uploadNewRPMs('el8', 'cleanup')
                             job_status_update()
                         }
                     }
