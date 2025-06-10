@@ -175,6 +175,7 @@ pipeline {
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsArgs()
+        HTTPS_PROXY = ''
     }
 
     options {
