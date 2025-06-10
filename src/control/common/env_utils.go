@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -63,6 +64,7 @@ func ScrubProxyVariables() {
 	proxyVars := []string{
 		"http_proxy", "https_proxy", "ftp_proxy", "socks_proxy", "no_proxy",
 		"HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "SOCKS_PROXY", "NO_PROXY",
+		"DAOS_HTTPS_PROXY",
 	}
 
 	if !proxyScrubIsDisabled() {

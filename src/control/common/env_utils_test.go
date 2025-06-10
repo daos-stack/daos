@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -114,6 +115,7 @@ func TestScrubProxyVariables(t *testing.T) {
 		"FTP_PROXY=yep it's a proxy somehow this is weird",
 		"no_proxy=nope",
 		"NO_PROXY=NOPE",
+		"DAOS_HTTPS_PROXY=NOPE",
 	}...)
 	for name, tc := range map[string]struct {
 		setup    []string
