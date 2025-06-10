@@ -413,6 +413,7 @@ struct crt_bulk {
 	d_iov_t        *iovs;        /** original iovs */
 	d_sg_list_t     sgl;         /** original sgl */
 	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
+	char           *bulk_orig_uri; /* where the bulk comes from */
 };
 
 /* crt_context */

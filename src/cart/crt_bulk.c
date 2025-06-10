@@ -231,10 +231,13 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
 	if (bulk->crt_ctx)
 		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
+
 out:
 	if (bulk != NULL) {
 		if (bulk->iovs)
 			D_FREE(bulk->iovs);
+		if (bulk->bulk_orig_uri)
+			D_FREE(bulk->bulk_orig_uri);
 		D_FREE(bulk);
 	}
 	return rc;
@@ -254,7 +257,7 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, false);
 	if (rc != 0)
 		DL_ERROR(rc, "%p:%s crt_hg_bulk_transfer() failed", bulk_desc->bd_rpc,
-			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
+			 crt_bulk_origin_addr_get(bulk_desc));
 
 out:
 	return rc;

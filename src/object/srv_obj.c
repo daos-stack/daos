@@ -247,8 +247,8 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	rpc = bulk_desc->bd_rpc;
 
 	if (cb_info->bci_rc != 0)
-		D_ERROR("rpc: %p:%s bulk transfer failed: %d\n", rpc, crt_req_origin_addr_get(rpc),
-			cb_info->bci_rc);
+		D_ERROR("rpc: %p:%s bulk transfer failed: %d\n", rpc,
+			crt_bulk_origin_addr_get(bulk_desc), cb_info->bci_rc);
 
 	arg = (struct obj_bulk_args *)cb_info->bci_arg;
 	/**
