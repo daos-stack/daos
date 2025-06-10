@@ -67,7 +67,11 @@ struct dtx_cleanup_cb_args {
 	d_list_t		dcca_pc_list;
 	int			dcca_st_count;
 	int			dcca_pc_count;
-	uint32_t		dcca_cleanup_thd;
+	union {
+		uint32_t dcca_cleanup_thd;
+		uint32_t dcca_version;
+	};
+	bool dcca_for_orphan;
 };
 
 static inline void
@@ -203,9 +207,13 @@ dtx_cleanup_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_tgt_cnt == 0)
 		return 0;
 
-	/* Stop the iteration if current DTX is not too old. */
-	if (dtx_sec2age(ent->ie_dtx_start_time) <= dcca->dcca_cleanup_thd)
+	if (dcca->dcca_for_orphan) {
+		if (ent->ie_dtx_ver >= dcca->dcca_version)
+			return 0;
+	} else if (dtx_sec2age(ent->ie_dtx_start_time) <= dcca->dcca_cleanup_thd) {
+		/* Stop the iteration if current DTX is not too old. */
 		return 1;
+	}
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 
@@ -287,12 +295,11 @@ dtx_dpci_free(struct dtx_partial_cmt_item *dpci)
 	D_FREE(dpci);
 }
 
-static void
-dtx_cleanup(void *arg)
+int
+dtx_cleanup_internal(struct ds_cont_child *cont, struct sched_request *sr, uint32_t thd,
+		     bool for_orphan)
 {
-	struct dss_module_info		*dmi = dss_get_module_info();
-	struct dtx_batched_cont_args	*dbca = arg;
-	struct ds_cont_child		*cont = dbca->dbca_cont;
+	struct dss_module_info          *dmi = dss_get_module_info();
 	struct dtx_share_peer		*dsp;
 	struct dtx_partial_cmt_item	*dpci;
 	struct dtx_entry		*dte;
@@ -303,26 +310,26 @@ dtx_cleanup(void *arg)
 	d_list_t			 act_list;
 	int				 count;
 	int				 rc;
-
-	if (dbca->dbca_cleanup_req == NULL)
-		goto out;
+	int                              rc1 = 0;
 
 	D_INIT_LIST_HEAD(&cmt_list);
 	D_INIT_LIST_HEAD(&abt_list);
 	D_INIT_LIST_HEAD(&act_list);
 	D_INIT_LIST_HEAD(&dcca.dcca_st_list);
 	D_INIT_LIST_HEAD(&dcca.dcca_pc_list);
-	dcca.dcca_st_count = 0;
-	dcca.dcca_pc_count = 0;
-	/* Cleanup stale DTX entries within about 10 seconds windows each time. */
-	dcca.dcca_cleanup_thd = dbca->dbca_cleanup_thd - 10;
+	dcca.dcca_st_count    = 0;
+	dcca.dcca_pc_count    = 0;
+	dcca.dcca_cleanup_thd = thd;
+	dcca.dcca_for_orphan  = for_orphan;
 	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
 			  dtx_cleanup_iter_cb, &dcca, VOS_ITER_DTX, 0);
-	if (rc < 0)
-		D_WARN("Failed to scan DTX entry for cleanup "
-		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
+	if (rc < 0) {
+		D_ERROR("Failed to iter DTX for cleanup %s on " DF_UUID ", ver %u: " DF_RC "\n",
+			for_orphan ? "orphan" : "stale", DP_UUID(cont->sc_uuid), thd, DP_RC(rc));
+		goto out;
+	}
 
-	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_st_list)) {
+	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_st_list)) {
 		if (dcca.dcca_st_count > DTX_REFRESH_MAX) {
 			count = DTX_REFRESH_MAX;
 			dcca.dcca_st_count -= DTX_REFRESH_MAX;
@@ -337,8 +344,11 @@ dtx_cleanup(void *arg)
 		 * that all the DTX entries in the check list will be handled
 		 * even if some former ones hit failure.
 		 */
-		rc = dtx_refresh_internal(cont, &count, &dcca.dcca_st_list,
-					  &cmt_list, &abt_list, &act_list, false);
+		rc = dtx_refresh_internal(cont, &count, &dcca.dcca_st_list, &cmt_list, &abt_list,
+					  &act_list, for_orphan ? DRI_ORPHAN : DRI_STALE);
+		if (rc != 0 && rc1 == 0)
+			rc1 = rc;
+
 		D_ASSERTF(count == 0, "%d entries are not handled: "DF_RC"\n",
 			  count, DP_RC(rc));
 	}
@@ -347,7 +357,7 @@ dtx_cleanup(void *arg)
 	D_ASSERT(d_list_empty(&abt_list));
 	D_ASSERT(d_list_empty(&act_list));
 
-	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_pc_list)) {
+	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_st_list)) {
 		dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item, dpci_link);
 		dcca.dcca_pc_count--;
 
@@ -377,6 +387,7 @@ dtx_cleanup(void *arg)
 		dtx_dpci_free(dpci);
 	}
 
+out:
 	while ((dsp = d_list_pop_entry(&dcca.dcca_st_list, struct dtx_share_peer,
 				       dsp_link)) != NULL)
 		dtx_dsp_free(dsp);
@@ -385,9 +396,21 @@ dtx_cleanup(void *arg)
 					dpci_link)) != NULL)
 		dtx_dpci_free(dpci);
 
-	dbca->dbca_cleanup_done = 1;
+	return rc != 0 ? rc : rc1;
+}
 
-out:
+static void
+dtx_cleanup(void *arg)
+{
+	struct dtx_batched_cont_args *dbca = arg;
+
+	if (dbca->dbca_cleanup_req != NULL) {
+		/* Cleanup stale DTX entries within about 10 seconds windows each time. */
+		dtx_cleanup_internal(dbca->dbca_cont, dbca->dbca_cleanup_req,
+				     dbca->dbca_cleanup_thd - 10, false);
+		dbca->dbca_cleanup_done = 1;
+	}
+
 	dtx_put_dbca(dbca);
 }
 
