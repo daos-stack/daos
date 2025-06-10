@@ -42,7 +42,7 @@ class RbldNoCapacity(TestWithServers):
             Full fill pool and verify pool by query after rebuild.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,md_on_ssd
+        :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild,no_cap
         :avocado: tags=RbldNoCapacity,test_rebuild_no_capacity
         """
