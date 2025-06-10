@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -753,10 +754,9 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
 
-	rc = daos_hhash_init();
+	rc = daos_hhash_init_feats(D_HASH_FT_RWLOCK);
 	if (rc != 0) {
-		D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("daos_hhash_init_feats failed, rc: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(exit_crt, rc);
 	}
 
