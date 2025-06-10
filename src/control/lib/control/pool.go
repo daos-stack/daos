@@ -548,8 +548,8 @@ func (pqr *PoolQueryResp) UpdateState() error {
 		pqr.State = daos.PoolServiceStateUnknown
 	}
 
-	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
-	if pqr.State == daos.PoolServiceStateReady && pqr.DisabledTargets > 0 {
+	// Update the Pool state as Degraded if initial state is Ready and rebuild is busy.
+	if pqr.Rebuild != nil && pqr.Rebuild.State == daos.PoolRebuildStateBusy {
 		pqr.State = daos.PoolServiceStateDegraded
 	}
 
