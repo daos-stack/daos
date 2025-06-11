@@ -64,7 +64,6 @@ func ScrubProxyVariables() {
 	proxyVars := []string{
 		"http_proxy", "https_proxy", "ftp_proxy", "socks_proxy", "no_proxy",
 		"HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "SOCKS_PROXY", "NO_PROXY",
-		"DAOS_HTTPS_PROXY",
 	}
 
 	if !proxyScrubIsDisabled() {
