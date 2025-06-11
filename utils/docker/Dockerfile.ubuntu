@@ -36,12 +36,13 @@ RUN locale-gen en_US.UTF-8
 RUN update-alternatives --set \
     java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
-ARG UID=5000
-
 # Add DAOS users
-RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
-            --home /home/daos daos_server
-RUN echo "daos_server:daos_server" | chpasswd
+ARG UID=5000
+COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
+     /tmp/daos-server-user-setup.sh
+RUN set -e;                                    \
+    chmod +x /tmp/daos-server-user-setup.sh && \
+    /tmp/daos-server-user-setup.sh
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
@@ -69,6 +70,7 @@ COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh utils/scripts/copy_files.sh
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -76,6 +78,7 @@ COPY --chown=daos_server:daos_server utils/build.config utils/
 ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_TARGET_TYPE=release
+ARG DAOS_PACKAGES_BUILD=yes
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -92,6 +95,19 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
       TARGET_TYPE=$DAOS_TARGET_TYPE &&                           \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
+COPY --chown=daos_server:daos_server utils/rpms utils/rpms
+COPY --chown=daos_server:daos_server utils/sl utils/sl
+
+# Build third party RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
+	export DISTRO=ubuntu &&                                                 \
+	export OUTPUT_TYPE=deb &&                                               \
+	export LIBDIR=/usr/lib/x86_64-linux-gnu &&                              \
+	utils/rpms/build_packages.sh deps &&                                    \
+	mkdir -p /home/daos/dpkg &&                                             \
+	cp *.deb /home/daos/dpkg;                                               \
+    }
+
 USER root:root
 ARG CB1
 RUN [ -z "$CB1" ] || { apt-get update && apt-get upgrade && apt-get clean all; }
@@ -106,8 +122,11 @@ COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct require
 # needed for NLT test
 COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
+COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/config utils/config
+COPY --chown=daos_server:daos_server utils/certs utils/certs
+COPY --chown=daos_server:daos_server utils/completion utils/completion
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -117,10 +136,25 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+    { export MPI_PKG=any &&       \
+      scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE \
+      FIRMWARE_MGMT=1 && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) && \
     go clean -cache && cp -r utils/config/examples /opt/daos; }
+
+# Build RPMs
+COPY --chown=daos_server:daos_server utils utils
+
+# Build DAOS RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
+	export DISTRO=ubuntu &&                                            \
+	export OUTPUT_TYPE=deb &&                                          \
+	export LIBDIR=/usr/lib/x86_64-linux-gnu &&                         \
+	utils/rpms/build_packages.sh daos &&                               \
+	mkdir -p /home/daos/dpkg &&                                        \
+	cp *.deb /home/daos/dpkg;                                          \
+    }
 
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH

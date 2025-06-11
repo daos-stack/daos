@@ -1,6 +1,7 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2025 Google LLC
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -46,7 +47,7 @@ function export_pythonpath()
   MINOR="$(python3 -c 'import sys; print(sys.version_info.minor)')"
   VERSION="${MAJOR}.${MINOR}"
   if [ "${MAJOR}" -eq 3 ]; then
-    PYTHONPATH=${SL_PREFIX}/lib64/python${VERSION}/site-packages:${PYTHONPATH}
+    PYTHONPATH=${SL_PREFIX}/lib64/python${VERSION}/site-packages:${PYTHONPATH:-}
   else
     echo "unknown Python version: ${VERSION}"
     return 0
