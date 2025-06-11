@@ -626,6 +626,8 @@ int
 d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void
 d_free_string(struct d_string_buffer_t *buf);
+void
+d_reset_string(struct d_string_buffer_t *buf);
 
 typedef void (*d_alloc_track_cb_t)(void *arg, size_t size);
 

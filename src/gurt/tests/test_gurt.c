@@ -23,6 +23,7 @@
 #include <gurt/dlog.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
+#include <gurt/parser.h>
 #include "mocks_gurt.h"
 
 /* machine epsilon */
@@ -2012,42 +2013,72 @@ config_copy_bad(char *buf, int len, void *src)
 	return CUSTOM_ERROR;
 }
 
-#define good_config1 "log_mask=debug"
-#define good_config2 " log_mask=debug\nstreams=all"
-#define good_config3 ""
-#define good_config4 "   log_mask    =       info     \nstreams =   vos=debug "
-#define bad_config1  "bad_var=debug"
-#define bad_config2  "log_mask=info\nlog_mask=debug"
-#define bad_config3  "=log_mask"
+#define good_config1 "log\nlog_mask=debug"
+#define good_config2 "log\n log_mask=debug\nstreams=all"
+#define good_config3 "log\n"
+#define good_config4 "log\n   log_mask    =       info     \nstreams =   vos=debug "
+#define bad_config1  "log\nbad_var=debug"
+#define bad_config2  "log\nlog_mask=info\nlog_mask=debug"
+#define bad_config3  "log\n=log_mask"
+#define bad_config4  " bad"
 
 static void
-test_log_parse_config(void **state)
+test_parser(void **state)
 {
+	d_parser_t *parser;
 	char old_mask[128]    = {"warn"};
 	char old_streams[128] = {"group_default"};
 	int  rc;
 
+	rc = d_parser_init(&parser);
+	assert_rc_equal(rc, 0);
+
+	/** register built-in log parser */
+	rc = d_log_register_parser(parser);
+
 	d_getenv_str(old_mask, sizeof(old_mask), "D_LOG_MASK");
 	d_getenv_str(old_streams, sizeof(old_streams), "DD_MASK");
 
-	rc = d_log_parse_config(good_config1, sizeof(good_config1) - 1, config_copy_good);
+	rc = d_parser_run(parser, good_config1, sizeof(good_config1) - 1, config_copy_good);
 	assert_rc_equal(rc, 0);
-	rc = d_log_parse_config(good_config2, sizeof(good_config2) - 1, config_copy_good);
+	assert_string_equal(d_parser_output_get(parser),
+			    "Setting log_mask to debug\nNo update to streams\n");
+	rc = d_parser_run(parser, good_config2, sizeof(good_config2) - 1, config_copy_good);
 	assert_rc_equal(rc, 0);
-	rc = d_log_parse_config(good_config3, sizeof(good_config3) - 1, config_copy_good);
-	assert_rc_equal(rc, 0);
-	rc = d_log_parse_config(good_config4, sizeof(good_config4) - 1, config_copy_good);
-	assert_rc_equal(rc, 0);
-	rc = d_log_parse_config(good_config3, sizeof(good_config3) - 1, config_copy_bad);
+	assert_string_equal(d_parser_output_get(parser),
+			    "Setting log_mask to debug\nSetting streams to all\n");
+	rc = d_parser_run(parser, good_config2, sizeof(good_config2) - 1, config_copy_bad);
 	assert_rc_equal(rc, CUSTOM_ERROR);
-	rc = d_log_parse_config(bad_config1, sizeof(bad_config1) - 1, config_copy_good);
-	assert_rc_equal(rc, -DER_INVAL);
-	rc = d_log_parse_config(bad_config2, sizeof(bad_config2) - 1, config_copy_good);
-	assert_rc_equal(rc, -DER_INVAL);
-	rc = d_log_parse_config(bad_config3, sizeof(bad_config3) - 1, config_copy_good);
-	assert_rc_equal(rc, -DER_INVAL);
+	assert_string_equal(
+	    d_parser_output_get(parser),
+	    "Could not copy parser data: DER_UNKNOWN(-50000): 'Unknown error code -50000'\n");
+	rc = d_parser_run(parser, good_config3, sizeof(good_config3) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	assert_string_equal(d_parser_output_get(parser),
+			    "No update to log_mask\nNo update to streams\n");
+	rc = d_parser_run(parser, good_config4, sizeof(good_config4) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	assert_string_equal(d_parser_output_get(parser),
+			    "Setting log_mask to info\nSetting streams to vos=debug\n");
+	rc = d_parser_run(parser, bad_config1, sizeof(bad_config1) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	assert_string_equal(d_parser_output_get(parser),
+			    "Unrecognized variable bad_var in log config\n");
+	rc = d_parser_run(parser, bad_config2, sizeof(bad_config2) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	assert_string_equal(d_parser_output_get(parser),
+			    "Duplication definition not supported in log config\n");
+	rc = d_parser_run(parser, bad_config3, sizeof(bad_config3) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	assert_string_equal(d_parser_output_get(parser),
+			    "Value without log_var log_mask in log config\n");
+	rc = d_parser_run(parser, bad_config4, sizeof(bad_config3) - 1, config_copy_good);
+	assert_rc_equal(rc, 0);
+	assert_string_equal(d_parser_output_get(parser), "Could not find handler for bad\n");
 
 	d_log_sync_mask_ex(old_mask, old_streams);
+
+	d_parser_fini(parser);
 }
 
 static void
@@ -2785,7 +2816,7 @@ int
 main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
-	    cmocka_unit_test(test_log_parse_config),
+	    cmocka_unit_test(test_parser),
 	    cmocka_unit_test(test_time),
 	    cmocka_unit_test(test_d_errstr),
 	    cmocka_unit_test(test_d_errdesc),

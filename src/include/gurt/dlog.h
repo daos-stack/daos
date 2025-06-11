@@ -370,27 +370,6 @@ void d_log_sync_mask(void);
 void d_log_sync_mask_ex(const char *log_mask, const char *dd_mask);
 
 /**
- * The user of d_log_parse_config has data they pass in but it's not necessarily
- * in a usable format.  The function d_log_parse_config will allocate an
- * appropriately sized buffer and pass it to the copy_cb with the config which
- * the callback must fill up to len bytes
- */
-typedef int (*d_log_copy_cb)(char *buf, int len, void *config);
-
-/**
- * Parse a log config
- *
- * \param[in] config	Opaque pointer representing the original config
- * \param[in] len	Length of data in config
- * \param[in] copy_cb	Function to fill a supplied buffer with the original
- *                      data
- *
- * \return 0 on success or appropriate error code
- */
-int
-     d_log_parse_config(void *config, int len, d_log_copy_cb copy_cb);
-
-/**
  * open a dlog.
  *
  * \param[in] tag		string we tag each line with
@@ -474,6 +453,18 @@ void d_log_sync(void);
  */
 void
 d_log_disable_logging(void);
+
+struct d_parser;
+typedef struct d_parser d_parser_t;
+
+/** Register log handling parser
+ *
+ * \param[in] parser Parser handle
+ *
+ * \return 0 on success, error otherwise
+ */
+int
+d_log_register_parser(d_parser_t *parser);
 
 #if defined(__cplusplus)
 }

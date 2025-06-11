@@ -14,10 +14,12 @@
 #include <fused/fuse.h>
 #include <fused/fuse_lowlevel.h>
 
+#include <daos/debug.h>
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
 #include <gurt/slab.h>
+#include <gurt/parser.h>
 
 #include <daos.h>
 #include <daos_fs.h>
@@ -37,6 +39,7 @@ struct dfuse_info {
 	bool                 di_wb_cache;
 	bool                 di_read_only;
 	bool                 di_local_flock;
+	d_parser_t          *di_parser;
 
 	/* Per process spinlock
 	 * This is used to lock readdir against closedir where they share a readdir handle,
