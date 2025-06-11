@@ -734,13 +734,13 @@ d_log_parse_config(struct d_string_buffer_t *output, char *config, int len, void
 	}
 
 	if (lv.mask)
-		d_write_string_buffer(output, "Setting log_mask to %s\n", lv.mask);
+		d_write_string_buffer(output, "log_mask=%s\n", lv.mask);
 	else
-		d_write_string_buffer(output, "No update to log_mask\n");
+		d_write_string_buffer(output, "log_mask unchanged\n");
 	if (lv.streams)
-		d_write_string_buffer(output, "Setting streams to %s\n", lv.streams);
+		d_write_string_buffer(output, "streams=%s\n", lv.streams);
 	else
-		d_write_string_buffer(output, "No update to streams\n");
+		d_write_string_buffer(output, "Streams unchanged\n");
 
 	d_log_sync_mask_ex(lv.mask, lv.streams);
 out:

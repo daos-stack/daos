@@ -407,6 +407,11 @@ check_fd_mountpoint(const char *mountpoint)
 	return fd;
 }
 
+static void
+stat_parser_cb(parser_t *parser, char *buf, int len, void *arg)
+{
+}
+
 static int
 init_parser(struct dfuse_info *dfuse_info)
 {
@@ -416,7 +421,15 @@ init_parser(struct dfuse_info *dfuse_info)
 	if (rc != 0)
 		return rc;
 
-	return d_log_register_parser(dfuse_info->di_parser);
+	rc = d_log_register_parser(dfuse_info->di_parser);
+	if (rc != 0)
+		return rc;
+
+	rc = d_parser_handler_register(dfuse_info->di_parser, "stats", stat_parser_cb);
+	if (rc != 0)
+		return rc;
+
+	return 0;
 }
 
 static void

@@ -2041,12 +2041,10 @@ test_parser(void **state)
 
 	rc = d_parser_run(parser, good_config1, sizeof(good_config1) - 1, config_copy_good);
 	assert_rc_equal(rc, 0);
-	assert_string_equal(d_parser_output_get(parser),
-			    "Setting log_mask to debug\nNo update to streams\n");
+	assert_string_equal(d_parser_output_get(parser), "log_mask=debug\nstreams unchanged\n");
 	rc = d_parser_run(parser, good_config2, sizeof(good_config2) - 1, config_copy_good);
 	assert_rc_equal(rc, 0);
-	assert_string_equal(d_parser_output_get(parser),
-			    "Setting log_mask to debug\nSetting streams to all\n");
+	assert_string_equal(d_parser_output_get(parser), "log_mask=debug\nstreams=all\n");
 	rc = d_parser_run(parser, good_config2, sizeof(good_config2) - 1, config_copy_bad);
 	assert_rc_equal(rc, CUSTOM_ERROR);
 	assert_string_equal(
@@ -2054,12 +2052,10 @@ test_parser(void **state)
 	    "Could not copy parser data: DER_UNKNOWN(-50000): 'Unknown error code -50000'\n");
 	rc = d_parser_run(parser, good_config3, sizeof(good_config3) - 1, config_copy_good);
 	assert_rc_equal(rc, 0);
-	assert_string_equal(d_parser_output_get(parser),
-			    "No update to log_mask\nNo update to streams\n");
+	assert_string_equal(d_parser_output_get(parser), "log_mask unchanged\nstreams unchanged\n");
 	rc = d_parser_run(parser, good_config4, sizeof(good_config4) - 1, config_copy_good);
 	assert_rc_equal(rc, 0);
-	assert_string_equal(d_parser_output_get(parser),
-			    "Setting log_mask to info\nSetting streams to vos=debug\n");
+	assert_string_equal(d_parser_output_get(parser), "log_mask=info\nstreams=vos=debug\n");
 	rc = d_parser_run(parser, bad_config1, sizeof(bad_config1) - 1, config_copy_good);
 	assert_rc_equal(rc, 0);
 	assert_string_equal(d_parser_output_get(parser),

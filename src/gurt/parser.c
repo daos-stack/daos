@@ -14,6 +14,32 @@
 
 #include <gurt/parser.h>
 
+/**
+ * To reduce likelihood of errors, we allocate enough buffer space to cover
+ * existing use cases.
+ */
+#define D_PARSER_MAX_IO_SIZE  2048
+#define D_PARSER_MAX_BUF_SIZE 256
+#define D_PARSER_BUF_NR       16
+
+struct d_parser_handler {
+	d_list_t          ph_link;
+	d_parser_run_cb_t ph_run_cb;
+	char              ph_id[D_PARSER_ID_MAX_LEN];
+};
+
+struct d_parser_buf {
+	char pb_buf[D_PARSER_MAX_BUF_SIZE];
+};
+
+struct d_parser_internal {
+	char                pi_input[D_PARSER_MAX_IO_SIZE];
+	char                pi_output[D_PARSER_MAX_IO_SIZE];
+	struct d_parser_buf pi_bufs[D_PARSER_BUF_NR];
+	uint32_t            pi_out_offset;
+	uint32_t            pi_free_buf_mask;
+};
+
 #define D_PARSER_MAGIC 0xbaadf00d
 
 static bool
@@ -92,25 +118,53 @@ d_parser_output_get(d_parser_t *parser)
 }
 
 char *
-d_strip(char *str, int *len)
+d_parser_string_copy(d_parser_t *parser, const char *str, int *len, bool strip)
 {
-	while (*len > 0 && isspace(str[0])) {
-		str++;
+	int buf_nr;
+
+	*len = 0;
+
+	if (!d_parser_is_valid(parser))
+		return "";
+
+	struct d_parser_internal *internal = (struct d_parser_internal *)&parser->d_internal[0];
+
+	if (internal->pi_free_buf_mask == 0) {
+		d_parser_output_put(parser, "Insufficient buffers to parse input");
+		return "";
+	}
+
+	buf_nr = __builtin_ffs(internal->pi_free_buf_mask);
+	internal->pi_free_buf_mask ^= 1 << buf_nr;
+
+	char *buf = &internal->pi_bufs[buf_nr].pb_buf;
+
+	/** Value can be truncated but it is invalid */
+	strncpy(buf, str, D_PARSER_MAX_BUF_SIZE);
+	buf[D_PARSER_MAX_BUF_SIZE - 1] = 0;
+
+	if (!strip)
+		goto out;
+
+	*len = strlen(buf);
+
+	while (*len > 0 && isspace(buf[0])) {
+		buf++;
 		(*len)--;
 	}
 
-	char *end = &str[*len - 1];
+	char *end = &buf[*len - 1];
 
 	while ((*len) > 0 && isspace(*end)) {
 		*(end--) = '\0';
 		(*len)--;
 	}
 
-	return str;
+	return buf;
 }
 
 int
-d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb)
+d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb, void *arg)
 {
 	char               *buf = NULL;
 	char               *id  = NULL;
@@ -127,8 +181,6 @@ d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb)
 	D_ALLOC_ARRAY(buf, len + 1);
 	if (data == NULL)
 		return -DER_NOMEM;
-
-	d_reset_string(&parser->p_output);
 
 	rc = copy_cb(buf, len, data);
 	if (rc != 0) {
@@ -148,7 +200,7 @@ d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb)
 		handler_buf = &buf[len];
 		handler_len = 0;
 	}
-	id = d_strip(buf, &len);
+	id = d_parser_string_copy(parser, buf, &len);
 	if (len == 0) {
 		d_write_string_buffer(&parser->p_output, "No type parameter given to parser\n");
 		goto out;
@@ -158,7 +210,7 @@ d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb)
 		if (strcmp(id, handler->ph_id) == 0) {
 			if (handler->ph_cbs.pc_parser_run_cb != NULL) {
 				handler->ph_cbs.pc_parser_run_cb(&parser->p_output, handler_buf,
-								 handler_len, handler->ph_arg);
+								 handler_len, arg);
 				goto out;
 			}
 		}

@@ -1350,6 +1350,6 @@ void
 dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
-#define DFUSE_CTRL_MODE (S_IFREG | 0222)
+#define DFUSE_CTRL_MODE (S_IFREG | 0666)
 
 #endif /* __DFUSE_H__ */
