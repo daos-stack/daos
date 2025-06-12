@@ -28,7 +28,8 @@ class DmgSystemCleanupTest(TestWithServers):
     """
 
     def test_dmg_system_cleanup_one_host(self):
-        """Jira ID: DAOS-6471
+        """
+        JIRA ID: DAOS-6471
 
         Test Description: Test dmg system cleanup.
 
