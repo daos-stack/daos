@@ -14,7 +14,7 @@ arch=$(uname -i)
 
 dnf_install_args="${1:-}"
 
-dnf --nodocs install ${dnf_install_args} \
+dnf --nodocs install "${dnf_install_args}" \
     boost-devel \
     bzip2 \
     curl \
@@ -74,7 +74,7 @@ dnf --nodocs install ${dnf_install_args} \
     which \
     yasm
 
-dnf install ${dnf_install_args} ruby-devel
+dnf install "${dnf_install_args}" ruby-devel
 gem install json -v 2.7.6
 gem install dotenv -v 2.8.1
 gem install fpm
@@ -84,6 +84,6 @@ fi
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
-    dnf --nodocs install ${dnf_install_args} \
+    dnf --nodocs install "${dnf_install_args}" \
         ipmctl-devel
 fi
