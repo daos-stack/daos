@@ -305,7 +305,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		return nil
 	}
 
-	bdevCfgs := srv.cfg.GetBdevCfgs()
+	bdevCfgs := srv.cfg.GetBdevConfigs()
 
 	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
 	if bdevCfgs.HaveRealNVMe() && srv.runningUser.Username != "root" {

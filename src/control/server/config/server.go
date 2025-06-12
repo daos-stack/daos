@@ -640,16 +640,6 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 	return nil
 }
 
-// GetBdevCfgs retrieves bdev tier configs from all engine components of the server config.
-func (cfg *Server) GetBdevCfgs() storage.TierConfigs {
-	var bdevCfgs storage.TierConfigs
-	for _, engineCfg := range cfg.Engines {
-		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
-	}
-
-	return bdevCfgs
-}
-
 // Validate asserts that config meets minimum requirements.
 func (cfg *Server) Validate(log logging.Logger) (err error) {
 	msg := "validating config file"
@@ -747,7 +737,7 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 
 	// Verify bdev_exclude doesn't clash with any configured bdev.
-	pciAddrs := cfg.GetBdevCfgs().NVMeBdevs().Devices()
+	pciAddrs := cfg.GetBdevConfigs().NVMeBdevs().Devices()
 	for _, a := range pciAddrs {
 		if common.Includes(cfg.BdevExclude, a) {
 			return FaultConfigBdevExcludeClash
@@ -947,4 +937,17 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	}
 
 	return nil
+}
+
+// GetBdevConfigs retrieves all engine bdev storage tier configs from a server configuration.
+func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
+	if cfg == nil {
+		return
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
+	}
+
+	return
 }
