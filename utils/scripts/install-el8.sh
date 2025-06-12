@@ -14,7 +14,7 @@ arch=$(uname -m)
 
 dnf_install_args="${1:-}"
 
-dnf --nodocs install ""${dnf_install_args}"" \
+dnf --nodocs install "${dnf_install_args}" \
     boost-python3-devel \
     bzip2 \
     capstone-devel \
