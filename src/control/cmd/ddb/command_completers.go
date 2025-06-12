@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -78,3 +79,5 @@ func listDirPool(match string) (result []string) {
 func rmPoolCompleter(prefix string, args []string) []string {
 	return filterSuggestions(prefix, []string{"-h"}, listDirPool(defMntPrefix))
 }
+
+// TODO DAOS-17322 Check if a completer is needed for the DtxAggr function
