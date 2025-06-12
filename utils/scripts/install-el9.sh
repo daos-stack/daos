@@ -10,7 +10,9 @@
 
 set -e
 
-dnf --nodocs install \
+dnf_install_args=${1:=''}
+
+dnf --nodocs install ${dnf_install_args} \
     boost-python3-devel \
     bzip2 \
     capstone-devel \
@@ -78,7 +80,7 @@ dnf --nodocs install \
     yasm
 
 ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
-dnf --nodocs install \
+dnf --nodocs install ${dnf_install_args} \
     "@ruby:${ruby_version}" \
     rubygems \
     rubygem-json
