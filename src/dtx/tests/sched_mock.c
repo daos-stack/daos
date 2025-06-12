@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +18,12 @@ struct sched_req_attr;
 
 void
 sched_req_wakeup(struct sched_request *req)
+{
+	assert_true(false);
+}
+
+void
+sched_req_abort(struct sched_request *req)
 {
 	assert_true(false);
 }

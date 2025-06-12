@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1527,15 +1528,21 @@ sched_req_wakeup(struct sched_request *req)
 }
 
 void
+sched_req_abort(struct sched_request *req)
+{
+	req->sr_abort = 1;
+	sched_req_wakeup(req);
+}
+
+void
 sched_req_wait(struct sched_request *req, bool abort)
 {
 	int	rc;
 
 	D_ASSERT(req != NULL);
-	if (abort) {
-		req->sr_abort = 1;
-		sched_req_wakeup(req);
-	}
+	if (abort)
+		sched_req_abort(req);
+
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 	rc = ABT_thread_join(req->sr_ult);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_thread_join: %d\n", rc);
