@@ -12,7 +12,7 @@ set -e
 
 arch=$(uname -i)
 
-dnf_install_args=${1:=''}
+dnf_install_args="${1:-}"
 
 dnf --nodocs install ${dnf_install_args} \
     boost-devel \

@@ -14,7 +14,7 @@ set -e
 
 arch=$(uname -i)
 
-apt_get_install_args=${1:=''}
+apt_get_install_args="${1:-}"
 
 apt-get install ${apt_get_install_args} \
     autoconf \

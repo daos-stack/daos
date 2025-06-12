@@ -12,7 +12,7 @@ set -e
 
 arch=$(uname -m)
 
-dnf_install_args=${1:=''}
+dnf_install_args="${1:-}"
 
 dnf --nodocs install ${dnf_install_args} \
     boost-python3-devel \
