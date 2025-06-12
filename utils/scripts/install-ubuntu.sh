@@ -16,7 +16,8 @@ arch=$(uname -i)
 
 apt_get_install_args="${1:-}"
 
-apt-get install "${apt_get_install_args}" \
+# shellcheck disable=SC2086
+apt-get install ${apt_get_install_args} \
     autoconf \
     build-essential \
     clang \
@@ -70,6 +71,7 @@ sudo gem install fpm
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
-    apt-get install "${apt_get_install_args}" \
+    # shellcheck disable=SC2086
+    apt-get install ${apt_get_install_args} \
         libipmctl-dev
 fi
