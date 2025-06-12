@@ -482,6 +482,7 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 				    dbca_pool_link);
 		D_ASSERT(!dbca->dbca_deregister);
 
+		dtx_get_dbca(dbca);
 		if (dbca->dbca_agg_req != NULL && dbca->dbca_agg_done) {
 			sched_req_put(dbca->dbca_agg_req);
 			dbca->dbca_agg_req = NULL;
@@ -489,36 +490,41 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		}
 
 		/* Finish this cycle scan. */
-		if (dbca->dbca_agg_gen == tls->dt_agg_gen)
+		if (dbca->dbca_agg_gen == tls->dt_agg_gen) {
+			dtx_put_dbca(dbca);
 			break;
+		}
+
+		if (unlikely(dbca->dbca_deregister)) {
+			/* Someone is closing current container. */
+			D_ASSERT(d_list_empty(&dbca->dbca_pool_link));
+			goto next;
+		}
 
 		dbca->dbca_agg_gen = tls->dt_agg_gen;
 		d_list_move_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 
 		if (dbca->dbca_agg_req != NULL)
-			continue;
+			goto next;
 
 		cont = dbca->dbca_cont;
 		dtx_stat(cont, &stat);
-		if (stat.dtx_cont_cmt_count == 0 ||
-		    stat.dtx_first_cmt_blob_time_lo == 0)
-			continue;
+		if (stat.dtx_cont_cmt_count == 0 || stat.dtx_first_cmt_blob_time_lo == 0)
+			goto next;
 
 		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
-			continue;
+			goto next;
 
 		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
 		    ((stat.dtx_cont_cmt_count > dtx_agg_thd_cnt_lo ||
 		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
 		     (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) >= dtx_agg_thd_age_up))) {
 			D_ASSERT(!dbca->dbca_agg_done);
-			dtx_get_dbca(dbca);
 			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
 			if (dbca->dbca_agg_req == NULL) {
 				D_WARN("Fail to start DTX agg ULT (1) for "DF_UUID"\n",
 				       DP_UUID(cont->sc_uuid));
-				dtx_put_dbca(dbca);
-				continue;
+				goto next;
 			}
 
 			dbpa->dbpa_aggregating++;
@@ -532,9 +538,15 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		    (victim_stat.dtx_first_cmt_blob_time_lo == stat.dtx_first_cmt_blob_time_lo &&
 		     victim_stat.dtx_first_cmt_blob_time_up == stat.dtx_first_cmt_blob_time_up &&
 		     victim_stat.dtx_cont_cmt_count < stat.dtx_cont_cmt_count)) {
+			if (victim_dbca != NULL)
+				dtx_put_dbca(victim_dbca);
+			dtx_get_dbca(dbca);
 			victim_stat = stat;
 			victim_dbca = dbca;
 		}
+
+next:
+		dtx_put_dbca(dbca);
 	}
 
 	/* No single container exceeds DTX thresholds, but the whole pool does,
@@ -545,16 +557,18 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 	    victim_dbca != NULL && victim_stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) {
 		D_ASSERT(victim_dbca->dbca_agg_req == NULL && !victim_dbca->dbca_agg_done);
 
-		dtx_get_dbca(victim_dbca);
 		victim_dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, victim_dbca, 0);
 		if (victim_dbca->dbca_agg_req == NULL) {
-			D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID"\n",
-				DP_UUID(victim_dbca->dbca_cont->sc_uuid));
-			dtx_put_dbca(victim_dbca);
+			D_WARN("Fail to start DTX agg ULT (2) for " DF_UUID "\n",
+			       DP_UUID(victim_dbca->dbca_cont->sc_uuid));
 		} else {
 			dbpa->dbpa_aggregating++;
+			victim_dbca = NULL;
 		}
 	}
+
+	if (victim_dbca != NULL)
+		dtx_put_dbca(victim_dbca);
 }
 
 void
