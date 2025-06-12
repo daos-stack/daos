@@ -28,6 +28,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -1305,7 +1306,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
 					State:      new(ctlpb.ResponseState),
 				},
-				SysMemInfo: proto.MockPBSysMemInfo(),
+				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
 		"successful scan; no scm namespaces": {
@@ -1327,7 +1328,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 					Modules: proto.ScmModules{proto.MockScmModule()},
 					State:   new(ctlpb.ResponseState),
 				},
-				SysMemInfo: proto.MockPBSysMemInfo(),
+				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
 		"successful scan; multiple bdev tiers in config": {
@@ -1361,7 +1362,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 					Modules: proto.ScmModules{proto.MockScmModule()},
 					State:   new(ctlpb.ResponseState),
 				},
-				SysMemInfo: proto.MockPBSysMemInfo(),
+				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
 		"spdk scan failure": {
@@ -1386,7 +1387,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
 					State:      new(ctlpb.ResponseState),
 				},
-				SysMemInfo: proto.MockPBSysMemInfo(),
+				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
 		"hugepages disabled": {
@@ -1409,7 +1410,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
 					State:      new(ctlpb.ResponseState),
 				},
-				SysMemInfo: proto.MockPBSysMemInfo(),
+				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
 		"scm module discovery failure": {
@@ -1433,7 +1434,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 						Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
 					},
 				},
-				SysMemInfo: proto.MockPBSysMemInfo(),
+				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
 		"all discover fail": {
@@ -1459,7 +1460,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 						Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
 					},
 				},
-				SysMemInfo: proto.MockPBSysMemInfo(),
+				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
 		"scan bdev; vmd enabled": {
@@ -1484,7 +1485,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				Scm: &ctlpb.ScanScmResp{
 					State: new(ctlpb.ResponseState),
 				},
-				SysMemInfo: proto.MockPBSysMemInfo(),
+				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
 		"scan usage; engines not ready": {
