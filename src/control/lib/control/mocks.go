@@ -24,7 +24,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -309,17 +308,30 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 // MockSysMemInfo returns a mock SysMemInfo result. Note that per-NUMA stats are not populated in this
 // mock.
 func MockSysMemInfo() *common.SysMemInfo {
-	mi := &common.SysMemInfo{}
-	mi.HugepagesTotal = 1024
-	mi.HugepagesFree = 512
-	mi.HugepagesRsvd = 64
-	mi.HugepagesSurp = 32
-	mi.HugepageSizeKiB = 2048
-	mi.MemTotalKiB = (humanize.GiByte * 4) / humanize.KiByte
-	mi.MemFreeKiB = (humanize.GiByte * 1) / humanize.KiByte
-	mi.MemAvailableKiB = (humanize.GiByte * 2) / humanize.KiByte
-
-	return mi
+	return &common.SysMemInfo{
+		MemInfo: common.MemInfo{
+			MemTotalKiB:     (humanize.GiByte * 4) / humanize.KiByte,
+			MemFreeKiB:      (humanize.GiByte * 1) / humanize.KiByte,
+			MemAvailableKiB: (humanize.GiByte * 2) / humanize.KiByte,
+			HugepageSizeKiB: 2048,
+			HugepagesTotal:  1024,
+			HugepagesFree:   512,
+			HugepagesRsvd:   64,
+			HugepagesSurp:   32,
+		},
+		NumaNodes: []common.MemInfo{
+			{
+				NumaNodeIndex:  0,
+				HugepagesTotal: 1024,
+				HugepagesFree:  512,
+			},
+			{
+				NumaNodeIndex:  1,
+				HugepagesTotal: 0,
+				HugepagesFree:  0,
+			},
+		},
+	}
 }
 
 func mockNvmeCtrlrWithSmd(roleBits int, varIdx ...int32) *storage.NvmeController {
@@ -331,11 +343,20 @@ func mockNvmeCtrlrWithSmd(roleBits int, varIdx ...int32) *storage.NvmeController
 	return nc
 }
 
+// MockPBSysMemInfo returns a mock SysMemInfo result in protobuf format.
+func MockPBSysMemInfo() *ctlpb.SysMemInfo {
+	pbSysMemInfo := new(ctlpb.SysMemInfo)
+	if err := convert.Types(MockSysMemInfo(), pbSysMemInfo); err != nil {
+		panic(err)
+	}
+	return pbSysMemInfo
+}
+
 func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	pbSsr := &ctlpb.StorageScanResp{
 		Nvme:       &ctlpb.ScanNvmeResp{},
 		Scm:        &ctlpb.ScanScmResp{},
-		SysMemInfo: commonpb.MockPBSysMemInfo(),
+		SysMemInfo: MockPBSysMemInfo(),
 	}
 
 	nvmeControllers := storage.NvmeControllers{
