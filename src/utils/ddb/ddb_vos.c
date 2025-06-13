@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1318,8 +1319,9 @@ struct committed_dtx_cb_arg {
 };
 
 struct active_dtx_cb_arg {
-	dv_dtx_act_handler handler;
-	void *handler_arg;
+	dv_dtx_act_handler    handler;
+	void                 *handler_arg;
+	struct umem_instance *umm;
 };
 
 static int
@@ -1347,14 +1349,21 @@ active_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 	struct vos_dtx_act_ent		*ent = val->iov_buf;
 	int				 rc;
 
-	entry.ddtx_id = ent->dae_base.dae_xid;
-	entry.ddtx_epoch = ent->dae_base.dae_epoch;
-	entry.ddtx_grp_cnt = ent->dae_base.dae_grp_cnt;
-	entry.ddtx_ver = ent->dae_base.dae_ver;
-	entry.ddtx_rec_cnt = ent->dae_base.dae_rec_cnt;
-	entry.ddtx_mbs_flags = ent->dae_base.dae_mbs_flags;
-	entry.ddtx_flags = ent->dae_base.dae_flags;
-	entry.ddtx_oid = ent->dae_base.dae_oid;
+	entry.ddtx_xid         = DAE_XID(ent);
+	entry.ddtx_handle_time = ent->dae_start_time;
+	entry.ddtx_epoch       = DAE_EPOCH(ent);
+	entry.ddtx_grp_cnt     = DAE_GRP_CNT(ent);
+	entry.ddtx_ver         = DAE_VER(ent);
+	entry.ddtx_rec_cnt     = DAE_REC_CNT(ent);
+	entry.ddtx_mbs_flags   = DAE_MBS_FLAGS(ent);
+	entry.ddtx_flags       = DAE_FLAGS(ent);
+	entry.ddtx_oid         = DAE_OID(ent);
+	entry.ddtx_tgt_cnt     = DAE_TGT_CNT(ent);
+
+	if (DAE_MBS_DSIZE(ent) <= sizeof(DAE_MBS_INLINE(ent)))
+		entry.ddtx_ddt = DAE_MBS_INLINE(ent);
+	else
+		entry.ddtx_ddt = umem_off2ptr(arg->umm, DAE_MBS_OFF(ent));
 
 	rc = arg->handler(&entry, arg->handler_arg);
 
@@ -1401,10 +1410,11 @@ dv_dtx_get_act_table(daos_handle_t coh, dv_dtx_act_handler handler_cb, void *han
 	if (daos_handle_is_inval(coh))
 		return -DER_INVAL;
 
-	cb_arg.handler = handler_cb;
-	cb_arg.handler_arg = handler_arg;
-
 	cont = vos_hdl2cont(coh);
+
+	cb_arg.handler     = handler_cb;
+	cb_arg.handler_arg = handler_arg;
+	cb_arg.umm         = vos_cont2umm(cont);
 
 	rc = dbtree_iterate(cont->vc_dtx_active_hdl, DAOS_INTENT_DEFAULT, false,
 			    active_dtx_cb, &cb_arg);
