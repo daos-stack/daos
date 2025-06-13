@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -119,8 +120,8 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 
 	shard = dc_obj_anchor2shard(&dova->dkey_anchor);
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &cursor->dkey, 1,
-				      DIOF_TO_SPEC_SHARD, iod, &dova->fetch_sgl,
-				      NULL, &shard, NULL, NULL, NULL, &task);
+				      DIOF_TO_SPEC_SHARD | DIOF_FOR_DATA_VERIFICATION, iod,
+				      &dova->fetch_sgl, NULL, &shard, NULL, NULL, NULL, &task);
 	if (rc == 0)
 		rc = dc_task_schedule(task, true);
 
@@ -707,8 +708,8 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 
 	/* Fetch by specific shard */
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
-				      0, iods, sgls, NULL, &shard, NULL, NULL, NULL,
-				      &task);
+				      DIOF_TO_SPEC_SHARD | DIOF_FOR_DATA_VERIFICATION, iods, sgls,
+				      NULL, &shard, NULL, NULL, NULL, &task);
 	if (rc != 0) {
 		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
 			DP_OID(obj->cob_md.omd_id), idx, shard);
@@ -731,10 +732,9 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 		D_GOTO(out, rc);
 	}
 
-	daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
-				      0, iods, sgls_verify, NULL, &shard, NULL, NULL,
-				      NULL, &verify_task);
+				      DIOF_FOR_FORCE_DEGRADE | DIOF_FOR_DATA_VERIFICATION, iods,
+				      sgls_verify, NULL, &shard, NULL, NULL, NULL, &verify_task);
 	if (rc != 0) {
 		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
 			DP_OID(obj->cob_md.omd_id), idx, shard);
