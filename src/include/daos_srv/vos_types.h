@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -374,7 +375,7 @@ enum {
 	VOS_IT_FOR_MIGRATION = (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED = (1 << 6),
-	/** Cleanup stale DTX entry. */
+	/** Discard object (shard) */
 	VOS_IT_FOR_DISCARD = (1 << 7),
 	/** Entry is not committed */
 	VOS_IT_UNCOMMITTED = (1 << 8),
