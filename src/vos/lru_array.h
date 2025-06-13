@@ -431,6 +431,8 @@ lrua_allocx_inplace_(struct lru_array *array, uint32_t idx, uint64_t key,
 	entry = &sub->ls_table[ent_idx];
 	if (entry->le_key != key && entry->le_key != 0) {
 		D_ERROR("Cannot allocated idx %d in place\n", idx);
+		/* Return the conflict one for further process. */
+		*entryp = entry->le_payload;
 		return -DER_NO_PERM;
 	}
 
