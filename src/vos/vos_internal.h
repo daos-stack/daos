@@ -142,6 +142,18 @@ enum {
 /* Throttle ENOSPACE error message */
 #define VOS_NOSPC_ERROR_INTVL	60	/* seconds */
 
+enum {
+	/** Disable VOS disagnose mode by default. */
+	VOS_DIAG_DEF = 0,
+	/** Only check potential corruption/inconsistency in VOS without repairing. */
+	VOS_DIAG_CHECK,
+	/** Check and repair potential corruption/inconsistency in VOS. */
+	VOS_DIAG_REPAIR,
+	/** Guard for boundary. */
+	VOS_DIAG_MAX
+};
+
+extern unsigned int    vos_diag_mode;
 extern unsigned int vos_agg_nvme_thresh;
 extern bool vos_dkey_punch_propagate;
 extern bool vos_skip_old_partial_dtx;
@@ -1084,7 +1096,8 @@ struct vos_iterator {
 	 * mutual exclusion between aggregation and object discard.
 	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
-	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1;
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1,
+	    it_for_check : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1365,6 +1378,8 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_for_check)
+		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
 }
 
