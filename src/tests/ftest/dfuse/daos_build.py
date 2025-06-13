@@ -147,6 +147,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         timeout = 10 * 60
         if cmd.startswith('scons'):
             timeout = build_time * 60
+        elif cmd.endswith('install.sh -y'):
+            timeout *= 2
         self.log_step(f"Running '{cmd}' with a {timeout}s timeout")
         start = time.time()
         result = run_remote(
