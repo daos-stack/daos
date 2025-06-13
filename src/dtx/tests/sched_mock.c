@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,4 +59,11 @@ void
 sched_req_wait(struct sched_request *req, bool abort)
 {
 	assert_true(false);
+}
+
+uint64_t
+sched_cur_seq(void)
+{
+	assert_true(false);
+	return UINT64_MAX;
 }
