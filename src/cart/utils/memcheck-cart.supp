@@ -11,6 +11,30 @@
     fun:_dl_open
 }
 {
+   _dl_fini leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fini
+   ...
+}
+{
+   dlerror_run leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dlerror_run
+   ...
+}
+{
+   _dl_fixup leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fixup
+   ...
+}
+{
    FI leak 6
    Memcheck:Leak
    match-leak-kinds: possible
@@ -565,7 +589,7 @@
    DAOS-15159
    Memcheck:Param
    write(buf)
-   fun:runtime/internal/syscall.Syscall6
+   fun:internal/runtime/syscall.Syscall6
 }
 {
    DAOS-15548
@@ -660,7 +684,7 @@
    Syscall6 param
    Memcheck:Param
    read(buf)
-   fun:runtime/internal/syscall.Syscall6
+   fun:internal/runtime/syscall.Syscall6
 }
 {
    __tsan_go_atomic32_load
