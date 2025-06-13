@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -312,7 +313,7 @@ CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
  * NOTE: Please be careful when change CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
  *	 to avoid hole is the struct chk_property.
  */
-#define CHK_POLICY_MAX		(CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN + 1)
+#define CHK_CLASS_MAX           (CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN + 1)
 
 struct chk_co_rpc_cb_args {
 	void		*cb_priv;
@@ -486,7 +487,7 @@ struct chk_bookmark {
 struct chk_property {
 	d_rank_t			cp_leader;
 	Chk__CheckFlag			cp_flags;
-	Chk__CheckInconsistAction	cp_policies[CHK_POLICY_MAX];
+	Chk__CheckInconsistAction       cp_policies[CHK_CLASS_MAX];
 	/*
 	 * NOTE: Preserve for supporting to continue the check until the specified phase in the
 	 *	 future. -1 means to check all phases.
@@ -621,23 +622,6 @@ struct chk_pool_rec {
 	ABT_cond		 cpr_cond;
 };
 
-struct chk_pending_rec {
-	/* Link into chk_pool_rec::cpr_pending_list. */
-	d_list_t		 cpr_pool_link;
-	/* Link into chk_rank_rec::crr_pending_list. */
-	d_list_t		 cpr_rank_link;
-	uuid_t			 cpr_uuid;
-	uint64_t		 cpr_seq;
-	d_rank_t		 cpr_rank;
-	uint32_t		 cpr_class;
-	uint32_t		 cpr_action;
-	uint32_t		 cpr_busy:1,
-				 cpr_exiting:1,
-				 cpr_on_leader:1;
-	ABT_mutex		 cpr_mutex;
-	ABT_cond		 cpr_cond;
-};
-
 struct chk_report_unit {
 	uint64_t		 cru_gen;
 	uint32_t		 cru_cla;
@@ -658,6 +642,23 @@ struct chk_report_unit {
 	d_sg_list_t		*cru_details;
 	uint32_t		 cru_sugg;
 	uint32_t		 cru_result;
+};
+
+struct chk_pending_rec {
+	/* Link into chk_pool_rec::cpr_pending_list. */
+	d_list_t  cpr_pool_link;
+	/* Link into chk_rank_rec::crr_pending_list. */
+	d_list_t  cpr_rank_link;
+	uuid_t    cpr_uuid;
+	uint64_t  cpr_seq;
+	uint32_t  cpr_rank;
+	uint32_t  cpr_class;
+	uint32_t  cpr_action;
+	uint32_t  cpr_busy : 1, cpr_exiting : 1, cpr_on_leader : 1;
+	ABT_mutex cpr_mutex;
+	ABT_cond  cpr_cond;
+	uint32_t  cpr_option_nr;
+	uint32_t  cpr_options[0];
 };
 
 struct chk_traverse_pools_args {
@@ -725,11 +726,13 @@ int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t 
 
 void chk_pool_shard_cleanup(struct chk_instance *ins);
 
-int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
-		    uint64_t seq, uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr);
+/* clang-format off */
+int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head,
+		    struct chk_report_unit *cru, uint64_t seq, struct chk_pending_rec **cpr);
 
-int chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked,
+int chk_pending_del(struct chk_instance *ins, uint64_t seq, uint32_t act, bool locked,
 		    struct chk_pending_rec **cpr);
+/* clang-format on */
 
 int chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr);
 
