@@ -54,26 +54,27 @@ type deprecatedParams struct {
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort       int                       `yaml:"port"`
-	TransportConfig   *security.TransportConfig `yaml:"transport_config"`
-	Engines           []*engine.Config          `yaml:"engines"`
-	BdevExclude       []string                  `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO       bool                      `yaml:"disable_vfio"`
-	DisableVMD        *bool                     `yaml:"disable_vmd"`
-	EnableHotplug     bool                      `yaml:"enable_hotplug"`
-	NrHugepages       int                       `yaml:"nr_hugepages"`        // total for all engines
-	SystemRamReserved int                       `yaml:"system_ram_reserved"` // total for all engines
-	DisableHugepages  bool                      `yaml:"disable_hugepages"`
-	ControlLogMask    common.ControlLogLevel    `yaml:"control_log_mask"`
-	ControlLogFile    string                    `yaml:"control_log_file,omitempty"`
-	ControlLogJSON    bool                      `yaml:"control_log_json,omitempty"`
-	HelperLogFile     string                    `yaml:"helper_log_file,omitempty"`
-	FWHelperLogFile   string                    `yaml:"firmware_helper_log_file,omitempty"`
-	FaultPath         string                    `yaml:"fault_path,omitempty"`
-	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
-	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
-	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
-	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
+	ControlPort              int                       `yaml:"port"`
+	TransportConfig          *security.TransportConfig `yaml:"transport_config"`
+	Engines                  []*engine.Config          `yaml:"engines"`
+	BdevExclude              []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO              bool                      `yaml:"disable_vfio"`
+	DisableVMD               *bool                     `yaml:"disable_vmd"`
+	EnableHotplug            bool                      `yaml:"enable_hotplug"`
+	NrHugepages              int                       `yaml:"nr_hugepages"`        // total for all engines
+	SystemRamReserved        int                       `yaml:"system_ram_reserved"` // total for all engines
+	DisableHugepages         bool                      `yaml:"disable_hugepages"`
+	AllowImbalancedHugepages bool                      `yaml:"allow_imbalanced_hugepages"`
+	ControlLogMask           common.ControlLogLevel    `yaml:"control_log_mask"`
+	ControlLogFile           string                    `yaml:"control_log_file,omitempty"`
+	ControlLogJSON           bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile            string                    `yaml:"helper_log_file,omitempty"`
+	FWHelperLogFile          string                    `yaml:"firmware_helper_log_file,omitempty"`
+	FaultPath                string                    `yaml:"fault_path,omitempty"`
+	TelemetryPort            int                       `yaml:"telemetry_port,omitempty"`
+	CoreDumpFilter           uint8                     `yaml:"core_dump_filter,omitempty"`
+	ClientEnvVars            []string                  `yaml:"client_env_vars,omitempty"`
+	SupportConfig            SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`

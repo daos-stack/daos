@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -593,6 +594,7 @@ enable_hotplug: false
 nr_hugepages: 0
 system_ram_reserved: 26
 disable_hugepages: false
+allow_imbalanced_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 core_dump_filter: 19
