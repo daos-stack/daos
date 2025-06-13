@@ -26,7 +26,7 @@ source ci/provisioning/post_provision_config_common_functions.sh
 source ci/junit.sh
 
 
-: "${MLNX_VER_NUM:=24.04-0.6.6.0}"
+: "${DOCA_OFED_VER_NUM:=3.0.0}"
 
 : "${DISTRO:=EL_7}"
 
@@ -76,7 +76,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            DISTRO=\"$DISTRO\"
            DAOS_STACK_RETRY_DELAY_SECONDS=\"$DAOS_STACK_RETRY_DELAY_SECONDS\"
            DAOS_STACK_RETRY_COUNT=\"$DAOS_STACK_RETRY_COUNT\"
-           MLNX_VER_NUM=\"$MLNX_VER_NUM\"
+           DOCA_OFED_VER_NUM=\"$DOCA_OFED_VER_NUM\"
            BUILD_URL=\"$BUILD_URL\"
            STAGE_NAME=\"$STAGE_NAME\"
            OPERATIONS_EMAIL=\"$OPERATIONS_EMAIL\"
