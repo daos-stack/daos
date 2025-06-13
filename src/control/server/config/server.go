@@ -539,8 +539,8 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, smi *common.SysMemInfo) er
 	return nil
 }
 
-// CalcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
-func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (uint64, error) {
+// calcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
+func (cfg *Server) calcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (uint64, error) {
 	// Convert memory from kib to bytes.
 	memTotal := uint64(memKiB * humanize.KiByte)
 
@@ -558,8 +558,8 @@ func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (u
 		len(cfg.Engines))
 }
 
-// CalcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
-func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramdiskSize uint64) (uint64, error) {
+// calcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
+func (cfg *Server) calcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramdiskSize uint64) (uint64, error) {
 	// Calculate assigned hugepage memory in bytes.
 	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
 
@@ -588,7 +588,7 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, smi *common.SysMemInfo) er
 		return nil // no ramdisk to size
 	}
 
-	maxRamdiskSize, err := cfg.CalcRamdiskSize(log, smi.HugepageSizeKiB, smi.MemTotalKiB)
+	maxRamdiskSize, err := cfg.calcRamdiskSize(log, smi.HugepageSizeKiB, smi.MemTotalKiB)
 	if err != nil {
 		return errors.Wrapf(err, "calculate ramdisk size")
 	}
@@ -602,7 +602,7 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, smi *common.SysMemInfo) er
 		// Total RAM is insufficient to meet minimum size.
 		log.Errorf("%s: insufficient total memory", msg)
 
-		minMem, err := cfg.CalcMemForRamdiskSize(log, smi.HugepageSizeKiB,
+		minMem, err := cfg.calcMemForRamdiskSize(log, smi.HugepageSizeKiB,
 			storage.MinRamdiskMem)
 		if err != nil {
 			log.Error(err.Error())
