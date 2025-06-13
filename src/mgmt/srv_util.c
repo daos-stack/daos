@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,7 +63,8 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 	rc = crt_group_primary_modify(NULL /* grp */, &info->dmi_ctx, 1 /* num_ctxs */, ranks,
 				      incarnations, uris, CRT_GROUP_MOD_OP_REPLACE, version);
 	if (rc != 0) {
-		D_ERROR("failed to update group: %u -> %u: %d\n", version_current, version, rc);
+		DL_CDEBUG(rc == -DER_GRPVER, DLOG_INFO, DLOG_ERR, rc,
+			  "failed to update group: %u -> %u", version_current, version);
 		goto out;
 	}
 
