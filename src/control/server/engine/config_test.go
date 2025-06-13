@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1308,6 +1309,55 @@ func TestConfig_UpdatePMDKEnvars(t *testing.T) {
 				test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
 					"Invalid ABT_THREAD_STACKSIZE value")
 			}
+		})
+	}
+}
+
+func TestConfig_SetNUMAAffinity(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg     *Config
+		setNUMA uint
+		expErr  error
+		expNUMA uint
+	}{
+		"pinned_numa_node set in config conflicts with detected affinity": {
+			cfg: MockConfig().
+				WithPinnedNumaNode(2).
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			setNUMA: 1,
+			expNUMA: 2,
+			expErr:  errors.New("configured NUMA node"),
+		},
+		"pinned_numa_node not set in config; detected affinity used": {
+			cfg: MockConfig().
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			setNUMA: 1,
+			expNUMA: 1,
+		},
+		"pinned_numa_node and first_core set": {
+			cfg: MockConfig().
+				WithPinnedNumaNode(2).
+				WithServiceThreadCore(1).
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			expErr: errors.New("cannot set both"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := tc.cfg.SetNUMAAffinity(tc.setNUMA)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
+				"unexpected pinned numa node")
+			test.AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
+				"unexpected numa node in fabric config")
+			test.AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
+				"unexpected numa node in storage config")
 		})
 	}
 }
