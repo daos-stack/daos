@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +18,7 @@
 #include <daos/object.h>
 
 #define EC_CSUM_OC	OC_EC_2P2G1
+#define RP_CSUM_OC      OC_RP_2G1
 
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
@@ -45,7 +47,14 @@ csum_ec_enable(void **state)
 }
 
 static inline int
-csum_replia_enable(void **state)
+csum_replica_enable(void **state)
+{
+	dts_csum_oc = RP_CSUM_OC;
+	return 0;
+}
+
+static inline int
+csum_shard_enable(void **state)
 {
 	dts_csum_oc = OC_SX;
 	return 0;
@@ -2781,10 +2790,18 @@ setup(void **state)
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
-#define CSUM_TEST(dsc, test) { STR(__COUNTER__)". " dsc, test, \
-			  csum_replia_enable, test_case_teardown }
-#define EC_CSUM_TEST(dsc, test) { STR(__COUNTER__)". " dsc, test, \
-			  csum_ec_enable, test_case_teardown }
+#define CSUM_TEST(dsc, test)                                                                       \
+	{                                                                                          \
+		STR(__COUNTER__) ". " dsc, test, csum_shard_enable, test_case_teardown             \
+	}
+#define EC_CSUM_TEST(dsc, test)                                                                    \
+	{                                                                                          \
+		STR(__COUNTER__) ". " dsc, test, csum_ec_enable, test_case_teardown                \
+	}
+#define RP_CSUM_TEST(dsc, test)                                                                    \
+	{                                                                                          \
+		STR(__COUNTER__) ". " dsc, test, csum_replica_enable, test_case_teardown           \
+	}
 
 static const struct CMUnitTest csum_tests[] = {
     CSUM_TEST("DAOS_CSUM00: csum disabled", checksum_disabled),
@@ -2815,6 +2832,7 @@ static const struct CMUnitTest csum_tests[] = {
     CSUM_TEST("DAOS_CSUM07: Mix of Single Value and Array values iods", mix_test),
     CSUM_TEST("DAOS_CSUM08: Update/Fetch A Key", test_update_fetch_a_key),
     CSUM_TEST("DAOS_CSUM09: Update/Fetch D Key", test_update_fetch_d_key),
+    RP_CSUM_TEST("DAOS_CSUM09.2: Update/Fetch D Key", test_update_fetch_d_key),
     CSUM_TEST("DAOS_CSUM10: Enumerate A Keys", test_enumerate_a_key),
     CSUM_TEST("DAOS_CSUM11: Enumerate D Keys", test_enumerate_d_key),
     CSUM_TEST("DAOS_CSUM12: Enumerate objects", test_enumerate_object),
