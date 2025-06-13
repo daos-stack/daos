@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -816,6 +817,10 @@ func (db *Database) UpdateMember(m *system.Member) error {
 
 	_, err := db.FindMemberByUUID(m.UUID)
 	if err != nil {
+		return err
+	}
+
+	if err := db.manageVoter(m, raftOpUpdateMember); err != nil {
 		return err
 	}
 
