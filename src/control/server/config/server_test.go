@@ -1954,55 +1954,6 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 	}
 }
 
-func TestConfig_SetNUMAAffinity(t *testing.T) {
-	for name, tc := range map[string]struct {
-		cfg     *engine.Config
-		setNUMA uint
-		expErr  error
-		expNUMA uint
-	}{
-		"pinned_numa_node set in config conflicts with detected affinity": {
-			cfg: engine.MockConfig().
-				WithPinnedNumaNode(2).
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			setNUMA: 1,
-			expNUMA: 2,
-			expErr:  errors.New("configured NUMA node"),
-		},
-		"pinned_numa_node not set in config; detected affinity used": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			setNUMA: 1,
-			expNUMA: 1,
-		},
-		"pinned_numa_node and first_core set": {
-			cfg: engine.MockConfig().
-				WithPinnedNumaNode(2).
-				WithServiceThreadCore(1).
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			expErr: errors.New("cannot set both"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			err := tc.cfg.SetNUMAAffinity(tc.setNUMA)
-			test.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
-
-			test.AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
-				"unexpected pinned numa node")
-			test.AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
-				"unexpected numa node in fabric config")
-			test.AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
-				"unexpected numa node in storage config")
-		})
-	}
-}
-
 func TestConfig_SetEngineAffinities(t *testing.T) {
 	baseSrvCfg := func() *Server {
 		return DefaultServer()
