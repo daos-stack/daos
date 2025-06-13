@@ -701,8 +701,10 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	rc = read_snap_list(&tx, cont, snapshots, snap_count);
 	cont_put(cont);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT " read_snap_list failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
+	}
 
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
