@@ -713,16 +713,33 @@ done:
 	return rc;
 }
 
+static inline char *
+dev_type2str(enum smd_dev_type st)
+{
+	switch (st) {
+	case SMD_DEV_TYPE_DATA:
+		return "Data";
+	case SMD_DEV_TYPE_META:
+		return "Meta";
+	case SMD_DEV_TYPE_WAL:
+		return "WAL";
+	default:
+		return "Unknown";
+	}
+}
+
 static int
-sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id,
-	    daos_size_t blob_size, uuid_t dev_id)
+sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id, daos_size_t blob_size,
+	    uuid_t dev_id, enum smd_dev_type st)
 {
 	struct ddb_ctx *ctx = cb_args;
 
-	ddb_printf(ctx, "> Sync Info - pool: "DF_UUIDF", target id: %d, blob id: %lu, "
-		   "blob_size: %lu\n", DP_UUID(pool_id),
-		   vos_id, blob_id, blob_size);
-	ddb_printf(ctx, "> Sync Info - dev: "DF_UUIDF", target id: %d\n", DP_UUID(dev_id), vos_id);
+	ddb_printf(ctx,
+		   "> Sync Info - pool: " DF_UUIDF ", target id: %d, \t[%s],\t blob id: %#lx, "
+		   "blob_size: %lu\n",
+		   DP_UUID(pool_id), vos_id, dev_type2str(st), blob_id, blob_size);
+	ddb_printf(ctx, "> Sync Info - dev : " DF_UUIDF ", target id: %d\n", DP_UUID(dev_id),
+		   vos_id);
 
 	return 0;
 }
