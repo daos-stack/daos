@@ -224,7 +224,7 @@
 ## will enable engine start-up with an imbalanced configuration.
 #
 ## default: false
-#allow_imbalanced_hugepages: true
+#allow_numa_imbalance: true
 #
 #
 ## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
