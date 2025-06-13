@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +10,10 @@
 
 #include <daos_prop.h>
 #include <daos_types.h>
+
+enum chk_query_flags {
+	CQF_SHOW_DETAIL = (1 << 0),
+};
 
 struct chk_policy {
 	uint32_t		cp_class;
@@ -79,8 +84,10 @@ int chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 
 int chk_leader_stop(int pool_nr, uuid_t pools[]);
 
-int chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+/* clang-format off */
+int chk_leader_query(uint32_t flags, int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		     chk_query_pool_cb_t pool_cb, void *buf);
+/* clang-format on */
 
 int chk_leader_prop(chk_prop_cb_t prop_cb, void *buf);
 
