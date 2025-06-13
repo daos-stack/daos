@@ -10,4 +10,4 @@ echo Running shellcheck
 # This depends on shellcheck 0.7.2 or above so works in GitHub actions but not on el8.8
 find . \( -path ./.git -o -path ./venv -o -path ./build -o -path ./src/control/vendor \
  -o -path ./install -o -path ./src/rdb/raft -type d  \) -prune -o -name "*.sh" -exec \
- shellcheck --source-path ci --external-sources --format gcc \{\} \+
+ shellcheck --source-path ci:utils/rpms --external-sources --format gcc \{\} \+
