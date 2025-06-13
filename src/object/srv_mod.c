@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +24,8 @@ static int
 obj_mod_init(void)
 {
 	int	rc;
+
+	obj_init_iov_fragment_params();
 
 	rc = obj_utils_init();
 	if (rc)
