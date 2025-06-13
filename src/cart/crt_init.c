@@ -51,6 +51,10 @@ crt_lib_init(void)
 	crt_gdata.cg_inited       = 0;
 	crt_gdata.cg_primary_prov = CRT_PROV_OFI_TCP_RXM;
 
+	/* By default set number of secondary remote tags to 1 */
+	crt_gdata.cg_num_remote_tags = 1;
+	crt_gdata.cg_last_remote_tag = 0;
+
 	rc = d_gettime(&now);
 	D_ASSERTF(rc == 0, "d_gettime: " DF_RC "\n", DP_RC(rc));
 	d_srand(now.tv_sec * 1000 * 1000 * 1000 + now.tv_nsec + getpid());
