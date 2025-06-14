@@ -1,6 +1,5 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -68,7 +67,7 @@ class DmgSystemCleanupTest(TestWithServers):
 
         # Call dmg system cleanup on the host and create cleaned pool list.
         dmg_cmd = self.get_dmg_command()
-        result = dmg_cmd.system_cleanup(self.server_managers[0].hosts, verbose=True)
+        result = dmg_cmd.system_cleanup(self.agent_managers[0].hosts, verbose=True)
 
         # Build list of pools and how many handles were cleaned (should be 6 each)
         actual_counts = {}
