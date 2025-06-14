@@ -372,6 +372,7 @@ type SystemStartReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
+	IgnoreAdminExcluded bool // Ignore AdminExcluded ranks in the Ranks/Hosts lists
 }
 
 // SystemStartResp contains the request response.
@@ -420,9 +421,10 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 	}
 
 	pbReq := &mgmtpb.SystemStartReq{
-		Hosts: req.Hosts.String(),
-		Ranks: req.Ranks.String(),
-		Sys:   req.getSystem(rpcClient),
+		Hosts:               req.Hosts.String(),
+		Ranks:               req.Ranks.String(),
+		Sys:                 req.getSystem(rpcClient),
+		IgnoreAdminExcluded: req.IgnoreAdminExcluded,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
@@ -443,8 +445,9 @@ type SystemStopReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
-	Force bool
-	Full  bool
+	Force               bool
+	Full                bool
+	IgnoreAdminExcluded bool // Ignore any ranks in the rank/host list in the AdminExcluded state
 }
 
 // SystemStopResp contains the request response.
@@ -502,12 +505,13 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 		return nil, errors.New("full and ranks options may not be mixed")
 	}
 
-	pbReq := new(mgmtpb.SystemStopReq)
-	pbReq.Hosts = req.Hosts.String()
-	pbReq.Ranks = req.Ranks.String()
-	pbReq.Force = !req.Full // Force used unless full graceful shutdown requested.
-	pbReq.Sys = req.getSystem(rpcClient)
-
+	pbReq := &mgmtpb.SystemStopReq{
+		Hosts:               req.Hosts.String(),
+		Ranks:               req.Ranks.String(),
+		Sys:                 req.getSystem(rpcClient),
+		Force:               !req.Full, // Force used unless full graceful shutdown requested.
+		IgnoreAdminExcluded: req.IgnoreAdminExcluded,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
 	})
