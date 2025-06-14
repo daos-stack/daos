@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -34,14 +36,24 @@ func newMgmtModule() *mgmtModule {
 	return &mgmtModule{}
 }
 
+// GetMethod always errors because this module sends only, and doesn't implement any dRPC methods.
+func (mod *mgmtModule) GetMethod(id int32) (drpc.Method, error) {
+	return nil, errors.New("mgmtModule implements no methods")
+}
+
 // HandleCall is the handler for calls to the mgmtModule
-func (mod *mgmtModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+	logging.FromContext(ctx).Errorf("attempted to call HandleCall on mgmtModule, which services no methods")
 	return nil, drpc.UnknownMethodFailure()
 }
 
 // ID will return Mgmt module ID
-func (mod *mgmtModule) ID() drpc.ModuleID {
-	return drpc.ModuleMgmt
+func (mod *mgmtModule) ID() int32 {
+	return daos.ModuleMgmt
+}
+
+func (mod *mgmtModule) String() string {
+	return "server_mgmt"
 }
 
 // poolDatabase defines an interface to be implemented by
@@ -78,6 +90,28 @@ func newSrvModule(log logging.Logger, pdb poolDatabase, cdb checker.FindingStore
 	}
 }
 
+// GetMethod gets the corresponding Method for the method ID.
+func (mod *srvModule) GetMethod(id int32) (drpc.Method, error) {
+	switch id {
+	case daos.MethodNotifyReady.ID(),
+		daos.MethodGetPoolServiceRanks.ID(),
+		daos.MethodPoolFindByLabel.ID(),
+		daos.MethodClusterEvent.ID(),
+		daos.MethodCheckerListPools.ID(),
+		daos.MethodCheckerRegisterPool.ID(),
+		daos.MethodCheckerDeregisterPool.ID(),
+		daos.MethodCheckerReport.ID(),
+		daos.MethodListPools.ID():
+		return daos.SrvMethod(id), nil
+	default:
+		return nil, fmt.Errorf("invalid method %d for module %s", id, mod.String())
+	}
+}
+
+func (mod *srvModule) String() string {
+	return "server"
+}
+
 // HandleCall is the handler for calls to the srvModule.
 func (mod *srvModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) (_ []byte, err error) {
 	defer func() {
@@ -89,23 +123,23 @@ func (mod *srvModule) HandleCall(ctx context.Context, session *drpc.Session, met
 	}()
 
 	switch method {
-	case drpc.MethodNotifyReady:
+	case daos.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
-	case drpc.MethodGetPoolServiceRanks:
+	case daos.MethodGetPoolServiceRanks:
 		return mod.handleGetPoolServiceRanks(req)
-	case drpc.MethodPoolFindByLabel:
+	case daos.MethodPoolFindByLabel:
 		return mod.handlePoolFindByLabel(req)
-	case drpc.MethodClusterEvent:
+	case daos.MethodClusterEvent:
 		return mod.handleClusterEvent(req)
-	case drpc.MethodCheckerListPools:
+	case daos.MethodCheckerListPools:
 		return mod.handleCheckerListPools(ctx, req)
-	case drpc.MethodCheckerRegisterPool:
+	case daos.MethodCheckerRegisterPool:
 		return mod.handleCheckerRegisterPool(ctx, req)
-	case drpc.MethodCheckerDeregisterPool:
+	case daos.MethodCheckerDeregisterPool:
 		return mod.handleCheckerDeregisterPool(ctx, req)
-	case drpc.MethodCheckerReport:
+	case daos.MethodCheckerReport:
 		return mod.handleCheckerReport(ctx, req)
-	case drpc.MethodListPools:
+	case daos.MethodListPools:
 		return mod.handleListPools(req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
@@ -113,8 +147,8 @@ func (mod *srvModule) HandleCall(ctx context.Context, session *drpc.Session, met
 }
 
 // ID will return SRV module ID
-func (mod *srvModule) ID() drpc.ModuleID {
-	return drpc.ModuleSrv
+func (mod *srvModule) ID() int32 {
+	return daos.ModuleSrv
 }
 
 func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {

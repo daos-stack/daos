@@ -3164,7 +3164,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				if len(calls) == 0 {
 					continue
 				}
-				if calls[len(calls)-1].Method == drpc.MethodGroupUpdate {
+				if calls[len(calls)-1].Method == daos.MethodGroupUpdate.ID() {
 					break
 				}
 			}

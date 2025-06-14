@@ -58,7 +58,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
-		   cmd/drpc_test/hello/drpc_test.pb.go
+		   cmd/hello_drpc/hello/drpc_test.pb.go
 CTRL_SOURCE_ROOT = $(DAOS_ROOT)/src/control
 PROTO_SOURCE_DIR = $(DAOS_ROOT)/src/proto
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
@@ -123,7 +123,7 @@ $(CTRL_SOURCE_ROOT)/security/auth/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
 	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
 			    --go-grpc_out=$(dir $@) --go-grpc_opt=paths=source_relative $<
 
-$(CTRL_SOURCE_ROOT)/cmd/drpc_test/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
+$(CTRL_SOURCE_ROOT)/cmd/hello_drpc/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
 	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
 			    --go-grpc_out=$(dir $@) --go-grpc_opt=paths=source_relative $<
 
