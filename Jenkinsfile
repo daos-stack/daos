@@ -17,6 +17,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-17259') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -263,6 +264,9 @@ pipeline {
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on Leap 15')
+        booleanParam(name: 'CI_CODE_COVERAGE',
+                     defaultValue: true,
+                     description: 'Run with code coverage analysis')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -653,7 +657,8 @@ pipeline {
                                        build_deps: 'no',
                                        stash_opt: true,
                                        scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       code_coverage: params.CI_CODE_COVERAGE))
                     }
                     post {
                         unsuccessful {
@@ -744,7 +749,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: prRepos(),
                                      inst_rpms: unitPackages()))
@@ -806,7 +811,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 160,
+                            unitTest(timeout_time: 250,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -814,8 +819,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/**/*.log'],
+                            unitTestPost artifacts: ['unit_test_memcheck_logs/'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
@@ -831,7 +835,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 180,
+                            unitTest(timeout_time: 720,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -839,8 +843,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
-                                                     'unit_test_memcheck_bdev_logs/**/*.log'],
+                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs/'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
                             job_status_update()
                         }
@@ -851,7 +854,7 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
+                // expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
@@ -1227,6 +1230,45 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
+        stage('Test Summary') {
+            when {
+                beforeAgent true
+                expression { true }
+            }
+            parallel {
+                stage('Code Coverage Report') {
+                    when {
+                        beforeAgent true
+                        expression { params.CI_CODE_COVERAGE }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.test_summary'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(add_repos: false)
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            codeCoverageReport(
+                                stashes: ['code_coverage_Unit_Test_on_EL_8.8',
+                                          'code_coverage_Unit_Test_bdev_on_EL_8.8',
+                                          'code_coverage_NLT_on_EL_8.8',
+                                          'code_coverage_Unit_Test_with_memcheck_on_EL_8.8',
+                                          'code_coverage_Unit_Test_bdev_with_memcheck_on_EL_8.8'],
+                                script: 'ci/code_coverage_report.sh',
+                                label: 'Code Coverage Report'))
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'code_coverage_report/*',
+                                             allowEmptyArchive: false
+                            job_status_update()
+                        }
+                    }
+                } // stage('Code Coverage Report')
+            } // parallel
+        } // stage('Test Summary')
     } // stages
     post {
         always {
