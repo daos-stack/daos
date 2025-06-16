@@ -42,11 +42,10 @@ RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
     dnf clean all &&      \
     rm -f /tmp/install.sh
 
-RUN apt-get -qq update
-RUN apt-get -qqy install python3.11
 ARG JENKINS_URL
 
 # Setup a python venv so that python packages can be installed locally.
+RUN dnf --nodocs  install python3.11
 RUN python3.11 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
