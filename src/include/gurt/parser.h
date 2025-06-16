@@ -13,13 +13,13 @@
 
 #define D_PARSER_ID_MAX_LEN 64
 
-typedef void (*d_parser_run_cb_t)(d_parser_t *output, char *buf, int len, void *arg);
-
 typedef struct d_parser {
 	d_list_t                 p_handlers;
 	uint64_t                 p_magic;
 	char                     p_internal[0];
 } d_parser_t;
+
+typedef void (*d_parser_run_cb_t)(d_parser_t *output, char *buf, int len, void *arg);
 
 /** Initialize a simple parser
  *
@@ -74,7 +74,7 @@ d_parser_output_get(d_parser_t *parser, int *len);
  * \param[in] fmt    Format string
  */
 void
-d_parser_output_put(parser_t *parser, const char *fmt, ...)
+d_parser_output_put(d_parser_t *parser, const char *fmt, ...)
     __attribute__((__format__(__printf__, 2, 3)));
 
 /**

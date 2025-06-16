@@ -626,28 +626,22 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 }
 
 struct log_variables {
-	char *mask;
-	char *streams;
+	const char *mask;
+	const char *streams;
 };
 
 static int
-d_log_var_parse_one(struct d_string_buffer_t *output, const char *name, char **ptr,
-		    const char *log_var, const char *value, int len)
+d_log_var_parse_one(d_parser_t *parser, const char *name, const char **ptr, const char *log_var,
+		    const char *value, int len)
 {
-	char *log_buf;
-
 	if (strncmp(name, log_var, len) == 0) {
 		if (*ptr != NULL) {
-			d_write_string_buffer(
-			    output, "Duplication definition not supported in log config\n");
+			d_parser_output_put(parser,
+					    "Duplication definition not supported in log config\n");
 			return -DER_INVAL;
 		}
-		/** Free'd in d_log_var_free() to make leak detector happy */
-		D_STRNDUP(log_buf, value, len + 1);
-		if (log_buf == NULL)
-			return -DER_NOMEM;
 
-		*ptr = log_buf;
+		*ptr = value;
 
 		return 1;
 	}
@@ -655,55 +649,46 @@ d_log_var_parse_one(struct d_string_buffer_t *output, const char *name, char **p
 	return 0;
 }
 
-static void
-d_log_var_free(char *log_buf)
-{
-	/** Allocated in d_log_var_parse_one.  Use same name to make parser
-	 * happy.
-	 */
-	D_FREE(log_buf);
-}
-
 static int
-d_process_log_var(struct d_string_buffer_t *output, struct log_variables *lv, char *log_var,
-		  int log_var_len, char *value, int value_len)
+d_process_log_var(d_parser_t *parser, struct log_variables *lv, char *log_var, int log_var_len,
+		  char *value, int value_len)
 {
 	int rc;
 
-	log_var = d_strip(log_var, &log_var_len);
-	value   = d_strip(value, &value_len);
+	log_var = d_parser_string_copy(parser, log_var, &log_var_len, true);
+	value   = d_parser_string_copy(parser, value, &value_len, true);
 
 	if (log_var_len == 0) {
 		if (value_len == 0)
 			return 0;
-		d_write_string_buffer(output, "Value without log_var %s in log config\n", value);
+		d_parser_output_put(parser, "Value without log_var %s in log config\n", value);
 		return -DER_INVAL;
 	}
 
 	if (value_len == 0) {
-		d_write_string_buffer(output, "Empty value not supported for %s in log config\n",
-				      log_var);
+		d_parser_output_put(parser, "Empty value not supported for %s in log config\n",
+				    log_var);
 		return -DER_INVAL;
 	}
 
-	rc = d_log_var_parse_one(output, "log_mask", &lv->mask, log_var, value, sizeof("log_mask"));
+	rc = d_log_var_parse_one(parser, "log_mask", &lv->mask, log_var, value, sizeof("log_mask"));
 	if (rc == 1)
 		return 0;
 	if (rc < 0)
 		return rc;
 	rc =
-	    d_log_var_parse_one(output, "streams", &lv->streams, log_var, value, sizeof("streams"));
+	    d_log_var_parse_one(parser, "streams", &lv->streams, log_var, value, sizeof("streams"));
 	if (rc == 1)
 		return 0;
 	if (rc == 0) {
-		d_write_string_buffer(output, "Unrecognized variable %s in log config\n", log_var);
+		d_parser_output_put(parser, "Unrecognized variable %s in log config\n", log_var);
 		rc = -DER_INVAL;
 	}
 	return rc;
 }
 
 static void
-d_log_parse_config(struct d_string_buffer_t *output, char *config, int len, void *arg)
+d_log_parse_config(d_parser_t *parser, char *config, int len, void *arg)
 {
 	struct log_variables lv      = {0};
 	char                *log_var = NULL;
@@ -721,40 +706,32 @@ d_log_parse_config(struct d_string_buffer_t *output, char *config, int len, void
 			break;
 		loc = strchr(log_var, '=');
 		if (loc == NULL) {
-			d_write_string_buffer(output, "Could not parse value from '%s'\n", log_var);
+			d_parser_output_put(parser, "Could not parse value from '%s'\n", log_var);
 		}
 		*loc  = '\0';
 		var_len   = loc - log_var;
 		value = loc + 1;
 		value_len = strlen(value);
 
-		rc = d_process_log_var(output, &lv, log_var, var_len, value, value_len);
+		rc = d_process_log_var(parser, &lv, log_var, var_len, value, value_len);
 		if (rc != 0)
-			goto out;
+			return;
 	}
 
 	if (lv.mask)
-		d_write_string_buffer(output, "log_mask=%s\n", lv.mask);
+		d_parser_output_put(parser, "log_mask=%s\n", lv.mask);
 	else
-		d_write_string_buffer(output, "log_mask unchanged\n");
+		d_parser_output_put(parser, "log_mask unchanged\n");
 	if (lv.streams)
-		d_write_string_buffer(output, "streams=%s\n", lv.streams);
+		d_parser_output_put(parser, "streams=%s\n", lv.streams);
 	else
-		d_write_string_buffer(output, "Streams unchanged\n");
+		d_parser_output_put(parser, "streams unchanged\n");
 
 	d_log_sync_mask_ex(lv.mask, lv.streams);
-out:
-	/** Use a local variable to make allocation parser happy */
-	d_log_var_free(lv.mask);
-	d_log_var_free(lv.streams);
 }
 
 int
 d_log_register_parser(d_parser_t *parser)
 {
-	d_parser_cbs_t cbs = {0};
-
-	cbs.pc_parser_run_cb = d_log_parse_config;
-
-	return d_parser_handler_register(parser, "log", &cbs, NULL);
+	return d_parser_handler_register(parser, "log", d_log_parse_config);
 }

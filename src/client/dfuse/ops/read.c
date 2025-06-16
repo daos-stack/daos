@@ -473,12 +473,16 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct dfuse_event   *ev;
 
 	if (ino == DFUSE_CTRL_INO) {
-		if (position != 0) {
+		int         value_len;
+		const char *output = d_parser_output_get(dfuse_info->di_parser, &value_len);
+
+		if (position >= value_len) {
 			rc = fuse_reply_buf(req, NULL, 0);
 		} else {
-			const char *output = d_parser_output_get(dfuse_info->di_parser);
-			D_ERROR("output=%s\n", output);
-			rc = fuse_reply_buf(req, output, strlen(output));
+			int remaining = value_len - position;
+			if (remaining > len)
+				remaining = len;
+			rc = fuse_reply_buf(req, &output[position], remaining);
 		}
 		if (rc != 0)
 			DS_ERROR(-rc, "fuse_reply_buf error");

@@ -408,7 +408,7 @@ check_fd_mountpoint(const char *mountpoint)
 }
 
 static void
-stat_parser_cb(parser_t *parser, char *buf, int len, void *arg)
+stat_parser_cb(d_parser_t *parser, char *buf, int len, void *arg)
 {
 }
 

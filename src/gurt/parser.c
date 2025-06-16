@@ -4,14 +4,12 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
-#include <errno.h>
-#include <dlfcn.h>
-#include <pthread.h>
-#include <limits.h>
+#include <stdio.h>
+#include <stdarg.h>
 #include <stdint.h>
-
 #include <malloc.h>
 
+#include <gurt/common.h>
 #include <gurt/parser.h>
 
 /**
@@ -42,21 +40,39 @@ struct d_parser_internal {
 
 #define D_PARSER_MAGIC 0xbaadf00d
 
+static inline struct d_parser_internal *
+d_parser2internal(d_parser_t *parser)
+{
+	return (struct d_parser_internal *)&(parser->p_internal[0]);
+}
+
 static bool
 d_parser_is_valid(d_parser_t *parser)
 {
 	return (parser != NULL && parser->p_magic == D_PARSER_MAGIC);
 }
 
-int
-d_parser_init(d_parser_t **parser)
+static inline void
+reset_parser(struct d_parser_internal *internal)
 {
-	D_ALLOC_PTR(*parser);
+	internal->pi_out_offset    = 0;
+	internal->pi_output[0]     = 0;
+	internal->pi_free_buf_mask = (1 << D_PARSER_BUF_NR) - 1;
+}
+
+int
+d_parser_init(d_parser_t **parser_ptr)
+{
+	d_parser_t *parser;
+	D_ALLOC(parser, sizeof(*parser) + sizeof(struct d_parser_internal));
 	if (parser == NULL)
 		return -DER_NOMEM;
 
-	D_INIT_LIST_HEAD(&(*parser)->p_handlers);
-	(*parser)->p_magic = D_PARSER_MAGIC;
+	D_INIT_LIST_HEAD(&parser->p_handlers);
+	parser->p_magic = D_PARSER_MAGIC;
+	reset_parser(d_parser2internal(parser));
+
+	*parser_ptr = parser;
 
 	return 0;
 }
@@ -64,29 +80,26 @@ d_parser_init(d_parser_t **parser)
 void
 d_parser_fini(d_parser_t *parser)
 {
-	d_parser_handler_t *handler;
+	struct d_parser_handler *handler;
 
 	if (!d_parser_is_valid(parser))
 		return;
 
-	while ((handler = d_list_pop_entry(&parser->p_handlers, d_parser_handler_t, ph_link)) !=
-	       NULL) {
-		if (handler->ph_cbs.pc_parser_fini_cb != NULL)
-			handler->ph_cbs.pc_parser_fini_cb(handler->ph_id, handler->ph_arg);
+	while ((handler = d_list_pop_entry(&parser->p_handlers, struct d_parser_handler,
+					   ph_link)) != NULL) {
 		D_FREE(handler);
 	}
 
 	if (parser->p_magic != 0) {
-		d_free_string(&parser->p_output);
 		parser->p_magic = 0;
 		D_FREE(parser);
 	}
 }
 
 int
-d_parser_handler_register(d_parser_t *parser, const char *id, d_parser_cbs_t *cbs, void *arg)
+d_parser_handler_register(d_parser_t *parser, const char *id, d_parser_run_cb_t run_cb)
 {
-	d_parser_handler_t *handler;
+	struct d_parser_handler *handler;
 
 	if (!d_parser_is_valid(parser))
 		return -DER_INVAL;
@@ -95,8 +108,7 @@ d_parser_handler_register(d_parser_t *parser, const char *id, d_parser_cbs_t *cb
 	if (handler == NULL)
 		return -DER_NOMEM;
 
-	handler->ph_arg = arg;
-	handler->ph_cbs = *cbs;
+	handler->ph_run_cb = run_cb;
 	strncpy(handler->ph_id, id, D_PARSER_ID_MAX_LEN);
 	handler->ph_id[D_PARSER_ID_MAX_LEN - 1] = 0;
 
@@ -106,15 +118,14 @@ d_parser_handler_register(d_parser_t *parser, const char *id, d_parser_cbs_t *cb
 }
 
 const char *
-d_parser_output_get(d_parser_t *parser)
+d_parser_output_get(d_parser_t *parser, int *len)
 {
 	if (!d_parser_is_valid(parser))
 		return "Invalid parser\n";
 
-	if (parser->p_output.str == NULL)
-		return "";
-
-	return parser->p_output.str;
+	struct d_parser_internal *internal = d_parser2internal(parser);
+	*len                               = internal->pi_out_offset;
+	return internal->pi_output;
 }
 
 char *
@@ -127,17 +138,16 @@ d_parser_string_copy(d_parser_t *parser, const char *str, int *len, bool strip)
 	if (!d_parser_is_valid(parser))
 		return "";
 
-	struct d_parser_internal *internal = (struct d_parser_internal *)&parser->d_internal[0];
+	struct d_parser_internal *internal = d_parser2internal(parser);
 
-	if (internal->pi_free_buf_mask == 0) {
+	buf_nr = __builtin_ffs(internal->pi_free_buf_mask);
+	if (buf_nr == 0) {
 		d_parser_output_put(parser, "Insufficient buffers to parse input");
 		return "";
 	}
+	internal->pi_free_buf_mask ^= 1 << (buf_nr - 1);
 
-	buf_nr = __builtin_ffs(internal->pi_free_buf_mask);
-	internal->pi_free_buf_mask ^= 1 << buf_nr;
-
-	char *buf = &internal->pi_bufs[buf_nr].pb_buf;
+	char *buf = &internal->pi_bufs[buf_nr].pb_buf[0];
 
 	/** Value can be truncated but it is invalid */
 	strncpy(buf, str, D_PARSER_MAX_BUF_SIZE);
@@ -159,7 +169,7 @@ d_parser_string_copy(d_parser_t *parser, const char *str, int *len, bool strip)
 		*(end--) = '\0';
 		(*len)--;
 	}
-
+out:
 	return buf;
 }
 
@@ -169,7 +179,7 @@ d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb, 
 	char               *buf = NULL;
 	char               *id  = NULL;
 	char               *end;
-	d_parser_handler_t *handler;
+	struct d_parser_handler *handler;
 	char               *handler_buf = NULL;
 	int                 handler_len;
 	int                 rc = 0;
@@ -177,15 +187,21 @@ d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb, 
 	if (!d_parser_is_valid(parser))
 		return -DER_INVAL;
 
-	/** Extra byte allocated for possible NUL character */
-	D_ALLOC_ARRAY(buf, len + 1);
-	if (data == NULL)
-		return -DER_NOMEM;
+	/* Just truncate the input */
+	if (len >= D_PARSER_MAX_IO_SIZE) {
+		d_parser_output_put(parser, "Can't parse a buffer larger than %d bytes\n",
+				    D_PARSER_MAX_IO_SIZE - 1);
+		return 0;
+	}
+
+	struct d_parser_internal *internal = d_parser2internal(parser);
+
+	reset_parser(internal);
+	buf = &internal->pi_input[0];
 
 	rc = copy_cb(buf, len, data);
 	if (rc != 0) {
-		d_write_string_buffer(&parser->p_output, "Could not copy parser data: " DF_RC "\n",
-				      DP_RC(rc));
+		d_parser_output_put(parser, "Could not copy parser data: " DF_RC "\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -200,24 +216,47 @@ d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb, 
 		handler_buf = &buf[len];
 		handler_len = 0;
 	}
-	id = d_parser_string_copy(parser, buf, &len);
+	id = d_parser_string_copy(parser, buf, &len, true);
 	if (len == 0) {
-		d_write_string_buffer(&parser->p_output, "No type parameter given to parser\n");
+		d_parser_output_put(parser, "No type parameter given to parser\n");
 		goto out;
 	}
 
 	d_list_for_each_entry(handler, &parser->p_handlers, ph_link) {
 		if (strcmp(id, handler->ph_id) == 0) {
-			if (handler->ph_cbs.pc_parser_run_cb != NULL) {
-				handler->ph_cbs.pc_parser_run_cb(&parser->p_output, handler_buf,
-								 handler_len, arg);
+			if (handler->ph_run_cb != NULL) {
+				handler->ph_run_cb(parser, handler_buf, handler_len, arg);
 				goto out;
 			}
 		}
 	}
-	d_write_string_buffer(&parser->p_output, "Could not find handler for %s\n", id);
+	d_parser_output_put(parser, "Could not find handler for %s\n", id);
 
 out:
-	D_FREE(buf);
 	return rc;
+}
+
+void
+d_parser_output_put(d_parser_t *parser, const char *fmt, ...)
+{
+	if (!d_parser_is_valid(parser))
+		return;
+
+	struct d_parser_internal *internal  = d_parser2internal(parser);
+	int                       remaining = sizeof(internal->pi_output) - internal->pi_out_offset;
+
+	/** We truncate the output to avoid allocations at parsing time */
+	if (remaining <= 1)
+		return;
+
+	va_list ap;
+
+	va_start(ap, fmt);
+	int n = vsnprintf(&internal->pi_output[internal->pi_out_offset], remaining, fmt, ap);
+	va_end(ap);
+
+	if (n < 0)
+		return;
+
+	internal->pi_out_offset += remaining > n ? n : remaining;
 }
