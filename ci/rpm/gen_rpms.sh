@@ -21,5 +21,5 @@ env
 pushd "${mydir}/../.." || exit 1
 utils/rpms/build_packages.sh daos
 mkdir -p /home/daos/rpms
-cp *.rpm /home/daos/rpms
+cp ./*.rpm /home/daos/rpms
 popd || exit 1
