@@ -1560,7 +1560,7 @@ handle_event(struct pool_svc *svc, struct pool_svc_event_set *event_set)
 	if (!pool_disable_exclude) {
 		rc = pool_svc_exclude_ranks(svc, event_set);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_UUID ": failed to exclude ranks", DP_UUID(svc->ps_uuid));
+			DL_INFO(rc, DF_UUID ": exclude ranks", DP_UUID(svc->ps_uuid));
 			return rc;
 		}
 	}
