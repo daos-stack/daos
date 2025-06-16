@@ -45,7 +45,7 @@ RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
 ARG JENKINS_URL
 
 # Setup a python venv so that python packages can be installed locally.
-RUN python3 -m venv /home/daos/venv
+RUN python3.11 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
