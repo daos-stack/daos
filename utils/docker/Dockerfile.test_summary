@@ -42,6 +42,8 @@ RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
     dnf clean all &&      \
     rm -f /tmp/install.sh
 
+RUN apt-get -qq update
+RUN apt-get -qqy install python3.11
 ARG JENKINS_URL
 
 # Setup a python venv so that python packages can be installed locally.
