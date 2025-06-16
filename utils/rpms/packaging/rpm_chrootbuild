@@ -67,7 +67,7 @@ if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
                     build_number="${branch#*:}"
                     branch="${branch%:*}"
                 fi
-                REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
+                REPO_FILE_URL="${JENKINS_URL:-https://jenkins-3.daos.hpc.amslabs.hpecorp.net/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
             else
                 if [ ! -d "$REPO_FILES_PR" ]; then
                     echo "Could not find your specified directory \"$REPO_FILES_PR\" to read repo-files from"
@@ -101,7 +101,7 @@ for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
     repo_adds+=("--enablerepo $repo:${branch//[@\/]/_}:$build_number")
     echo -e "[$repo:${branch//[@\/]/_}:$build_number]\n\
 name=$repo:${branch//[@\/]/_}:$build_number\n\
-baseurl=${ARTIFACTS_URL:-${JENKINS_URL:-https://build.hpdd.intel.com/}job/}daos-stack/job/$repo/job/${branch//\//%2F}/$build_number/artifact/artifacts/$DISTRO/\n\
+baseurl=${ARTIFACTS_URL:-${JENKINS_URL:-https://jenkins-3.daos.hpc.amslabs.hpecorp.net/}job/}daos-stack/job/$repo/job/${branch//\//%2F}/$build_number/artifact/artifacts/$DISTRO/\n\
 enabled=1\n\
 gpgcheck=False\n" >> mock.cfg
 done

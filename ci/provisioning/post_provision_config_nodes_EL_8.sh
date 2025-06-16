@@ -67,7 +67,7 @@ install_mofed() {
     fi
 
     # Add a repo to install Mellanox_OFED RPMS
-    : "${ARTIFACTORY_URL:=https://artifactory.dc.hpdd.intel.com/artifactory/}"
+    : "${ARTIFACTORY_URL:=https://artifactory.daos.hpc.amslabs.hpecorp.net/artifactory/}"
     # Temporary fix
     if  [[ ${ARTIFACTORY_URL} != *"/artifactory" ]]; then
         ARTIFACTORY_URL="${ARTIFACTORY_URL}artifactory"
