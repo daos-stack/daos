@@ -658,13 +658,19 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                        script {
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                        stash_files: 'ci/test_files_to_stash.txt',
+                                        build_deps: 'no',
+                                        stash_opt: true,
+                                        scons_args: sconsArgs() +
+                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                            if (new_rpms()) {
+                                sh label: 'Generate RPMs',
+                                    script: './ci/rpm/gen_rpms.sh'
+                            }
+                        }
                     }
                     post {
                         success {
