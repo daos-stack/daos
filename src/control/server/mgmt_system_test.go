@@ -1730,9 +1730,32 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expInvokeCount: 2, // prep should be called
 		},
 		"full system stop; partial ranks in req": {
-			req:       &mgmtpb.SystemStopReq{Ranks: "0,1"},
-			mResps:    hostRespStopSuccess,
-			expAPIErr: errSysForceNotFull,
+			req: &mgmtpb.SystemStopReq{Ranks: "0,1"},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(1, mockRankSuccess("prep shutdown", 0), mockRankSuccess("prep shutdown", 1)),
+				},
+				{
+					hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 0, 1), mockRankSuccess("stop", 1, 1),
+			},
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "joined"),
+				}
+			},
+			expInvokeCount: 2, // prep should be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1"),
 		},
 		"full system stop (forced)": {
 			req:        &mgmtpb.SystemStopReq{Force: true},
