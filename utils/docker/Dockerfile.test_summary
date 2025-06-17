@@ -51,7 +51,6 @@ ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
-WORKDIR /home/daos
 COPY requirements-code-coverage.txt ./
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install -r requirements-code-coverage.txt
