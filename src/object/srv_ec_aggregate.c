@@ -2443,6 +2443,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	struct pl_map		*map;
 	struct daos_oclass_attr  oca;
 	struct cont_props	 props;
+	uint32_t                 shard_nr;
 	int			 rc = 0;
 
 	/** We should have filtered it if it isn't EC */
@@ -2462,6 +2463,8 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
 	md.omd_pdom_lvl = props.dcp_perf_domain;
 	md.omd_pda = props.dcp_ec_pda;
+	shard_nr        = daos_oclass_grp_size(&oca) * daos_obj_id2grp_nr(md.omd_id);
+	agg_param->ap_credits += roundup(shard_nr, 128) / 128;
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 
