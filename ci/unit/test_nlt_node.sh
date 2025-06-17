@@ -45,8 +45,8 @@ prlimit -n
 pwd
 ls -al
 find . -name "*.gcno"
-# export GCOV_PREFIX="${pwd}"
-# export GCOV_PREFIX_STRIP="7"
+export GCOV_PREFIX="${pwd}"
+export GCOV_PREFIX_STRIP="7"
 
 HTTPS_PROXY="${HTTPS_PROXY:-}" ./utils/node_local_test.py --max-log-size 1950MiB \
     --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
