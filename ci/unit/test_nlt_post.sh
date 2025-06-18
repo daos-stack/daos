@@ -23,5 +23,4 @@ rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
       --filter="include nltir.xml" --filter="include nltr.json" \
       --filter="include nlt-junit.xml" --filter="exclude *" ./
 mkdir -p vm_test
-# tmp comment-out
-# mv nlt-errors.json vm_test/
+mv nlt-errors.json vm_test/
