@@ -67,7 +67,15 @@ class DmgSystemCleanupTest(TestWithServers):
 
         # Call dmg system cleanup on the host and create cleaned pool list.
         dmg_cmd = self.get_dmg_command()
-        result = dmg_cmd.system_cleanup(self.agent_managers[0].hosts, verbose=True)
+        # result = dmg_cmd.system_cleanup(self.agent_managers[0].hosts, verbose=True)
+
+        # Debug
+        result = None
+        agent_hosts = self.agent_managers[0].hosts
+        self.log.debug(f"## agent_hosts = {agent_hosts}")
+        for agent_host in agent_hosts:
+            self.log.debug(f"## agent_host = {agent_host}")
+            result = dmg_cmd.system_cleanup(agent_host, verbose=True)
 
         # Build list of pools and how many handles were cleaned (should be 6 each)
         actual_counts = {}
