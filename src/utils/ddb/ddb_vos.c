@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -666,7 +667,7 @@ void
 dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj)
 {
 	obj->ddbo_oid = oid;
-	obj->ddbo_nr_grps = (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
+	obj->ddbo_nr_grps = daos_obj_id2grp_nr(oid);
 
 	/*
 	 * It would be nice to get the object class name, but currently that is client
