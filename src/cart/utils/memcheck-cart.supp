@@ -710,7 +710,7 @@
    fun:crt_context_provider_create
    fun:daos_eq_lib_init
    fun:daos_init
-   fun:_cgo_b590e4e2531a_Cfunc_daos_init
+   ...
    fun:runtime.asmcgocall.abi0
 }
 {
