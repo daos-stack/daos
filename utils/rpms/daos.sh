@@ -393,19 +393,16 @@ if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
 fi
 
 TARGET_PATH="${libdir}"
+DEPENDS="${openmpi_lib}"
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-build_package "daos-client-tests-openmpi"
+# Don't do autoreq, we know we need OpenMPI so add it explicitly
+build_package "daos-client-tests-openmpi" "noautoreq"
 
 #shim packages
 PACKAGE_TYPE="empty"
 ARCH="noarch"
-EXTERNAL_DEPENDS=("libmpi.so.40()(64bit)")
-DEPENDS=()
-# no files in shim
-build_package "daos-mofed-shim"
-
 DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
 build_package "daos-tests"
 
