@@ -38,8 +38,8 @@ class DmgSystemCleanupTest(TestWithServers):
         :avocado: tags=DmgSystemCleanupTest,test_dmg_system_cleanup_one_host
         """
         # Print out where this is running
-        hostname = gethostname().split(".")[0]
-        self.log.info("Script is running on %s", hostname)
+        control_host = gethostname().split(".")[0]
+        self.log.info("Script is running on %s", control_host)
 
         # Create 2 pools and create a container in each pool.
         self.pool = []
@@ -67,15 +67,7 @@ class DmgSystemCleanupTest(TestWithServers):
 
         # Call dmg system cleanup on the host and create cleaned pool list.
         dmg_cmd = self.get_dmg_command()
-        # result = dmg_cmd.system_cleanup(self.agent_managers[0].hosts, verbose=True)
-
-        # Debug
-        result = None
-        agent_hosts = self.agent_managers[0].hosts
-        self.log.debug(f"## agent_hosts = {agent_hosts}")
-        for agent_host in agent_hosts:
-            self.log.debug(f"## agent_host = {agent_host}")
-            result = dmg_cmd.system_cleanup(agent_host, verbose=True)
+        result = dmg_cmd.system_cleanup(machinename=control_host)
 
         # Build list of pools and how many handles were cleaned (should be 6 each)
         actual_counts = {}

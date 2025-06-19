@@ -2,7 +2,6 @@ hosts:
   test_servers: 3
   test_clients: 1
 
-
 timeout: 1200
 
 server_config:
@@ -10,7 +9,7 @@ server_config:
   engines_per_host: 2
   engines:
     0:
-      targets: 1
+      targets: 4
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
@@ -19,7 +18,7 @@ server_config:
         - DAOS_MD_CAP=1024
       storage: auto
     1:
-      targets: 1
+      targets: 4
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
