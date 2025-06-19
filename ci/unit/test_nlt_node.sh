@@ -58,4 +58,6 @@ if [[ -n $(find build -name "*.gcda") ]]; then
     mkdir -p /tmp/code_coverage
     gcovr -o /tmp/code_coverage/code_coverage_report.html --html-details --gcov-ignore-parse-errors
     gcovr --json /tmp/code_coverage/code_coverage.json --gcov-ignore-parse-errors
+    # add ddebug
+    ls -al /tmp/code_coverage
 fi
