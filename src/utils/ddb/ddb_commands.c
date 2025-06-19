@@ -5,6 +5,10 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/mount.h>
 #include <daos/common.h>
 #include <daos_srv/vos.h>
 #include "ddb_common.h"
@@ -1256,5 +1260,93 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 	else
 		ddb_print(ctx, "Device replacing succeeded\n");
 
+	return rc;
+}
+
+static int
+is_mountpoint(const char *path)
+{
+	struct stat st_path, st_parent;
+	char        parent_path[DDB_PATH_MAX];
+
+	if (stat(path, &st_path) != 0)
+		return -1;
+
+	snprintf(parent_path, sizeof(parent_path), "%s/..", path);
+
+	if (stat(parent_path, &st_parent) != 0)
+		return -1;
+
+	return (st_path.st_dev != st_parent.st_dev);
+}
+
+int
+ddb_run_setup(struct ddb_ctx *ctx, struct setup_options *opt)
+{
+	int  rc       = 0;
+	int  scm_size = 0;
+	char options[DDB_PATH_MAX];
+	char db_path[DDB_PATH_MAX]   = DEFAULT_DB_PATH;
+	char scm_mount[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+
+	if (opt->scm_size == 0) {
+		ddb_errorf(ctx, "Invalid scm_size '%u'\n", opt->scm_size);
+		return -DER_INVAL;
+	}
+	scm_size = opt->scm_size;
+
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
+
+	if (opt->scm_mount != NULL) {
+		if (strlen(opt->scm_mount) == 0 || strlen(opt->scm_mount) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid scm_mount '%s'\n", opt->scm_mount);
+			return -DER_INVAL;
+		}
+		strncpy(scm_mount, opt->scm_mount, ARRAY_SIZE(scm_mount) - 1);
+	}
+
+	/* Make sure mountpoint is clear */
+	if (access(scm_mount, F_OK)) {
+		rc = errno;
+		ddb_errorf(ctx, "Failed to access scm mountpoint %s, %s(%d)\n", scm_mount,
+			   strerror(rc), rc);
+		return daos_errno2der(rc);
+	}
+	rc = is_mountpoint(scm_mount);
+	if (rc == -1) {
+		rc = errno;
+		ddb_errorf(ctx, "Failed to check scm_mount %s, %s(%d)\n", scm_mount, strerror(rc),
+			   rc);
+		return daos_errno2der(rc);
+	} else if (rc == 1) {
+		ddb_errorf(ctx, "scm_mount %s has already mounted. Please umount it before.\n",
+			   scm_mount);
+		return -DER_ALREADY;
+	}
+
+	/* Mount */
+	memset(options, 0, sizeof(options));
+	snprintf(options, DDB_PATH_MAX - 1, "mpol=prefer:0,size=%dg%s", scm_size,
+		 opt->scm_hugepages_disabled ? "" : ",huge=always");
+	rc = mount("tmpfs", scm_mount, "tmpfs", MS_NOATIME, (void *)options);
+	if (rc) {
+		ddb_errorf(ctx, "Failed to mount tmpfs on %s " DF_RC "\n", scm_mount, DP_RC(rc));
+		return daos_errno2der(rc);
+	}
+
+	// receate scm path
+	rc = dv_run_setup(db_path, scm_mount);
+	if (rc) {
+		ddb_errorf(ctx, "Failed to setup scm. " DF_RC "\n", DP_RC(rc));
+		umount(scm_mount);
+		return rc;
+	}
+	ddb_printf(ctx, "Setup tmpfs and vos file succeeded on '%s'\n", scm_mount);
 	return rc;
 }

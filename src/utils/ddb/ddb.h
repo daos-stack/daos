@@ -121,6 +121,7 @@ enum ddb_cmd {
 	DDB_CMD_DTX_ACT_DISCARD_INVALID = 23,
 	DDB_CMD_DEV_LIST                = 24,
 	DDB_CMD_DEV_REPLACE             = 25,
+	DDB_CMD_SETUP                   = 26,
 };
 
 /* option and argument structures for commands that need them */
@@ -209,6 +210,13 @@ struct dev_replace_options {
 	char *new_devid;
 };
 
+struct setup_options {
+	char        *db_path;
+	char        *scm_mount;
+	unsigned int scm_size; // tmpfs挂载的大小，单位GiB
+	bool         scm_hugepages_disabled;
+};
+
 struct ddb_cmd_info {
 	enum ddb_cmd dci_cmd;
 	union {
@@ -229,6 +237,7 @@ struct ddb_cmd_info {
 		struct dtx_act_options        dci_dtx_act;
 		struct dev_list_options       dci_dev_list;
 		struct dev_replace_options    dci_dev_replace;
+		struct setup_options          dci_setup;
 	} dci_cmd_option;
 };
 
@@ -274,6 +283,8 @@ int
 ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt);
 int
      ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt);
+int
+     ddb_run_setup(struct ddb_ctx *ctx, struct setup_options *opt);
 
 void ddb_program_help(struct ddb_ctx *ctx);
 void ddb_commands_help(struct ddb_ctx *ctx);

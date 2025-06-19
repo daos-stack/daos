@@ -381,4 +381,24 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Completer: nil,
 	})
+	// Command setup
+	app.AddCommand(&grumble.Command{
+		Name:      "setup",
+		Aliases:   nil,
+		Help:      "Setup tmpfs and VOS file according to the pool information stored in SMD",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.Bool("d", "hugepages_disabled", false, "disabled use hugepages for scm mount. (default: false)")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the vos db.")
+			a.String("scm_mount", "Path to the scm mountpoint.")
+			a.Uint("scm_size", "scm tmpfs size. (unit:GiB)")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbSetup(ctx, c.Args.String("db_path"), c.Args.String("scm_mount"), c.Args.Uint("scm_size"), c.Flags.Bool("hugepages_disabled"))
+		},
+		Completer: nil,
+	})
 }
