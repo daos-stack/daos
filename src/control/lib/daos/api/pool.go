@@ -150,8 +150,8 @@ func newPoolInfo(cpi *C.daos_pool_info_t) *daos.PoolInfo {
 	if poolInfo.DisabledTargets > 0 {
 		poolInfo.State = daos.PoolServiceStateTargetsExcluded
 	}
-
 	poolInfo.Rebuild = newPoolRebuildStatus(&cpi.pi_rebuild_st)
+
 	if poolInfo.QueryMask.HasOption(daos.PoolQueryOptionSpace) {
 		poolInfo.TierStats = []*daos.StorageUsageStats{
 			newPoolSpaceInfo(&cpi.pi_space, C.DAOS_MEDIA_SCM),

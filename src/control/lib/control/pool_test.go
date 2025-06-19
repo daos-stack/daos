@@ -1245,8 +1245,8 @@ func TestControl_UpdateState(t *testing.T) {
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
 					UUID:            poolUUID,
-					TotalTargets:    1,
-					DisabledTargets: 0,
+					TotalTargets:    2,
+					DisabledTargets: 1,
 				},
 			},
 			expState: daos.PoolServiceStateReady.String(),
@@ -1255,10 +1255,14 @@ func TestControl_UpdateState(t *testing.T) {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
-					UUID:            poolUUID,
-					TotalTargets:    1,
-					DisabledTargets: 4,
-					State:           daos.PoolServiceStateReady,
+					UUID:         poolUUID,
+					TotalTargets: 1,
+					State:        daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
+						Objects: 1,
+						Records: 2,
+					},
 				},
 			},
 			expState: daos.PoolServiceStateTargetsExcluded.String(),
