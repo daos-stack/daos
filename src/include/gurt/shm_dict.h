@@ -8,7 +8,7 @@
 #include <gurt/shm_alloc.h>
 
 /* the max length allowed for a hash table name */
-#define MAX_HT_NAME_LEN      16
+#define MAX_HT_NAME_LEN      80
 
 /* reserved string for d_shm_mutex_t as ht record value */
 #define INIT_KEY_VALUE_MUTEX "INIT_MUTEX"
