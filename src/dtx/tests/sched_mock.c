@@ -22,6 +22,12 @@ sched_req_wakeup(struct sched_request *req)
 	assert_true(false);
 }
 
+void
+sched_req_abort(struct sched_request *req)
+{
+	assert_true(false);
+}
+
 struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 {
