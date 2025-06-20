@@ -1,0 +1,35 @@
+# (C) Copyright 2023-2024 Intel Corporation.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+"""CART perf utility"""
+
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    tenv = env.Clone()
+    tenv.require('mercury')
+    # pylint: disable=wrong-spelling-in-comment
+    # tenv.Replace(CCFLAGS=['-O0','-g'])
+    # tenv.AppendUnique(CCFLAGS=['-fsanitize=address',
+    #                            '-fsanitize-address-use-after-scope',
+    #                            '-fno-omit-frame-pointer',
+    #                            '-fno-optimize-sibling-calls'])
+    # tenv.AppendUnique(LINKFLAGS=['-fsanitize=address'])
+    # tenv.AppendUnique(CCFLAGS=['-fsanitize=thread'])
+    # tenv.AppendUnique(LINKFLAGS=['-fsanitize=thread'])
+    # pylint: enable=wrong-spelling-in-comment
+
+    libs = ['cart', 'gurt', 'mercury', 'dl', 'pthread']
+
+    crt_perf_src = [tenv.Object('crt_perf.c'), tenv.Object('crt_perf_mpi.c')]
+    crt_perf_exe = ['crt_rate.c', 'crt_bw_write.c', 'crt_bw_read.c', 'crt_perf_server.c']
+    for test in crt_perf_exe:
+        target = tenv.d_program([test, crt_perf_src], LIBS=libs)
+        tenv.Install('$PREFIX/bin', target)
+
+
+if __name__ == "SCons.Script":
+    scons()

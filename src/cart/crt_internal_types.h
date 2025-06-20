@@ -149,6 +149,8 @@ struct crt_gdata {
 	unsigned int             cg_use_sensors         : 1;
 	/** whether we are on a primary provider */
 	unsigned int             cg_provider_is_primary : 1;
+	/** use legacy progress method */
+	bool                     cg_progress_legacy;
 
 	/** use single thread to access context */
 	bool                     cg_thread_mode_single;
@@ -230,6 +232,7 @@ struct crt_event_cb_priv {
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
 	ENV(D_THREAD_MODE_SINGLE)                                                                  \
 	ENV(D_PROGRESS_BUSY)                                                                       \
+	ENV(D_PROGRESS_LEGACY)                                                                     \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
@@ -423,6 +426,10 @@ struct crt_context {
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
+
+	/* main progress */
+	int (*cc_prog_func)(struct crt_context *, int64_t);
+	int (*cc_prog_cond_func)(struct crt_context *, int64_t, crt_progress_cond_cb_t, void *);
 
 	/* progress callback */
 	void                    *cc_prog_cb_arg;
