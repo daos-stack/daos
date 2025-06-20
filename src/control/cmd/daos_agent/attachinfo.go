@@ -37,7 +37,7 @@ func (cmd *attachInfoCmd) getAttachInfo(ctx context.Context) (*control.GetAttach
 type dumpAttachInfoCmd struct {
 	attachInfoCmd
 	Output      string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
-	ProviderIdx *uint  // TODO SRS-31: Enable with multiprovider functionality: `short:"n" long:"provider_idx" description:"Index of provider to fetch (if multiple)"`
+	ProviderIdx *uint  `short:"n" long:"provider_idx" description:"Index of provider to fetch (if multiple)"`
 }
 
 func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
