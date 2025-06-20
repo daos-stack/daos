@@ -10,7 +10,7 @@ HEADERS = ['daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
            'daos.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'heap.h', 'fault_inject.h', 'debug_setup.h',
-                'types.h', 'atomic.h', 'slab.h',
+                'types.h', 'atomic.h', 'slab.h', 'parser.h',
                 'telemetry_consumer.h', 'telemetry_common.h']
 HEADERS_CART = ['api.h', 'iv.h', 'types.h', 'swim.h']
 
