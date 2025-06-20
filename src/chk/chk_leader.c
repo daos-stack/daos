@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2414,6 +2415,13 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 	uint32_t			 cbk_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	int				 rc = 0;
 	int				 i;
+	uint8_t                          chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc) {
+		D_ERROR("chk_leader_start_prep fail to get rpc protocol\n");
+		D_GOTO(out, rc);
+	}
 
 	if (rank_nr == 0) {
 		D_ERROR("Rank list cannot be NULL for check start\n");
@@ -2481,7 +2489,7 @@ reset:
 
 	memset(cbk, 0, sizeof(*cbk));
 	cbk->cb_magic = CHK_BK_MAGIC_LEADER;
-	cbk->cb_version = DAOS_CHK_VERSION;
+	cbk->cb_version = chk_ver;
 
 init:
 	rc = chk_prop_prepare(leader, flags, phase, policy_nr, policies, rank_list, prop);
@@ -2552,6 +2560,11 @@ chk_leader_start_post(struct chk_instance *ins)
 	uint32_t		 ins_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	uint32_t		 pool_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	int			 rc = 0;
+	uint8_t                  chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
 		pool_cbk = &cpr->cpr_bk;
@@ -2560,7 +2573,7 @@ chk_leader_start_post(struct chk_instance *ins)
 			memset(pool_cbk, 0, sizeof(*pool_cbk));
 			pool_cbk->cb_magic = CHK_BK_MAGIC_POOL;
 			pool_cbk->cb_gen = ins_cbk->cb_gen;
-			pool_cbk->cb_version = DAOS_CHK_VERSION;
+			pool_cbk->cb_version = chk_ver;
 		}
 
 		/*

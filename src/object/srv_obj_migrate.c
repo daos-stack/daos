@@ -4371,6 +4371,11 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 	crt_rpc_t		*rpc;
 	int			rc;
 	uint32_t		rpc_timeout = 0;
+	uint8_t                  rpc_ver;
+
+	rc = ds_obj_rpc_protocol(&rpc_ver);
+	if (rc)
+		return rc;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
@@ -4395,8 +4400,7 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 	index = target->ta_comp.co_index;
 	ABT_rwlock_unlock(pool->sp_lock);
 	tgt_ep.ep_tag = 0;
-	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_MIGRATE, DAOS_OBJ_MODULE,
-				 DAOS_OBJ_VERSION);
+	opcode        = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_MIGRATE, DAOS_OBJ_MODULE, rpc_ver);
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
 			    &rpc);
 	if (rc) {
