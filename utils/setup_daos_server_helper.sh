@@ -68,10 +68,10 @@ USR_CTL=/usr/share/daos/control
 echo -n "Creating SPDK script links under $USR_SPDK ... "
 mkdir -p "$USR_SPDK/scripts" "$USR_CTL"
 if ! [ -e "$USR_SPDK/scripts/setup.sh" ]; then
-        ln -sf "$SL_SPDK_PREFIX/share/spdk/scripts/setup.sh" "$USR_SPDK/scripts"
+        ln -sf "$SL_SPDK_PREFIX/share/daos/spdk/scripts/setup.sh" "$USR_SPDK/scripts"
 fi
 if ! [ -e "$USR_SPDK/scripts/common.sh" ]; then
-        ln -sf "$SL_SPDK_PREFIX/share/spdk/scripts/common.sh" "$USR_SPDK/scripts"
+        ln -sf "$SL_SPDK_PREFIX/share/daos/spdk/scripts/common.sh" "$USR_SPDK/scripts"
 fi
 if ! [ -e "$USR_SPDK/include" ]; then
         ln -s "$SL_SPDK_PREFIX/include" "$USR_SPDK"/include
