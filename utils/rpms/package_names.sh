@@ -26,7 +26,7 @@ set_lib_name() {
   fi
 }
 
-set_lib_name openmpi lib openmpi3 openmpi openmpi
+set_lib_name openmpi lib openmpi openmpi3 openmpi
 export openmpi_lib
 set_lib_name argobots lib argobots libabt0 libabt0
 export argobots_lib
