@@ -1633,6 +1633,62 @@ rebuild_long_scan_hang(void **state)
 	print_message("rebuild done\n");
 }
 
+static void
+rebuild_akey_punch_reint(void **state)
+{
+	test_arg_t   *arg = *state;
+	struct ioreq  req;
+	daos_obj_id_t oid;
+	d_rank_t      rank = 2;
+	int           i;
+	int           len = 4096;
+	daos_recx_t   recx;
+	char         *data;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+
+	oid  = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
+	oid  = dts_oid_set_rank(oid, rank);
+	data = (char *)malloc(len);
+	assert_true(data != NULL);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	req.iod_type = DAOS_IOD_ARRAY;
+	for (i = 0; i < 4; i++) {
+		recx.rx_nr  = len;
+		recx.rx_idx = i * len + 10;
+		memset(data, 'a' + i, len);
+		insert_recxs("d_key", "a_key_0", 1, DAOS_TX_NONE, &recx, 1, data, len, &req);
+		insert_recxs("d_key", "a_key_1", 1, DAOS_TX_NONE, &recx, 1, data, len, &req);
+		insert_recxs("d_key", "a_key_2", 1, DAOS_TX_NONE, &recx, 1, data, len, &req);
+	}
+
+	sleep(2);
+	punch_akey("d_key", "a_key_0", DAOS_TX_NONE, &req);
+	sleep(2);
+	/*
+		for (i = 0; i < 4; i++) {
+			recx.rx_nr = len;
+			recx.rx_idx = i * len + 4096 * 4096;
+			memset(data, 'a' + i, len);
+			insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+				     data, len, &req);
+		}
+	*/
+
+	print_message("kill rank %d\n", rank);
+	rebuild_single_pool_rank(arg, rank, true);
+
+	print_message("reintegrate rank %d\n", rank);
+	reintegrate_single_pool_rank(arg, rank, true);
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	ioreq_fini(&req);
+	free(data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
     {"REBUILD0: drop rebuild scan reply", rebuild_drop_scan, rebuild_small_sub_setup,
@@ -1709,6 +1765,8 @@ static const struct CMUnitTest rebuild_tests[] = {
     {"REBUILD36: basic incremental reintegration", rebuild_incr_reint_basic,
      rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
     {"REBUILD37: single engine scan lengthy hang", rebuild_long_scan_hang, rebuild_sub_setup,
+     rebuild_sub_teardown},
+    {"REBUILD38: akey update_punch reint", rebuild_akey_punch_reint, rebuild_sub_6nodes_rf1_setup,
      rebuild_sub_teardown},
 };
 

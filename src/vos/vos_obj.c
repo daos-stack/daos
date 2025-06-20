@@ -428,6 +428,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
 
+	D_ERROR("lxzlxz punch\n");
+
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
