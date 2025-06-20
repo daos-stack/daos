@@ -1102,7 +1102,7 @@ class _Component():
         """Parse the patches variable"""
         patchnum = 1
         patchstr = self.prereqs.get_config("patch_versions", self.name)
-        if patchstr is None:
+        if patchstr is None or self.prereqs.deps_as_gitmodules_subdir:
             return {}
         patches = {}
         patch_strs = patchstr.split(",")
