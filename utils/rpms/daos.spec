@@ -22,8 +22,8 @@
 %endif
 
 Name:          daos
-Version:       2.6.3
-Release:       9%{?relval}%{?dist}
+Version:       2.6.4
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -622,8 +622,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed May 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.3-9
+* Fri Jun 20 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-2
 - Switch libfuse3 to libfused
+
+* Tue Jun 17 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.4-1
+- First release candidate for 2.6.4
 
 * Mon May 12 2025  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.3-8
 - Bump lua-lmod version to >=8.7.36
