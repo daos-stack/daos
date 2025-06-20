@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -159,6 +160,8 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 			return propError("value must not be empty")
 		}
 
+		value = strings.Trim(value, "\"")
+		value = strings.Trim(value, "'")
 		f.ParsedProps[key] = value
 	}
 
