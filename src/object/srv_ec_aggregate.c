@@ -2721,8 +2721,8 @@ retry:
 	if (rc != 0)
 		goto update_hae;
 
-	rc = vos_iterate_obj(&iter_param, true, &anchors, agg_iterate_pre_cb,
-			     agg_iterate_post_cb, ec_agg_param, dth);
+	rc = vos_iterate_obj(&iter_param, &anchors, agg_iterate_pre_cb, agg_iterate_post_cb,
+			     ec_agg_param, dth);
 	if (rc == -DER_INPROGRESS && !d_list_empty(&dth->dth_share_tbd_list)) {
 		uint64_t	now = daos_gettime_coarse();
 
