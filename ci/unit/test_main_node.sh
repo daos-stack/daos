@@ -81,17 +81,38 @@ fi
 rm -rf "$test_log_dir"
 
 # Use default python as that's where storage_estimator is installed.
-python3 -m venv venv
+python3.11 -m venv venv
+# temp cp for debug
+ls -la /usr/lib64/
+cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib64/python3.11/site-packages/
+# cp -r /opt/daos/lib64/daos_srv/libvos_size.so venv/lib64/
+cp -r /opt/daos/lib64/daos_srv venv/lib64/
+cp /opt/daos/lib64/libdfs.so venv/lib64/
+
 # shellcheck disable=SC1091
 source venv/bin/activate
-# touch venv/pip.conf
-# pip config set global.progress_bar off
-# pip config set global.no_color true
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip config set global.no_color true
 
 pip install --upgrade pip
 pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
+# pip install /opt/daos/lib64/python3.6/site-packages/storage_estimator
 
+utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
+                   $SUDO_ARG
+
+# Generate code coverage report if at least one gcda file was generated
+# Possibly limit this to finding a single match
+if [[ -n $(find build -name "*.gcda") ]]; then
+    pip install --requirement requirements-code-coverage.txt
+    
+    mkdir -p "${test_log_dir}/code_coverage"
+    gcovr -o "${test_log_dir}/code_coverage/code_coverage_report.html" --html-details --gcov-ignore-parse-errors
+    # Eventually remove this one and only generate json files per stage.
+    gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors
+fi
 HTTPS_PROXY="${HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
