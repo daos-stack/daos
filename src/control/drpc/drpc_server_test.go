@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -73,8 +74,8 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	socket := newMockConn()
 	call := &Call{
 		Sequence: 123,
-		Module:   ModuleMgmt.ID(),
-		Method:   MethodPoolCreate.ID(),
+		Module:   1,
+		Method:   2,
 	}
 	callBytes, err := proto.Marshal(call)
 	if err != nil {
@@ -83,7 +84,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	socket.ReadOutputBytes = callBytes
 	socket.ReadOutputNumBytes = len(callBytes)
 
-	mod := newTestModule(ModuleID(call.Module))
+	mod := newTestModule(call.Module)
 	svc := NewModuleService(log)
 	svc.RegisterModule(mod)
 
@@ -371,6 +372,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 
 	// TEST module as defined in <daos/drpc_modules.h> has id 0
 	mod := newTestModule(0)
+	mod.GetMethodErr = errors.New("mock error")
 	dss.RegisterRPCModule(mod)
 
 	ctx, shutdown := context.WithCancel(test.Context(t))
