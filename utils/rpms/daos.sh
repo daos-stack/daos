@@ -393,7 +393,12 @@ if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
 fi
 
 TARGET_PATH="${libdir}"
-DEPENDS="${openmpi_lib}"
+DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
+DEPENDS+="hdf5-${openmpi_lib}"
+DEPENDS+="hdf5-vol-daos-${openmpi_lib}"
+DEPENDS+="MACSio-${openmpi_lib}"
+DEPENDS+="simul-${openmpi_lib}"
+DEPENDS+="${openmpi_lib}"
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
