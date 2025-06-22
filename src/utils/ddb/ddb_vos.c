@@ -560,8 +560,9 @@ dv_path_verify(daos_handle_t poh, struct dv_indexed_tree_path *itp)
 	args.pva_current_idx = 0;
 	args.pva_itp = itp;
 
-	param.ip_hdl = coh;
+	param.ip_hdl        = coh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors,
 			 verify_path_pre_cb, verify_path_post_cb, &args, NULL);
@@ -1815,6 +1816,7 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete com
 	rc = smd_init(vos_db_get());
 	if (!SUCCESS(rc)) {
 		D_ERROR("SMD failed to initialize: "DF_RC"\n", DP_RC(rc));
+		vos_self_fini();
 		return rc;
 	}
 
@@ -1826,7 +1828,7 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete com
 		rc = sync_cb_args.sync_rc;
 
 	smd_fini();
-	vos_db_fini();
+	vos_self_fini();
 
 	return rc;
 }
