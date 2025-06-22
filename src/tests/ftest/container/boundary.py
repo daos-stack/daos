@@ -133,7 +133,7 @@ class BoundaryTest(TestWithServers):
             3. Launch io and sync-up each container.
             4. Close container.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=container,pool,boundary_test
         :avocado: tags=BoundaryTest,test_container_boundary
         """
