@@ -124,7 +124,7 @@ def _run_command(env, target, sources, daos_libs, command):
     if GetOption("code_coverage"):
         if 'gcov' not in daos_libs:
             daos_libs += ['gcov']
-        # tmp env.AppendENVPath('CGO_LDFLAGS', '-lgcov', sep=' ')
+        env.AppendENVPath('CGO_LDFLAGS', '-lgcov', sep=' ')
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
     return result
