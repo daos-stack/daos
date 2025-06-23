@@ -124,7 +124,7 @@ def _base_setup(env):
     if GetOption('code_coverage'):
         env.AppendUnique(CXXFLAGS=['-fprofile-arcs', '-ftest-coverage'])
         env.AppendUnique(CCFLAGS=['-fprofile-arcs', '-ftest-coverage'])
-        env.AppendUnique(CGO_CFLAGS=['-fprofile-arcs', '-ftest-coverage'])
+        # tmp env.AppendUnique(CGO_CFLAGS=['-fprofile-arcs', '-ftest-coverage'])
 
 
 def _check_flag_helper(context, compiler, ext, flag):
