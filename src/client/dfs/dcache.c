@@ -620,8 +620,8 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 			goto err;
 		}
 
-		shm_ht_rec_find_insert(&dcache->shm.dd_ht, key,	key_len, val, val_size, &obj->shm.rec_loc,
-				       &rc);
+		shm_ht_rec_find_insert(&dcache->shm.dd_ht, key,	key_len, val, val_size,
+				       &obj->shm.rec_loc, &rc);
 		/* val was copied into shm hash table record, so it is not needed any more. */
 		D_FREE(val);
 		if (rc)

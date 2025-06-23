@@ -721,8 +721,8 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 	/* add padding space to make sure value is aligned by SHM_MEM_ALIGN */
 	padding = (len_key & (SHM_MEM_ALIGN - 1)) ? (SHM_MEM_ALIGN - (len_key & (SHM_MEM_ALIGN - 1))) : 0;
 	/* record is not found. Insert it at the very beginning of the link list. */
-	rec = (d_shm_ht_rec_t)shm_memalign(SHM_MEM_ALIGN,
-					   sizeof(struct d_shm_ht_rec) + len_key + len_value + padding);
+	rec = (d_shm_ht_rec_t)shm_memalign(SHM_MEM_ALIGN, sizeof(struct d_shm_ht_rec) + len_key +
+							  len_value + padding);
 	if (rec == NULL) {
 		*err = ENOMEM;
 		goto err;
