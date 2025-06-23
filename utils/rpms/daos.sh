@@ -146,23 +146,26 @@ cat << EOF  > "${tmp}/post_install_server"
 #!/bin/bash
 set -x
 ldconfig
-sysctl -p "${sysctldir}/${sysctl_script_name}"
-systemctl daemon-reload || true
+systemctl --no-reload preset daos_server.service  &>/dev/null || :
+/usr/lib/systemd/systemd-sysctl 10-daos_server.conf &>/dev/null || :
 EOF
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_server")
 
 cat << EOF  > "${tmp}/pre_uninstall_server"
 #!/bin/bash
-# TODO: workout what %systemd_preun %{server_svc_name} does
+systemctl --no-reload disable --now daos_server.service >& /dev/null || :
 EOF
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
   if [[ "${DISTRO:-el8}" =~ suse ]]; then
     cat << EOF  > "${tmp}/post_uninstall_server"
 #!/bin/bash
-# TODO: work out what %postun server does
 ldconfig
-# TODO: workout what %systemd_postun %{server_svc_name} does
+for service in daos_server.service ; do
+  sysv_service="${service%.*}"
+  rm -f "/var/lib/systemd/migrated/$sysv_service" || :
+done
+/usr/bin/systemctl daemon-reload || :
 EOF
     EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_server")
   fi
@@ -272,18 +275,22 @@ EOF
 EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_client")
 
 cat << EOF  > "${tmp}/post_install_client"
-systemctl daemon-reload || true
+systemctl --no-reload preset daos_agent.service  &>/dev/null || :
 EOF
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_client")
 
 cat << EOF  > "${tmp}/pre_uninstall_client"
-# TODO: workout what %systemd_preun %{agent_svc_name} does
+systemctl --no-reload disable --now daos_agent.service >& /dev/null || :
 EOF
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
 if [[ "${DISTRO:-el8}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
-# TODO: workout what %systemd_postun %{agent_svc_name} does
+for service in daos_agent.service ; do
+  sysv_service="${service%.*}"
+  rm -f "/var/lib/systemd/migrated/$sysv_service" || :
+done
+/usr/bin/systemctl daemon-reload || :
 EOF
   EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
 fi
@@ -394,11 +401,11 @@ fi
 
 TARGET_PATH="${libdir}"
 DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
-DEPENDS+="hdf5-${openmpi_lib}"
-DEPENDS+="hdf5-vol-daos-${openmpi_lib}"
-DEPENDS+="MACSio-${openmpi_lib}"
-DEPENDS+="simul-${openmpi_lib}"
-DEPENDS+="${openmpi_lib}"
+DEPENDS+=("hdf5-${openmpi_lib}")
+DEPENDS+=("hdf5-vol-daos-${openmpi_lib}")
+DEPENDS+=("MACSio-${openmpi_lib}")
+DEPENDS+=("simul-${openmpi_lib}")
+DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
