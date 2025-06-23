@@ -85,8 +85,9 @@ python3.11 -m venv venv
 # temp cp for debug
 ls -la /usr/lib64/
 cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib64/python3.11/site-packages/
-# cp -r /opt/daos/lib64/daos_srv/libvos_size.so venv/lib64/
-cp -r /opt/daos/lib64/daos_srv venv/lib64/
+cp -r /opt/daos/lib64/daos_srv/libvos_size.so venv/lib64/
+# working check for additional files to be copied
+# cp -r /opt/daos/lib64/daos_srv venv/lib64/
 cp /opt/daos/lib64/libdfs.so venv/lib64/
 
 # shellcheck disable=SC1091
@@ -110,8 +111,8 @@ if [[ -n $(find build -name "*.gcda") ]]; then
     pip install --requirement requirements-code-coverage.txt
     
     mkdir -p "${test_log_dir}/code_coverage"
-    gcovr -o "${test_log_dir}/code_coverage/code_coverage_report.html" --html-details --gcov-ignore-parse-errors
-    # Eventually remove this one and only generate json files per stage.
+    # # Eventually remove this one and only generate json files per stage.
+    # gcovr -o "${test_log_dir}/code_coverage/code_coverage_report.html" --html-details --gcov-ignore-parse-errors
     gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors
 fi
 HTTPS_PROXY="${HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \

@@ -835,7 +835,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 720,
+                            unitTest(timeout_time: 450,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),

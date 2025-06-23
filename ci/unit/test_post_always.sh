@@ -47,4 +47,3 @@ rsync -v -rlpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ --exclude="venv"
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="include daos*.log" --filter="include code_coverage/*" \
       --filter="exclude *" "$test_log_dir/"
-    # Eventually remove this once a single code coverage file working.
