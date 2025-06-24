@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -205,6 +205,7 @@ out:
 static void *
 ival_thread_fn(void *arg)
 {
+	struct dfuse_info *dfuse_info = arg;
 	int sleep_time = 1;
 
 	while (1) {
@@ -231,6 +232,9 @@ ival_thread_fn(void *arg)
 		if (sleep_time < 2)
 			sleep_time = 2;
 		DFUSE_TRA_DEBUG(&ival_data, "Sleeping %d", sleep_time);
+
+		/* try to free slab entries if possible */
+		d_slab_reclaim_if_possible(&dfuse_info->di_slab);
 	}
 	return NULL;
 }
@@ -291,7 +295,7 @@ ival_thread_start(struct dfuse_info *dfuse_info)
 
 	ival_data.session = dfuse_info->di_session;
 
-	rc = pthread_create(&ival_thread, NULL, ival_thread_fn, NULL);
+	rc = pthread_create(&ival_thread, NULL, ival_thread_fn, dfuse_info);
 	if (rc != 0)
 		goto out;
 	pthread_setname_np(ival_thread, "dfuse inval");
