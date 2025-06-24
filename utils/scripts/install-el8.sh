@@ -12,7 +12,10 @@ set -e
 
 arch=$(uname -m)
 
-dnf --nodocs install \
+dnf_install_args="${1:-}"
+
+# shellcheck disable=SC2086
+dnf --nodocs install ${dnf_install_args} \
     boost-python3-devel \
     bzip2 \
     capstone-devel \
@@ -79,14 +82,16 @@ dnf --nodocs install \
     yasm
 
 ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
-dnf --nodocs install \
+# shellcheck disable=SC2086
+dnf --nodocs install ${dnf_install_args} \
     "@ruby:${ruby_version}" \
     rubygems \
     rubygem-json
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
-    dnf --nodocs install \
+    # shellcheck disable=SC2086
+    dnf --nodocs install ${dnf_install_args} \
         ipmctl \
         libipmctl-devel
 fi
@@ -96,9 +101,11 @@ fi
 # installed specifically.
 
 if [ -e /etc/fedora-release ]; then
-        dnf install java-1.8.0-openjdk-devel maven-openjdk8
+    # shellcheck disable=SC2086
+    dnf install ${dnf_install_args} java-1.8.0-openjdk-devel maven-openjdk8
 else
-        dnf install maven
+    # shellcheck disable=SC2086
+    dnf install ${dnf_install_args} maven
 fi
 
 gem install fpm
