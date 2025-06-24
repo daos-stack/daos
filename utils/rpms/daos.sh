@@ -54,10 +54,10 @@ append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/daos"
 list_files files "${SL_PREFIX}/lib64/daos/VERSION"
-append_install_list "${extras[@]}"
+append_install_list "${files[@]}"
 
 mkdir -p "${tmp}${sysconfdir}/daos/certs"
-extras+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos/certs")
+install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos/certs")
 
 EXTRA_OPTS=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
@@ -77,7 +77,8 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   mkdir -p "${tmp}/${unitdir}"
   install -m 644 "utils/systemd/${server_svc_name}" "${tmp}/${unitdir}"
   install_list+=("${tmp}/${unitdir}/${server_svc_name}=${unitdir}/${server_svc_name}")
-  mkdir -p "${tmp}/${sysconfdir}/daos/certs"
+  mkdir -p "${tmp}/${sysconfdir}/daos/certs/clients"
+  install_list+=("${tmp}/${sysconfdir}/daos/certs/clients=${sysconfdir}/daos/certs/clients")
 
   TARGET_PATH="${bindir}"
   list_files files "${SL_PREFIX}/bin/daos_engine" \
