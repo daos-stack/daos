@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,7 +75,7 @@
 /* Grace period before invalidating directories or non-directories.  Needs to be long enough so that
  * entries in the working set are not invalidated but short enough to be meaningful.
  */
-#define INVAL_DIRECTORY_GRACE (60 * 30)
+#define INVAL_DIRECTORY_GRACE (60 * 60 * 24 * 365 * 20) /* 20 years to avoid getcwd failures */
 #define INVAL_FILE_GRACE      2
 
 /* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
