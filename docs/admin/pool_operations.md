@@ -1367,12 +1367,15 @@ To reintegrate multiple targets on multiple ranks from a pool:
 $ dmg pool reintegrate --ranks=${rank_range_list} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool target reintegrate command accepts 3 parameters:
+The pool target reintegrate command accepts the following parameters:
 
 * The label or UUID of the pool that the targets will be reintegrated into.
 * The engine rank(s) of the target(s) to be reintegrated. This can be a single integer or a list of
   comma-separated ranges e.g. "1" or "1-9,10,12-19".
 * The target indices of the targets to be reintegrated from each specified engine rank (optional).
+* --no-migration: Skips data migration and directly brings previously down ranks back online (optional).
+  Use this option with caution - it's only safe when you can confirm there are no inflight I/O operations
+  during the maintenance window.
 
 When rebuild is triggered it will list the operations and their related engines/targets
 by their engine rank and target index.

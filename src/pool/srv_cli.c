@@ -998,19 +998,16 @@ dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadlin
 struct pool_update_target_state_arg {
 	struct pool_target_addr_list *puta_target_addrs;
 	pool_comp_state_t             puta_state;
-	bool                          puta_skip_rf_check;
+	uint32_t                      puta_flags;
 };
 
 static int
 pool_update_target_state_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
 	struct pool_update_target_state_arg *arg = varg;
-	uint32_t                             flags = 0;
 
-	if (arg->puta_skip_rf_check)
-		flags |= POOL_TGT_UPDATE_SKIP_RF_CHECK;
 	pool_tgt_update_in_set_data(rpc, arg->puta_target_addrs->pta_addrs,
-				    (size_t)arg->puta_target_addrs->pta_number, flags);
+				    (size_t)arg->puta_target_addrs->pta_number, arg->puta_flags);
 	return 0;
 }
 
@@ -1053,11 +1050,10 @@ static struct dsc_pool_svc_call_cbs pool_drain_cbs = {
 int
 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state, bool skip_rf_check)
+				 pool_comp_state_t state, uint32_t flags)
 {
-	struct pool_update_target_state_arg arg = {.puta_target_addrs  = target_addrs,
-						   .puta_state         = state,
-						   .puta_skip_rf_check = skip_rf_check};
+	struct pool_update_target_state_arg arg = {
+	    .puta_target_addrs = target_addrs, .puta_state = state, .puta_flags = flags};
 	struct dsc_pool_svc_call_cbs       *cbs;
 
 	switch (state) {

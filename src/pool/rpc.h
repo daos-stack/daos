@@ -152,10 +152,6 @@ enum map_update_opc {
 	MAP_REVERT_REBUILD,
 };
 
-enum pool_target_update_flags {
-	POOL_TGT_UPDATE_SKIP_RF_CHECK = (1 << 0),
-};
-
 static inline uint32_t
 pool_opc_2map_opc(uint32_t pool_opc)
 {

@@ -298,7 +298,7 @@ int dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t dea
 int
 	 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 					  struct pool_target_addr_list *target_list, pool_comp_state_t state,
-					  bool skip_rf_check);
+					  uint32_t flags);
 
 uint32_t ds_pool_get_vos_df_version_default(void);
 int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
