@@ -290,6 +290,8 @@ func getHugeNodesStr(log logging.Logger, perNumaNrWant int, smi *common.SysMemIn
 			if nn.HugepagesTotal >= perNumaNrWant {
 				nodeNrs[nID] = nn.HugepagesTotal // Maintain
 			} else {
+				log.Noticef("Increasing number of hugepages on NUMA-%d from %d ",
+					"to %d", nID, nn.HugepagesTotal, perNumaNrWant)
 				nodeNrs[nID] = perNumaNrWant // Grow
 			}
 			found = true
