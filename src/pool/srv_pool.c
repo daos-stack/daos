@@ -7421,7 +7421,7 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 int
 ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
-	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list,
+	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, true, list,
 					NULL, NULL, NULL, NULL, NULL, NULL);
 }
 

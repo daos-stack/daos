@@ -2116,8 +2116,13 @@ migrate_one_ult(void *arg)
 	 *   (nonexistent)
 	 * This is just a workaround...
 	 */
-	if (rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0)
+	if (rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
+		DL_ERROR(rc, DF_RB ": " DF_UOID " rebuild failed, set mpt_fini for tgt %d.",
+			 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), dss_get_module_info()->dmi_tgt_id);
 		tls->mpt_status = rc;
+		D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
+		tls->mpt_fini = 1;
+	}
 out:
 	migrate_one_destroy(mrone);
 	if (tls != NULL) {
@@ -2883,6 +2888,14 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 			arg->tgt_idx, mrone->mo_iod_num);
 
+		if (tls->mpt_status != 0) {
+			DL_ERROR(tls->mpt_status, DF_RB ": " DF_UOID " rebuild failed already",
+				 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid));
+			d_list_del_init(&mrone->mo_list);
+			migrate_one_destroy(mrone);
+			continue;
+		}
+
 		rc = migrate_tgt_enter(tls);
 		if (rc)
 			break;
@@ -3196,6 +3209,7 @@ migrate_fini_one_ult(void *data)
 	if (tls == NULL)
 		return 0;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
@@ -3226,6 +3240,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	struct migrate_stop_arg arg;
 	int			 rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	if (tls == NULL || tls->mpt_fini) {
 		if (tls != NULL)
