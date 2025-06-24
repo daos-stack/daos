@@ -161,10 +161,7 @@ EOF
     cat << EOF  > "${tmp}/post_uninstall_server"
 #!/bin/bash
 ldconfig
-for service in daos_server.service ; do
-  sysv_service="${service%.*}"
-  rm -f "/var/lib/systemd/migrated/$sysv_service" || :
-done
+rm -f "/var/lib/systemd/migrated/daos_server.service" || :
 /usr/bin/systemctl daemon-reload || :
 EOF
     EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_server")
@@ -286,10 +283,7 @@ EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
 if [[ "${DISTRO:-el8}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
-for service in daos_agent.service ; do
-  sysv_service="${service%.*}"
-  rm -f "/var/lib/systemd/migrated/$sysv_service" || :
-done
+rm -f "/var/lib/systemd/migrated/daos_agent.service" || :
 /usr/bin/systemctl daemon-reload || :
 EOF
   EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
