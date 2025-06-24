@@ -8,10 +8,11 @@ def scons():
     mocks = denv.Object("mocks.c")
 
     denv.Append(CPPDEFINES={'DRPC_TEST': '1'})
-    # Isolated unit tests
+    denv.AppendUnique(LIBPATH=[Dir('.')])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.d_test_program('srv_drpc_tests',
                         source=[pb_objs, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
-                        LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid'])
+                        LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid', 'bio'])
 
 
 if __name__ == "SCons.Script":

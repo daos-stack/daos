@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2022-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -559,8 +560,9 @@ dv_path_verify(daos_handle_t poh, struct dv_indexed_tree_path *itp)
 	args.pva_current_idx = 0;
 	args.pva_itp = itp;
 
-	param.ip_hdl = coh;
+	param.ip_hdl        = coh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors,
 			 verify_path_pre_cb, verify_path_post_cb, &args, NULL);
@@ -1425,6 +1427,12 @@ dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti)
 }
 
 int
+dv_dtx_active_entry_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *discarded)
+{
+	return vos_dtx_discard_invalid(coh, dti, discarded);
+}
+
+int
 dv_delete(daos_handle_t poh, struct dv_tree_path *vtp)
 {
 	daos_handle_t	coh;
@@ -1774,8 +1782,8 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 		/* Ignore error for now ... might not exist*/
 		D_WARN("delete target failed: " DF_RC "\n", DP_RC(rc));
 
-	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id,
-			      info->dsi_hdr->bbh_blob_id, st, blob_size, 0);
+	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id, info->dsi_hdr->bbh_blob_id, st,
+			      blob_size, 0, false);
 	if (!SUCCESS(rc)) {
 		D_ERROR("add target failed: "DF_RC"\n", DP_RC(rc));
 		args->sync_rc = rc;
@@ -1808,6 +1816,7 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete com
 	rc = smd_init(vos_db_get());
 	if (!SUCCESS(rc)) {
 		D_ERROR("SMD failed to initialize: "DF_RC"\n", DP_RC(rc));
+		vos_self_fini();
 		return rc;
 	}
 
@@ -1819,7 +1828,7 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete com
 		rc = sync_cb_args.sync_rc;
 
 	smd_fini();
-	vos_db_fini();
+	vos_self_fini();
 
 	return rc;
 }
@@ -1946,4 +1955,90 @@ dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_
 		*incompat_flags = pff.incompat_flags;
 
 	return 0;
+}
+
+int
+dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt)
+{
+	int rc;
+
+	rc = vos_self_init(db_path, true, 0);
+	if (rc) {
+		DL_ERROR(rc, "Initialize standalone VOS failed.");
+		return rc;
+	}
+
+	D_ASSERT(d_list_empty(dev_list));
+	rc = bio_dev_list(vos_xsctxt_get(), dev_list, dev_cnt);
+	if (rc)
+		DL_ERROR(rc, "Failed to list devices.");
+
+	vos_self_fini();
+	return rc;
+}
+
+static inline struct bio_dev_info *
+find_dev_info(d_list_t *dev_list, uuid_t dev_id)
+{
+	struct bio_dev_info *dev_info;
+
+	d_list_for_each_entry(dev_info, dev_list, bdi_link) {
+		if (uuid_compare(dev_id, dev_info->bdi_dev_id) == 0)
+			return dev_info;
+	}
+
+	return NULL;
+}
+
+int
+dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid)
+{
+	struct bio_dev_info *old_dev_info, *new_dev_info, *dev_info, *tmp;
+	d_list_t             dev_list;
+	int                  rc, dev_cnt = 0;
+
+	rc = vos_self_init(db_path, true, 0);
+	if (rc) {
+		DL_ERROR(rc, "Initialize standalone VOS failed.");
+		return rc;
+	}
+
+	D_INIT_LIST_HEAD(&dev_list);
+	rc = bio_dev_list(vos_xsctxt_get(), &dev_list, &dev_cnt);
+	if (rc) {
+		DL_ERROR(rc, "Failed to list devices.");
+		goto out;
+	}
+
+	rc           = -DER_INVAL;
+	old_dev_info = find_dev_info(&dev_list, old_devid);
+	if (old_dev_info == NULL) {
+		D_ERROR("Old dev " DF_UUID " isn't found\n", DP_UUID(old_devid));
+		goto out;
+	} else if (!(old_dev_info->bdi_flags & NVME_DEV_FL_INUSE)) {
+		D_ERROR("Old dev " DF_UUID " isn't inuse\n", DP_UUID(old_devid));
+		goto out;
+	}
+
+	new_dev_info = find_dev_info(&dev_list, new_devid);
+	if (new_dev_info == NULL) {
+		D_ERROR("New dev " DF_UUID " isn't found\n", DP_UUID(new_devid));
+		goto out;
+	} else if (new_dev_info->bdi_flags & NVME_DEV_FL_INUSE) {
+		D_ERROR("New dev " DF_UUID " is inuse\n", DP_UUID(new_devid));
+		goto out;
+	}
+
+	/* Specify 'roles' as 0 */
+	rc = smd_dev_replace(old_devid, new_devid, 0);
+	if (rc)
+		DL_ERROR(rc, "Failed to replace device in SMD");
+out:
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
+		d_list_del_init(&dev_info->bdi_link);
+		bio_free_dev_info(dev_info);
+	}
+
+	vos_self_fini();
+	return rc;
 }

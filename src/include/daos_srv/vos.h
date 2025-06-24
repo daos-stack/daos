@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -191,6 +191,18 @@ int
 vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
 
 /**
+ * Discard the active DTX entry's records if invalid.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	The DTX identifier to be validated.
+ * \param discarded	[OUT]	The number of discarded records.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *discarded);
+
+/**
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
@@ -222,6 +234,15 @@ vos_dtx_aggregate(daos_handle_t coh);
  */
 void
 vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
+
+/**
+ * Notify lower layer that DTX resync has been done.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param ver	[IN]	The version that DTX resync has been done.
+ */
+void
+vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver);
 
 /**
  * Set the DTX committable as committable.
@@ -1712,5 +1733,17 @@ vos_unpin_objects(daos_handle_t coh, struct vos_pin_handle *hdl);
  */
 int
 vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos_pin_handle **hdl);
+
+/**
+ * Check if the oid exist in current vos.
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	oid	oid to be checked.
+ *
+ * \return	true	exist.
+ *		false	does not exist.
+ */
+bool
+vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
 #endif /* __VOS_API_H */

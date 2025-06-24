@@ -2,6 +2,9 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025 Google LLC
+(C) Copyright 2025 Enakta Labs Ltd
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -434,6 +437,11 @@ def get_base_env(clean=False):
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+
+    # If set, retain the HTTPS_PROXY for valgrind
+    http_proxy = os.environ.get('HTTPS_PROXY')
+    if http_proxy:
+        env['HTTPS_PROXY'] = http_proxy
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
@@ -918,7 +926,7 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
             self._add_test_case('server_stop', failure=message)
         start = time.perf_counter()
-        rc = self.run_dmg(['system', 'stop'])
+        rc = self.run_dmg(['system', 'stop', '--full'])
         if rc.returncode != 0:
             print(rc)
             entry = {}
@@ -926,7 +934,7 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            msg = f'dmg system stop failed with {rc.returncode}'
+            msg = f'dmg system stop --full failed with {rc.returncode}'
             entry['message'] = msg
             self.conf.wf.issues.append(entry)
         if not self.valgrind:
@@ -1046,6 +1054,8 @@ class DaosServer():
                                          delete=False) as log_file:
             log_name = log_file.name
             cmd_env['D_LOG_FILE'] = log_name
+            with open(log_name, 'w', encoding='utf-8') as lf:
+                lf.write(f'cmd: {" ".join(cmd)}\n')
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
@@ -1264,6 +1274,9 @@ class ValgrindHelper():
                '--gen-suppressions=all',
                '--error-exitcode=42']
 
+        if self.conf.args.valgrind_verbose:
+            cmd.append('--verbose')
+
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
@@ -1435,6 +1448,9 @@ class DFuse():
                 pass
             total_time += 1
             if total_time > 60:
+                # Kill the unresponsive dfuse command
+                self._sp.send_signal(signal.SIGTERM)
+                self._sp = None
                 raise NLTestFail('Timeout starting dfuse')
 
         self._daos.add_fuse(self)
@@ -1717,6 +1733,8 @@ def run_daos_cmd(conf,
                                      delete=False) as log_file:
         log_name = log_file.name
         cmd_env['D_LOG_FILE'] = log_name
+        with open(log_file.name, 'w', encoding='utf-8') as lf:
+            lf.write(f'cmd: {" ".join(cmd)}\n')
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
@@ -4383,7 +4401,7 @@ class PosixTests():
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'ERROR: daos: failed fs fix-entry: DER_BUSY(-1012): Device or resource busy':
+        if 'DER_BUSY(-1012): Device or resource busy' not in line[-1]:
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
         # stop dfuse
@@ -4542,66 +4560,6 @@ class PosixTests():
         os.environ['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
 
         return importlib.import_module('pydaos.torch')
-
-    @needs_dfuse_with_opt(caching_variants=[False])
-    def test_torch_map_dataset(self):
-        """Check that all files in container are read regardless of the directory level"""
-        test_files = [
-            {"name": "0.txt", "content": b"0", "seen": 0},
-            {"name": "1/l1.txt", "content": b"1", "seen": 0},
-            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
-        ]
-
-        for tf in test_files:
-            file = join(self.dfuse.dir, tf["name"])
-            os.makedirs(os.path.dirname(file), exist_ok=True)
-            with open(file, 'wb') as f:
-                f.write(tf["content"])
-
-        torch = self.import_torch(self.server)
-        dataset = torch.Dataset(pool=self.pool.uuid, cont=self.container.uuid)
-
-        assert len(dataset) == len(test_files)
-
-        for _, content in enumerate(dataset):
-            for f in test_files:
-                if f["content"] == content:
-                    f["seen"] += 1
-
-        for f in test_files:
-            assert f["seen"] == 1
-
-        del dataset
-
-    @needs_dfuse_with_opt(caching_variants=[False])
-    def test_torch_iter_dataset(self):
-        """Check that all files in container are read regardless of the directory level"""
-        test_files = [
-            {"name": "0.txt", "content": b"0", "seen": 0},
-            {"name": "1/l1.txt", "content": b"1", "seen": 0},
-            {"name": "1/2/l2.txt", "content": b"2", "seen": 0},
-            {"name": "1/2/3/l3.txt", "content": b"3", "seen": 0},
-        ]
-
-        for tf in test_files:
-            file = join(self.dfuse.dir, tf["name"])
-            os.makedirs(os.path.dirname(file), exist_ok=True)
-            with open(file, 'wb') as f:
-                f.write(tf["content"])
-
-        torch = self.import_torch(self.server)
-        dataset = torch.IterableDataset(pool=self.pool.uuid, cont=self.container.uuid)
-
-        for content in dataset:
-            for f in test_files:
-                if f["content"] == content:
-                    f["seen"] += 1
-
-        for f in test_files:
-            assert f["seen"] == 1
-
-        del dataset
 
 
 class NltStdoutWrapper():
@@ -5588,6 +5546,8 @@ class AllocFailTestRun():
                                          delete=False) as log_file:
             self.log_file = log_file.name
             self._env['D_LOG_FILE'] = self.log_file
+            with open(log_file.name, 'w', encoding='utf-8') as lf:
+                lf.write(f'cmd: {" ".join(cmd)}\n')
 
     def __str__(self):
         cmd_text = ' '.join(self._cmd)
@@ -6815,6 +6775,7 @@ def main():
     parser.add_argument('--test', action='append', help="Use '--test list' for list")
     parser.add_argument('--exclude-test', action='append',
                         help='space separated list of tests to exclude')
+    parser.add_argument('--valgrind_verbose', action='store_true', help='Use --verbose w/ valgrind')
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
 

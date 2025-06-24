@@ -32,7 +32,6 @@ pool_3:
   scm_size: 4GB
   nvme_size: 350GB
 container:
-  control_method: API
   object_qty: 10
   record_size:
     - 1

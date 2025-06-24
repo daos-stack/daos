@@ -19,6 +19,3 @@ pool:
   scm_size: 3G
 dkeys:
   number_of_dkeys: 1000000
-
-container:
-  control_method: API

@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -41,8 +42,8 @@ run-parts() {
         # don't run vim .swp files
         [ "${i%.sw?}" != "${i}" ] && continue
         skip_item=false
-        for skip in "${skip_list[@]}"; do
-            if [[ "${i}" =~ ${skip} ]]; then
+        for skip in "${skip_list[@]:-}"; do
+            if [[ -n "${skip}" ]] && [[ "${i}" =~ ${skip} ]]; then
                 skip_item=true
                 echo "Skipping ${i}"
                 break

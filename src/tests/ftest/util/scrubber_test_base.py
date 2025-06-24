@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -110,7 +111,8 @@ class TestWithScrubber(IorTestBase):
         process = threading.Thread(target=self.run_ior_with_pool,
                                    kwargs={"create_pool": True,
                                            "create_cont": False,
-                                           "fail_on_warning": True})
+                                           "fail_on_warning": True,
+                                           "timeout": self.ior_timeout})
         # Launch the IOR thread
         process.start()
         # Wait for the thread to finish

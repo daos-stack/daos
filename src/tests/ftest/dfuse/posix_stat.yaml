@@ -1,7 +1,9 @@
 hosts:
   test_servers: 2
   test_clients: 1
+
 timeout: 600
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -9,16 +11,17 @@ server_config:
     0:
       targets: 4
       nr_xs_helpers: 0
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
+
 pool:
   scm_size: 1G
+
 container:
   type: POSIX
   control_method: daos
+
 block_sizes: [1M, 10M, 100M, 500M]
+
 ior:
   api: POSIX
   flags: "-v -w -k"

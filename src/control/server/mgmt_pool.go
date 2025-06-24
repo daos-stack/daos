@@ -483,14 +483,6 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, err
 	}
 
-	// Zero mem_file_bytes in non-MD-on-SSD mode.
-	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
-		resp.MemFileBytes = 0
-	} else {
-		svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
-			humanize.Bytes(resp.MemFileBytes), resp.MemFileBytes)
-	}
-
 	if resp.GetStatus() != 0 {
 		if err := svc.sysdb.RemovePoolService(ctx, ps.PoolUUID); err != nil {
 			return nil, err
@@ -836,6 +828,9 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
+	if err := svc.checkRanksExist(req.Rank); err != nil {
+		return nil, err
+	}
 
 	dResp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExclude, req)
 	if err != nil {
@@ -853,6 +848,9 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 // PoolDrain implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*mgmtpb.PoolDrainResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	if err := svc.checkRanksExist(req.Rank); err != nil {
 		return nil, err
 	}
 
@@ -906,31 +904,35 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	return resp, nil
 }
 
+// Return error if any requested rank is not in a valid state. Uses available rank filter under the
+// hood so will only against ranks with joined/ready state.
+func (svc *mgmtSvc) checkRanksExist(rl ...uint32) error {
+	rs := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(rl))
+	_, miss, err := svc.membership.CheckRanks(rs.String())
+	if err != nil {
+		return err
+	}
+	if miss.Count() != 0 {
+		return FaultPoolInvalidRanks(miss.Ranks())
+	}
+
+	return nil
+}
+
 // PoolReintegrate implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintReq) (*mgmtpb.PoolReintResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
+	if err := svc.checkRanksExist(req.Rank); err != nil {
+		return nil, err
+	}
 
-	// Look up the pool service record to find the storage allocations
-	// used at creation.
+	// Look up the pool service record to find the storage allocations used at creation.
 	ps, err := svc.getPoolService(req.GetId())
 	if err != nil {
 		return nil, err
 	}
-
-	r := ranklist.Rank(req.Rank)
-
-	m, err := svc.membership.Get(r)
-	if err != nil {
-		return nil, err
-	}
-
-	if m.State&system.AvailableMemberFilter == 0 {
-		invalid := []ranklist.Rank{r}
-		return nil, FaultPoolInvalidRanks(invalid)
-	}
-
 	req.TierBytes = ps.Storage.PerRankTierStorage
 	req.MemRatio = ps.Storage.MemRatio
 
@@ -970,14 +972,6 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
-	// Zero mem_file_bytes in non-MD-on-SSD mode.
-	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
-		resp.MemFileBytes = 0
-	} else {
-		svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
-			humanize.Bytes(resp.MemFileBytes), resp.MemFileBytes)
-	}
-
 	return resp, nil
 }
 
@@ -995,19 +989,6 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 	resp := &mgmtpb.PoolQueryTargetResp{}
 	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
 		return nil, err
-	}
-
-	// Zero mem_file_bytes in non-MD-on-SSD mode.
-	if !svc.harness.Instances()[0].GetStorage().BdevRoleMetaConfigured() {
-		for _, tgtInfo := range resp.Infos {
-			tgtInfo.MemFileBytes = 0
-		}
-	} else {
-		for _, tgtInfo := range resp.Infos {
-			svc.log.Tracef("%T mem_file_bytes: %s (%d)", resp,
-				humanize.Bytes(tgtInfo.MemFileBytes), tgtInfo.MemFileBytes)
-			break
-		}
 	}
 
 	return resp, nil

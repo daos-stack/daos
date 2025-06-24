@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -435,6 +436,11 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, int index)
 	int	j;
 	int	k;
 	int	l;
+
+	if (dt_no_punch) {
+		akey_punch_idx = -1;
+		dkey_punch_idx = -1;
+	}
 
 	D_ALLOC(large_key, LARGE_KEY_SIZE);
 	if (large_key == NULL)

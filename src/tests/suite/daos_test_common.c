@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +32,10 @@ unsigned int	dt_cell_size;
 int		dt_obj_class;
 int		dt_redun_lvl;
 int		dt_redun_fac;
+
+/** pool incremental reintegration */
+int		dt_incr_reint;
+bool		dt_no_punch; /* will remove later */
 
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
@@ -349,6 +354,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	daos_prop_t		 co_props = {0};
 	struct daos_prop_entry	 dpp_entry[6] = {0};
 	struct daos_prop_entry	*entry;
+	daos_prop_t		 po_props = {0};
+	struct daos_prop_entry	 po_entry[1] = {0};
 
 	/* feed a seed for pseudo-random number generator */
 	gettimeofday(&now, NULL);
@@ -393,6 +400,18 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->cont_open_flags = DAOS_COO_RW;
 		arg->obj_class = dt_obj_class;
 		arg->pool.destroyed = false;
+	}
+
+	/** Look at variables set by test arguments and setup pool props */
+	if (dt_incr_reint) {
+		print_message("\n-------\n"
+			      "Incremental reintegration enabled in test!"
+			      "\n-------\n");
+		entry = &po_entry[po_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_PO_REINT_MODE;
+		entry->dpe_val = DAOS_REINT_MODE_INCREMENTAL;
+
+		po_props.dpp_nr++;
 	}
 
 	/** Look at variables set by test arguments and setup container props */
@@ -445,11 +464,13 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		co_props.dpp_nr++;
 	}
 
+	if (po_props.dpp_nr > 0)
+		po_props.dpp_entries = po_entry;
 	if (co_props.dpp_nr > 0)
 		co_props.dpp_entries = dpp_entry;
 
 	while (!rc && step != arg->setup_state)
-		rc = test_setup_next_step(state, pool, NULL, &co_props);
+		rc = test_setup_next_step(state, pool, &po_props, &co_props);
 
 	if (rc) {
 		D_FREE(arg);

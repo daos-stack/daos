@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2018-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -539,13 +539,13 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 		if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
 			if (flags & BIO_MC_FL_RDB)
 				rc = smd_rdb_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st,
-						     blob_sz);
+						     blob_sz, flags & BIO_MC_FL_RECREATE);
 			else
 				rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st,
-						      blob_sz, scm_sz);
+						      blob_sz, scm_sz, flags & BIO_MC_FL_RECREATE);
 		} else {
-			rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st, blob_sz,
-					      0);
+			rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st, blob_sz, 0,
+					      flags & BIO_MC_FL_RECREATE);
 		}
 
 		if (rc != 0) {

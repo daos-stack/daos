@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -339,7 +340,7 @@ clear_cmt_dtx_cmd_tests(void **state)
 static void
 dtx_commit_entry_tests(void **state)
 {
-	struct dtx_act_commit_options opt = {0};
+	struct dtx_act_options opt = {0};
 
 	assert_invalid(ddb_run_dtx_act_commit(&g_ctx, &opt));
 	opt.path = "[0]/[0]";
@@ -352,7 +353,7 @@ dtx_commit_entry_tests(void **state)
 static void
 dtx_abort_entry_tests(void **state)
 {
-	struct dtx_act_abort_options opt = {0};
+	struct dtx_act_options opt = {0};
 
 	assert_invalid(ddb_run_dtx_act_abort(&g_ctx, &opt));
 
@@ -360,6 +361,27 @@ dtx_abort_entry_tests(void **state)
 	assert_invalid(ddb_run_dtx_act_abort(&g_ctx, &opt));
 	opt.dtx_id = "12345678-1234-1234-1234-123456789012.1234";
 	assert_success(ddb_run_dtx_act_abort(&g_ctx, &opt));
+}
+
+static void
+dtx_act_discard_invalid_tests(void **state)
+{
+	struct dtx_act_options opt = {0};
+
+	g_ctx.dc_write_mode = false;
+	assert_invalid(ddb_run_dtx_act_discard_invalid(&g_ctx, &opt));
+
+	g_ctx.dc_write_mode = true;
+	assert_invalid(ddb_run_dtx_act_discard_invalid(&g_ctx, &opt));
+
+	opt.path = "[0]/[0]";
+	assert_invalid(ddb_run_dtx_act_discard_invalid(&g_ctx, &opt));
+
+	opt.dtx_id = "12345678-1234-1234-1234-123456789012.1234";
+	assert_success(ddb_run_dtx_act_discard_invalid(&g_ctx, &opt));
+
+	opt.dtx_id = "all";
+	assert_success(ddb_run_dtx_act_discard_invalid(&g_ctx, &opt));
 }
 
 static void
@@ -431,6 +453,7 @@ ddb_commands_tests_run()
 	    TEST(process_ilog_cmd_tests),
 	    TEST(clear_cmt_dtx_cmd_tests),
 	    TEST(dtx_commit_entry_tests),
+	    TEST(dtx_act_discard_invalid_tests),
 	    TEST(dtx_abort_entry_tests),
 	    TEST(feature_cmd_tests),
 	};

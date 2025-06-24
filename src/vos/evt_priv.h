@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,7 +116,6 @@ struct evt_context {
 	umem_off2ptr(evt_umm(tcx), offset)
 
 #define EVT_NODE_MAGIC 0xf00d
-#define EVT_DESC_MAGIC 0xbeefdead
 
 /** Convert an offset to a evtree node descriptor
  * \param[IN]	tcx	Tree context

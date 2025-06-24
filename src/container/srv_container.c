@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +22,7 @@
 #include <daos/pool.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/vos.h>
 #include <daos_srv/security.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -185,8 +187,8 @@ ds_cont_svc_fini(struct cont_svc **svcp)
 	*svcp = NULL;
 }
 
-static int cont_svc_ec_agg_leader_start(struct cont_svc *svc);
-static void cont_svc_ec_agg_leader_stop(struct cont_svc *svc);
+static int cont_svc_eph_track_leader_start(struct cont_svc *svc);
+static void cont_svc_eph_track_leader_stop(struct cont_svc *svc);
 
 int
 ds_cont_svc_step_up(struct cont_svc *svc)
@@ -202,7 +204,7 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	}
 	D_ASSERT(svc->cs_pool != NULL);
 
-	rc = cont_svc_ec_agg_leader_start(svc);
+	rc = cont_svc_eph_track_leader_start(svc);
 	if (rc != 0)
 		D_ERROR(DF_UUID": start ec agg leader failed: "DF_RC"\n",
 			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
@@ -213,7 +215,7 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 void
 ds_cont_svc_step_down(struct cont_svc *svc)
 {
-	cont_svc_ec_agg_leader_stop(svc);
+	cont_svc_eph_track_leader_stop(svc);
 	D_ASSERT(svc->cs_pool != NULL);
 	ds_pool_put(svc->cs_pool);
 	svc->cs_pool = NULL;
@@ -1518,7 +1520,7 @@ out:
 }
 
 static void
-cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid);
+cont_track_eph_leader_delete(struct cont_svc *svc, uuid_t cont_uuid);
 
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc,
@@ -1571,7 +1573,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out_prop;
 
-	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
+	cont_track_eph_leader_delete(cont->c_svc, cont->c_uuid);
 
         if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
                 need_destroy_oid_oit_kvs = true;
@@ -1647,32 +1649,32 @@ out:
 	return rc;
 }
 
-struct cont_ec_agg *
-cont_ec_agg_lookup(struct cont_svc *cont_svc, uuid_t cont_uuid)
+struct cont_track_eph_leader *
+cont_track_eph_leader_lookup(struct cont_svc *cont_svc, uuid_t cont_uuid)
 {
-	struct cont_ec_agg *ec_agg;
+	struct cont_track_eph_leader *eph_ldr;
 
-	d_list_for_each_entry(ec_agg, &cont_svc->cs_ec_agg_list, ea_list) {
-		if (ec_agg->ea_deleted)
+	d_list_for_each_entry(eph_ldr, &cont_svc->cs_cont_ephs_leader_list, cte_list) {
+		if (eph_ldr->cte_deleted)
 			continue;
-		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0)
-			return ec_agg;
+		if (uuid_compare(eph_ldr->cte_cont_uuid, cont_uuid) == 0)
+			return eph_ldr;
 	}
 	return NULL;
 }
 
 static int
-cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
-		  struct cont_ec_agg **ec_aggp)
+cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
+			    struct cont_track_eph_leader **leader_p)
 {
-	struct cont_ec_agg	*ec_agg = NULL;
-	struct pool_domain	*doms;
-	int			rank_nr;
-	int			rc = 0;
+	struct cont_track_eph_leader	*eph_ldr = NULL;
+	struct pool_domain		*doms;
+	int				 rank_nr;
+	int				 rc = 0;
 	int			i;
 
-	D_ALLOC_PTR(ec_agg);
-	if (ec_agg == NULL)
+	D_ALLOC_PTR(eph_ldr);
+	if (eph_ldr == NULL)
 		return -DER_NOMEM;
 
 	D_ASSERT(cont_svc->cs_pool->sp_map != NULL);
@@ -1680,42 +1682,43 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	if (rank_nr < 0)
 		D_GOTO(out, rc = rank_nr);
 
-	D_ALLOC_ARRAY(ec_agg->ea_server_ephs, rank_nr);
-	if (ec_agg->ea_server_ephs == NULL)
+	D_ALLOC_ARRAY(eph_ldr->cte_server_ephs, rank_nr);
+	if (eph_ldr->cte_server_ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	uuid_copy(ec_agg->ea_cont_uuid, cont_uuid);
-	ec_agg->ea_servers_num = rank_nr;
-	ec_agg->ea_current_eph = 0;
+	uuid_copy(eph_ldr->cte_cont_uuid, cont_uuid);
+	eph_ldr->cte_servers_num = rank_nr;
+	eph_ldr->cte_current_ec_agg_eph = 0;
 	for (i = 0; i < rank_nr; i++) {
-		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
-		ec_agg->ea_server_ephs[i].eph = 0;
+		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
+		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
+		eph_ldr->cte_server_ephs[i].re_stable_eph = 0;
 	}
-	d_list_add(&ec_agg->ea_list, &cont_svc->cs_ec_agg_list);
-	*ec_aggp = ec_agg;
+	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
+	*leader_p = eph_ldr;
 out:
 	if (rc) {
-		if (ec_agg)
-			D_FREE(ec_agg->ea_server_ephs);
-		D_FREE(ec_agg);
+		if (eph_ldr)
+			D_FREE(eph_ldr->cte_server_ephs);
+		D_FREE(eph_ldr);
 	}
 
 	return rc;
 }
 
 static void
-cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid)
+cont_track_eph_leader_delete(struct cont_svc *svc, uuid_t cont_uuid)
 {
-	struct cont_ec_agg	*ec_agg;
+	struct cont_track_eph_leader	*eph_ldr;
 
-	ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
-	if (ec_agg == NULL)
+	eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
+	if (eph_ldr == NULL)
 		return;
 
-	/* Set ea_deleted flag to destroy it inside cont_agg_eph_leader_ult()
+	/* Set cte_deleted flag to destroy it inside cont_track_eph_leader_ult()
 	 * to avoid list iteration broken.
 	 */
-	ec_agg->ea_deleted = 1;
+	eph_ldr->cte_deleted = 1;
 }
 
 /**
@@ -1723,52 +1726,54 @@ cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid)
  * will be called by IV update on the leader.
  */
 int
-ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
-			      d_rank_t rank, daos_epoch_t eph)
+ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t rank,
+				daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph)
 {
-	struct cont_svc		*svc;
-	struct cont_ec_agg	*ec_agg;
-	int			rc;
-	bool			retried = false;
-	int			i;
+	struct cont_svc			*svc;
+	struct cont_track_eph_leader	*eph_ldr;
+	int				 rc;
+	bool				 retried = false;
+	int				 i;
 
-	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
-				    NULL /* hint */);
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint */);
 	if (rc != 0)
 		return rc;
 
 retry:
-	ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
-	if (ec_agg == NULL) {
-		rc = cont_ec_agg_alloc(svc, cont_uuid, &ec_agg);
+	eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
+	if (eph_ldr == NULL) {
+		rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
 		if (rc)
 			D_GOTO(out_put, rc);
 	}
 
-	for (i = 0; i < ec_agg->ea_servers_num; i++) {
-		if (ec_agg->ea_server_ephs[i].rank == rank) {
-			if (ec_agg->ea_server_ephs[i].eph < eph)
-				ec_agg->ea_server_ephs[i].eph = eph;
+	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
+		if (eph_ldr->cte_server_ephs[i].re_rank == rank) {
+			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph)
+				eph_ldr->cte_server_ephs[i].re_ec_agg_eph = ec_agg_eph;
+			if (eph_ldr->cte_server_ephs[i].re_stable_eph < stable_eph)
+				eph_ldr->cte_server_ephs[i].re_stable_eph = stable_eph;
 			break;
 		}
 	}
 
-	if (i == ec_agg->ea_servers_num) {
+	if (i == eph_ldr->cte_servers_num) {
 		if (!retried) {
-			D_DEBUG(DB_MD, "rank %u eph "DF_X64" retry for"
-				DF_CONT"\n", rank, eph,
+			D_DEBUG(DB_MD, "rank %u ec_agg_eph "DF_X64", stable_eph "DF_X64
+				" retry for"DF_CONT"\n", rank, ec_agg_eph, stable_eph,
 				DP_CONT(pool_uuid, cont_uuid));
 			retried = true;
-			ec_agg->ea_deleted = 1;
+			eph_ldr->cte_deleted = 1;
 			goto retry;
 		} else {
-			D_WARN("rank %u eph "DF_X64" does not exist for "
-			       DF_CONT"\n", rank, eph,
+			D_WARN("rank %u ec_agg_eph "DF_X64", stable_eph "DF_X64
+			       " does not exist for "DF_CONT"\n", rank, ec_agg_eph, stable_eph,
 			       DP_CONT(pool_uuid, cont_uuid));
 		}
 	} else {
-		D_DEBUG(DB_MD, DF_CONT" update eph rank %u eph "DF_X64"\n",
-			DP_CONT(pool_uuid, cont_uuid), rank, eph);
+		D_DEBUG(DB_MD, DF_CONT" update eph rank %u ec_agg_eph "DF_X64
+			", stable_eph "DF_X64".\n", DP_CONT(pool_uuid, cont_uuid),
+			rank, ec_agg_eph, stable_eph);
 	}
 
 out_put:
@@ -1776,67 +1781,113 @@ out_put:
 	return 0;
 }
 
-struct refresh_vos_agg_eph_arg {
-	uuid_t	pool_uuid;
-	uuid_t  cont_uuid;
-	daos_epoch_t min_eph;
+#define EPH_ARG_TGT_INLINE	(64)
+struct refresh_track_eph_arg {
+	uuid_t		 pool_uuid;
+	uuid_t		 cont_uuid;
+	daos_epoch_t	 min_ec_agg_eph;
+	daos_epoch_t	 min_stable_eph;
+	uint8_t		*tgt_status;
+	uint8_t		 tgt_status_inline[EPH_ARG_TGT_INLINE];
 };
 
-int
-cont_refresh_vos_agg_eph_one(void *data)
+static int
+cont_refresh_track_eph_one(void *data)
 {
-	struct refresh_vos_agg_eph_arg *arg = data;
-	struct ds_cont_child	*cont_child;
-	int			rc;
+	struct refresh_track_eph_arg	*arg = data;
+	struct ds_cont_child		*cont_child;
+	unsigned int			 idx = dss_get_module_info()->dmi_tgt_id;
+	int				 rc;
 
 	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_MD, DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
+	D_DEBUG(DB_MD, DF_CONT": %s ec agg boundary eph "DF_X64"->"DF_X64", "
+		": %s stable eph "DF_X64"->"DF_X64"\n",
 		DP_CONT(arg->pool_uuid, arg->cont_uuid),
-		cont_child->sc_ec_agg_eph_boundary < arg->min_eph ? "update" : "ignore",
-		cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
+		cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph ? "update" : "ignore",
+		cont_child->sc_ec_agg_eph_boundary, arg->min_ec_agg_eph,
+		cont_child->sc_global_stable_eph < arg->min_stable_eph ? "update" : "ignore",
+		cont_child->sc_global_stable_eph, arg->min_stable_eph);
 
-	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
-		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
+	if (cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph)
+		cont_child->sc_ec_agg_eph_boundary = arg->min_ec_agg_eph;
+
+	/* Only should update local stable epoch if the target is in UPIN status */
+	if (cont_child->sc_global_stable_eph < arg->min_stable_eph &&
+	    (arg->tgt_status[idx] & PO_COMP_ST_UPIN)) {
+		rc = vos_cont_set_global_stable_epoch(cont_child->sc_hdl, arg->min_stable_eph);
+		if (rc == 0)
+			cont_child->sc_global_stable_eph = arg->min_stable_eph;
+		else
+			rc = 0;
+	}
 
 	ds_cont_child_put(cont_child);
 	return rc;
 }
 
 int
-ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
-			    daos_epoch_t eph)
+ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+			      daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph)
 {
-	struct refresh_vos_agg_eph_arg	arg;
-	int				rc;
+	struct ds_pool			*pool = NULL;
+	struct pool_target		*tgts;
+	struct refresh_track_eph_arg	 arg;
+	d_rank_t			 rank;
+	int				 i, rc;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
-	arg.min_eph = eph;
+	arg.min_ec_agg_eph = ec_agg_eph;
+	arg.min_stable_eph = stable_eph;
+	if (likely(dss_tgt_nr <= EPH_ARG_TGT_INLINE)) {
+		arg.tgt_status = arg.tgt_status_inline;
+	} else {
+		D_ALLOC_ARRAY(arg.tgt_status, dss_tgt_nr);
+		if (arg.tgt_status == NULL) {
+			return -DER_NOMEM;
+		}
+	}
 
-	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				     PO_COMP_ST_DOWNOUT, cont_refresh_vos_agg_eph_one,
-				     &arg, DSS_ULT_FL_PERIODIC);
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID" lookup pool failed: %d\n", DP_UUID(pool_uuid), rc);
+		goto out;
+	}
+	rank = dss_self_rank();
+	rc = pool_map_find_target_by_rank_idx(pool->sp_map, rank, -1, &tgts);
+	D_ASSERT(rc == dss_tgt_nr);
+	for (i = 0; i < dss_tgt_nr; i++)
+		arg.tgt_status[i] = tgts[i].ta_comp.co_status;
+	ds_pool_put(pool);
+
+	rc = ds_pool_thread_collective(
+	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
+
+out:
+	if (arg.tgt_status != NULL && arg.tgt_status != arg.tgt_status_inline)
+		D_FREE(arg.tgt_status);
 	return rc;
 }
 
-#define EC_AGG_EPH_INTV	 (10ULL * 1000)	/* seconds interval to check*/
+#define TRACK_EPH_INTV	 (5ULL * 1000)	/* seconds interval to check*/
 static void
-cont_agg_eph_leader_ult(void *arg)
+cont_track_eph_leader_ult(void *arg)
 {
-	struct cont_svc		*svc = arg;
-	struct ds_pool		*pool = svc->cs_pool;
-	struct cont_ec_agg	*ec_agg;
-	struct cont_ec_agg	*tmp;
-	uint64_t		cur_eph, new_eph;
-	int			rc = 0;
+	struct cont_svc			*svc = arg;
+	struct ds_pool			*pool = svc->cs_pool;
+	struct cont_track_eph_leader	*eph_ldr;
+	struct cont_track_eph_leader	*tmp;
+	uint64_t			 cur_eph, new_eph;
+	int				 rc = 0;
 
-	if (svc->cs_ec_leader_ephs_req == NULL)
+	if (svc->cs_cont_ephs_leader_req == NULL)
 		goto out;
 
-	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
+	while (!dss_ult_exiting(svc->cs_cont_ephs_leader_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
 		if (pool->sp_rebuilding) {
@@ -1853,59 +1904,72 @@ cont_agg_eph_leader_ult(void *arg)
 			goto yield;
 		}
 
-		d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list) {
-			daos_epoch_t min_eph = DAOS_EPOCH_MAX;
+		d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
+			daos_epoch_t min_ec_agg_eph = DAOS_EPOCH_MAX;
+			daos_epoch_t min_stable_eph = DAOS_EPOCH_MAX;
 			int	     i;
 
-			if (ec_agg->ea_deleted) {
-				d_list_del(&ec_agg->ea_list);
-				D_FREE(ec_agg->ea_server_ephs);
-				D_FREE(ec_agg);
+			if (eph_ldr->cte_deleted) {
+				d_list_del(&eph_ldr->cte_list);
+				D_FREE(eph_ldr->cte_server_ephs);
+				D_FREE(eph_ldr);
 				continue;
 			}
 
-			for (i = 0; i < ec_agg->ea_servers_num; i++) {
-				d_rank_t rank = ec_agg->ea_server_ephs[i].rank;
+			for (i = 0; i < eph_ldr->cte_servers_num; i++) {
+				d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
 
 				if (d_rank_in_rank_list(&fail_ranks, rank)) {
 					D_DEBUG(DB_MD, DF_CONT" skip %u\n",
 						DP_CONT(svc->cs_pool_uuid,
-							ec_agg->ea_cont_uuid),
+							eph_ldr->cte_cont_uuid),
 						rank);
 					continue;
 				}
 
-				if (ec_agg->ea_server_ephs[i].eph < min_eph)
-					min_eph = ec_agg->ea_server_ephs[i].eph;
+				if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
+					min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
+				if (eph_ldr->cte_server_ephs[i].re_stable_eph < min_stable_eph)
+					min_stable_eph = eph_ldr->cte_server_ephs[i].re_stable_eph;
 			}
 
-			if (min_eph == ec_agg->ea_current_eph)
+			if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
+			    min_stable_eph == eph_ldr->cte_current_stable_eph)
 				continue;
 
 			/**
 			 * NB: during extending or reintegration, the new
 			 * server might cause the minimum epoch is less than
-			 * ea_current_eph.
+			 * cte_current_ec_agg_eph.
 			 */
-			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "DF_X64"\n",
-				DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
-				min_eph, ec_agg->ea_current_eph);
+			D_DEBUG(DB_MD, DF_CONT" min_ec_agg_eph "DF_X64" current "DF_X64
+				", min_stable_eph "DF_X64" current "DF_X64".\n",
+				DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
+				min_ec_agg_eph, eph_ldr->cte_current_ec_agg_eph,
+				min_stable_eph, eph_ldr->cte_current_stable_eph);
 
-			cur_eph = d_hlc2sec(ec_agg->ea_current_eph);
-			new_eph = d_hlc2sec(min_eph);
+			cur_eph = d_hlc2sec(eph_ldr->cte_current_ec_agg_eph);
+			new_eph = d_hlc2sec(min_ec_agg_eph);
 			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
 				D_WARN(DF_CONT": Sluggish EC boundary reporting. "
 				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
-				       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
+				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
 				       cur_eph, new_eph, new_eph - cur_eph);
 
-			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
-							ec_agg->ea_cont_uuid,
-							min_eph);
+			cur_eph = d_hlc2sec(eph_ldr->cte_current_stable_eph);
+			new_eph = d_hlc2sec(min_stable_eph);
+			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+				D_WARN(DF_CONT": Sluggish stable epoch reporting. "
+				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
+				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
+				       cur_eph, new_eph, new_eph - cur_eph);
+
+			rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->cte_cont_uuid,
+						       min_ec_agg_eph, min_stable_eph);
 			if (rc) {
 				DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
 					  DF_CONT ": refresh failed",
-					  DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
+					  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
 
 				/* If there are network error or pool map inconsistency,
 				 * let's skip the following eph sync, which will fail
@@ -1919,45 +1983,44 @@ cont_agg_eph_leader_ult(void *arg)
 
 				continue;
 			}
-			ec_agg->ea_current_eph = min_eph;
+			eph_ldr->cte_current_ec_agg_eph = min_ec_agg_eph;
+			eph_ldr->cte_current_stable_eph = min_stable_eph;
 			if (pool->sp_rebuilding)
 				break;
 		}
 
 		map_ranks_fini(&fail_ranks);
 
-		if (dss_ult_exiting(svc->cs_ec_leader_ephs_req))
+		if (dss_ult_exiting(svc->cs_cont_ephs_leader_req))
 			break;
 yield:
-		sched_req_sleep(svc->cs_ec_leader_ephs_req, EC_AGG_EPH_INTV);
+		sched_req_sleep(svc->cs_cont_ephs_leader_req, TRACK_EPH_INTV);
 	}
 
 out:
 	D_DEBUG(DB_MD, DF_UUID": stop eph ult: rc %d\n",
 		DP_UUID(svc->cs_pool_uuid), rc);
 
-	d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list) {
-		d_list_del(&ec_agg->ea_list);
-		D_FREE(ec_agg->ea_server_ephs);
-		D_FREE(ec_agg);
+	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
+		d_list_del(&eph_ldr->cte_list);
+		D_FREE(eph_ldr->cte_server_ephs);
+		D_FREE(eph_ldr);
 	}
 }
 
 static int
-cont_svc_ec_agg_leader_start(struct cont_svc *svc)
+cont_svc_eph_track_leader_start(struct cont_svc *svc)
 {
 	struct sched_req_attr	attr;
 	uuid_t			anonym_uuid;
 
-	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
-	if (unlikely(ec_agg_disabled))
-		return 0;
+	D_INIT_LIST_HEAD(&svc->cs_cont_ephs_leader_list);
 
-	D_ASSERT(svc->cs_ec_leader_ephs_req == NULL);
+	D_ASSERT(svc->cs_cont_ephs_leader_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-	svc->cs_ec_leader_ephs_req = sched_create_ult(&attr, cont_agg_eph_leader_ult, svc, 0);
-	if (svc->cs_ec_leader_ephs_req == NULL) {
+	svc->cs_cont_ephs_leader_req = sched_create_ult(&attr, cont_track_eph_leader_ult, svc, 0);
+	if (svc->cs_cont_ephs_leader_req == NULL) {
 		D_ERROR(DF_UUID" Failed to create EC leader eph ULT.\n",
 			DP_UUID(svc->cs_pool_uuid));
 		return -DER_NOMEM;
@@ -1967,20 +2030,20 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 }
 
 static void
-cont_svc_ec_agg_leader_stop(struct cont_svc *svc)
+cont_svc_eph_track_leader_stop(struct cont_svc *svc)
 {
 	D_DEBUG(DB_MD, DF_UUID" wait for ec agg leader stop\n",
 		DP_UUID(svc->cs_pool_uuid));
 
-	if (svc->cs_ec_leader_ephs_req == NULL)
+	if (svc->cs_cont_ephs_leader_req == NULL)
 		return;
 
 	D_DEBUG(DB_MD, DF_UUID" Stopping EC query ULT\n",
 		DP_UUID(svc->cs_pool_uuid));
 
-	sched_req_wait(svc->cs_ec_leader_ephs_req, true);
-	sched_req_put(svc->cs_ec_leader_ephs_req);
-	svc->cs_ec_leader_ephs_req = NULL;
+	sched_req_wait(svc->cs_cont_ephs_leader_req, true);
+	sched_req_put(svc->cs_cont_ephs_leader_req);
+	svc->cs_cont_ephs_leader_req = NULL;
 }
 
 int
@@ -5612,9 +5675,9 @@ out:
 
 		prop = cqo->cqo_prop;
 	} else if ((opc == CONT_OPEN) || (opc == CONT_OPEN_BYLABEL)) {
-		struct cont_open_out *coo = crt_reply_get(rpc);
+		struct cont_open_out *cout = crt_reply_get(rpc);
 
-		prop = coo->coo_prop;
+		prop = cout->coo_prop;
 	}
 
 	out->co_rc = rc;
@@ -5871,8 +5934,10 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, "pool " DF_UUID " cont_svc_lookup_leader failed", DP_UUID(pool_uuid));
 		return rc;
+	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -5880,8 +5945,10 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
+	}
 
 	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
 	cont_put(cont);
@@ -6009,7 +6076,7 @@ ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid)
 
 	rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
 	if (rc == 0)
-		cont_ec_agg_delete(svc, uuid);
+		cont_track_eph_leader_delete(svc, uuid);
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,

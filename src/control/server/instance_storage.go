@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -68,9 +70,9 @@ func (ei *EngineInstance) MountScm() error {
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (ei *EngineInstance) NotifyStorageReady() {
+func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
 	go func() {
-		ei.storageReady <- true
+		ei.storageReady <- replaceRank
 	}()
 }
 
@@ -147,6 +149,16 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 		}
 		if !needsSuperblock {
 			ei.log.Debugf("%s: superblock not needed", msgIdx)
+
+			if ei.storage.HasBlockDevices() {
+				ei.log.Debugf("%s: checking bdev config", msgIdx)
+
+				ctrlrs, err := getEngineBdevCtrlrs(ctx, ei)
+				if err != nil {
+					return err
+				}
+				return ei.storage.UpgradeBdevConfig(ctx, ctrlrs)
+			}
 			return nil
 		}
 		ei.log.Debugf("%s: superblock needed", msgIdx)
@@ -171,8 +183,14 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		ei.log.Infof("%s %s storage not ready: %s", build.DataPlaneName, msgIdx, ctx.Err())
-	case <-ei.storageReady:
-		ei.log.Infof("%s %s storage ready", build.DataPlaneName, msgIdx)
+	case replaceRank := <-ei.storageReady:
+		// Set replaceRank instance state to be used later in join request.
+		ei.replaceRank.Store(replaceRank)
+		msg := fmt.Sprintf("%s %s storage ready", build.DataPlaneName, msgIdx)
+		if replaceRank {
+			msg += ", attempting to replace rank..."
+		}
+		ei.log.Info(msg)
 	}
 
 	ei.waitFormat.SetFalse()

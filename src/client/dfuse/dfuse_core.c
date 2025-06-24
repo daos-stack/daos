@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -78,11 +79,11 @@ cont:
 static int
 dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 {
-	int		matched;
-	unsigned int	out = 0;
-	int		count0 = 0;
-	int		count1 = 0;
-	char		c = '\0';
+	int          matched;
+	unsigned int out    = 0;
+	int          count0 = 0;
+	int          count1 = 0;
+	char         c      = '\0';
 
 	matched = sscanf(buff, "%u%n%c%n", &out, &count0, &c, &count1);
 
@@ -536,7 +537,7 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 err_disconnect:
 	ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
 	if (ret)
-		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC, DP_RC(ret));
+		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: " DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfp);
 err:
@@ -1273,12 +1274,15 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
 			ie->ie_stat.st_ino, ref, DP_DE(ie->ie_name), ie->ie_parent);
 
-	D_ASSERTF(ref == 0, "Reference is %d", ref);
-	D_ASSERTF(atomic_load_relaxed(&ie->ie_il_count) == 0, "il_count is %d",
-		  atomic_load_relaxed(&ie->ie_il_count));
-	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
-		  atomic_load_relaxed(&ie->ie_open_count));
-	D_ASSERT(!ie->ie_active);
+	if (ref != 0 || atomic_load_relaxed(&ie->ie_il_count) != 0 ||
+	    atomic_load_relaxed(&ie->ie_open_count) != 0 || ie->ie_active) {
+		DFUSE_TRA_WARNING(ie,
+				  "Unclean shutdown of dfuse, probably due to forced umount: "
+				  "ref=%d il_count=%d open_count=%d active=%p",
+				  ref, atomic_load_relaxed(&ie->ie_il_count),
+				  atomic_load_relaxed(&ie->ie_open_count), ie->ie_active);
+		return;
+	}
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
@@ -1377,20 +1381,20 @@ dfuse_event_release(void *arg)
 int
 dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 {
-	struct fuse_args          args     = {0};
+	struct fuse_args          args = {0};
 	struct dfuse_inode_entry *ie;
-	struct d_slab_reg         read_slab  = {.sr_init    = dfuse_event_init,
-						.sr_reset   = dfuse_read_event_reset,
-						.sr_release = dfuse_event_release,
-						POOL_TYPE_INIT(dfuse_event, de_list)};
+	struct d_slab_reg         read_slab     = {.sr_init    = dfuse_event_init,
+						   .sr_reset   = dfuse_read_event_reset,
+						   .sr_release = dfuse_event_release,
+						   POOL_TYPE_INIT(dfuse_event, de_list)};
 	struct d_slab_reg         pre_read_slab = {.sr_init    = dfuse_event_init,
 						   .sr_reset   = dfuse_pre_read_event_reset,
 						   .sr_release = dfuse_event_release,
 						   POOL_TYPE_INIT(dfuse_event, de_list)};
-	struct d_slab_reg         write_slab = {.sr_init    = dfuse_event_init,
-						.sr_reset   = dfuse_write_event_reset,
-						.sr_release = dfuse_event_release,
-						POOL_TYPE_INIT(dfuse_event, de_list)};
+	struct d_slab_reg         write_slab    = {.sr_init    = dfuse_event_init,
+						   .sr_reset   = dfuse_write_event_reset,
+						   .sr_release = dfuse_event_release,
+						   POOL_TYPE_INIT(dfuse_event, de_list)};
 	int                       rc;
 	int                       idx = 0;
 
@@ -1581,41 +1585,6 @@ ino_dfs_flush_nr(d_list_t *rlink, void *arg)
 }
 
 static int
-ino_kernel_flush(d_list_t *rlink, void *arg)
-{
-	struct dfuse_info        *dfuse_info = arg;
-	struct dfuse_inode_entry *ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	int                       rc;
-
-	/* Only evict entries that are direct children of the root, the kernel
-	 * will walk the tree for us
-	 */
-	if (ie->ie_parent != 1)
-		return 0;
-
-	/* Do not evict root itself */
-	if (ie->ie_stat.st_ino == 1)
-		return 0;
-
-	rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent, ie->ie_name,
-					      strlen(ie->ie_name));
-	if (rc != 0 && rc != -EBADF)
-		DHS_WARN(ie, -rc, "%#lx %#lx " DF_DE, ie->ie_parent, ie->ie_stat.st_ino,
-			 DP_DE(ie->ie_name));
-	else
-		DHS_INFO(ie, -rc, "%#lx %#lx " DF_DE, ie->ie_parent, ie->ie_stat.st_ino,
-			 DP_DE(ie->ie_name));
-
-	/* If the FUSE connection is dead then do not traverse further, it
-	 * doesn't matter what gets returned here, as long as it's negative
-	 */
-	if (rc == -EBADF)
-		return -DER_NO_HDL;
-
-	return -DER_SUCCESS;
-}
-
-static int
 dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 {
 	struct dfuse_cont *dfc;
@@ -1638,10 +1607,10 @@ dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 static int
 dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 {
-	struct dfuse_info *dfuse_info = handle;
+	struct dfuse_info      *dfuse_info = handle;
 	struct dfuse_cont_core *dfcc, *dfccn;
-	struct dfuse_pool *dfp;
-	int                rc;
+	struct dfuse_pool      *dfp;
+	int                     rc;
 
 	dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 
@@ -1702,13 +1671,6 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 
 		sem_destroy(&eqt->de_sem);
 	}
-
-	/* First flush, instruct the kernel to forget items.  This will run and work in ideal cases
-	 * but often if the filesystem is unmounted it'll abort part-way through.
-	 */
-	rc = d_hash_table_traverse(&dfuse_info->dpi_iet, ino_kernel_flush, dfuse_info);
-
-	DHL_INFO(dfuse_info, rc, "Kernel flush complete");
 
 	/* At this point there's a number of inodes which are in memory, traverse these and free
 	 * them, along with any resources.

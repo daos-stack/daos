@@ -206,42 +206,48 @@ struct pressure_ratio {
 };
 
 static struct pressure_ratio pressure_gauge[] = {
-	{	/* free space > 40%, no space pressure */
-		.pr_free	= 40,
-		.pr_gc_ratio	= 10,
-		.pr_delay	= 0,
-		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
-	},
-	{	/* free space > 30% */
-		.pr_free	= 30,
-		.pr_gc_ratio	= 20,
-		.pr_delay	= 4000, /* msecs */
-		.pr_pressure	= 1,
-	},
-	{	/* free space > 20% */
-		.pr_free	= 20,
-		.pr_gc_ratio	= 30,
-		.pr_delay	= 6000, /* msecs */
-		.pr_pressure	= 2,
-	},
-	{	/* free space > 10% */
-		.pr_free	= 10,
-		.pr_gc_ratio	= 40,
-		.pr_delay	= 8000, /* msecs */
-		.pr_pressure	= 3,
-	},
-	{	/* free space > 5% */
-		.pr_free	= 5,
-		.pr_gc_ratio	= 50,
-		.pr_delay	= 10000, /* msecs */
-		.pr_pressure	= 4,
-	},
-	{	/* free space <= 5% */
-		.pr_free	= 0,
-		.pr_gc_ratio	= 60,
-		.pr_delay	= 12000, /* msecs */
-		.pr_pressure	= 5,
-	},
+    {
+	/* free space > 40%, no space pressure */
+	.pr_free     = 40,
+	.pr_gc_ratio = 10,
+	.pr_delay    = 0,
+	.pr_pressure = SCHED_SPACE_PRESS_NONE,
+    },
+    {
+	/* free space > 30% */
+	.pr_free     = 30,
+	.pr_gc_ratio = 30,
+	.pr_delay    = 4000, /* msecs */
+	.pr_pressure = 1,
+    },
+    {
+	/* free space > 20% */
+	.pr_free     = 20,
+	.pr_gc_ratio = 45,
+	.pr_delay    = 6000, /* msecs */
+	.pr_pressure = 2,
+    },
+    {
+	/* free space > 10% */
+	.pr_free     = 10,
+	.pr_gc_ratio = 60,
+	.pr_delay    = 8000, /* msecs */
+	.pr_pressure = 3,
+    },
+    {
+	/* free space > 5% */
+	.pr_free     = 5,
+	.pr_gc_ratio = 75,
+	.pr_delay    = 10000, /* msecs */
+	.pr_pressure = 4,
+    },
+    {
+	/* free space <= 5% */
+	.pr_free     = 0,
+	.pr_gc_ratio = 90,
+	.pr_delay    = 12000, /* msecs */
+	.pr_pressure = 5,
+    },
 };
 
 static inline unsigned int
@@ -771,7 +777,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left, nvme_left, ne_left, ne_sys;
+	uint64_t                 scm_left, nvme_left, ne_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -807,12 +813,8 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	if (vps.vps_ne_total == 0) {
 		ne_left = UINT64_MAX;
 	} else {
-		D_ASSERT(vps.vps_ne_total < SCM_TOTAL(&vps));
-		ne_sys = SCM_SYS(&vps) * vps.vps_ne_total / SCM_TOTAL(&vps);
-		if (vps.vps_ne_free > ne_sys)
-			ne_left = vps.vps_ne_free - ne_sys;
-		else
-			ne_left = 0;
+		ne_left = vps.vps_ne_free;
+		D_ASSERT(ne_left <= vps.vps_ne_total);
 	}
 
 	if (NVME_TOTAL(&vps) == 0)      /* NVMe not enabled */

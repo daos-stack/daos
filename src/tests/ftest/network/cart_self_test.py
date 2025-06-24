@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -104,6 +105,6 @@ class CartSelfTest(TestWithServers):
         try:
             orterun.run()
         except CommandFailure as error:
-            self.test_log.info(
+            self.log.info(
                 "CaRT self_test returned non-zero: %s", str(error))
             self.fail("CaRT self_test returned non-zero")

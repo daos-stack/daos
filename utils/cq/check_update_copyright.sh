@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
 #  Copyright 2025 Hewlett Packard Enterprise Development LP
@@ -34,6 +34,8 @@ regex_hpe='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4})
 shortname_hpe="Hewlett Packard Enterprise Development LP"
 regex_google='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Google LLC.*$))'
 shortname_google="Google LLC"
+regex_enakta='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Enakta.*$))'
+shortname_enakta="Enakta Labs Ltd"
 year=$(date +%Y)
 errors=0
 targets=(
@@ -109,6 +111,10 @@ case "$user_domain" in
         regex_user="$regex_google"
         shortname_user="$shortname_google"
         ;;
+    "enakta")
+        regex_user="$regex_enakta"
+        shortname_user="$shortname_enakta"
+        ;;
     *)
         regex_user="$regex_hpe"
         shortname_user="$shortname_hpe"
@@ -143,7 +149,7 @@ for file in $files; do
          [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
         continue
     fi
-    
+
     # Check for existing copyright in user's domain
     # If it exists and is updated, nothing to do
     read -r y1_user y2_user <<< "$(sed -nre "s/^.*$regex_user.*$/\4 \6/p" "$file")"

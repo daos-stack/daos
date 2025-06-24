@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -57,6 +58,11 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # Get the expected pool query values from the test yaml. This should be as simple as:
         #   exp_info = self.params.get("exp_vals", path="/run/*", default={})
         # but this yields an empty dictionary (the default), so it needs to be defined manually:
+        scm_size_total = (
+            self.params.get("total_mdonssd", path="/run/exp_vals/scm/*")
+            if self.server_managers[0].manager.job.using_control_metadata
+            else self.params.get("total", path="/run/exp_vals/scm/*")
+        )
         exp_info = {
             "state": self.params.get("pool_state", path="/run/exp_vals/*"),
             "uuid": self.pool.uuid.lower(),
@@ -78,7 +84,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             "tier_stats": [
                 {
                     "media_type": "scm",
-                    "total": self.params.get("total", path="/run/exp_vals/scm/*")
+                    "total": scm_size_total
                 },
                 {
                     "media_type": "nvme",
@@ -91,17 +97,15 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             "usage": [
                 {
                     "tier_name": "SCM",
-                    "size": self.params.get("total", path="/run/exp_vals/scm/*")
+                    "size": scm_size_total
                 },
                 {
                     "tier_name": "NVME",
                     "size": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ],
-            "mem_file_bytes": (
-                self.params.get("total", path="/run/exp_vals/scm/*") if
-                self.server_managers[0].manager.job.using_control_metadata else
-                0)
+            "md_on_ssd_active": self.server_managers[0].manager.job.using_control_metadata,
+            "mem_file_bytes": scm_size_total
         }
 
         self.assertDictEqual(

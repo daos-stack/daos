@@ -34,7 +34,6 @@ pool:
   properties: rd_fac:2
 container:
   type: POSIX
-  control_method: API
   single_data_set:
     # [object_qty, record_qty, dkey, akey, data_size]
     - [1, 1, 1, 1, 4194304]

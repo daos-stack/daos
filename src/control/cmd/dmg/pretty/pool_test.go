@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -353,6 +354,7 @@ func TestPretty_PrintPoolCreateResp(t *testing.T) {
 					600 * humanize.MByte,
 					10 * humanize.GByte,
 				},
+				MemFileBytes: 300 * humanize.MByte,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool created with 5.66%%,94.34%% storage tier ratio
@@ -367,7 +369,7 @@ Pool created with 5.66%%,94.34%% storage tier ratio
 
 `, test.MockPoolUUID()),
 		},
-		"basic; md-on-ssd": {
+		"basic; MD-on-SSD": {
 			pcr: &control.PoolCreateResp{
 				UUID:     test.MockUUID(),
 				SvcReps:  mockRanks(0, 1, 2),
@@ -376,7 +378,8 @@ Pool created with 5.66%%,94.34%% storage tier ratio
 					600 * humanize.MByte,
 					10 * humanize.GByte,
 				},
-				MemFileBytes: 300 * humanize.MByte, // Non-zero indicates MD-on-SSD.
+				MemFileBytes:  300 * humanize.MByte,
+				MdOnSsdActive: true,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool created with 5.66%%,94.34%% storage tier ratio
@@ -627,6 +630,124 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintPoolRanksResps(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resps  []*control.PoolRanksResp
+		expErr error
+		expOut string
+	}{
+		"normal pool drain response": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 0}, {Rank: 1}, {Rank: 2},
+					},
+				},
+			},
+			expOut: `
+Pool                                 Ranks Result Reason 
+----                                 ----- ------ ------ 
+00000001-0001-0001-0001-000000000001 0-2   OK     -      
+
+`,
+		},
+		"normal response; use labels": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: "label1",
+					Results: []*control.PoolRankResult{
+						{Rank: 0}, {Rank: 1}, {Rank: 2}, {Rank: 3},
+					},
+				},
+				{
+					ID: "label2",
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2}, {Rank: 3}, {Rank: 4},
+					},
+				},
+			},
+			expOut: `
+Pool   Ranks Result Reason 
+----   ----- ------ ------ 
+label1 0-3   OK     -      
+label2 1-4   OK     -      
+
+`,
+		},
+		"multiple response with failures": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2},
+					},
+				},
+				{
+					ID: test.MockUUID(2),
+					Results: []*control.PoolRankResult{
+						{Rank: 0},
+						{Rank: 1, Errored: true, Msg: "fail1"},
+						{Rank: 2, Errored: true, Msg: "fail2"},
+						{Rank: 3, Errored: true, Msg: "fail1"},
+					},
+				},
+			},
+			expOut: `
+Pool                                 Ranks Result Reason 
+----                                 ----- ------ ------ 
+00000001-0001-0001-0001-000000000001 1-2   OK     -      
+00000002-0002-0002-0002-000000000002 0     OK     -      
+00000002-0002-0002-0002-000000000002 1,3   FAIL   fail1  
+00000002-0002-0002-0002-000000000002 2     FAIL   fail2  
+
+`,
+		},
+		"multiple responses for the same pool": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2},
+					},
+				},
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 0},
+						{Rank: 1, Errored: true, Msg: "fail1"},
+					},
+				},
+			},
+			expErr: errors.New("multiple PoolRanksResps for the same pool"),
+		},
+		"multiple results for the same rank": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 1},
+					},
+				},
+			},
+			expErr: errors.New("multiple PoolRankResults for rank 1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out strings.Builder
+			gotErr := PrintPoolRanksResps(&out, tc.resps...)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

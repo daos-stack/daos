@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -813,5 +814,17 @@ evt_feats_get(struct evt_root *root)
  * \return 0 on success
  */
 int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats);
+
+/** Validate the provided evt.
+ *
+ * Note: It is designed for catastrophic recovery. Not to perform at run-time.
+ *
+ * \param evt[in]
+ * \param dtx_lid[in]	local id of the DTX entry the evt is supposed to belong to
+ *
+ * \return true if evt is valid.
+ **/
+bool
+evt_desc_is_valid(const struct evt_desc *evt, uint32_t dtx_lid);
 
 #endif /* __DAOS_EV_TREE_H__ */

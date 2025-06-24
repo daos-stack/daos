@@ -62,3 +62,74 @@ for i in range(1, cols * rows + 1):
     plt.imshow(img.squeeze(), cmap="gray")
 plt.show()
 ```
+
+
+### Checkpoint interface
+
+Torch framework provides a way to save and load model's checkpoints: `torch.save` and `torch.load` functions are used to save and load the model state dictionary.
+The `torch.save` function expects a state dictionary object and a file like object `Union[str, PathLike, BinaryIO, IO[bytes]]`.
+To implement such interface, `pydaos.torch.WriteBuffer` class is introduced, which is a wrapper around `io.BufferedIOBase` object, behaving like a writable stream.
+`WriteBuffer` can operate in two modes: in-memory buffer and chunked buffer. In-memory buffer accumulates data in memory and writes it to the DAOS container when `close()` method is called.
+Chunked buffer writes the data to the DAOS container in chunks of fixed size. There are optional parameters to limit number of chunks in-flight and number of worker processes to use.
+Implementation of the loader is pretty straightforward - it reads the data from the file with existing API and returns it as a buffer.
+
+For convenience, the `pydoas.torch.Checkpoint` class is provided that manages the DAOS connections and provides `reader` and `writer` methods.
+
+
+Example of using the checkpointing interface in DLIO benchmark:
+
+```python
+import logging
+import torch
+from pydaos.torch import Checkpoint as DaosCheckpoint
+
+from dlio_benchmark.checkpointing.base_checkpointing import BaseCheckpointing
+from dlio_benchmark.utils.utility import Profile
+from dlio_benchmark.utils.config import ConfigArguments
+
+from dlio_benchmark.common.constants import MODULE_CHECKPOINT
+
+dlp = Profile(MODULE_CHECKPOINT)
+
+
+class PyDaosTorchCheckpointing(BaseCheckpointing):
+    __instance = None
+
+    @staticmethod
+    def get_instance():
+        """ Static access method. """
+        if PyDaosTorchCheckpointing.__instance is None:
+            logging.basicConfig(level=logging.INFO)
+            PyDaosTorchCheckpointing.__instance = PyDaosTorchCheckpointing()
+        return PyDaosTorchCheckpointing.__instance
+
+    @dlp.log_init
+    def __init__(self):
+        super().__init__("pt")
+
+        args = ConfigArguments.get_instance()
+        prefix = args.checkpoint_folder
+        pool = args.checkpoint_daos_pool
+        cont = args.checkpoint_daos_cont
+
+        logging.info(f"Checkpointing is set to DAOS pool: {pool}, container: {cont} with prefix: {prefix}")
+        self.ckpt = DaosCheckpoint(pool, cont, prefix)
+
+    @dlp.log
+    def get_tensor(self, size):
+        return torch.randint(high=1, size=(size,), dtype=torch.int8)
+
+    @dlp.log
+    def save_state(self, suffix, state):
+        name = self.get_name(suffix)
+        with self.ckpt.writer(name) as f:
+            torch.save(state, f)
+
+    @dlp.log
+    def checkpoint(self, epoch, step_number):
+        super().checkpoint(epoch, step_number)
+
+    @dlp.log
+    def finalize(self):
+        super().finalize()
+```
