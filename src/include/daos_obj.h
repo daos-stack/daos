@@ -498,6 +498,12 @@ daos_obj_id2class(daos_obj_id_t oid)
 	return (ord << OC_REDUN_SHIFT) | nr_grps;
 }
 
+static inline uint32_t
+daos_obj_id2grp_nr(daos_obj_id_t oid)
+{
+	return (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
+}
+
 static inline bool
 daos_obj_id_is_nil(daos_obj_id_t oid)
 {
