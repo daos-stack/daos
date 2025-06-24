@@ -212,6 +212,10 @@ cont_free_internal(struct vos_container *cont)
 			vea_hint_unload(cont->vc_hint_ctxt[i]);
 	}
 
+	D_ASSERTF(cont->vc_pool->vp_dtx_committed_count >= cont->vc_dtx_committed_count,
+		  "Unexpected committed DTX entries count: %u vs %u\n",
+		  cont->vc_pool->vp_dtx_committed_count, cont->vc_dtx_committed_count);
+
 	cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
 	d_tm_dec_gauge(vos_tls_get(cont->vc_pool->vp_sysdb)->vtl_committed,
 		       cont->vc_dtx_committed_count);

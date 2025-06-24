@@ -14,6 +14,7 @@ from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
 from dfuse_utils import get_dfuse, start_dfuse
+from distro_utils import detect
 from run_utils import run_remote
 
 
@@ -103,6 +104,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
     remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
     remote_env['COVFILE'] = os.environ['COVFILE']
+    remote_env['HTTPS_PROXY'] = os.environ['HTTPS_PROXY']
 
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
@@ -117,10 +119,20 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
 
     preload_cmd = remote_env.to_export_str()
 
+    # Set the distro version for the utils/scripts/install-*.sh file
+    distro_info = detect()
+    distro = f"el{distro_info.version}"
+    if "suse" in distro_info.name.lower():
+        distro = f"leap{distro_info.version}"
+    elif "ubuntu" in distro_info.name.lower():
+        distro = "ubuntu"
+
     cmds = ['python3 -m venv {}/venv'.format(mount_dir),
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
+            f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
+            'sudo -E /tmp/install.sh -y',
             'python3 -m pip install pip --upgrade',
             f'python3 -m pip install -r {build_dir}/requirements-build.txt',
             f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
@@ -136,6 +148,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         timeout = 10 * 60
         if cmd.startswith('scons'):
             timeout = build_time * 60
+        elif cmd.endswith('install.sh -y'):
+            timeout *= 2
         self.log_step(f"Running '{cmd}' with a {timeout}s timeout")
         start = time.time()
         result = run_remote(
