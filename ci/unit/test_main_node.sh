@@ -87,8 +87,6 @@ ls -la /usr/lib64/
 cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib64/python3.11/site-packages/
 mkdir venv/lib64/daos_srv
 cp -r /opt/daos/lib64/daos_srv/libvos_size.so venv/lib64/daos_srv/
-# working check for additional files to be copied
-# cp -r /opt/daos/lib64/daos_srv venv/lib64/
 cp /opt/daos/lib64/libdfs.so venv/lib64/
 
 # shellcheck disable=SC1091
