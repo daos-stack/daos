@@ -1439,13 +1439,14 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			    daos_epoch_t update_eph,
 			    uint32_t flags, struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t		 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
-	daos_handle_t		 ioh;
-	int			 rc, rc1, i, sgl_cnt = 0;
-	d_iov_t			csum_iov = {0};
-	struct daos_csummer	*csummer = NULL;
-	struct dcs_iod_csums	*iod_csums = NULL;
-	d_iov_t			*p_csum_iov = NULL;
+	d_sg_list_t           sgls[OBJ_ENUM_UNPACK_MAX_IODS];
+	daos_handle_t         ioh;
+	int                   sgl_cnt    = 0;
+	d_iov_t               csum_iov   = {0};
+	struct daos_csummer  *csummer    = NULL;
+	struct dcs_iod_csums *iod_csums  = NULL;
+	d_iov_t              *p_csum_iov = NULL;
+	int                   rc, rc1, i;
 
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
@@ -2114,7 +2115,7 @@ migrate_one_ult(void *arg)
 	 *   (nonexistent)
 	 * This is just a workaround...
 	 */
-	if (rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
+	if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
 		DL_ERROR(rc, DF_RB ": " DF_UOID " rebuild failed, set mpt_fini for tgt %d.",
 			 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), dss_get_module_info()->dmi_tgt_id);
 		tls->mpt_status = rc;
