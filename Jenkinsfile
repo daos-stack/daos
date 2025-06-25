@@ -162,6 +162,9 @@ pipeline {
         booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
+        booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
