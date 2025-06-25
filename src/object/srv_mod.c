@@ -25,6 +25,8 @@ obj_mod_init(void)
 {
 	int	rc;
 
+	obj_init_iov_fragment_params();
+
 	rc = obj_utils_init();
 	if (rc)
 		goto out;
