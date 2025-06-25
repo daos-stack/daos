@@ -82,8 +82,7 @@ rm -rf "$test_log_dir"
 
 # Use default python as that's where storage_estimator is installed.
 python3.11 -m venv venv
-# temp cp for debug
-ls -la /usr/lib64/
+
 cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib64/python3.11/site-packages/
 mkdir venv/lib64/daos_srv
 cp -r /opt/daos/lib64/daos_srv/libvos_size.so venv/lib64/daos_srv/
@@ -105,13 +104,10 @@ utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$te
                    $SUDO_ARG
 
 # Generate code coverage report if at least one gcda file was generated
-# Possibly limit this to finding a single match
 if [[ -n $(find build -name "*.gcda") ]]; then
     pip install --requirement requirements-code-coverage.txt
     
     mkdir -p "${test_log_dir}/code_coverage"
-    # # Eventually remove this one and only generate json files per stage.
-    # gcovr -o "${test_log_dir}/code_coverage/code_coverage_report.html" --html-details --gcov-ignore-parse-errors
     gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors
 fi
 HTTPS_PROXY="${HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \

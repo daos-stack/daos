@@ -53,6 +53,5 @@ if [[ -n $(find build -name "*.gcda") ]]; then
     pip install --requirement requirements-code-coverage.txt
 
     mkdir -p /tmp/code_coverage
-    # gcovr -o /tmp/code_coverage/code_coverage_report.html --html-details --gcov-ignore-parse-errors
     gcovr --json /tmp/code_coverage/code_coverage.json --gcov-ignore-parse-errors
 fi
