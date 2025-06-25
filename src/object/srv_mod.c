@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -180,9 +181,10 @@ struct dss_module_key obj_module_key = {
 static int
 obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 {
-	int	opc = opc_get(rpc->cr_opc);
-	int	proto_ver = crt_req_get_proto_ver(rpc);
-	int	rc = 0;
+	int          opc       = opc_get(rpc->cr_opc);
+	int          proto_ver = crt_req_get_proto_ver(rpc);
+	unsigned int type;
+	int          rc = 0;
 
 	D_ASSERT(proto_ver == DAOS_OBJ_VERSION || proto_ver == DAOS_OBJ_VERSION - 1);
 
@@ -200,9 +202,13 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = orw_v10->orw_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, obj_rpc_is_update(rpc) ?
-				    SCHED_REQ_UPDATE : SCHED_REQ_FETCH,
-				    &orw->orw_pool_uuid);
+		if (orw->orw_flags & ORF_FOR_MIGRATION)
+			type = SCHED_REQ_MIGRATE;
+		else if (obj_rpc_is_update(rpc))
+			type = SCHED_REQ_UPDATE;
+		else
+			type = SCHED_REQ_FETCH;
+		sched_req_attr_init(attr, type, &orw->orw_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_MIGRATE: {
@@ -230,7 +236,8 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = oei_v10->oei_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oei->oei_pool_uuid);
+		type = (oei->oei_flags & ORF_FOR_MIGRATION) ? SCHED_REQ_MIGRATE : SCHED_REQ_ANONYM;
+		sched_req_attr_init(attr, type, &oei->oei_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_PUNCH:
