@@ -267,11 +267,16 @@ class CoreFileProcessing():
         # -debuginfo packages that don't get installed with debuginfo-install
         self.log.debug("Installing -debuginfo packages that don't get installed",
                        " with debuginfo-install")
-        for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5',
-                    'libabt0' if "suse" in self.distro_info.name.lower() else "argobots",
-                    'libfabric', 'hdf5-vol-daos', 'hdf5-vol-daos-mpich',
-                    'hdf5-vol-daos-mpich-tests', 'hdf5-vol-daos-openmpi',
-                    'hdf5-vol-daos-openmpi-tests', 'ior']:
+        package_list = ['systemd', 'ndctl', 'mercury', 'hdf5', 'libfabric', 'ior', 'hdf5-vol-daos',
+                        'hdf5-vol-daos-mpich', 'hdf5-vol-daos-mpich-tests', 'hdf5-vol-daos-openmpi',
+                        'hdf5-vol-daos-openmpi-tests']
+        if "suse" in self.distro_info.name.lower():
+            package_list.append('libabt0')
+        else:
+            package_list.append('argobots')
+        if self.is_el() and int(self.distro_info.version) >= 9:
+            package_list.extend(['systemd-libs', 'ndctl-libs', 'daxctl-libs'])
+        for pkg in package_list:
             debug_pkg = self.resolve_debuginfo(pkg)
             if debug_pkg and debug_pkg not in install_pkgs:
                 install_pkgs.append(debug_pkg)
@@ -293,7 +298,8 @@ class CoreFileProcessing():
                          "python36", "openmpi3", "gcc"])
                 elif self.is_el() and int(self.distro_info.version) >= 8:
                     dnf_args.extend(
-                        ["libpmemobj", "python3", "openmpi", "gcc"])
+                        ["libpmemobj", "python3", "openmpi", "gcc", 'libpmem', "ndctl-libs",
+                         "daxctl-libs", "libgcc", "systemd-libs"])
                 else:
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
@@ -331,7 +337,7 @@ class CoreFileProcessing():
 
         retry = False
         for cmd in cmds:
-            if not run_local(self.log, " ".join(cmd), True, 120).passed:
+            if not run_local(self.log, " ".join(cmd)).passed:
                 # got an error, so abort this list of commands and re-run
                 # it with a dnf clean, makecache first
                 retry = True
