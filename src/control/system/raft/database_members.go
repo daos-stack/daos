@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -47,28 +48,68 @@ func (mrm MemberRankMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jm)
 }
 
-func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *system.Member) {
-	if _, exists := mam[addr.String()]; !exists {
-		mam[addr.String()] = []*system.Member{}
+// Remove members with duplicate UUIDs from MemberAddrMap.
+func (mam MemberAddrMap) dedupMembers(addrStr string) {
+	//oldMembers []*system.Member) []*system.Member {
+	seen := make(map[string]struct{})
+	dupes := make(map[string]struct{})
+
+	for _, m := range mam[addrStr] {
+		us := m.UUID.String()
+
+		if _, exists := seen[us]; exists {
+			dupes[us] = struct{}{}
+		} else {
+			seen[us] = struct{}{}
+		}
 	}
-	mam[addr.String()] = append(mam[addr.String()], m)
+	if len(dupes) == 0 {
+		return
+	}
+
+	// Update with de-duplicated slice only if needed.
+	newMembers := []*system.Member{}
+	for _, m := range mam[addrStr] {
+		if _, exists := dupes[m.UUID.String()]; !exists {
+			newMembers = append(newMembers, m)
+		}
+	}
+
+	mam[addrStr] = newMembers
+}
+
+func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *system.Member) {
+	as := addr.String()
+
+	if _, exists := mam[as]; !exists {
+		mam[as] = []*system.Member{}
+	}
+
+	mam[as] = append(mam[as], m)
+	mam.dedupMembers(as)
 }
 
 func (mam MemberAddrMap) removeMember(m *system.Member) {
-	members, exists := mam[m.Addr.String()]
-	if !exists {
+	mas := m.Addr.String()
+
+	if _, exists := mam[mas]; !exists {
 		return
 	}
-	for i, cur := range members {
-		if m.UUID == cur.UUID {
-			// remove from slice
-			members = append(members[:i], members[i+1:]...)
-			break
+
+	mam.dedupMembers(mas)
+
+	newMembers := []*system.Member{}
+	for _, cur := range mam[mas] {
+		if m.UUID != cur.UUID {
+			nm := *cur
+			newMembers = append(newMembers, &nm)
 		}
 	}
-	if len(members) == 0 {
-		delete(mam, m.Addr.String())
+	if len(newMembers) == 0 {
+		delete(mam, mas)
 	}
+
+	mam[mas] = newMembers
 }
 
 // MarshalJSON creates a serialized representation of the MemberAddrMap.
@@ -170,7 +211,7 @@ func (mdb *MemberDatabase) updateMember(m *system.Member) {
 	mdb.addToFaultDomainTree(cur)
 }
 
-// removeMember is responsible for removing new Member and updating all
+// removeMember is responsible for removing Member and updating all
 // of the relevant maps.
 func (mdb *MemberDatabase) removeMember(m *system.Member) {
 	delete(mdb.Ranks, m.Rank)
