@@ -671,6 +671,7 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 	d_shm_ht_rec_t  rec_next = NULL;
 	char           *value    = NULL;
 	int             rc;
+	int             padding;
 	d_shm_ht_head_t ht_head;
 
 	*err = SHM_HT_SUCCESS;
@@ -717,21 +718,21 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 			off_next = rec->next;
 		}
 	}
+	/* add padding space to make sure value is aligned by SHM_MEM_ALIGN */
+	padding = (len_key & (SHM_MEM_ALIGN - 1)) ? (SHM_MEM_ALIGN - (len_key & (SHM_MEM_ALIGN - 1))) : 0;
 	/* record is not found. Insert it at the very beginning of the link list. */
-	rec = (d_shm_ht_rec_t)shm_memalign(SHM_MEM_ALIGN,
-					   sizeof(struct d_shm_ht_rec) + len_key + len_value);
+	rec = (d_shm_ht_rec_t)shm_memalign(SHM_MEM_ALIGN, sizeof(struct d_shm_ht_rec) + len_key +
+							  len_value + padding);
 	if (rec == NULL) {
 		*err = ENOMEM;
 		goto err;
 	}
-	rec->len_key = len_key;
-	/* add padding space to make sure value is aligned by SHM_MEM_ALIGN */
-	rec->len_padding =
-	    (len_key & (SHM_MEM_ALIGN - 1)) ? (SHM_MEM_ALIGN - (len_key & (SHM_MEM_ALIGN - 1))) : 0;
-	rec->len_value = len_value;
-	rec->next      = INVALID_OFFSET;
+	rec->len_key     = len_key;
+	rec->len_padding = padding;
+	rec->len_value   = len_value;
+	rec->next        = INVALID_OFFSET;
 	memcpy((char *)rec + sizeof(struct d_shm_ht_rec), key, len_key);
-	value = (char *)rec + sizeof(struct d_shm_ht_rec) + len_key + rec->len_padding;
+	value = (char *)rec + sizeof(struct d_shm_ht_rec) + len_key + padding;
 
 	if (strcmp(val, INIT_KEY_VALUE_MUTEX) == 0) {
 		/* value holds a pthread mutex lock */

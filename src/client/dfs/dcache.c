@@ -447,8 +447,8 @@ dcache_add_root(dfs_dcache_t *dcache)
 	shm_ht_rec_find_insert(&dcache->shm.dd_ht, &dcache->dd_key_root_prefix[0],
 			       DCACHE_KEY_PREF_SIZE - 1, val, val_size,
 			       &dcache->dd_dfs->root.shm.rec_loc, &rc);
-	if (rc)
-		D_FREE(val);
+	/* val was copied into shm hash table record, so it is not needed any more. */
+	D_FREE(val);
 	return daos_der2errno(rc);
 }
 
@@ -620,14 +620,14 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 			goto err;
 		}
 
-		shm_ht_rec_find_insert(&dcache->shm.dd_ht, &dcache->dd_key_root_prefix[0],
-				       DCACHE_KEY_PREF_SIZE - 1, val, val_size, &obj->shm.rec_loc,
-				       &rc);
-		if (rc) {
-			D_FREE(val);
-			D_GOTO(err, rc = daos_der2errno(rc));
-		}
-		return 0;
+		shm_ht_rec_find_insert(&dcache->shm.dd_ht, key,	key_len, val, val_size,
+				       &obj->shm.rec_loc, &rc);
+		/* val was copied into shm hash table record, so it is not needed any more. */
+		D_FREE(val);
+		if (rc)
+			dfs_release(obj);
+		*rec = obj;
+		return rc;
 	}
 
 	if (!dcache->dh.dd_disable_gc) {
@@ -1002,7 +1002,7 @@ dcache_create_shm(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_p
 		D_GOTO(err_shm, rc = ENOMEM);
 
 	dcache_tmp->dd_dfs  = dfs;
-	dcache_tmp->dd_type = DFS_CACHE_DRAM;
+	dcache_tmp->dd_type = DFS_CACHE_SHM;
 
 	/** create / open a hash table with the pool.cont name */
 	rc = dc_pool_hdl2uuid(dfs->poh, NULL, &pool_uuid);
@@ -1017,7 +1017,7 @@ dcache_create_shm(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_p
 	ht_name[36] = '.';
 	uuid_unparse(cont_uuid, ht_name + DAOS_UUID_STR_SIZE);
 
-	rc = shm_ht_create(ht_name, bits, 3, &dcache_tmp->shm.dd_ht);
+	rc = shm_ht_create(ht_name, bits, 4, &dcache_tmp->shm.dd_ht);
 	if (rc != 0)
 		D_GOTO(err_dcache, rc = daos_der2errno(rc));
 
@@ -1060,6 +1060,11 @@ dcache_destroy(dfs_t *dfs)
 	D_ASSERT(dfs->dcache != NULL);
 	if (dfs->dcache->dd_type == DFS_CACHE_SHM) {
 		int rc;
+
+		/* decrease the ht record reference of root */
+		rc = shm_ht_rec_decref(&dfs->dcache->dd_dfs->root.shm.rec_loc);
+		if (rc)
+			D_ERROR("shm_ht_rec_decref() failed: " DF_RC "\n", DP_RC(rc));
 
 		rc = shm_ht_decref(&dfs->dcache->shm.dd_ht);
 		if (rc)
@@ -1211,7 +1216,7 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 {
 	const size_t            key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
 	dfs_obj_t              *rec;
-	char                   *key;
+	char                    key[DCACHE_KEY_PREF_SIZE + DFS_MAX_NAME];
 	char                   *key_prefix;
 	size_t                  key_len;
 	char                   *value;
@@ -1226,10 +1231,6 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 		return dfs->dcache->dh.find_insert_rel_fn(dfs->dcache, parent, name, len, flags,
 							  _rec, mode, stbuf);
 	}
-
-	D_ALLOC(key, key_prefix_len + len + 1);
-	if (key == NULL)
-		return -DER_NOMEM;
 
 	key_prefix = dfs->dcache->dd_key_root_prefix;
 	memcpy(key, key_prefix, key_prefix_len);
@@ -1254,6 +1255,7 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 		rc = dfs_obj_deserialize(value, strlen(value), rec);
 		if (rc)
 			D_GOTO(out, rc);
+		memcpy(&rec->shm.rec_loc, &rec_loc, sizeof(rec_loc));
 
 		/** handle following symlinks outside of the dcache */
 		if (S_ISLNK(rec->mode) && !(flags & O_NOFOLLOW)) {
@@ -1280,6 +1282,7 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 		}
 		if (mode)
 			*mode = rec->mode;
+		rec->dc = dfs->dcache;
 		rc = 0;
 	}
 
@@ -1287,7 +1290,6 @@ done:
 	D_ASSERT(rec != NULL);
 	*_rec = rec;
 out:
-	D_FREE(key);
 	return rc;
 }
 
