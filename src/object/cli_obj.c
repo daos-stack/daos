@@ -1715,30 +1715,28 @@ dc_obj_layout_refresh(daos_handle_t oh)
 }
 
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt,
-		   uint32_t timeout_sec)
+dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint16_t *retry_cnt,
+		   uint16_t *inprogress_cnt, uint32_t timeout_sec)
 {
-	uint32_t	delay = 0;
-	uint32_t	limit = 4;
+	uint32_t delay = 0;
 
-	/*
-	 * Randomly delay 5 ~ 1028 us if it is not the first retry for
-	 * -DER_INPROGRESS || -DER_UPDATE_AGAIN cases.
-	 */
-	++(*retry_cnt);
-	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
-		if (++(*inprogress_cnt) > 1) {
-			limit += *inprogress_cnt;
-			if (limit > 10)
-				limit = 10;
+	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN)
+		++(*inprogress_cnt);
 
-			delay = (d_rand() & ((1 << limit) - 1)) + 5;
-			/* Rebuild is being established on the server side, wait a bit longer */
-			if (err == -DER_UPDATE_AGAIN)
-				delay <<= 10;
-			D_DEBUG(DB_IO, "Try to re-sched task %p for %d/%d times with %u us delay\n",
-				task, (int)*inprogress_cnt, (int)*retry_cnt, delay);
-		}
+	if (++(*retry_cnt) > 1) {
+		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
+		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
+		/* Rebuild is being established on the server side, wait a bit longer */
+		if (err == -DER_UPDATE_AGAIN)
+			delay <<= 10;
+		else if (opc == DAOS_OBJ_RPC_COLL_PUNCH)
+			/* 128 times of the delay for collective object RPC. */
+			delay <<= 7;
+		else if (opc == DAOS_OBJ_RPC_CPD)
+			/* 8 times of the delay for compounded RPC. */
+			delay <<= 3;
+		D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u/%u times with %u us delay\n",
+			task, opc, *inprogress_cnt, *retry_cnt, delay);
 	}
 
 	/*
@@ -1780,8 +1778,9 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		if (!pmap_stale) {
 			uint32_t now = daos_gettime_coarse();
 
-			delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
-						   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+			delay =
+			    dc_obj_retry_delay(task, obj_auxi->opc, result, &obj_auxi->retry_cnt,
+					       &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
 			if (result == -DER_INPROGRESS &&
 			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->inprogress_cnt >= 10) ||
 			     (obj_auxi->retry_warn_ts > 0 && obj_auxi->retry_warn_ts + 10 < now))) {
