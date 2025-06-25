@@ -790,7 +790,8 @@ pipeline {
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
-                                           id: 'NLT_server')
+                                           id: 'NLT_server'),
+                                         scm: 'daos-stack/daos'
                             job_status_update()
                         }
                     }
@@ -1008,7 +1009,8 @@ pipeline {
                                                         id: 'Fault_Injection'),
                                                  issues(pattern: 'nlt-client-leaks.json',
                                                         name: 'Fault injection leaks',
-                                                        id: 'NLT_client')]
+                                                        id: 'NLT_client')],
+                                         scm: 'daos-stack/daos'
                             junit testResults: 'nlt-junit.xml'
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
