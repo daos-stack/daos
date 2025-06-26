@@ -946,7 +946,6 @@ child_hdlr(void)
 	rc = daos_eq_lib_reset_after_fork();
 	if (rc)
 		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
-	daos_dti_reset();
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
 	context_reset = true;
 	d_eq_count    = 0;
