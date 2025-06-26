@@ -378,7 +378,7 @@ log_rotate(void)
 	int rc = 0;
 
 	if (!mst.log_old) {
-		rc = asprintf(&mst.log_old, "%s.oldest", mst.log_file);
+		rc = asprintf(&mst.log_old, "%s.first", mst.log_file);
 		if (rc < 0) {
 			dlog_print_err(errno, "failed to alloc name\n");
 			return -1;
