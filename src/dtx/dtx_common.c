@@ -851,18 +851,19 @@ dtx_shares_fini(struct dtx_handle *dth)
 int
 dtx_handle_reinit(struct dtx_handle *dth)
 {
+	D_ASSERT(dth->dth_aborted == 0);
+	D_ASSERT(dth->dth_already == 0);
+
 	if (dth->dth_modification_cnt > 0) {
 		D_ASSERT(dth->dth_ent != NULL);
 		D_ASSERT(dth->dth_pinned != 0);
 	}
-	D_ASSERT(dth->dth_already == 0);
 
-	dth->dth_modify_shared = 0;
-	dth->dth_active = 0;
+	dth->dth_modify_shared      = 0;
+	dth->dth_active             = 0;
 	dth->dth_touched_leader_oid = 0;
-	dth->dth_local_tx_started = 0;
-	dth->dth_cos_done = 0;
-	dth->dth_aborted = 0;
+	dth->dth_local_tx_started   = 0;
+	dth->dth_cos_done           = 0;
 
 	dth->dth_op_seq = 0;
 	dth->dth_oid_cnt = 0;
@@ -1267,7 +1268,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	struct dtx_memberships		*mbs;
 	size_t				 size;
 	uint32_t			 flags;
-	int				 status = -1;
+	int                              status;
 	int				 rc = 0;
 	bool				 aborted = false;
 
@@ -1284,41 +1285,16 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	if (dth->dth_solo)
 		goto out;
 
-	if (dth->dth_need_validation) {
-		/* During waiting for bulk data transfer or other non-leaders, the DTX
-		 * status may be changes by others (such as DTX resync or DTX refresh)
-		 * by race. Let's check it before handling the case of 'result < 0' to
-		 * avoid aborting 'ready' one.
-		 */
-		status = vos_dtx_validation(dth);
-		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE ||
-			     status == DTX_ST_COMMITTING))
-			D_GOTO(out, result = -DER_ALREADY);
-	}
-
-	if (result < 0)
+	/* During waiting for bulk data transfer or other non-leaders, the DTX status maybe
+	 * changes by others (such as DTX resync or DTX refresh) by race. Let's check it
+	 * before handling the case of 'result < 0' to avoid aborting 'ready' one.
+	 */
+	status = vos_dtx_validation(dth);
+	if (status != -DER_ALREADY && result < 0)
 		goto abort;
 
-	switch (status) {
-	case -1:
-		break;
-	case DTX_ST_PREPARED:
-		if (likely(!dth->dth_aborted))
-			break;
-		/* Fall through */
-	case DTX_ST_INITED:
-	case DTX_ST_PREPARING:
-		aborted = true;
-		result = -DER_AGAIN;
-		goto out;
-	case DTX_ST_ABORTED:
-	case DTX_ST_ABORTING:
-		aborted = true;
-		result = -DER_INPROGRESS;
-		goto out;
-	default:
-		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
-	}
+	if (status < 0)
+		D_GOTO(out, result = status);
 
 	if (dlh->dlh_relay)
 		goto out;
