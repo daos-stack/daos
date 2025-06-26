@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -684,18 +685,15 @@ daos_dti_gen(struct dtx_id *dti, bool zero)
 	if (zero) {
 		memset(dti, 0, sizeof(*dti));
 	} else {
-		if (uuid_is_null(dti_uuid))
-			uuid_generate(dti_uuid);
-
 		uuid_copy(dti->dti_uuid, dti_uuid);
 		dti->dti_hlc = d_hlc_get();
 	}
 }
 
 void
-daos_dti_reset(void)
+daos_dti_init(void)
 {
-	memset(dti_uuid, 0, sizeof(dti_uuid));
+	uuid_generate(dti_uuid);
 }
 
 /**
