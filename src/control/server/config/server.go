@@ -577,7 +577,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, hugepageSizeKiB int) error
 			cfg.NrHugepages = ScanMinHugepageCount
 		} else {
 			log.Infof("No hugepages required as zero configured engine targets, "+
-				"configurd value (%d) will be used to enable NVMe device discovery",
+				"configured value (%d) will be used to enable NVMe device discovery",
 				cfg.NrHugepages)
 		}
 
