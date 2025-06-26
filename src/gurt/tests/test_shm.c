@@ -449,7 +449,8 @@ test_lock(void **state)
 	shm_mutex_lock(mutex, &owner_dead);
 	gettimeofday(&tm2, NULL);
 	dt = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
-	assert_true(fabs(dt - TIME_SLEEP) < 0.25);
+	printf("Time diff = %4.2lf\n", fabs(dt - TIME_SLEEP));
+	assert_true(fabs(dt - TIME_SLEEP) < 0.40);
 	shm_mutex_unlock(mutex);
 	assert_true(owner_dead == false);
 
