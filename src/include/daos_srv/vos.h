@@ -20,6 +20,7 @@
 #include <daos/placement.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
+#include <daos_srv/daos_mgmt_srv.h>
 
 #define VOS_POOL_COMPAT_FLAG_IMMUTABLE (1ULL << 0)
 #define VOS_POOL_COMPAT_FLAG_SKIP_START      (1ULL << 1)
@@ -1513,6 +1514,80 @@ vos_pool_needs_checkpoint(daos_handle_t poh);
  */
 int
 vos_pool_checkpoint(daos_handle_t poh);
+
+typedef void (*bind_cpu_fn_t)(int tgt_id);
+typedef int (*cleanup_newborns_fn_t)(uuid_t uuid, unsigned int flags);
+
+struct recreate_tgts_arg {
+	const char   *vos_storage_path; // Base path for vos file, such as '/mnt/daos'
+	const char   *newborns_path;    // Temp path to init vos file, such as '/mnt/daos/NEWBORNS'
+	/**
+	 * Usually 'dss_bind_to_xstream_cpuset'
+	 * Because this func cannot be called by vos
+	 * So have to specify function pointer.
+	 * If not specify, tgt_preallocate won't execute on specify cpu
+	 */
+	bind_cpu_fn_t bind_cpu_fn;
+	/**
+	 * Usually 'ds_mgmt_cleanup_newborns'
+	 * Because dss_thread_collective cannot be called by vos
+	 * If not specify, tgt_kill_pool will not execute
+	 */
+	cleanup_newborns_fn_t cleanup_newborns_fn;
+};
+
+/**
+ * Recreate vos file for each tgts
+ * \param[in] recreate_arg		See 'struct recreate_tgts_arg'
+ *
+ */
+int
+vos_pool_recreate_tgts(struct recreate_tgts_arg *recreate_arg);
+
+/**
+ * Generate the vos file path.
+ * Rule: '/${dir}/${pool_uuid}/${fname}-${idx}'
+ * e.g:  '/mnt/daos/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/vos-0'
+ *
+ * \param[in] pool_uuid		Pool uuid
+ * \param[in] dir			Base path for scm mountpoint
+ * \param[in] fname			Vos/rdb name
+ * \param[in] idx			Vos file index
+ * \param[in] fpath			Save the generated path
+ */
+int
+vos_path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx, char **fpath);
+
+/**
+ * Sync cache
+ */
+int
+vos_dir_fsync(const char *path);
+
+/** Parallel recreate vos file
+ *
+ * \param[in] uuid				Pool uuid
+ * \param[in] scm_size			Per vos file size
+ * \param[in] tgt_nr			Vos file counts
+ * \param[in] cancel_pending	if true, preallocate will abort
+ * \param[in] newborns_path		Base path for tgt_preallocate
+ * \param[in] bind_cpu_fn		Usually 'dss_bind_to_xstream_cpuset', this func can't be
+ * call in vos, so specify pointer
+ */
+int
+vos_tgt_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool *cancel_pending,
+			     const char *newborns_path, bind_cpu_fn_t bind_cpu_fn);
+
+/** Parallel recreate vos file
+ *
+ * \param[in] uuid				Pool uuid
+ * \param[in] scm_size			Per vos file size
+ * \param[in] tgt_nr			Vos file counts
+ * \param[in] newborns_path		Base path for tgt_preallocate
+ */
+int
+vos_tgt_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
+			       const char *newborns_path);
 
 /**
  * The following declarations are for checksum scrubbing functions. The function
