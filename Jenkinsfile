@@ -165,7 +165,7 @@ Map update_default_commit_pragmas() {
 }
 
 Boolean code_coverage_build() {
-    if startedByTimer() {
+    if (startedByTimer()) {
         return true
     }
     return params.CI_CODE_COVERAGE
