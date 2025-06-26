@@ -164,11 +164,11 @@ Map update_default_commit_pragmas() {
     }
 }
 
-Boolean code_coverage_build() {
+Boolean is_code_coverage() {
     if (startedByTimer()) {
         return true
     }
-    return params.CI_CODE_COVERAGE
+    return paramsValue('CI_CODE_COVERAGE', false)
 }
 
 pipeline {
@@ -495,7 +495,7 @@ pipeline {
                 stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_build() }
+                        expression { !skipStage() && !is_code_coverage() }
                     }
                     agent {
                         dockerfile {
@@ -534,7 +534,7 @@ pipeline {
                 stage('Build RPM on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_build() }
+                        expression { !skipStage() && !is_code_coverage() }
                     }
                     agent {
                         dockerfile {
@@ -572,7 +572,7 @@ pipeline {
                 stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_build() }
+                        expression { !skipStage() && !is_code_coverage() }
                     }
                     agent {
                         dockerfile {
@@ -671,7 +671,7 @@ pipeline {
                                        stash_opt: true,
                                        scons_args: sconsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       code_coverage: code_coverage_build()))
+                                       code_coverage: is_code_coverage()))
                     }
                     post {
                         unsuccessful {
@@ -869,7 +869,7 @@ pipeline {
                 beforeAgent true
                 // expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && !code_coverage_build() }
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && !is_code_coverage() }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -1134,7 +1134,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() && !code_coverage_build() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() && !is_code_coverage() }
             }
             steps {
                 script {
