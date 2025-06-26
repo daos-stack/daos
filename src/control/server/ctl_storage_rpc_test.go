@@ -78,7 +78,7 @@ func TestServer_bdevScan(t *testing.T) {
 		"hugepages disabled": {
 			req:        &ctlpb.ScanNvmeReq{},
 			disableHPs: true,
-			expErr:     errors.New("hugepages have been disabled"),
+			expErr:     storage.FaultHugepagesDisabled,
 		},
 		"scan local; no bdevs in config; scan fails": {
 			req:         &ctlpb.ScanNvmeReq{Health: true},
@@ -1942,7 +1942,7 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				PrepareErr: errors.New("failure"),
 			},
-			expErr: FaultHugepagesDisabled,
+			expErr: storage.FaultHugepagesDisabled,
 		},
 		"success": {
 			req: &ctlpb.NvmeRebindReq{
@@ -2068,7 +2068,7 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 						WithStorageClass(storage.ClassDcpm.String()),
 				},
 			},
-			expErr: FaultHugepagesDisabled,
+			expErr: storage.FaultHugepagesDisabled,
 		},
 		"missing bdev config index 0": {
 			req: &ctlpb.NvmeAddDeviceReq{
