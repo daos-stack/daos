@@ -49,7 +49,7 @@ func (mrm MemberRankMap) MarshalJSON() ([]byte, error) {
 }
 
 // Remove members with duplicate UUIDs from MemberAddrMap.
-func (mam MemberAddrMap) dedupMembers(addrStr string) {
+func (mam MemberAddrMap) dedupeMembers(addrStr string) {
 	//oldMembers []*system.Member) []*system.Member {
 	seen := make(map[string]struct{})
 	dupes := make(map[string]struct{})
@@ -86,7 +86,7 @@ func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *system.Member) {
 	}
 
 	mam[as] = append(mam[as], m)
-	mam.dedupMembers(as)
+	mam.dedupeMembers(as)
 }
 
 func (mam MemberAddrMap) removeMember(m *system.Member) {
@@ -96,7 +96,7 @@ func (mam MemberAddrMap) removeMember(m *system.Member) {
 		return
 	}
 
-	mam.dedupMembers(mas)
+	mam.dedupeMembers(mas)
 
 	newMembers := []*system.Member{}
 	for _, cur := range mam[mas] {

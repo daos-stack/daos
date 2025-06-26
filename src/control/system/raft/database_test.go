@@ -431,6 +431,11 @@ func ignoreFaultDomainIDOption() cmp.Option {
 		}, cmp.Ignore())
 }
 
+//TODO
+//func TestSystem_MemberAddrMap_dedupeMembers
+//func TestSystem_MemberAddrMap_addMember
+//func TestSystem_MemberAddrMap_removeMember
+
 func TestSystem_Database_memberRaftOps(t *testing.T) {
 	ctx := test.Context(t)
 
@@ -819,7 +824,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 	}
 }
 
-func TestSystemDatabase_PoolServiceList(t *testing.T) {
+func TestSystem_Database_PoolServiceList(t *testing.T) {
 	ready := &PoolService{
 		PoolUUID:   uuid.New(),
 		PoolLabel:  "pool0001",
@@ -1061,7 +1066,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 	}
 }
 
-func Test_Database_ResignLeadership(t *testing.T) {
+func TestSystem_Database_ResignLeadership(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cause     error
 		expErr    error
@@ -1116,7 +1121,7 @@ func Test_Database_ResignLeadership(t *testing.T) {
 	}
 }
 
-func TestDatabase_TakePoolLock(t *testing.T) {
+func TestSystem_Database_TakePoolLock(t *testing.T) {
 	mockUUID := uuid.MustParse(test.MockUUID(1))
 	parentLock := makeLock(1, 1, 1)
 	wrongIdLock := makeLock(1, 2, 1)
