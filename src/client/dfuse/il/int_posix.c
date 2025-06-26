@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -805,7 +806,6 @@ child_hdlr(void)
 	rc = daos_eq_lib_reset_after_fork();
 	if (rc)
 		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
-	daos_dti_reset();
 	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
 	rc = daos_eq_create(&ioil_eqh);
 	if (rc)
