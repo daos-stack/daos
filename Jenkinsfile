@@ -164,8 +164,21 @@ Map update_default_commit_pragmas() {
     }
 }
 
+Boolean code_coverage_build() {
+    if startedByTimer() {
+        return true
+    }
+    return params.CI_CODE_COVERAGE
+}
+
 pipeline {
     agent { label 'lightweight' }
+
+    triggers {
+        // Generate a code coverage report each Sunday
+        /* groovylint-disable-next-line AddEmptyString */
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 5 * * 6' : '')
+    }
 
     environment {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
@@ -265,7 +278,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Do not build on Leap 15')
         booleanParam(name: 'CI_CODE_COVERAGE',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run with code coverage analysis')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
@@ -482,7 +495,7 @@ pipeline {
                 stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_build() }
                     }
                     agent {
                         dockerfile {
@@ -521,7 +534,7 @@ pipeline {
                 stage('Build RPM on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_build() }
                     }
                     agent {
                         dockerfile {
@@ -559,7 +572,7 @@ pipeline {
                 stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_build() }
                     }
                     agent {
                         dockerfile {
@@ -658,7 +671,7 @@ pipeline {
                                        stash_opt: true,
                                        scons_args: sconsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       code_coverage: params.CI_CODE_COVERAGE))
+                                       code_coverage: code_coverage_build()))
                     }
                     post {
                         unsuccessful {
@@ -856,7 +869,7 @@ pipeline {
                 beforeAgent true
                 // expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && !code_coverage_build() }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -1121,7 +1134,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() && !code_coverage_build() }
             }
             steps {
                 script {
