@@ -21,10 +21,15 @@ static dfs_t		*dfs_mt;
 static bool
 check_ts(struct timespec l, struct timespec r)
 {
-	if (l.tv_sec == r.tv_sec)
+	if (l.tv_sec == r.tv_sec) {
+		if (l.tv_nsec >= r.tv_nsec)
+			print_error("timestamp difference of %09ld nsec\n", l.tv_nsec - r.tv_nsec);
 		return l.tv_nsec < r.tv_nsec;
-	else
+	} else {
+		if (l.tv_sec >= r.tv_sec)
+			print_error("timestamp difference of %jd sec\n", l.tv_sec - r.tv_sec);
 		return l.tv_sec < r.tv_sec;
+	}
 }
 
 static void
@@ -1580,7 +1585,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 
 	printf("Start Time:\n");
 	printtimespec(first_ts);
-
+	usleep(10000);
 	if (S_ISREG(mode)) {
 		d_iov_set(&iov, buf, 64);
 		sgl.sg_nr = 1;

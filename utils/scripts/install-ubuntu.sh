@@ -14,13 +14,17 @@ set -e
 
 arch=$(uname -i)
 
-apt-get install \
+apt_get_install_args="${1:-}"
+
+# shellcheck disable=SC2086
+apt-get install ${apt_get_install_args} \
     autoconf \
     build-essential \
     clang \
     clang-format \
     cmake \
     curl \
+    fdupes \
     git \
     golang-go \
     kmod \
@@ -39,6 +43,7 @@ apt-get install \
     libndctl-dev \
     libnuma-dev \
     libopenmpi-dev \
+    libpsm2-dev \
     libpci-dev \
     libprotobuf-c-dev \
     librdmacm-dev \
@@ -50,17 +55,23 @@ apt-get install \
     maven \
     numactl \
     openjdk-8-jdk \
+    pandoc \
     patchelf \
     pciutils \
     pkg-config \
+    ruby \
     python3-dev \
     python3-venv \
+    sudo \
     uuid-dev \
     valgrind \
     yasm
 
+sudo gem install fpm
+
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
-    apt-get install \
+    # shellcheck disable=SC2086
+    apt-get install ${apt_get_install_args} \
         libipmctl-dev
 fi
