@@ -12,6 +12,7 @@ set -uex
 : "${REPOS:=}"
 : "${DAOS_LAB_CA_FILE_URL:=}"
 : "${REPOSITORY_NAME:=artifactory}"
+: "${no_proxy:=}"
 
 # shellcheck disable=SC2120
 disable_repos () {
@@ -138,7 +139,7 @@ if [ -n "$REPO_FILE_URL" ]; then
         echo "proxy = \"\""
     } > /etc/pip.conf
     if [ -n "$no_proxy" ]; then
-        export no_proxy="$no_proxy,${trusted_host}"        
+        export no_proxy="$no_proxy,${trusted_host}"
     else
         export no_proxy="${trusted_host}"
     fi

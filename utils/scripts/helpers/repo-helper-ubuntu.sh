@@ -11,6 +11,7 @@ set -uex
 : "${DAOS_LAB_CA_FILE_UR:=}"
 : "${REPOSITORY_NAME:=artifactory}"
 : "${BASE_DISTRO:=24.04}"
+: "${no_proxy:=}"
 
 disable_repos () {
     if [ -e /etc/apt/sources.list.d/ubuntu.sources ];then
