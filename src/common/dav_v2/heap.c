@@ -34,6 +34,7 @@
 #define MAX_RUN_LOCKS_VG MAX_CHUNK /* avoid perf issues /w drd */
 
 #define ZINFO_VERSION    0x1
+#define ZINFO_CAPACITY            262144
 
 struct zinfo_element {
 	unsigned char z_allotted   : 1;
@@ -42,9 +43,11 @@ struct zinfo_element {
 };
 
 struct zinfo_vec {
-	uint32_t             version;
-	uint32_t             num_elems;
-	struct zinfo_element z[];
+	uint32_t             zv_version;
+	uint32_t             zv_capacity;
+	uint32_t             zv_inuse;
+	uint64_t             zv_next_off;
+	struct zinfo_element zv_elems[];
 };
 
 TAILQ_HEAD(mbrt_q, mbrt);
@@ -138,7 +141,7 @@ heap_zinfo_set(struct palloc_heap *heap, uint32_t zid, bool allotted, bool evict
 	struct zinfo_element *ze;
 
 	if (heap->rt->zinfo_vec) {
-		ze                  = heap->rt->zinfo_vec->z;
+		ze                  = heap->rt->zinfo_vec->zv_elems;
 		ze[zid].z_allotted  = allotted;
 		ze[zid].z_evictable = evictable;
 		mo_wal_persist(&heap->p_ops, &ze[zid], sizeof(ze[zid]));
@@ -152,7 +155,7 @@ heap_zinfo_get(struct palloc_heap *heap, uint32_t zid, bool *allotted, bool *evi
 	struct zinfo_element *ze;
 
 	if (heap->rt->zinfo_vec) {
-		ze         = heap->rt->zinfo_vec->z;
+		ze         = heap->rt->zinfo_vec->zv_elems;
 		*allotted  = ze[zid].z_allotted;
 		*evictable = ze[zid].z_evictable;
 	} else {
@@ -165,7 +168,7 @@ heap_zinfo_get(struct palloc_heap *heap, uint32_t zid, bool *allotted, bool *evi
 static inline void
 heap_zinfo_set_usage(struct palloc_heap *heap, uint32_t zid, enum mb_usage_hint val)
 {
-	struct zinfo_element *ze = heap->rt->zinfo_vec->z;
+	struct zinfo_element *ze = heap->rt->zinfo_vec->zv_elems;
 
 	D_ASSERT(heap->rt->zinfo_vec && ze[zid].z_allotted && val < MB_UMAX_HINT);
 	ze[zid].z_usage_hint = val;
@@ -175,31 +178,51 @@ heap_zinfo_set_usage(struct palloc_heap *heap, uint32_t zid, enum mb_usage_hint 
 static inline void
 heap_zinfo_get_usage(struct palloc_heap *heap, uint32_t zid, enum mb_usage_hint *val)
 {
-	struct zinfo_element *ze = heap->rt->zinfo_vec->z;
+	struct zinfo_element *ze = heap->rt->zinfo_vec->zv_elems;
 
 	D_ASSERT(heap->rt->zinfo_vec && ze[zid].z_allotted && ze[zid].z_evictable &&
 		 ze[zid].z_usage_hint < MB_UMAX_HINT);
 	*val = ze[zid].z_usage_hint;
 }
 
-size_t
-heap_zinfo_get_size(uint32_t nzones)
+void
+heap_zinfo_get_size(uint64_t *alloc_size, uint64_t *capacity)
 {
-	return (sizeof(struct zinfo_vec) + sizeof(struct zinfo_element) * nzones);
+	*alloc_size = (sizeof(struct zinfo_vec) + sizeof(struct zinfo_element) * ZINFO_CAPACITY);
+	*capacity   = ZINFO_CAPACITY;
 }
 
-static inline void
-heap_zinfo_init(struct palloc_heap *heap)
+void
+heap_zinfo_init(struct palloc_heap *heap, bool is_create)
 {
-	struct zinfo_vec *z = heap->rt->zinfo_vec;
+	struct zinfo_vec *zv;
+	struct zone      *z0 = heap->layout_info.zone0;
+	uint64_t          alloc_size, capacity;
 
-	D_ASSERT(heap->layout_info.zone0->header.zone0_zinfo_size >=
-		 heap_zinfo_get_size(heap->rt->nzones));
+	heap_zinfo_get_size(&alloc_size, &capacity);
+	D_ASSERT(z0->header.zone0_zinfo_size == alloc_size);
 
-	z->version   = ZINFO_VERSION;
-	z->num_elems = heap->rt->nzones;
-	mo_wal_persist(&heap->p_ops, z, sizeof(*z));
-	heap_zinfo_set(heap, 0, 1, false);
+	heap->rt->zinfo_vec      = HEAP_OFF_TO_PTR(heap, z0->header.zone0_zinfo_off);
+	heap->rt->zinfo_vec_size = z0->header.zone0_zinfo_size;
+
+	zv = heap->rt->zinfo_vec;
+
+	if (is_create) {
+		zv->zv_version  = ZINFO_VERSION;
+		zv->zv_capacity = capacity;
+		zv->zv_inuse    = heap->rt->nzones;
+		mo_wal_persist(&heap->p_ops, zv, sizeof(*zv));
+		heap_zinfo_set(heap, 0, 1, false);
+	} else {
+		D_ASSERT(zv->zv_inuse <= heap->rt->nzones);
+		if (zv->zv_inuse < heap->rt->nzones) {
+			zv->zv_inuse = heap->rt->nzones;
+			mo_wal_persist(&heap->p_ops, &zv->zv_inuse, sizeof(zv->zv_inuse));
+		}
+	}
+	heap->rt->zones_exhausted    = 1;
+	heap->rt->zones_exhausted_ne = 1;
+	heap->rt->zones_exhausted_e  = 0;
 }
 
 static void
@@ -2352,26 +2375,17 @@ heap_off2mbid(struct palloc_heap *heap, uint64_t offset)
 }
 
 int
-heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
+heap_update_mbrt_zinfo(struct palloc_heap *heap)
 {
 	bool               allotted, evictable;
-	struct zone       *z0       = heap->layout_info.zone0;
 	int                nemb_cnt = 1, emb_cnt = 0, i;
 	struct mbrt       *mb;
 	struct zone       *z;
 	enum mb_usage_hint usage_hint;
 	int                last_allocated = 0;
 
-	heap->rt->zinfo_vec      = HEAP_OFF_TO_PTR(heap, z0->header.zone0_zinfo_off);
-	heap->rt->zinfo_vec_size = z0->header.zone0_zinfo_size;
-
-	if (init)
-		heap_zinfo_init(heap);
-	else {
-		D_ASSERT(heap->rt->zinfo_vec->num_elems == heap->rt->nzones);
-		heap_zinfo_get(heap, 0, &allotted, &evictable);
-		D_ASSERT((evictable == false) && (allotted == true));
-	}
+	heap_zinfo_get(heap, 0, &allotted, &evictable);
+	D_ASSERT((evictable == false) && (allotted == true));
 
 	for (i = 1; i < heap->rt->nzones; i++) {
 		heap_zinfo_get(heap, i, &allotted, &evictable);
@@ -2400,6 +2414,7 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
 		}
 		last_allocated = i;
 	}
+
 	heap->rt->zones_exhausted    = last_allocated + 1;
 	heap->rt->zones_exhausted_ne = nemb_cnt;
 	heap->rt->zones_exhausted_e  = emb_cnt;
