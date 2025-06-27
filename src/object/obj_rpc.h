@@ -191,6 +191,8 @@ enum obj_rpc_flags {
 	ORF_EMPTY_SGL		= (1 << 24),
 	/* The CPD RPC only contains read-only transaction. */
 	ORF_CPD_RDONLY		= (1 << 25),
+	/* For data consistency verification. */
+	ORF_FOR_DATA_VERIFICATION = (1 << 26),
 };
 /* clang-format on */
 
@@ -643,7 +645,7 @@ struct daos_cpd_bulk {
 	struct daos_cpd_sub_head	 dcb_head;
 	uint32_t			 dcb_size;
 	uint32_t			 dcb_padding;
-	crt_bulk_t			*dcb_bulk;
+	crt_bulk_t                       dcb_bulk;
 	/*
 	 * The following are only used to handle the bulk for CPD RPC body temporarily,
 	 * do not pack on-wire.
@@ -685,10 +687,10 @@ struct daos_cpd_sg {
 	((struct daos_cpd_sg)		(oci_sub_heads)		CRT_ARRAY)  \
 	/* scatter array for daos_cpd_sub_req. */			    \
 	((struct daos_cpd_sg)		(oci_sub_reqs)		CRT_ARRAY)  \
-	/* scatter array for daos_cpd_disp_ent. */			    \
-	((struct daos_cpd_sg)		(oci_disp_ents)		CRT_ARRAY)  \
 	/* scatter array for daos_shard_tgt. */				    \
-	((struct daos_cpd_sg)		(oci_disp_tgts)		CRT_ARRAY)
+	((struct daos_cpd_sg)		(oci_disp_tgts)		CRT_ARRAY)  \
+	/* scatter array for daos_cpd_disp_ent. */			    \
+	((struct daos_cpd_sg)		(oci_disp_ents)		CRT_ARRAY)
 
 	/* For parse and dispatch convenience, the 'oci_disp_tgts' are sorted
 	 * as the same order as 'oci_disp_ents' do. Each transaction has each
