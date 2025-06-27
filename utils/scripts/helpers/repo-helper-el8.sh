@@ -126,7 +126,6 @@ done
 
 disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
 
-
 # Setup the PyPi to use the artifactory as the installation packages source
 if [ -n "$REPO_FILE_URL" ]; then
     trusted_host="${REPO_FILE_URL##*//}"
