@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import time
 
 from apricot import TestWithServers
@@ -252,13 +251,13 @@ class ReplayTests(TestWithServers):
         for container in containers:
             for index, item in enumerate((container.pool, container)):
                 # Modify a random pool/container property value
-                name = random.choice(list(modify_attributes[index].keys()))  # nosec
+                name = self.random.choice(list(modify_attributes[index].keys()))
                 modified = False
                 for entry in expected[item.identifier]:
                     if entry['name'] == name:
                         original = entry['value']
                         while entry['value'] == original:
-                            entry['value'] = random.choice(modify_attributes[index][name])  # nosec
+                            entry['value'] = self.random.choice(modify_attributes[index][name])
                         self.log.info(
                             'Modifying %s property: %s -> %s',
                             item.identifier, entry['name'], entry['value'])

@@ -1,9 +1,9 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import threading
 import time
 
@@ -64,7 +64,7 @@ class DiskFailureTest(OSAUtils):
                 time.sleep(5)
 
             # Evict a random target from the system
-            evict_device = random.choice(device_info)  # nosec
+            evict_device = self.random.choice(device_info)
             self.log.info("Evicting random target: %s", evict_device["uuid"])
             try:
                 get_dmg_response(self.dmg_command.storage_set_faulty,

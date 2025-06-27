@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -261,6 +262,21 @@ func CreateTestDir(t *testing.T) (string, func()) {
 			t.Fatalf("Couldn't remove tmp dir: %v", err)
 		}
 	}
+}
+
+// RemoveContents removes contents of a directory.
+func RemoveContents(t *testing.T, dir string) error {
+	files, err := filepath.Glob(filepath.Join(dir, "*"))
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		err = os.RemoveAll(file)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CreateTestFile creates a file in the given directory with a random name, and

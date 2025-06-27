@@ -280,7 +280,7 @@ class CopyRetriever():
     def get(self, name, subdir, *_args, **kw):
         """Downloads sources from a git repository into subdir"""
         if self.source is None:
-            self.source = os.path.join(Dir('#').srcnode().abspath, "src", "external", name)
+            self.source = os.path.join(Dir('#').srcnode().abspath, "deps", name)
         print(f'Copying source for {name} from {self.source} to {subdir}')
         exclude = set([".git", ".github"])
         for root, dirs, files in os.walk(self.source, topdown=True):
@@ -1102,7 +1102,7 @@ class _Component():
         """Parse the patches variable"""
         patchnum = 1
         patchstr = self.prereqs.get_config("patch_versions", self.name)
-        if patchstr is None:
+        if patchstr is None or self.prereqs.deps_as_gitmodules_subdir:
             return {}
         patches = {}
         patch_strs = patchstr.split(",")
