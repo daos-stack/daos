@@ -12,6 +12,7 @@ set -uex
 : "${REPOS:=}"
 : "${REPOSITORY_NAME:=artifactory}"
 : "${DAOS_LAB_CA_FILE_URL:=}"
+: "${no_proxy:=}"
 
 # shellcheck disable=SC2120
 disable_repos () {
