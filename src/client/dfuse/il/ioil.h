@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +27,8 @@ struct ioil_cont {
 	d_list_t          ioc_containers;
 	/* Number of files open in container */
 	int               ioc_open_count;
+	/* Metrics enabled for this container? */
+	bool              ioc_metrics_enabled;
 };
 
 struct fd_entry {
