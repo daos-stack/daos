@@ -25,19 +25,6 @@
 #endif
 #endif
 
-#define TEST_ALWAYS_TRUE_EXPR(cnd) do {	\
-	if (__builtin_constant_p(cnd))	\
-		COMPILE_ERROR_ON(cnd);	\
-} while (0)
-#define TEST_ALWAYS_EQ_EXPR(lhs, rhs) do {				\
-	if (__builtin_constant_p(lhs) && __builtin_constant_p(rhs))	\
-		COMPILE_ERROR_ON((lhs) == (rhs));			\
-} while (0)
-#define TEST_ALWAYS_NE_EXPR(lhs, rhs) do {				\
-	if (__builtin_constant_p(lhs) && __builtin_constant_p(rhs))	\
-		COMPILE_ERROR_ON((lhs) != (rhs));			\
-} while (0)
-
 /* produce debug/trace output */
 #if defined(DAV_EXTRA_DEBUG)
 #define DAV_DBG(fmt, ...) D_DEBUG(DAV_LOG_FAC, fmt "\n", ##__VA_ARGS__)
@@ -50,52 +37,29 @@
 	D_ASSERTF(0, fmt "\n", ## __VA_ARGS__)
 
 /* assert a condition is true at runtime */
-#define ASSERT_rt(cnd) do {				\
-	if (!EVALUATE_DBG_EXPRESSIONS || (cnd))		\
-		break;					\
-	D_ASSERT(cnd);					\
-} while (0)
+#define ASSERT(cnd)                                                                                \
+	do {                                                                                       \
+		if (!EVALUATE_DBG_EXPRESSIONS)                                                     \
+			break;                                                                     \
+		D_ASSERT(cnd);                                                                     \
+	} while (0)
 
 /* assert two integer values are equal at runtime */
-#define ASSERTeq_rt(lhs, rhs) do {			\
-	if (!EVALUATE_DBG_EXPRESSIONS || ((lhs) == (rhs)))\
-		break; \
-	D_ASSERTF(((lhs) == (rhs)),			\
-	"assertion failure: %s (0x%llx) == %s (0x%llx)", #lhs,\
-	(unsigned long long)(lhs), #rhs, (unsigned long long)(rhs)); \
-} while (0)
+#define ASSERTeq(lhs, rhs)                                                                         \
+	do {                                                                                       \
+		if (!EVALUATE_DBG_EXPRESSIONS)                                                     \
+			break;                                                                     \
+		D_ASSERTF(((lhs) == (rhs)), "assertion failure: %s (0x%llx) == %s (0x%llx)", #lhs, \
+			  (unsigned long long)(lhs), #rhs, (unsigned long long)(rhs));             \
+	} while (0)
 
 /* assert two integer values are not equal at runtime */
-#define ASSERTne_rt(lhs, rhs) do {			\
-	if (!EVALUATE_DBG_EXPRESSIONS || ((lhs) != (rhs)))\
-		break;					\
-	D_ASSERTF(((lhs) != (rhs)),			\
-	"assertion failure: %s (0x%llx) != %s (0x%llx)", #lhs,\
-	(unsigned long long)(lhs), #rhs, (unsigned long long)(rhs)); \
-} while (0)
-
-/*
- * Detect useless asserts on always true expression. Please use
- * COMPILE_ERROR_ON(!cnd) or ASSERT_rt(cnd) in such cases.
- */
-/* assert a condition is true */
-#define ASSERT(cnd) do {\
-		TEST_ALWAYS_TRUE_EXPR(cnd);\
-		ASSERT_rt(cnd);\
-	} while (0)
-
-/* assert two integer values are equal */
-#define ASSERTeq(lhs, rhs) do {\
-		/* See comment in ASSERT. */\
-		TEST_ALWAYS_EQ_EXPR(lhs, rhs);\
-		ASSERTeq_rt(lhs, rhs);\
-	} while (0)
-
-/* assert two integer values are not equal */
-#define ASSERTne(lhs, rhs) do {\
-		/* See comment in ASSERT. */\
-		TEST_ALWAYS_NE_EXPR(lhs, rhs);\
-		ASSERTne_rt(lhs, rhs);\
+#define ASSERTne(lhs, rhs)                                                                         \
+	do {                                                                                       \
+		if (!EVALUATE_DBG_EXPRESSIONS)                                                     \
+			break;                                                                     \
+		D_ASSERTF(((lhs) != (rhs)), "assertion failure: %s (0x%llx) != %s (0x%llx)", #lhs, \
+			  (unsigned long long)(lhs), #rhs, (unsigned long long)(rhs));             \
 	} while (0)
 
 #define ERR(fmt, ...)\
