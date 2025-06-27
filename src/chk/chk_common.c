@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -183,9 +184,7 @@ btr_ops_t chk_pool_ops = {
 struct chk_pending_bundle {
 	d_list_t		*cpb_pool_head;
 	d_list_t		*cpb_rank_head;
-	d_rank_t		 cpb_rank;
-	uuid_t			 cpb_uuid;
-	uint32_t		 cpb_class;
+	struct chk_report_unit  *cpb_cru;
 	uint64_t		 cpb_seq;
 };
 
@@ -210,11 +209,14 @@ chk_pending_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	struct chk_pending_bundle	*cpb = val_iov->iov_buf;
 	struct chk_pending_rec		*cpr = NULL;
 	int				 rc = 0;
+	int                              i;
+	size_t                           size;
 
 	D_ASSERT(cpb != NULL);
 	D_ASSERT(val_out != NULL);
 
-	D_ALLOC_PTR(cpr);
+	size = sizeof(*cpr) + sizeof(uint32_t) * cpb->cpb_cru->cru_option_nr;
+	D_ALLOC(cpr, size);
 	if (cpr == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -226,11 +228,14 @@ chk_pending_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	if (rc != 0)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
-	uuid_copy(cpr->cpr_uuid, cpb->cpb_uuid);
-	cpr->cpr_seq = cpb->cpb_seq;
-	cpr->cpr_rank = cpb->cpb_rank;
-	cpr->cpr_class = cpb->cpb_class;
-	cpr->cpr_action = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+	uuid_copy(cpr->cpr_uuid, *(cpb->cpb_cru->cru_pool));
+	cpr->cpr_seq       = cpb->cpb_seq;
+	cpr->cpr_rank      = cpb->cpb_cru->cru_rank;
+	cpr->cpr_class     = cpb->cpb_cru->cru_cla;
+	cpr->cpr_action    = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+	cpr->cpr_option_nr = cpb->cpb_cru->cru_option_nr;
+	for (i = 0; i < cpr->cpr_option_nr; i++)
+		cpr->cpr_options[i] = cpb->cpb_cru->cru_options[i];
 
 	if (cpb->cpb_rank_head != NULL)
 		d_list_add_tail(&cpr->cpr_rank_link, cpb->cpb_rank_head);
@@ -332,20 +337,15 @@ chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks)
 	D_INFO("Ranks List:\n");
 
 	while (rank_nr >= 8) {
-		D_INFO("%8u %8u %8u %8u %8u %8u %8u %8u\n",
-		       ranks[0], ranks[1], ranks[2], ranks[3],
+		D_INFO("%8u%8u%8u%8u%8u%8u%8u%8u\n", ranks[0], ranks[1], ranks[2], ranks[3],
 		       ranks[4], ranks[5], ranks[6], ranks[7]);
 		rank_nr -= 8;
 		ranks += 8;
 	}
 
 	if (rank_nr > 0) {
-		rc = snprintf(ptr, 79, "%8u", ranks[0]);
-		D_ASSERT(rc > 0);
-		ptr += rc;
-
-		for (i = 1; i < rank_nr; i++) {
-			rc = snprintf(ptr, 79 - 8 * i, " %8u", ranks[i]);
+		for (i = 0; i < rank_nr; i++) {
+			rc = snprintf(ptr, 79 - 8 * i, "%8u", ranks[i]);
 			D_ASSERT(rc > 0);
 			ptr += rc;
 		}
@@ -889,8 +889,8 @@ chk_pool_shard_cleanup(struct chk_instance *ins)
 }
 
 int
-chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
-		uint64_t seq, uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr)
+chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head,
+		struct chk_report_unit *cru, uint64_t seq, struct chk_pending_rec **cpr)
 {
 	struct chk_pending_bundle	rbund;
 	d_iov_t				kiov;
@@ -900,12 +900,10 @@ chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_he
 
 	D_ASSERT(cpr != NULL);
 
-	uuid_copy(rbund.cpb_uuid, uuid);
 	rbund.cpb_pool_head = pool_head;
 	rbund.cpb_rank_head = rank_head;
-	rbund.cpb_seq = seq;
-	rbund.cpb_rank = rank;
-	rbund.cpb_class = cla;
+	rbund.cpb_seq       = seq;
+	rbund.cpb_cru       = cru;
 
 	d_iov_set(&viov, NULL, 0);
 	d_iov_set(&riov, &rbund, sizeof(rbund));
@@ -922,36 +920,55 @@ chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_he
 	ABT_rwlock_unlock(ins->ci_abt_lock);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
-		 "Add pending record with gen "DF_X64", seq "DF_X64", rank %u, class %u: "DF_RC"\n",
-		 ins->ci_bk.cb_gen, seq, rank, cla, DP_RC(rc));
+		 "Add pending record, gen " DF_X64 ", seq " DF_X64 ", rank %u, cla %u: " DF_RC "\n",
+		 ins->ci_bk.cb_gen, seq, cru->cru_rank, cru->cru_cla, DP_RC(rc));
 
 	return rc;
 }
 
 int
-chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked, struct chk_pending_rec **cpr)
+chk_pending_del(struct chk_instance *ins, uint64_t seq, uint32_t act, bool locked,
+		struct chk_pending_rec **cpr)
 {
 	d_iov_t		kiov;
 	d_iov_t		riov;
 	int		rc;
+	int             i;
+	bool            matched = false;
 
 	d_iov_set(&riov, NULL, 0);
 	d_iov_set(&kiov, &seq, sizeof(seq));
 
 	if (!locked)
 		ABT_rwlock_wrlock(ins->ci_abt_lock);
-	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
+	rc = dbtree_lookup(ins->ci_pending_hdl, &kiov, &riov);
+	if (rc != 0)
+		goto out;
+
+	*cpr = (struct chk_pending_rec *)riov.iov_buf;
+	for (i = 0; i < (*cpr)->cpr_option_nr; i++) {
+		if ((*cpr)->cpr_options[i] == act) {
+			matched = true;
+			break;
+		}
+	}
+
+	if (matched)
+		rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ | BTR_PROBE_BYPASS, &kiov,
+				   &riov);
+	else
+		rc = -DER_MISMATCH;
+
+out:
 	if (!locked)
 		ABT_rwlock_unlock(ins->ci_abt_lock);
 
-	if (rc == 0)
-		*cpr = (struct chk_pending_rec *)riov.iov_buf;
-	else
-		*cpr = NULL;
-
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
-		 "Del pending record with gen "DF_X64", seq "DF_X64": "DF_RC"\n",
-		 ins->ci_bk.cb_gen, seq, DP_RC(rc));
+		 "Del pending record, gen " DF_X64 ", seq " DF_X64 ", act %u: " DF_RC "\n",
+		 ins->ci_bk.cb_gen, seq, act, DP_RC(rc));
+
+	if (rc != 0)
+		*cpr = NULL;
 
 	return rc;
 }
@@ -1032,9 +1049,9 @@ chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
 
 	/* Reuse former policies if "policy_nr == 0". */
 	if (policy_nr > 0) {
-		memset(prop->cp_policies, 0, sizeof(Chk__CheckInconsistAction) * CHK_POLICY_MAX);
+		memset(prop->cp_policies, 0, sizeof(Chk__CheckInconsistAction) * CHK_CLASS_MAX);
 		for (i = 0; i < policy_nr; i++) {
-			if (unlikely(policies[i].cp_class >= CHK_POLICY_MAX)) {
+			if (unlikely(policies[i].cp_class >= CHK_CLASS_MAX)) {
 				D_ERROR("Invalid DAOS inconsistency class %u\n",
 					policies[i].cp_class);
 				D_GOTO(out, rc = -DER_INVAL);
