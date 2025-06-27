@@ -82,6 +82,18 @@ func mockRankSuccess(a string, r uint32, n ...int32) *sharedpb.RankResult {
 	return rr
 }
 
+func mockRankIgnored(a string, r uint32, n ...int32) *sharedpb.RankResult {
+	rr := &sharedpb.RankResult{
+		Rank: r, Msg: a + " ignored on AdminExcluded rank",
+		State:  stateString(system.MemberStateAdminExcluded),
+		Action: a,
+	}
+	if len(n) > 0 {
+		rr.Addr = test.MockHostAddr(n[0]).String()
+	}
+	return rr
+}
+
 var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreUnexported(events.RASEvent{}),
 	cmpopts.IgnoreFields(events.RASEvent{}, "Timestamp"))
@@ -492,7 +504,7 @@ func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 			t.Fatal(err)
 		}
 		cmpOpts := append(test.DefaultCmpOpts(),
-			cmpopts.EquateApproxTime(time.Second),
+			cmpopts.IgnoreFields(system.Member{}, "LastUpdate"),
 		)
 		if diff := cmp.Diff(em, am, cmpOpts...); diff != "" {
 			t.Fatalf("unexpected members (-want, +got)\n%s\n", diff)
@@ -1432,6 +1444,14 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 		return []string{e.String()}
 	}
 
+	getMemberRanks := func(members system.Members) *ranklist.RankSet {
+		ranks := ranklist.NewRankSet()
+		for _, m := range members {
+			ranks.Add(m.Rank)
+		}
+		return ranks
+	}
+
 	for name, tc := range map[string]struct {
 		req            *mgmtpb.SystemStartReq
 		members        system.Members
@@ -1442,6 +1462,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 		expAbsentHosts string
 		expAPIErr      error
 		expDispatched  []string
+		expFanoutRanks *ranklist.RankSet
 	}{
 		"nil req": {
 			req:       (*mgmtpb.SystemStartReq)(nil),
@@ -1500,6 +1521,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1"),
 			expAbsentRanks: "4-9",
 			expDispatched:  expEventsStartFail("failed rank 0"),
 		},
@@ -1524,6 +1546,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "errored").WithInfo("start failed"),
 				mockMember(t, 3, 2, "ready"),
 			},
+			expFanoutRanks: ranklist.MustCreateRankSet("2-3"),
 			expAbsentHosts: "10.0.0.[3-5]",
 			expDispatched:  expEventsStartFail("failed rank 2"),
 		},
@@ -1552,12 +1575,141 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "joined"),
 			},
 		},
+		"ignore admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(1, mockRankSuccess("start", 0), mockRankSuccess("start", 1)),
+				hr(2, mockRankSuccess("start", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("start", 0, 1),
+				mockRankSuccess("start", 1, 1),
+				mockRankSuccess("start", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "ready"),
+				mockMember(t, 1, 1, "ready"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "ready"),
+			},
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
+		},
+		"requested admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks: "1-3",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
+		},
+		"requested hosts with admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Hosts: "10.0.0.[1-2]",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
+		},
+		"ignore requested admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks:               "1-3",
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(1, mockRankSuccess("start", 1)),
+				hr(2, mockRankSuccess("start", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("start", 1, 1),
+				mockRankSuccess("start", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "ready"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "ready"),
+			},
+			expFanoutRanks: ranklist.MustCreateRankSet("1,3"),
+		},
+		"ignore requested admin-excluded ranks (hosts)": {
+			req: &mgmtpb.SystemStartReq{
+				Hosts:               "10.0.0.2",
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(2, mockRankSuccess("start", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("start", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "ready"),
+			},
+			expFanoutRanks: ranklist.MustCreateRankSet("3"),
+		},
+		"requested only admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks: "1-2",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.MustCreateRankSet("1-2").Ranks()),
+		},
+		"requested only admin-excluded ranks with ignore": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks:               "1-2",
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: errors.New("all requested ranks are administratively excluded"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			if tc.expFanoutRanks == nil {
+				tc.expFanoutRanks = getMemberRanks(tc.members)
+			}
 
 			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
@@ -1581,6 +1733,11 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			checkMembers(t, tc.expMembers, svc.membership)
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+
+			mockInvoker := svc.rpcClient.(*control.MockInvoker)
+			test.AssertEqual(t, len(mockInvoker.SentReqs), 1, "fanoutRequests sent")
+			ranksReqSent := mockInvoker.SentReqs[0].(*control.RanksReq)
+			test.AssertEqual(t, tc.expFanoutRanks.String(), ranksReqSent.Ranks, "")
 
 			<-ctx.Done()
 
@@ -1648,6 +1805,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		req            *mgmtpb.SystemStopReq
+		members        system.Members
 		mResps         [][]*control.HostResponse
 		expMembers     func() system.Members
 		expResults     []*sharedpb.RankResult
@@ -1656,6 +1814,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 		expAPIErr      error
 		expDispatched  []string
 		expInvokeCount int
+		expFanoutRanks *ranklist.RankSet
 	}{
 		"nil req": {
 			req:       (*mgmtpb.SystemStopReq)(nil),
@@ -1674,6 +1833,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expMembers:     expMembersPrepFail,
 			expDispatched:  expEventsStopFail("prep shutdown"),
 			expInvokeCount: 1,
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
 		},
 		"prep success stop fail": {
 			req:            &mgmtpb.SystemStopReq{},
@@ -1682,6 +1842,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expMembers:     expMembersStopFail,
 			expDispatched:  expEventsStopFail("stop"),
 			expInvokeCount: 2,
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
 		},
 		"stop some ranks": {
 			req: &mgmtpb.SystemStopReq{Ranks: "0,1", Force: true},
@@ -1702,6 +1863,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 1, // prep should not be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1"),
 		},
 		"stop with all ranks": {
 			req:        &mgmtpb.SystemStopReq{Ranks: "0,1,3", Force: true},
@@ -1715,6 +1877,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 1, // prep should not be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
 		},
 		"full system stop": {
 			req:        &mgmtpb.SystemStopReq{},
@@ -1728,6 +1891,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 2, // prep should be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
 		},
 		"full system stop; partial ranks in req": {
 			req: &mgmtpb.SystemStopReq{Ranks: "0,1"},
@@ -1769,6 +1933,126 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 1, // prep should not be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
+		},
+		"stop with admin-excluded ranks": {
+			req: &mgmtpb.SystemStopReq{Force: true},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(1, mockRankSuccess("stop", 0)),
+					hr(1, mockRankSuccess("stop", 1)),
+					hr(2, mockRankSuccess("stop", 3)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 0, 1),
+				mockRankSuccess("stop", 1, 1),
+				mockRankSuccess("stop", 3, 2),
+			},
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 2, 2, "adminexcluded"),
+					mockMember(t, 3, 2, "stopped"),
+				}
+			},
+			expInvokeCount: 1,
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
+		},
+		"requested admin-excluded ranks": {
+			req: &mgmtpb.SystemStopReq{
+				Ranks: "1-3",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
+		},
+		"requested hosts with admin-excluded ranks": {
+			req: &mgmtpb.SystemStopReq{
+				Hosts: "10.0.0.[1-2]",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
+		},
+		"ignore requested admin-excluded ranks": {
+			req: &mgmtpb.SystemStopReq{
+				Ranks:               "1-3",
+				Force:               true,
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(1, mockRankSuccess("stop", 1)),
+					hr(2, mockRankSuccess("stop", 3)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 1, 1),
+				mockRankSuccess("stop", 3, 2),
+			},
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "joined"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 2, 2, "adminexcluded"),
+					mockMember(t, 3, 2, "stopped"),
+				}
+			},
+			expInvokeCount: 1,
+			expFanoutRanks: ranklist.MustCreateRankSet("1,3"),
+		},
+		"ignore requested admin-excluded ranks (hosts)": {
+			req: &mgmtpb.SystemStopReq{
+				Hosts:               "10.0.0.2",
+				Force:               true,
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(2, mockRankSuccess("stop", 3)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 3, 2),
+			},
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "joined"),
+					mockMember(t, 1, 1, "joined"),
+					mockMember(t, 2, 2, "adminexcluded"),
+					mockMember(t, 3, 2, "stopped"),
+				}
+			},
+			expInvokeCount: 1,
+			expFanoutRanks: ranklist.MustCreateRankSet("3"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1778,12 +2062,14 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			if tc.mResps == nil {
 				tc.mResps = [][]*control.HostResponse{{}}
 			}
-			members := system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "joined"),
-				mockMember(t, 3, 2, "joined"),
+			if tc.members == nil {
+				tc.members = system.Members{
+					mockMember(t, 0, 1, "joined"),
+					mockMember(t, 1, 1, "joined"),
+					mockMember(t, 3, 2, "joined"),
+				}
 			}
-			svc := mgmtSystemTestSetup(t, log, members, tc.mResps...)
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps...)
 
 			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
@@ -1807,6 +2093,13 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			checkMembers(t, tc.expMembers(), svc.membership)
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+
+			if tc.expInvokeCount > 0 {
+				mockInvoker := svc.rpcClient.(*control.MockInvoker)
+				test.AssertEqual(t, tc.expInvokeCount, len(mockInvoker.SentReqs), "fanoutRequests sent")
+				ranksReqSent := mockInvoker.SentReqs[0].(*control.RanksReq)
+				test.AssertEqual(t, tc.expFanoutRanks.String(), ranksReqSent.Ranks, "")
+			}
 
 			<-ctx.Done()
 
@@ -2023,6 +2316,15 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 		"invalid hosts": {
 			req:    &mgmtpb.SystemDrainReq{Hosts: "host-[1-2]"},
 			expErr: errors.New("invalid host(s)"),
+		},
+		"requested admin excluded ranks": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0-2"},
+			members: system.Members{
+				system.MockMember(t, 0, system.MemberStateAdminExcluded),
+				system.MockMember(t, 1, system.MemberStateJoined),
+				system.MockMember(t, 2, system.MemberStateAdminExcluded),
+			},
+			expErr: FaultRankAdminExcluded(ranklist.RankList{0, 2}),
 		},
 		"local failure on pool query": {
 			req:   &mgmtpb.SystemDrainReq{Ranks: "0"},
