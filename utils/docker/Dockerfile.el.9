@@ -65,7 +65,9 @@ RUN echo "no_proxy = $no_proxy"
 
 # Install latest versions of python tools.
 COPY requirements-build.txt requirements-utest.txt ./
-RUN python3 -m pip -vvv --no-cache-dir install --upgrade pip && \
+RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
+        direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
+    python3 -m pip -vvv --no-cache-dir install --upgrade pip && \
     python3 -m pip -vvv --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
 WORKDIR /home/daos/pre
