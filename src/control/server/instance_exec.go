@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -105,12 +106,12 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 // createPublishInstanceExitFunc returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
 func createPublishInstanceExitFunc(publish func(*events.RASEvent), hostname string) onInstanceExitFn {
-	return func(_ context.Context, engineIdx uint32, rank ranklist.Rank, exitErr error, exPid int) error {
+	return func(_ context.Context, engineIdx uint32, rank ranklist.Rank, incarnation uint64, exitErr error, exPid int) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
 
-		evt := events.NewEngineDiedEvent(hostname, engineIdx, rank.Uint32(),
+		evt := events.NewEngineDiedEvent(hostname, engineIdx, rank.Uint32(), incarnation,
 			common.ExitStatus(exitErr.Error()), exPid)
 
 		// set forwardable if there is a rank for the MS to operate on
@@ -143,7 +144,7 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 	// After we know that the instance has exited, fire off
 	// any callbacks that were waiting for this state.
 	for _, exitFn := range ei.onInstanceExit {
-		err := exitFn(ctx, engineIdx, rank, exitErr, exitPid)
+		err := exitFn(ctx, engineIdx, rank, ei.incarnation, exitErr, exitPid)
 		if err != nil {
 			ei.log.Errorf("onExit: %s", err)
 		}
