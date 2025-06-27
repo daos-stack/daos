@@ -1166,12 +1166,20 @@ main(int argc, char **argv)
 	sigdelset(&set, SIGBUS);
 	sigdelset(&set, SIGSEGV);
 	sigdelset(&set, SIGTRAP);
+	sigdelset(&set, SIGINT);
 	/** also allow abort()/assert() to trigger */
 	sigdelset(&set, SIGABRT);
 
 	rc = pthread_sigmask(SIG_BLOCK, &set, NULL);
 	if (rc) {
 		perror("failed to mask signals");
+		exit(EXIT_FAILURE);
+	}
+
+	struct sigaction sa = {.sa_handler = SIG_IGN};
+	rc                  = sigaction(SIGINT, &sa, NULL);
+	if (rc) {
+		perror("Failed to set sigaction for SIGINT");
 		exit(EXIT_FAILURE);
 	}
 
@@ -1186,7 +1194,6 @@ main(int argc, char **argv)
 
 	/** wait for shutdown signal */
 	sigemptyset(&set);
-	sigaddset(&set, SIGINT);
 	sigaddset(&set, SIGTERM);
 	sigaddset(&set, SIGUSR1);
 	sigaddset(&set, SIGUSR2);
