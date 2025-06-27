@@ -91,6 +91,9 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 	d_getenv_uint32_t("D_POLL_TIMEOUT", &ev_prog_timeout);
 
 unlock:
+	if (rc == 0)
+		daos_dti_init();
+
 	D_MUTEX_UNLOCK(&daos_eq_lock);
 	return rc;
 crt:
