@@ -11,7 +11,6 @@ set -uex
 : "${DAOS_LAB_CA_FILE_UR:=}"
 : "${REPOSITORY_NAME:=artifactory}"
 : "${BASE_DISTRO:=24.04}"
-: "${no_proxy:=}"
 
 disable_repos () {
     if [ -e /etc/apt/sources.list.d/ubuntu.sources ];then
@@ -117,9 +116,4 @@ if [ -n "$REPO_FILE_URL" ]; then
         echo "trusted-host = ${trusted_host}"
         echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
     } > /etc/pip.conf
-    if [ -n "$no_proxy" ]; then
-        export no_proxy="$no_proxy,${trusted_host}"        
-    else
-        export no_proxy="${trusted_host}"
-    fi
 fi

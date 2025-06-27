@@ -62,10 +62,8 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 COPY requirements-build.txt requirements-utest.txt ./
-RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
-        direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
-    python3 -m pip -vvv --no-cache-dir install --upgrade pip && \
-    python3 -m pip -vvv --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
