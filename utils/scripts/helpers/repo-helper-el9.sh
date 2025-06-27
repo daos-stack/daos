@@ -132,6 +132,5 @@ if [ -n "$REPO_FILE_URL" ]; then
         echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
         echo "proxy = https://proxy.that.does.not.exist.com/"
      } > /etc/pip.conf
-     echo $no_proxy
      export no_proxy="${trusted_host}"
 fi

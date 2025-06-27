@@ -179,4 +179,9 @@ if [ -n "$REPO_FILE_URL" ]; then
         echo "trusted-host = ${trusted_host}"
         echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
      } > /etc/pip.conf
+    if [ -n "$no_proxy" ]; then
+        export no_proxy="$no_proxy,${trusted_host}"        
+    else
+        export no_proxy="${trusted_host}"
+    fi
 fi
