@@ -20,6 +20,7 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
 
         Test Description:
             Test EC object class with MDtest for on-line rebuild.
+
         Use Cases:
             Create the pool and run MDtest with EC object class.
             While MDtest is running kill single server.
@@ -34,3 +35,4 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
         # Stop one random rank while mdtest is running
         ranks_to_stop = self.random.sample(list(self.server_managers[0].ranks), k=1)
         self.start_online_mdtest(ranks_to_stop)
+        self.pool.wait_for_rebuild_to_end()
