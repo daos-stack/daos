@@ -133,6 +133,7 @@ message PoolReintReq {
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 	repeated uint64 tier_bytes = 6; // Size in bytes of storage tiers
 	float           mem_ratio  = 7; // Fraction of meta-blob-sz to use as mem-file-sz
+	bool            no_migration = 8; // Safe reintegration, no data migration
 }
 
 // PoolReintResp returns resultant state of reintegrate operation.

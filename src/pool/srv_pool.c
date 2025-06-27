@@ -7071,7 +7071,7 @@ pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map)
  *				\a tgts is nonempty; if specified, must be
  *				initialized to empty and freed by the caller)
  * \param[in]	src		source of the map update
- * \param[in]	skip_rf_check	skip the RF check
+ * \param[in]	flags		update flags
  */
 static int
 pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclude_rank,
@@ -7080,7 +7080,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 			     struct pool_target_addr_list *tgt_addrs, struct rsvc_hint *hint,
 			     bool *p_updated, uint32_t *map_version_p, uint32_t *tgt_map_ver,
 			     struct pool_target_addr_list *inval_tgt_addrs,
-			     enum map_update_source src, bool skip_rf_check)
+			     enum map_update_source src, uint32_t flags)
 {
 	struct rdb_tx		tx;
 	struct pool_map	       *map;
@@ -7210,7 +7210,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * Do not change the pool map if the `pw_rf` is broken or is about to break,
 	 * unless the force option is given.
 	 */
-	if (!skip_rf_check && opc == MAP_EXCLUDE) {
+	if (!(flags & POOL_TGT_UPDATE_SKIP_RF_CHECK) && opc == MAP_EXCLUDE) {
 		int failed_cnt;
 
 		rc = pool_map_update_failed_cnt(map);
@@ -7442,7 +7442,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		    d_rank_list_t *extend_rank_list, uint32_t *extend_domains,
 		    uint32_t extend_domains_nr, struct pool_target_addr_list *list,
 		    struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
-		    struct rsvc_hint *hint, enum map_update_source src, bool skip_rf_check)
+		    struct rsvc_hint *hint, enum map_update_source src, uint32_t flags)
 {
 	struct pool_target_id_list	target_list = { 0 };
 	daos_prop_t			prop = { 0 };
@@ -7453,11 +7453,13 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	char				*env;
 	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
+	bool                             safe_reint   = false;
+	bool                             no_data_sync = false;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
 					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
-					  src, skip_rf_check);
+					  src, flags);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -7485,18 +7487,6 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
-		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
-		if (opc == MAP_EXCLUDE || opc == MAP_DRAIN) {
-			rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
-			if (rc)
-				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
-					target_list.pti_ids[0].pti_id,
-					DP_UUID(svc->ps_pool->sp_uuid), DP_RC(rc));
-		}
-		D_GOTO(out, rc);
-	}
-
 	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && (opc == MAP_EXCLUDE))
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
@@ -7504,6 +7494,42 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
+	/*
+	 * Check if we're in safe reintegration mode (no migration needed)
+	 * or no-data-sync mode for MAP_REINT operation
+	 */
+	safe_reint   = (flags & POOL_TGT_UPDATE_NO_MIGRATION) && opc == MAP_REINT;
+	no_data_sync = (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC);
+	if (safe_reint || (no_data_sync && opc == MAP_REINT)) {
+		/*
+		 * For both cases (safe_reint or no_data_sync),
+		 * immediately mark targets as UPIN (available) state
+		 */
+		rc = ds_pool_tgt_finish_rebuild(svc->ps_pool->sp_uuid, &target_list);
+		if (rc) {
+			D_INFO("mark target %d of " DF_UUID " as UPIN: " DF_RC "\n",
+			       target_list.pti_ids[0].pti_id, DP_UUID(svc->ps_pool->sp_uuid),
+			       DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+		/*
+		 * Special handling for safe_reint mode only:
+		 * If we have valid target map version (tgt_map_ver != 0),
+		 * trigger reclaim operation to recover space from  previously unfinished rebuilds
+		 */
+		if (safe_reint && tgt_map_ver != 0) {
+			rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0,
+						 &target_list, RB_OP_RECLAIM, delay);
+			if (rc != 0)
+				D_ERROR("rebuild fails rc: " DF_RC "\n", DP_RC(rc));
+		}
+		D_GOTO(out, rc);
+	}
+
+	if (no_data_sync) {
+		D_DEBUG(DB_MD, "Data migration is skipped.\n");
+		D_GOTO(out, rc);
+	}
 
 	if (tgt_map_ver != 0) {
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph,
@@ -7624,10 +7650,10 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 		goto failed;
 	}
 
-	rc =
-	    pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
-				false /* exclude_rank */, &rank_list, domains, ndomains, NULL, NULL,
-				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, true);
+	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
+				 false /* exclude_rank */, &rank_list, domains, ndomains, NULL,
+				 NULL, &out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG,
+				 POOL_TGT_UPDATE_SKIP_RF_CHECK);
 
 failed:
 	pool_svc_put_leader(svc);
@@ -7665,7 +7691,8 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 		goto out;
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT &&
-	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
+	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
+	    !(flags & POOL_TGT_UPDATE_NO_MIGRATION)) {
 		rc = pool_discard(rpc->cr_ctx, svc, &list, true);
 		if (rc)
 			goto out_svc;
@@ -7673,8 +7700,7 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */, NULL, NULL, 0, &list, &inval_list_out,
-				 &out->pto_op.po_map_version, &out->pto_op.po_hint, MUS_DMG,
-				 flags & POOL_TGT_UPDATE_SKIP_RF_CHECK);
+				 &out->pto_op.po_map_version, &out->pto_op.po_hint, MUS_DMG, flags);
 	if (rc != 0)
 		goto out_svc;
 
@@ -7735,7 +7761,7 @@ pool_svc_exclude_ranks(struct pool_svc *svc, struct pool_svc_event_set *event_se
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(POOL_EXCLUDE), true /* exclude_rank */,
 				 NULL, NULL, 0, &list, &inval_list_out, &map_version,
-				 NULL /* hint */, MUS_SWIM, false);
+				 NULL /* hint */, MUS_SWIM, 0);
 
 	D_DEBUG(DB_MD, DF_UUID ": exclude %u ranks: map_version=%u: " DF_RC "\n",
 		DP_UUID(svc->ps_uuid), n, rc == 0 ? map_version : 0, DP_RC(rc));

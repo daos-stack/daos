@@ -751,10 +751,11 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 // service client API. Per-rank results are returned in control API generic PoolRanksResp.
 type PoolRanksReq struct {
 	poolRequest
-	ID        string          `json:"id"`
-	Ranks     []ranklist.Rank `json:"ranks"`
-	TargetIdx []uint32        `json:"target_idx"`
-	Force     bool            `json:"force"`
+	ID          string          `json:"id"`
+	Ranks       []ranklist.Rank `json:"ranks"`
+	TargetIdx   []uint32        `json:"target_idx"`
+	Force       bool            `json:"force"`
+	NoMigration bool            `json:"no_migration"`
 }
 
 // PoolRankResult describes the result of an operation on a pool's rank. JSON compatible with
@@ -949,6 +950,7 @@ func poolReintegrateRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolR
 	}
 	pbReq.Sys = req.getSystem(rpcClient)
 	pbReq.Rank = rank.Uint32()
+	pbReq.NoMigration = req.NoMigration
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)

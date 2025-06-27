@@ -16,6 +16,7 @@
 #include <daos_srv/bio.h>
 #include <daos_api.h>
 #include <daos_security.h>
+#include <daos/pool.h>
 
 #include "svc.pb-c.h"
 #include "acl.pb-c.h"
@@ -712,7 +713,7 @@ out:
 static int
 pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
 			 uint32_t *target_idx, uint32_t rank, pool_comp_state_t state,
-			 size_t scm_size, size_t nvme_size, size_t meta_size, bool skip_rf_check)
+			 size_t scm_size, size_t nvme_size, size_t meta_size, uint32_t flags)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
@@ -741,7 +742,7 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx
 	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
-					      nvme_size, meta_size, skip_rf_check);
+					      nvme_size, meta_size, flags);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -761,6 +762,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint8_t			*body;
 	size_t			len;
 	int			rc;
+	uint32_t                 flags = 0;
 
 	mgmt__pool_exclude_resp__init(&resp);
 
@@ -779,9 +781,11 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	if (req->force)
+		flags |= POOL_TGT_UPDATE_SKIP_RF_CHECK;
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
-				      0 /* nvme_size */, 0 /* meta_size */, req->force);
+				      0 /* nvme_size */, 0 /* meta_size */, flags);
 
 	d_rank_list_free(svc_ranks);
 
@@ -830,7 +834,7 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
-				      0 /* nvme_size */, 0 /* meta_size */, false);
+				      0 /* nvme_size */, 0 /* meta_size */, 0);
 
 	d_rank_list_free(svc_ranks);
 
@@ -947,6 +951,7 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint64_t			scm_bytes;
 	uint64_t			nvme_bytes = 0;
 	int				rc;
+	uint32_t                         flags = 0;
 
 	mgmt__pool_reint_resp__init(&resp);
 
@@ -975,9 +980,11 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	if (req->no_migration)
+		flags |= POOL_TGT_UPDATE_NO_MIGRATION;
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
-				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, false);
+				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, flags);
 
 	d_rank_list_free(svc_ranks);
 
