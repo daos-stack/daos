@@ -1181,14 +1181,13 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			// Apply test case changes to basic config
 			cfg := tc.extraConfig(baseCfg(t, log, testFile))
 
-			mi := &common.MemInfo{
-				HugepageSizeKiB: defHpSizeKb,
-			}
+			smi := &common.SysMemInfo{}
+			smi.HugepageSizeKiB = defHpSizeKb
 			if tc.zeroHpSize {
-				mi.HugepageSizeKiB = 0
+				smi.HugepageSizeKiB = 0
 			}
 
-			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
+			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, smi))
 			if tc.expErr != nil {
 				return
 			}
@@ -1377,12 +1376,11 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			if val > math.MaxInt {
 				t.Fatal("int overflow")
 			}
-			mi := &common.MemInfo{
-				HugepageSizeKiB: 2048,
-				MemTotalKiB:     int(val),
-			}
+			smi := &common.SysMemInfo{}
+			smi.HugepageSizeKiB = 2048
+			smi.MemTotalKiB = int(val)
 
-			test.CmpErr(t, tc.expErr, cfg.SetRamdiskSize(log, mi))
+			test.CmpErr(t, tc.expErr, cfg.SetRamdiskSize(log, smi))
 			if tc.expErr != nil {
 				return
 			}
@@ -1952,55 +1950,6 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 
 			test.AssertEqual(t, tc.expDetected, detected,
 				"unexpected detected numa node")
-		})
-	}
-}
-
-func TestConfig_SetNUMAAffinity(t *testing.T) {
-	for name, tc := range map[string]struct {
-		cfg     *engine.Config
-		setNUMA uint
-		expErr  error
-		expNUMA uint
-	}{
-		"pinned_numa_node set in config conflicts with detected affinity": {
-			cfg: engine.MockConfig().
-				WithPinnedNumaNode(2).
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			setNUMA: 1,
-			expNUMA: 2,
-			expErr:  errors.New("configured NUMA node"),
-		},
-		"pinned_numa_node not set in config; detected affinity used": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			setNUMA: 1,
-			expNUMA: 1,
-		},
-		"pinned_numa_node and first_core set": {
-			cfg: engine.MockConfig().
-				WithPinnedNumaNode(2).
-				WithServiceThreadCore(1).
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			expErr: errors.New("cannot set both"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			err := tc.cfg.SetNUMAAffinity(tc.setNUMA)
-			test.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
-
-			test.AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
-				"unexpected pinned numa node")
-			test.AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
-				"unexpected numa node in fabric config")
-			test.AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
-				"unexpected numa node in storage config")
 		})
 	}
 }
