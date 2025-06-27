@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -361,6 +362,7 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
+	size_t           original_bytes = requested_bytes;
 
 	/*
 	 * loop until all bytes are consumed, the end of the sgl is reached, or
@@ -376,7 +378,8 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	}
 
 	if (requested_bytes)
-		D_INFO("Requested more bytes than what's available in sgl\n");
+		D_INFO("Requested more bytes %zd than what's available in sgl %zd\n",
+		       original_bytes, original_bytes - requested_bytes);
 
 	return rc;
 }
