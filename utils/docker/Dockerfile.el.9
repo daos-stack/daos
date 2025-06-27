@@ -60,6 +60,9 @@ RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
+# for test purpose only
+RUN echo "no_proxy = $no_proxy"
+
 # Install latest versions of python tools.
 COPY requirements-build.txt requirements-utest.txt ./
 RUN python3 -m pip -vvv --no-cache-dir install --upgrade pip && \
