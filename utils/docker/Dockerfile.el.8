@@ -61,14 +61,6 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
 
 ARG JENKINS_URL
 
-# Setup the PyPi to use the artifactory as the installation packages source
-RUN if [ -n "$REPO_FILE_URL" ]; then trusted_host="${REPO_FILE_URL##*//}"; \
-        trusted_host="${trusted_host%%/*}"; \
-        echo "$trusted_host"; \
-        echo "[global]" > /etc/pip.conf; \
-        echo "trusted-host = ${trusted_host}" >> /etc/pip.conf; \
-        echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple" >> /etc/pip.conf; fi;
-
 USER daos_server:daos_server
 
 # Setup a python venv so that python packages can be installed locally.
