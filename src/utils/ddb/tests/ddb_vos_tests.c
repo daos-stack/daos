@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -791,7 +792,7 @@ dtx_commit_active_table(void **state)
 	/* get a dtx_id. entry_handler_committed_entry is set when dv_dtx_get_act_table is called */
 	dv_dtx_get_act_table(coh, active_entry_handler, NULL);
 	assert_int_equal(2, active_entry_handler_called);
-	assert_int_equal(1, dv_dtx_commit_active_entry(coh, &active_entry_handler_entry.ddtx_id));
+	assert_int_equal(1, dv_dtx_commit_active_entry(coh, &active_entry_handler_entry.ddtx_xid));
 
 	/* Should be 1 committed entry in the table now */
 	dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL);
@@ -819,7 +820,7 @@ dtx_abort_active_table(void **state)
 	/* get a dtx_id. entry_handler_committed_entry is set when dv_dtx_get_act_table is called */
 	dv_dtx_get_act_table(coh, active_entry_handler, NULL);
 	assert_int_equal(2, active_entry_handler_called);
-	assert_success(dv_dtx_abort_active_entry(coh, &active_entry_handler_entry.ddtx_id));
+	assert_success(dv_dtx_abort_active_entry(coh, &active_entry_handler_entry.ddtx_xid));
 
 	/* Should still be 0 committed entries in table */
 	dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL);
