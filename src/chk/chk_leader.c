@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,6 +31,7 @@ struct chk_query_args {
 	struct btr_root		 cqa_btr;
 	daos_handle_t		 cqa_hdl;
 	d_list_t		 cqa_list;
+	uint32_t                 cqa_flags;
 	uint32_t		 cqa_count;
 	uint32_t		 cqa_ins_status;
 	uint32_t		 cqa_ins_phase;
@@ -3162,11 +3164,15 @@ chk_leader_free_shard(void *data)
 static int
 chk_leader_query_cb(struct chk_co_rpc_cb_args *cb_args)
 {
-	struct chk_query_args		*cqa = cb_args->cb_priv;
-	struct chk_query_pool_shard	*shards = cb_args->cb_data;
-	struct chk_query_pool_shard	*shard;
-	int				 rc = 0;
-	int				 i;
+	struct chk_query_args       *cqa    = cb_args->cb_priv;
+	struct chk_query_pool_shard *shards = cb_args->cb_data;
+	struct chk_query_pool_shard *shard  = NULL;
+	struct chk_pool_shard       *cps;
+	struct chk_pool_rec         *cpr = NULL;
+	d_iov_t                      kiov;
+	d_iov_t                      riov;
+	int                          rc = 0;
+	int                          i;
 
 	if (cb_args->cb_result != 0)
 		goto out;
@@ -3175,7 +3181,70 @@ chk_leader_query_cb(struct chk_co_rpc_cb_args *cb_args)
 	cqa->cqa_ins_phase = cb_args->cb_ins_phase;
 	cqa->cqa_gen = cb_args->cb_gen;
 
+	if (daos_handle_is_valid(cqa->cqa_ins->ci_pool_hdl) &&
+	    !(cqa->cqa_flags & CQF_SHOW_DETAIL)) {
+		d_iov_set(&kiov, shards[0].cqps_uuid, sizeof(uuid_t));
+		d_iov_set(&riov, NULL, 0);
+		rc = dbtree_lookup(cqa->cqa_ins->ci_pool_hdl, &kiov, &riov);
+		if (rc == 0)
+			cpr = (struct chk_pool_rec *)riov.iov_buf;
+		else if (rc != -DER_NONEXIST)
+			goto out;
+	}
+
 	for (i = 0; i < cb_args->cb_nr; i++) {
+		if (cqa->cqa_flags & CQF_SHOW_DETAIL)
+			goto dup;
+
+		if (shard == NULL) {
+			d_iov_set(&kiov, shards[i].cqps_uuid, sizeof(uuid_t));
+			d_iov_set(&riov, NULL, 0);
+			rc = dbtree_lookup(cqa->cqa_hdl, &kiov, &riov);
+
+			if (rc == -DER_NONEXIST)
+				goto dup;
+
+			if (rc != 0)
+				goto out;
+
+			cps   = (struct chk_pool_shard *)riov.iov_buf;
+			shard = cps->cps_data;
+		}
+
+		/* Ignore unchecked pool shard for non-detailed mode. */
+		if (shards[i].cqps_status == CHK__CHECK_POOL_STATUS__CPS_UNCHECKED)
+			continue;
+
+		shard->cqps_status =
+		    chk_pool_merge_status(shard->cqps_status, shards[i].cqps_status);
+
+		if (shard->cqps_phase > shards[i].cqps_phase) {
+			shard->cqps_phase = shards[i].cqps_phase;
+			shard->cqps_rank  = shards[i].cqps_rank;
+		}
+
+		if (shard->cqps_status != CHK__CHECK_POOL_STATUS__CPS_CHECKING &&
+		    shard->cqps_status != CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+		    shards[i].cqps_status != CHK__CHECK_POOL_STATUS__CPS_CHECKING &&
+		    shards[i].cqps_status != CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+		    shard->cqps_time.ct_stop_time < shards[i].cqps_time.ct_stop_time)
+			shard->cqps_time.ct_stop_time = shards[i].cqps_time.ct_stop_time;
+
+		if ((shard->cqps_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
+		     shard->cqps_status == CHK__CHECK_POOL_STATUS__CPS_PENDING) &&
+		    (shards[i].cqps_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
+		     shards[i].cqps_status == CHK__CHECK_POOL_STATUS__CPS_PENDING) &&
+		    (shard->cqps_time.ct_left_time < shards[i].cqps_time.ct_left_time))
+			shard->cqps_time.ct_left_time = shards[i].cqps_time.ct_left_time;
+
+		shard->cqps_statistics.cs_repaired += shards[i].cqps_statistics.cs_repaired;
+		shard->cqps_statistics.cs_ignored += shards[i].cqps_statistics.cs_ignored;
+		shard->cqps_statistics.cs_failed += shards[i].cqps_statistics.cs_failed;
+		shard->cqps_statistics.cs_total += shards[i].cqps_statistics.cs_total;
+
+		continue;
+
+dup:
 		/*
 		 * @shards is from chk_query_remote RPC reply, the buffer will be released after
 		 * the RPC done. Let's copy all related data to new the buffer for further using.
@@ -3193,6 +3262,13 @@ chk_leader_query_cb(struct chk_co_rpc_cb_args *cb_args)
 		}
 	}
 
+	if (shard != NULL && cpr != NULL) {
+		shard->cqps_status =
+		    chk_pool_merge_status(shard->cqps_status, cpr->cpr_bk.cb_pool_status);
+		if (shard->cqps_phase < cpr->cpr_bk.cb_phase)
+			shard->cqps_phase = cpr->cpr_bk.cb_phase;
+	}
+
 out:
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle query CB with result %d: "
@@ -3202,7 +3278,7 @@ out:
 }
 
 static struct chk_query_args *
-chk_cqa_alloc(struct chk_instance *ins)
+chk_cqa_alloc(struct chk_instance *ins, uint32_t flags)
 {
 	struct umem_attr	 uma = { 0 };
 	struct chk_query_args	*cqa;
@@ -3213,7 +3289,8 @@ chk_cqa_alloc(struct chk_instance *ins)
 		goto out;
 
 	D_INIT_LIST_HEAD(&cqa->cqa_list);
-	cqa->cqa_ins = ins;
+	cqa->cqa_ins   = ins;
+	cqa->cqa_flags = flags;
 
 	uma.uma_id = UMEM_CLASS_VMEM;
 	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_POOL, 0, CHK_BTREE_ORDER, &uma,
@@ -3235,18 +3312,15 @@ chk_cqa_free(struct chk_query_args *cqa)
 }
 
 int
-chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+chk_leader_query(uint32_t flags, int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		 chk_query_pool_cb_t pool_cb, void *buf)
 {
 	struct chk_instance		*ins = chk_leader;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
 	struct chk_query_args		*cqa = NULL;
-	struct chk_pool_rec		*cpr;
-	struct chk_pool_rec		*tmp;
-	struct chk_pool_shard		*cps;
-	struct chk_query_pool_shard	*shard;
-	d_iov_t				 kiov;
-	d_iov_t				 riov;
+	struct chk_pool_rec             *cpr;
+	struct chk_pool_shard           *cps;
+	struct chk_query_pool_shard     *shard;
 	uint64_t			 gen = cbk->cb_gen;
 	uint32_t			 status;
 	uint32_t			 phase;
@@ -3275,19 +3349,19 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 			D_GOTO(out, rc = -DER_NOTLEADER);
 	}
 
-	cqa = chk_cqa_alloc(ins);
+	cqa = chk_cqa_alloc(ins, flags);
 	if (cqa == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 again:
-	rc = chk_query_remote(ins->ci_ranks, gen, pool_nr, pools, chk_leader_query_cb, cqa);
+	rc = chk_query_remote(ins->ci_ranks, gen, flags, pool_nr, pools, chk_leader_query_cb, cqa);
 	if (rc != 0) {
 		if (rc == -DER_OOG || rc == -DER_GRPVER || rc == -DER_AGAIN) {
 			D_INFO(DF_LEADER" Someone is not ready %d, let's retry query after 1 sec\n",
 			       DP_LEADER(ins), rc);
 			if (!d_list_empty(&cqa->cqa_list)) {
 				chk_cqa_free(cqa);
-				cqa = chk_cqa_alloc(ins);
+				cqa = chk_cqa_alloc(ins, flags);
 				if (cqa == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
@@ -3342,44 +3416,33 @@ again:
 	if (rc != 0)
 		goto out;
 
-	d_list_for_each_entry(cpr, &cqa->cqa_list, cpr_link) {
-		d_iov_set(&riov, NULL, 0);
-		d_iov_set(&kiov, cpr->cpr_uuid, sizeof(uuid_t));
-		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
-		if (likely(rc == 0))
-			tmp = (struct chk_pool_rec *)riov.iov_buf;
-		else
-			tmp = NULL;
+	if (flags & CQF_SHOW_DETAIL) {
+		d_list_for_each_entry(cpr, &cqa->cqa_list, cpr_link) {
+			d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+				rc = pool_cb(cps->cps_data, idx++, buf);
+				if (rc != 0)
+					goto out;
 
-		d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
-			shard = cps->cps_data;
-
-			/*
-			 * NOTE: The pool status on different engines may be different. For example:
-			 *	 the PS leader may be in PENDING because of interaction, but others
-			 *	 are still in running status. We summarize the status for the query
-			 *	 result to avoid confusing. It is just temporary solution, and will
-			 *	 be moved to control plane in the future - DAOS-13989.
-			 */
-			if (cps->cps_rank != CHK_LEADER_RANK && tmp != NULL) {
-				shard->cqps_status = chk_pool_merge_status(shard->cqps_status,
-									tmp->cpr_bk.cb_pool_status);
-				if (shard->cqps_phase < tmp->cpr_bk.cb_phase)
-					shard->cqps_phase = tmp->cpr_bk.cb_phase;
+				D_ASSERT(cqa->cqa_count >= idx);
 			}
-
-			rc = pool_cb(shard, idx++, buf);
+		}
+	} else {
+		d_list_for_each_entry(cpr, &cqa->cqa_list, cpr_link) {
+			cps =
+			    d_list_entry(cpr->cpr_shard_list.next, struct chk_pool_shard, cps_link);
+			rc = pool_cb(cps->cps_data, idx++, buf);
 			if (rc != 0)
 				goto out;
 
 			D_ASSERT(cqa->cqa_count >= idx);
 		}
 	}
+
 out:
 	chk_cqa_free(cqa);
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Leader query check with gen "DF_X64" for %d pools: "DF_RC"\n",
-		 gen, pool_nr, DP_RC(rc));
+		 "Leader query check gen " DF_X64 " flags %u for %d pools (%d shards): " DF_RC "\n",
+		 gen, flags, pool_nr, idx, DP_RC(rc));
 
 	return rc;
 }
