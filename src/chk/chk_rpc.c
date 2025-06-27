@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -639,8 +640,8 @@ out:
 }
 
 int
-chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
-		 chk_co_rpc_cb_t query_cb, void *args)
+chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t flags, int pool_nr,
+		 uuid_t pools[], chk_co_rpc_cb_t query_cb, void *args)
 {
 	struct chk_co_rpc_cb_args	 cb_args = { 0 };
 	crt_rpc_t			*req = NULL;
@@ -652,9 +653,10 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 	if (rc != 0)
 		goto out;
 
-	cqi = crt_req_get(req);
-	cqi->cqi_gen = gen;
-	cqi->cqi_uuids.ca_count = pool_nr;
+	cqi                      = crt_req_get(req);
+	cqi->cqi_gen             = gen;
+	cqi->cqi_flags           = flags;
+	cqi->cqi_uuids.ca_count  = pool_nr;
 	cqi->cqi_uuids.ca_arrays = pools;
 
 	rc = dss_rpc_send(req);
@@ -685,8 +687,8 @@ out:
 	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u query DAOS check with gen "DF_X64", pool_nr %d: "DF_RC"\n",
-		 dss_self_rank(), gen, pool_nr, DP_RC(rc));
+		 "Rank %u query DAOS check with gen " DF_X64 ", pool_nr %d, flags %x: " DF_RC "\n",
+		 dss_self_rank(), gen, pool_nr, flags, DP_RC(rc));
 
 	return rc;
 }

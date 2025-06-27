@@ -639,7 +639,7 @@ ds_mgmt_check_stop(int pool_nr, char **pools)
 }
 
 int
-ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
+ds_mgmt_check_query(uint32_t flags, int pool_nr, char **pools, chk_query_head_cb_t head_cb,
 		    chk_query_pool_cb_t pool_cb, void *buf)
 {
 	return 0;
