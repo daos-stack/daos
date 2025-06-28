@@ -976,6 +976,15 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 		return 0;
 }
 
+#define UMEM_TX_SET(UMM, VAR, VALUE, RC)                                                           \
+	do {                                                                                       \
+		(RC) = umem_tx_add_ptr((UMM), &(VAR), sizeof((VAR)));                              \
+		if ((RC) != DER_SUCCESS) {                                                         \
+			break;                                                                     \
+		}                                                                                  \
+		(VAR) = (VALUE);                                                                   \
+	} while (0)
+
 static inline int
 umem_tx_xadd_ptr(struct umem_instance *umm, void *ptr, size_t size,
 		 uint64_t flags)

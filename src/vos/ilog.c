@@ -1616,3 +1616,34 @@ ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_
 
 	return false;
 }
+
+umem_off_t
+ilog_umoff_by_idx(struct umem_instance *umm, struct ilog_df *root_df, int32_t idx)
+{
+	struct ilog_root  *root;
+	struct ilog_array *array;
+	umem_off_t         umoff;
+
+	if (!ILOG_CHECK_VALID(root_df)) {
+		return -DER_INVAL;
+	}
+
+	root = (struct ilog_root *)root_df;
+
+	if (root->lr_tree.it_embedded) {
+		if (idx != 0) {
+			return -DER_INVAL;
+		}
+		umoff = umem_ptr2off(umm, &root->lr_id);
+	} else {
+		array = umem_off2ptr(umm, root->lr_tree.it_root);
+		if (idx >= array->ia_len) {
+			return -DER_INVAL;
+		}
+		umoff = umem_ptr2off(umm, &array->ia_id[idx]);
+	}
+
+	umem_off_set_flags(&umoff, DTX_UMOFF_ILOG);
+
+	return umoff;
+}

@@ -166,6 +166,11 @@ extern unsigned int          dss_tgt_per_numa_nr;
 /** The maximum number of credits for each IO chore queue. That is per helper XS. */
 extern uint32_t              dss_chore_credits;
 
+/** Number of dRPC xstreams */
+#define DRPC_XS_NR            (1)
+
+#define DSS_SYS_XS_NR_DEFAULT (DAOS_TGT0_OFFSET + DRPC_XS_NR)
+
 #define DSS_CHORE_CREDITS_MIN 1024
 #define DSS_CHORE_CREDITS_DEF 4096
 
@@ -323,12 +328,17 @@ void ds_iv_fini(void);
 	(DAOS_TGT0_OFFSET + dss_tgt_nr +			\
 	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr :	\
 	  dss_tgt_offload_xs_nr))
+/** main XS id of (vos) tgt_id when no helper pool is present */
+#define DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, sys_xs_nr) ((tgt_id) + (sys_xs_nr))
 /** main XS id of (vos) tgt_id */
-#define DSS_MAIN_XS_ID(tgt_id)					\
-	(dss_helper_pool ? ((tgt_id) + dss_sys_xs_nr) :		\
-			   ((tgt_id) * ((dss_tgt_offload_xs_nr /\
-			      dss_tgt_nr) + 1) + dss_sys_xs_nr))
+#define DSS_MAIN_XS_ID(tgt_id)                                                                     \
+	(dss_helper_pool                                                                           \
+	     ? (DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, dss_sys_xs_nr))                              \
+	     : ((tgt_id) * ((dss_tgt_offload_xs_nr / dss_tgt_nr) + 1) + dss_sys_xs_nr))
 
+#define DSS_SYS_XS_NAME_FMT     "daos_sys_%d"
+#define DSS_IO_XS_NAME_FMT      "daos_io_%d"
+#define DSS_OFFLOAD_XS_NAME_FMT "daos_off_%d"
 
 /**
  * get the VOS target ID of xstream.
@@ -373,5 +383,10 @@ int dss_chore_queue_init(struct dss_xstream *dx);
 int dss_chore_queue_start(struct dss_xstream *dx);
 void dss_chore_queue_stop(struct dss_xstream *dx);
 void dss_chore_queue_fini(struct dss_xstream *dx);
+
+/** util.c */
+
+int
+dss_register_dbtree_classes(void);
 
 #endif /* __DAOS_SRV_INTERNAL__ */

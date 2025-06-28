@@ -1,0 +1,45 @@
+"""Build tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    denv = env.Clone()
+    denv.Append(OBJPREFIX="dlck_")
+
+    libs = ['vos_srv', 'daos_common_pmem', 'bio', 'uuid', 'gurt', 'pmemobj', 'abt', 'pthread']
+
+    src = [
+        'dlck_abt.c',
+        'dlck_args_common.c',
+        'dlck_args_engine.c',
+        'dlck_args_files.c',
+        'dlck_args_parse.c',
+        'dlck_args.c',
+        'dlck_dtx_act_recs_recover.c',
+        'dlck_engine.c',
+        'dlck_main.c',
+        'dlck_pool.c',
+        'dlck_sched.c',
+        'dlck_tls.c',
+        '../../engine/util.c',
+        '../../mgmt/srv_util_file.c',
+    ]
+
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(LIBPATH=[Dir('.')])
+    denv.Append(CPPPATH=[Dir('../../').srcnode()])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
+    denv.require('argobots', 'pmdk')
+
+    dlck = denv.d_program('dlck', src, LIBS=libs)
+    denv.Install('$PREFIX/bin', dlck)
+
+    # build tests
+    SConscript('tests/SConscript')
+
+
+if __name__ == "SCons.Script":
+    scons()

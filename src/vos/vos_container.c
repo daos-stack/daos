@@ -1029,3 +1029,57 @@ vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch)
 
 	return 0;
 }
+
+struct dlck_iter_bundle {
+	daos_handle_t      coh;
+	d_vector_t        *dv;
+	struct dlck_stats *ds;
+};
+
+static int
+dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		       vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct vos_iterator     *iter   = vos_hdl2iter(ih);
+	struct dlck_iter_bundle *bundle = (struct dlck_iter_bundle *)cb_arg;
+	daos_handle_t            coh    = bundle->coh;
+	d_vector_t              *dv     = bundle->dv;
+	struct dlck_stats       *ds     = bundle->ds;
+
+	if (ds != NULL) {
+		ds->touched += 1;
+	}
+
+	switch (type) {
+	case VOS_ITER_OBJ:
+		return dlck_obj_get_active(coh, iter, dv);
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+		return dlck_irec_get_active(coh, iter, dv);
+	case VOS_ITER_SINGLE:
+		return dlck_sv_add_if_active(coh, iter, dv);
+	case VOS_ITER_RECX:
+		return dlck_ev_add_if_active(coh, iter, dv);
+	default:
+		return 0; /** skip */
+	}
+}
+
+int
+dlck_vos_cont_rec_get_active(daos_handle_t coh, d_vector_t *dv, struct dlck_stats *ds)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+	struct dlck_iter_bundle bundle;
+
+	param.ip_hdl        = coh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	bundle.coh = coh;
+	bundle.dv  = dv;
+	bundle.ds  = ds;
+
+	return vos_iterate(&param, VOS_ITER_OBJ, true, &anchors, dlck_rec_get_active_cb, NULL,
+			   &bundle, NULL);
+}
