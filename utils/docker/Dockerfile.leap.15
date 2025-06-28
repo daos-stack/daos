@@ -48,9 +48,7 @@ FROM basic
 # with a local repository, yet needing a proxy to reach outside repositories.
 # This needs to be moved to a shell script like above in the future to
 # properly only remove the proxy variables only when they need to be removed
-RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
-        direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
-    dnf upgrade &&        \
+RUN dnf upgrade &&        \
     /tmp/install.sh &&    \
     dnf clean all &&      \
     rm -f /tmp/install.sh
@@ -105,8 +103,6 @@ ARG DAOS_PACKAGES_BUILD=yes
 # The dnf upgrade can add or re-enable distro repositories.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                             \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "                            \
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;                                 \
         dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
         dnf clean all;                                                                               \
     }
@@ -115,8 +111,6 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
         scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
               TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
@@ -149,8 +143,6 @@ RUN if [ "$COMPILER" = "icc" ]; then                                            
             rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
             dnf config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                     \
         fi;                                                                                              \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
         dnf install intel-oneapi-compiler-dpcpp-cpp &&                                                   \
         dnf clean all;                                                                                   \
     fi
@@ -158,8 +150,6 @@ RUN if [ "$COMPILER" = "icc" ]; then                                            
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1
 RUN [ -z "$CB1" ] || {                                                                               \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "                            \
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;                                 \
         dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
         dnf clean all;                                                                               \
     }
@@ -184,8 +174,6 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE    \
 	      FIRMWARE_MGMT=1 &&                                           \
@@ -214,8 +202,6 @@ WORKDIR /home/daos/daos/src/client/java
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "                     \
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;                          \
         mkdir /home/daos/.m2 &&                                                               \
         cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
         mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;      \
