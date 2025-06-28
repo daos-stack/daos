@@ -23,14 +23,14 @@ ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
 
-# Accept no_proxy at build time
-ARG no_proxy
+# Accept DAOS_NO_PROXY at build time
+ARG DAOS_NO_PROXY
 # Propagate into the build environment
-ENV no_proxy=${no_proxy}
-ENV NO_PROXY=${no_proxy}
+ENV no_proxy=${DAOS_NO_PROXY}
+ENV NO_PROXY=${DAOS_NO_PROXY}
 # Persist into /etc/environment for use by shells and services
-RUN echo "no_proxy=${no_proxy}" >> /etc/environment && \
-    echo "NO_PROXY=${no_proxy}" >> /etc/environment
+RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
+    echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el9.sh /tmp/install.sh
