@@ -53,16 +53,6 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-# Setup the PyPi to use the artifactory as the installation packages source
-RUN if [ -n "$REPO_FILE_URL" ]; then trusted_host="${REPO_FILE_URL##*//}"; \
-        trusted_host="${trusted_host%%/*}"; \
-        { echo "[global]"; \
-            echo "trusted-host = ${trusted_host}" ;\
-            echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple" ;\
-            echo "proxy = ";\
-        } > /etc/pip.conf; \
-    fi
-
  USER daos_server:daos_server
 
 # Setup a python venv so that python packages can be installed locally.
