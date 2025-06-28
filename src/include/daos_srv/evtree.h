@@ -17,6 +17,7 @@
 #include <daos/mem.h>
 #include <gurt/list.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/d_vector.h>
 
 enum {
 	EVT_UMEM_TYPE	= 150,
@@ -783,6 +784,14 @@ int evt_iter_corrupt(daos_handle_t ih);
  */
 int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
 		   struct evt_entry *entry, daos_anchor_t *anchor);
+
+struct vos_iterator;
+
+/**
+ * XXX
+ */
+int
+    dlck_ev_add_if_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv);
 
 /** Get overhead constants for an evtree
  *
