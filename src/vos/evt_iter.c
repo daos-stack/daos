@@ -695,3 +695,44 @@ set_anchor:
  out:
 	return rc;
 }
+
+int
+dlck_ev_add_if_active(daos_handle_t coh, struct vos_iterator *vos_iter, d_vector_t *dv)
+{
+	struct vos_obj_iter   *oiter = vos_iter2oiter(vos_iter);
+	struct evt_context    *tcx;
+	struct evt_iterator   *iter;
+	struct evt_trace      *trace;
+	struct evt_node       *node;
+	struct evt_desc       *desc;
+	struct dlck_dtx_rec    rec = {0};
+	struct evt_node_entry *ne;
+
+	tcx = evt_hdl2tcx(oiter->it_hdl);
+	if (tcx == NULL) {
+		return -DER_NO_HDL;
+	}
+
+	iter = &tcx->tc_iter;
+	D_ASSERT(evt_iter_is_ready(iter) == 0);
+
+	/** unexptect iterator type */
+	D_ASSERT(!evt_iter_is_sorted(iter));
+
+	trace   = &tcx->tc_trace[tcx->tc_depth - 1];
+	node    = evt_off2node(tcx, trace->tr_node);
+	desc    = evt_node_desc_at(tcx, node, trace->tr_at);
+	rec.lid = desc->dc_dtx;
+
+	if (rec.lid == DTX_LID_COMMITTED || rec.lid == DTX_LID_ABORTED) {
+		return DER_SUCCESS;
+	}
+
+	ne        = evt_node_entry_at(tcx, node, trace->tr_at);
+	rec.umoff = umem_off2offset(ne->ne_child);
+	umem_off_set_flags(&rec.umoff, DTX_UMOFF_EVT);
+
+	d_vector_append(dv, &rec);
+
+	return DER_SUCCESS;
+}

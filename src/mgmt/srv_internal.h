@@ -188,4 +188,8 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
 void ds_mgmt_kill_rank(bool force);
 
+/** srv_util_file.c */
+int
+mgmt_file_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
+
 #endif /* __SRV_MGMT_INTERNAL_H__ */

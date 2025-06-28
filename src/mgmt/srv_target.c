@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -751,55 +752,20 @@ tgt_vos_create_one(void *varg)
 static int
 tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 {
-	char				*path = NULL;
-	int				 fd = -1, rc;
+	char *path = NULL;
+	int   rc;
 
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 	rc = path_gen(uuid, newborns_path, VOS_FILE, &tgt_id, &path);
-	if (rc)
-		goto out;
+	if (rc) {
+		return rc;
+	}
 
 	D_DEBUG(DB_MGMT, DF_UUID ": creating vos file %s (%ld bytes)\n", DP_UUID(uuid), path,
 		scm_size);
 
-	fd = open(path, O_CREAT|O_RDWR, 0600);
-	if (fd < 0) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to create vos file %s: "
-			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-		goto out;
-	}
+	rc = mgmt_file_preallocate(path, uuid, scm_size);
 
-	/** Align to 4K or locking the region based on the size will fail */
-	scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
-	/**
-	 * Pre-allocate blocks for vos files in order to provide
-	 * consistent performance and avoid entering into the backend
-	 * filesystem allocator through page faults.
-	 * Use fallocate(2) instead of posix_fallocate(3) since the
-	 * latter is bogus with tmpfs.
-	 */
-	rc = fallocate(fd, 0, 0, scm_size);
-	if (rc) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to allocate vos file %s with "
-			"size: "DF_U64": "DF_RC"\n",
-			DP_UUID(uuid), path, scm_size, DP_RC(rc));
-		goto out;
-	}
-
-	rc = fsync(fd);
-	(void)close(fd);
-	fd = -1;
-	if (rc) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to sync vos pool %s: "
-			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-		goto out;
-	}
-out:
-	if (fd != -1)
-		close(fd);
 	D_FREE(path);
 	return rc;
 }
