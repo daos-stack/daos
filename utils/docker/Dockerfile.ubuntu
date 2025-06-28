@@ -22,6 +22,16 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
 ARG DAOS_LAB_CA_FILE_URL
+
+# Accept no_proxy at build time
+ARG no_proxy
+# Propagate into the build environment
+ENV no_proxy=${no_proxy}
+ENV NO_PROXY=${no_proxy}
+# Persist into /etc/environment for use by shells and services
+RUN echo "no_proxy=${no_proxy}" >> /etc/environment && \
+    echo "NO_PROXY=${no_proxy}" >> /etc/environment
+
 # script to setup local repo if available and install packages
 COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper.sh
 COPY ./utils/scripts/install-ubuntu.sh /tmp/install.sh
