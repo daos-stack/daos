@@ -130,6 +130,5 @@ if [ -n "$REPO_FILE_URL" ]; then
         echo "[global]"
         echo "trusted-host = ${trusted_host}"
         echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
-        echo "proxy = "
     } > /etc/pip.conf
 fi
