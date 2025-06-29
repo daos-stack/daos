@@ -125,3 +125,14 @@ module_hotfixes=true\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
 done
 
 disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
+
+# Setup the PyPi to use the artifactory as the installation packages source
+if [ -n "$REPO_FILE_URL" ]; then
+    trusted_host="${REPO_FILE_URL##*//}"
+    trusted_host="${trusted_host%%/*}"; \
+    cat <<EOF > /etc/pip.conf
+[global]
+    trusted-host = ${trusted_host}
+    index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple
+EOF
+fi
