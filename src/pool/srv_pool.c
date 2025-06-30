@@ -7432,6 +7432,82 @@ ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
 					NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
+struct safe_reint_ult_arg {
+	uuid_t                     pool_uuid;
+	uint32_t                   tgt_map_ver;
+	daos_epoch_t               rebuild_eph;
+	struct pool_target_id_list list;
+};
+
+static void
+ds_pool_tgt_safe_reint_ult(void *arg)
+{
+	struct safe_reint_ult_arg *ult_arg = arg;
+	int                        rc;
+	struct ds_pool            *pool;
+
+	rc = ds_pool_lookup(ult_arg->pool_uuid, &pool);
+	if (rc)
+		return;
+
+	ds_rebuild_abort(ult_arg->pool_uuid, -1, -1, -1);
+
+	rc = ds_pool_tgt_finish_rebuild(ult_arg->pool_uuid, &ult_arg->list);
+	if (rc) {
+		D_INFO("mark target %d of " DF_UUID " as UPIN: " DF_RC "\n",
+		       ult_arg->list.pti_ids[0].pti_id, DP_UUID(ult_arg->pool_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+	if (ult_arg->tgt_map_ver == 0)
+		D_GOTO(out, rc = 0);
+
+	/*
+	 * Special handling for safe_reint mode only:
+	 * If we have valid target map version (tgt_map_ver != 0),
+	 * trigger reclaim operation to recover space from  previously unfinished rebuilds
+	 */
+	rc = ds_rebuild_schedule(pool, ult_arg->tgt_map_ver, ult_arg->rebuild_eph, 0,
+				 &ult_arg->list, RB_OP_RECLAIM, 2);
+	if (rc != 0)
+		D_ERROR("rebuild fails rc: " DF_RC "\n", DP_RC(rc));
+out:
+	pool_target_id_list_free(&ult_arg->list);
+	D_FREE(arg);
+	ds_pool_put(pool);
+	return;
+}
+
+static int
+ds_pool_tgt_safe_reint(uuid_t pool_uuid, struct pool_target_id_list *list, uint32_t tgt_map_ver,
+		       daos_epoch_t rebuild_eph)
+{
+	int                        rc;
+	struct safe_reint_ult_arg *arg;
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		return -DER_NOMEM;
+
+	rc = pool_target_id_list_dup(list, &arg->list);
+	if (rc) {
+		D_FREE(arg);
+		return -DER_NOMEM;
+	}
+	uuid_copy(arg->pool_uuid, pool_uuid);
+	arg->tgt_map_ver = tgt_map_ver;
+	arg->rebuild_eph = rebuild_eph;
+
+	rc = dss_ult_create(ds_pool_tgt_safe_reint_ult, &arg, DSS_XS_SYS, 0, 0, NULL);
+	if (rc)
+		goto out;
+
+	return 0;
+out:
+	pool_target_id_list_free(&arg->list);
+	D_FREE(arg);
+	return rc;
+}
+
 /*
  * Perform a pool map update indicated by opc. If successful, the new pool map
  * version is reported via map_version. Upon -DER_NOTLEADER, a pool service
@@ -7501,27 +7577,17 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	safe_reint   = (flags & POOL_TGT_UPDATE_NO_MIGRATION) && opc == MAP_REINT;
 	no_data_sync = (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC);
 	if (safe_reint || (no_data_sync && opc == MAP_REINT)) {
-		/*
-		 * For both cases (safe_reint or no_data_sync),
-		 * immediately mark targets as UPIN (available) state
-		 */
-		rc = ds_pool_tgt_finish_rebuild(svc->ps_pool->sp_uuid, &target_list);
-		if (rc) {
-			D_INFO("mark target %d of " DF_UUID " as UPIN: " DF_RC "\n",
-			       target_list.pti_ids[0].pti_id, DP_UUID(svc->ps_pool->sp_uuid),
-			       DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-		/*
-		 * Special handling for safe_reint mode only:
-		 * If we have valid target map version (tgt_map_ver != 0),
-		 * trigger reclaim operation to recover space from  previously unfinished rebuilds
-		 */
-		if (safe_reint && tgt_map_ver != 0) {
-			rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0,
-						 &target_list, RB_OP_RECLAIM, delay);
-			if (rc != 0)
-				D_ERROR("rebuild fails rc: " DF_RC "\n", DP_RC(rc));
+		if (safe_reint) {
+			rc = ds_pool_tgt_safe_reint(svc->ps_pool->sp_uuid, &target_list,
+						    tgt_map_ver, rebuild_eph);
+		} else {
+			rc = ds_pool_tgt_finish_rebuild(svc->ps_pool->sp_uuid, &target_list);
+			if (rc) {
+				D_INFO("mark target %d of " DF_UUID " as UPIN: " DF_RC "\n",
+				       target_list.pti_ids[0].pti_id,
+				       DP_UUID(svc->ps_pool->sp_uuid), DP_RC(rc));
+				D_GOTO(out, rc);
+			}
 		}
 		D_GOTO(out, rc);
 	}

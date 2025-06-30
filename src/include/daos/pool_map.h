@@ -196,6 +196,9 @@ pool_target_id_list_alloc(unsigned int num,
 void
 pool_target_id_list_free(struct pool_target_id_list *id_list);
 
+int
+pool_target_id_list_dup(struct pool_target_id_list *id_list, struct pool_target_id_list *dup_list);
+
 /**
  * pool component buffer, it's a contiguous buffer which includes portion of
  * or all components of a pool map.
