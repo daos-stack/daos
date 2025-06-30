@@ -565,7 +565,7 @@
    DAOS-15159
    Memcheck:Param
    write(buf)
-   fun:runtime/internal/syscall.Syscall6
+   fun:internal/runtime/syscall.Syscall6
 }
 {
    DAOS-15548
@@ -660,7 +660,7 @@
    Syscall6 param
    Memcheck:Param
    read(buf)
-   fun:runtime/internal/syscall.Syscall6
+   fun:internal/runtime/syscall.Syscall6
 }
 {
    __tsan_go_atomic32_load
@@ -710,7 +710,7 @@
    fun:crt_context_provider_create
    fun:daos_eq_lib_init
    fun:daos_init
-   fun:_cgo_b590e4e2531a_Cfunc_daos_init
+   ...
    fun:runtime.asmcgocall.abi0
 }
 {
