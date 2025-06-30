@@ -170,6 +170,7 @@ EOF
   EXTRA_OPTS+=("--rpm-attr" "0644,root,root:${sysconfdir}/daos/daos_server.yml")
   EXTRA_OPTS+=("--rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
   EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
+  EXTRA_OPTS+=("--rpm-attr" "2755,root,daos_server:${bindir}/daos_server")
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${VERSION}-${RELEASE}" )
   DEPENDS+=( "${pmemobj_lib} >= ${pmdk_version}" "${argobots_lib} >= ${argobots_version}" )
@@ -389,6 +390,8 @@ if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
   TARGET_PATH="${bindir}/daos_firmware_helper"
   list_files files "${SL_PREFIX}/bin/daos_firmware_helper"
   append_install_list "${files[@]}"
+
+  EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_firmware_helper")
 
   DEPENDS=("daos-server = ${VERSION}-${RELEASE}")
   build_package "daos-firmware"
