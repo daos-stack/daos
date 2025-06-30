@@ -3574,7 +3574,7 @@ merge_key(struct dc_object *obj, d_list_t *head, char *key, int key_size)
 
 	d_list_for_each_entry(key_one, head, key_list) {
 		if (key_size == key_one->key.iov_len &&
-		    strncmp(key_one->key.iov_buf, key, key_size) == 0) {
+		    memcmp(key_one->key.iov_buf, key, key_size) == 0) {
 			return 0;
 		}
 	}
