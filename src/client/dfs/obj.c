@@ -1835,6 +1835,17 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 		p += sizeof(obj->d.oclass);
 		memcpy(p, &obj->d.chunk_size, sizeof(obj->d.chunk_size));
 		p += sizeof(obj->d.chunk_size);
+	} else {
+		daos_size_t cell_size, chunk_size;
+		int         rc;
+
+		D_ASSERT((obj->mode & S_IFMT) == S_IFREG);
+		rc = daos_array_get_attr(obj->oh, &chunk_size, &cell_size);
+		if (rc)
+			return daos_der2errno(rc);
+		D_ASSERT(cell_size == 1);
+		memcpy(p, &chunk_size, sizeof(chunk_size));
+		p += sizeof(chunk_size);
 	}
 
 	memcpy(p, &obj->dc_stbuf, sizeof(obj->dc_stbuf));
@@ -1845,10 +1856,12 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 }
 
 int
-dfs_obj_deserialize(const char *buf, size_t buf_size, struct dfs_obj *obj)
+dfs_obj_deserialize(dfs_t *dfs, int flags, const char *buf, size_t buf_size, struct dfs_obj *obj)
 {
 	const uint8_t *p = (const uint8_t *)buf;
+	int            rc;
 
+	obj->dfs = dfs;
 	memcpy(&obj->oid, p, sizeof(obj->oid));
 	p += sizeof(obj->oid);
 	memcpy(&obj->mode, p, sizeof(obj->mode));
@@ -1876,13 +1889,43 @@ dfs_obj_deserialize(const char *buf, size_t buf_size, struct dfs_obj *obj)
 			obj->value = NULL;
 		}
 	} else if ((obj->mode & S_IFMT) == S_IFDIR) {
+		int daos_mode;
+
+		daos_mode = get_daos_obj_mode(flags);
+		if (daos_mode == -1)
+			return EINVAL;
+
 		memcpy(&obj->d.oclass, p, sizeof(obj->d.oclass));
 		p += sizeof(obj->d.oclass);
 		memcpy(&obj->d.chunk_size, p, sizeof(obj->d.chunk_size));
 		p += sizeof(obj->d.chunk_size);
 		obj->value = NULL;
+
+		/** open directory object */
+		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_open() Failed, " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
 	} else {
+		daos_size_t chunk_size;
+		int         daos_mode;
+
 		obj->value = NULL;
+		memcpy(&chunk_size, p, sizeof(chunk_size));
+		p += sizeof(chunk_size);
+
+		daos_mode = get_daos_obj_mode(flags);
+		if (daos_mode == -1)
+			return EINVAL;
+
+		/** open file object */
+		rc = daos_array_open_with_attr(dfs->coh, obj->oid, dfs->th, daos_mode, 1,
+					       chunk_size, &obj->oh, NULL);
+		if (rc != 0) {
+			D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
 	}
 
 	memcpy(&obj->dc_stbuf, p, sizeof(obj->dc_stbuf));

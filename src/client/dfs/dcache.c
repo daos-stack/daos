@@ -1154,7 +1154,7 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 			if (rec == NULL)
 				D_GOTO(out, rc = ENOMEM);
 
-			rc = dfs_obj_deserialize(value, strlen(value), rec);
+			rc = dfs_obj_deserialize(dfs, flags, value, strlen(value), rec);
 			if (rc)
 				D_GOTO(out, rc);
 		}
@@ -1252,7 +1252,7 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 		if (rec == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
-		rc = dfs_obj_deserialize(value, strlen(value), rec);
+		rc = dfs_obj_deserialize(dfs, flags, value, strlen(value), rec);
 		if (rc)
 			D_GOTO(out, rc);
 		memcpy(&rec->shm.rec_loc, &rec_loc, sizeof(rec_loc));
