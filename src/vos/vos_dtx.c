@@ -216,11 +216,11 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	D_FREE(dae->dae_records);
 	dae->dae_rec_cap = 0;
 	DAE_REC_CNT(dae) = 0;
-	dae->dae_need_release = 0;
 
 	if (!keep_df) {
-		dae->dae_df_off = UMOFF_NULL;
-		dae->dae_dbd = NULL;
+		dae->dae_need_release = 0;
+		dae->dae_df_off       = UMOFF_NULL;
+		dae->dae_dbd          = NULL;
 	}
 }
 
@@ -472,9 +472,7 @@ vos_dtx_table_register(void)
 		return rc;
 	}
 
-	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE,
-				   BTR_FEAT_SKIP_LEAF_REBAL,
-				   &dtx_committed_btr_ops);
+	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE, 0, &dtx_committed_btr_ops);
 	if (rc != 0)
 		D_ERROR("Failed to register DTX committed dbtree: %d\n", rc);
 
@@ -1360,6 +1358,12 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		d_list_for_each_entry(dsp, &dth->dth_share_act_list, dsp_link) {
 			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
 				   sizeof(struct dtx_id)) == 0) {
+				if (dsp->dsp_status == -DER_INPROGRESS)
+					return dtx_inprogress(dae, dth, true, true, 9);
+
+				if (unlikely(dsp->dsp_status != 0))
+					return dsp->dsp_status;
+
 				if (!dtx_is_valid_handle(dth) ||
 				    intent == DAOS_INTENT_IGNORE_NONCOMMITTED)
 					return ALB_UNAVAILABLE;
@@ -1939,9 +1943,6 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (DAE_FLAGS(dae) & DTE_ORPHAN)
 			return -DER_TX_UNCERTAIN;
 
-		if (pm_ver != NULL)
-			*pm_ver = DAE_VER(dae);
-
 		if (dck != NULL) {
 			dck->oid = DAE_OID(dae);
 			dck->dkey_hash = DAE_DKEY_HASH(dae);
@@ -1981,28 +1982,42 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			 */
 			if (!(DAE_FLAGS(dae) & DTE_LEADER))
 				return -DER_INPROGRESS;
+		} else {
+			/* Not committable yet, related RPC handler ULT is still running. */
+			if (dae->dae_dth != NULL)
+				return -DER_INPROGRESS;
 
-			return vos_dae_is_prepare(dae) ? DTX_ST_PREPARED : DTX_ST_INITED;
-		}
+			if (epoch != NULL) {
+				daos_epoch_t e = *epoch;
 
-		/* Not committable yet, related RPC handler ULT is still running. */
-		if (dae->dae_dth != NULL)
-			return -DER_INPROGRESS;
+				*epoch = DAE_EPOCH(dae);
+				if (e != 0) {
+					if (e > DAE_EPOCH(dae))
+						return -DER_MISMATCH;
 
-		if (epoch != NULL) {
-			daos_epoch_t	e = *epoch;
-
-			*epoch = DAE_EPOCH(dae);
-			if (e != 0) {
-				if (e > DAE_EPOCH(dae))
-					return -DER_MISMATCH;
-
-				if (e < DAE_EPOCH(dae))
-					return -DER_TX_RESTART;
+					if (e < DAE_EPOCH(dae))
+						return -DER_TX_RESTART;
+				}
 			}
 		}
 
-		return vos_dae_is_prepare(dae) ? DTX_ST_PREPARED : DTX_ST_INITED;
+		if (!vos_dae_is_prepare(dae))
+			return DTX_ST_INITED;
+
+		if (pm_ver == NULL)
+			return DTX_ST_PREPARED;
+
+		if (*pm_ver <= cont->vc_dtx_resync_ver) {
+			if (!for_refresh)
+				*pm_ver = DAE_VER(dae);
+			return DTX_ST_PREPARED;
+		}
+
+		/*
+		 * Before DTX resync completed, it is not sure whether related DTX is
+		 * committable or not, then have to ask DTX refresh sponsor to retry.
+		 */
+		return -DER_INPROGRESS;
 	}
 
 	if (rc == -DER_NONEXIST) {
@@ -2615,15 +2630,15 @@ vos_dtx_aggregate(daos_handle_t coh)
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
-		if (rc != 0 && rc != -DER_NONEXIST) {
+		if (rc == 0) {
+			count++;
+		} else if (rc != -DER_NONEXIST) {
 			D_ERROR("Failed to remove entry for DTX aggregation "
 				UMOFF_PF": "DF_RC"\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
 			goto out;
 		}
 	}
-
-	count = dbd->dbd_count;
 
 	if (epoch != cont_df->cd_newest_aggregated) {
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_newest_aggregated,
@@ -2767,6 +2782,20 @@ cmt:
 				break;
 			}
 		}
+	}
+}
+
+void
+vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver)
+{
+	struct vos_container *cont = vos_hdl2cont(coh);
+
+	D_ASSERT(cont != NULL);
+
+	if (likely(cont->vc_dtx_resync_ver < ver)) {
+		D_INFO("Update resync version %u => %u for container " DF_UUID "\n",
+		       cont->vc_dtx_resync_ver, ver, DP_UUID(cont->vc_id));
+		cont->vc_dtx_resync_ver = ver;
 	}
 }
 
@@ -2950,7 +2979,8 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 	struct vos_dtx_blob_df		*dbd;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
-	int				 rc = 0;
+	int                              rc  = 0;
+	int                              cnt = 0;
 	int				 i;
 
 	cont = vos_hdl2cont(coh);
@@ -2998,6 +3028,8 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 			D_FREE(dce);
 			D_GOTO(out, rc = 1);
 		}
+
+		cnt++;
 	}
 
 	if (dbd->dbd_count < dbd->dbd_cap || UMOFF_IS_NULL(dbd->dbd_next))
@@ -3006,9 +3038,21 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 	cont->vc_cmt_dtx_reindex_pos = dbd->dbd_next;
 
 out:
+	if (cnt > 0) {
+		cont->vc_dtx_committed_count += cnt;
+		cont->vc_pool->vp_dtx_committed_count += cnt;
+		d_tm_inc_gauge(vos_tls_get(false)->vtl_committed, cnt);
+	}
+
 	if (rc > 0) {
 		cont->vc_cmt_dtx_reindex_pos = UMOFF_NULL;
 		cont->vc_cmt_dtx_indexed = 1;
+		D_INFO("Reindexed committed DTX table (%u entries) for " DF_UUID "/" DF_UUID "\n",
+		       cont->vc_dtx_committed_count, DP_UUID(cont->vc_pool->vp_id),
+		       DP_UUID(cont->vc_id));
+	} else if (rc < 0) {
+		D_ERROR("Failed to reindex committed DTX for " DF_UUID "/" DF_UUID ": " DF_RC "\n",
+			DP_UUID(cont->vc_pool->vp_id), DP_UUID(cont->vc_id), DP_RC(rc));
 	}
 
 	return rc;
@@ -3341,6 +3385,10 @@ cmt:
 				DP_UUID(cont->vc_id), DP_RC(rc));
 			return rc;
 		}
+
+		D_ASSERTF(cont->vc_pool->vp_dtx_committed_count >= cont->vc_dtx_committed_count,
+			  "Unexpected committed DTX entries count: %u vs %u\n",
+			  cont->vc_pool->vp_dtx_committed_count, cont->vc_dtx_committed_count);
 
 		cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
 		D_ASSERT(cont->vc_pool->vp_sysdb == false);

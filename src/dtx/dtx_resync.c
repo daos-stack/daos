@@ -245,6 +245,13 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * let's commit the DTX globally.
 		 */
 		D_GOTO(out, rc = DSHR_NEED_COMMIT);
+	case -DER_OOG:
+	case -DER_HG:
+		D_WARN("Need retry resync for DTX " DF_DTI " because of " DF_RC "\n",
+		       DP_DTI(&dte->dte_xid), DP_RC(rc));
+		/* Yield to give more chance for network recovery. */
+		ABT_thread_yield();
+		D_GOTO(out, rc = DSHR_NEED_RETRY);
 	case -DER_INPROGRESS:
 	case -DER_TIMEDOUT:
 		D_WARN("Other participants not sure about whether the "
@@ -433,6 +440,10 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 		rc = dtx_status_handle_one(cont, &dre->dre_dte, dre->dre_oid, dre->dre_dkey_hash,
 					   dre->dre_epoch, tgt_array, &err);
+
+		if (unlikely(cont->sc_stopping))
+			D_GOTO(out, rc = -DER_CANCELED);
+
 		switch (rc) {
 		case DSHR_NEED_COMMIT:
 			goto commit;
@@ -685,6 +696,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	if (rc >= 0)
 		rc = rc1;
 
+	if (rc >= 0)
+		vos_set_dtx_resync_version(cont->sc_hdl, ver);
+
 	D_DEBUG(DB_MD, "Stop DTX resync (%s) scan for "DF_UUID"/"DF_UUID" with ver %u: rc = %d\n",
 		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
 
@@ -780,17 +794,22 @@ out:
 void
 dtx_resync_ult(void *data)
 {
-	struct dtx_scan_args	*arg = data;
-	struct ds_pool		*pool;
-	int			rc = 0;
+	struct dtx_scan_args *arg  = data;
+	struct ds_pool       *pool = NULL;
+	int                   rc;
 
 	rc = ds_pool_lookup(arg->pool_uuid, &pool);
-	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
+	if (rc != 0) {
+		D_WARN("Cannot find the pool " DF_UUID " for DTX resync: " DF_RC "\n",
+		       DP_UUID(arg->pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 			arg->version);
-		D_GOTO(out_put, rc);
+		goto out;
 	}
 	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
@@ -811,7 +830,9 @@ dtx_resync_ult(void *data)
 			DP_UUID(arg->pool_uuid), rc);
 	}
 	pool->sp_dtx_resync_version = arg->version;
-out_put:
-	ds_pool_put(pool);
+
+out:
+	if (pool != NULL)
+		ds_pool_put(pool);
 	D_FREE(arg);
 }
