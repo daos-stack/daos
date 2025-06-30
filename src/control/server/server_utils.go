@@ -102,15 +102,6 @@ func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
 	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
 }
 
-func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
-	var bdevCfgs storage.TierConfigs
-	for _, engineCfg := range cfg.Engines {
-		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
-	}
-
-	return bdevCfgs
-}
-
 func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, rep := range cfg.MgmtSvcReplicas {
@@ -305,7 +296,7 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]stri
 
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
 // are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
-// required for emulated NVMe.
+// mandatory requirements for emulated NVMe.
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
@@ -314,7 +305,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		return nil
 	}
 
-	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)
+	bdevCfgs := srv.cfg.GetBdevConfigs()
 
 	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
 	if bdevCfgs.HaveRealNVMe() && srv.runningUser.Username != "root" {
@@ -326,13 +317,19 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		}
 	}
 
+	// Clean leftover SPDK hugepages and lockfiles for configured NVMe SSDs before prepare.
+	pciAddrs := bdevCfgs.NVMeBdevs().Devices()
+	if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+		srv.log.Error(errors.Wrap(err, "prepBdevStorage").Error())
+	}
+
 	// When requesting to prepare NVMe drives during service start-up, use all addresses
 	// specified in engine config BdevList parameters as the PCIAllowList and the server
 	// config BdevExclude parameter as the PCIBlockList.
 
 	prepReq := storage.BdevPrepareRequest{
 		TargetUser:   srv.runningUser.Username,
-		PCIAllowList: strings.Join(bdevCfgs.NVMeBdevs().Devices(), storage.BdevPciAddrSep),
+		PCIAllowList: strings.Join(pciAddrs, storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
@@ -464,19 +461,30 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	return nil
 }
 
-func cleanEngineHugepages(srv *server) error {
-	req := storage.BdevPrepareRequest{
-		CleanHugepagesOnly: true,
+// Clean SPDK resources, both lockfiles and orphaned hugepages. Orphaned hugepages will be cleaned
+// whether or not device PCI addresses are supplied.
+func cleanSpdkResources(srv *server, pciAddrs []string) error {
+	// For the moment assume that both lockfile and hugepage cleanup should be skipped if
+	// hugepages have been disabled in the server config.
+	if srv.cfg.DisableHugepages {
+		return nil
 	}
 
-	msg := "cleanup hugepages via bdev backend"
+	req := storage.BdevPrepareRequest{
+		CleanSpdkHugepages: true,
+		CleanSpdkLockfiles: true,
+		PCIAllowList:       strings.Join(pciAddrs, storage.BdevPciAddrSep),
+	}
+
+	msg := "cleanup spdk resources"
 
 	resp, err := srv.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		return errors.Wrap(err, msg)
 	}
 
-	srv.log.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
+	srv.log.Debugf("%s: %d hugepages and lockfiles %v removed", msg,
+		resp.NrHugepagesRemoved, resp.LockfilesRemoved)
 
 	return nil
 }
@@ -567,6 +575,15 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		if engine.storage.BdevRoleMetaConfigured() {
 			return engine.storage.UnmountTmpfs()
 		}
+
+		storageCfg := engine.runner.GetConfig().Storage
+		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
+
+		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+			srv.log.Error(
+				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
+		}
+
 		return nil
 	})
 
@@ -587,11 +604,12 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	engine.OnStorageReady(func(_ context.Context) error {
 		srv.log.Debugf("engine %d: storage ready", engine.Index())
 
-		if !srv.cfg.DisableHugepages {
-			// Attempt to remove unused hugepages, log error only.
-			if err := cleanEngineHugepages(srv); err != nil {
-				srv.log.Errorf(err.Error())
-			}
+		storageCfg := engine.runner.GetConfig().Storage
+		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
+
+		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+			srv.log.Error(
+				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
 		}
 
 		// Retrieve up-to-date meminfo to check resource availability.
