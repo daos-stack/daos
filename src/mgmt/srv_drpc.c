@@ -711,16 +711,45 @@ out:
 }
 
 static int
-pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
-			 uint32_t *target_idx, uint32_t rank, pool_comp_state_t state,
-			 size_t scm_size, size_t nvme_size, size_t meta_size, uint32_t flags)
+pool_fill_target_addrs(struct pool_target_addr_list *target_addr_list, uint32_t *target_idx,
+		       size_t n_target_idx, d_rank_list_t *rank_list, uint32_t single_rank)
+{
+	int        i, j, k = 0;
+	const bool is_multi_rank = (rank_list != NULL);
+
+	if (n_target_idx > 0) {
+		for (i = 0; i < (is_multi_rank ? rank_list->rl_nr : 1); i++) {
+			for (j = 0; j < n_target_idx; ++j) {
+				target_addr_list->pta_addrs[k].pta_target = target_idx[j];
+				target_addr_list->pta_addrs[k].pta_rank =
+				    is_multi_rank ? rank_list->rl_ranks[i] : single_rank;
+				k++;
+			}
+		}
+	} else {
+		for (i = 0; i < (is_multi_rank ? rank_list->rl_nr : 1); i++) {
+			target_addr_list->pta_addrs[i].pta_target = -1;
+			target_addr_list->pta_addrs[i].pta_rank =
+			    is_multi_rank ? rank_list->rl_ranks[i] : single_rank;
+		}
+	}
+
+	return 0;
+}
+
+static int
+pool_change_target_state_common(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
+				uint32_t *target_idx, d_rank_list_t *rank_list,
+				uint32_t single_rank, pool_comp_state_t state, size_t scm_size,
+				size_t nvme_size, size_t meta_size, uint32_t flags)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
-	int				num_addrs;
-	int				rc, i;
+	int                             num_addrs, rc;
 
-	num_addrs = (n_target_idx > 0) ? n_target_idx : 1;
+	num_addrs = (n_target_idx > 0)
+			? (rank_list ? n_target_idx * rank_list->rl_nr : n_target_idx)
+			: (rank_list ? rank_list->rl_nr : 1);
 	if (uuid_parse(id, uuid) != 0) {
 		rc = -DER_INVAL;
 		DL_ERROR(rc, "Pool UUID is invalid");
@@ -730,26 +759,40 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx
 	rc = pool_target_addr_list_alloc(num_addrs, &target_addr_list);
 	if (rc)
 		return rc;
-
-	if (n_target_idx > 0) {
-		for (i = 0; i < n_target_idx; ++i) {
-			target_addr_list.pta_addrs[i].pta_target = target_idx[i];
-			target_addr_list.pta_addrs[i].pta_rank = rank;
-		}
-	} else {
-		target_addr_list.pta_addrs[0].pta_target = -1;
-		target_addr_list.pta_addrs[0].pta_rank = rank;
+	rc = pool_fill_target_addrs(&target_addr_list, target_idx, n_target_idx, rank_list,
+				    single_rank);
+	if (rc) {
+		pool_target_addr_list_free(&target_addr_list);
+		return rc;
 	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
 					      nvme_size, meta_size, flags);
-	if (rc != 0) {
-		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
-	}
+	if (rc != 0)
+		D_ERROR("Failed to set pool target up " DF_UUID ": " DF_RC "\n", DP_UUID(uuid),
+			DP_RC(rc));
 
 	pool_target_addr_list_free(&target_addr_list);
+
 	return rc;
+}
+
+static int
+pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
+			 uint32_t *target_idx, uint32_t rank, pool_comp_state_t state,
+			 size_t scm_size, size_t nvme_size, size_t meta_size, uint32_t flags)
+{
+	return pool_change_target_state_common(id, svc_ranks, n_target_idx, target_idx, NULL, rank,
+					       state, scm_size, nvme_size, meta_size, flags);
+}
+
+static int
+pool_change_targets_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
+			  uint32_t *target_idx, d_rank_list_t *rank_list, pool_comp_state_t state,
+			  size_t scm_size, size_t nvme_size, size_t meta_size, uint32_t flags)
+{
+	return pool_change_target_state_common(id, svc_ranks, n_target_idx, target_idx, rank_list,
+					       0, state, scm_size, nvme_size, meta_size, flags);
 }
 
 void
@@ -946,6 +989,7 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolReintReq              *req   = NULL;
 	Mgmt__PoolReintResp              resp;
 	d_rank_list_t			*svc_ranks = NULL;
+	d_rank_list_t                   *rank_list = NULL;
 	uint8_t				*body;
 	size_t				len;
 	uint64_t			scm_bytes;
@@ -976,19 +1020,24 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (req->n_tier_bytes > DAOS_MEDIA_NVME)
 		nvme_bytes = req->tier_bytes[DAOS_MEDIA_NVME];
 
+	rank_list = uint32_array_to_rank_list(req->ranks, req->n_ranks);
+	if (rank_list == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	if (req->no_migration)
 		flags |= POOL_TGT_UPDATE_NO_MIGRATION;
-	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
-				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
-				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, flags);
+	rc = pool_change_targets_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
+				       rank_list, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
+				       req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, flags);
 
 	d_rank_list_free(svc_ranks);
 
 out:
+	d_rank_list_free(rank_list);
 	resp.status = rc;
 	len         = mgmt__pool_reint_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);

@@ -559,7 +559,8 @@ struct  _Mgmt__PoolReintReq
   /*
    * target to move to the up state
    */
-  uint32_t rank;
+  size_t n_ranks;
+  uint32_t *ranks;
   /*
    * target ranks
    */
@@ -586,7 +587,7 @@ struct  _Mgmt__PoolReintReq
 };
 #define MGMT__POOL_REINT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reint_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0, 0 }
 
 
 /*
