@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -105,6 +106,11 @@ var (
 		code.ServerConfigSysRsvdZero,
 		"`system_ram_reserved` is set to zero in server config",
 		"set `system_ram_reserved` to a positive integer value in config",
+	)
+	FaultConfigBdevExcludeClash = serverConfigFault(
+		code.ServerConfigBdevExcludeClash,
+		"'bdev_exclude' list includes address used in engine config bdev_list",
+		"make sure addresses excluded are not included in engine storage configs then restart daos_server",
 	)
 )
 
