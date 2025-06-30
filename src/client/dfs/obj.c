@@ -1801,6 +1801,8 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 		} else if ((obj->mode & S_IFMT) == S_IFDIR) {
 			size += sizeof(daos_oclass_id_t);
 			size += sizeof(daos_size_t);
+		} else {
+			size += sizeof(daos_size_t);
 		}
 
 		size += sizeof(struct stat);
