@@ -187,11 +187,11 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	D_FREE(dae->dae_records);
 	dae->dae_rec_cap = 0;
 	DAE_REC_CNT(dae) = 0;
-	dae->dae_need_release = 0;
 
 	if (!keep_df) {
-		dae->dae_df_off = UMOFF_NULL;
-		dae->dae_dbd = NULL;
+		dae->dae_need_release = 0;
+		dae->dae_df_off       = UMOFF_NULL;
+		dae->dae_dbd          = NULL;
 	}
 }
 
@@ -445,9 +445,7 @@ vos_dtx_table_register(void)
 		return rc;
 	}
 
-	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE,
-				   BTR_FEAT_SKIP_LEAF_REBAL,
-				   &dtx_committed_btr_ops);
+	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE, 0, &dtx_committed_btr_ops);
 	if (rc != 0)
 		D_ERROR("Failed to register DTX committed dbtree: %d\n", rc);
 
@@ -2990,15 +2988,15 @@ vos_dtx_aggregate(daos_handle_t coh)
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
-		if (rc != 0 && rc != -DER_NONEXIST) {
+		if (rc == 0) {
+			count++;
+		} else if (rc != -DER_NONEXIST) {
 			D_ERROR("Failed to remove entry for DTX aggregation "
 				UMOFF_PF": "DF_RC"\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
 			goto out;
 		}
 	}
-
-	count = dbd->dbd_count;
 
 	if (epoch != cont_df->cd_newest_aggregated) {
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_newest_aggregated,
@@ -3383,7 +3381,8 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 	struct vos_dtx_blob_df		*dbd;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
-	int				 rc = 0;
+	int                              rc  = 0;
+	int                              cnt = 0;
 	int				 i;
 
 	cont = vos_hdl2cont(coh);
@@ -3431,6 +3430,8 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 			D_FREE(dce);
 			D_GOTO(out, rc = 1);
 		}
+
+		cnt++;
 	}
 
 	if (dbd->dbd_count < dbd->dbd_cap || UMOFF_IS_NULL(dbd->dbd_next))
@@ -3439,9 +3440,21 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 	cont->vc_cmt_dtx_reindex_pos = dbd->dbd_next;
 
 out:
+	if (cnt > 0) {
+		cont->vc_dtx_committed_count += cnt;
+		cont->vc_pool->vp_dtx_committed_count += cnt;
+		d_tm_inc_gauge(vos_tls_get(false)->vtl_committed, cnt);
+	}
+
 	if (rc > 0) {
 		cont->vc_cmt_dtx_reindex_pos = UMOFF_NULL;
 		cont->vc_cmt_dtx_indexed = 1;
+		D_INFO("Reindexed committed DTX table (%u entries) for " DF_UUID "/" DF_UUID "\n",
+		       cont->vc_dtx_committed_count, DP_UUID(cont->vc_pool->vp_id),
+		       DP_UUID(cont->vc_id));
+	} else if (rc < 0) {
+		D_ERROR("Failed to reindex committed DTX for " DF_UUID "/" DF_UUID ": " DF_RC "\n",
+			DP_UUID(cont->vc_pool->vp_id), DP_UUID(cont->vc_id), DP_RC(rc));
 	}
 
 	return rc;
@@ -3781,6 +3794,10 @@ cmt:
 				DP_UUID(cont->vc_id), DP_RC(rc));
 			return rc;
 		}
+
+		D_ASSERTF(cont->vc_pool->vp_dtx_committed_count >= cont->vc_dtx_committed_count,
+			  "Unexpected committed DTX entries count: %u vs %u\n",
+			  cont->vc_pool->vp_dtx_committed_count, cont->vc_dtx_committed_count);
 
 		cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
 		D_ASSERT(cont->vc_pool->vp_sysdb == false);
