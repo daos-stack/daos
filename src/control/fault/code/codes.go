@@ -157,6 +157,7 @@ const (
 	ServerPoolHasContainers
 	ServerHugepagesDisabled
 	ServerJoinReplaceEnabledPoolRank
+	ServerRankAdminExcluded
 )
 
 // server config fault codes

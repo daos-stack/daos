@@ -947,7 +947,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				PrimaryFabricURI: curMember.Addr.String(),
 				FaultDomain:      curMember.FaultDomain,
 			},
-			expErr: ErrUuidChanged(newUUID, curMember.UUID, curMember.Rank),
+			expErr: ErrJoinUuidChanged(newUUID, curMember.UUID, curMember.Rank),
 		},
 		"rejoin with different address": {
 			req: &JoinRequest{
@@ -957,7 +957,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				PrimaryFabricURI: curMember.Addr.String(),
 				FaultDomain:      curMember.FaultDomain,
 			},
-			expErr: ErrControlAddrChanged(newMember.Addr, curMember.Addr, curMember.UUID, curMember.Rank),
+			expErr: ErrJoinControlAddrChanged(newMember.Addr, curMember.Addr, curMember.UUID, curMember.Rank),
 		},
 		"successful join": {
 			req: &JoinRequest{
@@ -1012,7 +1012,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				FabricContexts:   curMember.PrimaryFabricContexts,
 				FaultDomain:      curMember.FaultDomain,
 			},
-			expErr: ErrAdminExcluded(adminExcludedMember.UUID, 0),
+			expErr: ErrJoinAdminExcluded(adminExcludedMember.UUID, 0),
 		},
 		"successful replace; different UUID but otherwise identical member": {
 			req: &JoinRequest{
