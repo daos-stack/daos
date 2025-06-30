@@ -12,17 +12,6 @@ index 6d2cbe029..eeeae5599 100644
  struct xnet_uring {
  	struct fid fid;
  	ofi_io_uring_t ring;
-@@ -774,8 +777,8 @@ do {						\
- 	ofi_straddr(_src_buf, &_src_len, ofi_translate_addr_format(ofi_sa_family(_src_addr)),	\
- 		    _src_addr);									\
- 												\
--	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n", _buf, _src_buf,	\
--		fi_strerror(err));								\
-+	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "ep %p state %u error on %s From %s : %s\n",	\
-+		ep, ep->state, _buf, _src_buf, fi_strerror(err));				\
- } while(0)
- 
- #endif //_XNET_H_
 diff --git a/prov/tcp/src/xnet_cm.c b/prov/tcp/src/xnet_cm.c
 index 1ae35d27d..64d66922a 100644
 --- a/prov/tcp/src/xnet_cm.c
@@ -131,16 +120,3 @@ index 3fc566b7d..f72d923fe 100644
  	ep->state = XNET_CONNECTING;
  	ret = ofi_bsock_connect(&ep->bsock, ep->addr,
  				(socklen_t) ofi_sizeofaddr(ep->addr));
-diff --git a/prov/tcp/src/xnet_rdm_cm.c b/prov/tcp/src/xnet_rdm_cm.c
-index 4dfc96650..e73170445 100644
---- a/prov/tcp/src/xnet_rdm_cm.c
-+++ b/prov/tcp/src/xnet_rdm_cm.c
-@@ -367,6 +367,8 @@ ssize_t xnet_get_conn(struct xnet_rdm *rdm, fi_addr_t addr,
- 		/* Force progress for apps that simply retry sending without
- 		 * trying to drive progress in between.
- 		 */
-+		FI_WARN_SPARSE(&xnet_prov, FI_LOG_EP_CTRL, "conn %p ep %p/%d.\n",
-+			       *conn, (*conn)->ep, (*conn)->ep->state);
- 		xnet_run_progress(xnet_rdm2_progress(rdm), false);
- 		return -FI_EAGAIN;
- 	}
