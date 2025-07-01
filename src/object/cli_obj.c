@@ -4727,8 +4727,10 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			count++;
 
 			/* Skip merging logic for single-IOV SGLs */
-			if (sg->sg_nr == 1 || !merge_iov)
+			if (sg->sg_nr == 1)
 				break;
+			if (!merge_iov)
+				continue;
 			/* Track mergeable IOV chains */
 			if (iov->iov_buf_len <= iov_frag_size) {
 				frag_chain++;
