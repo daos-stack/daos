@@ -49,7 +49,7 @@ func (c *cfgCmd) setDefaultConfigPath(log logging.Logger) {
 	// Default to build directory
 	c.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
 	if _, err := os.Stat(c.ConfigPath); err != nil {
-		log.Infof("No config file at %s, fallback to global default", build.ConfigDir)
+		log.Debugf("No config file at %s, fallback to global default", build.ConfigDir)
 		c.ConfigPath = path.Join("/etc/daos", defaultConfigFile)
 	}
 }
