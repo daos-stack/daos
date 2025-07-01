@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,6 +45,15 @@ func (c *cfgCmd) configPath() string {
 	return c.config.Path
 }
 
+func (c *cfgCmd) setDefaultConfigPath(log logging.Logger) {
+	// Default to build directory
+	c.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
+	if _, err := os.Stat(c.ConfigPath); err != nil {
+		log.Infof("No config file at %s, fallback to global default", build.ConfigDir)
+		c.ConfigPath = path.Join("/etc/daos", defaultConfigFile)
+	}
+}
+
 func (c *cfgCmd) loadConfig(log logging.Logger) error {
 	if c.IgnoreConfig {
 		c.config = nil
@@ -60,8 +70,7 @@ func (c *cfgCmd) loadConfig(log logging.Logger) error {
 	if c.ConfigPath != "" {
 		setInArgs = true
 	} else {
-		// Set config path to build directory if not supplied in command args.
-		c.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
+		c.setDefaultConfigPath(log)
 	}
 
 	c.config = config.DefaultServer()
