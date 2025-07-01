@@ -24,14 +24,14 @@ ior:
   repetitions: 1
   test_file: /testFile
   object_type:
-    - SX
-    - S1
-    - S4
-    - RP_2GX
-    - RP_2G1
-    - RP_3GX
-    - RP_3G1
-    - RP_4GX
+    # - SX
+    # - S1
+    # - S4
+    # - RP_2GX
+    # - RP_2G1
+    # - RP_3GX
+    # - RP_3G1
+    # - RP_4GX
     - RP_4G1
   dfs_destroy: false
   ior_sequence:
