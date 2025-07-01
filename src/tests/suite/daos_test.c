@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,11 +29,11 @@ static const char *all_tests = TESTS;
 static const char *all_tests_defined = TESTS EXPLICIT_TESTS;
 
 enum {
-	CHECKSUM_ARG_VAL_TYPE		= 0x2713,
-	CHECKSUM_ARG_VAL_CHUNKSIZE	= 0x2714,
-	CHECKSUM_ARG_VAL_SERVERVERIFY	= 0x2715,
+	CHECKSUM_ARG_VAL_TYPE         = 0x2713,
+	CHECKSUM_ARG_VAL_CHUNKSIZE    = 0x2714,
+	CHECKSUM_ARG_VAL_SERVERVERIFY = 0x2715,
+	REBUILD_INTERACTIVE           = 0x2716,
 };
-
 
 static void
 print_usage(int rank)
@@ -87,6 +88,7 @@ print_usage(int rank)
 	print_message("daos_test --csum_type CSUM_TYPE\n");
 	print_message("daos_test --csum_cs CHUNKSIZE\n");
 	print_message("daos_test --csum_sv\n");
+	print_message("daos_test --rebuild_interactive\n");
 	print_message("\n=============================\n");
 }
 
@@ -349,54 +351,51 @@ main(int argc, char **argv)
 	par_barrier(PAR_COMM_WORLD);
 
 	static struct option long_options[] = {
-		{"all",		no_argument,		NULL,	'a'},
-		{"mgmt",	no_argument,		NULL,	'm'},
-		{"cat_recov",	no_argument,		NULL,	'F'},
-		{"pool",	no_argument,		NULL,	'p'},
-		{"cont",	no_argument,		NULL,	'c'},
-		{"capa",	no_argument,		NULL,	'C'},
-		{"base_dtx",	no_argument,		NULL,	't'},
-		{"dist_dtx",	no_argument,		NULL,	'T'},
-		{"verify",	no_argument,		NULL,	'V'},
-		{"io",		no_argument,		NULL,	'i'},
-		{"ec_io",	no_argument,		NULL,	'I'},
-		{"checksum",	no_argument,		NULL,	'z'},
-		{"agg_ec",	no_argument,		NULL,	'Z'},
-		{"dedup",	no_argument,		NULL,	'U'},
-		{"epoch_io",	no_argument,		NULL,	'x'},
-		{"obj_array",	no_argument,		NULL,	'A'},
-		{"array",	no_argument,		NULL,	'D'},
-		{"daos_kv",	no_argument,		NULL,	'K'},
-		{"epoch",	no_argument,		NULL,	'e'},
-		{"erecov",	no_argument,		NULL,	'o'},
-		{"mdr",		no_argument,		NULL,	'R'},
-		{"oid_alloc",	no_argument,		NULL,	'O'},
-		{"degraded",	no_argument,		NULL,	'd'},
-		{"rebuild",	no_argument,		NULL,	'r'},
-		{"rebuild_simple",	no_argument,	NULL,	'v'},
-		{"rebuild_ec",	no_argument,		NULL,	'S'},
-		{"degrade_ec",	no_argument,		NULL,	'X'},
-		{"drain_simple",	no_argument,	NULL,	'b'},
-		{"nvme_recovery",	no_argument,	NULL,	'N'},
-		{"pipeline",	no_argument,	NULL,	'P'},
-		{"group",	required_argument,	NULL,	'g'},
-		{"csum_type",	required_argument,	NULL,
-						CHECKSUM_ARG_VAL_TYPE},
-		{"csum_cs",	required_argument,	NULL,
-						CHECKSUM_ARG_VAL_CHUNKSIZE},
-		{"csum_sv",	no_argument,		NULL,
-						CHECKSUM_ARG_VAL_SERVERVERIFY},
-		{"dmg_config",	required_argument,	NULL,	'n'},
-		{"svcn",	required_argument,	NULL,	's'},
-		{"subtests",	required_argument,	NULL,	'u'},
-		{"exclude",	required_argument,	NULL,	'E'},
-		{"filter",	required_argument,	NULL,	'f'},
-		{"work_dir",	required_argument,	NULL,	'W'},
-		{"workload_file", required_argument,	NULL,	'w'},
-		{"obj_class",	required_argument,	NULL,	'l'},
-		{"help",	no_argument,		NULL,	'h'},
-		{NULL,		0,			NULL,	0}
-	};
+	    {"all", no_argument, NULL, 'a'},
+	    {"mgmt", no_argument, NULL, 'm'},
+	    {"cat_recov", no_argument, NULL, 'F'},
+	    {"pool", no_argument, NULL, 'p'},
+	    {"cont", no_argument, NULL, 'c'},
+	    {"capa", no_argument, NULL, 'C'},
+	    {"base_dtx", no_argument, NULL, 't'},
+	    {"dist_dtx", no_argument, NULL, 'T'},
+	    {"verify", no_argument, NULL, 'V'},
+	    {"io", no_argument, NULL, 'i'},
+	    {"ec_io", no_argument, NULL, 'I'},
+	    {"checksum", no_argument, NULL, 'z'},
+	    {"agg_ec", no_argument, NULL, 'Z'},
+	    {"dedup", no_argument, NULL, 'U'},
+	    {"epoch_io", no_argument, NULL, 'x'},
+	    {"obj_array", no_argument, NULL, 'A'},
+	    {"array", no_argument, NULL, 'D'},
+	    {"daos_kv", no_argument, NULL, 'K'},
+	    {"epoch", no_argument, NULL, 'e'},
+	    {"erecov", no_argument, NULL, 'o'},
+	    {"mdr", no_argument, NULL, 'R'},
+	    {"oid_alloc", no_argument, NULL, 'O'},
+	    {"degraded", no_argument, NULL, 'd'},
+	    {"rebuild", no_argument, NULL, 'r'},
+	    {"rebuild_simple", no_argument, NULL, 'v'},
+	    {"rebuild_ec", no_argument, NULL, 'S'},
+	    {"degrade_ec", no_argument, NULL, 'X'},
+	    {"drain_simple", no_argument, NULL, 'b'},
+	    {"nvme_recovery", no_argument, NULL, 'N'},
+	    {"pipeline", no_argument, NULL, 'P'},
+	    {"group", required_argument, NULL, 'g'},
+	    {"csum_type", required_argument, NULL, CHECKSUM_ARG_VAL_TYPE},
+	    {"csum_cs", required_argument, NULL, CHECKSUM_ARG_VAL_CHUNKSIZE},
+	    {"csum_sv", no_argument, NULL, CHECKSUM_ARG_VAL_SERVERVERIFY},
+	    {"dmg_config", required_argument, NULL, 'n'},
+	    {"svcn", required_argument, NULL, 's'},
+	    {"subtests", required_argument, NULL, 'u'},
+	    {"exclude", required_argument, NULL, 'E'},
+	    {"filter", required_argument, NULL, 'f'},
+	    {"work_dir", required_argument, NULL, 'W'},
+	    {"workload_file", required_argument, NULL, 'w'},
+	    {"obj_class", required_argument, NULL, 'l'},
+	    {"rebuild_interactive", no_argument, NULL, REBUILD_INTERACTIVE},
+	    {"help", no_argument, NULL, 'h'},
+	    {NULL, 0, NULL, 0}};
 
 	rc = daos_init();
 	if (rc) {
@@ -469,6 +468,9 @@ main(int argc, char **argv)
 			break;
 		case CHECKSUM_ARG_VAL_SERVERVERIFY:
 			dt_csum_server_verify = true;
+			break;
+		case REBUILD_INTERACTIVE:
+			dt_rb_interactive = true;
 			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");
