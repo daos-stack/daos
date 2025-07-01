@@ -6203,9 +6203,9 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 		current_layout_ver = 0;
 
 	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
-		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
-					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
-					 RB_OP_UPGRADE, 0);
+		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
+					 DS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE,
+					 false /* stop_admin */, 0);
 		if (rc == 0)
 			*scheduled_layout_upgrade = true;
 	}
@@ -7519,8 +7519,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		tgt_map_ver);
 
 	if (tgt_map_ver != 0) {
-		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph,
-					 0, &target_list, RB_OP_REBUILD, delay);
+		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
+					 RB_OP_REBUILD, false /* stop_admin */, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -8232,6 +8232,74 @@ void
 ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 {
 	pool_svc_stop_handler(rpc, DAOS_POOL_VERSION);
+}
+
+/* TODO: make a real RPC handler ds_pool_rebuild_stop_handler(crt_rpc *rpc) to call this. */
+void
+ds_pool_rebuild_stop(uuid_t pool_uuid, struct rsvc_hint *hint)
+{
+	struct pool_svc *svc;
+	int              rc;
+
+	D_INFO(DF_UUID ": received request to stop rebuild\n", DP_UUID(pool_uuid));
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	ds_rebuild_admin_stop(pool_uuid);
+
+	/* TODO: ds_rsvc_set_hint(&svc->ps_rsvc, &out->hint); */
+	pool_svc_put_leader(svc);
+out:
+	/* TODO: RPC reply rc assign to rc */
+	D_INFO(DF_UUID ": rebuild stop result " DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+}
+
+/* administrator (via dmg command) asks to resume normal rebuild behavior for pool
+ * (if it has not already happened due to another automatic or manual rebuild in the meantime).
+ * TODO: make a real RPC handler ds_pool_rebuild_start_handler(crt_rpc *rpc) to call this.
+ */
+void
+ds_pool_rebuild_start(uuid_t pool_uuid, struct rsvc_hint *hint)
+{
+	struct pool_svc *svc;
+	struct ds_pool  *pool;
+	daos_prop_t      prop = {0};
+	int              rc;
+
+	D_INFO(DF_UUID ": received request to resume/start rebuild\n", DP_UUID(pool_uuid));
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc) {
+		DL_ERROR(rc, DF_UUID ": cannot find pool", DP_UUID(pool_uuid));
+		goto out_svc;
+	}
+
+	rc = ds_pool_iv_prop_fetch(pool, &prop);
+	if (rc) {
+		daos_prop_fini(&prop);
+		DL_ERROR(rc, DF_UUID ": cannot fetch properties", DP_UUID(pool_uuid));
+		goto out_pool;
+	}
+
+	rc = ds_rebuild_regenerate_task(pool, &prop);
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": regenerate rebuild task failed", DP_UUID(pool_uuid));
+
+	daos_prop_fini(&prop);
+out_pool:
+	ds_pool_put(pool);
+out_svc:
+	/* TODO: ds_rsvc_set_hint(&svc->ps_rsvc, &out->hint); */
+	pool_svc_put_leader(svc);
+out:
+	/* TODO: RPC reply rc assign to rc */
+	D_INFO(DF_UUID ": rebuild start result " DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
 }
 
 /**
