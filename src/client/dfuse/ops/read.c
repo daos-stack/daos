@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -464,12 +465,31 @@ void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
-	struct active_inode  *active     = oh->doh_ie->ie_active;
+	struct active_inode  *active;
 	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
 	bool                  mock_read  = false;
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	struct dfuse_event   *ev;
+
+	if (ino == DFUSE_CTRL_INO) {
+		int         value_len;
+		const char *output = d_parser_output_get(dfuse_info->di_parser, &value_len);
+
+		if (position >= value_len) {
+			rc = fuse_reply_buf(req, NULL, 0);
+		} else {
+			int remaining = value_len - position;
+			if (remaining > len)
+				remaining = len;
+			rc = fuse_reply_buf(req, &output[position], remaining);
+		}
+		if (rc != 0)
+			DS_ERROR(-rc, "fuse_reply_buf error");
+		return;
+	}
+
+	active = oh->doh_ie->ie_active;
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
 
