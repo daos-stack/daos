@@ -177,7 +177,7 @@ pipeline {
     triggers {
         // Generate a code coverage report each Sunday
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 5 * * 6' : '')
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 6 * * 0' : '')
     }
 
     environment {
