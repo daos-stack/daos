@@ -57,9 +57,9 @@ list_files files "${SL_PREFIX}/lib64/daos/VERSION"
 append_install_list "${files[@]}"
 
 mkdir -p "${tmp}${sysconfdir}/daos/certs"
-install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos/certs")
+install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 
-EXTRA_OPTS=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
+EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
 DEPENDS=( "mercury >= ${mercury_version}" "${libfabric_lib} >= ${libfabric_version}" )
 build_package "daos"
@@ -78,7 +78,7 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   install -m 644 "utils/systemd/${server_svc_name}" "${tmp}/${unitdir}"
   install_list+=("${tmp}/${unitdir}/${server_svc_name}=${unitdir}/${server_svc_name}")
   mkdir -p "${tmp}/${sysconfdir}/daos/certs/clients"
-  install_list+=("${tmp}/${sysconfdir}/daos/certs/clients=${sysconfdir}/daos/certs/clients")
+  install_list+=("${tmp}/${sysconfdir}/daos/certs/clients=${sysconfdir}/daos/certs")
 
   TARGET_PATH="${bindir}"
   list_files files "${SL_PREFIX}/bin/daos_engine" \
@@ -133,7 +133,6 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   list_files files "${SL_PREFIX}/lib64${estimator}/*"
   append_install_list "${files[@]}"
 
-  EXTRA_OPTS=()
   cat << EOF  > "${tmp}/pre_install_server"
 #!/bin/bash
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -265,7 +264,6 @@ TARGET_PATH="${datadir}/daos"
 list_files files "${SL_PREFIX}/share/daos/ioil-ld-opts"
 append_install_list "${files[@]}"
 
-EXTRA_OPTS=()
 cat << EOF  > "${tmp}/pre_install_client"
 getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
