@@ -522,6 +522,6 @@ enum { DFS_CACHE_SHM, DFS_CACHE_DRAM };
 int
 dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size);
 int
-dfs_obj_deserialize(dfs_t *dfs, int flags, const char *buf, size_t buf_size, struct dfs_obj *obj);
+dfs_obj_deserialize(dfs_t *dfs, int flags, const char *buf, struct dfs_obj *obj);
 
 #endif /* __DFS_INTERNAL_H__ */

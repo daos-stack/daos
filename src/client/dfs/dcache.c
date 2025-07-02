@@ -1154,7 +1154,7 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 			if (rec == NULL)
 				D_GOTO(out, rc = ENOMEM);
 
-			rc = dfs_obj_deserialize(dfs, flags, value, strlen(value), rec);
+			rc = dfs_obj_deserialize(dfs, flags, value, rec);
 			if (rc)
 				D_GOTO(out, rc);
 		}
@@ -1222,6 +1222,7 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 	char                   *value;
 	struct d_shm_ht_rec_loc rec_loc;
 	int                     rc;
+	size_t                  val_size;
 
 	D_ASSERT(dfs->dcache != NULL);
 	D_ASSERT(name != NULL);
@@ -1252,7 +1253,7 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 		if (rec == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
-		rc = dfs_obj_deserialize(dfs, flags, value, strlen(value), rec);
+		rc = dfs_obj_deserialize(dfs, flags, value, rec);
 		if (rc)
 			D_GOTO(out, rc);
 		memcpy(&rec->shm.rec_loc, &rec_loc, sizeof(rec_loc));
@@ -1278,6 +1279,12 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 					D_GOTO(out, rc);
 				memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
 				rec->dc_stated = true;
+				/* stat and dc_stated are updated, need to update ht record too */
+				/* the data buffer size is stored in front of data */
+				val_size = *((size_t *)value) & 0xFFFFFFFF;
+				rc = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
+				if (rc != 0)
+					D_GOTO(out, rc);
 			}
 		}
 		if (mode)

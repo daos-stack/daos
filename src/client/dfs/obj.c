@@ -1787,7 +1787,8 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 	uint8_t *p;
 
 	if (buf == NULL || *buf_size == 0) {
-		size_t size = 0;
+		/* save data size before data buffer */
+		size_t size = sizeof(int);
 
 		size += sizeof(obj->oid);
 		size += sizeof(obj->mode);
@@ -1812,6 +1813,9 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 	}
 
 	p = buf;
+	/* save data size before data buffer */
+	*((int *)p) = (int)(*buf_size);
+	p += sizeof(int);
 	memcpy(p, &obj->oid, sizeof(obj->oid));
 	p += sizeof(obj->oid);
 	memcpy(p, &obj->mode, sizeof(obj->mode));
@@ -1858,9 +1862,10 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 }
 
 int
-dfs_obj_deserialize(dfs_t *dfs, int flags, const char *buf, size_t buf_size, struct dfs_obj *obj)
+dfs_obj_deserialize(dfs_t *dfs, int flags, const char *buf, struct dfs_obj *obj)
 {
-	const uint8_t *p = (const uint8_t *)buf;
+	/* the very beginning holds data buffer size */
+	const uint8_t *p = (const uint8_t *)buf + sizeof(int);
 	int            rc;
 
 	obj->dfs = dfs;
