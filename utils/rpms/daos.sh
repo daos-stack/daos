@@ -267,7 +267,7 @@ append_install_list "${files[@]}"
 
 EXTRA_OPTS=()
 cat << EOF  > "${tmp}/pre_install_client"
-getent group agent >/dev/null || groupadd -r daos_agent
+getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
 EOF
