@@ -399,6 +399,7 @@ do_lock_mutex_child(bool lock_only)
 void
 test_lock(void **state)
 {
+	int                     i;
 	int                     rc;
 	int                     err;
 	int                     status;
@@ -441,15 +442,22 @@ test_lock(void **state)
 	pid = fork();
 	if (pid == 0)
 		execvp(exe_path, argv);
-	else
-		/* take a short nap to allow the child process to lock the mutex first */
-		usleep(18000);
+	else {
+		/* take a few short naps until the child process locks the mutex */
+		for (i = 0; i < 100; i++) {
+			usleep(20000);
+			if (*((int *)mutex) != 0)
+				/* the mutex is locked now */
+				break;
+		}
+	}
 
 	gettimeofday(&tm1, NULL);
 	shm_mutex_lock(mutex, &owner_dead);
 	gettimeofday(&tm2, NULL);
 	dt = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
-	assert_true(fabs(dt - TIME_SLEEP) < 0.25);
+	printf("Time diff = %4.2lf\n", fabs(dt - TIME_SLEEP));
+	assert_true(fabs(dt - TIME_SLEEP) < 0.20);
 	shm_mutex_unlock(mutex);
 	assert_true(owner_dead == false);
 
