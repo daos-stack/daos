@@ -284,6 +284,9 @@ func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
 func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	ei.incarnation = ready.Incarnation
+	ei.log.Debugf("engine idx=%d ready with incarnation=%d", ei.Index(), ei.incarnation)
+
 	if err := ei.updateFaultDomainInSuperblock(); err != nil {
 		ei.log.Error(err.Error()) // nonfatal
 	}
@@ -292,9 +295,6 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 	if err != nil {
 		return err
 	}
-
-	ei.incarnation = ready.Incarnation
-	ei.log.Debugf("engine idx=%d joined with rank=%d, incarnation=%d", ei.Index(), r, ei.incarnation)
 
 	// If the join was already processed because it ran on the same server,
 	// skip the rest of these steps.
