@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -643,13 +644,14 @@ map_distd(void *arg)
 		svc->s_map_dist_inp = false;
 		if (rc == 0) {
 			if (version > svc->s_map_dist_ver) {
-				D_DEBUG(DB_MD, "%s: version=%u->%u\n", svc->s_name,
-					svc->s_map_dist_ver, version);
+				D_INFO("%s: version=%u->%u\n", svc->s_name, svc->s_map_dist_ver,
+				       version);
 				svc->s_map_dist_ver = version;
 			}
 			ABT_cond_broadcast(svc->s_map_dist_cv);
 		} else {
 			/* Enqueue the request again. */
+			DL_INFO(rc, "%s: retrying due to error", svc->s_name);
 			svc->s_map_dist = true;
 		}
 	}

@@ -17,7 +17,7 @@ def _scan_go_file(node, env, _path):
     includes = []
     path_name = str(node)[12:]
     rc = subprocess.run([env.d_go_bin, 'list', '--json', '-mod=vendor', path_name],
-                        cwd='src/control', stdout=subprocess.PIPE, check=True)
+                        cwd='src/control', stdout=subprocess.PIPE, check=True, env=env['ENV'])
     data = json.loads(rc.stdout.decode('utf-8'))
     for dep in data['Deps']:
         if not dep.startswith('github.com/daos-stack/daos'):
@@ -118,7 +118,7 @@ def generate(env):
         context.Result(go_version)
         return 1
 
-    env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
+    env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER, os.environ['PATH']))
 
     if GetOption('help') or GetOption('clean'):
         return
@@ -142,6 +142,16 @@ def generate(env):
         env["ENV"]["GOMAXPROCS"] = '1'
     else:
         env["ENV"]["GOMAXPROCS"] = '5'
+
+    # If not already set in the environment, define some parameters for the Go toolchain
+    # that allow it to download and use a newer version as required to meet the requirements
+    # defined in go.mod.
+    if 'GOTOOLCHAIN' not in env['ENV']:
+        env['ENV']['GOTOOLCHAIN'] = 'auto'
+    if 'GOSUMDB' not in env['ENV']:
+        env['ENV']['GOSUMDB'] = 'sum.golang.org'
+    if 'GOPROXY' not in env['ENV']:
+        env['ENV']['GOPROXY'] = 'https://proxy.golang.org,direct'
 
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 

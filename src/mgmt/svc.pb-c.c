@@ -1065,108 +1065,199 @@ const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor =
   (ProtobufCMessageInit) mgmt__group_update_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[13] = {
-    {
-	"sys", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0,      /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, sys), NULL, &protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
-    {
-	"uuid", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0,      /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, uuid), NULL, &protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
-    {
-	"rank", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, rank), NULL, NULL, 0,                /* flags */
-	0, NULL, NULL                                                /* reserved1,reserved2, etc */
-    },
-    {
-	"uri", 4, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0,      /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, uri), NULL, &protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
-    {
-	"nctxs", 5, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, nctxs), NULL, NULL, 0,                /* flags */
-	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
-    },
-    {
-	"addr", 6, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0,      /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, addr), NULL, &protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
-    {
-	"srvFaultDomain", 7, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING,
-	0, /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, srvfaultdomain), NULL, &protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
-    {
-	"idx", 8, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, idx), NULL, NULL, 0,                /* flags */
-	0, NULL, NULL                                               /* reserved1,reserved2, etc */
-    },
-    {
-	"incarnation", 9, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, incarnation), NULL, NULL, 0,                /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
-    {
-	"secondary_uris", 10, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_STRING,
-	offsetof(Mgmt__JoinReq, n_secondary_uris), offsetof(Mgmt__JoinReq, secondary_uris), NULL,
-	&protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL                /* reserved1,reserved2, etc */
-    },
-    {
-	"secondary_nctxs", 11, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
-	offsetof(Mgmt__JoinReq, n_secondary_nctxs), offsetof(Mgmt__JoinReq, secondary_nctxs), NULL,
-	NULL, 0,      /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
-    {
-	"check_mode", 12, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, check_mode), NULL, NULL, 0,               /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
-    {
-	"replace", 13, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
-	offsetof(Mgmt__JoinReq, replace), NULL, NULL, 0,               /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
-    },
+static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[13] =
+{
+  {
+    "sys",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "uuid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rank",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "uri",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, uri),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nctxs",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, nctxs),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "addr",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, addr),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "srvFaultDomain",
+    7,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, srvfaultdomain),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "idx",
+    8,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, idx),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "incarnation",
+    9,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, incarnation),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "secondary_uris",
+    10,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Mgmt__JoinReq, n_secondary_uris),
+    offsetof(Mgmt__JoinReq, secondary_uris),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "secondary_nctxs",
+    11,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__JoinReq, n_secondary_nctxs),
+    offsetof(Mgmt__JoinReq, secondary_nctxs),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "check_mode",
+    12,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, check_mode),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "replace",
+    13,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, replace),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__join_req__field_indices_by_name[] = {
-    5,  /* field[5] = addr */
-    11, /* field[11] = check_mode */
-    7,  /* field[7] = idx */
-    8,  /* field[8] = incarnation */
-    4,  /* field[4] = nctxs */
-    2,  /* field[2] = rank */
-    12, /* field[12] = replace */
-    10, /* field[10] = secondary_nctxs */
-    9,  /* field[9] = secondary_uris */
-    6,  /* field[6] = srvFaultDomain */
-    0,  /* field[0] = sys */
-    3,  /* field[3] = uri */
-    1,  /* field[1] = uuid */
+  5,   /* field[5] = addr */
+  11,   /* field[11] = check_mode */
+  7,   /* field[7] = idx */
+  8,   /* field[8] = incarnation */
+  4,   /* field[4] = nctxs */
+  2,   /* field[2] = rank */
+  12,   /* field[12] = replace */
+  10,   /* field[10] = secondary_nctxs */
+  9,   /* field[9] = secondary_uris */
+  6,   /* field[6] = srvFaultDomain */
+  0,   /* field[0] = sys */
+  3,   /* field[3] = uri */
+  1,   /* field[1] = uuid */
 };
-static const ProtobufCIntRange   mgmt__join_req__number_ranges[1 + 1] = {{1, 0}, {0, 13}};
-const ProtobufCMessageDescriptor mgmt__join_req__descriptor           = {
-    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-    "mgmt.JoinReq",
-    "JoinReq",
-    "Mgmt__JoinReq",
-    "mgmt",
-    sizeof(Mgmt__JoinReq),
-    13,
-    mgmt__join_req__field_descriptors,
-    mgmt__join_req__field_indices_by_name,
-    1,
-    mgmt__join_req__number_ranges,
-    (ProtobufCMessageInit)mgmt__join_req__init,
-    NULL,
-    NULL,
-    NULL /* reserved[123] */
+static const ProtobufCIntRange mgmt__join_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 13 }
+};
+const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.JoinReq",
+  "JoinReq",
+  "Mgmt__JoinReq",
+  "mgmt",
+  sizeof(Mgmt__JoinReq),
+  13,
+  mgmt__join_req__field_descriptors,
+  mgmt__join_req__field_indices_by_name,
+  1,  mgmt__join_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__join_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCEnumValue mgmt__join_resp__state__enum_values_by_number[3] =
 {

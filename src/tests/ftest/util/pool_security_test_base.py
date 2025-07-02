@@ -6,7 +6,6 @@
 """
 import grp
 import os
-import random
 import re
 
 import agent_utils as agu
@@ -374,7 +373,7 @@ class PoolSecurityTestBase(TestWithServers):
                 self.fail(f"Failed to groupadd {groupname}")
             group_list.append(new_group)
         permission_list = group_list + user_list + current_user_acl
-        random.shuffle(permission_list)
+        self.random.shuffle(permission_list)
         with open(acl_file, "w") as test_file:
             test_file.write("\n".join(permission_list))
         return permission_list

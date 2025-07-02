@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +24,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_degraded_mode
         """
@@ -39,7 +40,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_management
         """
@@ -55,7 +56,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_pool
         """
@@ -71,7 +72,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_container
         """
@@ -87,7 +88,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_epoch
         """
@@ -103,7 +104,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_single_rdg_tx
         """
@@ -119,7 +120,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_distributed_tx
         """
@@ -135,7 +136,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_verify_consistency
         """
@@ -151,7 +152,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_io
         """
@@ -167,7 +168,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_ec_io
         """
@@ -183,7 +184,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_ec_obj
         """
@@ -199,7 +200,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_object_array
         """
@@ -215,7 +216,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_array
         """
@@ -231,7 +232,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_kv
         """
@@ -247,7 +248,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_capability
         """
@@ -263,7 +264,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_epoch_recovery
         """
@@ -279,7 +280,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_md_replication
         """
@@ -343,7 +344,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_oid_allocator
         """
@@ -359,7 +360,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_checksum
         """
@@ -391,7 +392,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_aggregate_ec
         """
@@ -407,7 +408,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_degraded_ec
         """
@@ -423,7 +424,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_dedup
         """
@@ -439,7 +440,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_upgrade
         """
@@ -455,7 +456,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test,faults
         :avocado: tags=DaosCoreTest,test_daos_pipeline
         """

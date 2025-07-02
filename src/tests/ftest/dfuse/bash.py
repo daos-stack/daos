@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -114,7 +115,7 @@ class DfuseBashCmd(TestWithServers):
             # f'more {fuse_root_dir}/src.c', # more hangs over ssh somehow
             f"dos2unix {fuse_root_dir}/src.c",
             f"gcc -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
-            f"valgrind size {fuse_root_dir}/output",
+            f'export DEBUGINFOD_URLS=""; valgrind size {fuse_root_dir}/output',
             f"readelf -s {fuse_root_dir}/output",
             f"strip -s {fuse_root_dir}/output",
             f"g++ -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
@@ -138,8 +139,16 @@ class DfuseBashCmd(TestWithServers):
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
             '--group_reporting --exitall_on_error --continue_on_error=none',
-            f'curl "https://www.google.com" -o {fuse_root_dir}/download.html',
         ]
+        # If set, use the HTTPS_PROXY for curl command
+        https_proxy = os.environ.get('HTTPS_PROXY')
+        if https_proxy:
+            proxy_option = f'--proxy "{https_proxy}"'
+        else:
+            proxy_option = ''
+        cmd = f'curl "https://www.google.com" -o {fuse_root_dir}/download.html {proxy_option}'
+        commands.append(cmd)
+
         for cmd in commands:
             self.log_step(f'Running command: {cmd}')
             result = run_remote(self.log, dfuse_hosts, env_str + cmd)

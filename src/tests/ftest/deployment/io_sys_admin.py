@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,7 +34,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,datamover,ior,mdtest
+        :avocado: tags=deployment,datamover,ior,mdtest,control,dfuse
         :avocado: tags=IoSysAdmin,test_io_sys_admin
         """
         # local param

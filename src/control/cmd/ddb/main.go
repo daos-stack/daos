@@ -183,7 +183,10 @@ Example Paths:
 	app := createGrumbleApp(ctx)
 
 	if opts.Args.VosPath != "" {
-		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") && !strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") {
+		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
 			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
 			if err := ddbOpen(ctx, string(opts.Args.VosPath), opts.WriteMode); err != nil {
 				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)

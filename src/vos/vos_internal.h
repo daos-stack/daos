@@ -145,7 +145,7 @@ enum {
 extern uint32_t vos_agg_gap;
 
 #define VOS_AGG_GAP_MIN		20 /* seconds */
-#define VOS_AGG_GAP_DEF		60
+#define VOS_AGG_GAP_DEF         20
 #define VOS_AGG_GAP_MAX		180
 
 extern unsigned int vos_agg_nvme_thresh;
@@ -433,6 +433,8 @@ struct vos_container {
 				vc_cmt_dtx_indexed:1;
 	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
+	/* The latest pool map version that DTX resync has been done. */
+	uint32_t                vc_dtx_resync_ver;
 };
 
 struct vos_dtx_act_ent {
@@ -1130,7 +1132,8 @@ struct vos_iterator {
 	 * mutual exclusion between aggregation and object discard.
 	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
-	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1;
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1,
+	    it_for_check : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1414,6 +1417,8 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_for_check)
+		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
 }
 

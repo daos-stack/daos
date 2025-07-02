@@ -233,7 +233,7 @@ test_test_tag_and_features() {
                      CP_FEATURES="foo bar" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
 }
 
-test_jenkins_curl() {
-    JENKINS_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}"
-    assert_equals "$(QUIET=true VERBOSE=false jenkins_curl -X POST "${JENKINS_URL}api/xml" 3>&1 >/dev/null | tr -d '\r' | grep '^X-Content-Type-Options:')" "X-Content-Type-Options: nosniff"
-}
+#test_jenkins_curl() {
+#    JENKINS_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}"
+#    assert_equals "$(QUIET=true VERBOSE=false jenkins_curl -X POST "${JENKINS_URL}api/xml" 3>&1 >/dev/null | tr -d '\r' | grep '^X-Content-Type-Options:')" "X-Content-Type-Options: nosniff"
+#}

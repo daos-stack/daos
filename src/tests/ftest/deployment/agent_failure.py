@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -241,7 +242,7 @@ class AgentFailure(IorTestBase):
         # 6. On the killed client, verify journalctl shows the log that the agent is
         # stopped.
         results = get_journalctl(
-            hosts=[agent_host_kill], since=since, until=until,
+            hosts=NodeSet(agent_host_kill), since=since, until=until,
             journalctl_type="daos_agent")
         self.log.info("journalctl results (kill) = %s", results)
         if "shutting down" not in results[0]["data"]:
@@ -252,7 +253,7 @@ class AgentFailure(IorTestBase):
         # 7. On the other client where agent is still running, verify that the journalctl
         # in the previous step doesn't show that the agent is stopped.
         results = get_journalctl(
-            hosts=[agent_host_keep], since=since, until=until,
+            hosts=NodeSet(agent_host_keep), since=since, until=until,
             journalctl_type="daos_agent")
         self.log.info("journalctl results (keep) = %s", results)
         if "shutting down" in results[0]["data"]:

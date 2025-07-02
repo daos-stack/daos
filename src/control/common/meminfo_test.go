@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,23 +8,16 @@
 package common
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	. "github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
-
-func TestCommon_getMemInfo(t *testing.T) {
-	// Just a simple test to verify that we get something -- it should
-	// pretty much never error.
-	_, err := GetMemInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
 
 func TestCommon_parseMemInfo(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -33,7 +27,9 @@ func TestCommon_parseMemInfo(t *testing.T) {
 		expErr    error
 	}{
 		"none parsed": {
-			expOut:    &MemInfo{},
+			expOut: &MemInfo{
+				NumaNodeIndex: -1,
+			},
 			expFreeMB: 0,
 		},
 		"2MB pagesize": {
@@ -48,6 +44,7 @@ HugePages_Surp:        0
 Hugepagesize:       2048 kB
 			`,
 			expOut: &MemInfo{
+				NumaNodeIndex:   -1,
 				HugepagesTotal:  1024,
 				HugepagesFree:   1023,
 				HugepageSizeKiB: 2048,
@@ -66,6 +63,7 @@ HugePages_Surp:        0
 Hugepagesize:       1048576 kB
 			`,
 			expOut: &MemInfo{
+				NumaNodeIndex:   -1,
 				HugepagesTotal:  16,
 				HugepagesFree:   16,
 				HugepageSizeKiB: 1048576,
@@ -89,7 +87,7 @@ Hugepagesize:       1 GB
 			rdr := strings.NewReader(tc.input)
 
 			gotOut, gotErr := parseMemInfo(rdr)
-			CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -98,9 +96,200 @@ Hugepagesize:       1 GB
 				t.Fatalf("unexpected output (-want, +got)\n%s\n", diff)
 			}
 
-			if gotOut.HugepagesFreeMB() != tc.expFreeMB {
+			mi := &SysMemInfo{MemInfo: *gotOut}
+			if mi.HugepagesFreeMB() != tc.expFreeMB {
 				t.Fatalf("expected FreeMB() to be %d, got %d",
-					tc.expFreeMB, gotOut.HugepagesFreeMB())
+					tc.expFreeMB, mi.HugepagesFreeMB())
+			}
+		})
+	}
+}
+
+func createMemInfoTestFile(t *testing.T, extDataDir, srcName, dstDir string) {
+	srcPath := filepath.Join(extDataDir, srcName)
+	if _, err := os.Stat(srcPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dstDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	dstPath := filepath.Join(dstDir, "meminfo")
+	test.CopyFile(t, srcPath, dstPath)
+	if _, err := os.Stat(dstPath); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCommon_getMemInfoNodes(t *testing.T) {
+	extTestDataDir := "./testdata"
+
+	testDir, clean := test.CreateTestDir(t)
+	defer clean()
+
+	pathRootSysOrig := pathRootSys
+	pathRootSys = filepath.Join(testDir, "sys")
+	defer func() {
+		pathRootSys = pathRootSysOrig
+	}()
+
+	for name, tc := range map[string]struct {
+		skipCreate bool
+		expNodes   []MemInfo
+		expErr     error
+	}{
+		"zero nodes found": {
+			skipCreate: true,
+			expNodes:   []MemInfo{},
+		},
+		"two nodes found": {
+			expNodes: []MemInfo{
+				{
+					HugepagesTotal: 2048,
+					HugepagesFree:  2048,
+					MemTotalKiB:    97673756,
+					MemFreeKiB:     87210384,
+					MemUsedKiB:     10463372,
+				},
+				{
+					NumaNodeIndex:  1,
+					HugepagesTotal: 512,
+					HugepagesFree:  512,
+					MemTotalKiB:    99030076,
+					MemFreeKiB:     95526628,
+					MemUsedKiB:     3503448,
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := test.RemoveContents(t, pathRootSys); err != nil {
+				t.Fatal(err)
+			}
+
+			if !tc.skipCreate {
+				createMemInfoTestFile(t, extTestDataDir, "meminfo_0",
+					filepath.Join(pathRootSys, "devices", "system", "node",
+						"node0"))
+				createMemInfoTestFile(t, extTestDataDir, "meminfo_1",
+					filepath.Join(pathRootSys, "devices", "system", "node",
+						"node1"))
+			}
+
+			gotNodes, gotErr := getMemInfoNodes()
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expNodes, gotNodes); diff != "" {
+				t.Fatalf("unexpected output (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestCommon_GetMemInfo(t *testing.T) {
+	extTestDataDir := "./testdata"
+
+	testDir, clean := test.CreateTestDir(t)
+	defer clean()
+
+	pathRootProcOrig := pathRootProc
+	pathRootProc = filepath.Join(testDir, "proc")
+	defer func() {
+		pathRootProc = pathRootProcOrig
+	}()
+	if err := os.Mkdir(pathRootProc, 0750); err != nil {
+		t.Fatal(err)
+	}
+
+	pathRootSysOrig := pathRootSys
+	pathRootSys = filepath.Join(testDir, "sys")
+	defer func() {
+		pathRootSys = pathRootSysOrig
+	}()
+
+	for name, tc := range map[string]struct {
+		// Mock file tree, map contains source file to destination dir locations.
+		files  map[string]string
+		expErr error
+		expOut *SysMemInfo
+	}{
+		"no numa nodes": {
+			files: map[string]string{
+				"meminfo": pathRootProc,
+			},
+			expOut: &SysMemInfo{
+				MemInfo: MemInfo{
+					NumaNodeIndex:   -1,
+					HugepagesTotal:  2560,
+					HugepagesFree:   2560,
+					HugepageSizeKiB: 2048,
+					MemTotalKiB:     196703832,
+					MemFreeKiB:      182740080,
+					MemAvailableKiB: 184708468,
+				},
+				NumaNodes: []MemInfo{},
+			},
+		},
+		"dual numa nodes": {
+			files: map[string]string{
+				"meminfo": pathRootProc,
+				"meminfo_0": filepath.Join(pathRootSys, "devices", "system", "node",
+					"node0"),
+				"meminfo_1": filepath.Join(pathRootSys, "devices", "system", "node",
+					"node1"),
+			},
+			expOut: &SysMemInfo{
+				MemInfo: MemInfo{
+					NumaNodeIndex:   -1,
+					HugepagesTotal:  2560,
+					HugepagesFree:   2560,
+					HugepageSizeKiB: 2048,
+					MemTotalKiB:     196703832,
+					MemFreeKiB:      182740080,
+					MemAvailableKiB: 184708468,
+				},
+				NumaNodes: []MemInfo{
+					{
+						HugepagesTotal: 2048,
+						HugepagesFree:  2048,
+						MemTotalKiB:    97673756,
+						MemFreeKiB:     87210384,
+						MemUsedKiB:     10463372,
+					},
+					{
+						NumaNodeIndex:  1,
+						HugepagesTotal: 512,
+						HugepagesFree:  512,
+						MemTotalKiB:    99030076,
+						MemFreeKiB:     95526628,
+						MemUsedKiB:     3503448,
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := test.RemoveContents(t, pathRootProc); err != nil {
+				t.Fatal(err)
+			}
+			if err := test.RemoveContents(t, pathRootSys); err != nil {
+				t.Fatal(err)
+			}
+
+			for srcName, dstDir := range tc.files {
+				createMemInfoTestFile(t, extTestDataDir, srcName, dstDir)
+			}
+
+			gotOut, gotErr := GetSysMemInfo()
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expOut, gotOut); diff != "" {
+				t.Fatalf("unexpected output (-want, +got)\n%s\n", diff)
 			}
 		})
 	}

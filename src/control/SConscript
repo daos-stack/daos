@@ -199,7 +199,7 @@ def scons():
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     aenv.AppendENVPath("CGO_CFLAGS",
-                       senv.subst("-I$SPDK_PREFIX/include -I$OFI_PREFIX/include"),
+                       senv.subst("-I$SPDK_PREFIX/include/daos_srv -I$OFI_PREFIX/include"),
                        sep=" ")
 
     # Sets CGO_LDFLAGS for rpath
