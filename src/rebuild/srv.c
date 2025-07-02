@@ -2669,8 +2669,10 @@ rebuild_prepare_one(void *data)
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
 	/* Local ds_pool_child isn't started yet, return a retry-able error */
-	if (dpc == NULL)
+	if (dpc == NULL) {
+		D_INFO(DF_UUID ": Local VOS pool isn't ready yet.\n", DP_UUID(rpt->rt_pool_uuid));
 		return -DER_STALE;
+	}
 
 	if (unlikely(dpc->spc_no_storage))
 		D_GOTO(put, rc = 0);
