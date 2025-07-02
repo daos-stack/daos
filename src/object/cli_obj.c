@@ -4801,6 +4801,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			void    *merged_buf = NULL;
 			uint64_t offset     = 0;
 			d_iov_t *merged_iov;
+			bool     hole = false;
 
 			iov = &sg->sg_iovs[j];
 			if (skip_sgl_iov(update, iov)) {
@@ -4820,11 +4821,13 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			}
 			/* Calculate merge range within size constraints */
 			merge_start = j;
+			hole        = false;
 			while (j < sg->sg_nr &&
 			       (merged_buf_size + sg->sg_iovs[j].iov_buf_len) <= MAX_MERGE_SIZE) {
 				iov = &sg->sg_iovs[j];
 				if (skip_sgl_iov(update, iov)) {
 					j++;
+					hole = true;
 					continue;
 				}
 				if (!isset_range((uint8_t *)ctx.merged_bitmaps[i], j, j))
@@ -4833,6 +4836,10 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 				merged_size += sg->sg_iovs[j].iov_len;
 				j++;
 			}
+			D_ERROR("%s merging sgl [%u %u) to dup_sgl %u, merged_buf_size: %lu, "
+				"merged_size: %lu, %s\n",
+				update ? "update" : "fetching", merge_start, j, sgl_idx,
+				merged_buf_size, merged_size, hole ? "hole" : "");
 
 			rc = sgl_alloc_bitmaps_needed(&ctx.alloc_bitmaps, i, args->nr, bitmap_sz);
 			if (rc) {
@@ -4849,12 +4856,21 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			/* Copy data from original IOVs to merged buffer */
 			offset = 0;
 			for (k = merge_start; k < j; k++) {
+				uint32_t merge_len;
+
 				iov = &sg->sg_iovs[k];
 				if (skip_sgl_iov(update, iov))
 					continue;
 				D_ASSERT(offset < merged_buf_size);
-				memcpy(merged_buf + offset, sg->sg_iovs[k].iov_buf,
-				       sg->sg_iovs[k].iov_len);
+				if (update)
+					merge_len = iov->iov_len;
+				else
+					merge_len = iov->iov_buf_len;
+				D_ERROR("%s merging sgl %u to dup_sgl %u, offset: %lu, merged_len: "
+					"%u\n",
+					update ? "update" : "fetching", k, sgl_idx, offset,
+					merge_len);
+				memcpy(merged_buf + offset, sg->sg_iovs[k].iov_buf, merge_len);
 				offset += sg->sg_iovs[k].iov_len;
 			}
 
@@ -4929,6 +4945,7 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 					j++;
 					sg_nr_out++;
 					dup_sg_idx++;
+					D_ASSERT(dup_buf_size == 0);
 					continue;
 				}
 				if (dup_buf_size == 0) {
@@ -4936,6 +4953,10 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 					dup_buf      = (char *)iov_dup->iov_buf;
 				}
 
+				D_ERROR("fetching copy back from dup idx: %u to sgl idx %u, "
+					"dup_buf_size: %u, iov_buf_len: %lu, iov_len: %lu\n",
+					dup_sg_idx, j, dup_buf_size, iov->iov_buf_len,
+					iov->iov_len);
 				/* Copy data from duplicate buffer to original buffer */
 				D_ASSERT(dup_buf_size >= iov->iov_buf_len);
 				memcpy((char *)iov->iov_buf, dup_buf, iov->iov_buf_len);
