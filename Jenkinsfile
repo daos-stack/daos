@@ -495,161 +495,161 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Build RPM on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() && !is_code_coverage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() && !is_code_coverage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() && !is_code_coverage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs() +
-                                '--build-arg FVERSION=37'
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                /* This stage is commented out until it can be replaced
-                with code for building the current Ubuntu release. */
-                stage('Build DEB on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        // expression { !skipStage() }
-                        expression { false }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.ubuntu'
-                            label 'docker_runner'
-                            args '--cap-add=SYS_ADMIN'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
+                // stage('Build RPM on EL 8') {
+                //     when {
+                //         beforeAgent true
+                //         expression { !skipStage() && !is_code_coverage() }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/rpms/packaging/Dockerfile.mockbuild'
+                //             label 'docker_runner'
+                //             args '--group-add mock'     +
+                //                  ' --cap-add=SYS_ADMIN' +
+                //                  ' --privileged=true'   +
+                //                  ' -v /scratch:/scratch'
+                //             additionalBuildArgs dockerBuildArgs()
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(buildRpm())
+                //     }
+                //     post {
+                //         success {
+                //             fixup_rpmlintrc()
+                //             buildRpmPost condition: 'success', rpmlint: true
+                //         }
+                //         unstable {
+                //             buildRpmPost condition: 'unstable'
+                //         }
+                //         failure {
+                //             buildRpmPost condition: 'failure'
+                //         }
+                //         unsuccessful {
+                //             buildRpmPost condition: 'unsuccessful'
+                //         }
+                //         cleanup {
+                //             buildRpmPost condition: 'cleanup'
+                //             job_status_update()
+                //         }
+                //     }
+                // }
+                // stage('Build RPM on EL 9') {
+                //     when {
+                //         beforeAgent true
+                //         expression { !skipStage() && !is_code_coverage() }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/rpms/packaging/Dockerfile.mockbuild'
+                //             label 'docker_runner'
+                //             args '--group-add mock'     +
+                //                  ' --cap-add=SYS_ADMIN' +
+                //                  ' -v /scratch:/scratch'
+                //             additionalBuildArgs dockerBuildArgs()
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(buildRpm())
+                //     }
+                //     post {
+                //         success {
+                //             fixup_rpmlintrc()
+                //             buildRpmPost condition: 'success', rpmlint: true
+                //         }
+                //         unstable {
+                //             buildRpmPost condition: 'unstable'
+                //         }
+                //         failure {
+                //             buildRpmPost condition: 'failure'
+                //         }
+                //         unsuccessful {
+                //             buildRpmPost condition: 'unsuccessful'
+                //         }
+                //         cleanup {
+                //             buildRpmPost condition: 'cleanup'
+                //             job_status_update()
+                //         }
+                //     }
+                // }
+                // stage('Build RPM on Leap 15.5') {
+                //     when {
+                //         beforeAgent true
+                //         expression { !skipStage() && !is_code_coverage() }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/rpms/packaging/Dockerfile.mockbuild'
+                //             label 'docker_runner'
+                //             args '--group-add mock'     +
+                //                  ' --cap-add=SYS_ADMIN' +
+                //                  ' --privileged=true'   +
+                //                  ' -v /scratch:/scratch'
+                //             additionalBuildArgs dockerBuildArgs() +
+                //                 '--build-arg FVERSION=37'
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(buildRpm())
+                //     }
+                //     post {
+                //         success {
+                //             fixup_rpmlintrc()
+                //             buildRpmPost condition: 'success', rpmlint: true
+                //         }
+                //         unstable {
+                //             buildRpmPost condition: 'unstable'
+                //         }
+                //         failure {
+                //             buildRpmPost condition: 'failure'
+                //         }
+                //         unsuccessful {
+                //             buildRpmPost condition: 'unsuccessful'
+                //         }
+                //         cleanup {
+                //             buildRpmPost condition: 'cleanup'
+                //             job_status_update()
+                //         }
+                //     }
+                // }
+                // /* This stage is commented out until it can be replaced
+                // with code for building the current Ubuntu release. */
+                // stage('Build DEB on Ubuntu 20.04') {
+                //     when {
+                //         beforeAgent true
+                //         // expression { !skipStage() }
+                //         expression { false }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/rpms/packaging/Dockerfile.ubuntu'
+                //             label 'docker_runner'
+                //             args '--cap-add=SYS_ADMIN'
+                //             additionalBuildArgs dockerBuildArgs()
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(buildRpm())
+                //     }
+                //     post {
+                //         success {
+                //             buildRpmPost condition: 'success'
+                //         }
+                //         unstable {
+                //             buildRpmPost condition: 'unstable'
+                //         }
+                //         failure {
+                //             buildRpmPost condition: 'failure'
+                //         }
+                //         unsuccessful {
+                //             buildRpmPost condition: 'unsuccessful'
+                //         }
+                //         cleanup {
+                //             buildRpmPost condition: 'cleanup'
+                //             job_status_update()
+                //         }
+                //     }
+                // }
                 stage('Build on EL 8.8') {
                     when {
                         beforeAgent true
@@ -689,79 +689,81 @@ pipeline {
                         }
                     }
                 }
-                // stage('Build on EL 9') {
-                //     when {
-                //         beforeAgent true
-                //         expression { !params.CI_el9_NOBUILD && !skipStage() }
-                //     }
-                //     agent {
-                //         dockerfile {
-                //             filename 'utils/docker/Dockerfile.el.9'
-                //             label 'docker_runner'
-                //             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                //                                                 deps_build: true,
-                //                                                 parallel_build: true) +
-                //                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                //                                 ' --build-arg REPOS="' + prRepos() + '"'
-                //         }
-                //     }
-                //     steps {
-                //         job_step_update(
-                //             sconsBuild(parallel_build: true,
-                //                        stash_files: 'ci/test_files_to_stash.txt',
-                //                        build_deps: 'no',
-                //                        stash_opt: true,
-                //                        scons_args: sconsArgs() +
-                //                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                //     }
-                //     post {
-                //         unsuccessful {
-                //             sh '''if [ -f config.log ]; then
-                //                       mv config.log config.log-el9-gcc
-                //                   fi'''
-                //             archiveArtifacts artifacts: 'config.log-el9-gcc',
-                //                              allowEmptyArchive: true
-                //         }
-                //         cleanup {
-                //             job_status_update()
-                //         }
-                //     }
-                // }
-                // stage('Build on Leap 15.5') {
-                //     when {
-                //         beforeAgent true
-                //         expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
-                //     }
-                //     agent {
-                //         dockerfile {
-                //             filename 'utils/docker/Dockerfile.leap.15'
-                //             label 'docker_runner'
-                //             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                //                                                 parallel_build: true,
-                //                                                 deps_build: true) +
-                //                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc"
-                //         }
-                //     }
-                //     steps {
-                //         job_step_update(
-                //             sconsBuild(parallel_build: true,
-                //                        scons_args: sconsFaultsArgs() +
-                //                                    ' PREFIX=/opt/daos TARGET_TYPE=release',
-                //                        build_deps: 'yes'))
-                //     }
-                //     post {
-                //         unsuccessful {
-                //             sh '''if [ -f config.log ]; then
-                //                       mv config.log config.log-leap15-gcc
-                //                   fi'''
-                //             archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                //                              allowEmptyArchive: true
-                //         }
-                //         cleanup {
-                //             job_status_update()
-                //         }
-                //     }
-                // }
+                stage('Build on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.9'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-el9 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
+                                       scons_args: sconsArgs() +
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       code_coverage: is_code_coverage()))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-el9-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-el9-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on Leap 15.5') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.leap.15'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       build_deps: 'yes',
+                                       code_coverage: is_code_coverage()))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
