@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,6 +56,11 @@ typedef enum {
 	DP_UUID((rpt)->rt_pool_uuid), (rpt)->rt_rebuild_ver, (rpt)->rt_rebuild_gen,                \
 	    RB_OP_STR((rpt)->rt_rebuild_op)
 #define DP_RBF_RPT(rpt) DP_RB_RPT(rpt), (rpt)->rt_leader_rank, (rpt)->rt_leader_term
+
+/* arguments for log rebuild identifier given a struct migrate_pool_tls *mpt */
+#define DP_RB_MPT(mpt)                                                                             \
+	DP_UUID((mpt)->mpt_pool_uuid), (mpt)->mpt_version, (mpt)->mpt_generation,                  \
+	    RB_OP_STR((mpt)->mpt_opc)
 
 int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 			daos_epoch_t stable_eph, uint32_t layout_version,
