@@ -203,7 +203,9 @@ vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_siz
 		}
 
 		if (mlc.mlc_inflights > META_READ_QD_NR) {
+			ABT_mutex_lock(mlc.mlc_lock);
 			ABT_cond_wait(mlc.mlc_cond, mlc.mlc_lock);
+			ABT_mutex_unlock(mlc.mlc_lock);
 			D_ASSERT(mlc.mlc_inflights <= META_READ_QD_NR);
 		}
 
@@ -214,7 +216,9 @@ vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_siz
 
 	mlc.mlc_wait_finished = 1;
 	if (mlc.mlc_inflights > 0) {
+		ABT_mutex_lock(mlc.mlc_lock);
 		ABT_cond_wait(mlc.mlc_cond, mlc.mlc_lock);
+		ABT_mutex_unlock(mlc.mlc_lock);
 		D_ASSERT(mlc.mlc_inflights == 0);
 	}
 	ABT_cond_free(&mlc.mlc_cond);
