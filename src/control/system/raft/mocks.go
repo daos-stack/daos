@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,8 +35,9 @@ type (
 		BarrierReturn         raft.Future
 	}
 	mockRaftService struct {
-		cfg mockRaftServiceConfig
-		fsm raft.FSM
+		cfg                    mockRaftServiceConfig
+		fsm                    raft.FSM
+		addVoterCalledForAddrs []string
 	}
 )
 
@@ -49,7 +51,8 @@ func (mrs *mockRaftService) Apply(cmd []byte, timeout time.Duration) raft.ApplyF
 	return &mockRaftFuture{}
 }
 
-func (mr *mockRaftService) AddVoter(_ raft.ServerID, _ raft.ServerAddress, _ uint64, _ time.Duration) raft.IndexFuture {
+func (mr *mockRaftService) AddVoter(_ raft.ServerID, addr raft.ServerAddress, _ uint64, _ time.Duration) raft.IndexFuture {
+	mr.addVoterCalledForAddrs = append(mr.addVoterCalledForAddrs, string(addr))
 	return &mockRaftFuture{}
 }
 
@@ -90,6 +93,11 @@ func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
 		return &mockRaftFuture{}
 	}
 	return mrs.cfg.BarrierReturn
+}
+
+// resetCalls resets call counts for the mock.
+func (mrs *mockRaftService) resetCalls() {
+	mrs.addVoterCalledForAddrs = nil
 }
 
 func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {
