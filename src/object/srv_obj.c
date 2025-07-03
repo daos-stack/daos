@@ -1391,13 +1391,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		D_GOTO(out, rc = 0);
 	}
 
-	rc = csum_verify_keys(ioc->ioc_coc->sc_csummer, &orw->orw_dkey,
-			      orw->orw_dkey_csum, &orw->orw_iod_array,
-			      &orw->orw_oid);
-	if (rc != 0) {
-		D_ERROR(DF_C_UOID_DKEY "verify_keys error: " DF_RC "\n",
-			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey), DP_RC(rc));
-		return rc;
+	if (!(orw->orw_flags & ORF_FOR_DATA_VERIFICATION)) {
+		rc = csum_verify_keys(ioc->ioc_coc->sc_csummer, &orw->orw_dkey,
+				      orw->orw_dkey_csum, &orw->orw_iod_array, &orw->orw_oid);
+		if (rc != 0) {
+			D_ERROR(DF_C_UOID_DKEY "verify_keys error: " DF_RC "\n",
+				DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey), DP_RC(rc));
+			return rc;
+		}
 	}
 
 	dkey = (daos_key_t *)&orw->orw_dkey;
@@ -1624,7 +1625,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		goto out;
 	}
 
-	if (obj_rpc_is_fetch(rpc) && !spec_fetch &&
+	if (obj_rpc_is_fetch(rpc) && !spec_fetch && !(orw->orw_flags & ORF_FOR_DATA_VERIFICATION) &&
 	    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
 		if (orw->orw_iod_array.oia_iods != iods) {
 			/* Need to copy iod sizes for checksums */
@@ -5265,11 +5266,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	struct daos_cpd_bulk		**dcbs = NULL;
 	struct daos_cpd_bulk		 *dcb = NULL;
 	crt_bulk_t			 *bulks = NULL;
-	d_sg_list_t			**sgls = NULL;
-	struct daos_cpd_sub_head	 *dcsh;
-	struct daos_cpd_disp_ent	 *dcde;
-	struct daos_cpd_req_idx		 *dcri;
-	void				 *end;
+	d_sg_list_t                     **sgls  = NULL;
 	uint32_t			  total = 0;
 	uint32_t			  count = 0;
 	int				  rc = 0;
@@ -5313,18 +5310,6 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 		}
 	}
 
-	for (i = 0; i < oci->oci_disp_ents.ca_count; i++) {
-		dcb = ds_obj_cpd_get_ents_bulk(rpc, i);
-		if (dcb != NULL) {
-			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_ENT,
-						  ds_obj_cpd_get_ents_cnt(rpc, i));
-			if (rc != 0)
-				goto out;
-
-			dcbs[count++] = dcb;
-		}
-	}
-
 	if (leader) {
 		for (i = 0; i < oci->oci_disp_tgts.ca_count; i++) {
 			dcb = ds_obj_cpd_get_tgts_bulk(rpc, i);
@@ -5336,6 +5321,18 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 
 				dcbs[count++] = dcb;
 			}
+		}
+	}
+
+	for (i = 0; i < oci->oci_disp_ents.ca_count; i++) {
+		dcb = ds_obj_cpd_get_ents_bulk(rpc, i);
+		if (dcb != NULL) {
+			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_ENT,
+						  ds_obj_cpd_get_ents_cnt(rpc, i));
+			if (rc != 0)
+				goto out;
+
+			dcbs[count++] = dcb;
 		}
 	}
 
@@ -5352,21 +5349,31 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < count; i++) {
-		bulks[i] = *dcbs[i]->dcb_bulk;
+		bulks[i] = dcbs[i]->dcb_bulk;
 		sgls[i] = &dcbs[i]->dcb_sgl;
 	}
 
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL, DAOS_HDL_INVAL,
-			       sgls, count, count, NULL);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, true, bulks, NULL, NULL, DAOS_HDL_INVAL, sgls,
+			       count, count, NULL);
 	if (rc != 0)
 		goto out;
 
 	for (i = 0; i < count; i++) {
+		D_ASSERTF(dcbs[i]->dcb_size == dcbs[i]->dcb_iov.iov_len, "Bad bulk: %u vs %u\n",
+			  dcbs[i]->dcb_size, (uint32_t)dcbs[i]->dcb_iov.iov_len);
+
 		switch (dcbs[i]->dcb_type) {
-		case DCST_BULK_HEAD:
-			dcsh = &dcbs[i]->dcb_head;
+		case DCST_BULK_HEAD: {
+			struct daos_cpd_sub_head *dcsh = &dcbs[i]->dcb_head;
+
 			dcsh->dcsh_mbs = dcbs[i]->dcb_iov.iov_buf;
+			D_ASSERTF(dcsh->dcsh_mbs->dm_data_size ==
+				      dcbs[i]->dcb_iov.iov_len - sizeof(*dcsh->dcsh_mbs),
+				  "Invalid bulk MBS data for CPD RPC on %s: %u vs %u\n",
+				  leader ? "leader" : "follower", dcsh->dcsh_mbs->dm_data_size,
+				  (uint32_t)(dcbs[i]->dcb_iov.iov_len - sizeof(*dcsh->dcsh_mbs)));
 			break;
+		}
 		case DCST_BULK_REQ:
 			rc = crt_proc_create(dss_get_module_info()->dmi_ctx,
 					     dcbs[i]->dcb_iov.iov_buf, dcbs[i]->dcb_iov.iov_len,
@@ -5386,17 +5393,36 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 					goto out;
 			}
 			break;
-		case DCST_BULK_ENT:
+		case DCST_BULK_ENT: {
+			struct daos_cpd_disp_ent *dcde;
+			struct daos_cpd_req_idx  *dcri;
+			void                     *end;
+
 			dcde = dcbs[i]->dcb_iov.iov_buf;
 			dcri = dcbs[i]->dcb_iov.iov_buf + sizeof(*dcde) * dcbs[i]->dcb_item_nr;
-			end = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
+			end  = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
 
 			for (j = 0; j < dcbs[i]->dcb_item_nr; j++) {
 				dcde[j].dcde_reqs = dcri;
 				dcri += dcde[j].dcde_read_cnt + dcde[j].dcde_write_cnt;
-				D_ASSERT((void *)dcri <= end);
+				D_ASSERTF((void *)dcri <= end,
+					  "Invalid bulk ENT data for CPD RPC on %s: pos %u, rd %u, "
+					  "wr %u, nr %u, size %u, base %p, cur %p, end %p\n",
+					  leader ? "leader" : "follower", j, dcde[j].dcde_read_cnt,
+					  dcde[j].dcde_write_cnt, dcbs[i]->dcb_item_nr,
+					  dcbs[i]->dcb_size, dcde, dcri, end);
 			}
 			break;
+		}
+		case DCST_BULK_TGT: {
+			struct daos_shard_tgt *tgts = dcbs[i]->dcb_iov.iov_buf;
+
+			D_ASSERTF(dss_self_rank() == tgts[0].st_rank &&
+				      dss_get_module_info()->dmi_tgt_id == tgts[0].st_tgt_idx,
+				  "Invalid bulk tgt data on %u: rank %u, tgt_idx %u\n",
+				  dss_self_rank(), tgts[0].st_rank, tgts[0].st_tgt_idx);
+			break;
+		}
 		default:
 			break;
 		}
