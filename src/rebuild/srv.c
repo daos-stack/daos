@@ -998,7 +998,7 @@ static void
 rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 {
 	D_ASSERT(rgt->rgt_refcount == 0);
-	d_list_del(&rgt->rgt_list);
+	d_list_del_init(&rgt->rgt_list);
 	if (rgt->rgt_servers)
 		D_FREE(rgt->rgt_servers);
 	if (rgt->rgt_servers_sorted)
@@ -2086,7 +2086,7 @@ rgt_leader_stop(struct rebuild_global_pool_tracker *rgt)
 	rgt->rgt_abort = 1;
 
 	/* Remove it from the rgt list to avoid stopping rgt duplicately */
-	d_list_del(&rgt->rgt_list);
+	d_list_del_init(&rgt->rgt_list);
 
 	ABT_mutex_lock(rgt->rgt_lock);
 	ABT_cond_wait(rgt->rgt_done_cond, rgt->rgt_lock);
@@ -2585,7 +2585,7 @@ rebuild_tgt_status_check_ult(void *arg)
 		if (!rpt->rt_global_done) {
 			struct ds_iv_ns *ns = rpt->rt_pool->sp_iv_ns;
 
-			iv.riv_master_rank = rpt->rt_leader_rank;
+			iv.riv_master_rank       = ns->iv_master_rank;
 			iv.riv_rank = rpt->rt_rank;
 			iv.riv_ver = rpt->rt_rebuild_ver;
 			iv.riv_rebuild_gen = rpt->rt_rebuild_gen;
@@ -2931,6 +2931,22 @@ rebuild_cleanup(void)
 	return 0;
 }
 
+static int
+rebuild_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
+{
+	if (opc_get(rpc->cr_opc) == REBUILD_OBJECTS_SCAN) {
+		struct rebuild_scan_in *rsi = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &rsi->rsi_pool_uuid);
+	}
+
+	return 0;
+}
+
+static struct dss_module_ops rebuild_mod_ops = {
+    .dms_get_req_attr = rebuild_get_req_attr,
+};
+
 struct dss_module rebuild_module = {
     .sm_name        = "rebuild",
     .sm_mod_id      = DAOS_REBUILD_MODULE,
@@ -2943,4 +2959,5 @@ struct dss_module rebuild_module = {
     .sm_cli_count   = {0},
     .sm_handlers    = {rebuild_handlers},
     .sm_key         = &rebuild_module_key,
+    .sm_mod_ops     = &rebuild_mod_ops,
 };
