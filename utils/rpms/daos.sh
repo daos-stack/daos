@@ -412,12 +412,22 @@ build_package "daos-client-tests-openmpi" "noautoreq"
 PACKAGE_TYPE="empty"
 ARCH="noarch"
 DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
+DEPENDS+=("mpifileutils-mpich")
+DEPENDS+=("testmpio")
+DEPENDS+=("mpich = 4.1~a1")
+DEPENDS+=("ior")
+DEPENDS+=("hdf5-mpich-tests")
+DEPENDS+=("hdf5-vol-daos-mpich-tests")
+DEPENDS+=("MACSio-mpich")
+DEPENDS+=("simul-mpich")
+DEPENDS+=("romio-tests")
+DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
 build_package "daos-tests"
 
 build_package "daos-client-tests-mpich"
 
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
-DEPENDS=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
-DEPENDS=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
-DEPENDS=("daos-serialize = ${VERSION}-${RELEASE}")
+DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
+DEPENDS+=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
+DEPENDS+=("daos-serialize = ${VERSION}-${RELEASE}")
 build_package "daos-tests-internal"
