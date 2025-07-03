@@ -685,7 +685,7 @@ pipeline {
                                        stash_files: 'ci/test_files_to_stash.txt',
                                        build_deps: 'no',
                                        stash_opt: true,
-                                       scons_args: sconsArgs() +
+                                       scons_args: sconsFaultsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
