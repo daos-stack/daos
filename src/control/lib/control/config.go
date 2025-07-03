@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,7 +55,11 @@ func UserConfigPath() string {
 // SystemConfigPath returns the computed path to the system
 // control configuration file, if it exists.
 func SystemConfigPath() string {
-	return path.Join(build.ConfigDir, defaultConfigFile)
+	if _, err := os.Stat(build.ConfigDir); err == nil {
+		return path.Join(build.ConfigDir, defaultConfigFile)
+	}
+
+	return path.Join("/etc/daos", defaultConfigFile)
 }
 
 // LoadConfig attempts to load a configuration by one of the following:

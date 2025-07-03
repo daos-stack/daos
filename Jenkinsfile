@@ -131,9 +131,9 @@ boolean new_rpms() {
     return cachedCommitPragma(pragma: "New-RPM", def_val: 'false')
 }
 
-void uploadNewRPMs() {
+void uploadNewRPMs(String target, String stage) {
     if (new_rpms()) {
-        buildRpmPost condition: 'success', rpmlint: false
+        buildRpmPost target: target, condition: stage, rpmlint: false
     }
 }
 
@@ -271,6 +271,9 @@ pipeline {
         booleanParam(name: 'CI_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on EL 8')
+        booleanParam(name: 'CI_el9_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on Leap 15')
@@ -658,6 +661,54 @@ pipeline {
                         }
                     }
                     steps {
+                        script {
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                        stash_files: 'ci/test_files_to_stash.txt',
+                                        build_deps: 'no',
+                                        stash_opt: true,
+                                        scons_args: sconsArgs() +
+                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                            if (new_rpms()) {
+                                sh label: 'Generate RPMs',
+                                    script: './ci/rpm/gen_rpms.sh'
+                            }
+                        }
+                    }
+                    post {
+                        success {
+                            uploadNewRPMs('el8', 'success')
+                        }
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-el8-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-el8-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            uploadNewRPMs('el8', 'cleanup')
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.9'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-el9 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
@@ -667,14 +718,46 @@ pipeline {
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
-                        success {
-                            uploadNewRPMs()
-                        }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
+                                      mv config.log config.log-el9-gcc
                                   fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
+                            archiveArtifacts artifacts: 'config.log-el9-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on Leap 15.5') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.leap.15'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       build_deps: 'yes'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
                                              allowEmptyArchive: true
                         }
                         cleanup {

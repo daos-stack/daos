@@ -162,10 +162,12 @@ create_depends() {
 
 build_package() {
   name="$1"; shift
+  if [ "${1-}" != "noautoreq" ]; then
+    EXTRA_OPTS+=("--rpm-autoreq")
+  fi
 
   output_type="${OUTPUT_TYPE:-rpm}"
   EXTRA_OPTS+=("--rpm-autoprov")
-  EXTRA_OPTS+=("--rpm-autoreq")
 
   depends=()
   create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
