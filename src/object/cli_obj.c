@@ -4692,10 +4692,10 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
             iov_frag_size == 0 ? false : obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
 
 	sgls = args->sgls;
-	if ((obj_auxi->rw_args.merge_ctx && obj_auxi->rw_args.merge_ctx->sgls_dup != NULL) ||
-	    sgls == NULL)
+	if (obj_auxi->req_dup_sgl || sgls == NULL)
 		return 0;
 
+	obj_auxi->req_dup_sgl = 1;
 	/* First pass: Analyze SGL structure and mark merge candidates */
 	for (i = 0; i < args->nr; i++) {
 		iod = &args->iods[i];
@@ -4852,13 +4852,15 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			/* Copy data from original IOVs to merged buffer */
 			offset = 0;
 			for (k = merge_start; k < j; k++) {
+				uint64_t merge_len;
+
 				iov = &sg->sg_iovs[k];
 				if (skip_sgl_iov(update, iov))
 					continue;
 				D_ASSERT(offset < merged_buf_size);
-				memcpy(merged_buf + offset, sg->sg_iovs[k].iov_buf,
-				       sg->sg_iovs[k].iov_len);
-				offset += sg->sg_iovs[k].iov_len;
+				merge_len = update ? iov->iov_len : iov->iov_buf_len;
+				memcpy(merged_buf + offset, iov->iov_buf, merge_len);
+				offset += merge_len;
 			}
 
 			/* Create merged IOV entry */
@@ -4900,6 +4902,8 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 	if (obj_auxi->opc != DAOS_OBJ_RPC_UPDATE && obj_auxi->opc != DAOS_OBJ_RPC_FETCH)
 		return;
 
+	obj_auxi->req_dup_sgl = 0;
+
 	if (ctx == NULL)
 		return;
 
@@ -4929,6 +4933,7 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 				/* Direct copy if entry wasn't modified */
 				if (!isset_range((uint8_t *)ctx->merged_bitmaps[i], j, j)) {
 					*iov = *iov_dup;
+					D_ASSERT(dup_buf_size == 0);
 					j++;
 					sg_nr_out++;
 					dup_sg_idx++;
