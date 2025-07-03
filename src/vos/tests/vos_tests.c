@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +59,7 @@ print_usage()
 	print_message("vos_tests -m|--punch_model\n");
 	print_message("vos_tests -C|--mvcc\n");
 	print_message("vos_tests -w|--wal\n");
+	print_message("vos_tests -M|--mark\n");
 	print_message("vos_tests -r|--run_vos_cmd <command>\n");
 	print_message("-S|--storage <storage path>\n");
 	print_message("vos_tests -h|--help\n");
@@ -89,6 +91,7 @@ run_all_tests(int keys)
 	failed += run_ilog_tests(cfg_desc_io);
 	failed += run_csum_extent_tests(cfg_desc_io);
 	failed += run_wal_tests(cfg_desc_io);
+	failed += run_mark_tests(cfg_desc_io);
 
 	failed += run_io_test(&type_list[0], ARRAY_SIZE(type_list), keys, cfg_desc_io);
 
@@ -105,7 +108,7 @@ main(int argc, char **argv)
 	int                  otype;
 	int                  keys;
 	const char          *vos_command    = NULL;
-	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCwr:";
+	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCwMr:";
 	static struct option long_options[] = {
 	    {"all", required_argument, 0, 'A'},
 	    {"pool", no_argument, 0, 'p'},
@@ -120,6 +123,7 @@ main(int argc, char **argv)
 	    {"epoch_cache", no_argument, 0, 't'},
 	    {"mvcc", no_argument, 0, 'C'},
 	    {"wal", no_argument, 0, 'w'},
+	    {"mark", no_argument, 0, 'M'},
 	    {"csum", no_argument, 0, 'z'},
 	    {"run_vos_cmd", required_argument, 0, 'r'},
 	    {"help", no_argument, 0, 'h'},
@@ -273,6 +277,10 @@ main(int argc, char **argv)
 			break;
 		case 'w':
 			nr_failed += run_wal_tests("");
+			test_run = true;
+			break;
+		case 'M':
+			nr_failed += run_mark_tests("");
 			test_run = true;
 			break;
 		case 'S':
