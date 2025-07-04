@@ -519,6 +519,9 @@ again:
 	return rc;
 }
 
+/* bypass bulk rma for single value's degraded fetch */
+#define OBJ_BULK_OFFSET_SKIP ((uint64_t)-1)
+
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
 		  uint64_t *remote_offs, uint8_t *skips, daos_handle_t ioh, d_sg_list_t **sgls,
@@ -599,9 +602,14 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 				break;
 		}
 
-		rc = bulk_transfer_sgl(ioh, rpc, remote_bulks[i + skip_nr],
-				       remote_offs ? remote_offs[i] : 0,
-				       bulk_op, bulk_bind, sgl, i, p_arg);
+		/* OBJ_BULK_OFFSET_SKIP is for the case of EC single value degraded fetch,
+		 * unnecessary to bulk transfer here, the data will be transferred back when
+		 * data recovery (ORF_EC_RECOV).
+		 */
+		if (remote_offs == NULL || remote_offs[i] != OBJ_BULK_OFFSET_SKIP)
+			rc = bulk_transfer_sgl(ioh, rpc, remote_bulks[i + skip_nr],
+					       remote_offs ? remote_offs[i] : 0, bulk_op, bulk_bind,
+					       sgl, i, p_arg);
 		if (sgls == NULL)
 			d_sgl_fini(sgl, false);
 		if (rc) {
@@ -1060,6 +1068,7 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 		} else if (deg_fetch) {
 			rc = obj_singv_ec_add_recov(nr, i, iod->iod_size,
 						    epoch, recov_lists_ptr);
+			offs[i] = OBJ_BULK_OFFSET_SKIP;
 		}
 	}
 
@@ -1450,6 +1459,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		bool				ec_deg_fetch;
 		bool				ec_recov;
 		bool				is_parity_shard;
+		bool                             size_only = false;
 		struct daos_recx_ep_list	*shadows = NULL;
 
 		bulk_op = CRT_BULK_PUT;
@@ -1457,8 +1467,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
-			if (!(orw->orw_flags & ORF_CHECK_EXISTENCE))
+			if (!(orw->orw_flags & ORF_CHECK_EXISTENCE)) {
 				fetch_flags = VOS_OF_FETCH_SIZE_ONLY;
+				size_only   = true;
+			}
 		}
 
 		ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
@@ -1485,7 +1497,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 				ioc->ioc_coc->sc_ec_agg_eph_boundary, DP_RC(rc));
 			goto out;
 		}
-		if (ec_deg_fetch && !spec_fetch) {
+		if (ec_deg_fetch && (size_only || !spec_fetch)) {
 			if (orwo->orw_rels.ca_arrays != NULL) {
 				/* Re-entry case */
 				daos_recx_ep_list_free(orwo->orw_rels.ca_arrays,
@@ -1591,24 +1603,27 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			daos_epoch_t	recov_epoch = 0;
 			bool		recov_snap = false;
 
-			/* If fetch from snapshot, and snapshot epoch lower than
-			 * vos agg epoch boundary, recovery from snapshot epoch.
-			 * Or, will recovery from max{parity_epoch, vos_epoch_
-			 * boundary}.
-			 */
-			vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
-			if (ioc->ioc_fetch_snap &&
-			    orw->orw_epoch < vos_agg_epoch) {
-				recov_epoch = orw->orw_epoch;
-				recov_snap =  true;
+			if (size_only) {
+				daos_recx_ep_list_free(recov_lists, iods_nr);
 			} else {
-				recov_epoch = vos_agg_epoch;
+				/* If fetch from snapshot, and snapshot epoch lower than
+				 * vos agg epoch boundary, recovery from snapshot epoch.
+				 * Or, will recovery from max{parity_epoch, vos_epoch_
+				 * boundary}.
+				 */
+				vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
+				if (ioc->ioc_fetch_snap && orw->orw_epoch < vos_agg_epoch) {
+					recov_epoch = orw->orw_epoch;
+					recov_snap  = true;
+				} else {
+					recov_epoch = vos_agg_epoch;
+				}
+				daos_recx_ep_list_set(recov_lists, iods_nr, recov_epoch,
+						      recov_snap);
+				daos_recx_ep_list_merge(recov_lists, iods_nr);
+				orwo->orw_rels.ca_arrays = recov_lists;
+				orwo->orw_rels.ca_count  = iods_nr;
 			}
-			daos_recx_ep_list_set(recov_lists, iods_nr,
-					      recov_epoch, recov_snap);
-			daos_recx_ep_list_merge(recov_lists, iods_nr);
-			orwo->orw_rels.ca_arrays = recov_lists;
-			orwo->orw_rels.ca_count = iods_nr;
 		}
 	}
 
