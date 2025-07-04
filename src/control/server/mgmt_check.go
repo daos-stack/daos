@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -528,13 +529,15 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, err
 	}
 
-	f, err := svc.sysdb.GetCheckerFinding(req.Seq)
-	if err != nil {
-		return nil, err
-	}
+	if !req.ForAll {
+		f, err := svc.sysdb.GetCheckerFinding(req.Seq)
+		if err != nil {
+			return nil, err
+		}
 
-	if !f.HasChoice(req.Act) {
-		return nil, errors.Errorf("invalid action %s (must be one of %s)", req.Act, f.ValidChoicesString())
+		if !f.HasChoice(req.Act) {
+			return nil, errors.Errorf("invalid action %s (must be one of %s)", req.Act, f.ValidChoicesString())
+		}
 	}
 
 	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerAction, req)
@@ -547,7 +550,7 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
 	}
 
-	if resp.Status == 0 {
+	if !req.ForAll && resp.Status == 0 {
 		if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
 			return nil, err
 		}
