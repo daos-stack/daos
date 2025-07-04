@@ -195,7 +195,7 @@ def scons():
                             "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
     ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" + \
-        " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
+        " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lssl -lnuma -ldl"
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     aenv.AppendENVPath("CGO_CFLAGS",
@@ -216,7 +216,7 @@ def scons():
 
     # Add vos and dependent libs for ddb
     ddb_env.AppendENVPath("CGO_LDFLAGS", " -lvos -ldav_v2 -ldaos_common_pmem -lpmem "
-                                         "-labt -lgurt -luuid -lbio -lcart", sep=" ")
+                                         "-labt -lgurt -luuid -lbio -lssl -lcart", sep=" ")
     install_go_bin(ddb_env, "ddb", ['ddb'])
 
 

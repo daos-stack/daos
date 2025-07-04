@@ -54,12 +54,12 @@ append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/daos"
 list_files files "${SL_PREFIX}/lib64/daos/VERSION"
-append_install_list "${extras[@]}"
+append_install_list "${files[@]}"
 
 mkdir -p "${tmp}${sysconfdir}/daos/certs"
-extras+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos/certs")
+install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 
-EXTRA_OPTS=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
+EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
 DEPENDS=( "mercury >= ${mercury_version}" "${libfabric_lib} >= ${libfabric_version}" )
 build_package "daos"
@@ -77,7 +77,8 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   mkdir -p "${tmp}/${unitdir}"
   install -m 644 "utils/systemd/${server_svc_name}" "${tmp}/${unitdir}"
   install_list+=("${tmp}/${unitdir}/${server_svc_name}=${unitdir}/${server_svc_name}")
-  mkdir -p "${tmp}/${sysconfdir}/daos/certs"
+  mkdir -p "${tmp}/${sysconfdir}/daos/certs/clients"
+  install_list+=("${tmp}/${sysconfdir}/daos/certs/clients=${sysconfdir}/daos/certs")
 
   TARGET_PATH="${bindir}"
   list_files files "${SL_PREFIX}/bin/daos_engine" \
@@ -132,7 +133,6 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   list_files files "${SL_PREFIX}/lib64${estimator}/*"
   append_install_list "${files[@]}"
 
-  EXTRA_OPTS=()
   cat << EOF  > "${tmp}/pre_install_server"
 #!/bin/bash
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -146,29 +146,30 @@ cat << EOF  > "${tmp}/post_install_server"
 #!/bin/bash
 set -x
 ldconfig
-sysctl -p "${sysctldir}/${sysctl_script_name}"
-systemctl daemon-reload || true
+systemctl --no-reload preset daos_server.service  &>/dev/null || :
+/usr/lib/systemd/systemd-sysctl 10-daos_server.conf &>/dev/null || :
 EOF
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_server")
 
 cat << EOF  > "${tmp}/pre_uninstall_server"
 #!/bin/bash
-# TODO: workout what %systemd_preun %{server_svc_name} does
+systemctl --no-reload disable --now daos_server.service >& /dev/null || :
 EOF
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
   if [[ "${DISTRO:-el8}" =~ suse ]]; then
     cat << EOF  > "${tmp}/post_uninstall_server"
 #!/bin/bash
-# TODO: work out what %postun server does
 ldconfig
-# TODO: workout what %systemd_postun %{server_svc_name} does
+rm -f "/var/lib/systemd/migrated/daos_server.service" || :
+/usr/bin/systemctl daemon-reload || :
 EOF
     EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_server")
   fi
   EXTRA_OPTS+=("--rpm-attr" "0644,root,root:${sysconfdir}/daos/daos_server.yml")
   EXTRA_OPTS+=("--rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
   EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
+  EXTRA_OPTS+=("--rpm-attr" "2755,root,daos_server:${bindir}/daos_server")
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${VERSION}-${RELEASE}" )
   DEPENDS+=( "${pmemobj_lib} >= ${pmdk_version}" "${argobots_lib} >= ${argobots_version}" )
@@ -263,27 +264,27 @@ TARGET_PATH="${datadir}/daos"
 list_files files "${SL_PREFIX}/share/daos/ioil-ld-opts"
 append_install_list "${files[@]}"
 
-EXTRA_OPTS=()
 cat << EOF  > "${tmp}/pre_install_client"
-getent group agent >/dev/null || groupadd -r daos_agent
+getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
 EOF
 EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_client")
 
 cat << EOF  > "${tmp}/post_install_client"
-systemctl daemon-reload || true
+systemctl --no-reload preset daos_agent.service  &>/dev/null || :
 EOF
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_client")
 
 cat << EOF  > "${tmp}/pre_uninstall_client"
-# TODO: workout what %systemd_preun %{agent_svc_name} does
+systemctl --no-reload disable --now daos_agent.service >& /dev/null || :
 EOF
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
 if [[ "${DISTRO:-el8}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
-# TODO: workout what %systemd_postun %{agent_svc_name} does
+rm -f "/var/lib/systemd/migrated/daos_agent.service" || :
+/usr/bin/systemctl daemon-reload || :
 EOF
   EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
 fi
@@ -388,31 +389,45 @@ if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
   list_files files "${SL_PREFIX}/bin/daos_firmware_helper"
   append_install_list "${files[@]}"
 
+  EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_firmware_helper")
+
   DEPENDS=("daos-server = ${VERSION}-${RELEASE}")
   build_package "daos-firmware"
 fi
 
 TARGET_PATH="${libdir}"
+DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
+DEPENDS+=("hdf5-${openmpi_lib}")
+DEPENDS+=("hdf5-vol-daos-${openmpi_lib}")
+DEPENDS+=("MACSio-${openmpi_lib}")
+DEPENDS+=("simul-${openmpi_lib}")
+DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-build_package "daos-client-tests-openmpi"
+# Don't do autoreq, we know we need OpenMPI so add it explicitly
+build_package "daos-client-tests-openmpi" "noautoreq"
 
 #shim packages
 PACKAGE_TYPE="empty"
 ARCH="noarch"
-EXTERNAL_DEPENDS=("libmpi.so.40()(64bit)")
-DEPENDS=()
-# no files in shim
-build_package "daos-mofed-shim"
-
 DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
+DEPENDS+=("mpifileutils-mpich")
+DEPENDS+=("testmpio")
+DEPENDS+=("mpich = 4.1~a1")
+DEPENDS+=("ior")
+DEPENDS+=("hdf5-mpich-tests")
+DEPENDS+=("hdf5-vol-daos-mpich-tests")
+DEPENDS+=("MACSio-mpich")
+DEPENDS+=("simul-mpich")
+DEPENDS+=("romio-tests")
+DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
 build_package "daos-tests"
 
 build_package "daos-client-tests-mpich"
 
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
-DEPENDS=("daos-tests-openmpi = ${VERSION}-${RELEASE}")
-DEPENDS=("daos-tests-mpich = ${VERSION}-${RELEASE}")
-DEPENDS=("daos-serialize = ${VERSION}-${RELEASE}")
+DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
+DEPENDS+=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
+DEPENDS+=("daos-serialize = ${VERSION}-${RELEASE}")
 build_package "daos-tests-internal"

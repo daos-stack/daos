@@ -3,6 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+/* Copyright 2025 Google LLC
  * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
@@ -51,7 +52,7 @@ Map nlt_test() {
                script: "grep -E '<error( |>)' ${filesList.join(' ')} || true",
                returnStdout: true
         if (rcs) {
-            vfail = 1
+            vgfail = 1
         }
         String suite = sanitizedStageName()
         junitSimpleReport suite: suite,
@@ -124,6 +125,16 @@ void fixup_rpmlintrc() {
     }
 
     writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
+}
+
+boolean new_rpms() {
+    return cachedCommitPragma(pragma: "New-RPM", def_val: 'false')
+}
+
+void uploadNewRPMs(String target, String stage) {
+    if (new_rpms()) {
+        buildRpmPost target: target, condition: stage, rpmlint: false
+    }
 }
 
 String vm9_label(String distro) {
@@ -481,7 +492,7 @@ pipeline {
                 stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !new_rpms() }
                     }
                     agent {
                         dockerfile {
@@ -520,7 +531,7 @@ pipeline {
                 stage('Build RPM on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !new_rpms() }
                     }
                     agent {
                         dockerfile {
@@ -558,7 +569,7 @@ pipeline {
                 stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !new_rpms() }
                     }
                     agent {
                         dockerfile {
@@ -650,15 +661,24 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                        script {
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                        stash_files: 'ci/test_files_to_stash.txt',
+                                        build_deps: 'no',
+                                        stash_opt: true,
+                                        scons_args: sconsArgs() +
+                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                            if (new_rpms()) {
+                                sh label: 'Generate RPMs',
+                                    script: './ci/rpm/gen_rpms.sh'
+                            }
+                        }
                     }
                     post {
+                        success {
+                            uploadNewRPMs('el8', 'success')
+                        }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
                                       mv config.log config.log-el8-gcc
@@ -667,6 +687,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
+                            uploadNewRPMs('el8', 'cleanup')
                             job_status_update()
                         }
                     }
