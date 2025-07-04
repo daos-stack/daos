@@ -1716,26 +1716,28 @@ dc_obj_layout_refresh(daos_handle_t oh)
 }
 
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt,
-		   uint32_t timeout_sec)
+dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint16_t *retry_cnt,
+		   uint16_t *inprogress_cnt, uint32_t timeout_sec)
 {
 	uint32_t delay = 0;
 
 	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN)
 		++(*inprogress_cnt);
 
-	/*
-	 * Randomly delay 5 ~ 1028 us if it is not the first retry.
-	 */
 	if (++(*retry_cnt) > 1) {
-		uint32_t limit = MIN(6, *retry_cnt) + 4;
-
-		delay = (d_rand() & ((1 << limit) - 1)) + 5;
+		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
+		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
 		/* Rebuild is being established on the server side, wait a bit longer */
 		if (err == -DER_UPDATE_AGAIN)
 			delay <<= 10;
-		D_DEBUG(DB_IO, "Try to re-sched task %p for %u/%u times with %u us delay\n", task,
-			*inprogress_cnt, *retry_cnt, delay);
+		else if (opc == DAOS_OBJ_RPC_COLL_PUNCH)
+			/* 128 times of the delay for collective object RPC. */
+			delay <<= 7;
+		else if (opc == DAOS_OBJ_RPC_CPD)
+			/* 8 times of the delay for compounded RPC. */
+			delay <<= 3;
+		D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u/%u times with %u us delay\n",
+			task, opc, *inprogress_cnt, *retry_cnt, delay);
 	}
 
 	/*
@@ -1778,8 +1780,9 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		if (!pmap_stale) {
 			uint32_t now = daos_gettime_coarse();
 
-			delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
-						   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+			delay =
+			    dc_obj_retry_delay(task, obj_auxi->opc, result, &obj_auxi->retry_cnt,
+					       &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
 			if (result == -DER_INPROGRESS &&
 			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->inprogress_cnt >= 10) ||
 			     (obj_auxi->retry_warn_ts > 0 && obj_auxi->retry_warn_ts + 10 < now))) {
@@ -3571,7 +3574,7 @@ merge_key(struct dc_object *obj, d_list_t *head, char *key, int key_size)
 
 	d_list_for_each_entry(key_one, head, key_list) {
 		if (key_size == key_one->key.iov_len &&
-		    strncmp(key_one->key.iov_buf, key, key_size) == 0) {
+		    memcmp(key_one->key.iov_buf, key, key_size) == 0) {
 			return 0;
 		}
 	}
@@ -6137,6 +6140,16 @@ sub_anchors_prep(struct obj_auxi_args *obj_auxi, int shards_nr)
 		D_ASSERTF(nr >= shards_nr, "nr %d shards_nr %d\n", nr, shards_nr);
 		buf_size /= shards_nr;
 		nr /= shards_nr;
+	} else if ((obj_auxi->opc == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
+		    obj_auxi->opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) &&
+		   shards_nr > 2 && nr >= shards_nr * 4) {
+		/* for EC object key enumerate, enumerate less keys from each shard
+		 * to avoid duplicate enumerate.
+		 */
+		int tmp_nr = shards_nr / 2;
+
+		nr       = roundup(nr / tmp_nr, 4);
+		buf_size = roundup(buf_size / tmp_nr, 64);
 	}
 
 	obj_auxi->sub_anchors = 1;

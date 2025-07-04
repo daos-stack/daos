@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -55,6 +56,8 @@ type MockNvmeCfg struct {
 	FormatRes      []*FormatResult
 	FormatErr      error
 	UpdateErr      error
+	CleanErr       error
+	CleanRes       []string
 }
 
 // MockNvmeImpl is an implementation of the Nvme interface.
@@ -64,7 +67,7 @@ type MockNvmeImpl struct {
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
 // accessible by SPDK on a given host.
-func (n *MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
+func (n MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
 	if n.Cfg.DiscoverErr != nil {
 		return nil, n.Cfg.DiscoverErr
 	}
@@ -74,7 +77,7 @@ func (n *MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, er
 }
 
 // Format device at given pci address, destructive operation!
-func (n *MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
+func (n MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	log.Debug("mock format nvme ssds")
 
 	if n.Cfg.FormatErr != nil {
@@ -89,7 +92,7 @@ func (n *MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 }
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
-func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
+func (n MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
 	if n.Cfg.UpdateErr != nil {
 		return n.Cfg.UpdateErr
 	}
@@ -97,4 +100,13 @@ func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path stri
 		ctrlrPciAddr, path, slot)
 
 	return nil
+}
+
+// Clean removes SPDK lockfiles associated with NVMe SSDs/controllers at given PCI addresses.
+func (n MockNvmeImpl) Clean(log logging.Logger, pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
+	if n.Cfg.CleanRes == nil {
+		n.Cfg.CleanRes = []string{}
+	}
+
+	return n.Cfg.CleanRes, n.Cfg.CleanErr
 }
