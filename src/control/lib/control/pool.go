@@ -751,10 +751,11 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 // service client API. Per-rank results are returned in control API generic PoolRanksResp.
 type PoolRanksReq struct {
 	poolRequest
-	ID        string          `json:"id"`
-	Ranks     []ranklist.Rank `json:"ranks"`
-	TargetIdx []uint32        `json:"target_idx"`
-	Force     bool            `json:"force"`
+	ID          string          `json:"id"`
+	Ranks       []ranklist.Rank `json:"ranks"`
+	TargetIdx   []uint32        `json:"target_idx"`
+	Force       bool            `json:"force"`
+	NoMigration bool            `json:"no_migration"`
 }
 
 // PoolRankResult describes the result of an operation on a pool's rank. JSON compatible with
@@ -948,7 +949,10 @@ func poolReintegrateRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolR
 		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
 	}
 	pbReq.Sys = req.getSystem(rpcClient)
-	pbReq.Rank = rank.Uint32()
+	pbRanks := make([]uint32, 1)
+	pbRanks[0] = rank.Uint32()
+	pbReq.Ranks = pbRanks
+	pbReq.NoMigration = req.NoMigration
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
@@ -971,7 +975,51 @@ func poolReintegrateRank(ctx context.Context, rpcClient UnaryInvoker, req *PoolR
 
 // PoolReintegrate will set pool targets on specified ranks back to up state which should
 // automatically start the reintegration process. Returns pool-ranks response and error.
+func PoolReintegrateRanks(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (*PoolRanksResp, error) {
+	if len(req.Ranks) == 0 {
+		return nil, errors.New("no ranks in request")
+	}
+	pbReq := new(mgmtpb.PoolReintReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", req, pbReq)
+	}
+	pbReq.Sys = req.getSystem(rpcClient)
+	pbReq.NoMigration = req.NoMigration
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.PoolReintResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
+	}
+	rpcClient.Debugf("Reintegrate DAOS pool-rank targets response: %+v\n", *resp)
+
+	// FIXME: Return value structure should be simplified to match batch ranks processing
+	results := []*PoolRankResult{}
+	for _, rank := range req.Ranks {
+		result := getPoolRankResult(resp.Status, rank)
+		results = append(results, result)
+	}
+
+	return &PoolRanksResp{
+		ID:      req.ID,
+		Results: results,
+	}, nil
+}
+
+// PoolReintegrate will set pool targets on specified ranks back to up state which should
+// automatically start the reintegration process. Returns pool-ranks response and error.
 func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanksReq) (*PoolRanksResp, error) {
+	if req.NoMigration {
+		return PoolReintegrateRanks(ctx, rpcClient, req)
+	}
 	return getPoolRanksResp(ctx, rpcClient, req, poolReintegrateRank)
 }
 

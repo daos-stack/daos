@@ -128,11 +128,12 @@ message PoolExtendResp {
 message PoolReintReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to add target up to
-	uint32 rank = 3; // target to move to the up state
+	repeated uint32 ranks        = 3; // target to move to the up state
 	repeated uint32 target_idx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 	repeated uint64 tier_bytes = 6; // Size in bytes of storage tiers
 	float           mem_ratio  = 7; // Fraction of meta-blob-sz to use as mem-file-sz
+	bool            no_migration = 8; // Safe reintegration, no data migration
 }
 
 // PoolReintResp returns resultant state of reintegrate operation.

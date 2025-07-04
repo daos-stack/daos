@@ -31,6 +31,11 @@
 #include <daos_types.h>
 #include <daos_pool.h>
 
+enum pool_target_update_flags {
+	POOL_TGT_UPDATE_SKIP_RF_CHECK = (1 << 0),
+	POOL_TGT_UPDATE_NO_MIGRATION  = (1 << 1),
+};
+
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE			(1ULL << 0)
 #define DAOS_PO_QUERY_REBUILD_STATUS		(1ULL << 1)

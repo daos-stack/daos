@@ -1512,7 +1512,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			expErr: errors.New("unmarshal"),
 		},
 		"missing uuid": {
-			reqIn:  &mgmtpb.PoolReintReq{Rank: 1},
+			reqIn:  &mgmtpb.PoolReintReq{Ranks: []uint32{1}},
 			expErr: errors.New("empty pool id"),
 		},
 		"invalid rank": {
@@ -1530,7 +1530,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 				Sys:       build.DefaultSystemName,
 				SvcRanks:  mockSvcRanks,
 				Id:        mockUUID,
-				Rank:      1,
+				Ranks:     []uint32{1},
 				TargetIdx: []uint32{1, 2},
 				TierBytes: mockTierBytes,
 				MemRatio:  mockMemRatio,
@@ -1544,7 +1544,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			if tc.reqIn == nil && !tc.nilReq {
 				tc.reqIn = &mgmtpb.PoolReintReq{
 					Id:        mockUUID,
-					Rank:      1,
+					Ranks:     []uint32{1},
 					TargetIdx: []uint32{1, 2},
 				}
 			}

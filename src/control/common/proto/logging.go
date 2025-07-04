@@ -138,7 +138,7 @@ func Debug(msg proto.Message) string {
 		fmt.Fprintf(&bld, "drain rank:%d", m.Rank)
 	case *mgmtpb.PoolReintReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
-		fmt.Fprintf(&bld, "reintegrate rank:%d", m.Rank)
+		fmt.Fprintf(&bld, "reintegrate ranks:%v", m.Ranks)
 	case *mgmtpb.PoolExcludeReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
 		fmt.Fprintf(&bld, "exclude rank:%d", m.Rank)

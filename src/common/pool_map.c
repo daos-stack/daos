@@ -3250,6 +3250,24 @@ pool_target_id_list_alloc(unsigned int num,
 	return 0;
 }
 
+int
+pool_target_id_list_dup(struct pool_target_id_list *id_list, struct pool_target_id_list *dup_list)
+{
+	int rc;
+
+	if (id_list == NULL || id_list->pti_number == 0)
+		return -DER_INVAL;
+
+	rc = pool_target_id_list_alloc(id_list->pti_number, dup_list);
+	if (rc)
+		return rc;
+
+	memcpy(dup_list->pti_ids, id_list->pti_ids,
+	       id_list->pti_number * sizeof(struct pool_target_id));
+
+	return 0;
+}
+
 void
 pool_target_id_list_free(struct pool_target_id_list *id_list)
 {

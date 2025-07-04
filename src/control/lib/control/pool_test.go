@@ -264,6 +264,7 @@ func TestControl_PoolRanksReq_Convert(t *testing.T) {
 	}
 	expReintPB := &mgmtpb.PoolReintReq{
 		Id:        "foo",
+		Ranks:     []uint32{1, 2, 3},
 		TargetIdx: []uint32{1, 2},
 	}
 	if diff := cmp.Diff(expReintPB, reintPB, cmpOpt); diff != "" {
