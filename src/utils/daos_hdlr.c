@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,7 +15,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define LIBSERIALIZE		"libdaos_serialize.so"
-#define NUM_SERIALIZE_PROPS	19
+#define NUM_SERIALIZE_PROPS     17
 
 #include <stdio.h>
 #include <dirent.h>
@@ -1167,13 +1168,13 @@ int
 dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_props,
 		      bool get_oid, bool get_label, bool get_roots)
 {
-	int		rc;
+	int              rc;
 	daos_prop_t	*props = NULL;
 	daos_prop_t	*prop_acl = NULL;
 	daos_prop_t	*props_merged = NULL;
-	uint32_t        total_props = NUM_SERIALIZE_PROPS;
+	uint32_t         total_props  = NUM_SERIALIZE_PROPS;
 	/* minimum number of properties that are always allocated/used to start count */
-	int             prop_index = NUM_SERIALIZE_PROPS;
+	int              prop_index = 0;
 
 	if (get_oid)
 		total_props++;
@@ -1194,40 +1195,38 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* The order of properties MUST match the order expected by serialization  */
-	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
-	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
-	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_LAYOUT_VER;
-	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_CSUM;
-	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
-	props->dpp_entries[5].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	props->dpp_entries[6].dpe_type = DAOS_PROP_CO_REDUN_FAC;
-	props->dpp_entries[7].dpe_type = DAOS_PROP_CO_REDUN_LVL;
-	props->dpp_entries[8].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
-	props->dpp_entries[9].dpe_type = DAOS_PROP_CO_COMPRESS;
-	props->dpp_entries[10].dpe_type = DAOS_PROP_CO_ENCRYPT;
-	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_OWNER;
-	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_DEDUP;
-	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
-	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_EC_PDA;
-	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_RP_PDA;
-	props->dpp_entries[17].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
-	props->dpp_entries[18].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_LAYOUT_VER;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_COMPRESS;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_ENCRYPT;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_DEDUP;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_EC_PDA;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_RP_PDA;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+	props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
 
 	/* Conditionally get the OID. Should always be true for serialization. */
 	if (get_oid) {
-		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
-		prop_index++;
+		props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
 	}
 
 	if (get_label) {
-		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_LABEL;
-		prop_index++;
+		props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_LABEL;
 	}
 
 	if (get_roots) {
-		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_ROOTS;
+		props->dpp_entries[prop_index++].dpe_type = DAOS_PROP_CO_ROOTS;
 	}
+
+	D_ASSERT(prop_index == total_props);
 
 	/* Get all props except ACL first. */
 	rc = daos_cont_query(coh, NULL, props, NULL);
@@ -1237,9 +1236,17 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	}
 
 	/* Fetch the ACL separately in case user doesn't have access */
-	rc = daos_cont_get_acl(coh, &prop_acl, NULL);
-	if (rc == 0) {
-		/* ACL will be appended to the end */
+	prop_acl = daos_prop_alloc(1);
+	if (prop_acl == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	prop_acl->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+
+	rc = daos_cont_query(coh, NULL, prop_acl, NULL);
+	if (rc != 0 && rc != DER_NO_PERM) {
+		DH_PERROR_DER(ap, rc, "Failed to query container");
+		D_GOTO(out, rc);
+	} else if (rc == 0) {
 		rc = daos_prop_merge2(props, prop_acl, &props_merged);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to set container ACL");
@@ -1247,10 +1254,8 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 		}
 		daos_prop_free(props);
 		props = props_merged;
-	} else if (rc != -DER_NO_PERM) {
-		DH_PERROR_DER(ap, rc, "Failed to query container ACL");
-		D_GOTO(out, rc);
 	}
+
 	rc = 0;
 	*_props = props;
 out:
