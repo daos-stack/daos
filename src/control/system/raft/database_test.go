@@ -431,10 +431,50 @@ func ignoreFaultDomainIDOption() cmp.Option {
 		}, cmp.Ignore())
 }
 
-//TODO
-//func TestSystem_MemberAddrMap_dedupeMembers
-//func TestSystem_MemberAddrMap_addMember
-//func TestSystem_MemberAddrMap_removeMember
+func checkMemberDB(t *testing.T, mdb *MemberDatabase, expMember *Member, opts ...cmp.Option) {
+	t.Helper()
+
+	cmpOpts := []cmp.Option{
+		cmp.AllowUnexported(Member{}),
+	}
+	for _, o := range opts {
+		cmpOpts = append(cmpOpts, o)
+	}
+
+	uuidM, ok := mdb.Uuids[expMember.UUID]
+	if !ok {
+		t.Errorf("member not found for UUID %s", expMember.UUID)
+	}
+	if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
+		t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
+	}
+
+	rankM, ok := mdb.Ranks[expMember.Rank]
+	if !ok {
+		t.Errorf("member not found for rank %d", expMember.Rank)
+	}
+	if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
+		t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
+	}
+
+	addrMs, ok := mdb.Addrs[expMember.Addr.String()]
+	if !ok {
+		t.Errorf("slice not found for addr %s", expMember.Addr.String())
+	}
+
+	found := false
+	for _, am := range addrMs {
+		if am.Rank == expMember.Rank {
+			found = true
+			if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
+				t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
+	}
+}
 
 func TestSystem_Database_memberRaftOps(t *testing.T) {
 	ctx := test.Context(t)
@@ -457,10 +497,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 		Addr:        testMembers[1].Addr,
 		State:       testMembers[1].State,
 		FaultDomain: MustCreateFaultDomainFromString("/rack1"),
-	}
-
-	cmpOpts := []cmp.Option{
-		cmp.AllowUnexported(Member{}),
 	}
 
 	for name, tc := range map[string]struct {
@@ -550,40 +586,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 
 			// Check member DB was updated
 			for _, expMember := range tc.expMembers {
-				uuidM, ok := db.data.Members.Uuids[expMember.UUID]
-				if !ok {
-					t.Errorf("member not found for UUID %s", expMember.UUID)
-				}
-				if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
-					t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
-				}
-
-				rankM, ok := db.data.Members.Ranks[expMember.Rank]
-				if !ok {
-					t.Errorf("member not found for rank %d", expMember.Rank)
-				}
-				if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
-					t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
-				}
-
-				addrMs, ok := db.data.Members.Addrs[expMember.Addr.String()]
-				if !ok {
-					t.Errorf("slice not found for addr %s", expMember.Addr.String())
-				}
-
-				found := false
-				for _, am := range addrMs {
-					if am.Rank == expMember.Rank {
-						found = true
-						if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
-							t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
-						}
-					}
-				}
-				if !found {
-					t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
-				}
-
+				checkMemberDB(t, db.data.Members, expMember)
 			}
 			if len(db.data.Members.Uuids) != len(tc.expMembers) {
 				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
