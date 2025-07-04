@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package drpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -16,22 +18,51 @@ import (
 	"github.com/pkg/errors"
 )
 
+type mockMethod struct {
+	id     int32
+	module int32
+}
+
+func (mm *mockMethod) ID() int32 {
+	return mm.id
+}
+
+func (mm *mockMethod) Module() int32 {
+	return mm.module
+}
+
+func (mm *mockMethod) String() string {
+	return fmt.Sprintf("mock method %d", mm.id)
+}
+
 // mockModule is a mock of the Module interface
 type mockModule struct {
 	HandleCallResponse []byte
 	HandleCallErr      error
-	IDValue            ModuleID
+	GetMethodErr       error
+	IDValue            int32
 }
 
 func (m *mockModule) HandleCall(_ context.Context, session *Session, method Method, input []byte) ([]byte, error) {
 	return m.HandleCallResponse, m.HandleCallErr
 }
 
-func (m *mockModule) ID() ModuleID {
+func (m *mockModule) ID() int32 {
 	return m.IDValue
 }
 
-func newTestModule(ID ModuleID) *mockModule {
+func (m *mockModule) String() string {
+	return "mock module"
+}
+
+func (m *mockModule) GetMethod(id int32) (Method, error) {
+	return &mockMethod{
+		id:     id,
+		module: m.IDValue,
+	}, m.GetMethodErr
+}
+
+func newTestModule(ID int32) *mockModule {
 	return &mockModule{
 		IDValue: ID,
 	}

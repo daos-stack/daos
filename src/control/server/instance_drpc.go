@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -151,9 +152,9 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	// system member state that should be set on dRPC success
 	targetState := system.MemberStateUnknown
 	switch method {
-	case drpc.MethodPrepShutdown:
+	case daos.MethodPrepShutdown:
 		targetState = system.MemberStateStopping
-	case drpc.MethodPingRank:
+	case daos.MethodPingRank:
 		targetState = system.MemberStateReady
 	default:
 		return system.NewMemberResult(rank,
@@ -182,7 +183,7 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 }
 
 func getBioHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
-	dresp, err := engine.CallDrpc(ctx, drpc.MethodBioHealth, req)
+	dresp, err := engine.CallDrpc(ctx, daos.MethodBioHealth, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "GetBioHealth dRPC call")
 	}
@@ -200,7 +201,7 @@ func getBioHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq) (
 }
 
 func listSmdDevices(ctx context.Context, engine Engine, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
-	dresp, err := engine.CallDrpc(ctx, drpc.MethodSmdDevs, req)
+	dresp, err := engine.CallDrpc(ctx, daos.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
 	}

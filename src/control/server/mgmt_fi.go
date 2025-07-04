@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -147,7 +148,7 @@ func (svc *mgmtSvc) FaultInjectPoolFault(parent context.Context, fault *chkpb.Fa
 		}
 
 		var dresp *drpc.Response
-		dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
+		dresp, err = svc.makePoolServiceCall(ctx, daos.MethodPoolSetProp, req)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +170,7 @@ func (svc *mgmtSvc) FaultInjectPoolFault(parent context.Context, fault *chkpb.Fa
 			SvcRanks: ranklist.RanksToUint32(allRanks),
 			Force:    true,
 		}
-		dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
+		dresp, err := svc.harness.CallDrpc(ctx, daos.MethodPoolDestroy, req)
 		if err != nil {
 			return nil, err
 		}
