@@ -62,6 +62,8 @@ type containerCmd struct {
 	DestroySnapshot containerSnapDestroyCmd      `command:"destroy-snap" description:"destroy container snapshot"`
 	ListSnapshots   containerSnapListCmd         `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
 	Rollback        containerSnapshotRollbackCmd `command:"rollback" description:"roll back container to specified snapshot"`
+
+	Telemetry containerTelemetryCmd `command:"telemetry" description:"container telemetry commands"`
 }
 
 type containerBaseCmd struct {
@@ -110,6 +112,15 @@ func (cmd *containerBaseCmd) openContainer(openFlags daos.ContainerOpenFlag) err
 		return err
 	}
 	cmd.container = resp.Connection
+
+	if cmd.pool == nil {
+		cmd.pool = cmd.container.PoolHandle
+		// needed for compat with older code
+		if err := cmd.pool.FillHandle(unsafe.Pointer(&cmd.cPoolHandle)); err != nil {
+			cmd.closeContainer()
+			return err
+		}
+	}
 
 	// needed for compat with older code
 	if err := cmd.container.FillHandle(unsafe.Pointer(&cmd.cContHandle)); err != nil {
@@ -520,6 +531,7 @@ func (cmd *existingContainerCmd) resolveAndOpen(contFlags daos.ContainerOpenFlag
 			cleanup()
 			return nulCleanFn, err
 		}
+		ap.pool = cmd.cPoolHandle
 		ap.cont = cmd.cContHandle
 	}
 
