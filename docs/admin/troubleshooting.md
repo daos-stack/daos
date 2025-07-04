@@ -68,10 +68,10 @@ server operations:
 
 |Component|Config Parameter|Example Config Value|
 |-|-|-|
-|Control Plane|control_log_file|/tmp/daos_server.log|
-|Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://docs.daos.io/v2.6/admin/predeployment_check/#privileged-helper)|helper_log_file|/tmp/daos_admin.log|
-|agent|log_file|/tmp/daos_agent.log|
+|Control Plane|control_log_file|/var/log/daos/daos_server.log|
+|Data Plane|log_file|/var/log/daos/daos_engine.\*.log|
+|[Privileged Helper](https://docs.daos.io/v2.6/admin/predeployment_check/#privileged-helper)|helper_log_file|/var/log/daos/daos_admin.log|
+|agent|log_file|/var/log/daos/daos_agent.log|
 
 ### Control Plane Log
 

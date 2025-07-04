@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -377,7 +378,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"dcpm scm; MS replicas set": {
 			msReplicas: "moon-111,mars-115,jupiter-119",
@@ -387,7 +388,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithMgmtSvcReplicas("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"dcpm scm; unmet min nr ssds": {
 			hostResponsesSet: [][]*control.HostResponse{
@@ -424,7 +425,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"dcpm scm; control_metadata path set": {
 			extMetadataPath: metadataMountPath,
@@ -442,7 +443,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
-				WithControlLogFile("/tmp/daos_server.log").
+				WithControlLogFile("/var/log/daos/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
 		"tmpfs scm; md-on-ssd; no logging to stdout": {
@@ -453,7 +454,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
-				WithControlLogFile("/tmp/daos_server.log").
+				WithControlLogFile("/var/log/daos/daos_server.log").
 				WithControlMetadata(controlMetadata),
 			expOutPrefix: "port: 10001",
 		},
@@ -541,8 +542,8 @@ func TestAuto_ConfigWrite(t *testing.T) {
 		defaultFiPort         = 31416
 		defaultFiPortInterval = 1000
 		defaultTargetCount    = 16
-		defaultEngineLogFile  = "/tmp/daos_engine"
-		defaultControlLogFile = "/tmp/daos_server.log"
+		defaultEngineLogFile  = "/var/log/daos/daos_engine"
+		defaultControlLogFile = "/var/log/daos/daos_server.log"
 
 		expOut = `port: 10001
 transport_config:
@@ -554,7 +555,7 @@ transport_config:
 engines:
 - targets: 12
   nr_xs_helpers: 2
-  log_file: /tmp/daos_engine.0.log
+  log_file: /var/log/daos/daos_engine.0.log
   storage:
   - class: dcpm
     scm_mount: /mnt/daos0
@@ -572,7 +573,7 @@ engines:
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
-  log_file: /tmp/daos_engine.1.log
+  log_file: /var/log/daos/daos_engine.1.log
   storage:
   - class: dcpm
     scm_mount: /mnt/daos1
@@ -594,7 +595,7 @@ nr_hugepages: 0
 system_ram_reserved: 26
 disable_hugepages: false
 control_log_mask: INFO
-control_log_file: /tmp/daos_server.log
+control_log_file: /var/log/daos/daos_server.log
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
