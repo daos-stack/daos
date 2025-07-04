@@ -1,5 +1,6 @@
 /*
  *  (C) Copyright 2016-2024 Intel Corporation.
+ *  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -519,8 +520,8 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		struct shard_fetch_stat	*fetch_stat;
 		bool			conflict = false;
 
-		D_DEBUG(DB_IO, DF_UOID" size "DF_U64" eph "DF_U64"\n", DP_UOID(orw->orw_oid),
-			sizes[i], orw->orw_epoch);
+		D_DEBUG(DB_IO, DF_UOID " size[%d] " DF_U64 " eph " DF_U64 "\n",
+			DP_UOID(orw->orw_oid), i, sizes[i], orw->orw_epoch);
 
 		if (!is_ec_obj) {
 			iods[i].iod_size = sizes[i];
