@@ -74,8 +74,8 @@ if [ -n "$REPO_FILE_URL" ]; then
     popd
     # These may have been created in the Dockerfile must be removed
     # when using a local repository.
-    unset HTTPS_PROXY
-    unset https_proxy
+    # unset HTTPS_PROXY
+    # unset https_proxy
 fi
 dnf -y --disablerepo \*epel\* install dnf-plugins-core
 dnf -y config-manager --save --setopt=assumeyes=True
