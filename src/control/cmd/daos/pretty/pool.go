@@ -72,6 +72,7 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 	w := txtfmt.NewErrWriter(out)
 
 	// Maintain output compatibility with the `daos pool query` output.
+	// Pool state should only show degraded when rebuild is active.
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d, state=%s\n",
 		pi.UUID, pi.TotalTargets, pi.DisabledTargets, pi.ServiceLeader, pi.Version, pi.State)
 
