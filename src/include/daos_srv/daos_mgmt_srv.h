@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,13 +15,6 @@
 #define __MGMT_SRV_H__
 
 #include <uuid/uuid.h>
-
-/**
- * Common file names used by each layer to store persistent data
- */
-#define	VOS_FILE	"vos-" /* suffixed by thread id */
-#define	DSM_META_FILE	"meta"
-#define RDB_FILE	"rdb-"
 
 int
 ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
