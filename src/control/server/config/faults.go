@@ -112,6 +112,11 @@ var (
 		"'enable_hotplug' setting is deprecated and no longer supported",
 		"set 'disable_hotplug: true' in server config file to disable hotplug",
 	)
+	FaultConfigBdevExcludeClash = serverConfigFault(
+		code.ServerConfigBdevExcludeClash,
+		"'bdev_exclude' list includes address used in engine config bdev_list",
+		"make sure addresses excluded are not included in engine storage configs then restart daos_server",
+	)
 )
 
 func FaultConfigFaultDomainInvalid(err error) *fault.Fault {

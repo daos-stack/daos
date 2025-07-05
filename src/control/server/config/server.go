@@ -490,7 +490,7 @@ func hugePageBytes(hpNr, hpSz int) uint64 {
 }
 
 // SetNrHugepages calculates minimum based on total target count if using nvme.
-func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error {
+func (cfg *Server) SetNrHugepages(log logging.Logger, smi *common.SysMemInfo) error {
 	var cfgTargetCount int
 	var sysXSCount int
 	for idx, ec := range cfg.Engines {
@@ -522,7 +522,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
-	minHugepages, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
+	minHugepages, err := storage.CalcMinHugepages(smi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
 	if err != nil {
 		return err
 	}
@@ -538,7 +538,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 			cfgTargetCount, msgSysXS)
 		cfg.NrHugepages = minHugepages
 		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
-			humanize.IBytes(hugePageBytes(minHugepages, mi.HugepageSizeKiB)))
+			humanize.IBytes(hugePageBytes(minHugepages, smi.HugepageSizeKiB)))
 	} else if cfg.NrHugepages < minHugepages {
 		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
 			"if this is not intentional update the 'nr_hugepages' config "+
@@ -549,8 +549,8 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	return nil
 }
 
-// CalcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
-func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (uint64, error) {
+// calcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
+func (cfg *Server) calcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (uint64, error) {
 	// Convert memory from kib to bytes.
 	memTotal := uint64(memKiB * humanize.KiByte)
 
@@ -568,8 +568,8 @@ func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (u
 		len(cfg.Engines))
 }
 
-// CalcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
-func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramdiskSize uint64) (uint64, error) {
+// calcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
+func (cfg *Server) calcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramdiskSize uint64) (uint64, error) {
 	// Calculate assigned hugepage memory in bytes.
 	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
 
@@ -586,7 +586,7 @@ func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramd
 
 // SetRamdiskSize calculates maximum RAM-disk size using total memory as reported by /proc/meminfo.
 // Then either validate configured engine storage values or assign if not already set.
-func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error {
+func (cfg *Server) SetRamdiskSize(log logging.Logger, smi *common.SysMemInfo) error {
 	if len(cfg.Engines) == 0 {
 		return nil // no engines
 	}
@@ -598,12 +598,12 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 		return nil // no ramdisk to size
 	}
 
-	maxRamdiskSize, err := cfg.CalcRamdiskSize(log, mi.HugepageSizeKiB, mi.MemTotalKiB)
+	maxRamdiskSize, err := cfg.calcRamdiskSize(log, smi.HugepageSizeKiB, smi.MemTotalKiB)
 	if err != nil {
 		return errors.Wrapf(err, "calculate ramdisk size")
 	}
 
-	memTotBytes := uint64(mi.MemTotalKiB) * humanize.KiByte
+	memTotBytes := uint64(smi.MemTotalKiB) * humanize.KiByte
 
 	msg := fmt.Sprintf("calculated max ram-disk size (%s) using MemTotal (%s)",
 		humanize.IBytes(maxRamdiskSize), humanize.IBytes(memTotBytes))
@@ -612,7 +612,7 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 		// Total RAM is insufficient to meet minimum size.
 		log.Errorf("%s: insufficient total memory", msg)
 
-		minMem, err := cfg.CalcMemForRamdiskSize(log, mi.HugepageSizeKiB,
+		minMem, err := cfg.calcMemForRamdiskSize(log, smi.HugepageSizeKiB,
 			storage.MinRamdiskMem)
 		if err != nil {
 			log.Error(err.Error())
@@ -767,6 +767,14 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
+	}
+
+	// Verify bdev_exclude doesn't clash with any configured bdev.
+	pciAddrs := cfg.GetBdevConfigs().NVMeBdevs().Devices()
+	for _, a := range pciAddrs {
+		if common.Includes(cfg.BdevExclude, a) {
+			return FaultConfigBdevExcludeClash
+		}
 	}
 
 	return nil
@@ -962,4 +970,17 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	}
 
 	return nil
+}
+
+// GetBdevConfigs retrieves all engine bdev storage tier configs from a server configuration.
+func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
+	if cfg == nil {
+		return
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
+	}
+
+	return
 }
