@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -187,16 +186,6 @@ func (db *Database) ShutdownRaft() error {
 		}
 
 		return shutdownErr
-	})
-}
-
-// ForceSnapshot signals that the raft implementation should manually trigger snapshot.
-// Blocks until the snapshot is complete.
-func (db *Database) ForceSnapshot() error {
-	db.log.Debug("taking raft snapshot")
-	return db.raft.withReadLock(func(svc raftService) error {
-		// Call the raft implementation's snapshot() and block until it completes.
-		return svc.Snapshot().Error()
 	})
 }
 

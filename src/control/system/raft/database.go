@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,7 +52,6 @@ type (
 		LeadershipTransfer() raft.Future
 		Barrier(time.Duration) raft.Future
 		Shutdown() raft.Future
-		Snapshot() raft.SnapshotFuture
 		State() raft.RaftState
 	}
 
@@ -412,33 +410,6 @@ func (db *Database) leaderHint() string {
 func (db *Database) IsLeader() bool {
 	return db.CheckLeader() == nil
 }
-
-// ForceSnapshot creates and persists snapshot of current state.
-//func (db *Database) ForceSnapshot() error {
-//	if err := db.raft.withReadLock(func(svc raftService) error {
-//	snap, err := (*fsm)(db).Snapshot()
-//	if err != nil {
-//		return errors.Wrap(err, "failed to generate snapshot")
-//	}
-//	//	version := getSnapshotVersion(conf.ProtocolVersion)
-//	//	sink, err := snaps.Create(version, lastIndex, lastTerm, configuration, 1, trans)
-//	//	if err != nil {
-//	//		return fmt.Errorf("failed to create snapshot: %v", err)
-//	//	}
-//	sink := db.raft.snapshots
-//	if err = snap.Persist(sink); err != nil {
-//		return errors.Wrap(err, "failed to persist snapshot")
-//	}
-//	if err = sink.Close(); err != nil {
-//		return fmt.Errorf("failed to finalize snapshot: %v", err)
-//	}
-//	//	sink := &testSnapshotSink{}
-//	//	if err := snap.Persist(sink); err != nil {
-//	//		t.Fatal(err)
-//	//	}
-//
-//	return nil
-//}
 
 // OnLeadershipGained registers callbacks to be run when this instance
 // gains the leadership role.

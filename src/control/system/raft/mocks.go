@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +7,6 @@
 package raft
 
 import (
-	"io"
 	"net"
 	"testing"
 	"time"
@@ -28,9 +26,6 @@ type (
 		index    uint64
 		response interface{}
 	}
-	mockRaftSnapshotFuture struct {
-		mockRaftFuture
-	}
 	mockRaftServiceConfig struct {
 		LeaderCh              <-chan bool
 		ServerAddress         raft.ServerAddress
@@ -48,11 +43,6 @@ type (
 func (mrf *mockRaftFuture) Error() error          { return mrf.err }
 func (mrf *mockRaftFuture) Index() uint64         { return mrf.index }
 func (mrf *mockRaftFuture) Response() interface{} { return mrf.response }
-
-// mockRaftSnapshotFuture also implements raft.SnapshotFuture
-func (mrsf *mockRaftSnapshotFuture) Open() (*raft.SnapshotMeta, io.ReadCloser, error) {
-	return nil, nil, nil
-}
 
 func (mrs *mockRaftService) Apply(cmd []byte, timeout time.Duration) raft.ApplyFuture {
 	mrs.fsm.Apply(&raft.Log{Data: cmd})
@@ -89,10 +79,6 @@ func (mrs *mockRaftService) LeadershipTransfer() raft.Future {
 func (mrs *mockRaftService) Shutdown() raft.Future {
 	mrs.cfg.State = raft.Shutdown
 	return &mockRaftFuture{}
-}
-
-func (mrs *mockRaftService) Snapshot() raft.SnapshotFuture {
-	return &mockRaftSnapshotFuture{}
 }
 
 func (mrs *mockRaftService) State() raft.RaftState {
