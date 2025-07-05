@@ -48,7 +48,7 @@ func (mrm MemberRankMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jm)
 }
 
-// Remove members with duplicate UUIDs from MemberAddrMap.
+// dedupeMembers removes members with duplicate UUIDs from MemberAddrMap.
 func (mam MemberAddrMap) dedupeMembers(addrStr string) {
 	seen := make(map[string]struct{})
 
@@ -67,10 +67,6 @@ func (mam MemberAddrMap) dedupeMembers(addrStr string) {
 
 func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *system.Member) {
 	as := addr.String()
-
-	if _, exists := mam[as]; !exists {
-		mam[as] = system.Members{}
-	}
 
 	mam[as] = append(mam[as], m)
 	mam.dedupeMembers(as)
@@ -97,6 +93,17 @@ func (mam MemberAddrMap) removeMember(m *system.Member) {
 	}
 
 	mam[mas] = newMembers
+}
+
+func (mam MemberAddrMap) updateMember(m *system.Member) {
+	mas := m.Addr.String()
+
+	for i, cur := range mam[mas] {
+		if m.UUID == cur.UUID {
+			mam[mas][i] = m
+			break
+		}
+	}
 }
 
 // MarshalJSON creates a serialized representation of the MemberAddrMap.
@@ -195,6 +202,7 @@ func (mdb *MemberDatabase) updateMember(m *system.Member) {
 	mdb.removeFromFaultDomainTree(cur)
 	cur.FaultDomain = m.FaultDomain
 	mdb.addToFaultDomainTree(cur)
+	mdb.Addrs.updateMember(cur)
 }
 
 // removeMember is responsible for removing Member and updating all of the relevant maps.

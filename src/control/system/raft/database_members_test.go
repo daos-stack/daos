@@ -241,3 +241,56 @@ func TestSystem_MemberDatabase_removeMember(t *testing.T) {
 		})
 	}
 }
+
+func TestSystem_MemberAddrMap_updateMember(t *testing.T) {
+	members := getMembers(t)
+	updatedMember := *members[2]
+	updatedMember.State = MemberStateErrored
+	identicalMember := *members[2]
+
+	for name, tc := range map[string]struct {
+		memberToUpdate Member
+		expMembers     Members
+	}{
+		"update success": {
+			memberToUpdate: updatedMember,
+			expMembers: Members{
+				members[0], members[1], &updatedMember, members[3],
+			},
+		},
+		"update; identical member": {
+			memberToUpdate: identicalMember,
+			expMembers:     members,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mdb := getMemberDatabase(t, members)
+
+			mdb.updateMember(&tc.memberToUpdate)
+
+			// Check member DB was updated.
+			for _, expMember := range tc.expMembers {
+				checkMemberDB(t, mdb, expMember,
+					cmpopts.IgnoreFields(Member{}, "LastUpdate"))
+			}
+			if len(mdb.Uuids) != len(tc.expMembers) {
+				t.Fatalf("expected %d uuid map entries, got %d", len(tc.expMembers),
+					len(mdb.Uuids))
+			}
+			if len(mdb.Ranks) != len(tc.expMembers) {
+				t.Fatalf("expected %d rank map entries, got %d", len(tc.expMembers),
+					len(mdb.Ranks))
+			}
+
+			// Verify address map has expected number of entries.
+			count := 0
+			for _, uuids := range mdb.Addrs {
+				count += len(uuids)
+			}
+			if count != len(tc.expMembers) {
+				t.Fatalf("expected %d address map entries, got %d",
+					len(tc.expMembers), count)
+			}
+		})
+	}
+}
