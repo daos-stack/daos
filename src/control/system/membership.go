@@ -42,6 +42,7 @@ type MemberStore interface {
 	RemoveMember(member *Member) error
 	CurMapVersion() (uint32, error)
 	FaultDomainTree() *FaultDomainTree
+	ForceSnapshot() error
 }
 
 // Membership tracks details of system members.
@@ -265,6 +266,10 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	resp.MapVersion, err = m.db.CurMapVersion()
 	if err != nil {
 		return nil, err
+	}
+
+	if err := m.db.ForceSnapshot(); err != nil {
+		return nil, errors.Wrap(err, "forcing snapshot after join-replace")
 	}
 
 	return &resp, err
