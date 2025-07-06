@@ -23,6 +23,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -244,9 +245,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 			DevicePath: "/dev/sdb1",
 		}).
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO(true).   // vfio enabled by default
-		WithDisableVMD(true).    // vmd enabled by default
-		WithEnableHotplug(true). // hotplug disabled by default
+		WithDisableVFIO(true).    // vfio enabled by default
+		WithDisableVMD(true).     // vmd enabled by default
+		WithDisableHotplug(true). // hotplug enabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_server_helper.log").
@@ -294,7 +295,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithEnvVars("CRT_TIMEOUT=30").
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("INFO").
-			WithStorageEnableHotplug(true).
+			WithStorageEnableHotplug(false).
 			WithStorageAutoFaultyCriteria(true, 100, 200),
 		engine.MockConfig().
 			WithSystemName("daos_server").
@@ -321,7 +322,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("INFO").
-			WithStorageEnableHotplug(true).
+			WithStorageEnableHotplug(false).
 			WithStorageAutoFaultyCriteria(false, 0, 0),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
@@ -351,10 +352,9 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 		},
 		"basic": {
 			cfg: &Server{
-				SystemName:    "name",
-				SocketDir:     "socketdir",
-				Modules:       "modules",
-				EnableHotplug: true,
+				SystemName: "name",
+				SocketDir:  "socketdir",
+				Modules:    "modules",
 				Fabric: engine.FabricConfig{
 					Provider:              "provider",
 					Interface:             "iface",
@@ -387,6 +387,9 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 			},
 			expEngCfg: &engine.Config{
 				SystemName: "name",
+				Storage: storage.Config{
+					EnableHotplug: true,
+				},
 				Fabric: engine.FabricConfig{
 					Provider:              "p1 p2 p3",
 					NumSecondaryEndpoints: []int{2, 3, 4},
@@ -450,6 +453,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 					WithBdevDeviceList("0000:83:00.0").
 					WithBdevDeviceRoles(storage.BdevRoleData),
 			).
+			WithStorageEnableHotplug(true).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(31316).
 			WithFabricProvider("ofi+tcp").
@@ -1696,6 +1700,36 @@ func TestServerConfig_Parsing(t *testing.T) {
 				return nil
 			},
 		},
+		"access_points and mgmt_svc_replicas both defined": {
+			inTxt:       "disable_hugepages: false",
+			outTxt:      "access_points: [foo.com]",
+			expParseErr: errors.New(msgAPsMSReps),
+		},
+		"enable_hotplug and disable_hotplug both set": {
+			inTxt:          "disable_hugepages: false",
+			outTxt:         "enable_hotplug: true",
+			expValidateErr: FaultConfigEnableHotplugDeprecated,
+		},
+		"enable_hotplug false setting allowed": {
+			inTxt:  "disable_hotplug: true",
+			outTxt: "enable_hotplug: false",
+			expCheck: func(c *Server) error {
+				if c.Engines[0].Storage.EnableHotplug {
+					return errors.New("expecting hotplug to be disabled")
+				}
+				return nil
+			},
+		},
+		"enable_hotplug true setting allowed": {
+			inTxt:  "disable_hotplug: true",
+			outTxt: "enable_hotplug: true",
+			expCheck: func(c *Server) error {
+				if !c.Engines[0].Storage.EnableHotplug {
+					return errors.New("expecting hotplug to be enabled")
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1801,7 +1835,8 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 		WithFabricProvider(testFabric).
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
-		WithSystemName(testSystemName)
+		WithSystemName(testSystemName).
+		WithStorageEnableHotplug(true)
 
 	config := DefaultServer().
 		WithFabricProvider(testFabric).
@@ -1960,6 +1995,8 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 
 			conf := DefaultServer().
 				WithFabricProvider("test").
+				WithMgmtSvcReplicas(
+					fmt.Sprintf("localhost:%d", build.DefaultControlPort)).
 				WithEngines(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)

@@ -200,6 +200,7 @@ const (
 	ServerConfigScmDiffClass
 	ServerConfigEngineBdevRolesMismatch
 	ServerConfigSysRsvdZero
+	ServerConfigEnableHotplugDeprecated
 	ServerConfigBdevExcludeClash
 	ServerConfigHugepagesDisabledWithNrSet
 )

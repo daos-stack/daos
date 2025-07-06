@@ -590,7 +590,7 @@ engines:
   pinned_numa_node: 1
 disable_vfio: false
 disable_vmd: false
-enable_hotplug: false
+disable_hotplug: false
 nr_hugepages: 0
 system_ram_reserved: 26
 disable_hugepages: false
@@ -613,6 +613,7 @@ hyperthreads: false
 		WithFabricProvider("ofi+verbs").
 		WithMgmtSvcReplicas("hostX:10002").
 		WithDisableVMD(false).
+		WithDisableHotplug(false).
 		WithEngines(
 			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
