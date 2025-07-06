@@ -767,8 +767,8 @@ decode_daos_data(struct json_config_ctx *ctx, const char *method_name, struct co
 	/* Get 'config' array first configuration entry */
 	ctx->config_it = spdk_json_array_first(ctx->config);
 	if (ctx->config_it == NULL) {
-		/* Entry not-found so return positive RC */
-		D_GOTO(out, rc = 1);
+		/* Entry not-found */
+		D_GOTO(out_not_found, rc = 0);
 	}
 
 	while (ctx->config_it != NULL) {
@@ -787,11 +787,14 @@ decode_daos_data(struct json_config_ctx *ctx, const char *method_name, struct co
 	}
 
 	if (ctx->config_it == NULL) {
-		/* Entry not-found so return positive RC */
-		rc = 1;
+		/* Entry not-found */
+		D_GOTO(out_not_found, rc = 0);
 	}
 
 out:
+	return rc;
+out_not_found:
+	D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
 	return rc;
 }
 
@@ -831,8 +834,6 @@ get_hotplug_busid_range(const char *nvme_conf)
 	       hotplug_busid_range.begin, hotplug_busid_range.end);
 
 out_ctx:
-	//	if (cfg.method != NULL)
-	//		D_FREE(cfg.method);
 	free_json_config_ctx(ctx);
 out:
 	return rc;
@@ -872,14 +873,10 @@ bio_set_hotplug_filter(const char *nvme_conf)
 	D_ASSERT(nvme_conf != NULL);
 
 	rc = get_hotplug_busid_range(nvme_conf);
-
-	/* Decode functions may return positive RC for success or entity not-found */
-	if (rc > 0)
-		D_ERROR("hotplug busid range info not found\n");
-	else if (rc < 0)
+	if (rc < 0)
 		return rc;
-	else
-		spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
+
+	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	return 0;
 }
@@ -931,13 +928,6 @@ bio_read_accel_props(const char *nvme_conf)
 	/* TODO: do something useful with acceleration engine properties */
 
 out_ctx:
-	/* Decode functions may return positive RC for success or entity not-found */
-	if (rc > 0) {
-		D_ERROR("acceleration property info not found\n");
-		rc = 0;
-	}
-	//	if (cfg.method != NULL)
-	//		D_FREE(cfg.method);
 	free_json_config_ctx(ctx);
 out:
 	return rc;
@@ -994,13 +984,6 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 	       *enable, (char *)*sock_addr);
 
 out_ctx:
-	/* Decode functions may return positive RC for success or entity not-found */
-	if (rc > 0) {
-		D_ERROR("spdk-rpc-server info not found\n");
-		rc = 0;
-	}
-	//	if (cfg.method != NULL)
-	//		D_FREE(cfg.method);
 	free_json_config_ctx(ctx);
 out:
 	return rc;
@@ -1064,13 +1047,6 @@ bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max
 	       *enable ? "enabled" : "disabled", *max_io_errs, *max_csum_errs);
 
 out_ctx:
-	/* Decode functions may return positive RC for success or entity not-found */
-	if (rc > 0) {
-		D_ERROR("auto-faulty-criteria info not found\n");
-		rc = 0;
-	}
-	//	if (cfg.method != NULL)
-	//		D_FREE(cfg.method);
 	free_json_config_ctx(ctx);
 out:
 	return rc;
