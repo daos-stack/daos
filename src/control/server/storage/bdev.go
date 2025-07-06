@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -548,20 +549,23 @@ type (
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
-		HugepageCount      int
-		HugeNodes          string
-		CleanHugepagesOnly bool
-		PCIAllowList       string
-		PCIBlockList       string
-		TargetUser         string
-		Reset_             bool
-		DisableVFIO        bool
-		EnableVMD          bool
+		HugepageCount         int
+		HugeNodes             string
+		CleanSpdkHugepages    bool
+		CleanSpdkLockfiles    bool
+		CleanSpdkLockfilesAny bool
+		PCIAllowList          string
+		PCIBlockList          string
+		TargetUser            string
+		Reset_                bool
+		DisableVFIO           bool
+		EnableVMD             bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
 		NrHugepagesRemoved uint
+		LockfilesRemoved   []string
 		VMDPrepared        bool
 	}
 

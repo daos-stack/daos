@@ -7512,45 +7512,9 @@ out:
 	return rc;
 }
 
-void
-ds_pool_extend_handler(crt_rpc_t *rpc)
-{
-	struct pool_extend_in	*in = crt_req_get(rpc);
-	struct pool_extend_out	*out = crt_reply_get(rpc);
-	struct pool_svc		*svc;
-	uuid_t			pool_uuid;
-	d_rank_list_t		rank_list;
-	uint32_t		ndomains;
-	uint32_t		*domains;
-	int			rc;
-
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p\n", DP_UUID(in->pei_op.pi_uuid), rpc);
-
-	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
-	rank_list.rl_nr = in->pei_tgt_ranks->rl_nr;
-	rank_list.rl_ranks = in->pei_tgt_ranks->rl_ranks;
-	ndomains = in->pei_ndomains;
-	domains = in->pei_domains.ca_arrays;
-
-	rc = pool_svc_lookup_leader(in->pei_op.pi_uuid, &svc, &out->peo_op.po_hint);
-	if (rc != 0)
-		goto out;
-
-	rc =
-	    pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
-				false /* exclude_rank */, &rank_list, domains, ndomains, NULL, NULL,
-				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, true);
-
-	pool_svc_put_leader(svc);
-out:
-	out->peo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pei_op.pi_uuid), rpc,
-		DP_RC(rc));
-	crt_reply_send(rpc);
-}
-
 static int
-pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list)
+pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list,
+	     bool reint)
 {
 	struct pool_tgt_discard_in	*ptdi_in;
 	struct pool_tgt_discard_out	*ptdi_out;
@@ -7560,7 +7524,9 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	int				i;
 	int				rc;
 
-	D_ASSERTF(svc->ps_pool->sp_incr_reint == 0, "incremental reint should not get here\n");
+	if (reint)
+		D_ASSERTF(svc->ps_pool->sp_incr_reint == 0,
+			  "incremental reint should not get here\n");
 
 	rank_list = d_rank_list_alloc(list->pta_number);
 	if (rank_list == NULL)
@@ -7610,6 +7576,62 @@ out:
 	return rc;
 }
 
+void
+ds_pool_extend_handler(crt_rpc_t *rpc)
+{
+	struct pool_extend_in       *in  = crt_req_get(rpc);
+	struct pool_extend_out      *out = crt_reply_get(rpc);
+	struct pool_svc             *svc;
+	struct pool_target_addr_list tgt_addr_list;
+	uuid_t                       pool_uuid;
+	d_rank_list_t                rank_list;
+	uint32_t                     ndomains;
+	uint32_t                    *domains;
+	int                          i;
+	int                          rc;
+
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc %p\n", DP_UUID(in->pei_op.pi_uuid), rpc);
+
+	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
+	rank_list.rl_nr          = in->pei_tgt_ranks->rl_nr;
+	rank_list.rl_ranks       = in->pei_tgt_ranks->rl_ranks;
+	ndomains                 = in->pei_ndomains;
+	domains                  = in->pei_domains.ca_arrays;
+	tgt_addr_list.pta_number = rank_list.rl_nr;
+	D_ALLOC_ARRAY(tgt_addr_list.pta_addrs, tgt_addr_list.pta_number);
+	if (tgt_addr_list.pta_addrs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	for (i = 0; i < tgt_addr_list.pta_number; i++) {
+		tgt_addr_list.pta_addrs[i].pta_rank   = rank_list.rl_ranks[i];
+		tgt_addr_list.pta_addrs[i].pta_target = -1;
+	}
+
+	rc = pool_svc_lookup_leader(in->pei_op.pi_uuid, &svc, &out->peo_op.po_hint);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_discard(rpc->cr_ctx, svc, &tgt_addr_list, false);
+	if (rc) {
+		DL_ERROR(rc, DF_UUID ": pool_discard failed.", DP_UUID(in->pei_op.pi_uuid));
+		goto failed;
+	}
+
+	rc =
+	    pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
+				false /* exclude_rank */, &rank_list, domains, ndomains, NULL, NULL,
+				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, true);
+
+failed:
+	pool_svc_put_leader(svc);
+out:
+	if (tgt_addr_list.pta_addrs != NULL)
+		D_FREE(tgt_addr_list.pta_addrs);
+	out->peo_op.po_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pei_op.pi_uuid), rpc,
+		DP_RC(rc));
+	crt_reply_send(rpc);
+}
+
 static void
 pool_update_handler(crt_rpc_t *rpc, int handler_version)
 {
@@ -7636,7 +7658,7 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT &&
 	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
-		rc = pool_discard(rpc->cr_ctx, svc, &list);
+		rc = pool_discard(rpc->cr_ctx, svc, &list, true);
 		if (rc)
 			goto out_svc;
 	}

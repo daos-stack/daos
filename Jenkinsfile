@@ -260,6 +260,9 @@ pipeline {
         booleanParam(name: 'CI_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on EL 8')
+        booleanParam(name: 'CI_el9_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on Leap 15')
@@ -661,6 +664,79 @@ pipeline {
                                       mv config.log config.log-el8-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-el8-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.9'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-el9 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
+                                       scons_args: sconsArgs() +
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-el9-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-el9-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on Leap 15.5') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.leap.15'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       build_deps: 'yes'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
                                              allowEmptyArchive: true
                         }
                         cleanup {
