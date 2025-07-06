@@ -35,7 +35,6 @@ type MemberStore interface {
 	MemberRanks(...MemberState) ([]Rank, error)
 	FindMemberByRank(rank Rank) (*Member, error)
 	FindMemberByUUID(uuid uuid.UUID) (*Member, error)
-	FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error)
 	AllMembers() ([]*Member, error)
 	AddMember(member *Member) error
 	UpdateMember(member *Member) error
@@ -184,41 +183,6 @@ type JoinResponse struct {
 	MapVersion uint32
 }
 
-// Sanity check that member has been removed from all membership database maps.
-func (m *Membership) checkMemberRemoved(member *Member) error {
-	if _, err := m.db.FindMemberByRank(member.Rank); !IsMemberNotFound(err) {
-		if err != nil {
-			return errors.Wrap(err, "checking rank was successfully removed")
-		}
-		return errors.Errorf("expected rank %d to have been removed from system membership",
-			member.Rank)
-	}
-
-	if _, err := m.db.FindMemberByUUID(member.UUID); !IsMemberNotFound(err) {
-		if err != nil {
-			return errors.Wrap(err, "checking uuid was successfully removed")
-		}
-		return errors.Errorf("expected uuid %d to have been removed from system membership",
-			member.UUID)
-	}
-
-	members, err := m.db.FindMembersByAddr(member.Addr)
-	if err != nil {
-		if IsMemberNotFound(err) {
-			return nil
-		}
-		return errors.Wrap(err, "checking addr-uuid mapping was successfully removed")
-	}
-	for _, m := range members {
-		if m.UUID == member.UUID {
-			return errors.Errorf("expected uuid %s address %s to have been removed "+
-				"from system membership address map", member.UUID, member.Addr)
-		}
-	}
-
-	return nil
-}
-
 // If in replace mode, attempt to update UUID of existing member if identical control address and
 // fabric URIs. Neither UUID or rank in request will match MS-db member.
 func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
@@ -245,9 +209,6 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 
 	if err := m.db.RemoveMember(cm); err != nil {
 		return nil, errors.Wrap(err, "removing old member in replace-rank join request")
-	}
-	if err := m.checkMemberRemoved(cm); err != nil {
-		return nil, errors.Wrap(err, "checking remove member in replace-rank join request")
 	}
 
 	resp := JoinResponse{

@@ -29,8 +29,8 @@ func TestRaft_MemberAddrMap_removeMember(t *testing.T) {
 		return system.MockMember(t, uint32(idx), system.MemberStateJoined)
 	}
 
-	members := func(t *testing.T, n int) system.Members {
-		members := system.Members{}
+	members := func(t *testing.T, n int) []*system.Member {
+		members := []*system.Member{}
 		for i := 0; i < n; i++ {
 			members = append(members, testMember(t, i))
 		}

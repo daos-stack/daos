@@ -23,8 +23,8 @@ type (
 	MemberRankMap map[ranklist.Rank]*system.Member
 	// MemberUuidMap provides a map of UUID->*system.Member.
 	MemberUuidMap map[uuid.UUID]*system.Member
-	// MemberAddrMap provides a map of string->system.Members.
-	MemberAddrMap map[string]system.Members
+	// MemberAddrMap provides a map of string->[]*system.Member.
+	MemberAddrMap map[string][]*system.Member
 
 	// MemberDatabase contains a set of maps for looking
 	// up members and provides methods for managing the
@@ -61,7 +61,7 @@ func (mam MemberAddrMap) removeMember(m *system.Member) {
 		return
 	}
 
-	newMembers := system.Members{}
+	newMembers := []*system.Member{}
 	for _, cur := range mam[mas] {
 		if m.UUID != cur.UUID {
 			nm := *cur
@@ -142,7 +142,8 @@ func (mdb *MemberDatabase) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// addMember is responsible for adding a new Member and updating all of the relevant maps.
+// addMember is responsible for adding a new Member and updating all
+// of the relevant maps.
 func (mdb *MemberDatabase) addMember(m *system.Member) {
 	mdb.Ranks[m.Rank] = m
 	mdb.Uuids[m.UUID] = m
@@ -174,7 +175,8 @@ func (mdb *MemberDatabase) updateMember(m *system.Member) {
 	mdb.addToFaultDomainTree(cur)
 }
 
-// removeMember is responsible for removing Member and updating all of the relevant maps.
+// removeMember is responsible for removing Member and updating all
+// of the relevant maps.
 func (mdb *MemberDatabase) removeMember(m *system.Member) {
 	delete(mdb.Ranks, m.Rank)
 	delete(mdb.Uuids, m.UUID)
