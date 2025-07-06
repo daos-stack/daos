@@ -2758,6 +2758,12 @@ start_one(uuid_t uuid, void *varg)
 	bool			 immutable;
 	int			 rc;
 
+	if (ds_mgmt_pbl_has_pool(uuid)) {
+		D_INFO(DF_UUID ": not starting: in pool blacklist\n", DP_UUID(uuid));
+		ds_pool_failed_add(uuid, -DER_NO_SERVICE);
+		return 0;
+	}
+
 	if (psa != NULL) {
 		aft_chk = psa->psa_aft_chk;
 		immutable = psa->psa_immutable;
@@ -2771,9 +2777,17 @@ start_one(uuid_t uuid, void *varg)
 
 	rc = ds_pool_start(uuid, aft_chk, immutable);
 	if (rc != 0) {
+		uuid_t uuid_tmp;
+
 		DL_ERROR(rc, DF_UUID ": failed to start pool, aft_chk %s, immutable %s",
 			 DP_UUID(uuid), aft_chk ? "yes" : "no", immutable ? "yes" : "no");
 		ds_pool_failed_add(uuid, rc);
+		uuid_copy(uuid_tmp, uuid);
+		ds_notify_ras_eventf(RAS_POOL_START_FAILED, RAS_TYPE_INFO, RAS_SEV_ERROR,
+				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */, &uuid_tmp, NULL /* cont */, NULL /* objid */,
+				     NULL /* ctlop */, NULL /* data */,
+				     "failed to start pool: " DF_RC, DP_RC(rc));
 	}
 
 	return 0;
@@ -2784,11 +2798,10 @@ pool_start_all(void *arg)
 {
 	int rc;
 
-	/* Scan the storage and start all pool services. */
+	/* Scan the storage and start all pools. */
 	rc = ds_mgmt_tgt_pool_iterate(start_one, NULL /* arg */);
 	if (rc != 0)
-		D_ERROR("failed to scan all pool services: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to scan pools");
 }
 
 bool
