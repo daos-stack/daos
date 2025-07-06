@@ -102,15 +102,6 @@ func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
 	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
 }
 
-func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
-	var bdevCfgs storage.TierConfigs
-	for _, engineCfg := range cfg.Engines {
-		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
-	}
-
-	return bdevCfgs
-}
-
 func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, rep := range cfg.MgmtSvcReplicas {
@@ -305,7 +296,7 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]stri
 
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
 // are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
-// required for emulated NVMe.
+// mandatory requirements for emulated NVMe.
 func prepBdevStorage(srv *server, iommuChecker hardware.IOMMUDetector, thpChecker hardware.THPDetector) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
@@ -326,7 +317,7 @@ func prepBdevStorage(srv *server, iommuChecker hardware.IOMMUDetector, thpChecke
 		return errors.Wrap(err, "iommu check")
 	}
 
-	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)
+	bdevCfgs := srv.cfg.GetBdevConfigs()
 
 	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
 	if bdevCfgs.HaveRealNVMe() && srv.runningUser.Username != "root" {
@@ -338,13 +329,19 @@ func prepBdevStorage(srv *server, iommuChecker hardware.IOMMUDetector, thpChecke
 		}
 	}
 
+	// Clean leftover SPDK hugepages and lockfiles for configured NVMe SSDs before prepare.
+	pciAddrs := bdevCfgs.NVMeBdevs().Devices()
+	if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+		srv.log.Error(errors.Wrap(err, "prepBdevStorage").Error())
+	}
+
 	// When requesting to prepare NVMe drives during service start-up, use all addresses
 	// specified in engine config BdevList parameters as the PCIAllowList and the server
 	// config BdevExclude parameter as the PCIBlockList.
 
 	prepReq := storage.BdevPrepareRequest{
 		TargetUser:   srv.runningUser.Username,
-		PCIAllowList: strings.Join(bdevCfgs.NVMeBdevs().Devices(), storage.BdevPciAddrSep),
+		PCIAllowList: strings.Join(pciAddrs, storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
@@ -437,7 +434,7 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
-func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+func updateHugeMemValues(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
 	ei.RLock()
 	ec := ei.runner.GetConfig()
 	eIdx := ec.Index
@@ -451,20 +448,20 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 
 	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
-	pageSizeMiB := mi.HugepageSizeKiB / humanize.KiByte // kib to mib
+	pageSizeMiB := smi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
-	memSizeFreeMiB := mi.HugepagesFree * pageSizeMiB
+	memSizeFreeMiB := smi.HugepagesFree * pageSizeMiB
 
 	// If free hugepage mem is not enough to meet requested number of hugepages, log notice and
 	// set mem_size engine parameter to free value. Otherwise set to requested value.
 	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %+v)", memSizeReqMiB,
-		pageSizeMiB, *mi)
+		pageSizeMiB, *smi)
 	if memSizeFreeMiB < memSizeReqMiB {
 		srv.log.Noticef("The amount of hugepage memory allocated for engine %d does not "+
 			"meet nr_hugepages requested in config: want %s (%d hugepages), got %s ("+
 			"%d hugepages)", ei, humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)),
 			nrPagesRequired, humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)),
-			mi.HugepagesFree)
+			smi.HugepagesFree)
 		ei.setMemSize(memSizeFreeMiB)
 	} else {
 		ei.setMemSize(memSizeReqMiB)
@@ -476,19 +473,30 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	return nil
 }
 
-func cleanEngineHugepages(srv *server) error {
-	req := storage.BdevPrepareRequest{
-		CleanHugepagesOnly: true,
+// Clean SPDK resources, both lockfiles and orphaned hugepages. Orphaned hugepages will be cleaned
+// whether or not device PCI addresses are supplied.
+func cleanSpdkResources(srv *server, pciAddrs []string) error {
+	// For the moment assume that both lockfile and hugepage cleanup should be skipped if
+	// hugepages have been disabled in the server config.
+	if srv.cfg.DisableHugepages {
+		return nil
 	}
 
-	msg := "cleanup hugepages via bdev backend"
+	req := storage.BdevPrepareRequest{
+		CleanSpdkHugepages: true,
+		CleanSpdkLockfiles: true,
+		PCIAllowList:       strings.Join(pciAddrs, storage.BdevPciAddrSep),
+	}
+
+	msg := "cleanup spdk resources"
 
 	resp, err := srv.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		return errors.Wrap(err, msg)
 	}
 
-	srv.log.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
+	srv.log.Debugf("%s: %d hugepages and lockfiles %v removed", msg,
+		resp.NrHugepagesRemoved, resp.LockfilesRemoved)
 
 	return nil
 }
@@ -498,7 +506,7 @@ func cleanEngineHugepages(srv *server) error {
 // RAM-disk sizes set in the storage config.
 //
 // Note that check is to be performed after hugepages have been allocated, as such the available
-// memory MemInfo value will show that Hugetlb has already been allocated (and therefore no longer
+// memory SysMemInfo value will show that Hugetlb has already been allocated (and therefore no longer
 // available) so don't need to take into account hugepage allowances during calculation.
 func checkMemForRamdisk(log logging.Logger, memRamdisks, memAvail uint64) error {
 	memRequired := (memRamdisks / 100) * uint64(memCheckThreshold)
@@ -519,7 +527,7 @@ func checkMemForRamdisk(log logging.Logger, memRamdisks, memAvail uint64) error 
 	return nil
 }
 
-func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) error {
+func checkEngineTmpfsMem(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
 	sc, err := ei.storage.GetScmConfig()
 	if err != nil {
 		return err
@@ -530,7 +538,7 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	}
 
 	memRamdisk := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
-	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
+	memAvail := uint64(smi.MemAvailableKiB) * humanize.KiByte
 
 	// In the event that tmpfs was already mounted, we need to verify that it
 	// is the correct size and that the memory usage still makes sense.
@@ -579,6 +587,15 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		if engine.storage.BdevRoleMetaConfigured() {
 			return engine.storage.UnmountTmpfs()
 		}
+
+		storageCfg := engine.runner.GetConfig().Storage
+		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
+
+		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+			srv.log.Error(
+				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
+		}
+
 		return nil
 	})
 
@@ -599,26 +616,27 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	engine.OnStorageReady(func(_ context.Context) error {
 		srv.log.Debugf("engine %d: storage ready", engine.Index())
 
-		if !srv.cfg.DisableHugepages {
-			// Attempt to remove unused hugepages, log error only.
-			if err := cleanEngineHugepages(srv); err != nil {
-				srv.log.Errorf(err.Error())
-			}
+		storageCfg := engine.runner.GetConfig().Storage
+		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
+
+		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+			srv.log.Error(
+				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
 		}
 
 		// Retrieve up-to-date meminfo to check resource availability.
-		mi, err := common.GetMemInfo()
+		smi, err := common.GetSysMemInfo()
 		if err != nil {
 			return err
 		}
 
 		// Update engine memory related config parameters before starting.
-		if err := updateHugeMemValues(srv, engine, mi); err != nil {
+		if err := updateHugeMemValues(srv, engine, smi); err != nil {
 			return errors.Wrap(err, "updating engine memory parameters")
 		}
 
 		// Check available RAM can satisfy tmpfs size before starting a new engine.
-		if err := checkEngineTmpfsMem(srv, engine, mi); err != nil {
+		if err := checkEngineTmpfsMem(srv, engine, smi); err != nil {
 			return errors.Wrap(err, "check ram available for engine tmpfs")
 		}
 

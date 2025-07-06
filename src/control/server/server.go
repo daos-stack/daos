@@ -63,7 +63,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 // non-exported package-scope function variable for mocking in unit tests
 var osSetenv = os.Setenv
 
-func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet, mi *common.MemInfo, lookupNetIF ifLookupFn, affSrcs ...config.EngineAffinityFn) error {
+func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet, smi *common.SysMemInfo, lookupNetIF ifLookupFn, affSrcs ...config.EngineAffinityFn) error {
 	processFabricProvider(cfg)
 
 	if err := cfg.SetEngineAffinities(log, affSrcs...); err != nil {
@@ -74,11 +74,11 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
-	if err := cfg.SetNrHugepages(log, mi); err != nil {
+	if err := cfg.SetNrHugepages(log, smi); err != nil {
 		return err
 	}
 
-	if err := cfg.SetRamdiskSize(log, mi); err != nil {
+	if err := cfg.SetRamdiskSize(log, smi); err != nil {
 		return err
 	}
 
@@ -593,12 +593,12 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	mi, err := common.GetMemInfo()
+	smi, err := common.GetSysMemInfo()
 	if err != nil {
 		return errors.Wrapf(err, "retrieve system memory info")
 	}
 
-	if err = processConfig(log, cfg, fis, mi, lookupIF, genFiAffFn(fis)); err != nil {
+	if err = processConfig(log, cfg, fis, smi, lookupIF, genFiAffFn(fis)); err != nil {
 		return err
 	}
 
