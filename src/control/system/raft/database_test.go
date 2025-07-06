@@ -589,7 +589,18 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				checkMemberDB(t, db.data.Members, expMember)
 			}
 			if len(db.data.Members.Uuids) != len(tc.expMembers) {
-				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
+				t.Fatalf("expected %d member UUIDs, got %d: %+v", len(tc.expMembers), len(db.data.Members.Uuids), db.data.Members.Uuids)
+			}
+			if len(db.data.Members.Ranks) != len(tc.expMembers) {
+				t.Fatalf("expected %d member ranks, got %d: %+v", len(tc.expMembers), len(db.data.Members.Ranks), db.data.Members.Ranks)
+			}
+
+			totalMemberAddrs := 0
+			for _, members := range db.data.Members.Addrs {
+				totalMemberAddrs += len(members)
+			}
+			if totalMemberAddrs != len(tc.expMembers) {
+				t.Fatalf("expected %d members in address table, got %d: %+v", len(tc.expMembers), totalMemberAddrs, db.data.Members.Addrs)
 			}
 
 			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {

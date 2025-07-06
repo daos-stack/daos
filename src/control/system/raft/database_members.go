@@ -70,20 +70,10 @@ func (mam MemberAddrMap) removeMember(m *system.Member) {
 	}
 	if len(newMembers) == 0 {
 		delete(mam, mas)
+		return
 	}
 
 	mam[mas] = newMembers
-}
-
-func (mam MemberAddrMap) updateMember(m *system.Member) {
-	mas := m.Addr.String()
-
-	for i, cur := range mam[mas] {
-		if m.UUID == cur.UUID {
-			mam[mas][i] = m
-			break
-		}
-	}
 }
 
 // MarshalJSON creates a serialized representation of the MemberAddrMap.
@@ -182,7 +172,6 @@ func (mdb *MemberDatabase) updateMember(m *system.Member) {
 	mdb.removeFromFaultDomainTree(cur)
 	cur.FaultDomain = m.FaultDomain
 	mdb.addToFaultDomainTree(cur)
-	mdb.Addrs.updateMember(cur)
 }
 
 // removeMember is responsible for removing Member and updating all of the relevant maps.
