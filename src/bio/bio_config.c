@@ -20,6 +20,8 @@
 /* JSON tags should match encode/decode logic in src/control/server/storage/bdev/backend_json.go */
 
 #define JSON_MAX_CHARS 4096
+#define JSON_NOT_FOUND    1
+#define BDEV_NAME_MAX_LEN 256
 
 struct
 json_config_ctx {
@@ -490,8 +492,6 @@ free_method:
 	return rc;
 }
 
-#define BDEV_NAME_MAX_LEN	256
-
 static int
 check_name_from_bdev_subsys(struct json_config_ctx *ctx)
 {
@@ -766,10 +766,8 @@ decode_daos_data(struct json_config_ctx *ctx, const char *method_name, struct co
 
 	/* Get 'config' array first configuration entry */
 	ctx->config_it = spdk_json_array_first(ctx->config);
-	if (ctx->config_it == NULL) {
-		/* Entry not-found */
-		D_GOTO(out_not_found, rc = 0);
-	}
+	if (ctx->config_it == NULL)
+		goto out_not_found;
 
 	while (ctx->config_it != NULL) {
 		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
@@ -786,16 +784,14 @@ decode_daos_data(struct json_config_ctx *ctx, const char *method_name, struct co
 		ctx->config_it = spdk_json_next(ctx->config_it);
 	}
 
-	if (ctx->config_it == NULL) {
-		/* Entry not-found */
-		D_GOTO(out_not_found, rc = 0);
-	}
+	if (ctx->config_it == NULL)
+		goto out_not_found;
 
 out:
 	return rc;
 out_not_found:
 	D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
-	return rc;
+	return JSON_NOT_FOUND;
 }
 
 struct busid_range_info hotplug_busid_range = {};
@@ -818,8 +814,11 @@ get_hotplug_busid_range(const char *nvme_conf)
 		goto out;
 
 	rc = decode_daos_data(ctx, NVME_CONF_SET_HOTPLUG_RANGE, &cfg);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == JSON_NOT_FOUND)
+			rc = 0;
 		goto out_ctx;
+	}
 
 	rc = spdk_json_decode_object(cfg.params, busid_range_decoders,
 				     SPDK_COUNTOF(busid_range_decoders),
@@ -908,8 +907,11 @@ bio_read_accel_props(const char *nvme_conf)
 		goto out;
 
 	rc = decode_daos_data(ctx, NVME_CONF_SET_ACCEL_PROPS, &cfg);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == JSON_NOT_FOUND)
+			rc = 0;
 		goto out_ctx;
+	}
 
 	rc = spdk_json_decode_object(cfg.params, accel_props_decoders,
 				     SPDK_COUNTOF(accel_props_decoders),
@@ -966,8 +968,11 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 		goto out;
 
 	rc = decode_daos_data(ctx, NVME_CONF_SET_SPDK_RPC_SERVER, &cfg);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == JSON_NOT_FOUND)
+			rc = 0;
 		goto out_ctx;
+	}
 
 	rc = spdk_json_decode_object(cfg.params, rpc_srv_decoders, SPDK_COUNTOF(rpc_srv_decoders),
 				     &rpc_srv_settings);
@@ -1018,8 +1023,11 @@ bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max
 		goto out;
 
 	rc = decode_daos_data(ctx, NVME_CONF_SET_AUTO_FAULTY, &cfg);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == JSON_NOT_FOUND)
+			rc = 0;
 		goto out_ctx;
+	}
 
 	rc = spdk_json_decode_object(cfg.params, auto_faulty_decoders,
 				     SPDK_COUNTOF(auto_faulty_decoders), &auto_faulty_criteria);
