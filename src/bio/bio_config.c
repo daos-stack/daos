@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -736,23 +737,16 @@ out:
 	return rc;
 }
 
+/* Caller responsible for freeing json_config_ctx after config_entry has been used */
 static int
-decode_daos_data(const char *nvme_conf, const char *method_name, struct config_entry *cfg)
+decode_daos_data(struct json_config_ctx *ctx, const char *method_name, struct config_entry *cfg)
 {
-	struct json_config_ctx	*ctx;
 	struct spdk_json_val	*daos_data;
 	int			 rc = 0;
 
-	D_ASSERT(nvme_conf != NULL);
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(method_name != NULL);
 	D_ASSERT(cfg != NULL);
-
-	D_ALLOC_PTR(ctx);
-	if (ctx == NULL)
-		return -DER_NOMEM;
-
-	rc = read_config(nvme_conf, ctx);
-	if (rc != 0)
-		D_GOTO(out, rc);
 
 	/* Capture daos_data JSON object */
 	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
@@ -796,8 +790,8 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 		/* Entry not-found so return positive RC */
 		rc = 1;
 	}
+
 out:
-	free_json_config_ctx(ctx);
 	return rc;
 }
 
@@ -806,12 +800,23 @@ struct busid_range_info hotplug_busid_range = {};
 static int
 get_hotplug_busid_range(const char *nvme_conf)
 {
+	struct json_config_ctx  *ctx;
 	struct config_entry	 cfg = {};
 	int			 rc;
 
-	rc = decode_daos_data(nvme_conf, NVME_CONF_SET_HOTPLUG_RANGE, &cfg);
+	D_ASSERT(nvme_conf != NULL);
+
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(nvme_conf, ctx);
 	if (rc != 0)
 		goto out;
+
+	rc = decode_daos_data(ctx, NVME_CONF_SET_HOTPLUG_RANGE, &cfg);
+	if (rc != 0)
+		goto out_ctx;
 
 	rc = spdk_json_decode_object(cfg.params, busid_range_decoders,
 				     SPDK_COUNTOF(busid_range_decoders),
@@ -819,18 +824,18 @@ get_hotplug_busid_range(const char *nvme_conf)
 	if (rc < 0) {
 		D_ERROR("Failed to decode '%s' entry: %s)\n", NVME_CONF_SET_HOTPLUG_RANGE,
 			spdk_strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_ctx, rc = -DER_INVAL);
 	}
 
 	D_INFO("'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
 	       hotplug_busid_range.begin, hotplug_busid_range.end);
+
+out_ctx:
+	//	if (cfg.method != NULL)
+	//		D_FREE(cfg.method);
+	free_json_config_ctx(ctx);
 out:
-	if (cfg.method != NULL)
-		D_FREE(cfg.method);
-	/* Decode functions return positive RC for success or not-found */
-	if (rc > 0)
-		rc = 0;
-	return 0;
+	return rc;
 }
 
 static bool
@@ -867,12 +872,16 @@ bio_set_hotplug_filter(const char *nvme_conf)
 	D_ASSERT(nvme_conf != NULL);
 
 	rc = get_hotplug_busid_range(nvme_conf);
-	if (rc != 0)
+
+	/* Decode functions may return positive RC for success or entity not-found */
+	if (rc > 0)
+		D_ERROR("hotplug busid range info not found\n");
+	else if (rc < 0)
 		return rc;
+	else
+		spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
-	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
-
-	return rc;
+	return 0;
 }
 
 /**
@@ -886,15 +895,24 @@ bio_set_hotplug_filter(const char *nvme_conf)
 int
 bio_read_accel_props(const char *nvme_conf)
 {
+	struct json_config_ctx  *ctx;
 	struct config_entry	 cfg = {};
 	struct accel_props_info  accel_props = {};
 	int			 rc;
 
 	D_ASSERT(nvme_conf != NULL);
 
-	rc = decode_daos_data(nvme_conf, NVME_CONF_SET_ACCEL_PROPS, &cfg);
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(nvme_conf, ctx);
 	if (rc != 0)
 		goto out;
+
+	rc = decode_daos_data(ctx, NVME_CONF_SET_ACCEL_PROPS, &cfg);
+	if (rc != 0)
+		goto out_ctx;
 
 	rc = spdk_json_decode_object(cfg.params, accel_props_decoders,
 				     SPDK_COUNTOF(accel_props_decoders),
@@ -902,7 +920,7 @@ bio_read_accel_props(const char *nvme_conf)
 	if (rc < 0) {
 		D_ERROR("Failed to decode '%s' entry (%s)\n", NVME_CONF_SET_ACCEL_PROPS,
 			spdk_strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_ctx, rc = -DER_INVAL);
 	}
 
 	D_INFO("'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
@@ -911,12 +929,17 @@ bio_read_accel_props(const char *nvme_conf)
 	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_CRC) ? "true" : "false");
 
 	/* TODO: do something useful with acceleration engine properties */
-out:
-	if (cfg.method != NULL)
-		D_FREE(cfg.method);
-	/* Decode functions return positive RC for success or not-found */
-	if (rc > 0)
+
+out_ctx:
+	/* Decode functions may return positive RC for success or entity not-found */
+	if (rc > 0) {
+		D_ERROR("acceleration property info not found\n");
 		rc = 0;
+	}
+	//	if (cfg.method != NULL)
+	//		D_FREE(cfg.method);
+	free_json_config_ctx(ctx);
+out:
 	return rc;
 }
 
@@ -934,6 +957,7 @@ out:
 int
 bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr)
 {
+	struct json_config_ctx  *ctx;
 	struct config_entry	 cfg = {};
 	struct rpc_srv_info      rpc_srv_settings = {};
 	int			 rc;
@@ -943,16 +967,24 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 	D_ASSERT(sock_addr != NULL);
 	D_ASSERT(*sock_addr == NULL);
 
-	rc = decode_daos_data(nvme_conf, NVME_CONF_SET_SPDK_RPC_SERVER, &cfg);
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(nvme_conf, ctx);
 	if (rc != 0)
 		goto out;
+
+	rc = decode_daos_data(ctx, NVME_CONF_SET_SPDK_RPC_SERVER, &cfg);
+	if (rc != 0)
+		goto out_ctx;
 
 	rc = spdk_json_decode_object(cfg.params, rpc_srv_decoders, SPDK_COUNTOF(rpc_srv_decoders),
 				     &rpc_srv_settings);
 	if (rc < 0) {
 		D_ERROR("Failed to decode '%s' entry: %s)\n", NVME_CONF_SET_SPDK_RPC_SERVER,
 			spdk_strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_ctx, rc = -DER_INVAL);
 	}
 
 	*enable = rpc_srv_settings.enable;
@@ -960,12 +992,17 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 
 	D_INFO("'%s' read from config: enabled=%d, addr %s\n", NVME_CONF_SET_SPDK_RPC_SERVER,
 	       *enable, (char *)*sock_addr);
-out:
-	if (cfg.method != NULL)
-		D_FREE(cfg.method);
-	/* Decode functions return positive RC for success or not-found */
-	if (rc > 0)
+
+out_ctx:
+	/* Decode functions may return positive RC for success or entity not-found */
+	if (rc > 0) {
+		D_ERROR("spdk-rpc-server info not found\n");
 		rc = 0;
+	}
+	//	if (cfg.method != NULL)
+	//		D_FREE(cfg.method);
+	free_json_config_ctx(ctx);
+out:
 	return rc;
 }
 
@@ -984,27 +1021,37 @@ int
 bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max_io_errs,
 			      uint32_t *max_csum_errs)
 {
+	struct json_config_ctx *ctx                  = NULL;
 	struct config_entry     cfg                  = {};
 	struct auto_faulty_info auto_faulty_criteria = {};
 	int                     rc;
 
-	rc = decode_daos_data(nvme_conf, NVME_CONF_SET_AUTO_FAULTY, &cfg);
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(nvme_conf, ctx);
 	if (rc != 0)
 		goto out;
+
+	rc = decode_daos_data(ctx, NVME_CONF_SET_AUTO_FAULTY, &cfg);
+	if (rc != 0)
+		goto out_ctx;
 
 	rc = spdk_json_decode_object(cfg.params, auto_faulty_decoders,
 				     SPDK_COUNTOF(auto_faulty_decoders), &auto_faulty_criteria);
 	if (rc < 0) {
 		D_ERROR("Failed to decode '%s' entry: %s)\n", NVME_CONF_SET_AUTO_FAULTY,
 			spdk_strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_ctx, rc = -DER_INVAL);
 	}
 
 	*enable = auto_faulty_criteria.enable;
 	if (*enable == false) {
 		*max_io_errs   = UINT32_MAX;
 		*max_csum_errs = UINT32_MAX;
-		goto out;
+		D_DEBUG(DB_MGMT, "bdev auto-faulty criteria disabled\n");
+		goto out_ctx;
 	}
 	*max_io_errs = auto_faulty_criteria.max_io_errs;
 	if (*max_io_errs == 0)
@@ -1013,15 +1060,19 @@ bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max
 	if (*max_csum_errs == 0)
 		*max_csum_errs = UINT32_MAX;
 
-out:
 	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
 	       *enable ? "enabled" : "disabled", *max_io_errs, *max_csum_errs);
 
-	if (cfg.method != NULL)
-		D_FREE(cfg.method);
-	/* Decode functions return positive RC for success or not-found */
-	if (rc > 0)
+out_ctx:
+	/* Decode functions may return positive RC for success or entity not-found */
+	if (rc > 0) {
+		D_ERROR("auto-faulty-criteria info not found\n");
 		rc = 0;
+	}
+	//	if (cfg.method != NULL)
+	//		D_FREE(cfg.method);
+	free_json_config_ctx(ctx);
+out:
 	return rc;
 }
 
