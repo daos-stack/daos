@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,7 +25,7 @@ type StorageControlService struct {
 	log             logging.Logger
 	storage         *storage.Provider
 	instanceStorage map[uint32]*storage.Config
-	getMemInfo      common.GetMemInfoFn
+	getSysMemInfo   common.GetSysMemInfoFn
 }
 
 // ScmPrepare preps locally attached modules.
@@ -70,7 +71,7 @@ func NewStorageControlService(log logging.Logger, ecs []*engine.Config) *Storage
 		log:             log,
 		instanceStorage: instanceStorage,
 		storage:         storage.DefaultProvider(log, 0, topCfg),
-		getMemInfo:      common.GetMemInfo,
+		getSysMemInfo:   common.GetSysMemInfo,
 	}
 }
 
