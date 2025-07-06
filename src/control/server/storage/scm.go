@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -608,9 +609,10 @@ func CalcRamdiskSize(log logging.Logger, memTotal, memHuge, memSys uint64, tgtCo
 	}
 
 	msgStats := fmt.Sprintf("mem stats: total %s (%d) - (hugepages %s + sys rsvd %s + "+
-		"(engine rsvd %s * nr engines %d). %d tgts-per-engine)", humanize.IBytes(memTotal),
-		memTotal, humanize.IBytes(memHuge), humanize.IBytes(memSys),
-		humanize.IBytes(memEng), engCount, tgtCount)
+		"(engine rsvd %s * nr engines %d), engine rsvd: max(%d tgts-per-engine * %s, %s)",
+		humanize.IBytes(memTotal), memTotal, humanize.IBytes(memHuge),
+		humanize.IBytes(memSys), humanize.IBytes(memEng), engCount, tgtCount,
+		humanize.IBytes(DefaultTgtMemRsvd), humanize.IBytes(DefaultEngineMemRsvd))
 
 	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
 	if memTotal < memRsvd {
