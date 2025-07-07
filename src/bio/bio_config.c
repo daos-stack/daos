@@ -833,6 +833,8 @@ get_hotplug_busid_range(const char *nvme_conf)
 	       hotplug_busid_range.begin, hotplug_busid_range.end);
 
 out_ctx:
+	if (cfg.method != NULL)
+		D_FREE(cfg.method);
 	free_json_config_ctx(ctx);
 out:
 	return rc;
@@ -930,6 +932,8 @@ bio_read_accel_props(const char *nvme_conf)
 	/* TODO: do something useful with acceleration engine properties */
 
 out_ctx:
+	if (cfg.method != NULL)
+		D_FREE(cfg.method);
 	free_json_config_ctx(ctx);
 out:
 	return rc;
@@ -989,6 +993,8 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 	       *enable, (char *)*sock_addr);
 
 out_ctx:
+	if (cfg.method != NULL)
+		D_FREE(cfg.method);
 	free_json_config_ctx(ctx);
 out:
 	return rc;
@@ -1055,6 +1061,8 @@ bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max
 	       *enable ? "enabled" : "disabled", *max_io_errs, *max_csum_errs);
 
 out_ctx:
+	if (cfg.method != NULL)
+		D_FREE(cfg.method);
 	free_json_config_ctx(ctx);
 out:
 	return rc;
