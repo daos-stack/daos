@@ -349,7 +349,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	}
 
 	*crt_ctx = (crt_context_t)ctx;
-	D_INFO("created context (idx %d, self_uri %s)\n", ctx->cc_idx, ctx->cc_self_uri);
+	D_DEBUG(DB_ALL, "created context (idx %d, self_uri %s)\n", ctx->cc_idx, ctx->cc_self_uri);
 
 out:
 	return rc;
