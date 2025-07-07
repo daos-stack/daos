@@ -529,7 +529,7 @@ pipeline {
                                         scons_args: sconsArgs() +
                                                     ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh "' + ENV.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -576,7 +576,7 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh "' + ENV.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -599,7 +599,7 @@ pipeline {
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -620,7 +620,7 @@ pipeline {
                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh "' + ENV.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -643,7 +643,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
