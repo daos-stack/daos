@@ -171,7 +171,7 @@ build_package() {
 
   depends=()
   create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
-  pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
+  pkgname="${name}-${VERSION}-${RELEASE}${DAOS_RELVAL:-}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
   fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
@@ -179,7 +179,7 @@ build_package() {
   --name "${name}" \
   --license "${LICENSE}" \
   --version "${VERSION}" \
-  --iteration "${RELEASE}" \
+  --iteration "${RELEASE}${DAOS_RELVAL:-}" \
   --architecture "${ARCH}" \
   --description "${DESCRIPTION}" \
   --url "${URL}" \
