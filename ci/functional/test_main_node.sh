@@ -16,5 +16,5 @@ export REMOTE_ACCT=jenkins
 export WITH_VALGRIND="$WITH_VALGRIND"
 export STAGE_NAME="$STAGE_NAME"
 
-HTTPS_PROXY="${HTTPS_PROXY:-}" /usr/lib/daos/TESTING/ftest/ftest.sh \
+DAOS_HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" /usr/lib/daos/TESTING/ftest/ftest.sh \
     "$TEST_TAG" "$TNODES" "$FTEST_ARG"

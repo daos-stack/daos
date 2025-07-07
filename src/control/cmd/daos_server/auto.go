@@ -70,7 +70,12 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		return nil, errors.Wrap(err, "nvme init")
 	}
 
-	nvmeResp, errNvme := scanNVMe(snc)
+	smi, err := common.GetSysMemInfo()
+	if err != nil {
+		return nil, errors.Wrap(err, "get hugepage info")
+	}
+
+	nvmeResp, errNvme := scanNVMe(snc, smi)
 	if errNvme != nil {
 		return nil, errors.Wrap(errNvme, "nvme scan")
 	}
@@ -89,7 +94,8 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		return nil, errors.Wrap(errScm, "scm scan")
 	}
 
-	smi, err := common.GetSysMemInfo()
+	// Reload to pick up any changes after scanNVMe (which may implicitly call prepNVMe).
+	smi, err = common.GetSysMemInfo()
 	if err != nil {
 		return nil, errors.Wrap(err, "get hugepage info")
 	}
