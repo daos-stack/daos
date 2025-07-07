@@ -1,5 +1,6 @@
 hosts:
   test_servers: 4
+  test_clients: 1
 
 timeout: 300
 

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -89,7 +90,7 @@ class PerServerFaultDomainTest(IorTestBase):
         8. Verify container's Health status is HEALTHY.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=container
         :avocado: tags=PerServerFaultDomainTest,test_rf1_healthy
         """
@@ -122,7 +123,7 @@ class PerServerFaultDomainTest(IorTestBase):
         8. Verify container's Health status is UNCLEAN.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=container
         :avocado: tags=PerServerFaultDomainTest,test_rf1_unclean
         """
@@ -160,7 +161,7 @@ class PerServerFaultDomainTest(IorTestBase):
         8. Verify container's Health status is HEALTHY.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=container
         :avocado: tags=PerServerFaultDomainTest,test_rf2_healthy
         """
@@ -236,7 +237,7 @@ class PerServerFaultDomainTest(IorTestBase):
         8. Verify container's Health status is HEALTHY.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=container
         :avocado: tags=PerServerFaultDomainTest,test_rf2_unclean
         """
