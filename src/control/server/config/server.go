@@ -70,7 +70,7 @@ type Server struct {
 	CoreDumpFilter     uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars      []string                  `yaml:"client_env_vars,omitempty"`
 	SupportConfig      SupportConfig             `yaml:"support_config,omitempty"`
-	ClientFirewallMode *bool                     `yaml:"client_behind_firewall,omitempty"`
+	ClientFirewallMode bool                      `yaml:"client_behind_firewall,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -279,7 +279,7 @@ func (cfg *Server) WithNrHugepages(nr int) *Server {
 
 // WithClientFirewallMode enables or disable client firewall mode.
 func (cfg *Server) WithClientFirewallMode(clientFirewallMode bool) *Server {
-	cfg.ClientFirewallMode = &clientFirewallMode
+	cfg.ClientFirewallMode = clientFirewallMode
 	return cfg
 }
 
@@ -335,8 +335,6 @@ func (cfg *Server) WithTelemetryPort(port int) *Server {
 // DefaultServer creates a new instance of configuration struct
 // populated with defaults.
 func DefaultServer() *Server {
-	clientFirewallMode := false
-
 	return &Server{
 		SystemName:        build.DefaultSystemName,
 		SocketDir:         defaultRuntimeDir,
@@ -350,7 +348,7 @@ func DefaultServer() *Server {
 		EnableHotplug:     false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter:     0b00010011, // private, shared, ELF
-		ClientFirewallMode: &clientFirewallMode,
+		ClientFirewallMode: false,
 	}
 }
 

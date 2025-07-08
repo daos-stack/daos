@@ -244,10 +244,10 @@ func TestServerConfig_Constructed(t *testing.T) {
 			DevicePath: "/dev/sdb1",
 		}).
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO(true).   // vfio enabled by default
-		WithDisableVMD(true).    // vmd enabled by default
-		WithEnableHotplug(true). // hotplug disabled by default
-		WithClientFirewallMode(true).
+		WithDisableVFIO(true).        // vfio enabled by default
+		WithDisableVMD(true).         // vmd enabled by default
+		WithEnableHotplug(true).      // hotplug disabled by default
+		WithClientFirewallMode(true). // firewall enabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_server_helper.log").

@@ -31,8 +31,10 @@
 /* Pool service (opaque) */
 struct ds_pool_svc;
 
-/* This is used to ensure in unit testing that clients ping targets after receiving a DER_RECONNECT
-error from the server in the case there is fault injection to return such an error.*/
+/* This is used to ensure in unit testing that clients ping targets after
+ * receiving a DER_RECONNECT error from the server in the case there is fault
+ * injection to return such an error.
+ */
 extern __thread bool firewall_blocking_flag;
 
 /**

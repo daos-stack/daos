@@ -656,11 +656,10 @@ dc_mgmt_net_cfg_init(const char *name, crt_init_options_t *crt_info)
 	}
 
 	if (info->client_firewall_mode) {
-		rc = asprintf(&client_firewall_mode, "%d", info->client_firewall_mode);
-		if (rc < 0) {
-			client_firewall_mode = NULL;
+		D_ASPRINTF(client_firewall_mode, "%d", info->client_firewall_mode);
+		if (client_firewall_mode == NULL)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
-		}
+
 		rc = d_setenv("FI_TCP_FIREWALL_ADDR", client_firewall_mode, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = -DER_NOMEM);

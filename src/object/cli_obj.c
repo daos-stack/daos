@@ -1435,8 +1435,9 @@ ping_tgt_task(tse_task_t *task)
 	int                       tgt_id;
 	int                       rc;
 	struct ping_tgt_task_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
-	pool_hdl                      = arg->pool_hdl;
-	tgt_id                        = arg->tgt_id;
+
+	pool_hdl = arg->pool_hdl;
+	tgt_id   = arg->tgt_id;
 
 	D_DEBUG(DB_TRACE, "calling dc_pool_ping_target with pool handle %lu and tgt id %d",
 		pool_hdl.cookie, tgt_id);

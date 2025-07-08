@@ -418,11 +418,6 @@ func (srv *server) setupGrpc() error {
 
 	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
 	for i, p := range providers {
-		clientFirewallMode := false
-		if srv.cfg.ClientFirewallMode != nil {
-			clientFirewallMode = *srv.cfg.ClientFirewallMode
-		}
-
 		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
 			Provider:           p,
 			CrtTimeout:         srv.cfg.Fabric.CrtTimeout,
@@ -430,7 +425,7 @@ func (srv *server) setupGrpc() error {
 			SrvSrxSet:          srxSetting,
 			ProviderIdx:        uint32(i),
 			EnvVars:            srv.cfg.ClientEnvVars,
-			ClientFirewallMode: clientFirewallMode,
+			ClientFirewallMode: srv.cfg.ClientFirewallMode,
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints
