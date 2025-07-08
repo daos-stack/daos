@@ -4870,8 +4870,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	}
 
 	if (unlikely(task->dt_result == -DER_TX_ID_REUSED || task->dt_result == -DER_EP_OLD)) {
-		struct dtx_id	*new_dti;
-		struct dtx_id	 old_dti;
+		struct dtx_id   *new_dti;
 		uint64_t	 api_flags;
 
 		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
@@ -4901,6 +4900,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 
 		if (task->dt_result == -DER_TX_ID_REUSED || !obj_req_with_cond_flags(api_flags)) {
+			struct dtx_id old_dti;
+
 			daos_dti_copy(&old_dti, new_dti);
 			daos_dti_gen(new_dti, false);
 			obj_auxi->io_retry = 1;

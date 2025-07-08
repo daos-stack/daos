@@ -685,6 +685,9 @@ daos_dti_gen(struct dtx_id *dti, bool zero)
 	if (zero) {
 		memset(dti, 0, sizeof(*dti));
 	} else {
+		/** new threads do not call daos_init, so we need to generate dti_uuid */
+		if (uuid_is_null(dti_uuid))
+			uuid_generate(dti_uuid);
 		uuid_copy(dti->dti_uuid, dti_uuid);
 		dti->dti_hlc = d_hlc_get();
 	}
