@@ -27,15 +27,27 @@ export mandir="${MANDIR:-/usr/share/man}"
 daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
 export daos_version
 daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
-  sed 's/^Release: *//' | sed 's/%.*//')"
+  sed 's/^Release: *//' | sed 's/%.*//')${DAOS_RELVAL:-}"
 export daos_release
 
 export libfabric_version="1.22.0"
+export libfabric_release="3${DAOS_RELVAL:-}"
+export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.0"
+export mercury_release="2${DAOS_RELVAL:-}"
+export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
+export argobots_release="2${DAOS_RELVAL:-}"
+export argobots_full="${argobots_version}-${argobots_release}"
 export pmdk_version="2.1.0"
+export pmdk_release="4${DAOS_RELVAL:-}"
+export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.30.0"
-export isal_crypto_version="2.24.0"
+export isal_release="2${DAOS_RELVAL:-}"
+export isal_full="${isal_version}-${isal_release}"
+export isal_crypto_version="2.24.0${DAOS_RELVAL:-}"
+export isal_crypto_release="2${DAOS_RELVAL:-}"
+export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
 
 source utils/rpms/package_names.sh
 
@@ -171,7 +183,7 @@ build_package() {
 
   depends=()
   create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
-  pkgname="${name}-${VERSION}-${RELEASE}${DAOS_RELVAL:-}.${ARCH}.${output_type}"
+  pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
   fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
@@ -179,7 +191,7 @@ build_package() {
   --name "${name}" \
   --license "${LICENSE}" \
   --version "${VERSION}" \
-  --iteration "${RELEASE}${DAOS_RELVAL:-}" \
+  --iteration "${RELEASE}" \
   --architecture "${ARCH}" \
   --description "${DESCRIPTION}" \
   --url "${URL}" \

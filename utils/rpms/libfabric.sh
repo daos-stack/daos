@@ -10,7 +10,7 @@ if [ -z "${SL_OFI_PREFIX}" ]; then
 fi
 
 VERSION="${libfabric_version}"
-RELEASE="3"
+RELEASE="${libfabric_release}"
 LICENSE="BSD or GPLv2"
 ARCH=${isa}
 DESCRIPTION="Provides a user-space API to access high-performance fabric
@@ -66,5 +66,5 @@ TARGET_PATH="${mandir}/man7"
 list_files files "${SL_OFI_PREFIX}/share/man/man7/f*.7*"
 append_install_list "${files[@]}"
 
-DEPENDS=("${libfabric_lib} = ${libfabric_version}")
+DEPENDS=("${libfabric_lib} = ${libfabric_full}")
 build_package "${libfabric_dev}"
