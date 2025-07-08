@@ -6129,6 +6129,9 @@ ioctl(int fd, unsigned long request, ...)
 	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)))
 		return next_ioctl(fd, request, param);
 
+	if (request == FIOCLEX)
+		return 0;
+
 	errno = ENOTSUP;
 	return (-1);
 }
