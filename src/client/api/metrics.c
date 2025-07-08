@@ -106,7 +106,7 @@ dc_tm_init(crt_init_options_t *crt_info)
 {
 	struct d_tm_node_t *started_at;
 	pid_t               pid = getpid();
-	int                 metrics_tag;
+	int                 flags = (D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK);
 	char                root_name[D_TM_MAX_NAME_LEN];
 	int                 rc;
 
@@ -117,6 +117,20 @@ dc_tm_init(crt_init_options_t *crt_info)
 	if (!daos_client_metric)
 		return 0;
 
+	d_getenv_bool(DAOS_CLIENT_METRICS_RETAIN, &daos_client_metric_retain);
+	if (daos_client_metric_retain) {
+		if (d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR)) {
+			D_ERROR("cannot set both %s and %s\n", DAOS_CLIENT_METRICS_DUMP_DIR,
+				DAOS_CLIENT_METRICS_RETAIN);
+			daos_client_metric = false;
+			return -DER_INVAL;
+		}
+		flags |= D_TM_RETAIN_SHMEM;
+	} else {
+		if (d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR))
+			flags |= D_TM_NO_SHMEM;
+	}
+
 	D_INFO("Setting up client telemetry for %s/%d\n", dc_jobid, pid);
 
 	/* Enable client-appropriate CaRT telemetry. */
@@ -126,13 +140,8 @@ dc_tm_init(crt_init_options_t *crt_info)
 	if (rc)
 		D_GOTO(out, rc);
 
-	metrics_tag = D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK;
-	d_getenv_bool(DAOS_CLIENT_METRICS_RETAIN, &daos_client_metric_retain);
-	if (daos_client_metric_retain)
-		metrics_tag |= D_TM_RETAIN_SHMEM;
-
 	snprintf(root_name, sizeof(root_name), "%d", pid);
-	rc = init_root(root_name, pid, metrics_tag);
+	rc = init_root(root_name, pid, flags);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to initialize client telemetry");
 		D_GOTO(out, rc);

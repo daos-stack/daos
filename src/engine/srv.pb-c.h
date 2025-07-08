@@ -30,9 +30,10 @@ typedef struct _Srv__CheckDeregPoolReq Srv__CheckDeregPoolReq;
 typedef struct _Srv__CheckDeregPoolResp Srv__CheckDeregPoolResp;
 typedef struct _Srv__CheckReportReq Srv__CheckReportReq;
 typedef struct _Srv__CheckReportResp Srv__CheckReportResp;
-typedef struct _Srv__ListPoolsReq               Srv__ListPoolsReq;
-typedef struct _Srv__ListPoolsResp              Srv__ListPoolsResp;
-typedef struct _Srv__ListPoolsResp__Pool        Srv__ListPoolsResp__Pool;
+typedef struct _Srv__ListPoolsReq Srv__ListPoolsReq;
+typedef struct _Srv__ListPoolsResp Srv__ListPoolsResp;
+typedef struct _Srv__ListPoolsResp__Pool Srv__ListPoolsResp__Pool;
+
 
 /* --- enums --- */
 
@@ -304,54 +305,55 @@ struct  _Srv__CheckReportResp
  { PROTOBUF_C_MESSAGE_INIT (&srv__check_report_resp__descriptor) \
     , 0 }
 
-struct _Srv__ListPoolsReq {
-	ProtobufCMessage   base;
-	/*
-	 * Include all pools in response, regardless of state
-	 */
-	protobuf_c_boolean include_all;
-};
-#define SRV__LIST_POOLS_REQ__INIT                                                                  \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_req__descriptor)                          \
-		, 0                                                                                \
-	}
 
-struct _Srv__ListPoolsResp__Pool {
-	ProtobufCMessage base;
-	/*
-	 * Pool UUID
-	 */
-	char            *uuid;
-	/*
-	 * Pool label
-	 */
-	char            *label;
-	/*
-	 * Pool service ranks
-	 */
-	size_t           n_svcreps;
-	uint32_t        *svcreps;
+struct  _Srv__ListPoolsReq
+{
+  ProtobufCMessage base;
+  /*
+   * Include all pools in response, regardless of state
+   */
+  protobuf_c_boolean include_all;
 };
-#define SRV__LIST_POOLS_RESP__POOL__INIT                                                           \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_resp__pool__descriptor)                   \
-		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL        \
-	}
+#define SRV__LIST_POOLS_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__list_pools_req__descriptor) \
+    , 0 }
 
-struct _Srv__ListPoolsResp {
-	ProtobufCMessage           base;
-	/*
-	 * List of pools
-	 */
-	size_t                     n_pools;
-	Srv__ListPoolsResp__Pool **pools;
+
+struct  _Srv__ListPoolsResp__Pool
+{
+  ProtobufCMessage base;
+  /*
+   * Pool UUID
+   */
+  char *uuid;
+  /*
+   * Pool label
+   */
+  char *label;
+  /*
+   * Pool service ranks
+   */
+  size_t n_svcreps;
+  uint32_t *svcreps;
 };
-#define SRV__LIST_POOLS_RESP__INIT                                                                 \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_resp__descriptor)                         \
-		, 0, NULL                                                                          \
-	}
+#define SRV__LIST_POOLS_RESP__POOL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__list_pools_resp__pool__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+
+
+struct  _Srv__ListPoolsResp
+{
+  ProtobufCMessage base;
+  /*
+   * List of pools
+   */
+  size_t n_pools;
+  Srv__ListPoolsResp__Pool **pools;
+};
+#define SRV__LIST_POOLS_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__list_pools_resp__descriptor) \
+    , 0,NULL }
+
 
 /* Srv__NotifyReadyReq methods */
 void   srv__notify_ready_req__init
@@ -604,34 +606,46 @@ void   srv__check_report_resp__free_unpacked
                      (Srv__CheckReportResp *message,
                       ProtobufCAllocator *allocator);
 /* Srv__ListPoolsReq methods */
-void
-srv__list_pools_req__init(Srv__ListPoolsReq *message);
-size_t
-srv__list_pools_req__get_packed_size(const Srv__ListPoolsReq *message);
-size_t
-srv__list_pools_req__pack(const Srv__ListPoolsReq *message, uint8_t *out);
-size_t
-srv__list_pools_req__pack_to_buffer(const Srv__ListPoolsReq *message, ProtobufCBuffer *buffer);
+void   srv__list_pools_req__init
+                     (Srv__ListPoolsReq         *message);
+size_t srv__list_pools_req__get_packed_size
+                     (const Srv__ListPoolsReq   *message);
+size_t srv__list_pools_req__pack
+                     (const Srv__ListPoolsReq   *message,
+                      uint8_t             *out);
+size_t srv__list_pools_req__pack_to_buffer
+                     (const Srv__ListPoolsReq   *message,
+                      ProtobufCBuffer     *buffer);
 Srv__ListPoolsReq *
-srv__list_pools_req__unpack(ProtobufCAllocator *allocator, size_t len, const uint8_t *data);
-void
-srv__list_pools_req__free_unpacked(Srv__ListPoolsReq *message, ProtobufCAllocator *allocator);
+       srv__list_pools_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__list_pools_req__free_unpacked
+                     (Srv__ListPoolsReq *message,
+                      ProtobufCAllocator *allocator);
 /* Srv__ListPoolsResp__Pool methods */
-void
-srv__list_pools_resp__pool__init(Srv__ListPoolsResp__Pool *message);
+void   srv__list_pools_resp__pool__init
+                     (Srv__ListPoolsResp__Pool         *message);
 /* Srv__ListPoolsResp methods */
-void
-srv__list_pools_resp__init(Srv__ListPoolsResp *message);
-size_t
-srv__list_pools_resp__get_packed_size(const Srv__ListPoolsResp *message);
-size_t
-srv__list_pools_resp__pack(const Srv__ListPoolsResp *message, uint8_t *out);
-size_t
-srv__list_pools_resp__pack_to_buffer(const Srv__ListPoolsResp *message, ProtobufCBuffer *buffer);
+void   srv__list_pools_resp__init
+                     (Srv__ListPoolsResp         *message);
+size_t srv__list_pools_resp__get_packed_size
+                     (const Srv__ListPoolsResp   *message);
+size_t srv__list_pools_resp__pack
+                     (const Srv__ListPoolsResp   *message,
+                      uint8_t             *out);
+size_t srv__list_pools_resp__pack_to_buffer
+                     (const Srv__ListPoolsResp   *message,
+                      ProtobufCBuffer     *buffer);
 Srv__ListPoolsResp *
-srv__list_pools_resp__unpack(ProtobufCAllocator *allocator, size_t len, const uint8_t *data);
-void
-srv__list_pools_resp__free_unpacked(Srv__ListPoolsResp *message, ProtobufCAllocator *allocator);
+       srv__list_pools_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__list_pools_resp__free_unpacked
+                     (Srv__ListPoolsResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Srv__NotifyReadyReq_Closure)
@@ -676,10 +690,15 @@ typedef void (*Srv__CheckReportReq_Closure)
 typedef void (*Srv__CheckReportResp_Closure)
                  (const Srv__CheckReportResp *message,
                   void *closure_data);
-typedef void (*Srv__ListPoolsReq_Closure)(const Srv__ListPoolsReq *message, void *closure_data);
-typedef void (*Srv__ListPoolsResp__Pool_Closure)(const Srv__ListPoolsResp__Pool *message,
-						 void                           *closure_data);
-typedef void (*Srv__ListPoolsResp_Closure)(const Srv__ListPoolsResp *message, void *closure_data);
+typedef void (*Srv__ListPoolsReq_Closure)
+                 (const Srv__ListPoolsReq *message,
+                  void *closure_data);
+typedef void (*Srv__ListPoolsResp__Pool_Closure)
+                 (const Srv__ListPoolsResp__Pool *message,
+                  void *closure_data);
+typedef void (*Srv__ListPoolsResp_Closure)
+                 (const Srv__ListPoolsResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 

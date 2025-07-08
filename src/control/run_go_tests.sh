@@ -170,7 +170,7 @@ $output
 
 function get_test_runner()
 {
-	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection,test_stubs"
+	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection,test_stubs,spdk"
 	test_runner="go test"
 
 	if which gotestsum >/dev/null; then
@@ -194,6 +194,12 @@ if [ "$check" == "false" ]; then
 fi
 
 DAOS_BASE=${DAOS_BASE:-${SL_SRC_DIR}}
+
+# Allow use of an official toolchain that is newer than
+# than the distro-provided toolchain, if necessary.
+export GOTOOLCHAIN=${GOTOOLCHAIN:-"auto"}
+export GOSUMDB=${GOSUMDB:-"sum.golang.org"}
+export GOPROXY=${GOPROXY:-"https://proxy.golang.org,direct"}
 
 export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"

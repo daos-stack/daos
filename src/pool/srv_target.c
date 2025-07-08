@@ -240,9 +240,9 @@ flush_ult(void *arg)
 		} else if (rc) {	/* This pool doesn't have NVMe partition */
 			sleep_ms = 60000;
 		} else if (sched_req_space_check(child->spc_flush_req) == SCHED_SPACE_PRESS_NONE) {
-			sleep_ms = 5000;
+			sleep_ms = 500;
 		} else {
-			sleep_ms = (nr_flushed < nr_flush) ? 1000 : 0;
+			sleep_ms = (nr_flushed < nr_flush) ? 50 : 0;
 		}
 
 		if (dss_ult_exiting(child->spc_flush_req))
@@ -2676,8 +2676,7 @@ ds_pool_tgt_discard_ult(void *data)
 		D_GOTO(free, rc = 0);
 	}
 
-	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
-		    PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
+	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
 				  DSS_ULT_DEEP_STACK);
 
