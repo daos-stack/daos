@@ -61,7 +61,7 @@ install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 
 EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
-DEPENDS=( "mercury >= ${mercury_version}" "${libfabric_lib} >= ${libfabric_version}" )
+DEPENDS=( "mercury >= ${mercury_full}" "${libfabric_lib} >= ${libfabric_full}" )
 build_package "daos"
 
 # Only build server RPMs if we built the server
@@ -172,7 +172,7 @@ EOF
   EXTRA_OPTS+=("--rpm-attr" "2755,root,daos_server:${bindir}/daos_server")
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${VERSION}-${RELEASE}" )
-  DEPENDS+=( "${pmemobj_lib} >= ${pmdk_version}" "${argobots_lib} >= ${argobots_version}" )
+  DEPENDS+=( "${pmemobj_lib} >= ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
   build_package "daos-server"
 
   TARGET_PATH="${bindir}"
@@ -302,32 +302,33 @@ append_install_list "${files[@]}"
 
 TARGET_PATH="${bindir}"
 list_files files "${SL_PREFIX}/bin/hello_drpc" \
-	   "${SL_PREFIX}/bin/acl_dump_test" \
-	   "${SL_PREFIX}/bin/agent_tests" \
-	   "${SL_PREFIX}/bin/drpc_engine_test" \
-	   "${SL_PREFIX}/bin/drpc_test" \
-	   "${SL_PREFIX}/bin/dfuse_test" \
-	   "${SL_PREFIX}/bin/eq_tests" \
-	   "${SL_PREFIX}/bin/job_tests" \
-	   "${SL_PREFIX}/bin/jump_pl_map" \
-	   "${SL_PREFIX}/bin/pl_bench" \
-	   "${SL_PREFIX}/bin/ring_pl_map" \
-	   "${SL_PREFIX}/bin/security_test" \
-	   "${SL_PREFIX}/bin/fault_status" \
-	   "${SL_PREFIX}/bin/crt_launch" \
-	   "${SL_PREFIX}/bin/daos_perf" \
-	   "${SL_PREFIX}/bin/daos_test" \
-	   "${SL_PREFIX}/bin/daos_debug_set_params" \
-	   "${SL_PREFIX}/bin/dfs_test" \
-	   "${SL_PREFIX}/bin/jobtest" \
-	   "${SL_PREFIX}/bin/daos_gen_io_conf" \
-	   "${SL_PREFIX}/bin/daos_run_io_conf"
+                 "${SL_PREFIX}/bin/acl_dump_test" \
+                 "${SL_PREFIX}/bin/agent_tests" \
+                 "${SL_PREFIX}/bin/drpc_engine_test" \
+                 "${SL_PREFIX}/bin/drpc_test" \
+                 "${SL_PREFIX}/bin/dfuse_test" \
+                 "${SL_PREFIX}/bin/eq_tests" \
+                 "${SL_PREFIX}/bin/job_tests" \
+                 "${SL_PREFIX}/bin/jump_pl_map" \
+                 "${SL_PREFIX}/bin/pl_bench" \
+                 "${SL_PREFIX}/bin/ring_pl_map" \
+                 "${SL_PREFIX}/bin/security_test" \
+                 "${SL_PREFIX}/bin/fault_status" \
+                 "${SL_PREFIX}/bin/crt_launch" \
+                 "${SL_PREFIX}/bin/daos_perf" \
+                 "${SL_PREFIX}/bin/daos_racer" \
+                 "${SL_PREFIX}/bin/daos_test" \
+                 "${SL_PREFIX}/bin/daos_debug_set_params" \
+                 "${SL_PREFIX}/bin/dfs_test" \
+                 "${SL_PREFIX}/bin/jobtest" \
+                 "${SL_PREFIX}/bin/daos_gen_io_conf" \
+                 "${SL_PREFIX}/bin/daos_run_io_conf"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_PREFIX}/lib64/libdaos_tests.so" \
-	   "${SL_PREFIX}/lib64/libdpar.so"
+                 "${SL_PREFIX}/lib64/libdpar.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
