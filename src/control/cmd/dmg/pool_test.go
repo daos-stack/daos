@@ -258,7 +258,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (% size nranks)",
 			"pool create label --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --nranks"),
+			errors.New("--size=% may not be mixed with --nranks"),
 		},
 		{
 			"Create pool with incompatible arguments (% size tier-ratio)",
