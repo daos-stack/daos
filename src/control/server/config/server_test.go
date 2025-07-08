@@ -46,6 +46,7 @@ var (
 		cmpopts.SortSlices(func(x, y string) bool { return x < y }),
 		cmpopts.IgnoreUnexported(
 			security.CertificateConfig{},
+			Server{},
 		),
 		cmpopts.IgnoreFields(Server{}, "Path"),
 		cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
