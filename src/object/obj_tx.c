@@ -1094,7 +1094,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	if (rc != -DER_TX_RESTART) {
 		uint32_t now = daos_gettime_coarse();
 
-		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt, 0);
+		delay = dc_obj_retry_delay(task, DAOS_OBJ_RPC_CPD, rc, &tx->tx_retry_cnt,
+					   &tx->tx_inprogress_cnt, 0);
 		if (rc == -DER_INPROGRESS &&
 		    ((tx->tx_retry_warn_ts == 0 && tx->tx_inprogress_cnt >= 10) ||
 		     (tx->tx_retry_warn_ts > 0 && tx->tx_retry_warn_ts + 10 < now))) {
