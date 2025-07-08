@@ -9,10 +9,10 @@ package raft
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 
-	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -79,7 +79,10 @@ func TestRaft_MemberAddrMap_removeMember(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tc.addrMap.removeMember(tc.toRemove)
 
-			test.CmpAny(t, "MemberAddrMap", tc.expMap, tc.addrMap, cmpopts.IgnoreFields(system.Member{}, "LastUpdate"))
+			cmpOpt := cmpopts.IgnoreFields(system.Member{}, "LastUpdate")
+			if diff := cmp.Diff(tc.expMap, tc.addrMap, cmpOpt); diff != "" {
+				t.Fatalf("unexpected MemberAddrMap (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
