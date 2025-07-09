@@ -19,7 +19,8 @@ fi
 env
 
 pushd "${mydir}/../.." || exit 1
-export DAOS_RELVAL="${1:-}"
+export DISTRO="${1}"
+export DAOS_RELVAL="${2:-}"
 utils/rpms/build_packages.sh
 mkdir -p /home/daos/rpms
 cp ./*.rpm /home/daos/rpms
