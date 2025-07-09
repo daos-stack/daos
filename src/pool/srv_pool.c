@@ -7163,7 +7163,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver, true);
+	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver, true,
+				     flags);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -7398,7 +7399,7 @@ pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, NULL, 0, NULL, tgts, tgt_addrs,
 					  hint, p_updated, map_version_p, tgt_map_ver,
-					  inval_tgt_addrs, MUS_DMG, true);
+					  inval_tgt_addrs, MUS_DMG, 0);
 
 	pool_svc_put_leader(svc);
 	return rc;
@@ -7433,78 +7434,80 @@ ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
 }
 
 struct safe_reint_ult_arg {
-	uuid_t                     pool_uuid;
-	uint32_t                   tgt_map_ver;
-	daos_epoch_t               rebuild_eph;
-	struct pool_target_id_list list;
+	struct ds_pool *pool;
+	ABT_eventual    eventual;
 };
 
 static void
-ds_pool_tgt_safe_reint_ult(void *arg)
+ds_rebuild_abort_ult(void *arg)
 {
 	struct safe_reint_ult_arg *ult_arg = arg;
+	int                        rc      = 0;
+
+	ds_rebuild_abort(ult_arg->pool->sp_uuid, -1, -1, -1);
+
+	ABT_eventual_set(ult_arg->eventual, (void *)&rc, sizeof(rc));
+}
+
+static int
+ds_pool_tgt_safe_reint(struct pool_svc *svc, struct pool_target_addr_list *list,
+		       struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
+		       struct rsvc_hint *hint, enum map_update_source src, uint32_t flags)
+{
 	int                        rc;
-	struct ds_pool            *pool;
+	struct safe_reint_ult_arg  arg;
+	ABT_eventual               eventual;
+	int                       *status;
+	bool                       updated;
+	struct pool_target_id_list target_list = {0};
+	uint32_t                   tgt_map_ver = 0;
+	daos_epoch_t               rebuild_eph = d_hlc_get();
+	bool no_data_sync = (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC);
 
-	rc = ds_pool_lookup(ult_arg->pool_uuid, &pool);
-	if (rc)
-		return;
+	if (!no_data_sync) {
+		rc = ABT_eventual_create(sizeof(*status), &eventual);
+		if (rc != ABT_SUCCESS)
+			return dss_abterr2der(rc);
 
-	ds_rebuild_abort(ult_arg->pool_uuid, -1, -1, -1);
+		arg.pool     = svc->ps_pool;
+		arg.eventual = eventual;
+		rc           = dss_ult_create(ds_rebuild_abort_ult, &arg, DSS_XS_SYS, 0, 0, NULL);
+		if (rc)
+			D_GOTO(out_eventual, rc);
 
-	rc = ds_pool_tgt_finish_rebuild(ult_arg->pool_uuid, &ult_arg->list);
-	if (rc) {
-		D_INFO("mark target %d of " DF_UUID " as UPIN: " DF_RC "\n",
-		       ult_arg->list.pti_ids[0].pti_id, DP_UUID(ult_arg->pool_uuid), DP_RC(rc));
-		D_GOTO(out, rc);
+		rc = ABT_eventual_wait(eventual, (void **)&status);
+		if (rc != ABT_SUCCESS)
+			D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+		if (*status != 0)
+			D_GOTO(out_eventual, rc = *status);
 	}
-	if (ult_arg->tgt_map_ver == 0)
-		D_GOTO(out, rc = 0);
+	rc = pool_svc_update_map_internal(svc, MAP_REINT, false, NULL, 0, NULL, &target_list, list,
+					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
+					  src, flags);
+	if (rc)
+		D_GOTO(out_eventual, rc);
+
+	if (!updated)
+		D_GOTO(out_eventual, rc);
+
+	if (tgt_map_ver == 0 || no_data_sync)
+		D_GOTO(out_eventual, rc = 0);
 
 	/*
 	 * Special handling for safe_reint mode only:
 	 * If we have valid target map version (tgt_map_ver != 0),
 	 * trigger reclaim operation to recover space from  previously unfinished rebuilds
 	 */
-	rc = ds_rebuild_schedule(pool, ult_arg->tgt_map_ver, ult_arg->rebuild_eph, 0,
-				 &ult_arg->list, RB_OP_RECLAIM, 2);
+	rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
+				 RB_OP_FAIL_RECLAIM, 2);
 	if (rc != 0)
 		D_ERROR("rebuild fails rc: " DF_RC "\n", DP_RC(rc));
-out:
-	pool_target_id_list_free(&ult_arg->list);
-	D_FREE(arg);
-	ds_pool_put(pool);
-	return;
-}
 
-static int
-ds_pool_tgt_safe_reint(uuid_t pool_uuid, struct pool_target_id_list *list, uint32_t tgt_map_ver,
-		       daos_epoch_t rebuild_eph)
-{
-	int                        rc;
-	struct safe_reint_ult_arg *arg;
+	return rc;
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		return -DER_NOMEM;
-
-	rc = pool_target_id_list_dup(list, &arg->list);
-	if (rc) {
-		D_FREE(arg);
-		return -DER_NOMEM;
-	}
-	uuid_copy(arg->pool_uuid, pool_uuid);
-	arg->tgt_map_ver = tgt_map_ver;
-	arg->rebuild_eph = rebuild_eph;
-
-	rc = dss_ult_create(ds_pool_tgt_safe_reint_ult, &arg, DSS_XS_SYS, 0, 0, NULL);
-	if (rc)
-		goto out;
-
-	return 0;
-out:
-	pool_target_id_list_free(&arg->list);
-	D_FREE(arg);
+out_eventual:
+	if (!no_data_sync)
+		ABT_eventual_free(&eventual);
 	return rc;
 }
 
@@ -7532,6 +7535,37 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool                             safe_reint   = false;
 	bool                             no_data_sync = false;
 
+	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
+	if (rc)
+		D_GOTO(out, rc);
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
+	D_ASSERT(entry != NULL);
+	if (!(entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD))) {
+		D_DEBUG(DB_MD, "self healing is disabled\n");
+		D_GOTO(out, rc);
+	}
+
+	/*
+	 * Check if we're in safe reintegration mode (no migration needed)
+	 * or no-data-sync mode for MAP_REINT operation
+	 */
+	safe_reint   = (flags & POOL_TGT_UPDATE_NO_MIGRATION) && opc == MAP_REINT;
+	no_data_sync = (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC);
+	if (safe_reint || (no_data_sync && opc == MAP_REINT)) {
+		D_ASSERT(exclude_rank == false);
+		D_ASSERT(extend_rank_list == NULL);
+		D_ASSERT(extend_domains == NULL);
+		rc = ds_pool_tgt_safe_reint(svc, list, inval_list_out, map_version, hint, src,
+					    flags | POOL_TGT_UPDATE_NO_MIGRATION);
+		D_GOTO(out, rc);
+	}
+
+	if (no_data_sync) {
+		D_DEBUG(DB_MD, "Data migration is skipped.\n");
+		D_GOTO(out, rc);
+	}
+
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
 					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
@@ -7544,7 +7578,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	d_agetenv_str(&env, REBUILD_ENV);
 	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
-	     daos_fail_check(DAOS_REBUILD_DISABLE)) {
+	    daos_fail_check(DAOS_REBUILD_DISABLE)) {
 		D_DEBUG(DB_REBUILD, DF_UUID ": Rebuild is disabled for all pools\n",
 			DP_UUID(svc->ps_pool->sp_uuid));
 		d_freeenv_str(&env);
@@ -7552,50 +7586,12 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
-	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
-	if (rc)
-		D_GOTO(out, rc);
-
-	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
-	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD))) {
-		D_DEBUG(DB_MD, "self healing is disabled\n");
-		D_GOTO(out, rc);
-	}
-
 	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && (opc == MAP_EXCLUDE))
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
 
-	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
-		tgt_map_ver);
-	/*
-	 * Check if we're in safe reintegration mode (no migration needed)
-	 * or no-data-sync mode for MAP_REINT operation
-	 */
-	safe_reint   = (flags & POOL_TGT_UPDATE_NO_MIGRATION) && opc == MAP_REINT;
-	no_data_sync = (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC);
-	if (safe_reint || (no_data_sync && opc == MAP_REINT)) {
-		if (safe_reint) {
-			rc = ds_pool_tgt_safe_reint(svc->ps_pool->sp_uuid, &target_list,
-						    tgt_map_ver, rebuild_eph);
-		} else {
-			rc = ds_pool_tgt_finish_rebuild(svc->ps_pool->sp_uuid, &target_list);
-			if (rc) {
-				D_INFO("mark target %d of " DF_UUID " as UPIN: " DF_RC "\n",
-				       target_list.pti_ids[0].pti_id,
-				       DP_UUID(svc->ps_pool->sp_uuid), DP_RC(rc));
-				D_GOTO(out, rc);
-			}
-		}
-		D_GOTO(out, rc);
-	}
-
-	if (no_data_sync) {
-		D_DEBUG(DB_MD, "Data migration is skipped.\n");
-		D_GOTO(out, rc);
-	}
+	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1, tgt_map_ver);
 
 	if (tgt_map_ver != 0) {
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph,

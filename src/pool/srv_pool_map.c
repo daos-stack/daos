@@ -55,7 +55,7 @@ update_tgt_down_drain_to_downout(uuid_t pool_uuid, struct pool_map *map, struct 
  */
 static int
 update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *target, int opc,
-	       uint32_t *version, bool print_changes)
+	       uint32_t *version, bool print_changes, unsigned int flags)
 {
 	int rc = 0;
 
@@ -151,9 +151,15 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		case PO_COMP_ST_DOWN:
 			target->ta_comp.co_flags |= PO_COMPF_DOWN2UP;
 		case PO_COMP_ST_DOWNOUT:
-			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UP\n",
-				DP_MAP(pool_uuid, map), DP_TARGET(target));
-			target->ta_comp.co_status = PO_COMP_ST_UP;
+			if (flags & POOL_TGT_UPDATE_NO_MIGRATION) {
+				D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UPIN\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
+				target->ta_comp.co_status = PO_COMP_ST_UPIN;
+			} else {
+				D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UP\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
+				target->ta_comp.co_status = PO_COMP_ST_UP;
+			}
 			target->ta_comp.co_in_ver = ++(*version);
 			if (print_changes)
 				D_PRINT(DF_MAP ": " DF_TARGET " start reintegration.\n",
@@ -367,7 +373,8 @@ update_one_dom(struct pool_map *map, struct pool_domain *dom, struct pool_target
  */
 int
 ds_pool_map_tgts_update(uuid_t pool_uuid, struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc, bool exclude_rank, uint32_t *tgt_map_ver, bool print_changes)
+			int opc, bool exclude_rank, uint32_t *tgt_map_ver, bool print_changes,
+			unsigned int flags)
 {
 	uint32_t	version;
 	int		i;
@@ -398,7 +405,7 @@ ds_pool_map_tgts_update(uuid_t pool_uuid, struct pool_map *map, struct pool_targ
 			return -DER_NONEXIST;
 		}
 
-		rc = update_one_tgt(pool_uuid, map, target, opc, &version, print_changes);
+		rc = update_one_tgt(pool_uuid, map, target, opc, &version, print_changes, flags);
 		if (rc < 0)
 			return rc;
 

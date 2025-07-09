@@ -442,7 +442,7 @@ jtc_set_status_on_target(struct jm_test_ctx *ctx, const int status,
 
 	int rc = ds_pool_map_tgts_update(NULL /* pool_uuid */, ctx->po_map, &tgts,
 					 pool_opc_2map_opc(status), false, &ctx->ver,
-					 ctx->enable_print_debug_msgs);
+					 ctx->enable_print_debug_msgs, 0);
 
 	/* Make sure pool map changed */
 	assert_success(rc);
