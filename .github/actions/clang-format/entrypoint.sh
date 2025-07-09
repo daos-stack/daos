@@ -2,11 +2,6 @@
 
 git config --global --add safe.directory /github/workspace
 
-# Use merge base of the target instead of the tip of the target
-if [ -n "${INPUT_TARGET}" ]; then
-    INPUT_TARGET="$(git merge-base "${INPUT_TARGET}" HEAD)"
-fi
-
 # Fix any formatting.
 echo "Applying code formatting"
 git-clang-format "${INPUT_TARGET}"
