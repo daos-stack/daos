@@ -18,7 +18,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -248,10 +247,6 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 
 	var defCoresPerNuma uint32 = 26
 	var defNumaCount uint32 = 2
-	defMemInfo := common.MemInfo{
-		HugepageSizeKiB: 2048,
-		MemTotalKiB:     1, // Avoid failing non-zero check.
-	}
 	defHostFabric := &control.HostFabric{
 		Interfaces: []*control.HostFabricInterface{
 			eth0, eth1, ib0, ib1,
@@ -264,7 +259,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			storage.MockScmNamespace(0),
 			storage.MockScmNamespace(1),
 		},
-		MemInfo: &defMemInfo,
+		SysMemInfo: defSysMemInfo(),
 		NvmeDevices: storage.NvmeControllers{
 			storage.MockNvmeController(1),
 			storage.MockNvmeController(2),
@@ -299,7 +294,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hf: &control.HostFabric{},
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
-				MemInfo:       &defMemInfo,
+				SysMemInfo:    defSysMemInfo(),
 			},
 			expErr: errors.New("zero numa nodes reported"),
 		},
@@ -333,7 +328,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				CoresPerNuma: 1,
 			},
 			hs:     &control.HostStorage{},
-			expErr: errors.New("nil HostStorage.MemInfo"),
+			expErr: errors.New("nil HostStorage.SysMemInfo"),
 		},
 		"dual engine; dcpm": {
 			hf: defHostFabric,
@@ -358,7 +353,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo:     &defMemInfo,
+				SysMemInfo:  defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{},
 			},
 			expErr: errors.New("insufficient number of ssds"),
@@ -383,7 +378,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &defMemInfo,
+				SysMemInfo: defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -410,7 +405,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &defMemInfo,
+				SysMemInfo: defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -432,7 +427,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &defMemInfo,
+				SysMemInfo: defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -449,7 +444,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &defMemInfo,
+				SysMemInfo: defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{
 					&storage.NvmeController{PciAddr: "4a0005:01:00.0"},
 					&storage.NvmeController{PciAddr: "4a0005:02:00.0"},
