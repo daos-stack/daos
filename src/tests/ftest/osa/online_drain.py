@@ -32,14 +32,14 @@ class OSAOnlineDrain(OSAUtils):
         self.dmg_command.exit_status_exception = True
         self.pool = None
 
-    def run_online_drain_test(self, num_pool, oclass=None, app_name="ior", multiple_ranks=None):
+    def run_online_drain_test(self, num_pool, oclass=None, app_name="ior", num_ranks=1):
         """Run the Online drain without data.
 
         Args:
              num_pool (int) : total pools to create for testing purposes.
              oclass (str) : Object class type (RP_2G1, etc)
              app_name (str) : application to run on parallel (ior or mdtest). Defaults to ior.
-             multiple_ranks (list): List of multiple ranks online drain testing (Default: None)
+             num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
         # Create a pool
         pool = {}
@@ -51,12 +51,9 @@ class OSAOnlineDrain(OSAUtils):
         targets = int(self.server_managers[-1].get_config_value('targets'))
         t_string = ','.join(map(str, self.random.sample(range(targets), 2)))
 
-        # For testing with multiple ranks as dmg parameters, use a list of ranks.
-        if multiple_ranks is None:
-            # Drain one of the ranks (or server)
-            rank = self.random.choice(list(self.server_managers[0].ranks.keys()))
-        else:
-            rank = multiple_ranks
+        # Get random rank(s) from the rank list.
+        ranklist = list(self.server_managers[0].ranks.keys())
+        rank = self.random.sample(ranklist, k=num_ranks)
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
@@ -203,6 +200,4 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=osa,osa_drain,online_drain
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_multiple_ranks
         """
-        self.log.info("Online Drain : Test with multiple ranks")
-        multiple_ranks = self.params.get("rank_list", '/run/multiple_ranks/*')
-        self.run_online_drain_test(1, multiple_ranks=multiple_ranks)
+        self.run_online_drain_test(1, num_ranks=2)

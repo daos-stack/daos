@@ -33,7 +33,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.dmg_command.exit_status_exception = True
 
     def run_offline_reintegration_test(self, num_pool, data=False, server_boot=False, oclass=None,
-                                       pool_fillup=0, multiple_ranks=False):
+                                       pool_fillup=0, num_ranks=1):
         # pylint: disable=too-many-branches
         """Run the offline reintegration without data.
 
@@ -45,7 +45,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             oclass (str) : daos object class string (eg: "RP_2G8")
             pool_fillup (int) : Percentage of pool filled up with data before performing OSA
                                 operations.
-            multiple_ranks (bool) : Perform multiple ranks testing (Default: False)
+            num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
         # Create 'num_pool' number of pools
         pools = []
@@ -83,10 +83,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
         # Exclude ranks from a random pool
         ranklist = list(self.server_managers[0].ranks.keys())
-        if multiple_ranks:
-            ranks = self.random.sample(ranklist, k=2)
-        else:
-            ranks = self.random.sample(ranklist, k=1)
+        ranks = self.random.sample(ranklist, k=num_ranks)
 
         self.pool = self.random.choice(pools)  # nosec
         for loop in range(0, self.loop_test_cnt):
@@ -335,4 +332,4 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegrate_with_multiple_ranks
         """
         self.log.info("Offline Reintegration : Test with multiple ranks")
-        self.run_offline_reintegration_test(1, data=True, multiple_ranks=True)
+        self.run_offline_reintegration_test(1, data=True, num_ranks=2)

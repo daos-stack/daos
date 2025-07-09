@@ -44,7 +44,7 @@ class OSAOnlineReintegration(OSAUtils):
         self.daos_racer.run()
 
     def run_online_reintegration_test(self, num_pool, racer=False, server_boot=False, oclass=None,
-                                      multiple_ranks=False):
+                                      num_ranks=1):
         """Run the Online reintegration without data.
 
         Args:
@@ -53,7 +53,7 @@ class OSAOnlineReintegration(OSAUtils):
                 Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank. Defaults to False.
             oclass (str) : daos object class string (eg: "RP_2G8"). Defaults to None.
-            multiple_ranks (bool) : Perform multiple ranks testing (Default: False)
+            num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -62,13 +62,7 @@ class OSAOnlineReintegration(OSAUtils):
         pool = {}
 
         ranklist = list(self.server_managers[0].ranks.keys())
-        if multiple_ranks:
-            rank = self.random.sample(ranklist, k=2)
-            # For multiple rank testing, we need RP_3G1 for IOR to complete.
-            oclass = "RP_3G1"
-        else:
-            # Exclude one rank
-            rank = self.random.sample(ranklist, k=1)
+        rank = self.random.sample(ranklist, k=num_ranks)
 
         # Start the daos_racer thread
         if racer is True:
@@ -239,4 +233,4 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_with_multiple_ranks
         """
         self.log.info("Online Reintegration : Multiple ranks")
-        self.run_online_reintegration_test(1, multiple_ranks=True)
+        self.run_online_reintegration_test(1, oclass="RP_3G1", num_ranks=2)

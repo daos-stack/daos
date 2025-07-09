@@ -31,7 +31,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
 
     def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0,
-                               multiple_ranks=False):
+                               num_ranks=1):
         """Run the offline drain without data.
 
         Args:
@@ -39,7 +39,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             data (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             oclass (str): DAOS object class (eg: RP_2G1,etc)
-            multiple_ranks (bool): Perform multiple ranks testing (Default: False)
+            num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
         # Create a pool
         pool = {}
@@ -48,12 +48,9 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
 
-        # For testing multiple ranks as dmg parameters, use a list of ranks.
+        # Get a random rank(s) based on num_ranks input.
         ranklist = list(self.server_managers[0].ranks.keys())
-        if multiple_ranks:
-            self.ranks = self.random.sample(ranklist, k=2)
-        else:
-            self.ranks = self.random.sample(ranklist, k=1)
+        self.ranks = self.random.sample(ranklist, k=num_ranks)
 
         # Exclude target : random two targets  (target idx : 0-7)
         exc = self.random.randint(0, 6)
@@ -278,4 +275,4 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=OSAOfflineDrain,test_osa_offline_drain_with_multiple_ranks
         """
         self.log.info("Offline Drain : Test with multiple ranks")
-        self.run_offline_drain_test(1, data=True, multiple_ranks=True)
+        self.run_offline_drain_test(1, data=True, num_ranks=2)
