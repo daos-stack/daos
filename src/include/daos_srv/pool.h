@@ -379,6 +379,8 @@ map_ranks_fini(d_rank_list_t *ranks);
 
 int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 		      d_rank_list_t *ranks);
+int
+    ds_pool_get_dead_ranks(struct pool_map *map, d_rank_list_t **ranks);
 int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, int **tgts,
 				 unsigned int *tgts_cnt);
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
@@ -387,6 +389,11 @@ int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  struct daos_pool_cont_info **containers,
 			  uint64_t *ncontainers);
 
+static inline int
+dsc_pool_get_dead_ranks(struct pool_map *map, d_rank_list_t **ranks)
+{
+	return ds_pool_get_dead_ranks(map, ranks);
+}
 int dsc_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 			     uuid_t *handles, size_t n_handles, uint32_t destroy, uint32_t force,
 			     char *machine, uint32_t *count);

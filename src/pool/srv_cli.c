@@ -371,54 +371,6 @@ pool_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 }
 
 static int
-pool_map_get_dead_ranks(struct pool_map *map, d_rank_list_t **ranks)
-{
-	crt_group_t        *primary_grp;
-	struct pool_domain *doms;
-	int                 doms_cnt;
-	int                 i;
-	int                 rc        = 0;
-	d_rank_list_t      *rank_list = NULL;
-
-	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
-	D_ASSERT(doms_cnt >= 0);
-	primary_grp = crt_group_lookup(NULL);
-	D_ASSERT(primary_grp != NULL);
-
-	rank_list = d_rank_list_alloc(0);
-	if (!rank_list)
-		return -DER_NOMEM;
-
-	for (i = 0; i < doms_cnt; i++) {
-		struct swim_member_state state;
-
-		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
-			continue;
-
-		rc = crt_rank_state_get(primary_grp, doms[i].do_comp.co_rank, &state);
-		if (rc != 0 && rc != -DER_NONEXIST) {
-			D_ERROR("failed to get status of rank %u: %d\n", doms[i].do_comp.co_rank,
-				rc);
-			break;
-		}
-
-		D_DEBUG(DB_MD, "rank/state %d/%d\n", doms[i].do_comp.co_rank,
-			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD) {
-			rc = d_rank_list_append(rank_list, doms[i].do_comp.co_rank);
-			if (rc)
-				D_GOTO(err, rc);
-		}
-	}
-err:
-	if (rc == 0)
-		*ranks = rank_list;
-	else
-		d_rank_list_free(rank_list);
-	return rc;
-}
-
-static int
 process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
 		     d_rank_list_t **dead_ranks, daos_pool_info_t *info, uuid_t pool_uuid,
 		     uint32_t map_version, uint32_t leader_rank, struct daos_pool_space *ps,
@@ -484,9 +436,9 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 			D_GOTO(error, rc = -DER_INVAL);
 		}
 
-		rc = pool_map_get_dead_ranks(map, &dead_rank_list);
+		rc = dsc_pool_get_dead_ranks(map, &dead_rank_list);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_UUID ": pool_map_get_ranks() failed", DP_UUID(pool_uuid));
+			DL_ERROR(rc, DF_UUID ": get dead ranks failed", DP_UUID(pool_uuid));
 			D_GOTO(error, rc);
 		}
 		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " dead ranks in pool map\n",

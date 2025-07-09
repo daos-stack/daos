@@ -7443,9 +7443,20 @@ ds_rebuild_abort_ult(void *arg)
 {
 	struct safe_reint_ult_arg *ult_arg = arg;
 	int                        rc      = 0;
+	uint32_t                   version = 0;
+
+	ds_rebuild_running_query(ult_arg->pool->sp_uuid, RB_OP_REBUILD, &version, NULL, NULL);
+	if (version == 0) {
+		D_ERROR(DF_UUID
+			": No rebuild process is running, --no-migration option is not permitted",
+			DP_UUID(ult_arg->pool->sp_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
 
 	ds_rebuild_abort(ult_arg->pool->sp_uuid, -1, -1, -1);
 
+out:
 	ABT_eventual_set(ult_arg->eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -7465,6 +7476,28 @@ ds_pool_tgt_safe_reint(struct pool_svc *svc, struct pool_target_addr_list *list,
 	bool no_data_sync = (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC);
 
 	if (!no_data_sync) {
+		d_rank_list_t *dead_rank_list = NULL;
+		/*
+		 * Safe reintegration mode is only allowed when:
+		 * 1. Pool rebuild is in progress
+		 * 2. The pool has some dead ranks
+		 *
+		 * The process involves:
+		 * 1. Aborting the existing rebuild
+		 * 2. Bringing ranks directly from DOWN to UPIN state
+		 * 3. Trigger reclaim operation to recover space from previously unfinished rebuilds
+		 */
+		rc = ds_pool_get_dead_ranks(svc->ps_pool->sp_map, &dead_rank_list);
+		if (rc)
+			return rc;
+		if (dead_rank_list == NULL) {
+			D_ERROR(DF_UUID
+				": No dead ranks found, --no-migration option is not permitted",
+				DP_UUID(svc->ps_uuid));
+			return -DER_NO_PERM;
+		}
+		d_rank_list_free(dead_rank_list);
+
 		rc = ABT_eventual_create(sizeof(*status), &eventual);
 		if (rc != ABT_SUCCESS)
 			return dss_abterr2der(rc);
@@ -9157,5 +9190,53 @@ ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool)
 			 DP_UUID(pool->sp_uuid), pool->sp_global_version);
 
 	ds_rsvc_put(rsvc);
+	return rc;
+}
+
+int
+ds_pool_get_dead_ranks(struct pool_map *map, d_rank_list_t **ranks)
+{
+	crt_group_t        *primary_grp;
+	struct pool_domain *doms;
+	int                 doms_cnt;
+	int                 i;
+	int                 rc        = 0;
+	d_rank_list_t      *rank_list = NULL;
+
+	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
+	D_ASSERT(doms_cnt >= 0);
+	primary_grp = crt_group_lookup(NULL);
+	D_ASSERT(primary_grp != NULL);
+
+	rank_list = d_rank_list_alloc(0);
+	if (!rank_list)
+		return -DER_NOMEM;
+
+	for (i = 0; i < doms_cnt; i++) {
+		struct swim_member_state state;
+
+		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
+			continue;
+
+		rc = crt_rank_state_get(primary_grp, doms[i].do_comp.co_rank, &state);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			D_ERROR("failed to get status of rank %u: %d\n", doms[i].do_comp.co_rank,
+				rc);
+			break;
+		}
+
+		D_DEBUG(DB_MD, "rank/state %d/%d\n", doms[i].do_comp.co_rank,
+			rc == -DER_NONEXIST ? -1 : state.sms_status);
+		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD) {
+			rc = d_rank_list_append(rank_list, doms[i].do_comp.co_rank);
+			if (rc)
+				D_GOTO(err, rc);
+		}
+	}
+err:
+	if (rc == 0 && rank_list->rl_nr != 0)
+		*ranks = rank_list;
+	else
+		d_rank_list_free(rank_list);
 	return rc;
 }
