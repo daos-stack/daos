@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +15,9 @@
 
 #define D_LOGFAC DD_FAC(mgmt)
 
+#include <daos_srv/daos_mgmt_srv.h>
+
+#include <daos/drpc_modules.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include "srv_internal.h"
@@ -367,6 +371,136 @@ void
 ds_mgmt_svc_put(struct mgmt_svc *svc)
 {
 	ds_rsvc_put_leader(&svc->ms_rsvc);
+}
+
+/**
+ * Get system properties from the MS. If this function returns 0, the caller is
+ * responsible for freeing *\a resp_out with
+ * mgmt__system_get_prop_resp__free_unpacked.
+ *
+ * \param[in]	req		Request (owned by caller)
+ * \param[out]	resp_out	Response (ownership transferred to caller)
+ */
+static int
+ds_mgmt_get_props(Mgmt__SystemGetPropReq *req, Mgmt__SystemGetPropResp **resp_out)
+{
+	uint8_t                 *reqb;
+	size_t                   reqb_size;
+	Drpc__Response          *dresp;
+	Mgmt__SystemGetPropResp *resp;
+	int                      rc;
+
+	reqb_size = mgmt__system_get_prop_req__get_packed_size(req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL)
+		return -DER_NOMEM;
+	mgmt__system_get_prop_req__pack(req, reqb);
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_PROPS, reqb, reqb_size,
+			   0 /* flags */, &dresp);
+	if (rc != 0)
+		goto out_reqb;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n", dresp->status);
+		rc = -DER_IO;
+		goto out_dresp;
+	}
+
+	resp = mgmt__system_get_prop_resp__unpack(NULL, dresp->body.len, dresp->body.data);
+	if (resp == NULL) {
+		D_ERROR("failed to unpack dRPC response\n");
+		rc = -DER_IO;
+		goto out_dresp;
+	}
+
+	*resp_out = resp;
+out_dresp:
+	drpc_response_free(dresp);
+out_reqb:
+	D_FREE(reqb);
+	return rc;
+}
+
+/**
+ * Get the system self-heal policy (i.e., system property "self_heal") from the
+ * MS.
+ *
+ * \param[in]	abort		Called during internal retries to see if the
+ *				operation should abort
+ * \param[in]	abort_arg	Argument to \a abort
+ * \param[out]	policy		Returned self-heal policy flags (e.g.,
+ *				DS_MGMT_SELF_HEAL_POOL_EXCLUDE)
+ */
+int
+ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t *policy)
+{
+	Mgmt__SystemGetPropReq   req = MGMT__SYSTEM_GET_PROP_REQ__INIT;
+	char                    *key = "self_heal";
+	Mgmt__SystemGetPropResp *resp = NULL;
+	char                    *sep = ";";
+	char                    *p;
+	char                    *saveptr;
+	int                      rc;
+
+	/* TODO: Integrate with the control plane changes. */
+	if (true) {
+		*policy = DS_MGMT_SELF_HEAL_ALL;
+		return 0;
+	}
+
+	req.sys    = daos_sysname;
+	req.keys   = &key;
+	req.n_keys = 1;
+
+retry:
+	rc = ds_mgmt_get_props(&req, &resp);
+	/* TODO: The retry case may need integration and revision. */
+	if (rc == -DER_TIMEDOUT) {
+		if (abort(abort_arg)) {
+			DL_INFO(rc, "aborting");
+			goto out;
+		}
+		goto retry;
+	} else if (rc != 0) {
+		DL_ERROR(rc, "failed to unpack response");
+		goto out;
+	}
+
+	rc = -DER_PROTO;
+	if (resp->n_properties != 1) {
+		D_ERROR("got unexpected number of properties in response: %zu\n",
+			resp->n_properties);
+		goto out_resp;
+	}
+	if (strcmp(resp->properties[0]->key, key) != 0) {
+		D_ERROR("got unexpected property in response: '%s'\n", resp->properties[0]->key);
+		goto out_resp;
+	}
+	if (resp->properties[0]->value == NULL) {
+		D_ERROR("got NULL property value in response\n");
+		goto out_resp;
+	}
+	D_INFO("%s=%s\n", key, resp->properties[0]->value);
+	*policy = 0;
+	for (p = strtok_r(resp->properties[0]->value, sep, &saveptr); p != NULL;
+	     p = strtok_r(NULL, sep, &saveptr)) {
+		if (strcmp(p, "exclude") == 0) {
+			*policy |= DS_MGMT_SELF_HEAL_EXCLUDE;
+		} else if (strcmp(p, "pool_exclude") == 0) {
+			*policy |= DS_MGMT_SELF_HEAL_POOL_EXCLUDE;
+		} else if (strcmp(p, "pool_rebuild") == 0) {
+			*policy |= DS_MGMT_SELF_HEAL_POOL_REBUILD;
+		} else {
+			D_ERROR("unknown self-heal policy '%s'\n", p);
+			goto out_resp;
+		}
+	}
+
+	rc = 0;
+out_resp:
+	mgmt__system_get_prop_resp__free_unpacked(resp, NULL);
+out:
+	return rc;
 }
 
 int
