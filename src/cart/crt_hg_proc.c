@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -204,6 +205,8 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
 
 		/* Free the wrapper struct */
+		if (bulk->iovs)
+			D_FREE(bulk->iovs);
 		D_FREE(bulk);
 		*pcrt_bulk = NULL;
 		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
