@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -753,6 +754,11 @@ retry:
 			   NULL, flags, NULL, csum_iov_fetch);
 	if (rc == -DER_TIMEDOUT &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
+		if (tls->mpt_fini) {
+			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
+				 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid));
+			return rc;
+		}
 		/* If pool map does not change, then let's retry for timeout, instead of
 		 * fail out.
 		 */
@@ -1494,13 +1500,10 @@ post:
 			 * the rebuild and retry.
 			 */
 			rc = -DER_DATA_LOSS;
-			D_DEBUG(DB_REBUILD,
-				DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
-				" eph "DF_U64" "DF_RC"\n",
-				DP_UOID(mrone->mo_oid),
-				mrone, DP_KEY(&mrone->mo_dkey),
-				DP_KEY(&iods[i].iod_name), iod_num, i, mrone->mo_epoch,
-				DP_RC(rc));
+			D_INFO(DF_UOID " %p dkey " DF_KEY " " DF_KEY " nr %d/%d"
+				       " eph " DF_U64 " " DF_RC "\n",
+			       DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
+			       DP_KEY(&iods[i].iod_name), iod_num, i, mrone->mo_epoch, DP_RC(rc));
 			D_GOTO(end, rc);
 		}
 	}
