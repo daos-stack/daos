@@ -1143,7 +1143,8 @@ struct vos_iterator {
 	 * mutual exclusion between aggregation and object discard.
 	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
-	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1;
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1,
+	    it_for_check : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1427,6 +1428,8 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_for_check)
+		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
 }
 

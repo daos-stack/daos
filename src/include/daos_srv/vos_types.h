@@ -393,8 +393,10 @@ enum {
 	VOS_IT_UNCOMMITTED = (1 << 8),
 	/** The iterator is for an aggregation operation (EC or VOS) */
 	VOS_IT_FOR_AGG = (1 << 9),
+	/** Checking whether the target is aborted or not. */
+	VOS_IT_FOR_CHECK = (1 << 10),
 	/** Mask for all flags */
-	VOS_IT_MASK = (1 << 10) - 1,
+	VOS_IT_MASK = (1 << 11) - 1,
 };
 
 typedef struct {
