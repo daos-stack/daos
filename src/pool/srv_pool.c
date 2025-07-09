@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2690,6 +2690,12 @@ start_one(uuid_t uuid, void *varg)
 	bool			 aft_chk;
 	bool			 immutable;
 	int			 rc;
+
+	if (ds_mgmt_pbl_has_pool(uuid)) {
+		D_INFO(DF_UUID ": not starting: in pool blacklist\n", DP_UUID(uuid));
+		ds_pool_failed_add(uuid, -DER_NO_SERVICE);
+		return 0;
+	}
 
 	if (psa != NULL) {
 		aft_chk = psa->psa_aft_chk;
