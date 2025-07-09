@@ -529,7 +529,7 @@ pipeline {
                                         scons_args: sconsArgs() +
                                                     ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -576,7 +576,7 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -620,7 +620,7 @@ pipeline {
                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
