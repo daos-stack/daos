@@ -891,11 +891,6 @@ dsc_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 		return -DER_NO_PERM;
 	}
 
-	if (daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC)) {
-		D_ERROR("Can't set set redundancy factor on existing pool.\n");
-		return -DER_NO_PERM;
-	}
-
 	if (daos_prop_entry_get(prop, DAOS_PROP_PO_EC_PDA)) {
 		D_ERROR("Can't set EC performance domain affinity on existing pool\n");
 		return -DER_NO_PERM;
