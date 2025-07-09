@@ -10,6 +10,7 @@ package hello
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -21,11 +22,25 @@ import (
 
 func TestDrpc_Hello_Integration(t *testing.T) {
 	for name, tc := range map[string]struct {
-		method    drpc.Method
-		expStatus drpc.Status
+		method      drpc.Method
+		name        string
+		expStatus   drpc.Status
+		expGreeting string
 	}{
+		"bad method ID": {
+			method:    helloMethod(-1),
+			name:      "dontcare",
+			expStatus: drpc.Status_UNKNOWN_METHOD,
+		},
 		"basic greeting": {
-			method: MethodGreeting,
+			method:      MethodGreeting,
+			name:        "friend",
+			expGreeting: "Hello friend",
+		},
+		"large message": {
+			method:      MethodGreeting,
+			name:        strings.Repeat("a", drpc.MaxChunkSize),
+			expGreeting: fmt.Sprintf("Hello %s", strings.Repeat("a", drpc.MaxChunkSize)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -48,7 +63,7 @@ func TestDrpc_Hello_Integration(t *testing.T) {
 
 			// Message to be sent by the client to the server
 			req := &Hello{
-				Name: "drpc_test",
+				Name: tc.name,
 			}
 			call := &drpc.Call{
 				Module:   int32(Module_HELLO),
@@ -81,6 +96,7 @@ func TestDrpc_Hello_Integration(t *testing.T) {
 				if err := proto.Unmarshal(resp.Body, &helloResp); err != nil {
 					t.Fatal(err)
 				}
+				test.AssertEqual(t, tc.expGreeting, helloResp.Greeting, "")
 			}
 		})
 	}
