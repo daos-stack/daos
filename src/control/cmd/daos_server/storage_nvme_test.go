@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,8 +16,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -30,6 +33,16 @@ var (
 	defaultSingleAddrList = test.MockPCIAddr(1)
 	spaceSepMultiAddrList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1), storage.BdevPciAddrSep, test.MockPCIAddr(2))
 	currentUsername       string
+
+	defPrepCmpOpt = cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+		if x == nil && y == nil {
+			return true
+		}
+		return x.Equals(y)
+	})
+	defSysMemInfo = func() *common.SysMemInfo {
+		return control.MockSysMemInfo()
+	}
 )
 
 func getCurrentUsername(t *testing.T) string {
@@ -90,31 +103,58 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 		bmbc          bdev.MockBackendConfig
 		iommuDisabled bool
 		expErr        error
-		expPrepCall   *storage.BdevPrepareRequest
+		expPrepCalls  []storage.BdevPrepareRequest
 	}{
+		"hugepages disabled in config": {
+			cfg:    new(config.Server).WithDisableHugepages(true),
+			expErr: storage.FaultHugepagesDisabled,
+		},
 		"no devices; success": {
-			expPrepCall: &storage.BdevPrepareRequest{
-				// always set in local storage prepare to allow automatic detection
-				EnableVMD: true,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
+				{
+					// always set in local storage prepare to allow automatic detection
+					EnableVMD: true,
+				},
 			},
 		},
 		"succeeds; user params": {
 			prepCmd: newPrepCmd(),
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: testNrHugepages,
-				PCIAllowList:  defaultSingleAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				EnableVMD:     true,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+					PCIAllowList:       defaultSingleAddrList,
+					PCIBlockList:       spaceSepMultiAddrList,
+				},
+				{
+					HugepageCount: testNrHugepages,
+					PCIAllowList:  defaultSingleAddrList,
+					PCIBlockList:  spaceSepMultiAddrList,
+					EnableVMD:     true,
+				},
 			},
 		},
 		"succeeds; different target user; multi allow list": {
 			prepCmd: newPrepCmd().WithTargetUser("bob").WithPCIAllowList(defaultMultiAddrList),
-			expPrepCall: &storage.BdevPrepareRequest{
-				TargetUser:    "bob",
-				HugepageCount: testNrHugepages,
-				PCIAllowList:  spaceSepMultiAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				EnableVMD:     true,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+					PCIAllowList:       spaceSepMultiAddrList,
+					PCIBlockList:       spaceSepMultiAddrList,
+				},
+				{
+					TargetUser:    "bob",
+					HugepageCount: testNrHugepages,
+					PCIAllowList:  spaceSepMultiAddrList,
+					PCIBlockList:  spaceSepMultiAddrList,
+					EnableVMD:     true,
+				},
 			},
 		},
 		"fails; user params": {
@@ -122,11 +162,20 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			bmbc: bdev.MockBackendConfig{
 				PrepareErr: errors.New("backend prep setup failed"),
 			},
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: testNrHugepages,
-				PCIAllowList:  defaultSingleAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				EnableVMD:     true,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+					PCIAllowList:       defaultSingleAddrList,
+					PCIBlockList:       spaceSepMultiAddrList,
+				},
+				{
+					TargetUser:    "bob",
+					HugepageCount: testNrHugepages,
+					PCIAllowList:  defaultSingleAddrList,
+					PCIBlockList:  spaceSepMultiAddrList,
+					EnableVMD:     true,
+				},
 			},
 			expErr: errors.New("backend prep setup failed"),
 		},
@@ -141,12 +190,20 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 		"root; vfio disabled; iommu not detected": {
 			prepCmd:       newPrepCmd().WithTargetUser("root").WithDisableVFIO(true),
 			iommuDisabled: true,
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: testNrHugepages,
-				TargetUser:    "root",
-				PCIAllowList:  defaultSingleAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				DisableVFIO:   true,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+					PCIAllowList:       defaultSingleAddrList,
+					PCIBlockList:       spaceSepMultiAddrList,
+				},
+				{
+					HugepageCount: testNrHugepages,
+					TargetUser:    "root",
+					PCIAllowList:  defaultSingleAddrList,
+					PCIBlockList:  spaceSepMultiAddrList,
+					DisableVFIO:   true,
+				},
 			},
 		},
 		"config parameters ignored as cmd settings already exist": {
@@ -158,11 +215,19 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 						WithBdevDeviceList(test.MockPCIAddr(8)))).
 				WithBdevExclude(test.MockPCIAddr(9)).
 				WithNrHugepages(1024),
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: testNrHugepages,
-				PCIAllowList:  defaultSingleAddrList,
-				PCIBlockList:  spaceSepMultiAddrList,
-				EnableVMD:     true,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+					PCIAllowList:       defaultSingleAddrList,
+					PCIBlockList:       spaceSepMultiAddrList,
+				},
+				{
+					HugepageCount: testNrHugepages,
+					PCIAllowList:  defaultSingleAddrList,
+					PCIBlockList:  spaceSepMultiAddrList,
+					EnableVMD:     true,
+				},
 			},
 		},
 		"config parameters applied; disable vmd": {
@@ -180,11 +245,20 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				WithBdevExclude(test.MockPCIAddr(9)).
 				WithNrHugepages(1024).
 				WithDisableVMD(true),
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugepageCount: 1024,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
-					test.MockPCIAddr(8)),
-				PCIBlockList: test.MockPCIAddr(9),
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7),
+						storage.BdevPciAddrSep, test.MockPCIAddr(8)),
+					PCIBlockList: test.MockPCIAddr(9),
+				},
+				{
+					HugepageCount: 1024,
+					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7),
+						storage.BdevPciAddrSep, test.MockPCIAddr(8)),
+					PCIBlockList: test.MockPCIAddr(9),
+				},
 			},
 		},
 		"config parameters applied; disable vfio": {
@@ -194,8 +268,15 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 		},
 		"nil config; parameters not applied (simulates effect of --ignore-config)": {
 			prepCmd: &prepareNVMeCmd{},
-			expPrepCall: &storage.BdevPrepareRequest{
-				EnableVMD: true,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
+				{
+					EnableVMD: true,
+				},
 			},
 		},
 	} {
@@ -230,24 +311,19 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			gotErr := prepareNVMe(req, &tc.prepCmd.nvmeCmd)
 			test.CmpErr(t, tc.expErr, gotErr)
 
+			// If empty TargetUser in cmd, expect current user in call.
+			if tc.prepCmd.TargetUser == "" {
+				for i := range tc.expPrepCalls {
+					if tc.expPrepCalls[i].CleanSpdkHugepages {
+						continue
+					}
+					tc.expPrepCalls[i].TargetUser = getCurrentUsername(t)
+				}
+			}
+
 			mbb.RLock()
-			if tc.expPrepCall == nil {
-				if len(mbb.PrepareCalls) != 0 {
-					t.Fatalf("unexpected number of prepare calls, want 0 got %d",
-						len(mbb.PrepareCalls))
-				}
-			} else {
-				if len(mbb.PrepareCalls) != 1 {
-					t.Fatalf("unexpected number of prepare calls, want 1 got %d",
-						len(mbb.PrepareCalls))
-				}
-				// If empty TargetUser in cmd, expect current user in call.
-				if tc.prepCmd.TargetUser == "" {
-					tc.expPrepCall.TargetUser = getCurrentUsername(t)
-				}
-				if diff := cmp.Diff(*tc.expPrepCall, mbb.PrepareCalls[0]); diff != "" {
-					t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
-				}
+			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls, defPrepCmpOpt); diff != "" {
+				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
 			}
 			if len(mbb.ResetCalls) != 0 {
 				t.Fatalf("unexpected number of reset calls, want 0 got %d",
@@ -268,15 +344,32 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		return rdc
 	}
 
+	defCleanCall := storage.BdevPrepareRequest{
+		CleanSpdkHugepages: true,
+		CleanSpdkLockfiles: true,
+		PCIAllowList:       defaultSingleAddrList,
+		PCIBlockList:       spaceSepMultiAddrList,
+	}
+
 	for name, tc := range map[string]struct {
 		resetCmd      *resetNVMeCmd
 		cfg           *config.Server
 		bmbc          bdev.MockBackendConfig
 		iommuDisabled bool
 		expErr        error
+		expCleanCall  *storage.BdevPrepareRequest
 		expResetCalls []storage.BdevPrepareRequest
 	}{
+		"hugepages disabled in config": {
+			cfg:    new(config.Server).WithDisableHugepages(true),
+			expErr: storage.FaultHugepagesDisabled,
+		},
 		"no devices; success": {
+			expCleanCall: &storage.BdevPrepareRequest{
+				CleanSpdkHugepages:    true,
+				CleanSpdkLockfiles:    true,
+				CleanSpdkLockfilesAny: true,
+			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
 					EnableVMD: true,
@@ -295,6 +388,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 					VMDPrepared: true,
 				},
 			},
+			expCleanCall: &defCleanCall,
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
 					PCIAllowList: defaultSingleAddrList,
@@ -316,6 +410,12 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			resetCmd: newResetCmd().
 				WithTargetUser("bob").
 				WithPCIAllowList(defaultMultiAddrList),
+			expCleanCall: &storage.BdevPrepareRequest{
+				CleanSpdkHugepages: true,
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       spaceSepMultiAddrList,
+				PCIBlockList:       spaceSepMultiAddrList,
+			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
 					EnableVMD:    true,
@@ -334,6 +434,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				},
 				ResetErr: errors.New("backend prep reset failed"),
 			},
+			expCleanCall: &defCleanCall,
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
 					EnableVMD:    true,
@@ -356,6 +457,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		"root; vfio disabled; iommu not detected": {
 			resetCmd:      newResetCmd().WithTargetUser("root").WithDisableVFIO(true),
 			iommuDisabled: true,
+			expCleanCall:  &defCleanCall,
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
 					TargetUser:   "root",
@@ -375,6 +477,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 						WithBdevDeviceList(test.MockPCIAddr(8)))).
 				WithBdevExclude(test.MockPCIAddr(9)).
 				WithNrHugepages(1024),
+			expCleanCall: &defCleanCall,
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
 					EnableVMD:    true,
@@ -400,6 +503,13 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				WithBdevExclude(test.MockPCIAddr(9)).
 				WithNrHugepages(1024).
 				WithDisableVMD(true),
+			expCleanCall: &storage.BdevPrepareRequest{
+				CleanSpdkHugepages: true,
+				CleanSpdkLockfiles: true,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7),
+					storage.BdevPciAddrSep, test.MockPCIAddr(8)),
+				PCIBlockList: test.MockPCIAddr(9),
+			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
 					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7),
@@ -417,6 +527,11 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		},
 		"nil config; parameters not applied (simulates effect of --ignore-config)": {
 			resetCmd: &resetNVMeCmd{},
+			expCleanCall: &storage.BdevPrepareRequest{
+				CleanSpdkHugepages:    true,
+				CleanSpdkLockfiles:    true,
+				CleanSpdkLockfilesAny: true,
+			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
 					TargetUser: getCurrentUsername(t),
@@ -458,14 +573,24 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()
+			log.Tracef("mock bdev backend prepare calls: %+v", mbb.PrepareCalls)
+			log.Tracef("mock bdev backend reset calls: %+v", mbb.ResetCalls)
+
 			// Call to clean hugepages should always be expected first.
-			if len(mbb.PrepareCalls) != 1 {
-				t.Fatalf("unexpected number of prepare calls, want 1w got %d",
-					len(mbb.PrepareCalls))
-			}
-			if diff := cmp.Diff(storage.BdevPrepareRequest{CleanHugepagesOnly: true},
-				mbb.PrepareCalls[0]); diff != "" {
-				t.Fatalf("unexpected clean hugepage calls (-want, +got):\n%s\n", diff)
+			switch len(mbb.PrepareCalls) {
+			case 0:
+				if tc.expCleanCall != nil {
+					t.Fatalf("unexpected number of prepare calls, want 1 got 0")
+				}
+			case 1:
+				if diff := cmp.Diff(tc.expCleanCall, &mbb.PrepareCalls[0]); diff != "" {
+					t.Fatalf("unexpected clean hugepage calls (-want, +got):\n%s\n", diff)
+				}
+			default:
+				if tc.expCleanCall != nil {
+					t.Fatalf("unexpected number of prepare calls, want 1 got %d",
+						len(mbb.PrepareCalls))
+				}
 			}
 
 			if diff := cmp.Diff(tc.expResetCalls, mbb.ResetCalls); diff != "" {
@@ -525,13 +650,6 @@ func TestDaosServer_getVMDState(t *testing.T) {
 }
 
 func TestDaosServer_scanNVMe(t *testing.T) {
-	cmpopt := cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
-		if x == nil && y == nil {
-			return true
-		}
-		return x.Equals(y)
-	})
-
 	for name, tc := range map[string]struct {
 		scanCmd       *scanNVMeCmd
 		cfg           *config.Server
@@ -544,6 +662,10 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 		expScanCall   *storage.BdevScanRequest
 		expScanResp   *storage.BdevScanResponse
 	}{
+		"hugepages disabled in config": {
+			cfg:    new(config.Server).WithDisableHugepages(true),
+			expErr: storage.FaultHugepagesDisabled,
+		},
 		"normal scan": {
 			bmbc: bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{
@@ -553,11 +675,27 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				},
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), EnableVMD: true},
-				{CleanHugepagesOnly: true},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+				},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+					Reset_:     true,
+				},
 			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
@@ -587,11 +725,20 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			),
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+					PCIAllowList:       spaceSepMultiAddrList,
+				},
+				{
 					TargetUser:   getCurrentUsername(t),
 					EnableVMD:    true,
 					PCIAllowList: spaceSepMultiAddrList,
 				},
-				{CleanHugepagesOnly: true},
+				{
+					CleanSpdkHugepages: true,
+					CleanSpdkLockfiles: true,
+					PCIAllowList:       spaceSepMultiAddrList,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -620,11 +767,25 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				(&engine.Config{}).WithStorage(),
 			).WithDisableVMD(true),
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t)},
-				{CleanHugepagesOnly: true},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
+				{
+					TargetUser: getCurrentUsername(t),
+				},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), Reset_: true},
+				{
+					TargetUser: getCurrentUsername(t),
+					Reset_:     true,
+				},
 			},
 			expScanCall: &storage.BdevScanRequest{},
 		},
@@ -639,8 +800,20 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				},
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
-				{TargetUser: getCurrentUsername(t), EnableVMD: true},
-				{CleanHugepagesOnly: true},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
+				{
+					TargetUser: getCurrentUsername(t),
+					EnableVMD:  true,
+				},
+				{
+					CleanSpdkHugepages:    true,
+					CleanSpdkLockfiles:    true,
+					CleanSpdkLockfilesAny: true,
+				},
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{TargetUser: getCurrentUsername(t), EnableVMD: true, Reset_: true},
@@ -678,7 +851,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expScanResp, gotResp, cmpopt); diff != "" {
+			if diff := cmp.Diff(tc.expScanResp, gotResp, defPrepCmpOpt); diff != "" {
 				t.Fatalf("unexpected scan resp (-want, +got):\n%s\n", diff)
 			}
 
@@ -686,13 +859,13 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			if len(mbb.ScanCalls) != 1 {
 				t.Fatalf("unexpected number of scan calls, want 1 got %d", len(mbb.ScanCalls))
 			}
-			if diff := cmp.Diff(tc.expScanCall, &mbb.ScanCalls[0], cmpopt); diff != "" {
+			if diff := cmp.Diff(tc.expScanCall, &mbb.ScanCalls[0], defPrepCmpOpt); diff != "" {
 				t.Fatalf("unexpected scan calls (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls, cmpopt); diff != "" {
+			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls, defPrepCmpOpt); diff != "" {
 				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.expResetCalls, mbb.ResetCalls, cmpopt); diff != "" {
+			if diff := cmp.Diff(tc.expResetCalls, mbb.ResetCalls, defPrepCmpOpt); diff != "" {
 				t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
 			}
 			mbb.RUnlock()
