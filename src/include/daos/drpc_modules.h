@@ -89,6 +89,7 @@ enum drpc_srv_method {
 	DRPC_METHOD_CHK_DEREG_POOL        = 308,
 	DRPC_METHOD_CHK_REPORT            = 309,
 	DRPC_METHOD_SRV_LIST_POOLS        = 310,
+	DRPC_METHOD_SRV_GET_PROPS         = 311,
 
 	NUM_DRPC_SRV_METHODS /* Must be last */
 };

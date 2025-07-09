@@ -2321,10 +2321,25 @@ static int pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map,
 				    uint32_t map_version_for, bool sync_remove);
 static void pool_svc_rfcheck_ult(void *arg);
 
+/* Abort condition of ds_mgmt_get_self_heal_policy for pool_svc. */
+static bool
+pool_svc_abort_gshp(void *arg)
+{
+	struct pool_svc *svc = arg;
+	uint64_t         term;
+	bool             is_leader;
+
+	is_leader = rdb_is_leader(svc->ps_rsvc.s_db, &term);
+	if (!is_leader || svc->ps_rsvc.s_term != term)
+		return true;
+	return false;
+}
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
+	uint64_t                sys_self_heal;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version = 0;
 	uuid_t                  srv_pool_hdl;
@@ -2341,15 +2356,17 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 * If this is the only voting replica, it may have become the leader
 	 * without doing any RPC. The primary group may have yet to be
 	 * initialized by the MS. Proceeding with such a primary group may
-	 * result in unnecessary rank exclusions (see the
+	 * result in unnecessary rank exclusions (see the init_events ->
 	 * pool_svc_check_node_status call below). Wait for the primary group
 	 * initialization by retrying the leader election (rate-limited by
 	 * rdb_timerd). (If there's at least one other voting replica, at least
 	 * one RPC must have been done, so the primary group must have been
 	 * initialized at this point.)
 	 */
-	if (!primary_group_initialized())
-		return -DER_GRPVER;
+	if (!primary_group_initialized()) {
+		rc = -DER_GRPVER;
+		goto out;
+	}
 
 	rc =
 	    read_db_for_stepping_up(svc, &map_buf, &map_version, &prop, srv_pool_hdl, srv_cont_hdl);
@@ -2371,6 +2388,12 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 	cont_svc_up = true;
+
+	rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to get self-heal policy", DP_UUID(svc->ps_uuid));
+		goto out;
+	}
 
 	rc = init_events(svc);
 	if (rc != 0)
@@ -2438,7 +2461,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal);
 	if (rc != 0)
 		goto out;
 
@@ -7498,6 +7521,23 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	char				*env;
 	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
+	uint64_t                         sys_self_heal = 0;
+
+	if (opc == MAP_EXCLUDE && src == MUS_SWIM) {
+		rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
+				 DP_UUID(svc->ps_uuid));
+			goto out;
+		}
+		if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE)) {
+			D_DEBUG(DB_MD,
+				DF_UUID ": pool_exculde disabled in system property self_heal\n",
+				DP_UUID(svc->ps_uuid));
+			rc = -DER_NO_PERM;
+			goto out;
+		}
+	}
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
@@ -7519,6 +7559,13 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
+	if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+		D_DEBUG(DB_MD, DF_UUID ": pool_rebuild disabled in system property self_heal\n",
+			DP_UUID(svc->ps_uuid));
+		rc = 0;
+		goto out;
+	}
+
 	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
 	if (rc)
 		D_GOTO(out, rc);
@@ -7526,7 +7573,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
 	D_ASSERT(entry != NULL);
 	if (!(entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD))) {
-		D_DEBUG(DB_MD, "self healing is disabled\n");
+		D_DEBUG(DB_MD, "rebuild and delay_rebuild disabled in pool property self_heal\n");
 		D_GOTO(out, rc);
 	}
 

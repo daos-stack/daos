@@ -14,6 +14,9 @@
 
 #define D_LOGFAC DD_FAC(mgmt)
 
+#include <daos_srv/daos_mgmt_srv.h>
+
+#include <daos/drpc_modules.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include "srv_internal.h"
@@ -367,6 +370,141 @@ void
 ds_mgmt_svc_put(struct mgmt_svc *svc)
 {
 	ds_rsvc_put_leader(&svc->ms_rsvc);
+}
+
+int
+ds_mgmt_get_props(Mgmt__SystemGetPropReq *req, bool (*abort)(void *arg), void *abort_arg,
+		  Mgmt__SystemGetPropResp **resp_out)
+{
+	uint8_t                 *reqb;
+	size_t                   reqb_size;
+	Drpc__Response          *dresp;
+	Mgmt__SystemGetPropResp *resp;
+	int                      rc;
+
+	reqb_size = mgmt__system_get_prop_req__get_packed_size(req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL)
+		return -DER_NOMEM;
+	mgmt__system_get_prop_req__pack(req, reqb);
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_PROPS, reqb, reqb_size,
+			   0 /* flags */, &dresp);
+	if (rc != 0)
+		goto out_reqb;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n", dresp->status);
+		rc = -DER_IO;
+		goto out_dresp;
+	}
+
+	resp = mgmt__system_get_prop_resp__unpack(NULL, dresp->body.len, dresp->body.data);
+	if (resp == NULL) {
+		D_ERROR("failed to unpack dRPC response\n");
+		rc = -DER_IO;
+		goto out_dresp;
+	}
+
+out_dresp:
+	drpc_response_free(dresp);
+out_reqb:
+	D_FREE(reqb);
+	return rc;
+}
+
+int
+ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t *policy)
+{
+#if 1
+	Mgmt__SystemGetPropReq   req = MGMT__SYSTEM_GET_PROP_REQ__INIT;
+	char                    *key = "self_heal";
+	Mgmt__SystemGetPropResp *resp;
+	char                    *sep = ";";
+	char                    *p;
+	char                    *saveptr;
+	int                      rc;
+
+	req.sys    = daos_sysname;
+	req.keys   = &key;
+	req.n_keys = 1;
+
+retry:
+	rc = ds_mgmt_get_props(&req, abort, abort_arg, &resp);
+	if (rc == -DER_TIMEDOUT) {
+		if (abort(abort_arg)) {
+			D_ERROR("self-heal policy request aborted\n");
+			return -DER_OP_CANCELED;
+		}
+		goto retry;
+	} else if (rc != 0) {
+		DL_ERROR(rc, "failed to unpack dRPC response\n");
+		goto out;
+	}
+
+	if (resp->n_properties != 1) {
+		D_ERROR("expected 1 property, got %zu\n", resp->n_properties);
+		rc = -DER_PROTO;
+		goto out_resp;
+	}
+	if (strcmp(resp->properties[0]->key, key) != 0) {
+		D_ERROR("expected property key '%s', got '%s'\n", key, resp->properties[0]->key);
+		rc = -DER_PROTO;
+		goto out_resp;
+	}
+	if (resp->properties[0]->value == NULL) {
+		D_ERROR("expected property value, got NULL\n");
+		rc = -DER_PROTO;
+		goto out_resp;
+	}
+
+	*policy = 0;
+	for (p = strtok_r(resp->properties[0]->value, sep, &saveptr); p != NULL;
+	     p = strtok_r(NULL, sep, &saveptr)) {
+		if (strcmp(p, "exclude") == 0) {
+			*policy |= DS_MGMT_SELF_HEAL_EXCLUDE;
+		} else if (strcmp(p, "pool_exclude") == 0) {
+			*policy |= DS_MGMT_SELF_HEAL_POOL_EXCLUDE;
+		} else if (strcmp(p, "pool_rebuild") == 0) {
+			*policy |= DS_MGMT_SELF_HEAL_POOL_REBUILD;
+		} else {
+			D_ERROR("unknown self-heal policy '%s'\n", p);
+			rc = -DER_PROTO;
+			goto out_resp;
+		}
+	}
+
+	D_INFO("%s=%s(%lx)\n", key, resp->properties[0]->value, *policy);
+out_resp:
+	mgmt__system_get_prop_resp__free_unpacked(resp, NULL);
+out:
+	return rc;
+#else
+	if (abort(abort_arg))
+		return -DER_OP_CANCELED;
+	/* Read file policy.txt and convert the number in the file to the policy. */
+	FILE *fp;
+	char  buf[32];
+	fp = fopen("policy.txt", "r");
+	if (fp == NULL) {
+		D_ERROR("failed to open policy.txt: %s\n", strerror(errno));
+		return -DER_IO;
+	}
+	if (fgets(buf, sizeof(buf), fp) == NULL) {
+		D_ERROR("failed to read policy.txt: %s\n", strerror(errno));
+		fclose(fp);
+		return -DER_IO;
+	}
+	fclose(fp);
+	/* Convert the string to a number. */
+	char *endptr;
+	*policy = strtoull(buf, &endptr, 10);
+	if (*endptr != '\n' && *endptr != '\0') {
+		D_ERROR("invalid policy in policy.txt: %s\n", buf);
+		return -DER_INVAL;
+	}
+	D_INFO("self_heal=%lx\n", *policy);
+	return 0;
+#endif
 }
 
 int
