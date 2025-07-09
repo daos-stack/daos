@@ -19,6 +19,18 @@ context_quotas_init(struct crt_context *ctx);
 static void
 context_quotas_finalize(struct crt_context *ctx);
 
+/* Progress methods */
+static int
+crt_progress_legacy(struct crt_context *ctx, int64_t timeout);
+static int
+crt_progress_event(struct crt_context *ctx, int64_t timeout_us);
+static int
+crt_progress_cond_legacy(struct crt_context *ctx, int64_t timeout, crt_progress_cond_cb_t cond_cb,
+			 void *arg);
+static int
+crt_progress_event_cond(struct crt_context *ctx, int64_t timeout_us, crt_progress_cond_cb_t cond_cb,
+			void *arg);
+
 static struct crt_ep_inflight *
 epi_link2ptr(d_list_t *rlink)
 {
@@ -154,6 +166,14 @@ crt_context_init(struct crt_context *ctx)
 
 	D_INIT_LIST_HEAD(&ctx->cc_quotas.rpc_waitq);
 	D_INIT_LIST_HEAD(&ctx->cc_link);
+
+	if (crt_gdata.cg_progress_legacy) {
+		ctx->cc_prog_func      = crt_progress_legacy;
+		ctx->cc_prog_cond_func = crt_progress_cond_legacy;
+	} else {
+		ctx->cc_prog_func      = crt_progress_event;
+		ctx->cc_prog_cond_func = crt_progress_event_cond;
+	}
 
 	/* create timeout binheap */
 	bh_node_cnt = CRT_DEFAULT_CREDITS_PER_EP_CTX * 64;
@@ -1074,7 +1094,7 @@ crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv)
 }
 
 static bool
-crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
+crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv, const struct timespec *ts_now)
 {
 	struct crt_opc_info	*opc_info;
 	struct crt_context	*crt_ctx;
@@ -1108,7 +1128,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 
 	RPC_TRACE(DB_NET, rpc_priv, "reset_timer enabled.\n");
 
-	crt_set_timeout(rpc_priv);
+	crt_set_timeout(rpc_priv, ts_now);
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	rc = crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
@@ -1123,7 +1143,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 }
 
 static void
-crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
+crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv, const struct timespec *ts_now)
 {
 	struct crt_context		*crt_ctx;
 	struct crt_grp_priv		*grp_priv;
@@ -1134,7 +1154,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	crt_rpc_lock(rpc_priv);
 
-	if (crt_req_timeout_reset(rpc_priv)) {
+	if (crt_req_timeout_reset(rpc_priv, ts_now)) {
 		crt_rpc_unlock(rpc_priv);
 		RPC_TRACE(DB_NET, rpc_priv, "reached timeout. Renewed for another cycle.\n");
 		return;
@@ -1210,12 +1230,11 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 }
 
 static void
-crt_context_timeout_check(struct crt_context *crt_ctx)
+crt_context_timeout_check(struct crt_context *crt_ctx, const struct timespec *ts_now)
 {
 	struct crt_rpc_priv		*rpc_priv;
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
-	uint64_t			 ts_now;
 	bool                             print_once = false;
 #ifdef HG_HAS_DIAG
 	bool should_republish = false;
@@ -1224,22 +1243,20 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	D_ASSERT(crt_ctx != NULL);
 
 	D_INIT_LIST_HEAD(&timeout_list);
-	ts_now = d_timeus_secdiff(0);
 
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	while (1) {
 		bh_node = d_binheap_root(&crt_ctx->cc_bh_timeout);
 		if (bh_node == NULL)
 			break;
-		rpc_priv = container_of(bh_node, struct crt_rpc_priv,
-					crp_timeout_bp_node);
-		if (rpc_priv->crp_timeout_ts > ts_now)
+		rpc_priv = container_of(bh_node, struct crt_rpc_priv, crp_timeout_bp_node);
+		if (d_timeless(ts_now, &rpc_priv->crp_deadline))
 			break;
 
 		/* +1 to prevent it from being released in timeout_untrack */
 		RPC_ADDREF(rpc_priv);
 		crt_req_timeout_untrack(rpc_priv);
-		rpc_priv->crp_timeout_ts = 0;
+		rpc_priv->crp_deadline = d_time_ms(0);
 
 		D_ASSERTF(d_list_empty(&rpc_priv->crp_tmp_link_timeout),
 			  "already on timeout list\n");
@@ -1277,7 +1294,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
 		}
 
-		crt_req_timeout_hdlr(rpc_priv);
+		crt_req_timeout_hdlr(rpc_priv, ts_now);
 		RPC_DECREF(rpc_priv);
 	}
 
@@ -1297,13 +1314,14 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 int
 crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context	*crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	struct crt_ep_inflight	*epi = NULL;
-	d_list_t		*rlink;
-	d_rank_t		 ep_rank;
-	int			 rc = 0;
-	int 			quota_rc = 0;
-	struct crt_grp_priv	*grp_priv;
+	struct crt_context     *crt_ctx = rpc_priv->crp_pub.cr_ctx;
+	struct crt_ep_inflight *epi     = NULL;
+	d_list_t               *rlink;
+	d_rank_t                ep_rank;
+	int                     rc       = 0;
+	int                     quota_rc = 0;
+	struct crt_grp_priv    *grp_priv;
+	struct timespec         ts_now;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1363,7 +1381,8 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
-	crt_set_timeout(rpc_priv);
+	d_gettime_coarse(&ts_now);
+	crt_set_timeout(rpc_priv, &ts_now);
 	rpc_priv->crp_epi = epi;
 	RPC_ADDREF(rpc_priv);
 
@@ -1495,7 +1514,7 @@ dispatch_rpc(struct crt_rpc_priv *rpc) {
 	crt_rpc_lock(rpc);
 
 	/* RPC got cancelled or timed out before it got here, it got already completed*/
-	if (rpc->crp_timeout_ts == 0) {
+	if (d_timenull(&rpc->crp_deadline)) {
 		crt_rpc_unlock(rpc);
 		return;
 	}
@@ -1567,10 +1586,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 			tmp_rpc->crp_state = RPC_STATE_INITED;
 			/* RPC got cancelled or timed out before it got here */
-			if (tmp_rpc->crp_timeout_ts == 0) {
+			if (d_timenull(&tmp_rpc->crp_deadline)) {
 				submit_rpc = false;
 			} else {
-				crt_set_timeout(tmp_rpc);
+				struct timespec ts_now;
+				d_gettime_coarse(&ts_now);
+				crt_set_timeout(tmp_rpc, &ts_now);
 
 				D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 				rc = crt_req_timeout_track(tmp_rpc);
@@ -1782,21 +1803,85 @@ crt_context_empty(crt_provider_t provider, int locked)
 	return rc;
 }
 
-int
-crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
-		  crt_progress_cond_cb_t cond_cb, void *arg)
+static int
+crt_progress_legacy(struct crt_context *ctx, int64_t timeout)
 {
-	struct crt_context	*ctx;
-	int64_t			 hg_timeout;
-	uint64_t		 now;
-	uint64_t		 end = 0;
-	int			 rc = 0;
+	struct timespec now;
+	int rc = 0;
+
+	/**
+	 * call progress once w/o any timeout before processing timed out
+	 * requests in case any replies are pending in the queue
+	 */
+	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT))
+		D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+
+	/**
+	 * process timeout and progress callback after this initial call to
+	 * progress
+	 */
+	d_gettime_coarse(&now);
+	crt_context_timeout_check(ctx, &now);
+	if (ctx->cc_prog_cb != NULL)
+		timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
+
+	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
+		/** call progress once again with the real timeout */
+		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT))
+			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+	}
+
+	return rc;
+}
+
+static int
+crt_progress_event(struct crt_context *ctx, int64_t timeout_us)
+{
+	struct timespec deadline, now = {.tv_sec = 0, .tv_nsec = 0};
+	int             rc;
+
+	if (ctx->cc_prog_cb != NULL)
+		timeout_us = ctx->cc_prog_cb(ctx, timeout_us, ctx->cc_prog_cb_arg);
+
+	if (timeout_us > 0) {
+		d_gettime_coarse(&now);
+		crt_context_timeout_check(ctx, &now);
+		deadline = now;
+		d_timeinc(&deadline, (uint64_t)(timeout_us * 1000));
+	} else
+		deadline = now;
+
+	rc = crt_hg_event_progress(&ctx->cc_hg_ctx, &deadline);
+	if (unlikely(rc && rc != -DER_TIMEDOUT))
+		D_ERROR("crt_hg_event_progress failed, rc: %d.\n", rc);
+
+	return rc;
+}
+
+int
+crt_progress(crt_context_t crt_ctx, int64_t timeout_us)
+{
+	struct crt_context *ctx = crt_ctx;
 
 	/** validate input parameters */
-	if (unlikely(crt_ctx == CRT_CONTEXT_NULL || cond_cb == NULL)) {
-		D_ERROR("invalid parameter (%p)\n", cond_cb);
+	if (unlikely(ctx == NULL)) {
+		D_ERROR("invalid parameter (NULL crt_ctx).\n");
 		return -DER_INVAL;
 	}
+
+	return ctx->cc_prog_func(ctx, timeout_us);
+}
+
+static int
+crt_progress_cond_legacy(struct crt_context *ctx, int64_t timeout, crt_progress_cond_cb_t cond_cb,
+			 void *arg)
+{
+	int64_t  hg_timeout;
+	uint64_t now;
+	uint64_t end = 0;
+	int      rc  = 0;
 
 	/**
 	 * Invoke the callback once first, in case the condition is met before
@@ -1809,8 +1894,6 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	if (unlikely(rc < 0))
 		/** something wrong happened during the callback execution */
 		return rc;
-
-	ctx = crt_ctx;
 
 	/** Progress with callback and non-null timeout */
 	if (timeout > 0) {
@@ -1830,7 +1913,10 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 
 	/** loop until callback returns non-null value */
 	while ((rc = cond_cb(arg)) == 0) {
-		crt_context_timeout_check(ctx);
+		struct timespec ts_now;
+
+		d_gettime_coarse(&ts_now);
+		crt_context_timeout_check(ctx, &ts_now);
 		if (ctx->cc_prog_cb != NULL)
 			timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
 
@@ -1877,44 +1963,56 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	return rc;
 }
 
-int
-crt_progress(crt_context_t crt_ctx, int64_t timeout)
+static int
+crt_progress_event_cond(struct crt_context *ctx, int64_t timeout_us, crt_progress_cond_cb_t cond_cb,
+			void *arg)
 {
-	struct crt_context	*ctx;
-	int			 rc = 0;
+	struct timespec deadline, now = {.tv_sec = 0, .tv_nsec = 0};
+	int             rc = 0, cb_rc;
+
+	if (ctx->cc_prog_cb != NULL)
+		timeout_us = ctx->cc_prog_cb(ctx, timeout_us, ctx->cc_prog_cb_arg);
+
+	if (timeout_us > 0) {
+		d_gettime_coarse(&now);
+		crt_context_timeout_check(ctx, &now);
+		deadline = now;
+		d_timeinc(&deadline, (uint64_t)(timeout_us * 1000));
+	} else
+		deadline = now;
+
+	/** loop until callback returns non-null value */
+	while (((cb_rc = cond_cb(arg)) == 0) && (rc != -DER_TIMEDOUT)) {
+		rc = crt_hg_event_progress(&ctx->cc_hg_ctx, &deadline);
+		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+			D_ERROR("crt_hg_event_progress failed with %d\n", rc);
+			return rc;
+		}
+	}
+
+	if (cb_rc > 0)
+		/** exit as per the callback request */
+		return 0;
+	if (unlikely(cb_rc < 0))
+		/** something wrong happened during the callback execution */
+		return cb_rc;
+
+	return rc;
+}
+
+int
+crt_progress_cond(crt_context_t crt_ctx, int64_t timeout_us, crt_progress_cond_cb_t cond_cb,
+		  void *arg)
+{
+	struct crt_context *ctx = crt_ctx;
 
 	/** validate input parameters */
-	if (unlikely(crt_ctx == CRT_CONTEXT_NULL)) {
-		D_ERROR("invalid parameter (NULL crt_ctx).\n");
+	if (unlikely(ctx == NULL || cond_cb == NULL)) {
+		D_ERROR("invalid parameter (%p)\n", cond_cb);
 		return -DER_INVAL;
 	}
 
-	ctx = crt_ctx;
-
-	/**
-	 * call progress once w/o any timeout before processing timed out
-	 * requests in case any replies are pending in the queue
-	 */
-	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
-	if (unlikely(rc && rc != -DER_TIMEDOUT))
-		D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
-
-	/**
-	 * process timeout and progress callback after this initial call to
-	 * progress
-	 */
-	crt_context_timeout_check(ctx);
-	if (ctx->cc_prog_cb != NULL)
-		timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
-
-	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
-		/** call progress once again with the real timeout */
-		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
-		if (unlikely(rc && rc != -DER_TIMEDOUT))
-			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
-	}
-
-	return rc;
+	return ctx->cc_prog_cond_func(ctx, timeout_us, cond_cb, arg);
 }
 
 /**
@@ -2028,7 +2126,7 @@ crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
 	 */
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	crt_req_timeout_untrack(rpc_priv);
-	rpc_priv->crp_timeout_ts = 0;
+	rpc_priv->crp_deadline = d_time_ms(0);
 	crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 }
