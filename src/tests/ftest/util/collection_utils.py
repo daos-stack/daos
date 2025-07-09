@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,6 +18,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
 from util.run_utils import find_command, run_local, run_remote, stop_processes
+from util.storage_utils import find_pci_address
 from util.systemctl_utils import stop_service
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
@@ -152,6 +154,36 @@ def cleanup_processes(logger, test, result):
             result.warn_test(logger, "Process", message)
 
     return not any_found
+
+
+def check_server_storage(logger, test, stage):
+    """Verify that the expected server storage devices exist.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        test (TestInfo): the test information
+        stage (str): current launch test execution stage
+
+    Returns:
+        bool: True if all expected devices found on all server hosts; False otherwise
+    """
+    logger.debug("-" * 80)
+    logger.debug(f"Verifying server storage during {stage} for \'{test}\'")
+    command = f"lspci -D | grep -E \'{'|'.join(test.yaml_info["bdev_list"])}\'"
+    result = run_remote(logger, test.host_info.servers.hosts, command)
+    if not result.passed:
+        message = f"Failure detected verifying storage during {stage} for \'{test}\'"
+        result.warn_test(logger, stage, message)
+        return False
+    bdev_set = set(test.yaml_info["bdev_list"])
+    status = True
+    for data in result.output:
+        device_set = set(find_pci_address("\n".join(data.stdout)))
+        match = bool(bdev_set & device_set == bdev_set)
+        logger.debug(f"  - Detected {str(device_set)} on {str(data.hosts)} - match = {str(match)}")
+        if not match:
+            status = False
+    return status
 
 
 def archive_files(logger, summary, hosts, source, pattern, destination, depth, threshold, timeout,
@@ -868,6 +900,10 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             return_code |= 512
         if not cleanup_processes(logger, test, test_result):
             return_code |= 4096
+
+    # Check storage devices for servers
+    if not check_server_storage(logger, test, "Process"):
+        return_code |= 512
 
     # Mark the test execution as failed if a results.xml file is not found
     test_logs_dir = os.path.realpath(os.path.join(job_results_dir, "latest"))

@@ -15,7 +15,7 @@ from pathlib import Path
 from ClusterShell.NodeSet import NodeSet
 from slurm_setup import SlurmSetup, SlurmSetupException
 # pylint: disable=import-error,no-name-in-module
-from util.collection_utils import TEST_RESULTS_DIRS, collect_test_result
+from util.collection_utils import TEST_RESULTS_DIRS, check_server_storage, collect_test_result
 from util.data_utils import dict_extract_values, list_flatten, list_unique
 from util.environment_utils import TestEnvironment
 from util.host_utils import HostException, HostInfo, get_local_host, get_node_set
@@ -246,6 +246,7 @@ class TestInfo():
         "client_partition",
         "client_reservation",
         "client_users",
+        "bdev_list",
     ]
 
     def __init__(self, test_file, order, yaml_extension=None):
@@ -423,6 +424,10 @@ class TestRunner():
         # Remove existing mount points on each test host
         status = self._clear_mount_points(logger, test, clear_mounts)
         if status:
+            return status
+
+        # Check storage devices for servers
+        if not check_server_storage(logger, test, "Prepare"):
             return status
 
         # Generate certificate files for the test
