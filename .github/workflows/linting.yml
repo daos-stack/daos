@@ -183,7 +183,7 @@ jobs:
       - name: Get merge-base ref
         id: get_merge_base
         run: |
-          ref=$(git merge-base ${{ github.base_ref }} ${{ github.head_ref }})
+          ref=$(git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }})
           echo "ref=$ref" >> $GITHUB_OUTPUT
       - name: Run check in docker
         uses: ./.github/actions/clang-format
