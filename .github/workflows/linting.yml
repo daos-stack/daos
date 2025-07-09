@@ -16,12 +16,12 @@ concurrency:
 permissions: {}
 
 jobs:
-  # Run isort on the tree.
-  # This checks .py files only so misses SConstruct and SConscript files are not checked, rather
-  # for these files check them afterwards.  The output-filter will not be installed for this part
-  # so regressions will be detected but not annotated.
-  isort:
-    name: Python isort
+  lint-python:
+    # Run isort on the tree.
+    # This checks .py files only so misses SConstruct and SConscript files are not checked, rather
+    # for these files check them afterwards.  The output-filter will not be installed for this part
+    # so regressions will be detected but not annotated.
+    name: Lint Python
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -31,17 +31,43 @@ jobs:
       - name: Set up Python environment
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
-          python-version: '3'
+          python-version: '3.11'
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
+      - name: Install python enchant
+        run: sudo apt-get update && sudo apt-get -y install python3-enchant
       - name: Run isort
         uses: isort/isort-action@24d8a7a51d33ca7f36c3f23598dafa33f7071326  # v1.1.1
         with:
           requirementsFiles: "requirements.txt"
-      - name: Run on SConstruct file.
+      - name: Run isort on SConstruct file
         run: isort --check-only SConstruct
-      - name: Run on build files.
+      - name: Run isort on build files
         run: find . -name SConscript | xargs isort --check-only
+      - name: Add flake8 parser
+        run: echo -n "::add-matcher::ci/daos-flake-matcher.json"
+      - name: Add flake8 whitespace parser
+        run: echo -n "::add-matcher::ci/daos-flakew-matcher.json"
+      - name: Add flake8 error parser
+        run: echo -n "::add-matcher::ci/daos-flakee-matcher.json"
+      - name: Run flake8 Lint
+        uses: py-actions/flake8@84ec6726560b6d5bd68f2a5bed83d62b52bb50ba  # v2.3.0
+        with:
+          # W503 and W504 are related as they conflict.  W503 is the preferred style and all code
+          # should be using it now.
+          ignore: 'W503'
+          exclude: 'src/control/vendor,src/client/pydaos/raw'
+          max-line-length: '100'
+      - name: Run flake8 Lint on SCons files
+        uses: py-actions/flake8@84ec6726560b6d5bd68f2a5bed83d62b52bb50ba  # v2.3.0
+        with:
+          ignore: 'F821,W503,F841'
+          max-line-length: '100'
+          args: '--filename */SConscript, SConstruct'
+      - name: Show pylint versions
+        run: ./utils/cq/daos_pylint.py --version
+      - name: Run pylint
+        run: ./utils/cq/daos_pylint.py --git --output-format github
 
   shell-check:
     name: ShellCheck
@@ -81,39 +107,6 @@ jobs:
       - name: Check DAOS ftest tags.
         run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
-  flake8-lint:
-    runs-on: ubuntu-24.04
-    name: Flake8 check
-    steps:
-      - name: Check out source repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Set up Python environment
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
-        with:
-          python-version: '3'
-      - name: Add parser
-        run: echo -n "::add-matcher::ci/daos-flake-matcher.json"
-      - name: Add whitespace parser
-        run: echo -n "::add-matcher::ci/daos-flakew-matcher.json"
-      - name: Add error parser
-        run: echo -n "::add-matcher::ci/daos-flakee-matcher.json"
-      - name: flake8 Lint
-        uses: py-actions/flake8@84ec6726560b6d5bd68f2a5bed83d62b52bb50ba  # v2.3.0
-        with:
-          # W503 and W504 are related as they conflict.  W503 is the preferred style and all code
-          # should be using it now.
-          ignore: 'W503'
-          exclude: 'src/control/vendor,src/client/pydaos/raw'
-          max-line-length: '100'
-      - name: flake8 Lint on SCons files.
-        uses: py-actions/flake8@84ec6726560b6d5bd68f2a5bed83d62b52bb50ba  # v2.3.0
-        with:
-          ignore: 'F821,W503,F841'
-          max-line-length: '100'
-          args: '--filename */SConscript, SConstruct'
-
   doxygen:
     name: Doxygen
     runs-on: ubuntu-24.04
@@ -134,26 +127,6 @@ jobs:
           name: API Documentation
           path: docs/doxygen/html/
           retention-days: 1
-
-  pylint:
-    name: Pylint check
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
-        with:
-          python-version: '3.11'
-      - name: Install python packages
-        run: python3 -m pip install --requirement requirements.txt
-      - name: Install enchant
-        run: sudo apt-get update && sudo apt-get -y install python3-enchant
-      - name: Show versions
-        run: ./utils/cq/daos_pylint.py --version
-      - name: Run pylint check.
-        run: ./utils/cq/daos_pylint.py --git --output-format github
 
   codespell:
     name: Codespell
@@ -224,13 +197,11 @@ jobs:
     name: Linting Summary
     runs-on: ubuntu-24.04
     needs:
-      - isort
+      - lint-python
       - shell-check
       - log-check
       - ftest-tags
-      - flake8-lint
       - doxygen
-      - pylint
       - codespell
       - clang-format
       - yaml-lint
