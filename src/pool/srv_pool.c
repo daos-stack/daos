@@ -2321,10 +2321,25 @@ static int pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map,
 				    uint32_t map_version_for, bool sync_remove);
 static void pool_svc_rfcheck_ult(void *arg);
 
+/* Abort condition of ds_mgmt_get_self_heal_policy for pool_svc. */
+static bool
+pool_svc_abort_gshp(void *arg)
+{
+	struct pool_svc *svc = arg;
+	uint64_t         term;
+	bool             is_leader;
+
+	is_leader = rdb_is_leader(svc->ps_rsvc.s_db, &term);
+	if (!is_leader || svc->ps_rsvc.s_term != term)
+		return true;
+	return false;
+}
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
+	uint64_t                sys_self_heal;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version = 0;
 	uuid_t                  srv_pool_hdl;
@@ -2371,6 +2386,12 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 	cont_svc_up = true;
+
+	rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to get self-heal policy", DP_UUID(svc->ps_uuid));
+		goto out;
+	}
 
 	rc = init_events(svc);
 	if (rc != 0)
@@ -2438,7 +2459,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal);
 	if (rc != 0)
 		goto out;
 
@@ -7473,6 +7494,30 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	char				*env;
 	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
+	bool                             sys_self_heal_applicable;
+	uint64_t                         sys_self_heal = 0;
+
+	/*
+	 * The system self-heal policy only applies to automatic pool exclude
+	 * and rebuild operations.
+	 */
+	sys_self_heal_applicable = (opc == MAP_EXCLUDE && src == MUS_SWIM);
+
+	if (sys_self_heal_applicable) {
+		rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
+				 DP_UUID(svc->ps_uuid));
+			goto out;
+		}
+		if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE)) {
+			D_DEBUG(DB_MD,
+				DF_UUID ": pool_exculde disabled in system property self_heal\n",
+				DP_UUID(svc->ps_uuid));
+			rc = -DER_NO_PERM;
+			goto out;
+		}
+	}
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
@@ -7494,8 +7539,15 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
+	if (sys_self_heal_applicable && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+		D_DEBUG(DB_MD, DF_UUID ": pool_rebuild disabled in system property self_heal\n",
+			DP_UUID(svc->ps_uuid));
+		rc = 0;
+		goto out;
+	}
+
 	if (!ds_pool_rebuild_enabled(svc->ps_pool)) {
-		D_DEBUG(DB_MD, DF_UUID ": self healing is disabled\n",
+		D_DEBUG(DB_MD, DF_UUID ": rebuild disabled for pool\n",
 			DP_UUID(svc->ps_pool->sp_uuid));
 		D_GOTO(out, rc);
 	}

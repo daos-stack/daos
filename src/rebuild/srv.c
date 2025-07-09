@@ -14,6 +14,7 @@
 #include <daos/rpc.h>
 #include <daos/pool.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/object.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
@@ -2461,13 +2462,19 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 
 /* Regenerate the rebuild tasks when changing the leader. */
 int
-ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
+ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal)
 {
 	struct daos_prop_entry *entry;
 	char                   *env;
 	int                     rc = 0;
 
 	rebuild_gst.rg_abort = 0;
+
+	if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+		D_DEBUG(DB_REBUILD, DF_UUID ": pool_rebuild disabled in sys_self_heal\n",
+			DP_UUID(pool->sp_uuid));
+		return DER_SUCCESS;
+	}
 
 	d_agetenv_str(&env, REBUILD_ENV);
 	if (env && !strcasecmp(env, REBUILD_ENV_DISABLED)) {
@@ -2536,7 +2543,7 @@ ds_rebuild_admin_start(struct ds_pool *pool)
 		goto out;
 	}
 
-	rc = ds_rebuild_regenerate_task(pool, &prop);
+	rc = ds_rebuild_regenerate_task(pool, &prop, DS_MGMT_SELF_HEAL_ALL);
 	daos_prop_fini(&prop);
 	if (rc)
 		DL_ERROR(rc, DF_UUID ": regenerate rebuild task failed", DP_UUID(pool->sp_uuid));

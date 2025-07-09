@@ -29,6 +29,7 @@
 #include "check.pb-c.h"
 #include "svc.pb-c.h"
 #include "smd.pb-c.h"
+#include "system.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 
