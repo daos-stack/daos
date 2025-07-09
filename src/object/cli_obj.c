@@ -1959,10 +1959,6 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		 fail_info->efi_recov_tasks != NULL);
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		recov_task = &fail_info->efi_recov_tasks[i];
-		/* Set client hlc as recovery epoch only for the case that
-		 * singv recovery without fetch from server ahead - when
-		 * some targets un-available.
-		 */
 		D_ASSERTF(recov_task->ert_epoch != DAOS_EPOCH_MAX && recov_task->ert_epoch != 0,
 			  "bad ert_epoch " DF_X64 "\n", recov_task->ert_epoch);
 		dc_cont2hdl_noref(obj->cob_co, &coh);
@@ -5751,9 +5747,8 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 			continue;
 
 		if (obj_auxi->ec_in_recov) {
-			D_DEBUG(DB_IO, DF_OID" shard %d failed recovery(%d) or singv fetch(%d).\n",
-				DP_OID(obj->cob_md.omd_id), grp_start + tgt_idx,
-				obj_auxi->ec_in_recov, obj_auxi->reasb_req.orr_singv_only);
+			D_DEBUG(DB_IO, DF_OID " shard %d failed recovery.\n",
+				DP_OID(obj->cob_md.omd_id), grp_start + tgt_idx);
 			D_GOTO(out, rc = -DER_TGT_RETRY);
 		}
 
