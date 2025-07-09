@@ -66,27 +66,26 @@ install_mofed() {
         gversion="${gversion%.*}"
     fi
 
-    # Add a repo to install Mellanox_OFED RPMS
-    : "${ARTIFACTORY_URL:=https://artifactory.dc.hpdd.intel.com/artifactory/}"
-    # Temporary fix
-    if  [[ ${ARTIFACTORY_URL} != *"/artifactory" ]]; then
-        ARTIFACTORY_URL="${ARTIFACTORY_URL}artifactory"
+    : "${ARTIFACTORY_URL:=}"
+    if [ -z "$ARTIFACTORY_URL" ]; then
+        return
     fi
-    mellanox_proxy="${ARTIFACTORY_URL}/mellanox-proxy/mlnx_ofed/"
-    mellanox_key_url="${ARTIFACTORY_URL}/mlnx_ofed/RPM-GPG-KEY-Mellanox"
-    rpm --import "$mellanox_key_url"
-    repo_url="$mellanox_proxy$MLNX_VER_NUM/rhel$gversion/x86_64/"
-    dnf -y config-manager --add-repo="$repo_url"
-    dnf -y config-manager --save --setopt="$(url_to_repo "$repo_url")".gpgcheck=1
-    dnf repolist || true
 
-    time dnf -y install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem
+    # Install Mellanox OFED or DOCA RPMS
+    install_mellanox="install_mellanox.sh"
+    script_url="${ARTIFACTORY_URL}/raw-internal/sre_tools/$install_mellanox"
+    install_target="/usr/local/bin/$install_mellanox"
 
-    # now, upgrade firmware
-    time dnf -y install mlnx-fw-updater
+    if [ ! -e "$install_target" ]; then
+        if ! curl --silent --show-error --fail \
+            -o "/usr/local/sbin/$install_mellanox" "$script_url"; then
+            echo "Failed to fetch $script_url"
+            return 1
+        fi
+        chmod 0755 "$install_target"
+    fi
 
-    # Make sure that tools are present.
-    #ls /usr/bin/ib_* /usr/bin/ibv_*
+    MELLANOX_VERSION="$MLNX_VER_NUM" "$install_mellanox"
 
     dnf list --showduplicates perftest
     if [ "$gversion" == "8.5" ]; then
@@ -96,5 +95,4 @@ install_mofed() {
         dnf list --showduplicates ucx-knem
         dnf remove -y ucx-knem || true
     fi
-
 }

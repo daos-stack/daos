@@ -94,6 +94,13 @@ retry_dnf() {
                 send_mail "Command retry successful in $STAGE_NAME after $((attempt + 1)) attempts using ${repo_servers[0]} as initial repo server " \
                           "Command:  ${args[*]}\nAttempts: $attempt\nStatus:   $rc"
             fi
+            if [ -n "$ARTIFACTORY_URL" ]; then
+                dnfx="dnf"
+                if command -v dnf4; then
+                    dnfx="dnf4"
+                fi
+                "$dnfx" config-manager --disable 'epel*' || true
+            fi
             return 0
         fi
         # Command failed, retry
@@ -236,7 +243,7 @@ fetch_repo_config() {
     . /etc/os-release
     local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
     local repopath="${REPOS_DIR}/$repo_file"
-    if ! curl -f -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
+    if ! curl --silent --show-error --fail -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
         echo "Failed to fetch repo file $REPO_FILE_URL$repo_file.repo"
         return 1
     fi
@@ -311,7 +318,7 @@ update_repos() {
 
     # we're not actually using the set_local_repos.sh script
     # setting a repo server is as easy as renaming a file
-    #if ! curl -o /usr/local/sbin/set_local_repos.sh-tmp "${REPO_FILE_URL}set_local_repos.sh"; then
+    #if ! curl --silent --show-error --fail -o /usr/local/sbin/set_local_repos.sh-tmp "${REPO_FILE_URL}set_local_repos.sh"; then
     #    send_mail "Fetch set_local_repos.sh failed.  Continuing on with in-image copy."
     #else
     #    cat /usr/local/sbin/set_local_repos.sh-tmp > /usr/local/sbin/set_local_repos.sh
@@ -353,11 +360,11 @@ post_provision_config_nodes() {
         dnf -y erase fuse3\*
     fi
 
-    if $CONFIG_POWER_ONLY; then
+    if [ -n "$CONFIG_POWER_ONLY" ]; then
         rm -f "$REPOS_DIR"/*_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload          \
-                     ompi argobots cart daos daos-client dpdk      \
-                     fuse-libs libisa-l libpmemobj mercury mpich   \
+                     argobots cart daos daos-client dpdk      \
+                     libisa-l libpmemobj mercury mpich   \
                      pmix protobuf-c spdk libfabric libpmem        \
                      munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd
@@ -365,7 +372,9 @@ post_provision_config_nodes() {
 
     cat /etc/os-release
 
-    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
+    # ConnectX can also be Ethernet for our CI nodes.
+    if lspci -mm | grep "ConnectX" | grep -i "infiniband" && \
+       ! grep MOFED_VERSION /etc/do-release; then
         # Remove OPA and install MOFED
         install_mofed
     fi
