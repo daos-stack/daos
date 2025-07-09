@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,7 +24,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -68,6 +68,7 @@ type (
 		cfg              MockInvokerConfig
 		invokeCount      int
 		invokeCountMutex sync.RWMutex
+		SentReqs         []UnaryRequest
 	}
 )
 
@@ -156,6 +157,7 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	mi.invokeCountMutex.Lock()
 	mi.invokeCount++
 	invokeCount = mi.invokeCount
+	mi.SentReqs = append(mi.SentReqs, uReq)
 	mi.invokeCountMutex.Unlock()
 	go func(invokeCount int) {
 		mi.log.Debugf("returning mock responses, invokeCount=%d", invokeCount)
@@ -273,7 +275,7 @@ func mockHostStorageSet(t *testing.T, hosts string, pbResp *ctlpb.StorageScanRes
 	if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hss.HostStorage.ScmNamespaces); err != nil {
 		t.Fatal(err)
 	}
-	if err := convert.Types(pbResp.GetMemInfo(), &hss.HostStorage.MemInfo); err != nil {
+	if err := convert.Types(pbResp.GetSysMemInfo(), &hss.HostStorage.SysMemInfo); err != nil {
 		t.Fatal(err)
 	}
 
@@ -303,17 +305,32 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 	return hsm
 }
 
-// MockMemInfo returns a mock MemInfo result.
-func MockMemInfo() *common.MemInfo {
-	return &common.MemInfo{
-		HugepagesTotal:  1024,
-		HugepagesFree:   512,
-		HugepagesRsvd:   64,
-		HugepagesSurp:   32,
-		HugepageSizeKiB: 2048,
-		MemTotalKiB:     (humanize.GiByte * 4) / humanize.KiByte,
-		MemFreeKiB:      (humanize.GiByte * 1) / humanize.KiByte,
-		MemAvailableKiB: (humanize.GiByte * 2) / humanize.KiByte,
+// MockSysMemInfo returns a mock SysMemInfo result. Note that per-NUMA stats are not populated in this
+// mock.
+func MockSysMemInfo() *common.SysMemInfo {
+	return &common.SysMemInfo{
+		MemInfo: common.MemInfo{
+			MemTotalKiB:     (humanize.GiByte * 4) / humanize.KiByte,
+			MemFreeKiB:      (humanize.GiByte * 1) / humanize.KiByte,
+			MemAvailableKiB: (humanize.GiByte * 2) / humanize.KiByte,
+			HugepageSizeKiB: 2048,
+			HugepagesTotal:  1024,
+			HugepagesFree:   512,
+			HugepagesRsvd:   64,
+			HugepagesSurp:   32,
+		},
+		NumaNodes: []common.MemInfo{
+			{
+				NumaNodeIndex:  0,
+				HugepagesTotal: 1024,
+				HugepagesFree:  512,
+			},
+			{
+				NumaNodeIndex:  1,
+				HugepagesTotal: 0,
+				HugepagesFree:  0,
+			},
+		},
 	}
 }
 
@@ -326,11 +343,20 @@ func mockNvmeCtrlrWithSmd(roleBits int, varIdx ...int32) *storage.NvmeController
 	return nc
 }
 
+// MockPBSysMemInfo returns a mock SysMemInfo result in protobuf format.
+func MockPBSysMemInfo() *ctlpb.SysMemInfo {
+	pbSysMemInfo := new(ctlpb.SysMemInfo)
+	if err := convert.Types(MockSysMemInfo(), pbSysMemInfo); err != nil {
+		panic(err)
+	}
+	return pbSysMemInfo
+}
+
 func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	pbSsr := &ctlpb.StorageScanResp{
-		Nvme:    &ctlpb.ScanNvmeResp{},
-		Scm:     &ctlpb.ScanScmResp{},
-		MemInfo: commonpb.MockPBMemInfo(),
+		Nvme:       &ctlpb.ScanNvmeResp{},
+		Scm:        &ctlpb.ScanScmResp{},
+		SysMemInfo: MockPBSysMemInfo(),
 	}
 
 	nvmeControllers := storage.NvmeControllers{
@@ -551,13 +577,13 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "1gbHugepages":
 		ssr = MockServerScanResp(t, "withSpaceUsage")
-		ssr.MemInfo.HugepageSizeKb = humanize.GiByte / humanize.KiByte // specified in kib
+		ssr.SysMemInfo.HugepageSizeKb = humanize.GiByte / humanize.KiByte // specified in kib
 	case "badPciAddr":
 		ssr.Nvme.Ctrlrs[0].PciAddr = "foo.bar"
 	case "noHugepageSz":
-		ssr.MemInfo.HugepageSizeKb = 0
+		ssr.SysMemInfo.HugepageSizeKb = 0
 	case "noMemTotal":
-		ssr.MemInfo.MemTotalKb = 0
+		ssr.SysMemInfo.MemTotalKb = 0
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
