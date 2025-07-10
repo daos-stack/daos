@@ -13,7 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
       - name: Build deps in Docker
         run: docker build . --file utils/docker/Dockerfile.el.9
             --build-arg DAOS_BUILD=no
