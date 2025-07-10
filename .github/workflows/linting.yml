@@ -184,7 +184,8 @@ jobs:
         id: get_merge_base
         run: |
           set -x
-          ref="$(git merge-base HEAD ${{ github.event.pull_request.base.ref || github.ref }})"
+          git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }}
+          ref="$(git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }})"
           echo "ref=$ref" >> $GITHUB_OUTPUT
           exit 0
       - name: Run check in docker
