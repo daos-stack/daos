@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -536,7 +536,16 @@ obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
 		}
 	}
 
-	ec_encode_data(cell_bytes, k, p, codec->ec_gftbls, data, parity_bufs);
+	static int lxzlog;
+
+	if (lxzlog == 0) {
+		D_ERROR("lxz ISAL encoding disabled\n");
+		lxzlog = 1;
+	}
+
+	(void)data;
+	(void)p;
+	//ec_encode_data(cell_bytes, k, p, codec->ec_gftbls, data, parity_bufs);
 
 out:
 	for (i = 0; i < c_idx; i++)
