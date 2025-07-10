@@ -36,5 +36,3 @@ verify_perms:
   other_user: daos_test_user_y1
 test_dfuse_mu_perms_cache:
   cache_time: 1
-
-# dummy change
