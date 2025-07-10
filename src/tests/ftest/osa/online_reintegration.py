@@ -62,7 +62,7 @@ class OSAOnlineReintegration(OSAUtils):
         pool = {}
 
         ranklist = list(self.server_managers[0].ranks.keys())
-        rank = self.random.sample(ranklist, k=num_ranks)
+        rank = ",".join(self.random.sample(ranklist, k=num_ranks))
 
         # Start the daos_racer thread
         if racer is True:

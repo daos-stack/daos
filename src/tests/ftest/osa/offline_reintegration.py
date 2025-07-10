@@ -83,7 +83,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
         # Exclude ranks from a random pool
         ranklist = list(self.server_managers[0].ranks.keys())
-        ranks = self.random.sample(ranklist, k=num_ranks)
+        ranks = ",".join(self.random.sample(ranklist, k=num_ranks))
 
         self.pool = self.random.choice(pools)  # nosec
         for loop in range(0, self.loop_test_cnt):
