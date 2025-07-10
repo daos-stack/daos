@@ -235,6 +235,17 @@ void sched_req_sleep(struct sched_request *req, uint32_t msec);
  */
 void sched_req_wakeup(struct sched_request *req);
 
+/* clang-format off */
+/**
+ * Abort a sched request attached ULT (without waiting).
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		N/A
+ */
+void sched_req_abort(struct sched_request *req);
+/* clang-format on */
+
 /**
  * Wakeup a sched request attached ULT terminated. The associated ULT of \a req
  * must not an unnamed ULT.

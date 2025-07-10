@@ -199,7 +199,7 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	}
 
 	if cm.State == MemberStateAdminExcluded {
-		return nil, ErrAdminExcluded(cm.UUID, cm.Rank)
+		return nil, ErrJoinAdminExcluded(cm.UUID, cm.Rank)
 	}
 	memberToReplace := &Member{}
 	*memberToReplace = *cm
@@ -267,7 +267,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		if curMember.State == MemberStateAdminExcluded {
-			return nil, ErrAdminExcluded(curMember.UUID, curMember.Rank)
+			return nil, ErrJoinAdminExcluded(curMember.UUID, curMember.Rank)
 		}
 
 		// If the member is already in the membership, don't allow rejoining
@@ -276,13 +276,13 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		// request has a rank of NilRank, which would indicate that
 		// the original join response was never received.
 		if !curMember.Rank.Equals(req.Rank) && !req.Rank.Equals(NilRank) {
-			return nil, ErrRankChanged(req.Rank, curMember.Rank, curMember.UUID)
+			return nil, ErrJoinRankChanged(req.Rank, curMember.Rank, curMember.UUID)
 		}
 		if curMember.UUID != req.UUID {
-			return nil, ErrUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
+			return nil, ErrJoinUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
 		if curMember.Addr.String() != req.ControlAddr.String() {
-			return nil, ErrControlAddrChanged(req.ControlAddr, curMember.Addr, curMember.UUID, curMember.Rank)
+			return nil, ErrJoinControlAddrChanged(req.ControlAddr, curMember.Addr, curMember.UUID, curMember.Rank)
 		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
@@ -651,17 +651,15 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	return rs, missHS, nil
 }
 
-func (m *Membership) CheckRankNotAdminExcluded(rank Rank) error {
+// IsRankAdminExcluded checks whether a given rank is in the AdminExcluded State.
+func (m *Membership) IsRankAdminExcluded(rank Rank) bool {
 	cm, err := m.db.FindMemberByRank(rank)
 	if err != nil {
-		return errors.Wrap(err, "check rank admin excluded")
+		m.log.Errorf("unable to find rank %d: %s", err.Error())
+		return false
 	}
 
-	if cm.State == MemberStateAdminExcluded {
-		return ErrAdminExcluded(cm.UUID, cm.Rank)
-	}
-
-	return nil
+	return cm.State == MemberStateAdminExcluded
 }
 
 // MarkRankDead is a helper method to mark a rank as dead in response to a
