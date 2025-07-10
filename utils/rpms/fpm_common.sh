@@ -45,7 +45,7 @@ export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.30.0"
 export isal_release="2${DAOS_RELVAL:-}"
 export isal_full="${isal_version}-${isal_release}"
-export isal_crypto_version="2.24.0${DAOS_RELVAL:-}"
+export isal_crypto_version="2.24.0"
 export isal_crypto_release="2${DAOS_RELVAL:-}"
 export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
 
