@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -243,9 +244,10 @@ func TestServerConfig_Constructed(t *testing.T) {
 			DevicePath: "/dev/sdb1",
 		}).
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO(true).   // vfio enabled by default
-		WithDisableVMD(true).    // vmd enabled by default
-		WithEnableHotplug(true). // hotplug disabled by default
+		WithDisableVFIO(true).        // vfio enabled by default
+		WithDisableVMD(true).         // vmd enabled by default
+		WithEnableHotplug(true).      // hotplug disabled by default
+		WithClientFirewallMode(true). // firewall disabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_server_helper.log").
