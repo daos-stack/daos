@@ -1,9 +1,10 @@
 #!/bin/bash
 #
-#  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2020-2024 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
-
+#
 set -eux
 
 if [ -z "$TEST_TAG" ]; then
@@ -47,6 +48,8 @@ test_cluster() {
         NODELIST=${tnodes}                              \
         BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
         STAGE_NAME=\"$STAGE_NAME\"                      \
+        JENKINS_URL=\"${JENKINS_URL:-}\"                \
+        DAOS_DEVOPS_EMAIL=\"${DAOS_DEVOPS_EMAIL:-}\"    \
         $(cat ci/functional/test_main_prep_node.sh)"
 }
 
@@ -58,7 +61,11 @@ if ! test_cluster; then
     if cluster_reboot; then
         if test_cluster; then
             hardware_ok=true
+        else
+            echo "Hardware test failed again after reboot"
         fi
+    else
+        echo "Cluster reboot failed"        
     fi
 else
     hardware_ok=true
@@ -99,6 +106,7 @@ if "$hardware_ok"; then
            FTEST_ARG=\"${FTEST_ARG:-}\"            \
            WITH_VALGRIND=\"${WITH_VALGRIND:-}\"    \
            STAGE_NAME=\"$STAGE_NAME\"              \
+           HTTPS_PROXY=\"${HTTPS_PROXY:-}\"        \
            $(cat ci/functional/test_main_node.sh)"
     else
         ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"

@@ -1,0 +1,12 @@
+diff --git a/src/libpmem2/aarch64/init.c b/src/libpmem2/aarch64/init.c
+index d4dd8812b21..f0b504b4b89 100644
+--- a/src/libpmem2/aarch64/init.c
++++ b/src/libpmem2/aarch64/init.c
+@@ -7,6 +7,7 @@
+ 
+ #include "auto_flush.h"
+ #include "flush.h"
++#include "log_internal.h"
+ #include "out.h"
+ #include "pmem2_arch.h"
+ 
