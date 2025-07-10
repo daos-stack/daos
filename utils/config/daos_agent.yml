@@ -97,7 +97,7 @@
 # default: /var/run/daos_agent
 #runtime_dir: /var/run/daos_agent
 
-# Full path and name of the DAOS agent logfile.
+## Full path and name of the DAOS agent logfile.
 ## default: print to stderr
 #log_file: /var/log/daos/daos_agent.log
 

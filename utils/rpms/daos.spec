@@ -15,6 +15,7 @@
 %global libfabric_version 1.15.1-1
 %global argobots_version 1.2
 %global __python %{__python3}
+%global daos_log_dir "/var/log/daos"
 
 %if (0%{?rhel} >= 8)
 # https://bugzilla.redhat.com/show_bug.cgi?id=1955184
@@ -414,11 +415,11 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
-# Ensure /var/log/daos exists
-if [ ! -d /var/log/daos ]; then
-    mkdir -p /var/log/daos
-    chown daos_server.daos_daemons /var/log/daos
-    chmod 775 /var/log/daos
+# Ensure daos_log_dir exists
+if [ ! -d %{daos_log_dir} ]; then
+    mkdir -p %{daos_log_dir}
+    chown daos_server.daos_daemons %{daos_log_dir}
+    chmod 775 %{daos_log_dir}
 fi
 
 %post server
@@ -441,10 +442,10 @@ fi
 getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
-# Ensure /var/log/daos exists
-if [ ! -d /var/log/daos ]; then
-    mkdir -p /var/log/daos
-    chmod 775 /var/log/daos
+# Ensure daos_log_dir exists
+if [ ! -d %{daos_log_dir} ]; then
+    mkdir -p %{daos_log_dir}
+    chmod 775 %{daos_log_dir}
 fi
 
 %post client
