@@ -2758,6 +2758,12 @@ start_one(uuid_t uuid, void *varg)
 	bool			 immutable;
 	int			 rc;
 
+	if (ds_mgmt_pbl_has_pool(uuid)) {
+		D_INFO(DF_UUID ": not starting: in pool blacklist\n", DP_UUID(uuid));
+		ds_pool_failed_add(uuid, -DER_NO_SERVICE);
+		return 0;
+	}
+
 	if (psa != NULL) {
 		aft_chk = psa->psa_aft_chk;
 		immutable = psa->psa_immutable;
