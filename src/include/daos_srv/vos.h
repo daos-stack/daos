@@ -21,6 +21,15 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
+/**
+ * Common file names used by each layer to store persistent data
+ */
+#define VOS_FILE                             "vos-" /* suffixed by thread id */
+#define VOS_DIR_NEWBORNS                     "NEWBORNS"
+#define VOS_DIR_ZOMBIES                      "ZOMBIES"
+#define DSM_META_FILE                        "meta"
+#define RDB_FILE                             "rdb-"
+
 #define VOS_POOL_COMPAT_FLAG_IMMUTABLE (1ULL << 0)
 #define VOS_POOL_COMPAT_FLAG_SKIP_START      (1ULL << 1)
 #define VOS_POOL_COMPAT_FLAG_SKIP_REBUILD    (1ULL << 2)
@@ -1544,6 +1553,65 @@ vos_pool_needs_checkpoint(daos_handle_t poh);
  */
 int
 vos_pool_checkpoint(daos_handle_t poh);
+
+typedef void (*bind_cpu_fn_t)(int tgt_id);
+/**
+ * Recreate pool vos and rdb files on storage_path
+ *
+ * \param[in] pool_uuid		Pool uuid
+ * \param[in] scm_size		Per vos file size
+ * \param[in] tgt_nr		vos files number
+ * \param[in] rdb_blob_sz	rdb file size, rdb file will not recreate if sz is zero
+ * \param[in] storage_path	Base path for store vos and rdb files
+ * \param[in] bind_cpu_fn	Bind a separate cpu to each vos file allocation
+ */
+int
+vos_pool_recreate_tgt(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb_blob_sz,
+		      const char *storage_path, bind_cpu_fn_t bind_cpu_fn);
+
+/**
+ * Generate the vos file path.
+ * Rule: '/${dir}/${pool_uuid}/${fname}-${idx}'
+ * e.g:  '/mnt/daos/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/vos-0'
+ *
+ * \param[in] pool_uuid		Pool uuid
+ * \param[in] dir		Base path for scm mountpoint
+ * \param[in] fname		Vos/rdb name
+ * \param[in] idx Vos		file index
+ * \param[in] fpath		Save the generated path
+ */
+int
+vos_path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx, char **fpath);
+
+/**
+ * Sync cache
+ */
+int
+vos_dir_fsync(const char *path);
+
+/**
+ * Parallel recreate vos file
+ * \param[in] uuid		Pool uuid
+ * \param[in] scm_size		Per vos file size
+ * \param[in] tgt_nr		Vos file counts
+ * \param[in] cancel_pending	If true, preallocate will abort
+ * \param[in] newborns_path	Base path for store vos/rdb files
+ * \param[in] bind_cpu_fn	e.g. `dss_bind_to_xstream_cpuset`
+ */
+int
+vos_tgt_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool *cancel_pending,
+			     const char *newborns_path, bind_cpu_fn_t bind_cpu_fn);
+
+/**
+ * Sequential recreate vos file
+ * \param[in] uuid		Pool uuid
+ * \param[in] scm_size		Per vos file size
+ * \param[in] tgt_nr		Vos file counts
+ * \param[in] newborns_path	Base path for store vos/rdb files
+ */
+int
+vos_tgt_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
+			       const char *newborns_path);
 
 /**
  * The following declarations are for checksum scrubbing functions. The function

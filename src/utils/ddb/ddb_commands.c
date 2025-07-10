@@ -1451,3 +1451,38 @@ done:
 
 	return rc;
 }
+
+int
+ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
+{
+	int  rc                      = 0;
+	char db_path[DDB_PATH_MAX]   = DEFAULT_DB_PATH;
+	char scm_mount[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
+				   opt->db_path, DDB_PATH_MAX);
+			return -DER_INVAL;
+		}
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
+
+	if (opt->scm_mount != NULL) {
+		if (strlen(opt->scm_mount) == 0 || strlen(opt->scm_mount) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid scm_mount '%s'\n", opt->scm_mount);
+			return -DER_INVAL;
+		}
+		strncpy(scm_mount, opt->scm_mount, ARRAY_SIZE(scm_mount) - 1);
+	}
+
+	/** setup tmpfs and prepare the vos file on scm_mount */
+	rc = dv_run_prov_mem(db_path, scm_mount, opt->scm_mount_size);
+	if (rc) {
+		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
+	} else {
+		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", scm_mount);
+	}
+
+	return rc;
+}
