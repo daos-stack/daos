@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -72,13 +73,13 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		switch (target->ta_comp.co_status) {
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DOWNOUT:
+		case PO_COMP_ST_DRAIN:
 			/* Nothing to do, already excluded */
 			D_INFO(DF_MAP ": Skip exclude down " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
-		case PO_COMP_ST_DRAIN:
 			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DOWN\n",
 				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
