@@ -9,6 +9,7 @@
 #define __DFUSE_H__
 
 #include <semaphore.h>
+#include <pthread.h>
 
 #include <fused/fuse.h>
 #include <fused/fuse_lowlevel.h>
@@ -1123,6 +1124,16 @@ dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 /* Drop a reference on an inode. */
 
 extern char *duns_xattr_name;
+
+static inline struct dfuse_eq *
+pick_eqt(struct dfuse_info *dfuse_info)
+{
+	uint64_t eqt_idx;
+
+	// eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
+	eqt_idx = pthread_self();
+	return &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
+}
 
 /* Generate the inode to use for this dfs object.  This is generating a single
  * 64 bit number from three 64 bit numbers so will not be perfect but does
