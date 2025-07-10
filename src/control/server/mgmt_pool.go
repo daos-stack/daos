@@ -924,7 +924,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintRe
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	if err := svc.checkRanksExist(req.Rank); err != nil {
+	if err := svc.checkRanksExist(req.Ranks...); err != nil {
 		return nil, err
 	}
 

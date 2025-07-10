@@ -371,54 +371,6 @@ pool_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 }
 
 static int
-pool_map_get_dead_ranks(struct pool_map *map, d_rank_list_t **ranks)
-{
-	crt_group_t        *primary_grp;
-	struct pool_domain *doms;
-	int                 doms_cnt;
-	int                 i;
-	int                 rc        = 0;
-	d_rank_list_t      *rank_list = NULL;
-
-	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
-	D_ASSERT(doms_cnt >= 0);
-	primary_grp = crt_group_lookup(NULL);
-	D_ASSERT(primary_grp != NULL);
-
-	rank_list = d_rank_list_alloc(0);
-	if (!rank_list)
-		return -DER_NOMEM;
-
-	for (i = 0; i < doms_cnt; i++) {
-		struct swim_member_state state;
-
-		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
-			continue;
-
-		rc = crt_rank_state_get(primary_grp, doms[i].do_comp.co_rank, &state);
-		if (rc != 0 && rc != -DER_NONEXIST) {
-			D_ERROR("failed to get status of rank %u: %d\n", doms[i].do_comp.co_rank,
-				rc);
-			break;
-		}
-
-		D_DEBUG(DB_MD, "rank/state %d/%d\n", doms[i].do_comp.co_rank,
-			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD) {
-			rc = d_rank_list_append(rank_list, doms[i].do_comp.co_rank);
-			if (rc)
-				D_GOTO(err, rc);
-		}
-	}
-err:
-	if (rc == 0)
-		*ranks = rank_list;
-	else
-		d_rank_list_free(rank_list);
-	return rc;
-}
-
-static int
 process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
 		     d_rank_list_t **dead_ranks, daos_pool_info_t *info, uuid_t pool_uuid,
 		     uint32_t map_version, uint32_t leader_rank, struct daos_pool_space *ps,
@@ -484,9 +436,9 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 			D_GOTO(error, rc = -DER_INVAL);
 		}
 
-		rc = pool_map_get_dead_ranks(map, &dead_rank_list);
+		rc = dsc_pool_get_dead_ranks(map, &dead_rank_list);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_UUID ": pool_map_get_ranks() failed", DP_UUID(pool_uuid));
+			DL_ERROR(rc, DF_UUID ": get dead ranks failed", DP_UUID(pool_uuid));
 			D_GOTO(error, rc);
 		}
 		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " dead ranks in pool map\n",
@@ -993,19 +945,16 @@ dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadlin
 struct pool_update_target_state_arg {
 	struct pool_target_addr_list *puta_target_addrs;
 	pool_comp_state_t             puta_state;
-	bool                          puta_skip_rf_check;
+	uint32_t                      puta_flags;
 };
 
 static int
 pool_update_target_state_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
 	struct pool_update_target_state_arg *arg = varg;
-	uint32_t                             flags = 0;
 
-	if (arg->puta_skip_rf_check)
-		flags |= POOL_TGT_UPDATE_SKIP_RF_CHECK;
 	pool_tgt_update_in_set_data(rpc, arg->puta_target_addrs->pta_addrs,
-				    (size_t)arg->puta_target_addrs->pta_number, flags);
+				    (size_t)arg->puta_target_addrs->pta_number, arg->puta_flags);
 	return 0;
 }
 
@@ -1048,11 +997,10 @@ static struct dsc_pool_svc_call_cbs pool_drain_cbs = {
 int
 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state, bool skip_rf_check)
+				 pool_comp_state_t state, uint32_t flags)
 {
-	struct pool_update_target_state_arg arg = {.puta_target_addrs  = target_addrs,
-						   .puta_state         = state,
-						   .puta_skip_rf_check = skip_rf_check};
+	struct pool_update_target_state_arg arg = {
+	    .puta_target_addrs = target_addrs, .puta_state = state, .puta_flags = flags};
 	struct dsc_pool_svc_call_cbs       *cbs;
 
 	switch (state) {

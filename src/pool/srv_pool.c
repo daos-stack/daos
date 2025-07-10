@@ -7084,7 +7084,7 @@ pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map)
  *				\a tgts is nonempty; if specified, must be
  *				initialized to empty and freed by the caller)
  * \param[in]	src		source of the map update
- * \param[in]	skip_rf_check	skip the RF check
+ * \param[in]	flags		update flags
  */
 static int
 pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclude_rank,
@@ -7093,7 +7093,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 			     struct pool_target_addr_list *tgt_addrs, struct rsvc_hint *hint,
 			     bool *p_updated, uint32_t *map_version_p, uint32_t *tgt_map_ver,
 			     struct pool_target_addr_list *inval_tgt_addrs,
-			     enum map_update_source src, bool skip_rf_check)
+			     enum map_update_source src, uint32_t flags)
 {
 	struct rdb_tx		tx;
 	struct pool_map	       *map;
@@ -7176,7 +7176,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver, true);
+	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver, true,
+				     flags);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -7223,7 +7224,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * Do not change the pool map if the `pw_rf` is broken or is about to break,
 	 * unless the force option is given.
 	 */
-	if (!skip_rf_check && opc == MAP_EXCLUDE) {
+	if (!(flags & POOL_TGT_UPDATE_SKIP_RF_CHECK) && opc == MAP_EXCLUDE) {
 		int failed_cnt;
 
 		rc = pool_map_update_failed_cnt(map);
@@ -7411,7 +7412,7 @@ pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, NULL, 0, NULL, tgts, tgt_addrs,
 					  hint, p_updated, map_version_p, tgt_map_ver,
-					  inval_tgt_addrs, MUS_DMG, true);
+					  inval_tgt_addrs, MUS_DMG, 0);
 
 	pool_svc_put_leader(svc);
 	return rc;
@@ -7445,6 +7446,117 @@ ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
 					NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
+struct safe_reint_ult_arg {
+	struct ds_pool *pool;
+	ABT_eventual    eventual;
+};
+
+static void
+ds_rebuild_abort_ult(void *arg)
+{
+	struct safe_reint_ult_arg *ult_arg = arg;
+	int                        rc      = 0;
+	uint32_t                   version = 0;
+
+	ds_rebuild_running_query(ult_arg->pool->sp_uuid, RB_OP_REBUILD, &version, NULL, NULL);
+	if (version == 0) {
+		D_ERROR(DF_UUID
+			": No rebuild process is running, --no-migration option is not permitted",
+			DP_UUID(ult_arg->pool->sp_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
+
+	ds_rebuild_abort(ult_arg->pool->sp_uuid, -1, -1, -1);
+
+out:
+	ABT_eventual_set(ult_arg->eventual, (void *)&rc, sizeof(rc));
+}
+
+static int
+ds_pool_tgt_safe_reint(struct pool_svc *svc, struct pool_target_addr_list *list,
+		       struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
+		       struct rsvc_hint *hint, enum map_update_source src, uint32_t flags)
+{
+	int                        rc;
+	struct safe_reint_ult_arg  arg;
+	ABT_eventual               eventual;
+	int                       *status;
+	bool                       updated;
+	struct pool_target_id_list target_list = {0};
+	uint32_t                   tgt_map_ver = 0;
+	daos_epoch_t               rebuild_eph = d_hlc_get();
+	bool no_data_sync = (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC);
+
+	if (!no_data_sync) {
+		d_rank_list_t *dead_rank_list = NULL;
+		/*
+		 * Safe reintegration mode is only allowed when:
+		 * 1. Pool rebuild is in progress
+		 * 2. The pool has some dead ranks
+		 *
+		 * The process involves:
+		 * 1. Aborting the existing rebuild
+		 * 2. Bringing ranks directly from DOWN to UPIN state
+		 * 3. Trigger reclaim operation to recover space from previously unfinished rebuilds
+		 */
+		rc = ds_pool_get_dead_ranks(svc->ps_pool->sp_map, &dead_rank_list);
+		if (rc)
+			return rc;
+		if (dead_rank_list == NULL) {
+			D_ERROR(DF_UUID
+				": No dead ranks found, --no-migration option is not permitted",
+				DP_UUID(svc->ps_uuid));
+			return -DER_NO_PERM;
+		}
+		d_rank_list_free(dead_rank_list);
+
+		rc = ABT_eventual_create(sizeof(*status), &eventual);
+		if (rc != ABT_SUCCESS)
+			return dss_abterr2der(rc);
+
+		arg.pool     = svc->ps_pool;
+		arg.eventual = eventual;
+		rc           = dss_ult_create(ds_rebuild_abort_ult, &arg, DSS_XS_SYS, 0, 0, NULL);
+		if (rc)
+			D_GOTO(out_eventual, rc);
+
+		rc = ABT_eventual_wait(eventual, (void **)&status);
+		if (rc != ABT_SUCCESS)
+			D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+		if (*status != 0)
+			D_GOTO(out_eventual, rc = *status);
+	}
+	rc = pool_svc_update_map_internal(svc, MAP_REINT, false, NULL, 0, NULL, &target_list, list,
+					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
+					  src, flags);
+	if (rc)
+		D_GOTO(out_eventual, rc);
+
+	if (!updated)
+		D_GOTO(out_eventual, rc);
+
+	if (tgt_map_ver == 0 || no_data_sync)
+		D_GOTO(out_eventual, rc = 0);
+
+	/*
+	 * Special handling for safe_reint mode only:
+	 * If we have valid target map version (tgt_map_ver != 0),
+	 * trigger reclaim operation to recover space from  previously unfinished rebuilds
+	 */
+	rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
+				 RB_OP_FAIL_RECLAIM, 2);
+	if (rc != 0)
+		D_ERROR("rebuild fails rc: " DF_RC "\n", DP_RC(rc));
+
+	return rc;
+
+out_eventual:
+	if (!no_data_sync)
+		ABT_eventual_free(&eventual);
+	return rc;
+}
+
 /*
  * Perform a pool map update indicated by opc. If successful, the new pool map
  * version is reported via map_version. Upon -DER_NOTLEADER, a pool service
@@ -7455,7 +7567,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		    d_rank_list_t *extend_rank_list, uint32_t *extend_domains,
 		    uint32_t extend_domains_nr, struct pool_target_addr_list *list,
 		    struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
-		    struct rsvc_hint *hint, enum map_update_source src, bool skip_rf_check)
+		    struct rsvc_hint *hint, enum map_update_source src, uint32_t flags)
 {
 	struct pool_target_id_list	target_list = { 0 };
 	daos_prop_t			prop = { 0 };
@@ -7466,26 +7578,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	char				*env;
 	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
-
-	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
-					  extend_domains_nr, extend_domains, &target_list, list,
-					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
-					  src, skip_rf_check);
-	if (rc)
-		D_GOTO(out, rc);
-
-	if (!updated)
-		D_GOTO(out, rc);
-
-	d_agetenv_str(&env, REBUILD_ENV);
-	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
-	     daos_fail_check(DAOS_REBUILD_DISABLE)) {
-		D_DEBUG(DB_REBUILD, DF_UUID ": Rebuild is disabled for all pools\n",
-			DP_UUID(svc->ps_pool->sp_uuid));
-		d_freeenv_str(&env);
-		D_GOTO(out, rc = 0);
-	}
-	d_freeenv_str(&env);
+	bool                             safe_reint   = false;
+	bool                             no_data_sync = false;
 
 	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
 	if (rc)
@@ -7498,25 +7592,52 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
-		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
-		if (opc == MAP_EXCLUDE || opc == MAP_DRAIN) {
-			rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
-			if (rc)
-				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
-					target_list.pti_ids[0].pti_id,
-					DP_UUID(svc->ps_pool->sp_uuid), DP_RC(rc));
-		}
+	/*
+	 * Check if we're in safe reintegration mode (no migration needed)
+	 * or no-data-sync mode for MAP_REINT operation
+	 */
+	safe_reint   = (flags & POOL_TGT_UPDATE_NO_MIGRATION) && opc == MAP_REINT;
+	no_data_sync = (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC);
+	if (safe_reint || (no_data_sync && opc == MAP_REINT)) {
+		D_ASSERT(exclude_rank == false);
+		D_ASSERT(extend_rank_list == NULL);
+		D_ASSERT(extend_domains == NULL);
+		rc = ds_pool_tgt_safe_reint(svc, list, inval_list_out, map_version, hint, src,
+					    flags | POOL_TGT_UPDATE_NO_MIGRATION);
 		D_GOTO(out, rc);
 	}
+
+	if (no_data_sync) {
+		D_DEBUG(DB_MD, "Data migration is skipped.\n");
+		D_GOTO(out, rc);
+	}
+
+	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
+					  extend_domains_nr, extend_domains, &target_list, list,
+					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
+					  src, flags);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (!updated)
+		D_GOTO(out, rc);
+
+	d_agetenv_str(&env, REBUILD_ENV);
+	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
+	    daos_fail_check(DAOS_REBUILD_DISABLE)) {
+		D_DEBUG(DB_REBUILD, DF_UUID ": Rebuild is disabled for all pools\n",
+			DP_UUID(svc->ps_pool->sp_uuid));
+		d_freeenv_str(&env);
+		D_GOTO(out, rc = 0);
+	}
+	d_freeenv_str(&env);
 
 	if ((entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD) && (opc == MAP_EXCLUDE))
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
 
-	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
-		tgt_map_ver);
+	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1, tgt_map_ver);
 
 	if (tgt_map_ver != 0) {
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph,
@@ -7637,10 +7758,10 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 		goto failed;
 	}
 
-	rc =
-	    pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
-				false /* exclude_rank */, &rank_list, domains, ndomains, NULL, NULL,
-				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, true);
+	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
+				 false /* exclude_rank */, &rank_list, domains, ndomains, NULL,
+				 NULL, &out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG,
+				 POOL_TGT_UPDATE_SKIP_RF_CHECK);
 
 failed:
 	pool_svc_put_leader(svc);
@@ -7678,7 +7799,8 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 		goto out;
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT &&
-	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
+	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
+	    !(flags & POOL_TGT_UPDATE_NO_MIGRATION)) {
 		rc = pool_discard(rpc->cr_ctx, svc, &list, true);
 		if (rc)
 			goto out_svc;
@@ -7686,8 +7808,7 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */, NULL, NULL, 0, &list, &inval_list_out,
-				 &out->pto_op.po_map_version, &out->pto_op.po_hint, MUS_DMG,
-				 flags & POOL_TGT_UPDATE_SKIP_RF_CHECK);
+				 &out->pto_op.po_map_version, &out->pto_op.po_hint, MUS_DMG, flags);
 	if (rc != 0)
 		goto out_svc;
 
@@ -7748,7 +7869,7 @@ pool_svc_exclude_ranks(struct pool_svc *svc, struct pool_svc_event_set *event_se
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(POOL_EXCLUDE), true /* exclude_rank */,
 				 NULL, NULL, 0, &list, &inval_list_out, &map_version,
-				 NULL /* hint */, MUS_SWIM, false);
+				 NULL /* hint */, MUS_SWIM, 0);
 
 	D_DEBUG(DB_MD, DF_UUID ": exclude %u ranks: map_version=%u: " DF_RC "\n",
 		DP_UUID(svc->ps_uuid), n, rc == 0 ? map_version : 0, DP_RC(rc));
@@ -9082,5 +9203,53 @@ ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool)
 			 DP_UUID(pool->sp_uuid), pool->sp_global_version);
 
 	ds_rsvc_put(rsvc);
+	return rc;
+}
+
+int
+ds_pool_get_dead_ranks(struct pool_map *map, d_rank_list_t **ranks)
+{
+	crt_group_t        *primary_grp;
+	struct pool_domain *doms;
+	int                 doms_cnt;
+	int                 i;
+	int                 rc        = 0;
+	d_rank_list_t      *rank_list = NULL;
+
+	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
+	D_ASSERT(doms_cnt >= 0);
+	primary_grp = crt_group_lookup(NULL);
+	D_ASSERT(primary_grp != NULL);
+
+	rank_list = d_rank_list_alloc(0);
+	if (!rank_list)
+		return -DER_NOMEM;
+
+	for (i = 0; i < doms_cnt; i++) {
+		struct swim_member_state state;
+
+		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
+			continue;
+
+		rc = crt_rank_state_get(primary_grp, doms[i].do_comp.co_rank, &state);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			D_ERROR("failed to get status of rank %u: %d\n", doms[i].do_comp.co_rank,
+				rc);
+			break;
+		}
+
+		D_DEBUG(DB_MD, "rank/state %d/%d\n", doms[i].do_comp.co_rank,
+			rc == -DER_NONEXIST ? -1 : state.sms_status);
+		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD) {
+			rc = d_rank_list_append(rank_list, doms[i].do_comp.co_rank);
+			if (rc)
+				D_GOTO(err, rc);
+		}
+	}
+err:
+	if (rc == 0 && rank_list->rl_nr != 0)
+		*ranks = rank_list;
+	else
+		d_rank_list_free(rank_list);
 	return rc;
 }

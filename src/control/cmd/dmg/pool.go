@@ -646,7 +646,8 @@ func (cmd *poolExtendCmd) Execute(args []string) error {
 // poolReintegrateCmd is the struct representing the command to Add a DAOS target.
 type poolReintegrateCmd struct {
 	poolRanksCmd
-	TargetIdx string `long:"target-idx" description:"Comma-separated list of target index(es) to be reintegrated into each rank"`
+	TargetIdx   string `long:"target-idx" description:"Comma-separated list of target index(es) to be reintegrated into each rank"`
+	NoMigration bool   `short:"n" long:"no-migration" description:"Skips data migration during rank reintegration (safe only with zero inflight I/O). Reclaim still executes."`
 }
 
 // Execute is run when poolReintegrateCmd subcommand is activated
@@ -657,9 +658,10 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolRanksReq{
-		ID:        cmd.PoolID().String(),
-		Ranks:     cmd.RankList.Ranks(),
-		TargetIdx: idxList,
+		ID:          cmd.PoolID().String(),
+		Ranks:       cmd.RankList.Ranks(),
+		TargetIdx:   idxList,
+		NoMigration: cmd.NoMigration,
 	}
 
 	resp, err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)

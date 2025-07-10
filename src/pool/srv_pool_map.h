@@ -10,6 +10,6 @@
 #define DAOS_SRV_POOL_MAP_H
 int
 ds_pool_map_tgts_update(uuid_t pool_uuid, struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc, bool evict_rank, uint32_t *tgt_map_ver,
-			bool print_changes);
+			int opc, bool evict_rank, uint32_t *tgt_map_ver, bool print_changes,
+			unsigned int flags);
 #endif /* DAOS_SRV_POOL_MAP_H */

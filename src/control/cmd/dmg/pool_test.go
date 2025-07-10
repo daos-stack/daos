@@ -726,9 +726,10 @@ func TestPoolCommands(t *testing.T) {
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1",
 			strings.Join([]string{
 				printRequest(t, &control.PoolRanksReq{
-					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks:     []ranklist.Rank{0},
-					TargetIdx: []uint32{1},
+					ID:          "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:       []ranklist.Rank{0},
+					TargetIdx:   []uint32{1},
+					NoMigration: false,
 				}),
 			}, " "),
 			nil,
@@ -738,9 +739,10 @@ func TestPoolCommands(t *testing.T) {
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1,2,3",
 			strings.Join([]string{
 				printRequest(t, &control.PoolRanksReq{
-					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks:     []ranklist.Rank{0},
-					TargetIdx: []uint32{1, 2, 3},
+					ID:          "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:       []ranklist.Rank{0},
+					TargetIdx:   []uint32{1, 2, 3},
+					NoMigration: false,
 				}),
 			}, " "),
 			nil,
@@ -750,9 +752,23 @@ func TestPoolCommands(t *testing.T) {
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0",
 			strings.Join([]string{
 				printRequest(t, &control.PoolRanksReq{
-					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks:     []ranklist.Rank{0},
-					TargetIdx: []uint32{},
+					ID:          "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:       []ranklist.Rank{0},
+					TargetIdx:   []uint32{},
+					NoMigration: false,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate a target without data migration",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --no-migration",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:          "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:       []ranklist.Rank{0},
+					TargetIdx:   []uint32{},
+					NoMigration: true,
 				}),
 			}, " "),
 			nil,
