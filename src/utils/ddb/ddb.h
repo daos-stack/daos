@@ -121,6 +121,7 @@ enum ddb_cmd {
 	DDB_CMD_DTX_ACT_DISCARD_INVALID = 23,
 	DDB_CMD_DEV_LIST                = 24,
 	DDB_CMD_DEV_REPLACE             = 25,
+	DDB_CMD_PROV_MEM                = 26,
 };
 
 /* option and argument structures for commands that need them */
@@ -209,6 +210,12 @@ struct dev_replace_options {
 	char *new_devid;
 };
 
+struct prov_mem_options {
+	char        *db_path;
+	char        *scm_mount;
+	unsigned int scm_mount_size;
+};
+
 struct ddb_cmd_info {
 	enum ddb_cmd dci_cmd;
 	union {
@@ -229,6 +236,7 @@ struct ddb_cmd_info {
 		struct dtx_act_options        dci_dtx_act;
 		struct dev_list_options       dci_dev_list;
 		struct dev_replace_options    dci_dev_replace;
+		struct prov_mem_options       dci_prov_mem;
 	} dci_cmd_option;
 };
 
@@ -274,6 +282,8 @@ int
 ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt);
 int
      ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt);
+int
+     ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt);
 
 void ddb_program_help(struct ddb_ctx *ctx);
 void ddb_commands_help(struct ddb_ctx *ctx);

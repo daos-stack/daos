@@ -381,4 +381,23 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Completer: nil,
 	})
+	// Command prov_mem
+	app.AddCommand(&grumble.Command{
+		Name:      "prov_mem",
+		Aliases:   nil,
+		Help:      "Prepare the memory environment for Metadata On SSD mode",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.Uint("s", "scm_mount_size", 0, "Specify tmpfs size(GiB) for scm_mount. Default automatically calculated.")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the vos db.")
+			a.String("scm_mount", "Path to the scm mountpoint.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbProvMem(ctx, c.Args.String("db_path"), c.Args.String("scm_mount"), c.Flags.Uint("scm_mount_size"))
+		},
+		Completer: nil,
+	})
 }

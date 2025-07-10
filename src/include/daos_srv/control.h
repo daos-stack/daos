@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,6 +43,12 @@ dpdk_cli_override_opts;
 /** Default size of a metadata pmem pool/file (1024 MiB) */
 #define DEFAULT_DAOS_MD_CAP_SIZE        (1ul << 30)
 #define MINIMUM_DAOS_MD_CAP_SIZE        (1ul << 27)
+
+/** Memory reservation constant defaults to be used when calculating RAM-disk size for DAOS I/O
+ * engine. */
+#define DEFAULT_DAOS_SYS_MEM_RSVD       ((1ul << 30) * 26)  /* 26GiB */
+#define DEFAULT_DAOS_TGT_MEM_RSVD       ((1ul << 20) * 128) /* 128MiB */
+#define DEFAULT_DAOS_ENGINE_MEM_RSVD    (1ul << 20)         /* 1GiB */
 
 /** Utility macros */
 #define CHK_FLAG(x, m) ((x & m) == m)

@@ -21,6 +21,12 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
+/*
+#include "stdlib.h"
+#include <daos_srv/control.h>
+*/
+import "C"
+
 // ScmState represents the probed state of PMem modules on the system.
 //
 //go:generate stringer -type=ScmState
@@ -52,9 +58,9 @@ const (
 
 // Memory reservation constant defaults to be used when calculating RAM-disk size for DAOS I/O engine.
 const (
-	DefaultSysMemRsvd    = humanize.GiByte * 26  // per-system
-	DefaultTgtMemRsvd    = humanize.MiByte * 128 // per-engine-target
-	DefaultEngineMemRsvd = humanize.GiByte * 1   // per-engine
+	DefaultSysMemRsvd    = C.DEFAULT_DAOS_SYS_MEM_RSVD    // per-system
+	DefaultTgtMemRsvd    = C.DEFAULT_DAOS_TGT_MEM_RSVD    // per-engine-target
+	DefaultEngineMemRsvd = C.DEFAULT_DAOS_ENGINE_MEM_RSVD // per-engine
 )
 
 func (ss ScmState) String() string {

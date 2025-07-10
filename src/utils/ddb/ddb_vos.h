@@ -215,5 +215,7 @@ int
 dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt);
 int
 dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid);
+int
+dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mount_size);
 
 #endif /* DAOS_DDB_VOS_H */

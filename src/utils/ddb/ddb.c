@@ -41,6 +41,7 @@
 #define COMMAND_NAME_DTX_ACT_DISCARD_INVALID "dtx_act_discard_invalid"
 #define COMMAND_NAME_DEV_LIST                "dev_list"
 #define COMMAND_NAME_DEV_REPLACE             "dev_replace"
+#define COMMAND_NAME_PROV_MEM                "prov_mem"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -814,6 +815,57 @@ dev_replace_option_parse(struct ddb_ctx *ctx, struct dev_replace_options *cmd_ar
 	return 0;
 }
 
+/* Parse command line options for the 'prov_mem' command */
+static int
+prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, uint32_t argc,
+		      char **argv)
+{
+	char         *options_short  = "s";
+	int           index          = 0, opt;
+	struct option options_long[] = {{"scm_mount_size", required_argument, NULL, 's'}, {NULL}};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+		switch (opt) {
+		case 's':
+			cmd_args->scm_mount_size = (unsigned int)strtoul(optarg, NULL, 10);
+			break;
+		case '?':
+			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+			break;
+		default:
+			return -DER_INVAL;
+		}
+	}
+
+	index = optind;
+	if (argc - index > 0) {
+		cmd_args->db_path = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'db_path'\n");
+		return -DER_INVAL;
+	}
+	if (argc - index > 0) {
+		cmd_args->scm_mount = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'scm_mount'\n");
+		return -DER_INVAL;
+	}
+
+	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 int
 ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info)
 {
@@ -935,6 +987,11 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 						argv);
 	}
 
+	if (same(cmd, COMMAND_NAME_PROV_MEM)) {
+		info->dci_cmd = DDB_CMD_PROV_MEM;
+		return prov_mem_option_parse(ctx, &info->dci_cmd_option.dci_prov_mem, argc, argv);
+	}
+
 	ddb_errorf(ctx,
 		   "'%s' is not a valid command. Available commands are:"
 		   "'help', "
@@ -960,7 +1017,9 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		   "'feature', "
 		   "'rm_pool', "
 		   "'dev_list', "
-		   "'dev_replace'\n",
+		   "'dev_replace', "
+		   "'prov_mem', "
+		   "\n",
 		   cmd);
 
 	return -DER_INVAL;
@@ -1134,6 +1193,10 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str)
 
 	case DDB_CMD_DEV_REPLACE:
 		rc = ddb_run_dev_replace(ctx, &info.dci_cmd_option.dci_dev_replace);
+		break;
+
+	case DDB_CMD_PROV_MEM:
+		rc = ddb_run_prov_mem(ctx, &info.dci_cmd_option.dci_prov_mem);
 		break;
 
 	case DDB_CMD_UNKNOWN:
@@ -1340,6 +1403,19 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tSpecify the old device UUID\n");
 	ddb_print(ctx, "    -n, --new_dev\n");
 	ddb_print(ctx, "\tSpecify the new device UUID\n");
+	ddb_print(ctx, "\n");
+
+	/* Command: prov_mem */
+	ddb_print(ctx, "prov_mem [Options] <db_path> <scm_mount>\n");
+	ddb_print(ctx, "\tPrepare the memory environment for md-on-ssd mode.\n");
+	ddb_print(ctx, "Options:\n");
+	ddb_print(ctx, "    -s, --scm_mount_size\n");
+	ddb_print(ctx,
+		  "\tSpecify tmpfs size(GiB) for scm_mount. Default automatically calculated.\n");
+	ddb_print(ctx, "    <db_path>\n");
+	ddb_print(ctx, "\tPath to the vos db. (default /mnt/daos)\n");
+	ddb_print(ctx, "    <scm_mount>\n");
+	ddb_print(ctx, "\tSpecify the path to the mount the tmpfs.\n");
 	ddb_print(ctx, "\n");
 }
 

@@ -290,3 +290,16 @@ func ddbDevReplace(ctx *DdbContext, db_path string, old_devid string, new_devid 
 	/* Run the c code command */
 	return daosError(C.ddb_run_dev_replace(&ctx.ctx, &options))
 }
+
+func ddbProvMem(ctx *DdbContext, db_path string, scm_mount string, size uint) error {
+	/* Set up the options */
+	options := C.struct_prov_mem_options{}
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
+	options.scm_mount = C.CString(scm_mount)
+	defer freeString(options.scm_mount)
+
+	options.scm_mount_size = C.uint(size)
+	/* Run the c code command */
+	return daosError(C.ddb_run_prov_mem(&ctx.ctx, &options))
+}
