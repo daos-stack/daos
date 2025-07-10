@@ -716,6 +716,27 @@ obj_iod_idx_parity2vos(uint32_t iod_nr, daos_iod_t *iods)
 	}
 }
 
+static inline int 
+obj_ec_tgt_del_err(uint32_t *err_list, uint32_t *nerrs, uint16_t tgt_id)
+{
+	uint32_t i;
+
+	for (i = 0; i < *nerrs; i++) {
+		if (err_list[i] == tgt_id)
+			break;
+	}
+
+	if (i == *nerrs)
+		return 0;
+
+	for (; i < *nerrs - 1; i++)
+		err_list[i] = err_list[i + 1];
+
+	*nerrs = *nerrs - 1;
+
+	return 1;
+}
+
 static inline bool
 obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 {

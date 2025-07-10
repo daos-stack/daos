@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -744,6 +744,49 @@ degrade_ec_agg_punch_fail_data(void **state)
 	degrade_ec_agg_punch(state, 1);
 }
 
+static void
+degrade_ec_fetch_timeout(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	daos_recx_t	recx;
+	char		*data;
+	int		data_size = EC_CELL_SIZE * 4;
+	char		*verify_data;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	data = (char *)malloc(data_size);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(data_size);
+	assert_true(verify_data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = data_size;
+	recx.rx_idx = 0;
+	memset(data, 'a', data_size);
+	memset(verify_data, 'a', data_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, data_size, &req);
+
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = data_size;
+	recx.rx_idx = 0;
+	daos_fail_loc_set(DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_ONCE);
+
+	memset(data, 0, data_size);
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, data_size, &req);
+	assert_memory_equal(data, verify_data, data_size);
+
+	ioreq_fini(&req);
+	free(data);
+	free(verify_data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest degrade_tests[] = {
 	{"DEGRADE0: degrade partial update with data tgt fail",
@@ -823,6 +866,8 @@ static const struct CMUnitTest degrade_tests[] = {
 	 degrade_ec_agg_punch_fail_parity, degrade_sub_setup, test_teardown},
 	{"DEGRADE28: degrade ec update punch aggregation data fail",
 	 degrade_ec_agg_punch_fail_data, degrade_sub_setup, test_teardown},
+	{"DEGRADE29: degrade ec update punch aggregation data fail",
+	 degrade_ec_fetch_timeout, degrade_sub_setup, test_teardown},
 };
 
 int
