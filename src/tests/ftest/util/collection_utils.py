@@ -168,38 +168,49 @@ def check_server_storage(logger, test, stage):
         bool: True if all expected devices found on all server hosts; False otherwise
     """
     status = True
-    logger.debug("-" * 80)
-    logger.debug(f"Verifying server storage during {stage} for \'{test}\'")
-    results = {}
     commands = {
         "scm_list":
             r"ndctl list -c -v | grep pmem | sed -e 's/.*:\"\(.*\)\"/\/dev\/\1/' | grep '{}'",
         "bdev_list":
             r"lspci -D | grep -E '{}'"
     }
+    detected = []
     for key, command in commands.items():
-        if key not in test.yaml_info or "daos" in test.yaml_info[key]:
-            # No need to check ram class storage (using /mnt/daos* scm) or storage w/o the scm/bdev
+        logger.debug("-" * 80)
+        logger.debug(f"Verifying server storage during {stage} for \'{test}\'")
+        if key not in test.yaml_info:
+            # No need to check storage w/o a scm/bdev entry
+            logger.debug(f" - No {key} storage defined for this test")
+            continue
+        if "daos" in test.yaml_info[key]:
+            # No need to check ram class storage (using /mnt/daos* scm)
+            logger.debug(f" - {key} storage using ram class")
             continue
         result = run_remote(
             logger, test.host_info.servers.hosts, command.format('|'.join(test.yaml_info[key])))
         if not result.passed:
-            message = f"Failure detected verifying {key} storage during for \'{test}\'"
-            logger.debug(f"{message}")
-            result.warn_test(logger, stage, message)
+            logger.error(f" - Failure detected verifying {key} storage during for \'{test}\'")
             status = False
-        else:
-            results[key] = result
-
-    for key, result in results.items():
+            continue
         item_set = set(test.yaml_info[key])
+        logger.debug(f" - Expecting the following {key} storage: {item_set}")
         for data in result.output:
-            result_set = set(find_pci_address("\n".join(data.stdout)))
+            if key == "bdev":
+                result_set = set(find_pci_address("\n".join(data.stdout)))
+            else:
+                result_set = set(data.stdout)
             match = bool(item_set & result_set == item_set)
-            logger.debug(
-                f"  - Detected {str(result_set)} on {str(data.hosts)} - match = {str(match)}")
             if not match:
                 status = False
+            detected.append([str(match), key, str(data.hosts), str(result_set)])
+
+        msg_format = "%-5s  %-3s  %-20s  %s"
+        logger.debug("-" * 80)
+        logger.debug(f"Detected server storage for \'{test}\':")
+        logger.debug(msg_format, "Match", "Type", "Servers", "Storage")
+        logger.debug(msg_format, "-" * 5, "-" * 3, "-" * 20, "-" * 60)
+        for entry in detected:
+            logger.debug(msg_format, *entry)
     return status
 
 
