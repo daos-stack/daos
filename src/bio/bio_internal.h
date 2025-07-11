@@ -36,6 +36,7 @@ struct bio_bulk_args {
 	void		*ba_bulk_ctxt;
 	unsigned int	 ba_bulk_perm;
 	unsigned int	 ba_sgl_idx;
+	unsigned int     ba_merged_len;
 };
 
 /* Cached bulk handle for avoiding expensive MR */
@@ -55,7 +56,7 @@ struct bio_bulk_hdl {
 	/* Reference count */
 	unsigned int		 bbh_inuse;
 	/* Flags */
-	unsigned int		 bbh_shareable:1;
+	unsigned int             bbh_shareable : 1, bbh_is_scm : 1;
 };
 
 /* Bulk handle group, categorized by bulk size */
@@ -618,6 +619,24 @@ ioc2d_bdev(struct bio_io_context *ioc)
 
 	D_ASSERT(d_bdev != NULL);
 	return d_bdev;
+}
+
+static inline bool
+is_exclusive_biov(struct bio_iov *biov)
+{
+	uint64_t mask = BIO_DMA_PAGE_SZ - 1;
+
+	/* IOV has extra data for csum, not shareable */
+	if (bio_iov2raw_len(biov) != bio_iov2req_len(biov))
+		return true;
+
+	/* IOV on SCM, shareable */
+	if (bio_iov2media(biov) == DAOS_MEDIA_SCM)
+		return false;
+
+	/* IOV on NVMe, only shareable when IOV is page size aligned */
+	D_ASSERT(bio_iov2media(biov) == DAOS_MEDIA_NVME);
+	return (bio_iov2raw_off(biov) & mask) || (bio_iov2raw_len(biov) & mask);
 }
 
 /* bio_bulk.c */
