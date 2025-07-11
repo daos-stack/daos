@@ -1,0 +1,89 @@
+/**
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+
+#define D_LOGFAC DD_FAC(dlck)
+
+#include <daos_errno.h>
+#include <daos/debug.h>
+#include <daos_version.h>
+#include <argp.h>
+
+#include "dlck_args.h"
+
+static struct argp_option common_options[] = {
+    OPT_HEADER("Options:", GROUP_OPTIONS),
+    {"write_mode", KEY_COMMON_WRITE_MODE, 0, 0, "Make changes persistent."},
+    {"cmd", KEY_COMMON_CMD, "CMD", 0, "Command (Required). Please see available commands below."},
+    OPT_HEADER("Available commands:", GROUP_AVAILABLE_CMDS),
+    /** entries below inherits the group number of the header entry */
+    LIST_ENTRY(DLCK_CMD_DTX_ACT_RECOVER_STR, "Active DTX entries' records recovery."),
+    {0}};
+
+static void
+args_init(struct dlck_args_common *args)
+{
+	memset(args, 0, sizeof(struct dlck_args));
+	/** set defaults */
+	args->write_mode = false; /** dry run */
+	args->cmd        = DLCK_CMD_NOT_SET;
+}
+
+static int
+args_check(struct argp_state *state, struct dlck_args_common *args)
+{
+	if (args->cmd == DLCK_CMD_NOT_SET) {
+		RETURN_FAIL(state, EINVAL, "Command not set");
+	}
+	return 0;
+}
+
+static enum dlck_cmd
+parse_command(const char *arg)
+{
+	if (strcmp(arg, DLCK_CMD_DTX_ACT_RECOVER_STR) == 0) {
+		return DLCK_CMD_DTX_ACT_RECOVER;
+	}
+
+	return DLCK_CMD_UNKNOWN;
+}
+
+error_t
+parser_common(int key, char *arg, struct argp_state *state)
+{
+	struct dlck_args_common *args = state->input;
+	int                      rc   = 0;
+
+	/** state changes */
+	switch (key) {
+	case ARGP_KEY_INIT:
+		args_init(args);
+		return 0;
+	case ARGP_KEY_END:
+		return args_check(state, args);
+	case ARGP_KEY_SUCCESS:
+	case ARGP_KEY_FINI:
+		return 0;
+	}
+
+	/** options */
+	switch (key) {
+	case KEY_COMMON_WRITE_MODE:
+		args->write_mode = true;
+		break;
+	case KEY_COMMON_CMD:
+		args->cmd = parse_command(arg);
+		if (args->cmd == DLCK_CMD_UNKNOWN) {
+			RETURN_FAIL(state, EINVAL, "Unknown command: %s", arg);
+		}
+		break;
+	default:
+		return ARGP_ERR_UNKNOWN;
+	}
+
+	return rc;
+}
+
+struct argp argp_common = {common_options, parser_common, NULL, NULL, NULL};
