@@ -18,6 +18,10 @@ on:
       - requirements-utest.txt
       - utils/build.config
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -62,6 +66,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          submodules: 'recursive'
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
@@ -109,7 +114,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
@@ -139,7 +144,7 @@ jobs:
       - name: Publish NLT test results
         if: always()
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b  # v2.18.0
+        uses: EnricoMi/publish-unit-test-result-action@3a74b2957438d0b6e2e61d67b05318aa25c9e6c6  # v2.20.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
@@ -178,7 +183,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
@@ -252,7 +257,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
+          fetch-depth: 500
       - name: Build dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -340,7 +346,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'recursive'
+          fetch-depth: 500
       - name: Build dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS

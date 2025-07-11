@@ -237,6 +237,17 @@ void sched_req_sleep(struct sched_request *req, uint32_t msec);
  */
 void sched_req_wakeup(struct sched_request *req);
 
+/* clang-format off */
+/**
+ * Abort a sched request attached ULT (without waiting).
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		N/A
+ */
+void sched_req_abort(struct sched_request *req);
+/* clang-format on */
+
 /**
  * Wakeup a sched request attached ULT terminated. The associated ULT of \a req
  * must not an unnamed ULT.
@@ -408,7 +419,18 @@ struct dss_module {
 /**
  * Stack size used for ULTs with deep stack
  */
-#define DSS_DEEP_STACK_SZ	65536
+#if defined(__clang__)
+#if defined(__has_feature) && __has_feature(address_sanitizer)
+#define DSS_DEEP_STACK_SZ 98304
+#endif
+#elif defined(__GNUC__)
+#ifdef __SANITIZE_ADDRESS__
+#define DSS_DEEP_STACK_SZ 98304
+#endif
+#endif
+#ifndef DSS_DEEP_STACK_SZ
+#define DSS_DEEP_STACK_SZ 65536
+#endif
 
 enum dss_xs_type {
 	/** current xstream */
