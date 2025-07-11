@@ -46,6 +46,10 @@ extern unsigned int	srv_io_mode;
 extern unsigned int	obj_coll_thd;
 extern btr_ops_t	dbtree_coll_ops;
 
+/** See comments in obj_sgls_dup(), tune iov merge conditions */
+extern unsigned int     iov_frag_count;
+extern unsigned int     iov_frag_size;
+
 /* Whether check redundancy group validation when DTX resync. */
 extern bool	tx_verify_rdg;
 
@@ -272,9 +276,16 @@ struct shard_auxi_args {
 	uint64_t		 enqueue_id;
 };
 
+struct sgl_merge_ctx {
+	d_sg_list_t *sgls_dup;
+	d_sg_list_t *sgls_orig;
+	uint64_t   **merged_bitmaps;
+	uint64_t   **alloc_bitmaps;
+};
+
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
-	d_sg_list_t		*sgls_dup;
+	struct sgl_merge_ctx    *merge_ctx;
 	struct dtx_id		 dti;
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
@@ -480,7 +491,8 @@ struct obj_auxi_args {
 					 reintegrating:1,
 					 tx_renew:1,
 					 rebuilding:1,
-					 for_migrate:1;
+					 for_migrate:1,
+					 req_dup_sgl:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 specified_shard;
 	uint32_t			 flags;
@@ -1072,6 +1084,28 @@ void obj_class_fini(void);
 
 #define OBJ_COLL_THD_MIN	COLL_DISP_WIDTH_DEF
 #define COLL_BTREE_ORDER	COLL_DISP_WIDTH_DEF
+
+#define IOV_FRAG_SIZE_DEF       4095
+#define IOV_FRAG_COUNT_DEF      128
+#define IOV_FRAG_COUNT_MIN      16
+
+static inline void
+obj_init_iov_fragment_params()
+{
+	d_getenv_uint("DAOS_IOV_FRAG_SIZE", &iov_frag_size);
+	d_getenv_uint("DAOS_IOV_FRAG_COUNT", &iov_frag_count);
+	if (iov_frag_count < IOV_FRAG_COUNT_MIN) {
+		D_WARN("Invalid IOV fragment count threshold: %u (minimum %u). Using default: %u\n",
+		       iov_frag_count, IOV_FRAG_COUNT_MIN, IOV_FRAG_COUNT_DEF);
+		iov_frag_count = IOV_FRAG_COUNT_DEF;
+	}
+	if (iov_frag_size == 0)
+		D_INFO("IOV fragment merging is disabled. Fragment count threshold: %u\n",
+		       iov_frag_count);
+	else
+		D_INFO("IOV fragment merging enabled (size threshold: %u, count threshold: %u)\n",
+		       iov_frag_size, iov_frag_count);
+}
 
 struct obj_query_merge_args {
 	struct daos_oclass_attr	*oqma_oca;
