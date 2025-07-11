@@ -16,13 +16,6 @@
 
 #include <uuid/uuid.h>
 
-/**
- * Common file names used by each layer to store persistent data
- */
-#define	VOS_FILE	"vos-" /* suffixed by thread id */
-#define	DSM_META_FILE	"meta"
-#define RDB_FILE	"rdb-"
-
 int
 ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
 		 char **fpath);

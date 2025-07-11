@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +17,7 @@
 #include <sys/stat.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/daos_mgmt_srv.h>
+#include <daos_srv/vos.h>
 #include <daos_srv/rdb.h>
 #include "srv_internal.h"
 #include "srv_layout.h"
