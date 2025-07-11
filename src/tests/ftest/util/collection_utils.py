@@ -167,22 +167,39 @@ def check_server_storage(logger, test, stage):
     Returns:
         bool: True if all expected devices found on all server hosts; False otherwise
     """
+    status = True
     logger.debug("-" * 80)
     logger.debug(f"Verifying server storage during {stage} for \'{test}\'")
-    command = f"lspci -D | grep -E \'{'|'.join(test.yaml_info['bdev_list'])}\'"
-    result = run_remote(logger, test.host_info.servers.hosts, command)
-    if not result.passed:
-        message = f"Failure detected verifying storage during {stage} for \'{test}\'"
-        result.warn_test(logger, stage, message)
-        return False
-    bdev_set = set(test.yaml_info["bdev_list"])
-    status = True
-    for data in result.output:
-        device_set = set(find_pci_address("\n".join(data.stdout)))
-        match = bool(bdev_set & device_set == bdev_set)
-        logger.debug(f"  - Detected {str(device_set)} on {str(data.hosts)} - match = {str(match)}")
-        if not match:
+    results = {}
+    commands = {
+        "scm_list":
+            r"ndctl list -c -v | grep pmem | sed -e 's/.*:\"\(.*\)\"/\/dev\/\1/' | grep '{}'",
+        "bdev_list":
+            r"lspci -D | grep -E '{}'"
+    }
+    for key, command in commands.items():
+        if key not in test.yaml_info or "daos" in test.yaml_info[key]:
+            # No need to check ram class storage (using /mnt/daos* scm) or storage w/o the scm/bdev
+            continue
+        result = run_remote(
+            logger, test.host_info.servers.hosts, command.format('|'.join(test.yaml_info[key])))
+        if not result.passed:
+            message = f"Failure detected verifying {key} storage during for \'{test}\'"
+            logger.debug(f"{message}")
+            result.warn_test(logger, stage, message)
             status = False
+        else:
+            results[key] = result
+
+    for key, result in results.items():
+        item_set = set(test.yaml_info[key])
+        for data in result.output:
+            result_set = set(find_pci_address("\n".join(data.stdout)))
+            match = bool(item_set & result_set == item_set)
+            logger.debug(
+                f"  - Detected {str(result_set)} on {str(data.hosts)} - match = {str(match)}")
+            if not match:
+                status = False
     return status
 
 
