@@ -348,13 +348,11 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	iommuEnabled, err := topology.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
-	if err != nil {
-		return err
-	}
+	iommuChecker := topology.DefaultIOMMUDetector(srv.log)
+	thpChecker := topology.DefaultTHPDetector(srv.log)
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
+	if err := prepBdevStorage(srv, iommuChecker, thpChecker); err != nil {
 		return err
 	}
 
