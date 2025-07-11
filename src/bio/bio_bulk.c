@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -419,9 +420,19 @@ bulk_hdl_unhold(struct bio_bulk_hdl *hdl)
 static inline bool
 is_exclusive_biov(struct bio_iov *biov)
 {
-	/* NVMe IOV or IOV with extra data for csum can't share bulk handle with others */
-	return (bio_iov2media(biov) != DAOS_MEDIA_SCM) ||
-		(bio_iov2raw_len(biov) != bio_iov2req_len(biov));
+	uint64_t mask = BIO_DMA_PAGE_SZ - 1;
+
+	/* IOV has extra data for csum, not shareable */
+	if (bio_iov2raw_len(biov) != bio_iov2req_len(biov))
+		return true;
+
+	/* IOV on SCM, shareable */
+	if (bio_iov2media(biov) == DAOS_MEDIA_SCM)
+		return false;
+
+	/* IOV on NVMe, only shareable when IOV is page size aligned */
+	D_ASSERT(bio_iov2media(biov) == DAOS_MEDIA_NVME);
+	return (bio_iov2raw_off(biov) & mask) || (bio_iov2raw_len(biov) & mask);
 }
 
 static void
