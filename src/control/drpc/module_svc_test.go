@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,7 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const defaultTestModID ModuleID = ModuleMgmt
+const defaultTestModID int32 = 1
 
 func TestNewModuleService(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -57,7 +58,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	expectedIDs := []ModuleID{-1, 7, 255, defaultTestModID}
+	expectedIDs := []int32{-1, 7, 255, defaultTestModID}
 	testMods := make([]*mockModule, 0, len(expectedIDs))
 
 	for _, id := range expectedIDs {
@@ -85,7 +86,7 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	testMod := newTestModule(ModuleMgmt)
+	testMod := newTestModule(defaultTestModID)
 	dupMod := newTestModule(testMod.IDValue)
 
 	service.RegisterModule(testMod)
@@ -149,6 +150,13 @@ func getResponse(sequence int64, status Status, body []byte) *Response {
 func TestService_ProcessMessage(t *testing.T) {
 	const testSequenceNum int64 = 13
 
+	testMethod := func(module, method int32) Method {
+		return &mockMethod{
+			id:     method,
+			module: module,
+		}
+	}
+
 	for name, tc := range map[string]struct {
 		callBytes      []byte
 		handleCallErr  error
@@ -160,24 +168,23 @@ func TestService_ProcessMessage(t *testing.T) {
 			expectedResp: getResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil),
 		},
 		"module doesn't exist": {
-			callBytes:    getCallBytes(t, testSequenceNum, 256, MethodPoolCreate),
+			callBytes:    getCallBytes(t, testSequenceNum, 256, testMethod(256, 1)),
 			expectedResp: getResponse(testSequenceNum, Status_UNKNOWN_MODULE, nil),
 		},
 		"HandleCall fails with regular error": {
-			callBytes: getCallBytes(t, testSequenceNum, int32(defaultTestModID),
-				MethodPoolCreate),
+			callBytes:     getCallBytes(t, testSequenceNum, int32(defaultTestModID), testMethod(int32(defaultTestModID), 1)),
 			handleCallErr: errors.New("HandleCall error"),
 			expectedResp:  getResponse(testSequenceNum, Status_FAILURE, nil),
 		},
 		"HandleCall fails with drpc.Failure": {
 			callBytes: getCallBytes(t, testSequenceNum, int32(defaultTestModID),
-				MethodPoolCreate),
+				testMethod(int32(defaultTestModID), 1)),
 			handleCallErr: NewFailure(Status_FAILED_UNMARSHAL_PAYLOAD),
 			expectedResp:  getResponse(testSequenceNum, Status_FAILED_UNMARSHAL_PAYLOAD, nil),
 		},
 		"HandleCall succeeds": {
 			callBytes: getCallBytes(t, testSequenceNum, int32(defaultTestModID),
-				MethodPoolCreate),
+				testMethod(int32(defaultTestModID), 1)),
 			handleCallResp: []byte("succeeded"),
 			expectedResp:   getResponse(testSequenceNum, Status_SUCCESS, []byte("succeeded")),
 		},
@@ -210,5 +217,24 @@ func TestService_ProcessMessage(t *testing.T) {
 				t.Fatalf("(-want, +got)\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestDrpc_Marshal_Success(t *testing.T) {
+	message := &Call{Module: 1, Method: 2, Sequence: 3}
+
+	result, err := Marshal(message)
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
+	}
+
+	// Unmarshaled result should match original
+	pMsg := &Call{}
+	_ = proto.Unmarshal(result, pMsg)
+
+	cmpOpts := test.DefaultCmpOpts()
+	if diff := cmp.Diff(message, pMsg, cmpOpts...); diff != "" {
+		t.Fatalf("(-want, +got)\n%s", diff)
 	}
 }
