@@ -65,7 +65,11 @@ FAMILY="${DISTRO%%_*}"
 : "${NODESTRING:=localhost}"
 
 : "${COMMIT_MESSAGE:=$(git log -1 --pretty=%B)}"
+: "${ARTIFACTORY_URL:=}"
 : "${REPO_FILE_URL:=}"
+if [ -n "$ARTIFACTORY_URL" ] && [ -z "$REPO_FILE_URL" ]; then
+    REPO_FILE_URL="$ARTIFACTORY_URL/repo-files/"
+fi
 
 # CI user can be any user that is not expected to be on the test systems.
 : "${CI_USER:=jenkins}"
@@ -94,10 +98,13 @@ function create_host_file() {
         return 0
 }
 
-if create_host_file "$NODESTRING" "./hosts" "/etc/hosts"; then
-  retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ./hosts --dest=/etc/hosts
-else
-  echo "ERROR: Failed to create host file"
+if [ "$NODESTRING" != "localhost" ]; then
+    if create_host_file "$NODESTRING" "./hosts" "/etc/hosts"; then
+        retry_cmd 300 clush -B -S -l root -w "$NODESTRING" \
+                            -c ./hosts --dest=/etc/hosts
+    else
+        echo "ERROR: Failed to create host file"
+    fi
 fi
 
 
@@ -115,15 +122,15 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            REPOSITORY_URL=\"${REPOSITORY_URL:-}\"
            JENKINS_URL=\"${JENKINS_URL:-}\"
            DISTRO=\"$DISTRO\"
-           DAOS_STACK_RETRY_DELAY_SECONDS=\"$DAOS_STACK_RETRY_DELAY_SECONDS\"
-           DAOS_STACK_RETRY_COUNT=\"$DAOS_STACK_RETRY_COUNT\"
+           DAOS_STACK_RETRY_DELAY_SECONDS=\"${DAOS_STACK_RETRY_DELAY_SECONDS:-}\"
+           DAOS_STACK_RETRY_COUNT=\"${DAOS_STACK_RETRY_COUNT:-}\"
            MLNX_VER_NUM=\"$MLNX_VER_NUM\"
-           BUILD_URL=\"$BUILD_URL\"
-           STAGE_NAME=\"$STAGE_NAME\"
-           OPERATIONS_EMAIL=\"$OPERATIONS_EMAIL\"
+           BUILD_URL=\"${BUILD_URL:-}\"
+           STAGE_NAME=\"${STAGE_NAME:-}\"
+           OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL:-}\"
            COMMIT_MESSAGE=\"$sanitized_commit_message\"
            REPO_FILE_URL=\"$REPO_FILE_URL\"
-           ARTIFACTORY_URL=\"${ARTIFACTORY_URL:-}\"
+           ARTIFACTORY_URL=\"${ARTIFACTORY_URL}\"
            BRANCH_NAME=\"${BRANCH_NAME:-}\"
            CHANGE_TARGET=\"${CHANGE_TARGET:-}\"
            CI_RPM_TEST_VERSION=\"${CI_RPM_TEST_VERSION:-}\"

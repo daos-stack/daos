@@ -74,7 +74,7 @@ install_mofed() {
     # Install Mellanox OFED or DOCA RPMS
     install_mellanox="install_mellanox.sh"
     script_url="${ARTIFACTORY_URL}/raw-internal/sre_tools/$install_mellanox"
-    install_target="/usr/local/bin/$install_mellanox"
+    install_target="/usr/local/sbin/$install_mellanox"
 
     if [ ! -e "$install_target" ]; then
         if ! curl --silent --show-error --fail \

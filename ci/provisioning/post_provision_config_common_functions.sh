@@ -236,21 +236,6 @@ timeout_cmd() {
     return "$rc"
 }
 
-fetch_repo_config() {
-    local repo_server="$1"
-
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
-    local repopath="${REPOS_DIR}/$repo_file"
-    if ! curl --silent --show-error --fail -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
-        echo "Failed to fetch repo file $REPO_FILE_URL$repo_file.repo"
-        return 1
-    fi
-
-    return 0
-}
-
 pr_repos() {
     if [ -n "$CI_PR_REPOS" ]; then
         echo "$CI_PR_REPOS"
@@ -281,9 +266,6 @@ set_local_repo() {
     # shellcheck disable=SC1091
     . /etc/os-release
 
-    rm -f "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}".repo
-    ln "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}"{-"$repo_server",.repo}
-
     if [ "$repo_server" = "artifactory" ]; then
         if { [[ \ $(pr_repos) = *\ daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
            [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-.0-9A-Za-z]+-testing ]]; then
@@ -304,30 +286,6 @@ set_local_repo() {
 
 update_repos() {
     local DISTRO_NAME="$1"
-
-    # Update the repo files
-    local repo_server
-    for repo_server in "${repo_servers[@]}"; do
-        if ! fetch_repo_config "$repo_server"; then
-            # leave the existing on-image repo config alone if the repo fetch fails
-            send_mail "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
-            echo "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
-            return 1
-        fi
-    done
-
-    # we're not actually using the set_local_repos.sh script
-    # setting a repo server is as easy as renaming a file
-    #if ! curl --silent --show-error --fail -o /usr/local/sbin/set_local_repos.sh-tmp "${REPO_FILE_URL}set_local_repos.sh"; then
-    #    send_mail "Fetch set_local_repos.sh failed.  Continuing on with in-image copy."
-    #else
-    #    cat /usr/local/sbin/set_local_repos.sh-tmp > /usr/local/sbin/set_local_repos.sh
-    #    chmod +x /usr/local/sbin/set_local_repos.sh
-    #    rm -f /usr/local/sbin/set_local_repos.sh-tmp
-    #fi
-
-    # successfully grabbed them all, so replace the entire $REPOS_DIR
-    # content with them
 
     # This is not working right on a second run.
     # using a quick hack to stop deleting a critical repo
@@ -372,9 +330,27 @@ post_provision_config_nodes() {
 
     cat /etc/os-release
 
-    # ConnectX can also be Ethernet for our CI nodes.
-    if lspci -mm | grep "ConnectX" | grep -i "infiniband" && \
-       ! grep MOFED_VERSION /etc/do-release; then
+    # ConnectX must be 5 or later to support MOFED/DOCA drivers
+    # RoCE tests with Mellanox adapters may use MOFED/DOCA drivers.
+    last_pci_bus=''
+    mellanox_drivers=false
+    while IFS= read -r line; do
+        pci_bus="${line%.*}"
+        if [ "$pci_bus" == "$last_pci_bus" ]; then
+            # We only use one interface on a dual interface HBA
+            # Fortunately lspci appears to group them together
+            continue
+        fi
+        last_pci_bus="$pci_bus"
+        mlnx_type="${line##*ConnectX-}"
+        mlnx_type="${mlnx_type%]*}"
+        if [ "$mlnx_type" -ge 5 ]; then
+            mellanox_drivers=true
+            break
+        fi
+    done < <(lspci -mm | grep "ConnectX")
+
+    if "$mellanox_drivers"; then
         # Remove OPA and install MOFED
         install_mofed
     fi

@@ -56,10 +56,11 @@ chown -R "${ci_uid}.${ci_gid}" "/localhome/${CI_USER}/"
 echo "$CI_USER ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/$CI_USER"
 
 # /scratch is needed on test nodes to be CI info for now.
-# DAOS tests need to be changed to use /ci_scratch_info instead.
+# DAOS tests need to be changed to use /CIShare instead.
 if [ -n "$DAOS_CI_INFO_DIR" ]; then
     mkdir -p /ci_scratch_info
-    retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /ci_scratch_info
+    retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /CIShare
+    # This part only until DAOS is migrated to use /CIShare
     rm -f /scratch
     ln -sfn /ci_scratch_info /scratch
 fi
