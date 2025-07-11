@@ -716,7 +716,7 @@ This is important because dead ranks may cause commands to hang and timeout so i
 and restarting them is a useful procedure.
 
 ```bash
-Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=Degraded
+Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=TargetsExcluded
     Pool health info:
     - Disabled ranks: 1
     - Dead ranks: 2
@@ -1392,12 +1392,11 @@ $ dmg pool reintegrate $DAOS_POOL --ranks=5 --target-idx=0,1
 ```
 
 !!! warning
-    While dmg pool query and list show how many targets are disabled for each
-    pool, there is currently no way to list the targets that have actually
-    been disabled. As a result, it is recommended for now to try to reintegrate
-    all engine ranks one after the other via `for i in seq $NR_RANKs; do dmg
-    pool reintegrate --ranks=$i; done`. This limitation will be addressed in the
-    next release.
+    While dmg pool query and list show how many targets are disabled for each pool, there is
+    currently no way to list the targets that have actually been disabled. As a result, it is
+    recommended for now to try to reintegrate all engine ranks reported as disabled in
+    `dmg pool query`. The string output after "Disabled ranks:" in the pool query output can
+    be used as the `--ranks=<disabled_ranks>` option value in `dmg pool reintegrate` command.
 
 #### System Reintegrate
 

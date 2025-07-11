@@ -493,8 +493,12 @@ migrate_pool_tls_create_one(void *data)
 
 	pool_child = ds_pool_child_lookup(arg->pool_uuid);
 	if (pool_child == NULL) {
-		D_ASSERTF(dss_get_module_info()->dmi_xs_id == 0,
-			  "Cannot find the pool "DF_UUIDF"\n", DP_UUID(arg->pool_uuid));
+		/* Local ds_pool_child isn't started yet, return a retry-able error */
+		if (dss_get_module_info()->dmi_xs_id != 0) {
+			D_INFO(DF_UUID ": Local VOS pool isn't ready yet.\n",
+			       DP_UUID(arg->pool_uuid));
+			return -DER_STALE;
+		}
 	} else if (unlikely(pool_child->spc_no_storage)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" "DF_UUID" lost pool shard, ver %d, skip.\n",
 			DP_UUID(arg->pool_uuid), DP_UUID(arg->pool_hdl_uuid), arg->version);
@@ -1536,12 +1540,11 @@ post:
 			 * the rebuild and retry.
 			 */
 			rc = -DER_STALE;
-			D_DEBUG(DB_REBUILD,
-				DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
-				      " nr %d/%d eph " DF_U64 " " DF_RC "\n",
-				DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone,
-				DP_KEY(&mrone->mo_dkey), DP_KEY(&iods[i].iod_name), iod_num, i,
-				mrone->mo_epoch, DP_RC(rc));
+			D_INFO(DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
+				     " nr %d/%d eph " DF_U64 " " DF_RC "\n",
+			       DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone,
+			       DP_KEY(&mrone->mo_dkey), DP_KEY(&iods[i].iod_name), iod_num, i,
+			       mrone->mo_epoch, DP_RC(rc));
 			stale = true;
 			D_GOTO(end, rc);
 		}
@@ -1555,7 +1558,7 @@ end:
 		rc = rc1;
 
 	if (rc)
-		DL_CDEBUG(stale, DB_REBUILD, DLOG_ERR, rc, DF_RB ": " DF_UOID " migrate error",
+		DL_CDEBUG(stale, DLOG_INFO, DLOG_ERR, rc, DF_RB ": " DF_UOID " migrate error",
 			  DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid));
 
 	return rc;

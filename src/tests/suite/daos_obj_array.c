@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1532,50 +1533,232 @@ mth_async_io(void **state)
 	print_message("all good\n");
 }
 
+#define ONE_MB  (1024 * 1024)
+#define FOUR_KB (4 * 1024)
+
+/**
+ * array_recx_read_mixed_iov - Test mixed IOV read operations
+ * @state: Test arguments
+ *
+ * Validates DAOS array read functionality with fragmented IOVs:
+ * - Writes 1MB data using single IOV
+ * - Reads back using 1091 mixed IOVs (64x4KB + 1024x4B + 2x0B + 1xremaining)
+ * - Verifies data integrity through segmented checks
+ */
+static void
+array_recx_read_mixed_iov(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgl;
+	daos_iod_t    iod;
+	daos_recx_t   recx;
+	char         *wbuf, *rbuf;
+	d_iov_t      *sg_iovs     = NULL;
+	int           total_iovs  = 64 + 1024 + 2 + 1;
+	int           data_offset = 0;
+	int           rc, i, remain_size;
+
+	/* Object initialization */
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Buffer allocation with guard pages */
+	wbuf = malloc(ONE_MB);
+	assert_true(wbuf != NULL);
+	dts_buf_render(wbuf, ONE_MB);
+	rbuf = calloc(1, ONE_MB + FOUR_KB);
+	assert_true(rbuf != NULL);
+
+	/* Build fragmented read IOV structure */
+	sg_iovs = calloc(total_iovs, sizeof(d_iov_t));
+	assert_true(sg_iovs != NULL);
+
+	/* 64x4KB IOVs for first 256KB */
+	for (i = 0; i < 64; i++) {
+		d_iov_set(&sg_iovs[data_offset], rbuf + data_offset * FOUR_KB, FOUR_KB);
+		data_offset++;
+	}
+
+	/* 1024x4B IOVs for next 4KB */
+	for (i = 0; i < 1024; i++) {
+		d_iov_set(&sg_iovs[data_offset], rbuf + 256 * 1024 + i * 4, 4);
+		data_offset++;
+	}
+
+	/* 2x zero-length IOVs */
+	for (i = 0; i < 2; i++) {
+		d_iov_set(&sg_iovs[data_offset], NULL, 0);
+		data_offset++;
+	}
+
+	/* Single IOV for remaining data (260KB+) */
+	remain_size = ONE_MB - (256 * 1024 + 4 * 1024);
+	d_iov_set(&sg_iovs[data_offset], rbuf + (256 + 4) * 1024, remain_size);
+	data_offset++;
+
+	/* Configure scatter-gather list */
+	sgl = (d_sg_list_t){.sg_nr = total_iovs, .sg_nr_out = 0, .sg_iovs = sg_iovs};
+
+	/* Prepare I/O descriptor */
+	d_iov_set(&dkey, "megakey", 7);
+	d_iov_set(&iod.iod_name, "big_akey", 8);
+	iod.iod_nr    = 1;
+	iod.iod_size  = 1;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_recxs = &recx;
+	recx.rx_idx   = 0;
+	recx.rx_nr    = ONE_MB;
+
+	/* Write initial data with single IOV */
+	d_sg_list_t write_sgl = {
+	    .sg_nr   = 1,
+	    .sg_iovs = &(d_iov_t){.iov_buf = wbuf, .iov_len = ONE_MB, .iov_buf_len = ONE_MB}};
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &write_sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Read back using fragmented IOVs */
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	assert_memory_equal(wbuf, rbuf, ONE_MB);
+
+	free(wbuf);
+	free(rbuf);
+	free(sg_iovs);
+	daos_obj_close(oh, NULL);
+}
+
+/**
+ * array_recx_write_mixed_iov_read_single - Test mixed IOV writes with single read
+ * @state: Test arguments
+ *
+ * Validates DAOS object I/O with complex scatter-gather patterns:
+ * - Writes 1MB data using 1091 mixed IOVs (4KB/4B/zero-length chunks)
+ * - Reads back with single IOV and verifies data integrity
+ * - Stress-tests IOV fragmentation handling in DAOS stack
+ */
+static void
+array_recx_write_mixed_iov_read_single(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	daos_iod_t    iod;
+	daos_recx_t   recx;
+	char         *wbuf, *rbuf;
+	d_iov_t      *sg_iovs_write = NULL;
+	int           total_iovs    = 64 + 1024 + 2 + 1;
+	int           data_offset   = 0;
+	int           rc, i, remain_size;
+
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Buffer allocation and initialization */
+	wbuf = malloc(ONE_MB);
+	assert_true(wbuf != NULL);
+	dts_buf_render(wbuf, ONE_MB);
+
+	/* Extra 4KB guard page for overflow detection */
+	rbuf = calloc(1, ONE_MB + FOUR_KB);
+	assert_true(rbuf != NULL);
+
+	/* Build fragmented write IOV structure */
+	sg_iovs_write = calloc(total_iovs, sizeof(d_iov_t));
+	assert_true(sg_iovs_write != NULL);
+
+	/* Stage 1: 64x4KB sequential IOVs */
+	for (i = 0; i < 64; i++) {
+		d_iov_set(&sg_iovs_write[data_offset], wbuf + data_offset * FOUR_KB, FOUR_KB);
+		data_offset++;
+	}
+
+	/* Stage 2: 1024x4B IOVs at 256KB offset */
+	for (i = 0; i < 1024; i++) {
+		d_iov_set(&sg_iovs_write[data_offset], wbuf + 256 * 1024 + i * 4, 4);
+		data_offset++;
+	}
+
+	/* Stage 3: 2x zero-length IOVs */
+	for (i = 0; i < 2; i++) {
+		d_iov_set(&sg_iovs_write[data_offset], NULL, 0);
+		data_offset++;
+	}
+
+	/* Stage 4: Remaining space as single IOV */
+	remain_size = ONE_MB - (256 * 1024 + 4 * 1024);
+	d_iov_set(&sg_iovs_write[data_offset], wbuf + (256 + 4) * 1024, remain_size);
+	data_offset++;
+
+	/* Configure write scatter-gather list */
+	d_sg_list_t write_sgl = {.sg_nr = total_iovs, .sg_nr_out = 0, .sg_iovs = sg_iovs_write};
+
+	/* Prepare data write operation */
+	d_iov_set(&dkey, "megakey", 7);
+	d_iov_set(&iod.iod_name, "big_akey", 8);
+	iod.iod_nr    = 1;
+	iod.iod_size  = 1;
+	iod.iod_recxs = &recx;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	recx.rx_idx   = 0;
+	recx.rx_nr    = ONE_MB;
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &write_sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Single IOV read verification */
+	d_iov_t read_iov;
+	d_iov_set(&read_iov, rbuf, ONE_MB);
+
+	d_sg_list_t read_sgl = {.sg_nr = 1, .sg_nr_out = 0, .sg_iovs = &read_iov};
+
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &read_sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	assert_memory_equal(wbuf, rbuf, ONE_MB);
+
+	free(wbuf);
+	free(rbuf);
+	free(sg_iovs_write);
+	daos_obj_close(oh, NULL);
+}
+
 static const struct CMUnitTest array_tests[] = {
-	{ "ARRAY0: small_sgl",
-	  small_sgl, NULL, test_case_teardown},
-	{ "ARRAY1: byte array with buffer on stack",
-	  byte_array_simple_stack, NULL, test_case_teardown},
-	{ "ARRAY2: array of uint8_t",
-	  array_simple, set_size_uint8, test_case_teardown},
-	{ "ARRAY3: array of uint16_t",
-	  array_simple, set_size_uint16, test_case_teardown},
-	{ "ARRAY4: array of uint32_t",
-	  array_simple, set_size_uint32, test_case_teardown},
-	{ "ARRAY5: array of uint64_t",
-	  array_simple, set_size_uint64, test_case_teardown},
-	{ "ARRAY6: array of 131071-byte records",
-	  array_simple, set_size_131071, test_case_teardown},
-	{ "ARRAY7: array of 1MB records",
-	  array_simple, set_size_1mb, test_case_teardown},
-	{ "ARRAY8: partial I/O on array",
-	  array_partial, NULL, test_case_teardown},
-	{ "ARRAY9: segfault replicator",
-	  replicator, NULL, test_case_teardown},
-	{ "ARRAY10: read from empty object",
-	  read_empty, NULL, test_case_teardown},
-	{ "ARRAY11: Array DKEY punch/enumerate",
-	  array_dkey_punch_enumerate, NULL, test_case_teardown},
-	{ "ARRAY12: Array AKEY punch/enumerate",
-	  array_akey_punch_enumerate, NULL, test_case_teardown},
-	{ "ARRAY13: Array RECX punch/enumerate",
-	  array_recx_punch_enumerate, NULL, test_case_teardown},
-	{ "ARRAY14: Reading from incomplete array",
-	  array_recx_read_incomplete, NULL, test_case_teardown},
-	{ "ARRAY15: Reading from array with holes",
-	  fetch_array_with_map, NULL, test_case_teardown},
-	{ "ARRAY16: Reading from array with holes not starting at idx 0",
-	  fetch_array_with_map_2, NULL, test_case_teardown},
-	{ "ARRAY16: Reading from array with holes not starting at idx 0, fetch "
-	  "idx doesn't align with extent",
-	  fetch_array_with_map_3, NULL, test_case_teardown},
-	{ "ARRAY17: Reading from array without holes, but many recxs",
-	  fetch_array_with_map_4, NULL, test_case_teardown},
-	{ "ARRAY18: Simple Conditional Operations",
-	  cond_ops, NULL, test_case_teardown},
-	{ "ARRAY19: multi-threaded EQ IO",
-	  mth_async_io, NULL, test_case_teardown},
+    {"ARRAY0: small_sgl", small_sgl, NULL, test_case_teardown},
+    {"ARRAY1: byte array with buffer on stack", byte_array_simple_stack, NULL, test_case_teardown},
+    {"ARRAY2: array of uint8_t", array_simple, set_size_uint8, test_case_teardown},
+    {"ARRAY3: array of uint16_t", array_simple, set_size_uint16, test_case_teardown},
+    {"ARRAY4: array of uint32_t", array_simple, set_size_uint32, test_case_teardown},
+    {"ARRAY5: array of uint64_t", array_simple, set_size_uint64, test_case_teardown},
+    {"ARRAY6: array of 131071-byte records", array_simple, set_size_131071, test_case_teardown},
+    {"ARRAY7: array of 1MB records", array_simple, set_size_1mb, test_case_teardown},
+    {"ARRAY8: partial I/O on array", array_partial, NULL, test_case_teardown},
+    {"ARRAY9: segfault replicator", replicator, NULL, test_case_teardown},
+    {"ARRAY10: read from empty object", read_empty, NULL, test_case_teardown},
+    {"ARRAY11: Array DKEY punch/enumerate", array_dkey_punch_enumerate, NULL, test_case_teardown},
+    {"ARRAY12: Array AKEY punch/enumerate", array_akey_punch_enumerate, NULL, test_case_teardown},
+    {"ARRAY13: Array RECX punch/enumerate", array_recx_punch_enumerate, NULL, test_case_teardown},
+    {"ARRAY14: Reading from incomplete array", array_recx_read_incomplete, NULL,
+     test_case_teardown},
+    {"ARRAY15: Reading from array with holes", fetch_array_with_map, NULL, test_case_teardown},
+    {"ARRAY16: Reading from array with holes not starting at idx 0", fetch_array_with_map_2, NULL,
+     test_case_teardown},
+    {"ARRAY16: Reading from array with holes not starting at idx 0, fetch "
+     "idx doesn't align with extent",
+     fetch_array_with_map_3, NULL, test_case_teardown},
+    {"ARRAY17: Reading from array without holes, but many recxs", fetch_array_with_map_4, NULL,
+     test_case_teardown},
+    {"ARRAY18: Simple Conditional Operations", cond_ops, NULL, test_case_teardown},
+    {"ARRAY19: multi-threaded EQ IO", mth_async_io, NULL, test_case_teardown},
+    {"ARRAY20: recx read mixed iov", array_recx_read_mixed_iov, NULL, test_case_teardown},
+    {"ARRAY21: recx write mixed iov", array_recx_write_mixed_iov_read_single, NULL,
+     test_case_teardown},
 };
 
 static int

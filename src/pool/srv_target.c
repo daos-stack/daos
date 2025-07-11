@@ -473,7 +473,6 @@ out:
 
 }
 
-
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
 {
@@ -503,14 +502,14 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	D_FREE(path);
 
 	if (rc != 0) {
-		if (rc != -DER_NONEXIST) {
+		if (!engine_in_check() || rc != -DER_NONEXIST) {
 			DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
 				  DF_UUID": Open VOS pool failed.", DP_UUID(child->spc_uuid));
 			goto out;
 		}
 
-		D_WARN("Lost pool "DF_UUIDF" shard %u on rank %u.\n",
-		       DP_UUID(child->spc_uuid), info->dmi_tgt_id, dss_self_rank());
+		D_WARN(DF_UUID ": Lost pool shard %u on rank %u.\n", DP_UUID(child->spc_uuid),
+		       info->dmi_tgt_id, dss_self_rank());
 		/*
 		 * Ignore the failure to allow subsequent logic (such as DAOS check)
 		 * to handle the trouble.
@@ -2677,8 +2676,7 @@ ds_pool_tgt_discard_ult(void *data)
 		D_GOTO(free, rc = 0);
 	}
 
-	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
-		    PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
+	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
 				  DSS_ULT_DEEP_STACK);
 
