@@ -49,7 +49,7 @@ if [[ ! "${DISTRO:-el8}" =~ el ]]; then
   append_install_list "${files[@]}"
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_libfabric")
   EXTRA_OPTS+=("--rpm-autoprov")
-  build_package ${libfabric_lib}
+  build_package "${libfabric_lib}"
 fi
 
 TARGET_PATH="${libdir}"
