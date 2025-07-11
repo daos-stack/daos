@@ -226,7 +226,7 @@ func (cmd *poolCreateCmd) setMemRatio(req *control.PoolCreateReq, defVal float32
 
 func (cmd *poolCreateCmd) storageAutoPercentage(ctx context.Context, req *control.PoolCreateReq) error {
 	if cmd.NumRanks > 0 {
-		return errIncompatFlags("size", "nranks")
+		return errIncompatFlags("size=%", "nranks")
 	}
 	if cmd.TierRatio.IsSet() {
 		return errIncompatFlags("size=%", "tier-ratio")
