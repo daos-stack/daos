@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,26 +34,62 @@ craft_default_jobid(char **jobid)
 	return 0;
 }
 
+static int
+get_jobid_env_var(char **jobid_env)
+{
+	char *tmp_env = NULL;
+
+	d_agetenv_str(&tmp_env, JOBID_ENV);
+	if (tmp_env == NULL) {
+		D_STRNDUP_S(tmp_env, DEFAULT_JOBID_ENV);
+	} else {
+		char *dup = tmp_env;
+
+		D_STRNDUP(tmp_env, dup, MAX_ENV_NAME);
+		d_freeenv_str(&dup);
+	}
+	if (tmp_env == NULL)
+		return -DER_NOMEM;
+
+	*jobid_env = tmp_env;
+	return 0;
+}
+
+int
+dc_set_default_jobid(const char *default_jobid)
+{
+	char *jobid_env = NULL;
+	char *jobid     = NULL;
+	int   rc        = 0;
+
+	/* first, determine which environment variable to check/set */
+	rc = get_jobid_env_var(&jobid_env);
+	if (rc)
+		D_GOTO(out, rc);
+
+	/* next, check to see if a jobid has already been set in the environment */
+	d_agetenv_str(&jobid, jobid_env);
+	if (jobid != NULL) {
+		d_freeenv_str(&jobid);
+		goto out;
+	}
+
+	/* set it to the default value since it wasn't already set */
+	d_setenv(jobid_env, default_jobid, 0);
+out:
+	D_FREE(jobid_env);
+	return rc;
+}
+
 int
 dc_job_init(void)
 {
 	char *jobid;
-	char *jobid_env;
 	int   err = 0;
 
-	d_agetenv_str(&jobid_env, JOBID_ENV);
-	if (jobid_env == NULL) {
-		D_STRNDUP_S(jobid_env, DEFAULT_JOBID_ENV);
-	} else {
-		char *tmp_env = jobid_env;
-
-		D_STRNDUP(jobid_env, tmp_env, MAX_ENV_NAME);
-		d_freeenv_str(&tmp_env);
-	}
-	if (jobid_env == NULL)
-		D_GOTO(out_err, err = -DER_NOMEM);
-
-	dc_jobid_env = jobid_env;
+	err = get_jobid_env_var(&dc_jobid_env);
+	if (err)
+		D_GOTO(out_err, err);
 
 	d_agetenv_str(&jobid, dc_jobid_env);
 	if (jobid == NULL) {
