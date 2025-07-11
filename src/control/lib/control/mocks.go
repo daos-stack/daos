@@ -829,6 +829,7 @@ func MockServerCfg(provider string, ecs []*engine.Config) *config.Server {
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider(provider).
 		WithDisableVMD(false).
+		WithDisableHotplug(false).
 		WithEngines(ecs...)
 }
 

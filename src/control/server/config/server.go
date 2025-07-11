@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +37,10 @@ const (
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
+type deprecatedParams struct {
+	EnableHotplug *bool `yaml:"enable_hotplug,omitempty"` // deprecated in 2.6.5
+}
+
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
@@ -46,7 +51,7 @@ type Server struct {
 	BdevExclude       []string                  `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO       bool                      `yaml:"disable_vfio"`
 	DisableVMD        *bool                     `yaml:"disable_vmd"`
-	EnableHotplug     bool                      `yaml:"enable_hotplug"`
+	DisableHotplug    *bool                     `yaml:"disable_hotplug"`
 	NrHugepages       int                       `yaml:"nr_hugepages"`        // total for all engines
 	SystemRamReserved int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages  bool                      `yaml:"disable_hugepages"`
@@ -78,6 +83,8 @@ type Server struct {
 
 	// Behavior flags
 	AutoFormat bool `yaml:"-"`
+
+	deprecatedParams `yaml:",inline"`
 }
 
 // WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
@@ -182,7 +189,10 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	engineCfg.SystemName = cfg.SystemName
 	engineCfg.SocketDir = cfg.SocketDir
 	engineCfg.Modules = cfg.Modules
-	engineCfg.Storage.EnableHotplug = cfg.EnableHotplug
+	engineCfg.Storage.EnableHotplug = true
+	if cfg.DisableHotplug != nil && *cfg.DisableHotplug {
+		engineCfg.Storage.EnableHotplug = false
+	}
 }
 
 // WithEngines sets the list of engine configurations.
@@ -245,9 +255,9 @@ func (cfg *Server) WithDisableVMD(disabled bool) *Server {
 	return cfg
 }
 
-// WithEnableHotplug can be used to enable hotplug
-func (cfg *Server) WithEnableHotplug(enabled bool) *Server {
-	cfg.EnableHotplug = enabled
+// WithDisableHotplug can be used to disable hotplug.
+func (cfg *Server) WithDisableHotplug(disabled bool) *Server {
+	cfg.DisableHotplug = &disabled
 	return cfg
 }
 
@@ -325,7 +335,6 @@ func DefaultServer() *Server {
 		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
 		Path:              defaultConfigPath,
 		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
-		EnableHotplug:     false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}
@@ -639,13 +648,36 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
+	if cfg.deprecatedParams.EnableHotplug != nil {
+		// Fail if conflicting EnableHotplug and DisableHotplug both set.
+		if cfg.DisableHotplug != nil {
+			return FaultConfigEnableHotplugDeprecated
+		}
+		log.Notice("enable_hotplug is deprecated; please use disable_hotplug instead " +
+			"(false by default)")
+
+		// Apply deprecated parameter updates.
+		eh := !*cfg.deprecatedParams.EnableHotplug
+		cfg.DisableHotplug = &eh
+		log.Debugf("deprecated param update: enable_hotplug: %v -> disable_hotplug: %v",
+			*cfg.deprecatedParams.EnableHotplug, *cfg.DisableHotplug)
+	}
+	// Set DisableHotplug reference if unset in config file.
+	if cfg.DisableHotplug == nil {
+		cfg.WithDisableHotplug(false)
+	}
+
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
 	}
 
+	for i := range cfg.Engines {
+		cfg.updateServerConfig(&cfg.Engines[i])
+	}
+
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
-		cfg.EnableHotplug, !(*cfg.DisableVMD))
+		!(*cfg.DisableHotplug), !(*cfg.DisableVMD))
 
 	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))
