@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2022-2023 Intel Corporation.
+#  Copyright 2025 Google LLC
 #  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -83,7 +84,7 @@ retry_dnf() {
     local monitor_threshold="$1"
     shift
 
-    local args=("dnf" "-y" "${@}")
+    local args=("dnf" "-y" "${@}" "--allowerasing")
     local attempt=0
     local rc=0
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
