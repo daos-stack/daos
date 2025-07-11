@@ -1318,7 +1318,7 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		d_tm_print_stats(stream, stats, format);
 }
 
-static uint64_t
+static double
 d_tm_histogram_get_value(struct d_tm_histogram_t *histogram, uint64_t total_count,
 			 uint32_t percentile)
 {
@@ -1345,20 +1345,20 @@ d_tm_histogram_get_value(struct d_tm_histogram_t *histogram, uint64_t total_coun
 			uint64_t high           = histogram->dth_buckets[i].dtb_max;
 			double   cur_percentage = (target_num - prev_num) / current_val;
 
-			return low + cur_percentage * (high - low);
+			return (low + cur_percentage * (high - low)) / 1000000;
 		}
 	}
 
-	return histogram->dth_buckets[histogram->dth_num_buckets - 1].dtb_max;
+	return histogram->dth_buckets[histogram->dth_num_buckets - 1].dtb_max / 1000000;
 }
 
 static void
 d_tm_print_histogram(FILE *stream, struct d_tm_histogram_t *histogram, int format)
 {
 	uint64_t total_count = 0;
-	uint64_t p50;
-	uint64_t p90;
-	uint64_t p99;
+	double   p50;
+	double   p90;
+	double   p99;
 	int      i;
 
 	for (i = 0; i < histogram->dth_num_buckets; i++)
@@ -1371,11 +1371,11 @@ d_tm_print_histogram(FILE *stream, struct d_tm_histogram_t *histogram, int forma
 	p90 = d_tm_histogram_get_value(histogram, total_count, 90);
 	p99 = d_tm_histogram_get_value(histogram, total_count, 99);
 	if (format == D_TM_CSV) {
-		fprintf(stream, "%ju,%ju,%ju", p50, p90, p99);
+		fprintf(stream, "%.2f,%.2f,%.2f", p50, p90, p99);
 		return;
 	}
 
-	fprintf(stream, " [p50: %ju, p90: %ju, p99: %ju]", p50, p90, p99);
+	fprintf(stream, " [p50: %.2f, p90: %.2f, p99: %.2f]", p50, p90, p99);
 }
 
 /**

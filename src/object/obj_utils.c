@@ -134,7 +134,7 @@ obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op,
 			       "sensor: " DF_RC "\n",
 			       DP_RC(rc));
 
-		rc = d_tm_init_histogram(tm[i], path, 18, 256, 2, "ns");
+		rc = d_tm_init_histogram(tm[i], path, 6, 256, 4, "us");
 		if (rc)
 			D_WARN("Failed to create per-I/O size latency histogram: " DF_RC "\n",
 			       DP_RC(rc));
