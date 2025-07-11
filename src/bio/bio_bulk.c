@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -416,14 +417,6 @@ bulk_hdl_unhold(struct bio_bulk_hdl *hdl)
 	}
 }
 
-static inline bool
-is_exclusive_biov(struct bio_iov *biov)
-{
-	/* NVMe IOV or IOV with extra data for csum can't share bulk handle with others */
-	return (bio_iov2media(biov) != DAOS_MEDIA_SCM) ||
-		(bio_iov2raw_len(biov) != bio_iov2req_len(biov));
-}
-
 static void
 bulk_hdl_hold(struct bio_bulk_hdl *hdl, unsigned int pg_off, unsigned int remote_idx,
 	      struct bio_iov *biov)
@@ -642,6 +635,9 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
 	D_ASSERT(!BIO_ADDR_IS_GANG(&biov->bi_addr));
 
+	if (arg->ba_merged_len)
+		pg_cnt = (arg->ba_merged_len + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT;
+
 	hdl = bulk_get_hdl(biod, biov, roundup_pgs(pg_cnt), pg_off, arg);
 	if (hdl == NULL) {
 		if (biod->bd_retry)
@@ -668,6 +664,7 @@ done:
 	D_ASSERT(biod->bd_bulk_hdls != NULL);
 	D_ASSERT(biod->bd_bulk_cnt < biod->bd_bulk_max);
 
+	arg->ba_merged_len                    = 0;
 	biod->bd_bulk_hdls[biod->bd_bulk_cnt] = hdl;
 	biod->bd_bulk_cnt++;
 

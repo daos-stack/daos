@@ -544,12 +544,28 @@ copy_one_setup(struct bio_desc *biod, int idx, void *data)
 		arg->ca_sgls[idx].sg_nr_out = 0;
 }
 
+#define MAX_MERGE_LEN (1UL << 20) /* 1MB */
+
 static void
 map_one_setup(struct bio_desc *biod, int idx, void *data)
 {
-	struct bio_bulk_args *arg = data;
+	struct bio_bulk_args *arg  = data;
+	struct bio_sglist    *bsgl = &biod->bd_sgls[idx];
+	int                   i;
 
 	arg->ba_sgl_idx = idx;
+	arg->ba_merged_len = 0;
+
+	/* Try merge IOVs for bulk transfer */
+	for (i = 0; i < bsgl->bs_nr_out; i++) {
+		struct bio_iov *biov = &bsgl->bs_iovs[i];
+
+		if ((arg->ba_merged_len + bio_iov2raw_len(biov)) >= MAX_MERGE_LEN ||
+		    is_exclusive_biov(biov) || bio_addr_is_hole(&biov->bi_addr))
+			break;
+
+		arg->ba_merged_len += bio_iov2raw_len(biov);
+	}
 }
 
 static int
