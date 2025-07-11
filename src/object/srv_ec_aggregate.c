@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2462,6 +2463,9 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	agg_param->ap_credits += roundup(shard_nr, 128) / 128;
 
 out:
+	if (map != NULL)
+		pl_map_decref(map);
+
 	return rc;
 }
 
