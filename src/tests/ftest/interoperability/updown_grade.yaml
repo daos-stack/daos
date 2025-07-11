@@ -57,15 +57,13 @@ ior:
 hdf5_vol:
   # Update depending on where libhdf5_vol_daos.so is installed
   # E.g. EL8
-  #plugin_path: "/usr/lib64/mpich/lib"
+  plugin_path: "/usr/lib64/mpich/lib"
   # E.g. Leap 15.6
-  plugin_path: /usr/lib64/mpi/gcc/mpich/lib
+  # plugin_path: /usr/lib64/mpi/gcc/mpich/lib
 
 interop:
-  # old_version: "2.6.1-3.el8"
-  # new_version: "2.6.2-2.el8"
   old_version: "2.6.2-2.el8"
-  new_version: "2.7.101-3.11010.ga94ac881.el8"
+  new_version: "2.6.3-4.el8"
 
 client:
   env_vars:

@@ -62,13 +62,11 @@ dnf list --repo daos-packages-v2.6.2 | grep -E '^daos|^mercury'
 ```
 ```
 clush -S -B -w $DAOS_CLIENTS "sudo dnf install -y daos-2.6.2-2.el8 \
-                                                  mercury-2.4.0~rc5-4.el8 \
                                                   daos-admin-2.6.2-2.el8  \
                                                   daos-client-2.6.2-2.el8 \
                                                   daos-client-tests-2.6.2-2.el8 \
                                                   ior mpich hdf5-vol-daos-mpich" && \
 clush -S -B -w $DAOS_SERVERS "sudo dnf install -y daos-2.6.2-2.el8 \
-                                                  mercury-2.4.0~rc5-4.el8 \
                                                   daos-admin-2.6.2-2.el8 \
                                                   daos-server-2.6.2-2.el8" && \
 clush -S -B -w "$ALL_NODES" "rpm -qa | grep -E '^daos|^mercury' | sort"
@@ -82,13 +80,13 @@ module load mpi/mpich-x86_64
 ```
 
 ## Configure test parameters
-The test to be ran is `test_upgrade_downgrade`.  
+The test to be ran is `test_upgrade_downgrade`.
 TODO: add details and examples.
 
 ## Run launch.py
-Double check that you are using your source install of ftest as mentioned above!  
+Double check that you are using your source install of ftest as mentioned above!
 Execution is similar to other functional tests. For example:
 ```
 cd /path/to/daos/install/lib/daos/TESTING/ftest/;  \
-python3 ./launch.py --provider "ofi+tcp;ofi_rxm" -aro -tc "$DAOS_CLIENTS" -ts "$DAOS_SERVERS" test_upgrade_downgrade;
+python3 ./launch.py --provider "ofi+tcp" -aro -tc "$DAOS_CLIENTS" -ts "$DAOS_SERVERS" test_upgrade_downgrade;
 ```
