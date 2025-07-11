@@ -433,7 +433,7 @@ class TestRunner():
         # Generate certificate files for the test
         return self._generate_certs(logger)
 
-    def execute(self, logger, test, repeat, number, sparse, fail_fast):
+    def execute(self, logger, test, repeat, number, sparse, fail_fast, details):
         """Run the specified test.
 
         Args:
@@ -443,6 +443,7 @@ class TestRunner():
             number (int): the test sequence number in this repetition
             sparse (bool): whether to use avocado sparse output
             fail_fast(bool): whether to use the avocado fail fast option
+            details: {dict}: dictionary to update with test results
 
         Returns:
             int: status code: 0 = success, >0 = failure
@@ -461,19 +462,25 @@ class TestRunner():
         return_code = result.output[0].returncode
         if return_code == 0:
             logger.debug("All avocado test variants passed")
+            details["status"] = "Passed"
         elif return_code & 1 == 1:
             logger.debug("At least one avocado test variant failed")
+            details["status"] = "Variant Failed"
         elif return_code & 2 == 2:
             logger.debug("At least one avocado job failed")
+            details["status"] = "Job Failed"
         elif return_code & 4 == 4:
             message = "Failed avocado commands detected"
             self.test_result.fail_test(logger, "Execute", message)
+            details["status"] = "Command Failed"
         elif return_code & 8 == 8:
             logger.debug("At least one avocado test variant was interrupted")
+            details["status"] = "Variant Failed - Interrupted"
         else:
             message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
             self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             return_code = 1
+            details["status"] = "Unknown Failure"
         if return_code:
             self._collect_crash_files(logger)
 
@@ -1266,10 +1273,13 @@ class TestGroup():
         if not code_coverage.setup(logger, result.tests[0]):
             return_code |= 128
 
+        self._details["tests"] = {"loops": []}
+
         # Run each test for as many repetitions as requested
         for loop in range(1, repeat + 1):
             logger.info("-" * 80)
             logger.info("Starting test repetition %s/%s", loop, repeat)
+            self._details["tests"]["loops"].append([])
 
             for index, test in enumerate(self.tests):
                 # Define a log for the execution of this test for this repetition
@@ -1278,6 +1288,12 @@ class TestGroup():
                 logger.info("Log file for repetition %s of %s: %s", loop, test, test_log_file)
                 test_file_handler = get_file_handler(test_log_file, LOG_FILE_FORMAT, logging.DEBUG)
                 logger.addHandler(test_file_handler)
+                self._details["tests"]["loops"][-1] = {
+                    "test_file": test,
+                    "results": test_log_file,
+                    "clients": test.yaml_info["test_clients"],
+                    "servers": test.yaml_info["test_servers"],
+                    "bdev_list": test.yaml_info["bdev_list"]}
 
                 # Prepare the hosts to run the tests
                 step_status = runner.prepare(
@@ -1289,7 +1305,9 @@ class TestGroup():
                     continue
 
                 # Run the test with avocado
-                return_code |= runner.execute(logger, test, loop, index + 1, sparse, fail_fast)
+                return_code |= runner.execute(
+                    logger, test, loop, index + 1, sparse, fail_fast,
+                    self._details["tests"]["loops"][-1])
 
                 # Archive the test results
                 return_code |= runner.process(

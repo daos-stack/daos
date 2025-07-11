@@ -169,7 +169,7 @@ def check_server_storage(logger, test, stage):
     """
     logger.debug("-" * 80)
     logger.debug(f"Verifying server storage during {stage} for \'{test}\'")
-    command = f"lspci -D | grep -E \'{'|'.join(test.yaml_info["bdev_list"])}\'"
+    command = f"lspci -D | grep -E \'{'|'.join(test.yaml_info['bdev_list'])}\'"
     result = run_remote(logger, test.host_info.servers.hosts, command)
     if not result.passed:
         message = f"Failure detected verifying storage during {stage} for \'{test}\'"
