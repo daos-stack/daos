@@ -762,11 +762,11 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 		resp.Nvme = respNvme
 	}
 
-	mi, err := cs.getMemInfo()
+	mi, err := cs.getSysMemInfo()
 	if err != nil {
 		return nil, err
 	}
-	if err := convert.Types(mi, &resp.MemInfo); err != nil {
+	if err := convert.Types(mi, &resp.SysMemInfo); err != nil {
 		return nil, err
 	}
 
@@ -795,7 +795,7 @@ func (cs *ControlService) formatMetadata(instances []Engine, reformat bool) (boo
 	return false, nil
 }
 
-func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getMemInfo func() (*common.MemInfo, error)) error {
+func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getSysMemInfo common.GetSysMemInfoFn) error {
 	if scmCfgs[0].Class != storage.ClassRam {
 		return nil
 	}
@@ -805,7 +805,7 @@ func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getM
 		memRamdisks += uint64(sc.Scm.RamdiskSize) * humanize.GiByte
 	}
 
-	mi, err := getMemInfo()
+	mi, err := getSysMemInfo()
 	if err != nil {
 		return errors.Wrap(err, "retrieving system meminfo")
 	}
@@ -819,11 +819,11 @@ func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getM
 }
 
 type formatScmReq struct {
-	log        logging.Logger
-	reformat   bool
-	replace    bool
-	instances  []Engine
-	getMemInfo func() (*common.MemInfo, error)
+	log           logging.Logger
+	reformat      bool
+	replace       bool
+	instances     []Engine
+	getSysMemInfo common.GetSysMemInfoFn
 }
 
 func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatResp) (map[int]string, map[int]bool, error) {
@@ -867,7 +867,7 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 
 	if allNeedFormat {
 		// Check available RAM is sufficient before formatting SCM on engines.
-		if err := checkTmpfsMem(req.log, scmCfgs, req.getMemInfo); err != nil {
+		if err := checkTmpfsMem(req.log, scmCfgs, req.getSysMemInfo); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -1038,11 +1038,11 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	}
 
 	fsr := formatScmReq{
-		log:        cs.log,
-		reformat:   req.Reformat,
-		replace:    req.Replace,
-		instances:  instances,
-		getMemInfo: cs.getMemInfo,
+		log:           cs.log,
+		reformat:      req.Reformat,
+		replace:       req.Replace,
+		instances:     instances,
+		getSysMemInfo: cs.getSysMemInfo,
 	}
 	cs.log.Tracef("formatScmReq: %+v", fsr)
 	instanceErrors, instanceSkips, err := formatScm(ctx, fsr, resp)
