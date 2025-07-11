@@ -8,22 +8,25 @@ updates:
     ignore:
       - dependency-name: "avocado-framework*"
     schedule:
-      interval: daily
+      interval: "cron"
+      cronjob: "0 0 1,15 * *"  # Twice a month
     groups:
       python-packages:
         patterns:
           - "*"
+    commit-message:
+      prefix: "Test-tag: pr,vm \n"
+
   - package-ecosystem: github-actions
     target-branch: master
     directory: /
     schedule:
-      interval: weekly
+      interval: "cron"
+      cronjob: "0 0 1,15 * *"  # Twice a month
     groups:
       gha-versions:
         patterns:
           - "*"
-    assignees:
-      - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
 
@@ -31,12 +34,11 @@ updates:
     target-branch: release/2.6
     directory: /
     schedule:
-      interval: weekly
+      interval: "cron"
+      cronjob: "0 0 1,15 * *"  # Twice a month
     groups:
       gha-versions:
         patterns:
           - "*"
-    assignees:
-      - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
