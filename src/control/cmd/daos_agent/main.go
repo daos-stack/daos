@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -189,15 +190,11 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 
 		cfgPath := opts.ConfigPath
 		if cfgPath == "" {
-			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
-			if _, err := os.Stat(defaultConfigPath); err == nil {
-				cfgPath = defaultConfigPath
-			} else {
-				defaultConfigPath := path.Join("/etc/daos", defaultConfigFile)
-				if _, err := os.Stat(defaultConfigPath); err == nil {
-					cfgPath = defaultConfigPath
-				}
+			foundPath, err := build.FindConfigFilePath(defaultConfigFile)
+			if err != nil {
+				return err
 			}
+			cfgPath = foundPath
 		}
 
 		cfg, err := processConfig(log, cmd, opts, cfgPath)
