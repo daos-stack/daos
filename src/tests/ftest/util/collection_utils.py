@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,6 +18,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
 from util.run_utils import find_command, run_local, run_remote, stop_processes
+from util.storage_utils import find_pci_address
 from util.systemctl_utils import stop_service
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
@@ -152,6 +154,64 @@ def cleanup_processes(logger, test, result):
             result.warn_test(logger, "Process", message)
 
     return not any_found
+
+
+def check_server_storage(logger, test, stage):
+    """Verify that the expected server storage devices exist.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        test (TestInfo): the test information
+        stage (str): current launch test execution stage
+
+    Returns:
+        bool: True if all expected devices found on all server hosts; False otherwise
+    """
+    status = True
+    commands = {
+        "scm_list":
+            r"ndctl list -c -v | grep pmem | sed -e 's/.*:\"\(.*\)\"/\/dev\/\1/' | grep '{}'",
+        "bdev_list":
+            r"lspci -D | grep -E '{}'"
+    }
+    detected = []
+    for key, command in commands.items():
+        logger.debug("-" * 80)
+        logger.debug(f"Verifying server storage during {stage} for \'{test}\'")
+        if key not in test.yaml_info or test.yaml_info[key] is None:
+            # No need to check storage w/o a scm/bdev entry
+            logger.debug(f" - No {key} storage defined for this test")
+            continue
+        if "daos" in test.yaml_info[key]:
+            # No need to check ram class storage (using /mnt/daos* scm)
+            logger.debug(f" - {key} storage using ram class")
+            continue
+        result = run_remote(
+            logger, test.host_info.servers.hosts, command.format('|'.join(test.yaml_info[key])))
+        if not result.passed:
+            logger.error(f" - Failure detected verifying {key} storage during for \'{test}\'")
+            status = False
+            continue
+        item_set = set(test.yaml_info[key])
+        logger.debug(f" - Expecting the following {key} storage: {item_set}")
+        for data in result.output:
+            if key == "bdev":
+                result_set = set(find_pci_address("\n".join(data.stdout)))
+            else:
+                result_set = set(data.stdout)
+            match = bool(item_set & result_set == item_set)
+            if not match:
+                status = False
+            detected.append([str(match), key, str(data.hosts), str(result_set)])
+
+        msg_format = "%-5s  %-3s  %-20s  %s"
+        logger.debug("-" * 80)
+        logger.debug(f"Detected server storage for \'{test}\':")
+        logger.debug(msg_format, "Match", "Type", "Servers", "Storage")
+        logger.debug(msg_format, "-" * 5, "-" * 3, "-" * 20, "-" * 60)
+        for entry in detected:
+            logger.debug(msg_format, *entry)
+    return status
 
 
 def archive_files(logger, summary, hosts, source, pattern, destination, depth, threshold, timeout,
@@ -868,6 +928,10 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             return_code |= 512
         if not cleanup_processes(logger, test, test_result):
             return_code |= 4096
+
+    # Check storage devices for servers
+    if not check_server_storage(logger, test, "Process"):
+        return_code |= 512
 
     # Mark the test execution as failed if a results.xml file is not found
     test_logs_dir = os.path.realpath(os.path.join(job_results_dir, "latest"))
