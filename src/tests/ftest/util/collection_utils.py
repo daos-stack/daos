@@ -178,7 +178,7 @@ def check_server_storage(logger, test, stage):
     for key, command in commands.items():
         logger.debug("-" * 80)
         logger.debug(f"Verifying server storage during {stage} for \'{test}\'")
-        if key not in test.yaml_info:
+        if key not in test.yaml_info or test.yaml_info[key] is None:
             # No need to check storage w/o a scm/bdev entry
             logger.debug(f" - No {key} storage defined for this test")
             continue
