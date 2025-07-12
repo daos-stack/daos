@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -299,8 +299,8 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		rc = crt_bulk_create(rpc_priv->crp_pub.cr_ctx, &bulk_sgl,
 				     CRT_BULK_RW, &local_bulk_hdl);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_bulk_create failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_bulk_create (len=%ld) failed: "
+				  DF_RC"\n", bulk_len, DP_RC(rc));
 			D_FREE(bulk_iov.iov_buf);
 			D_GOTO(out, rc);
 		}
