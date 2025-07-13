@@ -553,8 +553,10 @@ kv_put(daos_handle_t oh, daos_size_t size)
 		eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
 		if (eq_rc > 0)
 			completions += eq_rc;
-		if (eq_rc < 0)
+		if (eq_rc < 0) {
 			rc = eq_rc;
+			break;
+		}
 		if (completions >= num_events)
 			break;
 	}
