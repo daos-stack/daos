@@ -1289,7 +1289,7 @@ class TestGroup():
                 test_file_handler = get_file_handler(test_log_file, LOG_FILE_FORMAT, logging.DEBUG)
                 logger.addHandler(test_file_handler)
                 self._details["tests"]["loops"][-1] = {
-                    "test_file": test,
+                    "test_file": str(test),
                     "results": test_log_file,
                     "clients": test.yaml_info["test_clients"],
                     "servers": test.yaml_info["test_servers"],
