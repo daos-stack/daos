@@ -78,3 +78,82 @@ out:
 		d_rank_list_free(ranks);
 	return rc;
 }
+
+static struct d_uuid *pool_blacklist;
+static int            pool_blacklist_len;
+
+static int
+pbl_append(char *uuid_str)
+{
+	uuid_t         uuid;
+	struct d_uuid *p;
+	int            rc;
+
+	rc = uuid_parse(uuid_str, uuid);
+	if (rc != 0)
+		return -DER_INVAL;
+
+	/* Grow pool_blacklist by one element. */
+	D_REALLOC_ARRAY(p, pool_blacklist, pool_blacklist_len, pool_blacklist_len + 1);
+	if (p == NULL)
+		return -DER_NOMEM;
+	pool_blacklist = p;
+
+	uuid_copy(pool_blacklist[pool_blacklist_len].uuid, uuid);
+	pool_blacklist_len++;
+	return 0;
+}
+
+/**
+ * Create the (global) pool blacklist, a list of UUIDs of pools that shall be
+ * skipped during the engine setup process, based on the environment variable
+ * DAOS_POOL_BLACKLIST.
+ */
+int
+ds_mgmt_pbl_create(void)
+{
+	char *name = "DAOS_POOL_BLACKLIST";
+	char *value;
+	char *sep = ",";
+	char *uuid_str;
+	char *c;
+	int   rc;
+
+	rc = d_agetenv_str(&value, name);
+	if (rc == -DER_NONEXIST)
+		return 0;
+	else if (rc != 0)
+		return rc;
+
+	for (uuid_str = strtok_r(value, sep, &c); uuid_str != NULL;
+	     uuid_str = strtok_r(NULL, sep, &c)) {
+		rc = pbl_append(uuid_str);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to parse pool UUID in %s: '%s'", name, uuid_str);
+			D_FREE(pool_blacklist);
+			pool_blacklist_len = 0;
+			break;
+		}
+	}
+
+	d_freeenv_str(&value);
+	return rc;
+}
+
+bool
+ds_mgmt_pbl_has_pool(uuid_t uuid)
+{
+	int i;
+
+	for (i = 0; i < pool_blacklist_len; i++)
+		if (uuid_compare(pool_blacklist[i].uuid, uuid) == 0)
+			return true;
+	return false;
+}
+
+void
+ds_mgmt_pbl_destroy(void)
+{
+	D_FREE(pool_blacklist);
+	pool_blacklist_len = 0;
+}
