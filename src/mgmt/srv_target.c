@@ -1292,6 +1292,7 @@ tgt_destroy_cleanup(void *arg)
 
 	/** make sure the rename is persistent */
 	(void)dir_fsync(zombie);
+	D_INFO(DF_UUID ": moved %s to %s\n", DP_UUID(tda->tda_id.uuid), tda->tda_path, zombie);
 
 	/**
 	 * once successfully moved to the ZOMBIES directory, the target will
@@ -1301,6 +1302,7 @@ tgt_destroy_cleanup(void *arg)
 	if (tda->tda_rc == 0) {
 		(void)subtree_destroy(zombie);
 		(void)rmdir(zombie);
+		D_INFO(DF_UUID ": removed %s\n", DP_UUID(tda->tda_id.uuid), zombie);
 	} else {
 		D_INFO("Defer cleanup for lingering pool:"DF_UUID"\n",
 		       DP_UUID(tda->tda_id.uuid));
