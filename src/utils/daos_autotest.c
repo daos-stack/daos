@@ -690,8 +690,10 @@ kv_get(daos_handle_t oh, daos_size_t size)
 				}
 			}
 		}
-		if (eq_rc < 0)
+		if (eq_rc < 0) {
 			rc = eq_rc;
+			break:
+		}
 		if (completions >= num_events)
 			break;
 	}
