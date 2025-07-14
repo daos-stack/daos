@@ -1,6 +1,8 @@
 # .github/workflows/dependabot2jira.yml
 name: Dependabot_ticket
 
+permissions: {}
+
 on:
   push:
   pull_request:
