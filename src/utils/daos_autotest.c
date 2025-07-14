@@ -692,7 +692,7 @@ kv_get(daos_handle_t oh, daos_size_t size)
 		}
 		if (eq_rc < 0) {
 			rc = eq_rc;
-			break:
+			break;
 		}
 		if (completions >= num_events)
 			break;
