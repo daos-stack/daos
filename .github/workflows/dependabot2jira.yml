@@ -1,12 +1,11 @@
 # .github/workflows/dependabot2jira.yml
-name: Dependabot_ticket
+name: Dependabo jita ticket
 
 permissions: {}
 
 on:
-  push:
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened]
 
 jobs:
   run-if-grom72:
@@ -24,8 +23,8 @@ jobs:
             --data '{
               "fields": {
                 "project": { "key": "PMDK" },
-                "summary": "GitHub Action–generated ticket Wow",
-                "description": "This issue was created via curl in GitHub Actions. Wow",
+                "summary": "'"${{ github.event.pull_request.title }}"'",
+                "description": "'"${{ github.event.pull_request.body }}"'",
                 "issuetype": { "name": "Bug" }
               }
             }' "https://daosio.atlassian.net/rest/api/2/issue"
