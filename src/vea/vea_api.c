@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -379,7 +380,7 @@ error:
 	return rc;
 }
 
-#define FLUSH_INTVL		5	/* seconds */
+#define FLUSH_INTVL 2 /* seconds */
 
 static inline bool
 need_aging_flush(struct vea_space_info *vsi, bool force)

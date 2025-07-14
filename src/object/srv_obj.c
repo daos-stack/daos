@@ -325,6 +325,8 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 }
 
 #define MAX_BULK_IOVS	1024
+#define BULK_DELAY_MAX  3000
+#define BULK_DELAY_STEP 1000
 
 static int
 bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
@@ -369,6 +371,8 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		d_sg_list_t	sgl_sent;
 		size_t		length = 0;
 		unsigned int	start;
+		uint32_t        delay_tot = 0;
+		uint32_t        delay_cur;
 		bool		cached_bulk = false;
 
 		/*
@@ -433,8 +437,30 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			sgl_sent.sg_nr = sgl_sent.sg_nr_out = iov_idx - start;
 			bulk_iovs += sgl_sent.sg_nr;
 
+again:
 			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
 					     &local_bulk);
+			if (rc == -DER_NOMEM) {
+				if (delay_tot >= BULK_DELAY_MAX) {
+					D_ERROR("Too many in-flight bulk handles on %d\n", sgl_idx);
+					break;
+				}
+
+				/*
+				 * If there are too many in-flight bulk handles, then current
+				 * crt_bulk_create() may hit -DER_NOMEM failure. Let it sleep
+				 * for a while (at most 3 seconds) to give cart progress some
+				 * chance to complete some in-flight bulk transfers.
+				 */
+				delay_cur = BULK_DELAY_MAX - delay_tot;
+				if (delay_cur >= BULK_DELAY_STEP)
+					delay_cur = d_rand() % BULK_DELAY_STEP + 1;
+				dss_sleep(delay_cur);
+				delay_tot += delay_cur;
+				bulk_iovs = 0;
+				goto again;
+			}
+
 			if (rc != 0) {
 				D_ERROR("crt_bulk_create %d error " DF_RC "\n", sgl_idx, DP_RC(rc));
 				break;
@@ -490,6 +516,9 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 
 	return rc;
 }
+
+/* bypass bulk rma for single value's degraded fetch */
+#define OBJ_BULK_OFFSET_SKIP ((uint64_t)-1)
 
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
@@ -571,9 +600,14 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 				break;
 		}
 
-		rc = bulk_transfer_sgl(ioh, rpc, remote_bulks[i + skip_nr],
-				       remote_offs ? remote_offs[i] : 0,
-				       bulk_op, bulk_bind, sgl, i, p_arg);
+		/* OBJ_BULK_OFFSET_SKIP is for the case of EC single value degraded fetch,
+		 * unnecessary to bulk transfer here, the data will be transferred back when
+		 * data recovery (ORF_EC_RECOV).
+		 */
+		if (remote_offs == NULL || remote_offs[i] != OBJ_BULK_OFFSET_SKIP)
+			rc = bulk_transfer_sgl(ioh, rpc, remote_bulks[i + skip_nr],
+					       remote_offs ? remote_offs[i] : 0, bulk_op, bulk_bind,
+					       sgl, i, p_arg);
 		if (sgls == NULL)
 			d_sgl_fini(sgl, false);
 		if (rc) {
@@ -1032,6 +1066,7 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 		} else if (deg_fetch) {
 			rc = obj_singv_ec_add_recov(nr, i, iod->iod_size,
 						    epoch, recov_lists_ptr);
+			offs[i] = OBJ_BULK_OFFSET_SKIP;
 		}
 	}
 
@@ -1422,6 +1457,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		bool				ec_deg_fetch;
 		bool				ec_recov;
 		bool				is_parity_shard;
+		bool                             size_only = false;
 		struct daos_recx_ep_list	*shadows = NULL;
 
 		bulk_op = CRT_BULK_PUT;
@@ -1429,8 +1465,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
-			if (!(orw->orw_flags & ORF_CHECK_EXISTENCE))
+			if (!(orw->orw_flags & ORF_CHECK_EXISTENCE)) {
 				fetch_flags = VOS_OF_FETCH_SIZE_ONLY;
+				size_only   = true;
+			}
 		}
 
 		ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
@@ -1457,7 +1495,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 				ioc->ioc_coc->sc_ec_agg_eph_boundary, DP_RC(rc));
 			goto out;
 		}
-		if (ec_deg_fetch && !spec_fetch) {
+		if (ec_deg_fetch && (size_only || !spec_fetch)) {
 			if (orwo->orw_rels.ca_arrays != NULL) {
 				/* Re-entry case */
 				daos_recx_ep_list_free(orwo->orw_rels.ca_arrays,
@@ -1563,24 +1601,27 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			daos_epoch_t	recov_epoch = 0;
 			bool		recov_snap = false;
 
-			/* If fetch from snapshot, and snapshot epoch lower than
-			 * vos agg epoch boundary, recovery from snapshot epoch.
-			 * Or, will recovery from max{parity_epoch, vos_epoch_
-			 * boundary}.
-			 */
-			vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
-			if (ioc->ioc_fetch_snap &&
-			    orw->orw_epoch < vos_agg_epoch) {
-				recov_epoch = orw->orw_epoch;
-				recov_snap =  true;
+			if (size_only) {
+				daos_recx_ep_list_free(recov_lists, iods_nr);
 			} else {
-				recov_epoch = vos_agg_epoch;
+				/* If fetch from snapshot, and snapshot epoch lower than
+				 * vos agg epoch boundary, recovery from snapshot epoch.
+				 * Or, will recovery from max{parity_epoch, vos_epoch_
+				 * boundary}.
+				 */
+				vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
+				if (ioc->ioc_fetch_snap && orw->orw_epoch < vos_agg_epoch) {
+					recov_epoch = orw->orw_epoch;
+					recov_snap  = true;
+				} else {
+					recov_epoch = vos_agg_epoch;
+				}
+				daos_recx_ep_list_set(recov_lists, iods_nr, recov_epoch,
+						      recov_snap);
+				daos_recx_ep_list_merge(recov_lists, iods_nr);
+				orwo->orw_rels.ca_arrays = recov_lists;
+				orwo->orw_rels.ca_count  = iods_nr;
 			}
-			daos_recx_ep_list_set(recov_lists, iods_nr,
-					      recov_epoch, recov_snap);
-			daos_recx_ep_list_merge(recov_lists, iods_nr);
-			orwo->orw_rels.ca_arrays = recov_lists;
-			orwo->orw_rels.ca_count = iods_nr;
 		}
 	}
 
@@ -2005,6 +2046,7 @@ obj_local_rw_internal_wrap(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dt
 static int
 obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 {
+	struct obj_rw_in        *orw = crt_req_get(rpc);
 	struct dtx_share_peer	*dsp;
 	uint32_t		 retry = 0;
 	int			 rc;
@@ -2012,18 +2054,16 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 again:
 	rc = obj_local_rw_internal_wrap(rpc, ioc, dth);
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
-			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
-					   dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d times, "
-			       "maybe starve\n", DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
-			       dth->dth_share_tbd_count, retry);
-		}
-
-		if (!obj_rpc_is_fetch(rpc) || retry < 30) {
+		if (++retry < 3) {
 			rc = dtx_refresh(dth, ioc->ioc_coc);
 			if (rc == -DER_AGAIN)
 				goto again;
+		} else if (orw->orw_flags & ORF_MAYBE_STARVE) {
+			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
+					   dsp_link);
+			D_WARN(
+			    "DTX refresh for " DF_DTI " because of " DF_DTI " (%d), maybe starve\n",
+			    DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count);
 		}
 	}
 
@@ -2956,8 +2996,8 @@ again:
 			e = orw->orw_epoch;
 		else
 			e = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
-				       &e, &version);
+		version = orw->orw_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &e, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);
@@ -3539,12 +3579,16 @@ again:
 	}
 
 	if (obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
-			dsp = d_list_entry(dth->dth_share_tbd_list.next,
-					   struct dtx_share_peer, dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
-			       "times, maybe starve\n", DP_DTI(&dth->dth_xid),
-			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
+		if (++retry >= 3) {
+			if (opi->opi_flags & ORF_MAYBE_STARVE) {
+				dsp = d_list_entry(dth->dth_share_tbd_list.next,
+						   struct dtx_share_peer, dsp_link);
+				D_WARN("DTX refresh for " DF_DTI " because of " DF_DTI
+				       " (%d), maybe starve\n",
+				       DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
+				       dth->dth_share_tbd_count);
+			}
+			goto out;
 		}
 
 		rc = dtx_refresh(dth, ioc->ioc_coc);
@@ -3884,8 +3928,8 @@ again:
 			e = opi->opi_epoch;
 		else
 			e = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
-				       &e, &version);
+		version = opi->opi_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &e, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);
@@ -4929,6 +4973,7 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		       struct daos_cpd_disp_ent *dcde, struct daos_cpd_sub_req *dcsrs,
 		       struct obj_io_context *ioc, struct dtx_handle *dth)
 {
+	struct obj_cpd_in       *oci = crt_req_get(rpc);
 	struct dtx_share_peer	*dsp;
 	uint32_t		 retry = 0;
 	int			 rc;
@@ -4936,17 +4981,17 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 again:
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
+		if (++retry < 3) {
+			rc = dtx_refresh(dth, ioc->ioc_coc);
+			if (rc == -DER_AGAIN)
+				goto again;
+		} else if (oci->oci_flags & ORF_MAYBE_STARVE) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next,
 					   struct dtx_share_peer, dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
-			       "times, maybe starve\n", DP_DTI(&dth->dth_xid),
-			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
+			D_WARN(
+			    "DTX refresh for " DF_DTI " because of " DF_DTI " (%d), maybe starve\n",
+			    DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count);
 		}
-
-		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN)
-			goto again;
 	}
 
 	return rc;
@@ -5723,7 +5768,8 @@ again:
 			tmp = ocpi->ocpi_epoch;
 		else
 			tmp = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
+		version = ocpi->ocpi_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);

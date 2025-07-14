@@ -213,9 +213,15 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
+        booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
+                     defaultValue: false,
+                     description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
+        string(name: 'CI_SCONS_ARGS',
+               defaultValue: '',
+               description: 'Arguments for scons when building DAOS')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
@@ -251,18 +257,39 @@ pipeline {
         booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build DEB packages for Ubuntu 20')
+        booleanParam(name: 'CI_el8_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on EL 8')
+        booleanParam(name: 'CI_el9_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on EL 9')
+        booleanParam(name: 'CI_leap15_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit Test on EL 8 test stage')
+        booleanParam(name: 'CI_NLT_TEST',
+                     defaultValue: true,
+                     description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
+        booleanParam(name: 'CI_TEST_EL8_RPMs',
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on EL 8 test stage')
+        booleanParam(name: 'CI_TEST_LEAP15_RPMs',
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on Leap 15 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
+                     defaultValue: false,
+                     description: 'Skip all functional test stages (Test)')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
@@ -273,36 +300,39 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on Leap 15 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_TEST_SKIP',
+                     defaultValue: false,
+                     description: 'Skip Functional Hardware (Test Hardware) stage')
         booleanParam(name: 'CI_medium_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium test stage')
         booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
         booleanParam(name: 'CI_medium_vmd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium VMD test stage')
         booleanParam(name: 'CI_medium_verbs_provider_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Large test stage')
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
@@ -323,7 +353,7 @@ pipeline {
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
@@ -343,9 +373,6 @@ pipeline {
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
-        string(name: 'CI_SCONS_ARGS',
-               defaultValue: '',
-               description: 'Arguments for scons when building DAOS')
     }
 
     stages {
@@ -400,7 +427,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
             }
             steps {
                 cancelPreviousBuilds()
@@ -606,10 +633,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 8') {
+                stage('Build on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !params.CI_el8_NOBUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -644,10 +671,83 @@ pipeline {
                         }
                     }
                 }
+                stage('Build on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.9'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-el9 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
+                                       scons_args: sconsArgs() +
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-el9-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-el9-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on Leap 15.5') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.leap.15'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       build_deps: 'yes'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -735,7 +835,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { params.CI_NLT_TEST && !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -766,7 +866,8 @@ pipeline {
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
-                                           id: 'NLT_server')
+                                           id: 'NLT_server'),
+                                         scm: 'daos-stack/daos'
                             job_status_update()
                         }
                     }
@@ -826,7 +927,9 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
+                // Above not working, always skipping functional VM tests.
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -984,7 +1087,8 @@ pipeline {
                                                         id: 'Fault_Injection'),
                                                  issues(pattern: 'nlt-client-leaks.json',
                                                         name: 'Fault injection leaks',
-                                                        id: 'NLT_client')]
+                                                        id: 'NLT_client')],
+                                         scm: 'daos-stack/daos'
                             junit testResults: 'nlt-junit.xml'
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
@@ -998,7 +1102,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1018,7 +1122,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1092,7 +1196,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
             }
             steps {
                 script {
@@ -1100,34 +1204,30 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ?
-                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
-                            run_if_pr: false,
+                            run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw_vmd,medium',
@@ -1141,36 +1241,32 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ?
-                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: false,
+                            run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
@@ -1184,26 +1280,24 @@ pipeline {
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
-                            base_branch: 'master',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
-                            run_if_pr: false,
+                            run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),

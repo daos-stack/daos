@@ -140,6 +140,21 @@ const (
 	PoolConnectFlagExclusive PoolConnectFlag = C.DAOS_PC_EX
 )
 
+func (pcf PoolConnectFlag) String() string {
+	flagStrs := []string{}
+	if pcf&PoolConnectFlagReadOnly != 0 {
+		flagStrs = append(flagStrs, "read-only")
+	}
+	if pcf&PoolConnectFlagReadWrite != 0 {
+		flagStrs = append(flagStrs, "read-write")
+	}
+	if pcf&PoolConnectFlagExclusive != 0 {
+		flagStrs = append(flagStrs, "exclusive")
+	}
+	sort.Strings(flagStrs)
+	return strings.Join(flagStrs, ",")
+}
+
 func (pqo PoolQueryOption) String() string {
 	return string(pqo)
 }
@@ -315,8 +330,9 @@ const (
 	PoolServiceStateReady = PoolServiceState(mgmtpb.PoolServiceState_Ready)
 	// PoolServiceStateDestroying indicates that the pool service is being destroyed
 	PoolServiceStateDestroying = PoolServiceState(mgmtpb.PoolServiceState_Destroying)
-	// PoolServiceStateDegraded indicates that the pool service is in a degraded state
-	PoolServiceStateDegraded = PoolServiceState(mgmtpb.PoolServiceState_Degraded)
+	// PoolServiceStateTargetsExcluded indicates that the pool service is operating with
+	// excluded targets
+	PoolServiceStateTargetsExcluded = PoolServiceState(mgmtpb.PoolServiceState_TargetsExcluded)
 	// PoolServiceStateUnknown indicates that the pool service state is unknown
 	PoolServiceStateUnknown = PoolServiceState(mgmtpb.PoolServiceState_Unknown)
 )
