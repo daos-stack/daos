@@ -20,11 +20,14 @@ jobs:
             --verbose \
             -X POST \
             -H "Content-Type: application/json" \
-            --data '{
-              "fields": {
-                "project": { "key": "PMDK" },
-                "summary": "${{ github.event.pull_request.title }}",
-                "description": "${{ github.event.pull_request.body }}",
-                "issuetype": { "name": "Bug" }
-              }
+            --data "$(jq -n --arg title "${{ github.event.pull_request.title }}" \
+                           --arg body "${{ github.event.pull_request.body }}" \
+                           '{
+                              fields: {
+                                project: { key: "PMDK" },
+                                summary: $title,
+                                description: $body,
+                                issuetype: { name: "Bug" }
+                              }
+                            }')" \
             }' "https://daosio.atlassian.net/rest/api/2/issue"
