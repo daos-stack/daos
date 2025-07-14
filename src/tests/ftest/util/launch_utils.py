@@ -1291,8 +1291,8 @@ class TestGroup():
                 self._details["tests"]["loops"][-1] = {
                     "test_file": str(test),
                     "results": test_log_file,
-                    "clients": test.yaml_info["test_clients"],
-                    "servers": test.yaml_info["test_servers"],
+                    "clients": str(test.yaml_info["test_clients"]),
+                    "servers": str(test.yaml_info["test_servers"]),
                     "bdev_list": test.yaml_info["bdev_list"]}
 
                 # Prepare the hosts to run the tests
