@@ -1,4 +1,4 @@
-### Ignored hadoop 3.4.1 related CVE
+### Ignored hadoop 3.4.1 related CVEs
 ## CVE-2023-39410,HIGH,7.5,"apache-avro: Apache Avro Java SDK: Memory when deserializing untrusted data in Avro Java SDK","org.apache.avro:avro","1.7.7","1.11.3",https://avd.aquasec.com/nvd/# CVE-2023-39410
 CVE-2023-39410
 
@@ -23,6 +23,6 @@ CVE-2025-48734
 ## CVE-2025-48924,MEDIUM,,"commons-lang/commons-lang: org.apache.commons/commons-lang3: Uncontrolled Recursion vulnerability in Apache Commons Lang","org.apache.commons:commons-lang3","3.12.0","3.18.0",https://avd.aquasec.com/nvd/# CVE-2025-48924
 CVE-2025-48924
 
-### Ignored io.netty:netty-buffer:4.1.115.Final and hadoop-common:3.4.1 CVE
+### Ignored io.netty:netty-buffer:4.1.115.Final and hadoop-common:3.4.1 CVEs
 ## CVE-2025-25193,MEDIUM,,"Netty, an asynchronous, event-driven network application framework, ha ...","io.netty:netty-common","4.1.115.Final","",https://avd.aquasec.com/nvd/# CVE-2025-25193
 CVE-2025-25193
