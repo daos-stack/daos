@@ -200,4 +200,5 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=osa,osa_drain,online_drain
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_multiple_ranks
         """
+        self.log.info("Offline Drain : Test with multiple ranks")
         self.run_online_drain_test(1, num_ranks=2)
