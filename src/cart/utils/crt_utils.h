@@ -86,7 +86,8 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 int
 crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		     pthread_t *progress_thread, crt_group_t **grp,
-		     uint32_t *grp_size, crt_init_options_t *init_opt);
+		     uint32_t *grp_size, crt_init_options_t *init_opt,
+		     struct crt_proto_format *proto_fmt);
 int
 crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg);
 

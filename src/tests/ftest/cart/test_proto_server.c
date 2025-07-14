@@ -19,7 +19,7 @@ test_run(d_rank_t my_rank)
 		test.tg_local_group_name, test.tg_remote_group_name);
 
 	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
-				  &test.tg_tid, &grp, &grp_size, NULL);
+				  &test.tg_tid, &grp, &grp_size, NULL, NULL);
 	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
