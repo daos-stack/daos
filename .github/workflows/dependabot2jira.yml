@@ -2,6 +2,7 @@
 name: Dependabot_ticket
 
 on:
+  push:
   pull_request:
     types: [opened, reopened, synchronize]
 
