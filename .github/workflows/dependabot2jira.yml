@@ -15,7 +15,7 @@ jobs:
         run: echo "PR created by grom72. Running workflow..."
       - name: Send request to Jira
         run: |
-          curl -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
+          curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}" \
             -X POST \
             -H "Content-Type: application/json" \
             --data '{
