@@ -593,10 +593,9 @@ out:
 }
 
 int
-crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
-		     pthread_t *progress_thread, crt_group_t **grp,
-		     uint32_t *grp_size, crt_init_options_t *init_opt,
-		     struct crt_proto_format *proto_fmt)
+crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx, pthread_t *progress_thread,
+		     crt_group_t **grp, uint32_t *grp_size, crt_init_options_t *init_opt,
+		     struct crt_proto_format *p_fmt)
 {
 	char            *grp_cfg_file = NULL;
 	char            *my_uri       = NULL;
@@ -641,8 +640,8 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	if (proto_fmt) {
-		rc = crt_proto_register(proto_fmt);
+	if (p_fmt != NULL) {
+		rc = crt_proto_register(p_fmt);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
