@@ -23,8 +23,8 @@ jobs:
             --data '{
               "fields": {
                 "project": { "key": "PMDK" },
-                "summary": "'"${{ github.event.pull_request.title }}"'",
-                "description": "'"${{ github.event.pull_request.body }}"'",
+                "summary": "${{ github.event.pull_request.title }}",
+                "description": "${{ github.event.pull_request.body }}",
                 "issuetype": { "name": "Bug" }
               }
             }' "https://daosio.atlassian.net/rest/api/2/issue"
