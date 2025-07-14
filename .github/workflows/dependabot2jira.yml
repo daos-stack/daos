@@ -19,6 +19,7 @@ jobs:
         run: |
           curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}" \
             --insecure \
+            --verbose \
             -X POST \
             -H "Content-Type: application/json" \
             --data '{
@@ -28,5 +29,4 @@ jobs:
                 "description": "This issue was created via curl in GitHub Actions. Wow",
                 "issuetype": { "name": "Bug" }
               }
-            }' \
-            "https://${{ secrets.JIRA_HOST }}/rest/api/2/issue"
+            }' "https://${{ secrets.JIRA_HOST }}/rest/api/2/issue"
