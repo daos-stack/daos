@@ -50,7 +50,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
 
         # Get a random rank(s) based on num_ranks input.
         ranklist = list(self.server_managers[0].ranks.keys())
-        self.ranks = ",".join(self.random.sample(ranklist, k=num_ranks))
+        self.ranks = ",".join(map(str, self.random.sample(ranklist, k=num_ranks)))
 
         # Exclude target : random two targets  (target idx : 0-7)
         exc = self.random.randint(0, 6)

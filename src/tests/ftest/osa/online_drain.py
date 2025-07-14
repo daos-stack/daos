@@ -53,7 +53,7 @@ class OSAOnlineDrain(OSAUtils):
 
         # Get random rank(s) from the rank list.
         ranklist = list(self.server_managers[0].ranks.keys())
-        rank = ",".join(self.random.sample(ranklist, k=num_ranks))
+        rank = ",".join(map(str, self.random.sample(ranklist, k=num_ranks)))
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
