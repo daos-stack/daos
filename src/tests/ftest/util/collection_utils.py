@@ -6,6 +6,7 @@
 """
 # pylint: disable=too-many-lines
 import glob
+import json
 import os
 import re
 import sys
@@ -625,6 +626,40 @@ def create_steps_log(logger, job_results_dir, test_result):
     return 0
 
 
+def record_variant_details(logger, job_results_dir, test_result, details):
+    """Record variant test results to the details.json file.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        job_results_dir (str): path to the avocado job results
+        test_result (TestResult): the test result used to update the status of the test
+        details (dict): dictionary to update with test results
+
+    Returns:
+        int: status code: 16384 = problem parsing the results.json; 0 = success
+    """
+    logger.debug("=" * 80)
+    logger.info("Creating steps.log file")
+    details["test_variants"] = []
+
+    test_logs_lnk = os.path.join(job_results_dir, "latest")
+    test_logs_dir = os.path.realpath(test_logs_lnk)
+    results_json = os.path.join(test_logs_dir, 'results.json')
+    try:
+        with open(results_json, "r", encoding="utf-8") as results:
+            data = json.loads(results.readlines())
+            for test in data["tests"]:
+                details["test_variants"].append(
+                    {"variant": test["id"].split(";")[0],
+                     "status": test["status"],
+                     "time": f"{round(test["time"], 2)}s"})
+    except Exception:
+        message = f"Error parsing {results_json}"
+        test_result.fail_test(logger, "Process", message, sys.exc_info())
+        return 16384
+    return 0
+
+
 def rename_avocado_test_dir(logger, test, job_results_dir, test_result, jenkins_xml, total_repeats):
     """Append the test name to its avocado job-results directory name.
 
@@ -887,7 +922,7 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
 
 
 def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, archive, rename,
-                        jenkins_xml, core_files, threshold, total_repeats):
+                        jenkins_xml, core_files, threshold, total_repeats, details):
     # pylint: disable=too-many-arguments
     """Process the test results.
 
@@ -911,6 +946,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
         core_files (dict): location and pattern defining where core files may be written
         threshold (str): optional upper size limit for test log files
         total_repeats (int): total number of times the test will be repeated
+        details (dict): dictionary to update with test results
 
     Returns:
         int: status code: 0 = success, >0 = failure
@@ -1015,6 +1051,9 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
 
     # Generate a steps.log file
     return_code |= create_steps_log(logger, job_results_dir, test_result)
+
+    # Add test variant results to the details
+    return_code |= record_variant_details(logger, job_results_dir, details)
 
     # Optionally rename the test results directory for this test
     if rename:

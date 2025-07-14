@@ -183,7 +183,8 @@ def summarize_run(logger, mode, status):
         1024: "ERROR: Failed to rename logs and results after one or more tests!",
         2048: "ERROR: Core stack trace files detected!",
         4096: "ERROR: Unexpected processes or mounts found running!",
-        8192: "ERROR: Failed to create steps.log!"
+        8192: "ERROR: Failed to create steps.log!",
+        16384: "ERROR: Failed to parse test variant status!"
     }
     for bit_code, error_message in bit_error_map.items():
         if status & bit_code == bit_code:
@@ -443,7 +444,7 @@ class TestRunner():
             number (int): the test sequence number in this repetition
             sparse (bool): whether to use avocado sparse output
             fail_fast(bool): whether to use the avocado fail fast option
-            details: {dict}: dictionary to update with test results
+            details (dict): dictionary to update with test results
 
         Returns:
             int: status code: 0 = success, >0 = failure
@@ -488,7 +489,7 @@ class TestRunner():
         return return_code
 
     def process(self, logger, job_results_dir, test, repeat, stop_daos, archive, rename,
-                jenkins_xml, core_files, threshold):
+                jenkins_xml, core_files, threshold, details):
         # pylint: disable=too-many-arguments
         """Process the test results.
 
@@ -509,6 +510,7 @@ class TestRunner():
             jenkins_xml (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
+            details (dict): dictionary to update with test results
 
         Returns:
             int: status code: 0 = success, >0 = failure
@@ -522,7 +524,7 @@ class TestRunner():
             test, repeat, self.total_repeats)
         status = collect_test_result(
             logger, test, self.test_result, job_results_dir, stop_daos, archive, rename,
-            jenkins_xml, core_files, threshold, self.total_repeats)
+            jenkins_xml, core_files, threshold, self.total_repeats, details)
 
         # Mark the execution of the test as passed if nothing went wrong
         if self.test_result.status is None:
@@ -1312,7 +1314,7 @@ class TestGroup():
                 # Archive the test results
                 return_code |= runner.process(
                     logger, job_results_dir, test, loop, stop_daos, archive, rename,
-                    jenkins_log, core_files, threshold)
+                    jenkins_log, core_files, threshold, self._details["tests"]["loops"][-1])
 
                 # Display disk usage after the test is complete
                 display_disk_space(logger, logdir)
