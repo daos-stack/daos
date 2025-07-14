@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,18 +67,19 @@ static void
 timiing_obj_csums_verify(void **state)
 {
 	struct cli_checksum_test_state	*st = *state;
-	struct dc_csum_veriry_args	 args = {
-		 .csummer    = st->csummer,
-		 .iods       = st->td.td_iods,
-		 .iod_nr     = 1,
-		 .sgls       = st->td.td_sgls,
-		 .dkey       = &st->td.dkey,
-		 .maps       = st->td.td_maps,
-		 .maps_nr    = 1,
-		 .iods_csums = NULL,
-		 .dkey_hash  = 1,
-		 .sizes      = st->td.td_sizes,
-	};
+	struct dc_csum_veriry_args       args = {
+		  .csummer      = st->csummer,
+		  .iods         = st->td.td_iods,
+		  .iod_nr       = 1,
+		  .sgls         = st->td.td_sgls,
+		  .dkey         = &st->td.dkey,
+		  .maps         = st->td.td_maps,
+		  .maps_nr      = 1,
+		  .iods_csums   = NULL,
+		  .dkey_hash    = 1,
+		  .sizes        = st->td.td_sizes,
+		  .ec_deg_fetch = false,
+        };
 
 	/* Calculate the checksums that will be verified. In production, these would
 	 * come from the server

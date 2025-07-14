@@ -9,7 +9,8 @@ good-names=rc,ret,fd,kv,wf,rf
 
 [MESSAGES CONTROL]
 disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-value,
-        wrong-import-position,modified-iterating-list,duplicate-code,unspecified-encoding
+        wrong-import-position,modified-iterating-list,duplicate-code,unspecified-encoding,
+        too-many-positional-arguments
 
 [FORMAT]
 max-line-length=100
