@@ -33,7 +33,7 @@ def configure_lustre(denv):
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.d_add_build_rpath()
 
@@ -54,6 +54,9 @@ def scons():
 
     duns = denv.d_library('duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib64/', duns)
+
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports='denv')
 
 
 if __name__ == "SCons.Script":
