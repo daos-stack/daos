@@ -29,4 +29,4 @@ jobs:
                 "description": "This issue was created via curl in GitHub Actions. Wow",
                 "issuetype": { "name": "Bug" }
               }
-            }' "https://${{ secrets.JIRA_HOST }}/rest/api/2/issue"
+            }' "https://daosio.atlassian.net/rest/api/2/issue"
