@@ -16,14 +16,15 @@ jobs:
       - name: Send request to Jira
         run: |
           curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}" \
+            --insecure \
             -X POST \
             -H "Content-Type: application/json" \
             --data '{
               "fields": {
                 "project": { "key": "PMDK" },
-                "summary": "GitHub Action–generated ticket",
-                "description": "This issue was created via curl in GitHub Actions.",
-                "issuetype": { "name": "Task" }
+                "summary": "GitHub Action–generated ticket Wow",
+                "description": "This issue was created via curl in GitHub Actions. Wow",
+                "issuetype": { "name": "Bug" }
               }
             }' \
             https://${{ secrets.JIRA_HOST }}/rest/api/2/issue
