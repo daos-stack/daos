@@ -18,7 +18,6 @@ jobs:
       - name: Send request to Jira
         run: |
           curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}" \
-            --insecure \
             --verbose \
             -X POST \
             -H "Content-Type: application/json" \
