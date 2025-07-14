@@ -13,3 +13,17 @@ jobs:
     steps:
       - name: Echo PR info
         run: echo "PR created by grom72. Running workflow..."
+      - name: Send request to Jira
+        run: |
+          curl -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data '{
+              "fields": {
+                "project": { "key": "PMDK" },
+                "summary": "GitHub Action–generated ticket",
+                "description": "This issue was created via curl in GitHub Actions.",
+                "issuetype": { "name": "Task" }
+              }
+            }' \
+            https://${{ secrets.JIRA_HOST }}/rest/api/2/issue
