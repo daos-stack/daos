@@ -1,0 +1,14 @@
+# .github/workflows/dependabot2jira.yml
+name: Dependabot_ticket
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  run-if-grom72:
+    if: github.actor == 'grom72'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo PR info
+        run: echo "PR created by grom72. Running workflow..."
