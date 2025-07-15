@@ -254,12 +254,16 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		struct fuse_entry_param entry = {0};
 
 		D_SPIN_LOCK(&dfuse_info->di_lock);
-		if (dfuse_info->di_ctrl_dfs != NULL) {
+		struct dfuse_cont *ctrl_dfs = parent_inode->ie_dfs;
+		if (dfuse_info->di_ctrl_dfs != NULL && dfuse_info->di_ctrl_dfs != ctrl_dfs) {
+			/** The other container appears to still be in use, so
+			 * try again later
+			 */
 			D_SPIN_UNLOCK(&dfuse_info->di_lock);
-			fuse_reply_err(req, EBUSY);
+			fuse_reply_err(req, EAGAIN);
 			return;
 		}
-		dfuse_info->di_ctrl_dfs = parent_inode->ie_dfs;
+		dfuse_info->di_ctrl_dfs = ctrl_dfs;
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
 		/** Unlikely to conflict */
 		entry.attr.st_ino = entry.ino = DFUSE_CTRL_INO;

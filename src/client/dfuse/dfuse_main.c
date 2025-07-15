@@ -407,12 +407,13 @@ check_fd_mountpoint(const char *mountpoint)
 	return fd;
 }
 
-#define PRINT_STAT(sname, ...) \
-{				\
-	d_parser_output_put(parser, "DFUSE statistics:\n"); \
-	d_parser_output_put(parser, #sname "\t\t" DF_U64 "\n", \
-			    atomic_fetch_add_relaxed(&ctrl_dfs->dfs_stat_value[DS_##sname], 0)); \
-}
+#define PRINT_STAT(sname, ...)                                                                     \
+	{                                                                                          \
+		uint64_t __stat =                                                                  \
+		    atomic_fetch_add_relaxed(&ctrl_dfs->dfs_stat_value[DS_##sname], 0);            \
+		if (__stat != 0)                                                                   \
+			d_parser_output_put(parser, "%-16s: " DF_U64 "\n", #sname, __stat);        \
+	}
 
 static void
 stat_parser_cb(d_parser_t *parser, char *buf, int len, void *arg)
@@ -423,6 +424,7 @@ stat_parser_cb(d_parser_t *parser, char *buf, int len, void *arg)
 		return;
 	}
 
+	d_parser_output_put(parser, "DFUSE statistics:\n");
 	D_FOREACH_DFUSE_STATX(PRINT_STAT);
 }
 
