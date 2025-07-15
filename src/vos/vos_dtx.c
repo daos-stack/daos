@@ -442,9 +442,16 @@ dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		rec->rec_off = umem_ptr2off(&tins->ti_umm, dce_new);
 		D_FREE(dce_old);
 	} else if (!dce_old->dce_reindex) {
-		D_ASSERTF(dce_new->dce_reindex, "Repeatedly commit DTX "DF_DTI"\n",
-			  DP_DTI(&DCE_XID(dce_new)));
-		dce_new->dce_exist = 1;
+		/* If two client threads (such as non-initialized context after fork) use the same
+		 * DTX ID (by chance), then it is possible to arrive here. But once comes here, we
+		 * have no chance to require related client/application to restart the transaction
+		 * since related RPC may has already completed.
+		 * */
+		if (unlikely(dce_new->dce_reindex == 0))
+			D_WARN("Commit DTX " DF_DTI " for more than once, maybe reused\n",
+			       DP_DTI(&DCE_XID(dce_new)));
+		else
+			dce_new->dce_exist = 1;
 	}
 
 	return 0;
