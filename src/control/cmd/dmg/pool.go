@@ -1,7 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
-// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -689,8 +688,8 @@ func (cmd *poolQueryCmd) Execute(args []string) error {
 type poolQueryTargetsCmd struct {
 	poolCmd
 
-	Rank    uint32         `long:"rank" required:"1" description:"Engine rank of the target(s) to be queried"`
-	Targets ui.RankSetFlag `long:"target-idx" description:"Comma-separated list of target index(es) to be queried (default: all)"`
+	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
+	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
 }
 
 // Execute is run when PoolQueryTargetsCmd subcommand is activated
@@ -698,7 +697,11 @@ func (cmd *poolQueryTargetsCmd) Execute(args []string) error {
 	ctx := cmd.MustLogCtx()
 
 	var tgtsList []uint32
-	if cmd.Targets.RankSet.Count() == 0 {
+	if len(cmd.Targets) > 0 {
+		if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
+			return errors.WithMessage(err, "parsing target list")
+		}
+	} else {
 		pi, err := control.PoolQuery(ctx, cmd.ctlInvoker, &control.PoolQueryReq{
 			ID:        cmd.PoolID().String(),
 			QueryMask: daos.DefaultPoolQueryMask,
@@ -712,11 +715,6 @@ func (cmd *poolQueryTargetsCmd) Execute(args []string) error {
 		tgtCount := pi.TotalTargets / pi.TotalEngines
 		for i := uint32(0); i < tgtCount; i++ {
 			tgtsList = append(tgtsList, i)
-		}
-	} else {
-		tgtsList = make([]uint32, cmd.Targets.RankSet.Count())
-		for i, rank := range cmd.Targets.RankSet.Ranks() {
-			tgtsList[i] = uint32(rank)
 		}
 	}
 

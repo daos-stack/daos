@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Google LLC
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -538,6 +537,8 @@ func checkRankResults(t *testing.T, exp, got []*sharedpb.RankResult) {
 }
 
 func TestServer_MgmtSvc_getPoolRanks(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+
 	for name, tc := range map[string]struct {
 		pools        []string
 		inRanks      *ranklist.RankSet
@@ -612,8 +613,11 @@ func TestServer_MgmtSvc_getPoolRanks(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
-			svc := newTestMgmtSvc(t, logging.FromContext(ctx))
+			buf.Reset()
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t, log)
+			svc := newTestMgmtSvc(t, log)
 
 			for _, uuidStr := range tc.pools {
 				addTestPoolService(t, svc.sysdb, &system.PoolService{
@@ -2655,8 +2659,8 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
-			log := logging.FromContext(ctx)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
 
@@ -2697,7 +2701,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := svc.SystemDrain(ctx, tc.req)
+			gotResp, gotErr := svc.SystemDrain(test.MustLogContext(t, log), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			if tc.expErr == nil {
@@ -2835,6 +2839,8 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_checkReplaceRank(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+
 	for name, tc := range map[string]struct {
 		pools         []string
 		rankToReplace ranklist.Rank
@@ -2881,8 +2887,11 @@ func TestServer_MgmtSvc_checkReplaceRank(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
-			svc := newTestMgmtSvc(t, logging.FromContext(ctx))
+			buf.Reset()
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t, log)
+			svc := newTestMgmtSvc(t, log)
 
 			for _, uuidStr := range tc.pools {
 				addTestPoolService(t, svc.sysdb, &system.PoolService{

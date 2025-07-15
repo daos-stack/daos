@@ -1,6 +1,5 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -372,7 +371,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
-        self.attrs = BasicParameter(None)
 
         self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
@@ -525,8 +523,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
                 "acl_file": self.acl_file.value,
-                "label": self.label.value,
-                "attrs": self.attrs.value
+                "label": self.label.value
             }
             self._log_method("daos.container_create", kwargs)
             result = self.daos.container_create(**kwargs)

@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2024 Intel Corporation.
-// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestAPI_RunSelfTest(t *testing.T) {
@@ -163,6 +163,8 @@ func TestAPI_RunSelfTest(t *testing.T) {
 			run_self_test_MsEndpoints = nil
 			run_self_test_EndpointLatencies = nil
 			run_self_test_RC = _Ctype_int(tc.self_test_RC)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var sysRanks []ranklist.Rank
 			if len(tc.cfg.EndpointRanks) == 0 {
@@ -186,7 +188,7 @@ func TestAPI_RunSelfTest(t *testing.T) {
 			tgtEps := genEndPoints(tc.cfg.EndpointTags, sysRanks...)
 			run_self_test_EndpointLatencies = genEpLatencies(tc.cfg.Repetitions*uint(len(tgtEps)), tgtEps...)
 
-			ctx := test.MustLogContext(t)
+			ctx := test.MustLogContext(t, log)
 			res, err := RunSelfTest(ctx, tc.cfg)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
