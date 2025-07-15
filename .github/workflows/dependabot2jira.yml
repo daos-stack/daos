@@ -4,7 +4,6 @@ name: Dependabo jira ticket
 permissions: {}
 
 on:
-  push:
   pull_request:
     types: [opened]
 
