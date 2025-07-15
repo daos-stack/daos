@@ -418,7 +418,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 # Ensure daos_log_dir exists
 if [ ! -d %{daos_log_dir} ]; then
     mkdir -p %{daos_log_dir}
-    chown daos_server.daos_daemons %{daos_log_dir}
+    chown daos_server:daos_daemons %{daos_log_dir}
     chmod 775 %{daos_log_dir}
 fi
 

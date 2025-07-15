@@ -1346,7 +1346,7 @@ engines:
   fabric_iface: eth0
   fabric_iface_port: 32416
   log_mask: ERR
-  log_file: /var/log/daos/server2.log
+  log_file: /var/log/daos/daos_engine1.log
   storage:
   -
     class: dcpm               # type of first storage tier (SCM)
