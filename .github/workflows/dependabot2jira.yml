@@ -13,22 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send request to Jira
-        run: >
-          curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}"
-            --verbose
-            -X POST
-            -H "Content-Type: application/json"
-            --data "$(jq -n --arg title "${{ github.event.pull_request.title }}"
-                           --arg body "$( cat << EOF
-                           ${{ github.event.pull_request.body }}
-                           EOF
-                           )"
-                           '{
-                              fields: {
-                                project: { key: "PMDK" },
-                                summary: $title,
-                                description: $body,
-                                issuetype: { name: "Bug" }
-                              }
-                            }')"
-            "https://daosio.atlassian.net/rest/api/2/issue"
+        run: |
+          curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}" \
+            --verbose \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data "$(jq -n --arg title "${{ github.event.pull_request.title }}" \
+                           --arg body "$( cat << EOF \
+                           ${{ github.event.pull_request.body }} \
+                           EOF \
+                           )" \
+                           '{ \
+                              fields: { \
+                                project: { key: "PMDK" }, \
+                                summary: $title, \
+                                description: $body, \
+                                issuetype: { name: "Bug" } \
+                              } \
+                            }')" "https://daosio.atlassian.net/rest/api/2/issue"
