@@ -2035,10 +2035,10 @@ static void
 test_parser(void **state)
 {
 	d_parser_t *parser;
-	char old_mask[128]    = {"warn"};
-	char old_streams[128] = {"group_default"};
+	char        old_mask[128]    = {"warn"};
+	char        old_streams[128] = {"group_default"};
 	int         len;
-	int  rc;
+	int         rc;
 
 	rc = d_parser_init(&parser);
 	assert_rc_equal(rc, 0);

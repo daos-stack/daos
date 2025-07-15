@@ -14,9 +14,9 @@
 #define D_PARSER_ID_MAX_LEN 64
 
 typedef struct d_parser {
-	d_list_t                 p_handlers;
-	uint64_t                 p_magic;
-	char                     p_internal[0];
+	d_list_t p_handlers;
+	uint64_t p_magic;
+	char     p_internal[0];
 } d_parser_t;
 
 typedef void (*d_parser_run_cb_t)(d_parser_t *output, char *buf, int len, void *arg);
