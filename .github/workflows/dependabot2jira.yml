@@ -1,5 +1,5 @@
 # .github/workflows/dependabot2jira.yml
-name: Dependabo jita ticket
+name: Dependabo jira ticket
 
 permissions: {}
 
@@ -12,16 +12,17 @@ jobs:
     if: github.actor == 'grom72'
     runs-on: ubuntu-latest
     steps:
-      - name: Echo PR info
-        run: echo "PR created by grom72. Running workflow..."
       - name: Send request to Jira
-        run: |
-          curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}" \
-            --verbose \
-            -X POST \
-            -H "Content-Type: application/json" \
-            --data "$(jq -n --arg title "${{ github.event.pull_request.title }}" \
-                           --arg body "${{ github.event.pull_request.body }}" \
+        run: >
+          curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}"
+            --verbose
+            -X POST
+            -H "Content-Type: application/json"
+            --data "$(jq -n --arg title "${{ github.event.pull_request.title }}"
+                           --arg body "$( cat << EOF
+                           ${{ github.event.pull_request.body }}
+                           EOF
+                           )"
                            '{
                               fields: {
                                 project: { key: "PMDK" },
@@ -29,5 +30,5 @@ jobs:
                                 description: $body,
                                 issuetype: { name: "Bug" }
                               }
-                            }')" \
-            }' "https://daosio.atlassian.net/rest/api/2/issue"
+                            }')"
+            "https://daosio.atlassian.net/rest/api/2/issue"
