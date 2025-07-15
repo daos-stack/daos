@@ -7018,44 +7018,31 @@ pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map, uint32_t ma
 	return 0;
 }
 
-static int
-pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map)
+static void
+log_unavailable_targets(struct pool_svc *svc, struct pool_map *map)
 {
-	crt_group_t		*primary_grp;
 	struct pool_domain	*doms;
 	int			 doms_cnt;
-	int			 i;
-	int			 rc = 0;
+	int                      i;
 
-	D_DEBUG(DB_MD, DF_UUID": checking node status\n", DP_UUID(svc->ps_uuid));
 	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
 	D_ASSERT(doms_cnt >= 0);
-	primary_grp = crt_group_lookup(NULL);
-	D_ASSERT(primary_grp != NULL);
 
-	D_CRIT("!!! Please try to recover these engines in top priority -\n");
-	D_CRIT("!!! Please refer \"Pool-Wise Redundancy Factor\" section in pool_operations.md\n");
+	D_ERROR(DF_UUID ": unavailable ranks/targets:\n", DP_UUID(svc->ps_uuid));
 	for (i = 0; i < doms_cnt; i++) {
-		struct swim_member_state state;
+		if (doms[i].do_comp.co_status & PO_COMP_ST_DOWN) {
+			D_ERROR(DF_UUID ":  rank %u\n", DP_UUID(svc->ps_uuid),
+				doms[i].do_comp.co_rank);
+		} else if (doms[i].do_comp.co_status & PO_COMP_ST_UPIN) { // XXX: ask Xuezhao
+			int j;
 
-		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
-			continue;
-
-		rc = crt_rank_state_get(primary_grp, doms[i].do_comp.co_rank, &state);
-		if (rc != 0 && rc != -DER_NONEXIST) {
-			D_ERROR("failed to get status of rank %u: %d\n",
-				doms[i].do_comp.co_rank, rc);
-			break;
+			for (j = 0; j < doms[i].do_target_nr; j++)
+				if (doms[i].do_targets[j].ta_comp.co_status & PO_COMP_ST_DOWN)
+					D_ERROR(DF_UUID ":  rank %u / target %d\n",
+						DP_UUID(svc->ps_uuid), doms[i].do_comp.co_rank,
+						doms[i].do_targets[j].ta_comp.co_index);
 		}
-
-		D_DEBUG(DB_MD, "rank/state %d/%d\n", doms[i].do_comp.co_rank,
-			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD)
-			D_CRIT("!!! pool "DF_UUID" : intolerable unavailability: engine rank %u\n",
-			       DP_UUID(svc->ps_uuid), doms[i].do_comp.co_rank);
 	}
-
-	return rc;
 }
 
 /*
@@ -7176,7 +7163,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver, true);
+	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver,
+				     false /* print_changes */);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -7235,18 +7223,15 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 
 		/* TODO DAOS-6353: Update to FAULT when supported */
 		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
-		D_INFO(DF_UUID ": Exclude %d ranks, failed NODE %d\n", DP_UUID(svc->ps_uuid),
-		       tgt_addrs->pta_number, failed_cnt);
+		D_DEBUG(DB_MD, DF_UUID ": tgt_addrs->pta_number=%d failed_cnt=%d\n",
+			DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, failed_cnt);
 		if (failed_cnt > pw_rf) {
-			D_CRIT(DF_UUID": exclude %d ranks will break pool RF %d, failed_cnt %d\n",
-			       DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, pw_rf, failed_cnt);
-			ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-			rc = pool_map_crit_prompt(svc, svc->ps_pool->sp_map);
-			ABT_rwlock_unlock(svc->ps_pool->sp_lock);
-			if (rc != 0)
-				DL_ERROR(rc, DF_UUID ": failed to log prompt",
-					 DP_UUID(svc->ps_uuid));
 			rc = -DER_RF;
+			DL_ERROR(rc,
+				 DF_UUID ": cannot exclude %d targets/ranks: "
+					 "unavailable FDs (%d) > pool RF (%d)",
+				 DP_UUID(svc->ps_uuid), tgt_addrs->pta_number, failed_cnt, pw_rf);
+			log_unavailable_targets(svc, map);
 			goto out_map;
 		}
 	}
