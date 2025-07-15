@@ -247,6 +247,7 @@ class TestInfo():
         "client_partition",
         "client_reservation",
         "client_users",
+        "scm_list",
         "bdev_list",
     ]
 
@@ -293,6 +294,8 @@ class TestInfo():
         """
         self.yaml_info = {"include_local_host": include_local_host}
         yaml_data = get_yaml_data(self.yaml_file)
+        for extra_yaml in self.extra_yaml:
+            yaml_data.update(get_yaml_data(extra_yaml))
         info = {}
         for key in self.YAML_INFO_KEYS:
             # Get the unique values with lists flattened

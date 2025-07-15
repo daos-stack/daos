@@ -1053,7 +1053,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
     return_code |= create_steps_log(logger, job_results_dir, test_result)
 
     # Add test variant results to the details
-    return_code |= record_variant_details(logger, job_results_dir, details)
+    return_code |= record_variant_details(logger, job_results_dir, test_result, details)
 
     # Optionally rename the test results directory for this test
     if rename:
