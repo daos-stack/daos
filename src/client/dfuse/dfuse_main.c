@@ -407,9 +407,23 @@ check_fd_mountpoint(const char *mountpoint)
 	return fd;
 }
 
+#define PRINT_STAT(sname, ...) \
+{				\
+	d_parser_output_put(parser, "DFUSE statistics:\n"); \
+	d_parser_output_put(parser, #sname "\t\t" DF_U64 "\n", \
+			    atomic_fetch_add_relaxed(&ctrl_dfs->dfs_stat_value[DS_##sname], 0)); \
+}
+
 static void
 stat_parser_cb(d_parser_t *parser, char *buf, int len, void *arg)
 {
+	struct dfuse_cont *ctrl_dfs = arg;
+	if (arg == NULL) {
+		d_parser_output_put(parser, "No active container\n");
+		return;
+	}
+
+	D_FOREACH_DFUSE_STATX(PRINT_STAT);
 }
 
 static int

@@ -60,6 +60,9 @@ struct dfuse_info {
 
 	d_list_t             di_pool_historic;
 
+	/** Set in lookup to save active container */
+	struct dfuse_cont   *di_ctrl_dfs;
+
 	/** Next available inode number */
 	ATOMIC uint64_t      di_ino_next;
 	bool                 di_shutdown;

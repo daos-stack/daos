@@ -248,9 +248,19 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *parent_inode;
 
+	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
+
 	if (strncmp(name, DFUSE_CTRL, sizeof(DFUSE_CTRL)) == 0) {
 		struct fuse_entry_param entry = {0};
 
+		D_SPIN_LOCK(&dfuse_info->di_lock);
+		if (dfuse_info->di_ctrl_dfs != NULL) {
+			D_SPIN_UNLOCK(&dfuse_info->di_lock);
+			fuse_reply_err(req, EBUSY);
+			return;
+		}
+		dfuse_info->di_ctrl_dfs = parent_inode->ie_dfs;
+		D_SPIN_UNLOCK(&dfuse_info->di_lock);
 		/** Unlikely to conflict */
 		entry.attr.st_ino = entry.ino = DFUSE_CTRL_INO;
 		entry.attr.st_mode            = DFUSE_CTRL_MODE;
@@ -259,8 +269,6 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		fuse_reply_entry(req, &entry);
 		return;
 	}
-
-	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
 	DFUSE_IE_STAT_ADD(parent_inode, DS_LOOKUP);
 

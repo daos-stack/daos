@@ -55,7 +55,13 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	bool                  wb_cache = false;
 
 	if (ino == DFUSE_CTRL_INO) {
-		rc = d_parser_run(dfuse_info->di_parser, bufv, len, dfuse_log_config_copy, NULL);
+		struct dfuse_cont    *ctrl_dfs;
+
+		D_SPIN_LOCK(&dfuse_info->di_lock);
+		ctrl_dfs = dfuse_info->di_ctrl_dfs;
+		D_SPIN_UNLOCK(&dfuse_info->di_lock);
+		rc = d_parser_run(dfuse_info->di_parser, bufv, len, dfuse_log_config_copy,
+				  ctrl_dfs);
 		if (rc != 0) {
 			DL_ERROR(rc, "Could not parse log ctrl config");
 			fuse_reply_err(req, daos_der2errno(rc));

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -378,6 +379,13 @@ log_rotate(void)
 	int rc = 0;
 
 	if (!mst.log_old) {
+		rc = asprintf(&mst.log_old, "%s.first", mst.log_file);
+		if (rc < 0) {
+			dlog_print_err(errno, "failed to alloc name\n");
+			return -1;
+		}
+	} else {
+		free(mst.log_old);
 		rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
 		if (rc < 0) {
 			dlog_print_err(errno, "failed to alloc name\n");

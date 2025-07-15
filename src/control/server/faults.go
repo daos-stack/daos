@@ -58,11 +58,6 @@ var (
 		"cannot destroy a pool with existing containers",
 		"retry the operation with the recursive flag set to remove containers along with the pool",
 	)
-	FaultHugepagesDisabled = serverFault(
-		code.ServerHugepagesDisabled,
-		"the use of hugepages has been disabled in the server config",
-		"set false (or remove) disable_hugepages parameter in config and reformat storage, then retry the operation",
-	)
 )
 
 func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
@@ -131,14 +126,6 @@ func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 		code.ServerPoolDuplicateLabel,
 		fmt.Sprintf("pool label %q already exists in the system", dupe),
 		"retry the request with a unique pool label",
-	)
-}
-
-func FaultEngineNUMAImbalance(nodeMap map[int]int) *fault.Fault {
-	return serverFault(
-		code.ServerConfigEngineNUMAImbalance,
-		fmt.Sprintf("uneven distribution of engines across NUMA nodes %v", nodeMap),
-		"config requires an equal number of engines assigned to each NUMA node",
 	)
 }
 
