@@ -652,8 +652,8 @@ def record_variant_details(logger, job_results_dir, test_result, details):
                 details["test_variants"].append(
                     {"variant": test["id"].split(";")[0],
                      "status": test["status"],
-                     "time": f"{round(test["time"], 2)}s"})
-    except Exception:
+                     "time": f"{round(test['time'], 2)}s"})
+    except Exception:       # pylint: disable=broad-except
         message = f"Error parsing {results_json}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return 16384
