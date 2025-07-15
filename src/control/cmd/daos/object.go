@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -136,7 +135,7 @@ func (cmd *objQueryCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndOpen(C.DAOS_COO_RO, ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}

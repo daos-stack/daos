@@ -1,6 +1,5 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -301,9 +300,6 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --acl-file=PATH
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
-                #   --attrs=<name>:<value>[,<name>:<value>,...]
-                #           user-defined attributes
-                self.attrs = FormattedParameter("--attrs={}", None)
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""
@@ -598,8 +594,6 @@ class DaosCommandBase(CommandWithSubCommand):
             """Get the daos filesystem sub command object."""
             if self.sub_command.value == "copy":
                 self.sub_command_class = self.CopySubCommand()
-            elif self.sub_command.value == "evict":
-                self.sub_command_class = self.EvictSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -628,14 +622,6 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.dst = FormattedParameter("--dst={}")
                 # filename to write and read container properties
                 self.preserve_props = FormattedParameter("--preserve-props={}")
-
-        class EvictSubCommand(CommonFilesystemSubCommand):
-            """Defines an object for the daos filesystem evict command."""
-
-            def __init__(self):
-                """Create a daos filesystem evict command object."""
-                super().__init__("evict")
-                self.path = BasicParameter(None, position=1)
 
     class SystemSubCommand(CommandWithSubCommand):
         """Defines an object for the daos system subcommand."""

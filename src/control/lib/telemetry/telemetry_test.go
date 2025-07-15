@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestTelemetry_Init(t *testing.T) {
@@ -260,7 +260,10 @@ func TestTelemetry_PruneSegments(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, err := initClientRoot(test.MustLogContext(t), shmID)
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx, err := initClientRoot(test.MustLogContext(t, log), shmID)
 	if err != nil {
 		t.Fatal(err)
 	}
