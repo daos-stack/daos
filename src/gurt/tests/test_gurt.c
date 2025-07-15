@@ -2833,7 +2833,6 @@ int
 main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
-	    cmocka_unit_test(test_parser),
 	    cmocka_unit_test(test_time),
 	    cmocka_unit_test(test_d_errstr),
 	    cmocka_unit_test(test_d_errdesc),
@@ -2850,6 +2849,7 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_gurt_hash_parallel_refcounting),
 	    cmocka_unit_test(test_gurt_atomic),
 	    cmocka_unit_test(test_gurt_string_buffer),
+	    cmocka_unit_test(test_parser),
 	    cmocka_unit_test(test_d_rank_list_dup_sort_uniq),
 	    cmocka_unit_test(test_hash_perf),
 	    cmocka_unit_test_setup_teardown(test_d_getenv_str, setup_getenv_mocks,

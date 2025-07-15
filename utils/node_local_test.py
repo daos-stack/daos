@@ -2240,7 +2240,7 @@ class PosixTests():
 
         container.destroy()
 
-    def test_dfuse_logctrl(self):
+    def test_dfuse_ctrl(self):
         """Test .dfuse_ctrl feature"""
 
         run_daos_cmd(self.conf,
@@ -2253,51 +2253,51 @@ class PosixTests():
 
         tests = {}
 
-        enable_debug = """log_mask=debug
+        enable_debug = """log
+log_mask=debug
 """
-        tests["enable_debug"] = {"payload": enable_debug, "expect_pass": True}
-        enable_debug_all_streams = """log_mask=debug
+        tests["enable_debug"] = {"payload": enable_debug}
+        enable_debug_all_streams = """log
+log_mask=debug
 streams=all
 """
-        tests["enable_debug_all_streams"] = {"payload": enable_debug_all_streams,
-                                             "expect_pass": True}
-        bogus_field = """xyz=debug
+        tests["enable_debug_all_streams"] = {"payload": enable_debug_all_streams}
+        bogus_field = """log
+xyz=debug
 """
-        tests["bogus_field"] = {"payload": bogus_field, "expect_pass": False}
-        empty = ""
-        tests["empty"] = {"payload": empty, "expect_pass": True}
-        whitespace = """    log_mask=info
+        tests["bogus_field"] = {"payload": bogus_field}
+        tests["empty"] = {"payload": "log\n"}
+        whitespace = """log
+log_mask=info
 streams=mem
-
 """
-        tests["whitespace"] = {"payload": whitespace, "expect_pass": True}
-        duplicates = """log_mask=debug
+        tests["whitespace"] = {"payload": whitespace}
+        duplicates = """log
+log_mask=debug
 log_mask=info
 streams=all
 """
-        tests["duplicates"] = {"payload": duplicates, "expect_pass": False}
-        warn = """log_mask=warn
+        tests["duplicates"] = {"payload": duplicates}
+        warn = """log
+log_mask=warn
 """
-        tests["warn"] = {"payload": warn, "expect_pass": True}
+        tests["warn"] = {"payload": warn}
+
+        tests["stats"] = {"payload": "stats\n"}
         ctrl = os.path.join(dfuse.dir, ".dfuse_ctrl")
 
         for name, test in tests.items():
             try:
-                with open(ctrl, "w") as log:
-                    log.write(test["payload"])
-                if not test["expect_pass"]:
-                    print(f"Test {name} should have failed but passed")
-                    self.fail()
+                with open(ctrl, "w") as ctrlfile:
+                    ctrlfile.write(test["payload"])
+                print("Output:")
+                with open(ctrl, "r") as ctrlfile:
+                    for line in ctrlfile.readlines():
+                        sys.stdout.write(line)
+                print(f"Test {name} passed")
             except OSError:
-                if test["expect_pass"]:
-                    print(f"Test {name} should have passed but failed")
-                    self.fail()
-
-            fname = os.path.join(dfuse.dir, f"{name}")
-            with open(fname, "w") as testfile:
-                testfile.write(test["payload"])
-
-            print(f"Test {name} passed")
+                print(f"Test {name} should have passed but failed")
+                self.fail()
 
         try:
             os.mkdir(ctrl)
