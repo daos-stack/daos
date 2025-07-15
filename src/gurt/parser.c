@@ -176,13 +176,13 @@ out:
 int
 d_parser_run(d_parser_t *parser, void *data, int len, d_parser_copy_cb copy_cb, void *arg)
 {
-	char               *buf = NULL;
-	char               *id  = NULL;
-	char               *end;
+	char                    *buf = NULL;
+	char                    *id  = NULL;
+	char                    *end;
 	struct d_parser_handler *handler;
-	char               *handler_buf = NULL;
-	int                 handler_len;
-	int                 rc = 0;
+	char                    *handler_buf = NULL;
+	int                      handler_len;
+	int                      rc = 0;
 
 	if (!d_parser_is_valid(parser))
 		return -DER_INVAL;

@@ -695,7 +695,7 @@ d_log_parse_config(d_parser_t *parser, char *config, int len, void *arg)
 	char                *value   = NULL;
 	int                  value_len;
 	int                  var_len;
-	int                  rc      = 0;
+	int                  rc = 0;
 	char                *saveptr1;
 	char                *loc;
 	char                *str1;
@@ -708,9 +708,9 @@ d_log_parse_config(d_parser_t *parser, char *config, int len, void *arg)
 		if (loc == NULL) {
 			d_parser_output_put(parser, "Could not parse value from '%s'\n", log_var);
 		}
-		*loc  = '\0';
+		*loc      = '\0';
 		var_len   = loc - log_var;
-		value = loc + 1;
+		value     = loc + 1;
 		value_len = strlen(value);
 
 		rc = d_process_log_var(parser, &lv, log_var, var_len, value, value_len);
