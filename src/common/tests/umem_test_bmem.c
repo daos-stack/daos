@@ -2324,6 +2324,17 @@ test_umempobj_create_smallsize(void **state)
 	unlink(name);
 	D_FREE(name);
 
+	/* umempobj_create with metablob size greater than 4TB */
+	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
+	assert_true(name != NULL);
+	ustore_tmp.stor_size = (4ul * 1024 * 1024 * 1024 * 1024) + (1024 * 1024);
+	uma.uma_pool = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, POOL_SIZE, 0666,
+				       &ustore_tmp);
+	assert_ptr_equal(uma.uma_pool, NULL);
+	ustore_tmp.stor_size = POOL_SIZE;
+	unlink(name);
+	D_FREE(name);
+
 	/* umempobj_create with scm size less than 32MB */
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
 	assert_true(name != NULL);
@@ -2527,7 +2538,7 @@ test_umempobj_heap_mb_stats(void **state)
 	/* Create a heap and cache of size 256MB and 128MB (16 & 8 zones) respectively */
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", 0);
 	assert_true(name != NULL);
-	uma.uma_pool = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, scm_size, 0666,
+	uma.uma_pool = umempobj_create(name, "heap_mb_stats", UMEMPOBJ_ENABLE_STATS, scm_size, 0666,
 				       &ustore_tmp);
 	assert_ptr_not_equal(uma.uma_pool, NULL);
 	maxsz_exp   = (uint64_t)(scm_size / MB_SIZE * NEMB_RATIO) * MB_SIZE;
@@ -2555,6 +2566,7 @@ test_umempobj_heap_mb_stats(void **state)
 	assert_int_equal(rc, 0);
 	assert_true(allocated1 * 100 / maxsz_alloc >= 99);
 	assert_int_equal(maxsz, maxsz_exp);
+	allocated1 -= allocated0;
 
 	for (count = num; count > num / 2; count--) {
 		umoff = *ptr;
@@ -2567,6 +2579,7 @@ test_umempobj_heap_mb_stats(void **state)
 	rc = umempobj_get_mbusage(umm.umm_pool, 0, &allocated, &maxsz);
 	print_message("NE usage max_size = %lu allocated = %lu\n", maxsz, allocated);
 	assert_int_equal(rc, 0);
+	allocated -= allocated0;
 	assert_true(allocated < ((allocated1 / 2) + alloc_size));
 	assert_true((allocated + alloc_size) > (allocated1 / 2));
 	assert_int_equal(maxsz, maxsz_exp);

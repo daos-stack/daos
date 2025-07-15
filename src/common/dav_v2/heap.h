@@ -66,9 +66,11 @@ heap_zone_load(struct palloc_heap *heap, uint32_t zid);
 int
 heap_load_nonevictable_zones(struct palloc_heap *heap);
 int
-heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init);
-size_t
-heap_zinfo_get_size(uint32_t nzones);
+heap_update_mbrt_zinfo(struct palloc_heap *heap);
+void
+heap_zinfo_get_size(uint64_t *alloc_size, uint64_t *capacity);
+void
+heap_zinfo_init(struct palloc_heap *heap, bool is_create);
 
 struct alloc_class *
 heap_get_best_class(struct palloc_heap *heap, size_t size);
