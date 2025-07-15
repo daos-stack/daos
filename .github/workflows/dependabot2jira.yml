@@ -15,15 +15,13 @@ jobs:
     steps:
       - name: Send request to Jira
         run: |
+          export BODY=${{ github.event.pull_request.body }}
           curl -u "${{ secrets.JIRA_USERNAME }}:${{ secrets.JIRA_PASSWORD }}" \
             --verbose \
             -X POST \
             -H "Content-Type: application/json" \
             --data "$(jq -n --arg title "${{ github.event.pull_request.title }}" \
-                           --arg body "$( cat << EOF \
-                           ${{ github.event.pull_request.body }} \
-                           EOF \
-                           )" \
+                           --arg body "$(BODY)" \
                            '{ \
                               fields: { \
                                 project: { key: "PMDK" }, \
