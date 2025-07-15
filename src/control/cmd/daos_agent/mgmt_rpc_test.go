@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -705,6 +706,53 @@ func TestAgent_handleSetupClientTelemetry(t *testing.T) {
 			if diff := cmp.Diff(expRespBytes, gotResp, protocmp.Transform()); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestAgent_mgmtModule_GetMethod(t *testing.T) {
+	for name, tc := range map[string]struct {
+		methodID  int32
+		expMethod drpc.Method
+		expErr    error
+	}{
+		"get-attach-info": {
+			methodID:  daos.MethodGetAttachInfo.ID(),
+			expMethod: daos.MethodGetAttachInfo,
+		},
+		"notify-pool-connect": {
+			methodID:  daos.MethodNotifyPoolConnect.ID(),
+			expMethod: daos.MethodNotifyPoolConnect,
+		},
+		"notify-pool-disconnect": {
+			methodID:  daos.MethodNotifyPoolDisconnect.ID(),
+			expMethod: daos.MethodNotifyPoolDisconnect,
+		},
+		"notify-exit": {
+			methodID:  daos.MethodNotifyExit.ID(),
+			expMethod: daos.MethodNotifyExit,
+		},
+		"setup-client-telemetry": {
+			methodID:  daos.MethodSetupClientTelemetry.ID(),
+			expMethod: daos.MethodSetupClientTelemetry,
+		},
+		"unknown": {
+			methodID: -1,
+			expErr:   errors.New("method ID -1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			parent := test.MustLogContext(t)
+			log := logging.FromContext(parent)
+
+			mod := &mgmtModule{
+				log: log,
+			}
+
+			method, err := mod.GetMethod(tc.methodID)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "", tc.expMethod, method)
 		})
 	}
 }
