@@ -1,6 +1,8 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -590,10 +592,11 @@ engines:
   pinned_numa_node: 1
 disable_vfio: false
 disable_vmd: false
-enable_hotplug: false
+disable_hotplug: false
 nr_hugepages: 0
 system_ram_reserved: 26
 disable_hugepages: false
+allow_numa_imbalance: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 core_dump_filter: 19
@@ -613,6 +616,7 @@ hyperthreads: false
 		WithFabricProvider("ofi+verbs").
 		WithMgmtSvcReplicas("hostX:10002").
 		WithDisableVMD(false).
+		WithDisableHotplug(false).
 		WithEngines(
 			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).

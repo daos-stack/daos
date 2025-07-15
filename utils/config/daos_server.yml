@@ -181,13 +181,14 @@
 #disable_vmd: true
 #
 #
-## Enable NVMe SSD Hotplug
+## Disable NVMe SSD Hotplug
 #
-## When hotplug is enabled, io engine will periodically check device hot
+## NVMe SSD hotplug is enabled by default but can be optionally disabled.
+## When enabled io engine will periodically check device hot
 ## plug/remove event, and setup/teardown the device automatically.
 #
 ## default: false
-#enable_hotplug: true
+#disable_hotplug: true
 #
 #
 ## Use Hyperthreads
@@ -235,6 +236,15 @@
 #
 ## default: false
 #disable_hugepages: false
+#
+## Hugepages will be applied across NUMA-nodes based on engine affinity. Typical scenarios where an
+## equal number of engines exist across a number of NUMA-nodes or all engines on a single NUMA-node
+## will be handled but if it's expected that there are a different number of engines on multiple
+## NUMA-nodes e.g. two engines on NUMA-0 and one engine on NUMA-1, then explicitly setting this flag
+## will enable engine start-up with an imbalanced configuration.
+#
+## default: false
+#allow_numa_imbalance: true
 #
 #
 ## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
