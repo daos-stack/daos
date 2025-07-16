@@ -50,8 +50,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
 
         # Get a random rank(s) based on num_ranks input.
         ranklist = list(self.server_managers[0].ranks.keys())
-        if num_ranks > 1:
-            self.ranks = ",".join(map(str, self.random.sample(ranklist, k=num_ranks)))
+        self.ranks = [",".join(map(str, self.random.sample(ranklist, k=num_ranks)))]
 
         # Exclude target : random two targets  (target idx : 0-7)
         exc = self.random.randint(0, 6)
@@ -111,11 +110,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 # If the pool is filled up just drain only a single rank.
                 if pool_fillup > 0 and index > 0:
                     continue
-                if num_ranks > 1:
-                    output = self.pool.drain(self.ranks, t_string)
-                    index = index + num_ranks
-                else:
-                    output = self.pool.drain(rank, t_string)
+                output = self.pool.drain(rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
                 total_space_after_drain = self.pool.get_total_space(refresh=True)
 

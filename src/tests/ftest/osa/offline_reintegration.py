@@ -83,7 +83,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
         # Exclude ranks from a random pool
         ranklist = list(self.server_managers[0].ranks.keys())
-        ranks = ",".join(map(str, self.random.sample(ranklist, k=num_ranks)))
+        ranks = [",".join(map(str, self.random.sample(ranklist, k=num_ranks)))]
 
         self.pool = self.random.choice(pools)  # nosec
         for loop in range(0, self.loop_test_cnt):
@@ -113,12 +113,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     else:
                         if pool_fillup > 0 and index > 0:
                             continue
-                        if num_ranks > 1:
-                            # For multiple rank testing exclude all ranks at once.
-                            output = self.pool.exclude(ranks)
-                            index = index + num_ranks
-                        else:
-                            output = self.pool.exclude(rank)
+                        output = self.pool.exclude(rank)
                 else:
                     output = self.dmg_command.system_stop(ranks=rank, force=True)
                     self.print_and_assert_on_rebuild_failure(output)
@@ -157,12 +152,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 else:
                     if pool_fillup > 0 and index > 0:
                         continue
-                    if num_ranks > 1:
-                        # For multiple rank testing reintegrate all ranks at once.
-                        output = self.pool.exclude(ranks)
-                        index = index + num_ranks
-                    else:
-                        output = self.pool.reintegrate(rank)
+                output = self.pool.reintegrate(rank)
                 self.print_and_assert_on_rebuild_failure(output, timeout=15)
                 free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
                 pver_reint = self.pool.get_version(True)
