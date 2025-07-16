@@ -126,8 +126,9 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	/* Keep backwards compatible with older clients that use timeouts instead of deadlines */
 	if (!(rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED)) {
 		src_timeout = rpc_priv->crp_req_hdr.cch_src_deadline_sec;
-		D_INFO("Deprecated client detected, using timeout of %d instead of deadlines\n",
-		       src_timeout);
+		D_DEBUG(DB_ALL,
+			"Deprecated client detected, using timeout of %d instead of deadlines\n",
+			src_timeout);
 	} else if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
 		/* Inherit a deadline from a source */
 		src_timeout = crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
