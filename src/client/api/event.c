@@ -104,6 +104,9 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
+	if (rc == 0)
+		daos_dti_reset();
+
 	return rc;
 crt:
 	crt_finalize();
