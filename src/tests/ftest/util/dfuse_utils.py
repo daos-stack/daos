@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -37,6 +38,7 @@ class DfuseCommand(ExecutableCommand):
         self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
         self.multi_user = FormattedParameter("--multi-user", False)
         self.read_only = FormattedParameter("--read-only", False)
+        self.enable_local_flock = FormattedParameter("--enable-local-flock", False)
 
     def set_dfuse_exports(self, log_file):
         """Set exports to issue before the dfuse command.
@@ -491,7 +493,7 @@ def stop_dfuse(test, dfuse):
     try:
         dfuse.stop()
     except (CommandFailure) as error:
-        test.test_log.info("  {}".format(error))
+        test.log.info("  {}".format(error))
         error_list.append("Error stopping dfuse: {}".format(error))
     return error_list
 

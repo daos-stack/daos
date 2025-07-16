@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -275,7 +276,6 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			Replicas:  <-replicas,
 			Storage: &PoolServiceStorage{
 				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
-				CurrentRankStr:     fmt.Sprintf("[0-%d]", maxRanks),
 				PerRankTierStorage: []uint64{1, 2},
 			},
 		}
@@ -431,6 +431,51 @@ func ignoreFaultDomainIDOption() cmp.Option {
 		}, cmp.Ignore())
 }
 
+func checkMemberDB(t *testing.T, mdb *MemberDatabase, expMember *Member, opts ...cmp.Option) {
+	t.Helper()
+
+	cmpOpts := []cmp.Option{
+		cmp.AllowUnexported(Member{}),
+	}
+	for _, o := range opts {
+		cmpOpts = append(cmpOpts, o)
+	}
+
+	uuidM, ok := mdb.Uuids[expMember.UUID]
+	if !ok {
+		t.Errorf("member not found for UUID %s", expMember.UUID)
+	}
+	if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
+		t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
+	}
+
+	rankM, ok := mdb.Ranks[expMember.Rank]
+	if !ok {
+		t.Errorf("member not found for rank %d", expMember.Rank)
+	}
+	if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
+		t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
+	}
+
+	addrMs, ok := mdb.Addrs[expMember.Addr.String()]
+	if !ok {
+		t.Errorf("slice not found for addr %s", expMember.Addr.String())
+	}
+
+	found := false
+	for _, am := range addrMs {
+		if am.Rank == expMember.Rank {
+			found = true
+			if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
+				t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
+	}
+}
+
 func TestSystem_Database_memberRaftOps(t *testing.T) {
 	ctx := test.Context(t)
 
@@ -452,10 +497,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 		Addr:        testMembers[1].Addr,
 		State:       testMembers[1].State,
 		FaultDomain: MustCreateFaultDomainFromString("/rack1"),
-	}
-
-	cmpOpts := []cmp.Option{
-		cmp.AllowUnexported(Member{}),
 	}
 
 	for name, tc := range map[string]struct {
@@ -545,43 +586,21 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 
 			// Check member DB was updated
 			for _, expMember := range tc.expMembers {
-				uuidM, ok := db.data.Members.Uuids[expMember.UUID]
-				if !ok {
-					t.Errorf("member not found for UUID %s", expMember.UUID)
-				}
-				if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
-					t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
-				}
-
-				rankM, ok := db.data.Members.Ranks[expMember.Rank]
-				if !ok {
-					t.Errorf("member not found for rank %d", expMember.Rank)
-				}
-				if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
-					t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
-				}
-
-				addrMs, ok := db.data.Members.Addrs[expMember.Addr.String()]
-				if !ok {
-					t.Errorf("slice not found for addr %s", expMember.Addr.String())
-				}
-
-				found := false
-				for _, am := range addrMs {
-					if am.Rank == expMember.Rank {
-						found = true
-						if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
-							t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
-						}
-					}
-				}
-				if !found {
-					t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
-				}
-
+				checkMemberDB(t, db.data.Members, expMember)
 			}
 			if len(db.data.Members.Uuids) != len(tc.expMembers) {
-				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
+				t.Fatalf("expected %d member UUIDs, got %d: %+v", len(tc.expMembers), len(db.data.Members.Uuids), db.data.Members.Uuids)
+			}
+			if len(db.data.Members.Ranks) != len(tc.expMembers) {
+				t.Fatalf("expected %d member ranks, got %d: %+v", len(tc.expMembers), len(db.data.Members.Ranks), db.data.Members.Ranks)
+			}
+
+			totalMemberAddrs := 0
+			for _, members := range db.data.Members.Addrs {
+				totalMemberAddrs += len(members)
+			}
+			if totalMemberAddrs != len(tc.expMembers) {
+				t.Fatalf("expected %d members in address table, got %d: %+v", len(tc.expMembers), totalMemberAddrs, db.data.Members.Addrs)
 			}
 
 			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
@@ -819,7 +838,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 	}
 }
 
-func TestSystemDatabase_PoolServiceList(t *testing.T) {
+func TestSystem_Database_PoolServiceList(t *testing.T) {
 	ready := &PoolService{
 		PoolUUID:   uuid.New(),
 		PoolLabel:  "pool0001",
@@ -1061,7 +1080,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 	}
 }
 
-func Test_Database_ResignLeadership(t *testing.T) {
+func TestSystem_Database_ResignLeadership(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cause     error
 		expErr    error
@@ -1116,7 +1135,7 @@ func Test_Database_ResignLeadership(t *testing.T) {
 	}
 }
 
-func TestDatabase_TakePoolLock(t *testing.T) {
+func TestSystem_Database_TakePoolLock(t *testing.T) {
 	mockUUID := uuid.MustParse(test.MockUUID(1))
 	parentLock := makeLock(1, 1, 1)
 	wrongIdLock := makeLock(1, 2, 1)

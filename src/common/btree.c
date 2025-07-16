@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2819,17 +2820,6 @@ btr_node_del_leaf(struct btr_context *tcx,
 		if (rc != 0)
 			return rc;
 
-		if (tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL) {
-			struct btr_node	*nd;
-
-			nd = btr_off2ptr(tcx, cur_tr->tr_node);
-			/* Current leaf node become empty,
-			 * will be removed from parent node.
-			 */
-			if (nd->tn_keyn == 0)
-				return 0;
-		}
-
 		return 1;
 	}
 
@@ -3146,13 +3136,12 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		is_leaf ? "record" : "child", is_leaf ? "leaf" : "non-leaf",
 		cur_nd->tn_keyn);
 
-	if (cur_nd->tn_keyn > 1 ||
-	    (is_leaf && tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)) {
+	if (cur_nd->tn_keyn > 1) {
 		/* OK to delete record without doing any extra work */
 		D_DEBUG(DB_TRACE, "Straight away deletion, no rebalance.\n");
-		sib_off	= BTR_NODE_NULL;
+		sib_off      = BTR_NODE_NULL;
 		sib_on_right = false; /* whatever... */
-	} else { /* needs to rebalance or merge nodes */
+	} else {                      /* needs to rebalance or merge nodes */
 		D_DEBUG(DB_TRACE, "Parent trace at=%d, key_nr=%d\n",
 			par_tr->tr_at, par_nd->tn_keyn);
 
@@ -3217,8 +3206,46 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 }
 
 /**
+ * Delete the last record from the tree as pointed by @trace.
+ *
+ * It handles both the embedded record and a record stored in a regular tree.
+ */
+static inline int
+btr_root_del_rec_last(struct btr_context *tcx, struct btr_trace *trace, void *args)
+{
+	struct btr_root *root = tcx->tc_tins.ti_root;
+	int              rc;
+
+	rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
+	if (rc != 0)
+		return rc;
+
+	if (btr_has_tx(tcx)) {
+		rc = btr_root_tx_add(tcx);
+		if (rc != 0)
+			return rc;
+	}
+
+	root->tr_depth = 0;
+	root->tr_node  = BTR_NODE_NULL;
+
+	if (btr_has_embedded_value(tcx)) {
+		root->tr_feats ^= BTR_FEAT_EMBEDDED;
+		tcx->tc_feats = root->tr_feats;
+	}
+
+	btr_context_set_depth(tcx, 0);
+	D_DEBUG(DB_TRACE, "Tree is empty now.\n");
+
+	return 0;
+}
+
+/**
  * Deleted the record/child pointed by @trace from the root node.
  *
+ * - If the remaining value is embedded it will be freed.
+ * - If only one record is left in the root and the embedded value is supported, it will become an
+ * embedded value.
  * - If the root node is also a leaf, and the root is empty after the deletion,
  *   then the root node will be freed as well.
  * - If the root node is a non-leaf node, then the corresponding child node
@@ -3228,35 +3255,33 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 static int
 btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 {
-	struct btr_node		*node;
-	struct btr_root		*root;
-	int			 rc = 0;
-	int                      threshold = 1;
-
-	root = tcx->tc_tins.ti_root;
-	node = btr_off2ptr(tcx, trace->tr_node);
+	struct btr_node *node = NULL;
+	struct btr_root *root = tcx->tc_tins.ti_root;
+	int              rc   = 0;
 
 	D_DEBUG(DB_TRACE, "Delete record/child from tree root, depth=%d\n",
 		root->tr_depth);
 
-	if (btr_has_embedded_value(tcx) || btr_node_is_leaf(tcx, trace->tr_node)) {
-		if (D_LOG_ENABLED(DB_TRACE)) {
-			if (btr_has_embedded_value(tcx)) {
-				D_DEBUG(DB_TRACE, "Delete embedded record from the root\n");
-			} else {
-				D_DEBUG(DB_TRACE, "Delete leaf from the root, key_nr=%d.\n",
-					node->tn_keyn);
-			}
-		}
+	if (btr_has_embedded_value(tcx)) {
+		D_DEBUG(DB_TRACE, "Delete the embedded record\n");
+		return btr_root_del_rec_last(tcx, trace, args);
+	}
 
-		if (btr_supports_embedded_value(tcx))
-			threshold = 2;
+	D_ASSERT((tcx->tc_trace.ti_embedded_info & BTR_EMBEDDED_SET) == 0);
+	node = btr_off2ptr(tcx, trace->tr_node);
 
+	if (btr_node_is_leaf(tcx, trace->tr_node)) {
 		/* the root is also a leaf node */
-		if (node->tn_keyn > threshold) {
-			/* have more than one record, simply remove the record
-			 * to be deleted.
-			 */
+		D_DEBUG(DB_TRACE, "Delete leaf from the root, key_nr=%d.\n", node->tn_keyn);
+
+		if (node->tn_keyn > 1) {
+			/* When removing the second to last record and embedding value is supported
+			 * the remaining record will become an embedded one. */
+			if (node->tn_keyn == 2 && btr_supports_embedded_value(tcx)) {
+				return btr_node_del_embed(tcx, trace, root, args);
+			}
+
+			/* have more than one record, simply remove the record to be deleted. */
 			if (btr_has_tx(tcx)) {
 				rc = btr_node_tx_add(tcx, trace->tr_node);
 				if (rc != 0)
@@ -3264,28 +3289,8 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			}
 
 			rc = btr_node_del_leaf_only(tcx, trace, true, args);
-		} else if (node->tn_keyn == 2) {
-			rc = btr_node_del_embed(tcx, trace, root, args);
 		} else {
-			rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
-			if (rc != 0)
-				return rc;
-
-			if (btr_has_tx(tcx)) {
-				rc = btr_root_tx_add(tcx);
-				if (rc != 0)
-					return rc;
-			}
-
-			root->tr_depth	= 0;
-			root->tr_node	= BTR_NODE_NULL;
-			if (btr_has_embedded_value(tcx)) {
-				root->tr_feats ^= BTR_FEAT_EMBEDDED;
-				tcx->tc_feats = root->tr_feats;
-			}
-
-			btr_context_set_depth(tcx, 0);
-			D_DEBUG(DB_TRACE, "Tree is empty now.\n");
+			return btr_root_del_rec_last(tcx, trace, args);
 		}
 	} else {
 		/* non-leaf node */
@@ -3784,9 +3789,9 @@ static int
 btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		 void *args, bool *empty_rc)
 {
-	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
+	struct btr_node   *nd;
 	struct btr_record *rec;
-	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
+	bool               leaf;
 	bool		 empty	= true;
 	int		 rc;
 	int		 i;
@@ -3803,6 +3808,10 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		}
 		goto out;
 	}
+
+	/* If it is not an embedded value it is a regular node. */
+	nd   = btr_off2ptr(tcx, nd_off);
+	leaf = btr_node_is_leaf(tcx, nd_off);
 
 	/* NB: don't need to call TX_ADD_RANGE(nd_off, ...) because I never
 	 * change it so nothing to undo on transaction failure, I may destroy
@@ -4497,9 +4506,6 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 
 	if (tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
 		*tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
-
-	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
-		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
 
 	if ((*tree_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) ==
 	    (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) {

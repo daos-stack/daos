@@ -1,7 +1,6 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers: 6
+  test_clients: 1
 timeout: 600
 server_config:
   name: daos_server
@@ -24,7 +23,6 @@ pool:
   pool_query_timeout: 30
   properties: rd_fac:2
 container:
-  control_method: API
   akey_size: 5
   dkey_size: 5
   debug: true

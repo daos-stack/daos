@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -570,8 +571,10 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx))
+		if (dss_xstream_exiting(dx)) {
+			rc = 0;
 			break;
+		}
 
 		ABT_thread_yield();
 	}
@@ -608,6 +611,7 @@ signal:
 		ABT_cond_signal(xstream_data.xd_ult_init);
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 	}
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc, "stopping");
 }
 
 static inline struct dss_xstream *
@@ -1047,8 +1051,10 @@ dss_start_xs_id(int tag, int xs_id)
 	}
 
 	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);
-	if (rc)
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to start one xstream: tag=%x xs_id=%d", tag, xs_id);
 		return rc;
+	}
 
 	return 0;
 }
@@ -1092,6 +1098,15 @@ dss_xstreams_init(void)
 
 	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
 	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
+
+	dss_chore_credits = DSS_CHORE_CREDITS_DEF;
+	d_getenv_uint("DAOS_IO_CHORE_CREDITS", &dss_chore_credits);
+	if (dss_chore_credits < DSS_CHORE_CREDITS_MIN) {
+		D_WARN("Invalid DAOS_IO_CHORE_CREDITS value, minimum is %u, set as default %u\n",
+		       DSS_CHORE_CREDITS_MIN, DSS_CHORE_CREDITS_DEF);
+		dss_chore_credits = DSS_CHORE_CREDITS_DEF;
+	}
+	D_INFO("Set DAOS IO chore credits as %u\n", dss_chore_credits);
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,

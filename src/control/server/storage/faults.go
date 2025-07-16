@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -194,6 +196,14 @@ var (
 		"'control_metadata.path' is required when MD-on-SSD roles are specified",
 		"set 'control_metadata.path' in the engine storage section of the server config file then "+
 			"restart daos_server")
+
+	// FaultHugepagesDisabled indicates a fault due to incompatibility between an operation and
+	// the use of hugepages having been disabled either in config file or via commandline option.
+	FaultHugepagesDisabled = storageFault(
+		code.StorageHugepagesDisabled,
+		"the use of hugepages has been disabled in the server config or via commandline option",
+		"set false (or remove) disable_hugepages parameter in config or remove the commandline option used to disable and retry the operation, a storage reformat might be necessary",
+	)
 )
 
 // FaultBdevConfigBadNrRoles creates a Fault when an unexpected number of roles have been assigned
@@ -262,6 +272,15 @@ func FaultPathAccessDenied(path string) *fault.Fault {
 		code.StoragePathAccessDenied,
 		fmt.Sprintf("path %q has incompatible access permissions", path),
 		"verify the path is accessible by the user running daos_server and try again",
+	)
+}
+
+// FaultInvalidSPDKConfig creates a Fault for the case where SPDK configuration is invalid.
+func FaultInvalidSPDKConfig(err error) *fault.Fault {
+	return storageFault(
+		code.SpdkInvalidConfiguration,
+		fmt.Sprintf("unable to parse SPDK configuration: %s", err),
+		"regenerate the configuration and restart daos_server",
 	)
 }
 

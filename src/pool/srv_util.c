@@ -279,6 +279,7 @@ init_reconf_map(struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 	int                 i;
 	int                 rc;
 
+	/* TODO DAOS-6353: Deal with FAULT level components */
 	domains_len = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL, &domains);
 	D_ASSERTF(domains_len > 0, "pool_map_find_domain: %d\n", domains_len);
 

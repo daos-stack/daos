@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -195,7 +196,7 @@ struct umem_pool {
 #define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
 #define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
 
-#define UMEM_CACHE_MIN_EVICTABLE_PAGES	2
+#define UMEM_CACHE_MIN_PAGES      1
 
 enum umem_page_event_types {
 	UMEM_CACHE_EVENT_PGLOAD = 0,
@@ -284,6 +285,8 @@ struct umem_cache {
 	/** Waitqueue for free page reserve: umem_cache_reserve() */
 	void            *ca_reserve_wq;
 	/** TODO: some other global status */
+	uint64_t        *ptr2off;
+	uintptr_t       *off2ptr;
 	/** MD page array, array index is page ID */
 	struct umem_page ca_pages[0];
 };
@@ -344,8 +347,21 @@ umem_cache_offisloaded(struct umem_store *store, umem_off_t offset);
  *
  * \return	Memory pointer
  */
-void *
-umem_cache_off2ptr(struct umem_store *store, umem_off_t offset);
+static inline void *
+umem_cache_off2ptr(struct umem_store *store, umem_off_t offset)
+{
+	struct umem_cache *cache = store->cache;
+	uintptr_t          base;
+	unsigned int       pgid;
+
+	pgid = (offset - cache->ca_base_off) >> cache->ca_page_shift;
+	D_ASSERTF(pgid <= cache->ca_md_pages, "pgid = %u, offset = %lu", pgid, offset);
+
+	base = cache->off2ptr[pgid];
+	D_ASSERTF(base != 0, "base addr = %lu", base);
+
+	return (void *)((uintptr_t)base + ((offset - cache->ca_base_off) & cache->ca_page_mask));
+}
 
 /** Convert memory pointer to MD-blob offset, the corresponding page must be mapped already.
  *
@@ -354,8 +370,22 @@ umem_cache_off2ptr(struct umem_store *store, umem_off_t offset);
  *
  * \return	MD-blob offset
  */
-umem_off_t
-umem_cache_ptr2off(struct umem_store *store, const void *ptr);
+static inline umem_off_t
+umem_cache_ptr2off(struct umem_store *store, const void *ptr)
+{
+	struct umem_cache *cache = store->cache;
+	unsigned int       idx;
+	umem_off_t         base_off;
+
+	idx = (ptr - cache->ca_base) >> cache->ca_page_shift;
+	D_ASSERTF((idx <= cache->ca_mem_pages), "ptr = %p, id = %u", ptr, idx);
+
+	base_off = cache->ptr2off[idx];
+	D_ASSERTF((base_off != (-1UL)), "base_off = %lu, ca_base = %p, cache->ca_mem_pages = %d",
+		  base_off, cache->ca_base, cache->ca_mem_pages);
+
+	return base_off + ((ptr - cache->ca_base) & cache->ca_page_mask);
+}
 
 /** Update umem_cache post WAL replay. This routine is called after
  *  WAL replay and the evictability of all pages are determined.

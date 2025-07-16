@@ -36,7 +36,6 @@ server_config:
 pool:
   size: 60%
   aggregation:
-    threshold: 50000000
     aggr_timeout: 180
   set_logmasks: False
 container:

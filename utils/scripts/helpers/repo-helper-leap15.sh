@@ -10,13 +10,15 @@ set -uex
 : "${BASE_DISTRO:=opensuse/leap:15.6}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
+: "${REPOSITORY_NAME:=artifactory}"
+: "${DAOS_LAB_CA_FILE_URL:=}"
 
 # shellcheck disable=SC2120
 disable_repos () {
     local repos_dir="$1"
     shift
     local save_repos
-    IFS=" " read -r -a save_repos <<< "${*:-} daos_ci-leap15-artifactory"
+    IFS=" " read -r -a save_repos <<< "${*:-} daos_ci-leap15-${REPOSITORY_NAME}"
     if [ -n "$REPO_FILE_URL" ]; then
         pushd "$repos_dir"
         local repo
@@ -37,21 +39,13 @@ disable_repos () {
 install_curl() {
 
     if command -v curl; then
+        echo "found curl!"
         return
     fi
 
-    if command -v dnf; then
-        dnf -y install curl
+    if command -v wget; then
+        echo "found wget!"
         return
-    fi
-
-    if command -v zypper; then
-        zypper mr --all --disable
-        zypper addrepo                                                                           \
-            "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
-              temp_opensuse_oss_proxy
-        zypper --non-interactive install curl
-        zypper removerepo temp_opensuse_oss_proxy
     fi
 }
 
@@ -73,6 +67,16 @@ install_dnf() {
 }
 
 # Use local repo server if present
+install_optional_ca() {
+    ca_storage="/etc/pki/trust/anchors/"
+    if [ -n "$DAOS_LAB_CA_FILE_URL" ]; then
+        curl -k --noproxy '*' -sSf -o "${ca_storage}lab_ca_file.crt" \
+            "$DAOS_LAB_CA_FILE_URL"
+        update-ca-certificates
+    fi
+}
+
+# Use local repo server if present
 # if a local repo server is present and the distro repo server can not
 # be reached, have to bootstrap in an environment to get curl installed
 # to then install the pre-built repo file.
@@ -86,17 +90,24 @@ else
 fi
 if [ -n "$REPO_FILE_URL" ]; then
     install_curl
+    install_optional_ca
     mkdir -p "$repos_dir"
     pushd "$repos_dir"
-    curl -k -f -o daos_ci-leap"$MAJOR_VER"-artifactory.repo        \
-         "$REPO_FILE_URL"daos_ci-leap"$MAJOR_VER"-artifactory.repo
+    curl -k --noproxy '*' -sSf -o "daos_ci-leap${MAJOR_VER}-${REPOSITORY_NAME}.repo" \
+         "${REPO_FILE_URL}daos_ci-leap${MAJOR_VER}-${REPOSITORY_NAME}.repo"
     disable_repos "$repos_dir"
     popd
+    # # These may have been created in the Dockerfile must be removed
+    # # when using a local repository.
+    # unset HTTPS_PROXY
+    # unset https_proxy
     install_dnf
 else
     if ! command -v dnf; then
         zypper --non-interactive --gpg-auto-import-keys install \
             dnf dnf-plugins-core
+    else
+        install_dnf
     fi
 fi
 if [ ! -d /etc/yum.repos.d/ ]; then
@@ -158,3 +169,15 @@ fi
 # in the past failed to validate HTTPS certificates if this command is not
 # run here.  Running this command just makes sure things work.
 update-ca-certificates
+
+# Setup the PyPi to use the artifactory as the installation packages source
+if [ -n "$REPO_FILE_URL" ]; then
+    trusted_host="${REPO_FILE_URL##*//}"
+    trusted_host="${trusted_host%%/*}"; \
+    {
+        echo "[global]"
+        echo "trusted-host = ${trusted_host}"
+        echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
+        echo "proxy = \"\""
+     } > /etc/pip.conf
+fi

@@ -1,5 +1,6 @@
 hosts:
   test_servers: 2
+  test_clients: 1
 
 timeout: 320
 
@@ -17,6 +18,3 @@ server_config:
 
 pool:
   scm_size: 1G
-
-container:
-  control_method: API

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -324,6 +325,8 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 }
 
 #define MAX_BULK_IOVS	1024
+#define BULK_DELAY_MAX  3000
+#define BULK_DELAY_STEP 1000
 
 static int
 bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
@@ -368,6 +371,8 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		d_sg_list_t	sgl_sent;
 		size_t		length = 0;
 		unsigned int	start;
+		uint32_t        delay_tot = 0;
+		uint32_t        delay_cur;
 		bool		cached_bulk = false;
 
 		/*
@@ -432,8 +437,30 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			sgl_sent.sg_nr = sgl_sent.sg_nr_out = iov_idx - start;
 			bulk_iovs += sgl_sent.sg_nr;
 
+again:
 			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
 					     &local_bulk);
+			if (rc == -DER_NOMEM) {
+				if (delay_tot >= BULK_DELAY_MAX) {
+					D_ERROR("Too many in-flight bulk handles on %d\n", sgl_idx);
+					break;
+				}
+
+				/*
+				 * If there are too many in-flight bulk handles, then current
+				 * crt_bulk_create() may hit -DER_NOMEM failure. Let it sleep
+				 * for a while (at most 3 seconds) to give cart progress some
+				 * chance to complete some in-flight bulk transfers.
+				 */
+				delay_cur = BULK_DELAY_MAX - delay_tot;
+				if (delay_cur >= BULK_DELAY_STEP)
+					delay_cur = d_rand() % BULK_DELAY_STEP + 1;
+				dss_sleep(delay_cur);
+				delay_tot += delay_cur;
+				bulk_iovs = 0;
+				goto again;
+			}
+
 			if (rc != 0) {
 				D_ERROR("crt_bulk_create %d error " DF_RC "\n", sgl_idx, DP_RC(rc));
 				break;
@@ -490,10 +517,13 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	return rc;
 }
 
+/* bypass bulk rma for single value's degraded fetch */
+#define OBJ_BULK_OFFSET_SKIP ((uint64_t)-1)
+
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
 		  uint64_t *remote_offs, uint8_t *skips, daos_handle_t ioh, d_sg_list_t **sgls,
-		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg, struct ds_cont_hdl *coh)
+		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg)
 {
 	struct obj_bulk_args	arg = { 0 };
 	int			i, rc, *status, ret;
@@ -570,9 +600,14 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 				break;
 		}
 
-		rc = bulk_transfer_sgl(ioh, rpc, remote_bulks[i + skip_nr],
-				       remote_offs ? remote_offs[i] : 0,
-				       bulk_op, bulk_bind, sgl, i, p_arg);
+		/* OBJ_BULK_OFFSET_SKIP is for the case of EC single value degraded fetch,
+		 * unnecessary to bulk transfer here, the data will be transferred back when
+		 * data recovery (ORF_EC_RECOV).
+		 */
+		if (remote_offs == NULL || remote_offs[i] != OBJ_BULK_OFFSET_SKIP)
+			rc = bulk_transfer_sgl(ioh, rpc, remote_bulks[i + skip_nr],
+					       remote_offs ? remote_offs[i] : 0, bulk_op, bulk_bind,
+					       sgl, i, p_arg);
 		if (sgls == NULL)
 			d_sgl_fini(sgl, false);
 		if (rc) {
@@ -601,13 +636,8 @@ done:
 	ABT_eventual_free(&p_arg->eventual);
 
 	if (rc == 0)
-		obj_update_latency(opc_get(rpc->cr_opc), BULK_LATENCY,
-				   daos_get_ntime() - time, arg.bulk_size);
-	if (rc == 0 && coh != NULL && unlikely(coh->sch_closed)) {
-		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
-			DP_UUID(coh->sch_uuid));
-		rc = -DER_IO;
-	}
+		obj_update_latency(opc_get(rpc->cr_opc), BULK_LATENCY, daos_get_ntime() - time,
+				   arg.bulk_size);
 
 	if (rc == 0 && p_arg->result != 0)
 		rc = p_arg->result;
@@ -848,8 +878,8 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *iod, uint64_t *off)
 
 	/* Only support 1 iod now */
 	bulk_bind = orw->orw_flags & ORF_BULK_BIND;
-	rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, off,
-			       NULL, DAOS_HDL_INVAL, &p_sgl, 1, 1, NULL, NULL);
+	rc        = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, off, NULL,
+				      DAOS_HDL_INVAL, &p_sgl, 1, 1, NULL);
 out:
 	orwo->orw_ret = rc;
 	orwo->orw_map_version = orw->orw_map_ver;
@@ -1036,6 +1066,7 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 		} else if (deg_fetch) {
 			rc = obj_singv_ec_add_recov(nr, i, iod->iod_size,
 						    epoch, recov_lists_ptr);
+			offs[i] = OBJ_BULK_OFFSET_SKIP;
 		}
 	}
 
@@ -1371,11 +1402,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			      orw->orw_dkey_csum, &orw->orw_iod_array,
 			      &orw->orw_oid);
 	if (rc != 0) {
-		D_ERROR(DF_C_UOID_DKEY"verify_keys error: "DF_RC"\n",
-			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
-			DP_RC(rc));
-		if (rc == -DER_CSUM)
-			obj_log_csum_err();
+		D_ERROR(DF_C_UOID_DKEY "verify_keys error: " DF_RC "\n",
+			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey), DP_RC(rc));
 		return rc;
 	}
 
@@ -1429,6 +1457,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		bool				ec_deg_fetch;
 		bool				ec_recov;
 		bool				is_parity_shard;
+		bool                             size_only = false;
 		struct daos_recx_ep_list	*shadows = NULL;
 
 		bulk_op = CRT_BULK_PUT;
@@ -1436,8 +1465,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
-			if (!(orw->orw_flags & ORF_CHECK_EXISTENCE))
+			if (!(orw->orw_flags & ORF_CHECK_EXISTENCE)) {
 				fetch_flags = VOS_OF_FETCH_SIZE_ONLY;
+				size_only   = true;
+			}
 		}
 
 		ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
@@ -1464,7 +1495,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 				ioc->ioc_coc->sc_ec_agg_eph_boundary, DP_RC(rc));
 			goto out;
 		}
-		if (ec_deg_fetch && !spec_fetch) {
+		if (ec_deg_fetch && (size_only || !spec_fetch)) {
 			if (orwo->orw_rels.ca_arrays != NULL) {
 				/* Re-entry case */
 				daos_recx_ep_list_free(orwo->orw_rels.ca_arrays,
@@ -1570,24 +1601,27 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			daos_epoch_t	recov_epoch = 0;
 			bool		recov_snap = false;
 
-			/* If fetch from snapshot, and snapshot epoch lower than
-			 * vos agg epoch boundary, recovery from snapshot epoch.
-			 * Or, will recovery from max{parity_epoch, vos_epoch_
-			 * boundary}.
-			 */
-			vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
-			if (ioc->ioc_fetch_snap &&
-			    orw->orw_epoch < vos_agg_epoch) {
-				recov_epoch = orw->orw_epoch;
-				recov_snap =  true;
+			if (size_only) {
+				daos_recx_ep_list_free(recov_lists, iods_nr);
 			} else {
-				recov_epoch = vos_agg_epoch;
+				/* If fetch from snapshot, and snapshot epoch lower than
+				 * vos agg epoch boundary, recovery from snapshot epoch.
+				 * Or, will recovery from max{parity_epoch, vos_epoch_
+				 * boundary}.
+				 */
+				vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
+				if (ioc->ioc_fetch_snap && orw->orw_epoch < vos_agg_epoch) {
+					recov_epoch = orw->orw_epoch;
+					recov_snap  = true;
+				} else {
+					recov_epoch = vos_agg_epoch;
+				}
+				daos_recx_ep_list_set(recov_lists, iods_nr, recov_epoch,
+						      recov_snap);
+				daos_recx_ep_list_merge(recov_lists, iods_nr);
+				orwo->orw_rels.ca_arrays = recov_lists;
+				orwo->orw_rels.ca_count  = iods_nr;
 			}
-			daos_recx_ep_list_set(recov_lists, iods_nr,
-					      recov_epoch, recov_snap);
-			daos_recx_ep_list_merge(recov_lists, iods_nr);
-			orwo->orw_rels.ca_arrays = recov_lists;
-			orwo->orw_rels.ca_count = iods_nr;
 		}
 	}
 
@@ -1649,8 +1683,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
-				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL,
-				       ioc->ioc_coh);
+				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL);
 		if (rc == 0) {
 			bio_iod_flush(biod);
 
@@ -2013,6 +2046,7 @@ obj_local_rw_internal_wrap(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dt
 static int
 obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 {
+	struct obj_rw_in        *orw = crt_req_get(rpc);
 	struct dtx_share_peer	*dsp;
 	uint32_t		 retry = 0;
 	int			 rc;
@@ -2020,18 +2054,16 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 again:
 	rc = obj_local_rw_internal_wrap(rpc, ioc, dth);
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
-			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
-					   dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d times, "
-			       "maybe starve\n", DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
-			       dth->dth_share_tbd_count, retry);
-		}
-
-		if (!obj_rpc_is_fetch(rpc) || retry < 30) {
+		if (++retry < 3) {
 			rc = dtx_refresh(dth, ioc->ioc_coc);
 			if (rc == -DER_AGAIN)
 				goto again;
+		} else if (orw->orw_flags & ORF_MAYBE_STARVE) {
+			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
+					   dsp_link);
+			D_WARN(
+			    "DTX refresh for " DF_DTI " because of " DF_DTI " (%d), maybe starve\n",
+			    DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count);
 		}
 	}
 
@@ -2499,8 +2531,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 			DP_RC(rc));
 		goto end;
 	}
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL,
-			       ioh, NULL, 1, 1, NULL, ioc.ioc_coh);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL, ioh, NULL, 1, 1,
+			       NULL);
 	if (rc)
 		D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oer->er_oid),
 			DP_RC(rc));
@@ -2577,8 +2609,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 				DP_RC(rc));
 			goto end;
 		}
-		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk,
-				       NULL, NULL, ioh, NULL, 1, 1, NULL, ioc.ioc_coh);
+		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk, NULL, NULL, ioh,
+				       NULL, 1, 1, NULL);
 		if (rc)
 			D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 				DP_RC(rc));
@@ -2964,8 +2996,8 @@ again:
 			e = orw->orw_epoch;
 		else
 			e = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
-				       &e, &version);
+		version = orw->orw_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &e, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);
@@ -3044,7 +3076,7 @@ again:
 		max_ver = dlh->dlh_rmt_ver;
 
 	/* Stop the distributed transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3332,8 +3364,8 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 	if (idx == 0)
 		return 0;
 
-	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, NULL, NULL,
-			       DAOS_HDL_INVAL, sgls, idx, idx, NULL, NULL);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, NULL, NULL, DAOS_HDL_INVAL, sgls,
+			       idx, idx, NULL);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
 		oeo->oeo_kds.ca_count = 0;
@@ -3547,12 +3579,16 @@ again:
 	}
 
 	if (obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
-			dsp = d_list_entry(dth->dth_share_tbd_list.next,
-					   struct dtx_share_peer, dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
-			       "times, maybe starve\n", DP_DTI(&dth->dth_xid),
-			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
+		if (++retry >= 3) {
+			if (opi->opi_flags & ORF_MAYBE_STARVE) {
+				dsp = d_list_entry(dth->dth_share_tbd_list.next,
+						   struct dtx_share_peer, dsp_link);
+				D_WARN("DTX refresh for " DF_DTI " because of " DF_DTI
+				       " (%d), maybe starve\n",
+				       DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
+				       dth->dth_share_tbd_count);
+			}
+			goto out;
 		}
 
 		rc = dtx_refresh(dth, ioc->ioc_coc);
@@ -3892,8 +3928,8 @@ again:
 			e = opi->opi_epoch;
 		else
 			e = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
-				       &e, &version);
+		version = opi->opi_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &e, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);
@@ -3975,7 +4011,7 @@ again:
 		max_ver = dlh->dlh_rmt_ver;
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/* Only standalone punches use this RPC. Retry with newer epoch. */
@@ -4598,12 +4634,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		rc = csum_verify_keys(ioc->ioc_coc->sc_csummer,
 				      &dcsr->dcsr_dkey, dcu->dcu_dkey_csum,
 				      &dcu->dcu_iod_array, &dcsr->dcsr_oid);
-		if (rc != 0) {
-			if (rc == -DER_CSUM)
-				obj_log_csum_err();
-
+		if (rc != 0)
 			goto out;
-		}
 
 		if (iohs == NULL) {
 			D_ALLOC_ARRAY(iohs, dcde->dcde_write_cnt);
@@ -4670,7 +4702,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 			rc = obj_bulk_transfer(rpc, CRT_BULK_GET, dcu->dcu_flags & ORF_BULK_BIND,
 					       dcu->dcu_bulks, poffs[i], pskips[i], iohs[i], NULL,
-					       piod_nrs[i], dcsr->dcsr_nr, &bulks[i], ioc->ioc_coh);
+					       piod_nrs[i], dcsr->dcsr_nr, &bulks[i]);
 			if (rc != 0) {
 				D_ERROR("Bulk transfer failed for obj "
 					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
@@ -4941,6 +4973,7 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		       struct daos_cpd_disp_ent *dcde, struct daos_cpd_sub_req *dcsrs,
 		       struct obj_io_context *ioc, struct dtx_handle *dth)
 {
+	struct obj_cpd_in       *oci = crt_req_get(rpc);
 	struct dtx_share_peer	*dsp;
 	uint32_t		 retry = 0;
 	int			 rc;
@@ -4948,17 +4981,17 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 again:
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++retry % 10 == 9)) {
+		if (++retry < 3) {
+			rc = dtx_refresh(dth, ioc->ioc_coc);
+			if (rc == -DER_AGAIN)
+				goto again;
+		} else if (oci->oci_flags & ORF_MAYBE_STARVE) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next,
 					   struct dtx_share_peer, dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
-			       "times, maybe starve\n", DP_DTI(&dth->dth_xid),
-			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
+			D_WARN(
+			    "DTX refresh for " DF_DTI " because of " DF_DTI " (%d), maybe starve\n",
+			    DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count);
 		}
-
-		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN)
-			goto again;
 	}
 
 	return rc;
@@ -5216,7 +5249,7 @@ again:
 	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, 0, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, rc);
+	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART && rc != -DER_AGAIN,
@@ -5388,8 +5421,8 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 		sgls[i] = &dcbs[i]->dcb_sgl;
 	}
 
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL,
-			       DAOS_HDL_INVAL, sgls, count, count, NULL, ioc->ioc_coh);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL, DAOS_HDL_INVAL,
+			       sgls, count, count, NULL);
 	if (rc != 0)
 		goto out;
 
@@ -5735,7 +5768,8 @@ again:
 			tmp = ocpi->ocpi_epoch;
 		else
 			tmp = 0;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
+		version = ocpi->ocpi_map_ver;
+		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
 		switch (rc) {
 		case -DER_ALREADY:
 			D_GOTO(out, rc = 0);
@@ -5795,7 +5829,7 @@ again:
 	if (max_ver < dlh->dlh_rmt_ver)
 		max_ver = dlh->dlh_rmt_ver;
 
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 	if (dtx_flags & DTX_RELAY)
 		goto out;
@@ -5970,7 +6004,7 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	if (version < dlh->dlh_rmt_ver)
 		version = dlh->dlh_rmt_ver;
 
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 out:
 	D_DEBUG(DB_IO, "Handled collective query RPC %p %s forwarding for obj "DF_UOID

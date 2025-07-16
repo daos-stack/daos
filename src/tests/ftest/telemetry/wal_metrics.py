@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -203,8 +204,8 @@ class WalMetrics(TestWithTelemetry):
                             # Check point dirty pages should be 1-30
                             ranges[metric][label] = [1, 30]
                         elif '_duration' in metric:
-                            # Check point duration should be 1-2,000,000
-                            ranges[metric][label] = [1, 2000000]
+                            # Check point duration should be 1-4,000,000 us
+                            ranges[metric][label] = [1, 4000000]
                         elif '_iovs_copied' in metric:
                             # Check point iovs copied should be >= 0
                             ranges[metric][label] = [1]

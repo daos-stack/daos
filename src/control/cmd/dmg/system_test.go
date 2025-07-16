@@ -202,6 +202,42 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
+			"system stop with full option",
+			"system stop --full",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStopReq{Full: true}),
+			}, " "),
+			nil,
+		},
+		{
+			"system stop with full and force options",
+			"system stop --full --force",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
+			"system stop with full and rank-hosts options",
+			"system stop --full --rank-hosts foo-[0-2]",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
+			"system stop with full and ranks options",
+			"system stop --full --ranks 0-2",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
+			"system stop with ignore-admin-excluded option",
+			"system stop --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStopReq{
+					IgnoreAdminExcluded: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
@@ -244,6 +280,30 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
 			"",
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
+		},
+		{
+			"system start with ranks and ignore-admin-excluded",
+			"system start --ranks 0-3 --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, withRanks(&control.SystemStartReq{IgnoreAdminExcluded: true}, 0, 1, 2, 3)),
+			}, " "),
+			nil,
+		},
+		{
+			"system start with hosts and ignore-admin-excluded",
+			"system start --rank-hosts foo-1 --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, withHosts(&control.SystemStartReq{IgnoreAdminExcluded: true}, "foo-1")),
+			}, " "),
+			nil,
+		},
+		{
+			"system start all with ignore-admin-excluded",
+			"system start --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStartReq{IgnoreAdminExcluded: true}),
+			}, " "),
+			nil,
 		},
 		{
 			"system exclude with multiple ranks",

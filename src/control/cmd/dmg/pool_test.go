@@ -258,7 +258,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (% size nranks)",
 			"pool create label --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --nranks"),
+			errors.New("--size=% may not be mixed with --nranks"),
 		},
 		{
 			"Create pool with incompatible arguments (% size tier-ratio)",
@@ -614,13 +614,14 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
+		// Exclude testing with multiple ranks is verified at the control API layer.
 		{
 			"Exclude a target with single target idx",
-			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{1},
 					Force:     false,
 				}),
@@ -629,11 +630,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Exclude a target with multiple idx",
-			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{1, 2, 3},
 					Force:     true,
 				}),
@@ -642,24 +643,25 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Exclude a target with no idx given",
-			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool exclude -f 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0",
 			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{},
 					Force:     true,
 				}),
 			}, " "),
 			nil,
 		},
+		// Drain testing with multiple ranks is verified at the control API layer.
 		{
 			"Drain a target with single target idx",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{1},
 				}),
 			}, " "),
@@ -667,11 +669,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Drain a target with multiple idx",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
@@ -679,11 +681,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Drain a target with no idx given",
-			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0",
 			strings.Join([]string{
-				printRequest(t, &control.PoolDrainReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{},
 				}),
 			}, " "),
@@ -718,13 +720,14 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
+		// Reintegrate testing with multiple ranks is verified at the control API layer.
 		{
 			"Reintegrate a target with single target idx",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{1},
 				}),
 			}, " "),
@@ -732,11 +735,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Reintegrate a target with multiple idx",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --target-idx 1,2,3",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
@@ -744,11 +747,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Reintegrate a target with no idx given",
-			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0",
 			strings.Join([]string{
-				printRequest(t, &control.PoolReintegrateReq{
+				printRequest(t, &control.PoolRanksReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
+					Ranks:     []ranklist.Rank{0},
 					TargetIdx: []uint32{},
 				}),
 			}, " "),
@@ -831,6 +834,19 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set pool rd_fac property",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("rd_fac", "1"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool property invalid property",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb whoops:foo",
 			"",
@@ -853,18 +869,6 @@ func TestPoolCommands(t *testing.T) {
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb perf_domain:root",
 			"",
 			errors.New("can't set perf_domain on existing pool."),
-		},
-		{
-			"Set pool rd_fac property is not allowed",
-			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
-			"",
-			errors.New("can't set redundancy factor on existing pool."),
-		},
-		{
-			"Set pool rf property is not allowed",
-			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
-			"",
-			errors.New("can't set redundancy factor on existing pool."),
 		},
 		{
 			"Set pool ec_pda property is not allowed",

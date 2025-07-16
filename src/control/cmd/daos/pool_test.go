@@ -105,17 +105,14 @@ func TestDaos_poolListCmd(t *testing.T) {
 }
 
 var (
-	defaultPoolConnectResp *api.PoolConnectResp = &api.PoolConnectResp{
-		Connection: &api.PoolHandle{},
-		Info:       defaultPoolInfo,
-	}
-
-	poolConnectResp *api.PoolConnectResp = defaultPoolConnectResp
-	poolConnectErr  error
+	poolConnectErr error
 )
 
 func PoolConnect(ctx context.Context, req api.PoolConnectReq) (*api.PoolConnectResp, error) {
-	return poolConnectResp, poolConnectErr
+	return &api.PoolConnectResp{
+		Connection: api.MockPoolHandle(),
+		Info:       defaultPoolInfo,
+	}, poolConnectErr
 }
 
 func TestDaos_poolQueryCmd(t *testing.T) {

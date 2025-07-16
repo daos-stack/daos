@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,30 +88,18 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
 
-		/* Skip this DTX since it has been committed or aggregated. */
-		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
-			goto next;
-
-		/* Remote ones are all ready, but local is not, then abort such DTX.
-		 * If related RPC sponsor is still alive, related RPC will be resent.
-		 */
-		if (unlikely(rc == DTX_ST_INITED)) {
-			rc = dtx_abort(cont, &dre->dre_dte, dre->dre_epoch);
-			D_DEBUG(DB_TRACE, "As new leader for DTX "DF_DTI", abort it (1): "DF_RC"\n",
-				DP_DTI(&dre->dre_dte.dte_xid), DP_RC(rc));
-			goto next;
-		}
-
-		/* If we failed to check the status, then assume that it is
+		/*
+		 * Skip this DTX since it has been committed or aggregated.
+		 * If we failed to check the status, then assume that it is
 		 * not committed, then commit it (again), that is harmless.
 		 */
+		if (rc != DTX_ST_COMMITTED && rc != -DER_NONEXIST) {
+			dtes[j] = dtx_entry_get(&dre->dre_dte);
+			dcks[j].oid = dre->dre_oid;
+			dcks[j].dkey_hash = dre->dre_dkey_hash;
+			j++;
+		}
 
-		dtes[j] = dtx_entry_get(&dre->dre_dte);
-		dcks[j].oid = dre->dre_oid;
-		dcks[j].dkey_hash = dre->dre_dkey_hash;
-		j++;
-
-next:
 		dtx_dre_release(drh, dre);
 	}
 
@@ -256,6 +245,13 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * let's commit the DTX globally.
 		 */
 		D_GOTO(out, rc = DSHR_NEED_COMMIT);
+	case -DER_OOG:
+	case -DER_HG:
+		D_WARN("Need retry resync for DTX " DF_DTI " because of " DF_RC "\n",
+		       DP_DTI(&dte->dte_xid), DP_RC(rc));
+		/* Yield to give more chance for network recovery. */
+		ABT_thread_yield();
+		D_GOTO(out, rc = DSHR_NEED_RETRY);
 	case -DER_INPROGRESS:
 	case -DER_TIMEDOUT:
 		D_WARN("Other participants not sure about whether the "
@@ -445,6 +441,10 @@ again:
 
 		rc = dtx_status_handle_one(cont, &dre->dre_dte, dre->dre_oid, dre->dre_dkey_hash,
 					   dre->dre_epoch, tgt_array, &err);
+
+		if (unlikely(cont->sc_stopping))
+			D_GOTO(out, err = -DER_CANCELED);
+
 		switch (rc) {
 		case DSHR_NEED_COMMIT:
 			goto commit;
@@ -701,6 +701,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 
 	if (rc >= 0)
 		rc = rc1;
+
+	if (rc >= 0)
+		vos_set_dtx_resync_version(cont->sc_hdl, ver);
 
 	D_DEBUG(DB_MD, "Stop DTX resync (%s) scan for "DF_UUID"/"DF_UUID" with ver %u: rc = %d\n",
 		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);

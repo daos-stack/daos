@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -70,7 +71,7 @@ class ContinuesAfterStop(IorTestBase):
         ior_start_time = journalctl_time()
 
         self.log_step("Stop one of the ranks (rank 3).")
-        self.server_managers[0].stop_ranks(ranks=[3], daos_log=self.log)
+        self.server_managers[0].stop_ranks(ranks=[3])
 
         msg = ("4. Look for the start of the rebuild (Rebuild [scanning]) in journalctl with "
                "daos_server identifier.")
@@ -96,10 +97,10 @@ class ContinuesAfterStop(IorTestBase):
             self.fail("'Rebuild [scanning]' wasn't found in journalctl after stopping a rank!")
 
         self.log_step("As soon as the message is detected, stop the rest of the ranks (0, 1, 2).")
-        self.server_managers[0].stop_ranks(ranks=[0, 1, 2], daos_log=self.log)
+        self.server_managers[0].stop_ranks(ranks=[0, 1, 2])
 
         self.log_step("Restart the three ranks.")
-        self.server_managers[0].start_ranks(ranks=[0, 1, 2], daos_log=self.log)
+        self.server_managers[0].start_ranks(ranks=[0, 1, 2])
 
         self.log_step("Wait for rebuild to finish.")
         pool.wait_for_rebuild_to_end(interval=5)

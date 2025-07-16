@@ -1,4 +1,6 @@
 # Copyright 2022-2024 Intel Corporation
+# Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of EL 9 based
@@ -7,8 +9,8 @@
 
 # Pull base image
 ARG POINT_RELEASE=
-ARG BASE_DISTRO=almalinux:9$POINT_RELEASE
-FROM $BASE_DISTRO as basic
+ARG BASE_DISTRO=rockylinux:9$POINT_RELEASE
+FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
@@ -19,6 +21,7 @@ ARG CB0
 ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
+ARG DAOS_LAB_CA_FILE_URL
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el9.sh /tmp/install.sh
 # script to setup local repo if available
@@ -65,9 +68,11 @@ RUN python3 -m pip --no-cache-dir install --upgrade pip && \
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
 COPY --chown=daos_server:daos_server SConstruct .
+COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh utils/scripts/copy_files.sh
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -75,6 +80,7 @@ COPY --chown=daos_server:daos_server utils/build.config utils/
 ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_TARGET_TYPE=release
+ARG DAOS_PACKAGES_BUILD=yes
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -93,6 +99,17 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
               TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
+
+COPY --chown=daos_server:daos_server utils/rpms utils/rpms
+COPY --chown=daos_server:daos_server utils/sl utils/sl
+
+# Build third party RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
+	export DISTRO="el9" &&                                                  \
+	utils/rpms/build_packages.sh deps &&                                    \
+	mkdir -p /home/daos/rpms &&                                             \
+	mv *.rpm /home/daos/rpms;                                               \
+    }
 USER root:root
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
@@ -110,8 +127,11 @@ LABEL DAOS=true
 WORKDIR /home/daos/daos/
 COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
 COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
+COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/config utils/config
+COPY --chown=daos_server:daos_server utils/certs utils/certs
+COPY --chown=daos_server:daos_server utils/completion utils/completion
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -122,10 +142,21 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
-              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+              FIRMWARE_MGMT=1 BUILD_TYPE=$DAOS_BUILD_TYPE                  \
+	      TARGET_TYPE=$DAOS_TARGET_TYPE &&                             \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
         cp -r utils/config/examples /opt/daos;                             \
+    }
+
+COPY --chown=daos_server:daos_server utils utils
+
+# Build DAOS RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
+	export DISTRO="el9" &&                                             \
+	utils/rpms/build_packages.sh daos &&                               \
+	mkdir -p /home/daos/rpms &&                                        \
+	cp *.rpm /home/daos/rpms;                                          \
     }
 
 # Set environment variables

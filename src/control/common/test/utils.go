@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -263,6 +264,21 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	}
 }
 
+// RemoveContents removes contents of a directory.
+func RemoveContents(t *testing.T, dir string) error {
+	files, err := filepath.Glob(filepath.Join(dir, "*"))
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		err = os.RemoveAll(file)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CreateTestFile creates a file in the given directory with a random name, and
 // writes the content string to the file. It returns the path to the file.
 func CreateTestFile(t *testing.T, dir, content string) string {
@@ -424,11 +440,36 @@ func Context(t *testing.T) context.Context {
 	return ctx
 }
 
-// MustLogContext returns a context containing the supplied logger.
+// MustLogContext returns a context containing a buffer-backed logger.
+// The contents of the buffer will be displayed on test failure. If the
+// optional parent context is not supplied, a default context is created.
 // Canceled when the test is done.
-func MustLogContext(t *testing.T, log logging.Logger) context.Context {
+func MustLogContext(t *testing.T, parents ...context.Context) context.Context {
 	t.Helper()
-	ctx, err := logging.ToContext(Context(t), log)
+
+	var parent context.Context
+	switch len(parents) {
+	case 0:
+		parent = Context(t)
+	case 1:
+		if parents[0] == nil {
+			// Pass through a nil context for tests that expect it.
+			return nil
+		} else {
+			var cancel context.CancelFunc
+			parent, cancel = context.WithCancel(parents[0])
+			t.Cleanup(cancel)
+		}
+	default:
+		t.Fatal("too many parent contexts")
+	}
+
+	log, buf := logging.NewTestLogger(t.Name())
+	t.Cleanup(func() {
+		ShowBufferOnFailure(t, buf)
+	})
+
+	ctx, err := logging.ToContext(parent, log)
 	if err != nil {
 		t.Fatal(err)
 	}
