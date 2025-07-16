@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,6 +52,9 @@ struct dc_csum_veriry_args {
 	d_iov_t                 *iov_csum;
 	uint32_t                 shard;
 	uint32_t                 shard_idx;
+
+	struct daos_recx_ep_list *recov_list;
+	bool                      ec_deg_fetch;
 };
 
 int

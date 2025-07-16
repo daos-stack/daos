@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1302,10 +1303,10 @@ obj_ec_recx_reasb(struct dc_object *obj, daos_iod_t *iod, d_sg_list_t *sgl,
 		siod->siod_tgt_idx = obj_ec_shard_idx(obj, dkey_hash, i);
 		siod->siod_idx = tgt_recx_idxs[i];
 		siod->siod_nr = tgt_recx_nrs[i];
-		EC_TRACE("i %d tgt %u idx %u nr %u, start "DF_U64
-			" tgt_recx %u/%u\n", i, siod->siod_tgt_idx, siod->siod_idx,
-			siod->siod_nr, obj_ec_shard_idx(obj, dkey_hash, 0),
-			tgt_recx_idxs[i], tgt_recx_nrs[i]);
+		EC_TRACE("i %d tgt %u idx %u nr %u, start %d,"
+			 " tgt_recx %u/%u\n",
+			 i, siod->siod_tgt_idx, siod->siod_idx, siod->siod_nr,
+			 obj_ec_shard_idx(obj, dkey_hash, 0), tgt_recx_idxs[i], tgt_recx_nrs[i]);
 		siod->siod_off = rec_nr * iod_size;
 		for (idx = last; idx < tgt_recx_idxs[i] + tgt_recx_nrs[i]; idx++)
 			rec_nr += riod->iod_recxs[idx].rx_nr;

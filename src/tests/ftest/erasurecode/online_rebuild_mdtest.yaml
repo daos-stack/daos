@@ -42,7 +42,7 @@ mdtest:
     np: 4
   api: DFS
   test_dir: /
-  dfs_destroy: True
+  dfs_destroy: False
   manager: MPICH
   flags: "-u -F -C"
   write_bytes: 524288

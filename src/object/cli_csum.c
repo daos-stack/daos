@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -286,6 +287,19 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 
 		if (!csum_iod_is_supported(iod))
 			continue;
+
+		/* For EC single value degraded fetch, if need data recovery the data is not
+		 * transferred back so need not csum verify. Data will be transferred back and
+		 * do csum verify at following EC data recovery phase.
+		 */
+		if (iod->iod_type == DAOS_IOD_SINGLE && args->ec_deg_fetch &&
+		    args->recov_list != NULL && args->recov_list[i].re_nr > 0) {
+			D_DEBUG(DB_CSUM,
+				DF_C_UOID_DKEY " SKIP [%d] iod single value csum verify "
+					       "for EC degraded fetch\n",
+				DP_C_UOID_DKEY(args->oid, args->dkey), i);
+			continue;
+		}
 
 		shard_iod.iod_size = args->sizes[i];
 		if (iod->iod_type == DAOS_IOD_ARRAY && args->oiods != NULL) {

@@ -330,8 +330,9 @@ const (
 	PoolServiceStateReady = PoolServiceState(mgmtpb.PoolServiceState_Ready)
 	// PoolServiceStateDestroying indicates that the pool service is being destroyed
 	PoolServiceStateDestroying = PoolServiceState(mgmtpb.PoolServiceState_Destroying)
-	// PoolServiceStateDegraded indicates that the pool service is in a degraded state
-	PoolServiceStateDegraded = PoolServiceState(mgmtpb.PoolServiceState_Degraded)
+	// PoolServiceStateTargetsExcluded indicates that the pool service is operating with
+	// excluded targets
+	PoolServiceStateTargetsExcluded = PoolServiceState(mgmtpb.PoolServiceState_TargetsExcluded)
 	// PoolServiceStateUnknown indicates that the pool service state is unknown
 	PoolServiceStateUnknown = PoolServiceState(mgmtpb.PoolServiceState_Unknown)
 )

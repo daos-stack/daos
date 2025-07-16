@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1691,15 +1692,19 @@ ec_cond_fetch(void **state)
 	daos_handle_t	 oh;
 	d_iov_t		 dkey;
 	d_iov_t		 non_exist_dkey;
-	d_sg_list_t	 sgl[2];
-	d_iov_t		 sg_iov[2];
-	daos_iod_t	 iod[2];
-	daos_recx_t	 recx[2];
-	char		*buf[2];
-	char		*akey[2];
+	d_sg_list_t      sgl[3];
+	d_iov_t          sg_iov[3];
+	daos_iod_t       iod[3];
+	daos_recx_t      recx[3];
+	char            *buf[3];
+	char            *akey[3];
 	const char	*akey_fmt = "akey%d";
 	int		 i, rc;
 	daos_size_t	 size = 8192;
+	daos_size_t      stripe_size;
+	uint16_t         fail_shards[2];
+	uint64_t         fail_val;
+	bool             degraded_test = false;
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1713,17 +1718,24 @@ ec_cond_fetch(void **state)
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
 	d_iov_set(&non_exist_dkey, "non_dkey", strlen("non_dkey"));
 
-	for (i = 0; i < 2; i++) {
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)ec_cell_size;
+	for (i = 0; i < 3; i++) {
 		D_ALLOC(akey[i], strlen(akey_fmt) + 1);
 		sprintf(akey[i], akey_fmt, i);
 
-		D_ALLOC(buf[i], size);
-		assert_non_null(buf[i]);
-
-		dts_buf_render(buf[i], size);
+		if (i == 2) {
+			D_ALLOC(buf[i], stripe_size);
+			assert_non_null(buf[i]);
+			dts_buf_render(buf[i], stripe_size);
+			d_iov_set(&sg_iov[i], buf[i], stripe_size);
+		} else {
+			D_ALLOC(buf[i], size);
+			assert_non_null(buf[i]);
+			dts_buf_render(buf[i], size);
+			d_iov_set(&sg_iov[i], buf[i], size);
+		}
 
 		/** init scatter/gather */
-		d_iov_set(&sg_iov[i], buf[i], size);
 		sgl[i].sg_nr		= 1;
 		sgl[i].sg_nr_out	= 0;
 		sgl[i].sg_iovs		= &sg_iov[i];
@@ -1737,16 +1749,26 @@ ec_cond_fetch(void **state)
 		if (i == 0) {
 			recx[i].rx_idx		= 0;
 			recx[i].rx_nr		= size;
-		} else {
+		} else if (i == 1) {
 			recx[i].rx_idx		= ec_cell_size;
 			recx[i].rx_nr		= size;
+		} else {
+			recx[i].rx_idx = 0;
+			recx[i].rx_nr  = stripe_size;
 		}
 	}
 
 	/** update record */
-	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, sgl,
-			     NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL);
 	assert_rc_equal(rc, 0);
+
+deg_test:
+	if (degraded_test) {
+		fail_shards[0] = 0;
+		fail_val       = daos_shard_fail_value(fail_shards, 1);
+		daos_fail_value_set(fail_val);
+		daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+	}
 
 	/** fetch with NULL sgl but iod_size is non-zero */
 	print_message("negative test - fetch with non-zero iod_size and NULL sgl\n");
@@ -1754,15 +1776,12 @@ ec_cond_fetch(void **state)
 			    NULL, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	/** normal fetch */
-	for (i = 0; i < 2; i++)
-		iod[i].iod_size	= DAOS_REC_ANY;
-
 	print_message("normal fetch\n");
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, NULL,
-			    NULL, NULL);
+	for (i = 0; i < 3; i++)
+		iod[i].iod_size = DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
-	for (i = 0; i < 2; i++)
+	for (i = 0; i < 3; i++)
 		assert_int_equal(iod[i].iod_size, 1);
 
 	for (i = 0; i < 2; i++)
@@ -1823,11 +1842,20 @@ ec_cond_fetch(void **state)
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_PER_AKEY, &dkey, 2, iod, sgl, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
+	if (!degraded_test) {
+		degraded_test = true;
+		print_message("run same tests in degraded mode ...\n");
+		goto deg_test;
+	}
+
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	for (i = 0; i < 2; i++) {
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+
+	for (i = 0; i < 3; i++) {
 		D_FREE(akey[i]);
 		D_FREE(buf[i]);
 	}

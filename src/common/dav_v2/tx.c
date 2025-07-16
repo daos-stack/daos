@@ -1868,7 +1868,7 @@ dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags)
  * obj_realloc -- (internal) reallocate zinfo object
  */
 int
-obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size)
+obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size, uint16_t class_id)
 {
 	struct operation_context *ctx;
 	struct carg_realloc       carg;
@@ -1890,7 +1890,7 @@ obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size)
 	operation_add_entry(ctx, sizep, size, ULOG_OPERATION_SET);
 
 	ret = palloc_operation(pop->do_heap, *offp, offp, size, constructor_zrealloc_root, &carg, 0,
-			       0, 0, 0, ctx);
+			       0, class_id, 0, ctx);
 
 	return ret;
 }
