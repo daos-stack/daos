@@ -487,8 +487,12 @@ migrate_pool_tls_create_one(void *data)
 
 	pool_child = ds_pool_child_lookup(arg->pool_uuid);
 	if (pool_child == NULL) {
-		D_ASSERTF(dss_get_module_info()->dmi_xs_id == 0,
-			  "Cannot find the pool "DF_UUIDF"\n", DP_UUID(arg->pool_uuid));
+		/* Local ds_pool_child isn't started yet, return a retry-able error */
+		if (dss_get_module_info()->dmi_xs_id != 0) {
+			D_INFO(DF_UUID ": Local VOS pool isn't ready yet.\n",
+			       DP_UUID(arg->pool_uuid));
+			return -DER_STALE;
+		}
 	} else if (unlikely(pool_child->spc_no_storage)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" "DF_UUID" lost pool shard, ver %d, skip.\n",
 			DP_UUID(arg->pool_uuid), DP_UUID(arg->pool_hdl_uuid), arg->version);
