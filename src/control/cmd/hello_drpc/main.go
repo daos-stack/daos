@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +10,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,6 +29,7 @@ var (
 
 func main() {
 	log := logging.NewCommandLineLogger()
+	log.SetLevel(logging.LogLevelTrace)
 	flag.Parse()
 
 	var err error
@@ -105,10 +106,10 @@ func runDrpcClient(log logging.Logger) error {
 		return errors.Wrap(err, "sending message")
 	}
 
-	fmt.Printf("Response:")
-	fmt.Printf("\tSequence: %v", resp.Sequence)
-	fmt.Printf("\tStatus: %v", resp.Status)
-	fmt.Printf("\tBody: %v bytes", len(resp.Body))
+	log.Infof("Response:")
+	log.Infof("\tSequence: %v", resp.Sequence)
+	log.Infof("\tStatus: %v", resp.Status)
+	log.Infof("\tBody: %v bytes", len(resp.Body))
 
 	respBody := &hello.HelloResponse{}
 	err = proto.Unmarshal(resp.Body, respBody)
@@ -116,8 +117,8 @@ func runDrpcClient(log logging.Logger) error {
 		return errors.Wrap(err, "unmarshalling HelloResponse")
 	}
 
-	log.Debugf("\tGreeting: %v", respBody.Greeting)
+	log.Infof("\tGreeting: %v", respBody.Greeting)
 
-	log.Debugf("Done.")
+	log.Infof("Done.")
 	return nil
 }
