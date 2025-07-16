@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +25,14 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
+
+func TestSrv_mgmtModule_GetMethod(t *testing.T) {
+	mod := newMgmtModule()
+
+	_, err := mod.GetMethod(123)
+
+	test.CmpErr(t, errors.New("implements no methods"), err)
+}
 
 func getTestNotifyReadyReqBytes(t *testing.T, sockPath string, idx uint32) []byte {
 	req := getTestNotifyReadyReq(t, sockPath, idx)
