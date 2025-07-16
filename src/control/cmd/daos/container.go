@@ -111,6 +111,15 @@ func (cmd *containerBaseCmd) openContainer(openFlags daos.ContainerOpenFlag) err
 	}
 	cmd.container = resp.Connection
 
+	if cmd.pool == nil {
+		cmd.pool = cmd.container.PoolHandle
+		// needed for compat with older code
+		if err := cmd.pool.FillHandle(unsafe.Pointer(&cmd.cPoolHandle)); err != nil {
+			cmd.closeContainer()
+			return err
+		}
+	}
+
 	// needed for compat with older code
 	if err := cmd.container.FillHandle(unsafe.Pointer(&cmd.cContHandle)); err != nil {
 		cmd.closeContainer()
@@ -520,6 +529,7 @@ func (cmd *existingContainerCmd) resolveAndOpen(contFlags daos.ContainerOpenFlag
 			cleanup()
 			return nulCleanFn, err
 		}
+		ap.pool = cmd.cPoolHandle
 		ap.cont = cmd.cContHandle
 	}
 
