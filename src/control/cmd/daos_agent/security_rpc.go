@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -145,9 +146,22 @@ func newCachedCredential(key string, cred *auth.Credential, lifetime time.Durati
 	}, nil
 }
 
+// GetMethod gets the corresponding Method for a method ID.
+func (m *SecurityModule) GetMethod(id int32) (drpc.Method, error) {
+	if id == daos.MethodRequestCredentials.ID() {
+		return daos.MethodRequestCredentials, nil
+	}
+
+	return nil, fmt.Errorf("invalid method ID %d for module %s", id, m.String())
+}
+
+func (m *SecurityModule) String() string {
+	return "agent_security"
+}
+
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
-	if method != drpc.MethodRequestCredentials {
+	if method != daos.MethodRequestCredentials {
 		return nil, drpc.UnknownMethodFailure()
 	}
 
@@ -215,6 +229,6 @@ func (m *SecurityModule) credRespWithStatus(status daos.Status) ([]byte, error) 
 }
 
 // ID will return Security module ID
-func (m *SecurityModule) ID() drpc.ModuleID {
-	return drpc.ModuleSecurityAgent
+func (m *SecurityModule) ID() int32 {
+	return daos.ModuleSecurityAgent
 }

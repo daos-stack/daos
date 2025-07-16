@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,7 +37,7 @@ func TestSrvSecurityModule_ID(t *testing.T) {
 
 	mod := NewSecurityModule(log, nil)
 
-	test.AssertEqual(t, mod.ID(), drpc.ModuleSecurity, "wrong drpc module")
+	test.AssertEqual(t, mod.ID(), daos.ModuleSecurity, "wrong drpc module")
 }
 
 func insecureTransportConfig() *security.TransportConfig {
@@ -51,22 +52,38 @@ func secureTransportConfig(certDir string) *security.TransportConfig {
 	}
 }
 
-func TestSrvSecurityModule_BadMethod(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
+func TestSrv_SecurityModule_GetMethod(t *testing.T) {
+	for name, tc := range map[string]struct {
+		methodID  int32
+		expMethod drpc.Method
+		expErr    error
+	}{
+		"request-cred": {
+			methodID:  daos.MethodValidateCredentials.ID(),
+			expMethod: daos.MethodValidateCredentials,
+		},
+		"unknown": {
+			methodID: -1,
+			expErr:   errors.New("method ID -1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			parent := test.MustLogContext(t)
+			log := logging.FromContext(parent)
 
-	mod := NewSecurityModule(log, insecureTransportConfig())
-	method, err := mod.ID().GetMethod(-1)
-	if method != nil {
-		t.Errorf("Expected no method to be returned, got %+v", method)
+			mod := NewSecurityModule(log, insecureTransportConfig())
+
+			method, err := mod.GetMethod(tc.methodID)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "", tc.expMethod, method)
+		})
 	}
-
-	test.CmpErr(t, errors.New("invalid method -1 for module Security"), err)
 }
 
 func callValidateCreds(t *testing.T, mod *SecurityModule, body []byte) ([]byte, error) {
 	t.Helper()
-	return mod.HandleCall(test.Context(t), nil, drpc.MethodValidateCredentials, body)
+	return mod.HandleCall(test.Context(t), nil, daos.MethodValidateCredentials, body)
 }
 
 func TestSrvSecurityModule_ValidateCred_InvalidReq(t *testing.T) {
