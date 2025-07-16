@@ -752,6 +752,24 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls,
 			   NULL, flags, NULL, csum_iov_fetch);
+	if (daos_is_dkey_uint64(mrone->mo_oid.id_pub) &&
+	    mrone->mo_dkey.iov_len == sizeof(uint64_t) &&
+	    *((uint64_t *)mrone->mo_dkey.iov_buf) == 3) {
+		int         i, j;
+		daos_iod_t *iod;
+
+		for (i = 0; i < iod_num; i++) {
+			iod = &iods[i];
+			for (j = 0; j < iod->iod_nr; j++) {
+				if (iods->iod_type == DAOS_IOD_ARRAY)
+					D_INFO(DF_UOID" lxz fetch [%d] iod_nr %d recx "DF_RECX
+					       " rc %d\n",
+					       DP_UOID(mrone->mo_oid), j, iod->iod_nr,
+					       DP_RECX(iod->iod_recxs[j]), rc);
+			}
+		}
+	}
+
 	if (rc == -DER_TIMEDOUT &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
@@ -2628,6 +2646,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	struct dc_object	*obj = NULL;
 	uint32_t		parity_shard = -1;
 	uint32_t		layout_ver;
+	bool			ignore = false;
 	int			i;
 
 	if (!daos_oclass_is_ec(&arg->oc_attr))
@@ -2663,13 +2682,14 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	migrate_tgt_off = obj_ec_shard_off_by_layout_ver(layout_ver, io->ui_dkey_hash,
 							 &arg->oc_attr, shard);
 	unpack_tgt_off = obj_ec_shard_off(obj, io->ui_dkey_hash, io->ui_oid.id_shard);
+
 	if (rc == 1 &&
 	     (is_ec_data_shard_by_tgt_off(unpack_tgt_off, &arg->oc_attr) ||
 	     (io->ui_oid.id_layout_ver > 0 && io->ui_oid.id_shard != parity_shard))) {
-		D_DEBUG(DB_REBUILD, DF_UOID" ignore shard "DF_KEY"/%u/%d/%u/%d.\n",
+		D_INFO(DF_UOID" lxz ignore shard "DF_KEY"/%u/%d/%u/%d.\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
 			(int)obj_ec_shard_off(obj, io->ui_dkey_hash, 0), parity_shard, rc);
-		D_GOTO(put, rc = 0);
+		ignore = true;
 	}
 	rc = 0;
 
@@ -2678,6 +2698,25 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	     io->ui_obj_punch_eph == 0; i++) {
 		daos_iod_t	*iod = &io->ui_iods[i];
 		daos_epoch_t	**ephs = &io->ui_recx_ephs[i];
+
+		if (iod->iod_type == DAOS_IOD_ARRAY &&
+		    daos_is_dkey_uint64(io->ui_oid.id_pub) &&
+		    io->ui_dkey.iov_len == sizeof(uint64_t) &&
+		    *((uint64_t *)io->ui_dkey.iov_buf) == 3) {
+			int k;
+
+			D_INFO(DF_UOID" lxz unpack "DF_KEY" for shard %u/%u/%u/"DF_X64"/%u, "
+			       "iod_nr %d, ignore %d\n",
+			       DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard, unpack_tgt_off,
+			       migrate_tgt_off, io->ui_dkey_hash, parity_shard, iod->iod_nr,
+			       ignore);
+			for (k = 0; k < iod->iod_nr; k++)
+				D_INFO(DF_UOID" [%d] recx "DF_RECX" ignore %d\n",
+				       DP_UOID(io->ui_oid), k, DP_RECX(iod->iod_recxs[k]), ignore);
+		}
+
+		if (ignore)
+			continue;
 
 		if (iod->iod_type == DAOS_IOD_SINGLE || io->ui_akey_punch_ephs[i] != 0) {
 			create_migrate_one = true;
