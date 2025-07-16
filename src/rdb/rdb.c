@@ -60,7 +60,8 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * access protection.
 	 */
 	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* data_sz */, 0 /* meta_sz */,
-			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, vos_df_version, &pool);
+			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
+			     vos_df_version, &pool);
 	if (rc != 0)
 		goto out;
 	ABT_thread_yield();
