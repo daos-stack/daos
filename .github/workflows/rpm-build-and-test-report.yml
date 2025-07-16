@@ -93,7 +93,7 @@ jobs:
             esac
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
       - name: Test Report
-        uses: dorny/test-reporter@890a17cecf52a379fc869ab770a71657660be727  # v2.1.0
+        uses: dorny/test-reporter@dc3a92680fcc15842eef52e8c4606ea7ce6bd3f3  # v2.1.1
         with:
           artifact: ${{ env.STAGE_NAME }} test-results
           name: ${{ env.STAGE_NAME }} Test Results (dorny)
@@ -112,7 +112,7 @@ jobs:
       - name: Set variables
         run: echo "STAGE_NAME=Functional Hardware ${{ matrix.stage }}" >> $GITHUB_ENV
       - name: Test Report
-        uses: dorny/test-reporter@890a17cecf52a379fc869ab770a71657660be727  # v2.1.0
+        uses: dorny/test-reporter@dc3a92680fcc15842eef52e8c4606ea7ce6bd3f3  # v2.1.1
         with:
           artifact: ${{ env.STAGE_NAME }} test-results
           name: ${{ env.STAGE_NAME }} Test Results (dorny)
