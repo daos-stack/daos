@@ -196,7 +196,7 @@ def check_server_storage(logger, test, stage):
         item_set = set(test.yaml_info[key])
         logger.debug(f" - Expecting the following {key} storage: {item_set}")
         for data in result.output:
-            if key == "bdev":
+            if key == "bdev_list":
                 result_set = set(find_pci_address("\n".join(data.stdout)))
             else:
                 result_set = set(data.stdout)
@@ -205,11 +205,9 @@ def check_server_storage(logger, test, stage):
                 status = False
             detected.append([str(match), key, str(data.hosts), str(result_set)])
 
-        msg_format = "%-5s  %-3s  %-20s  %s"
-        logger.debug("-" * 80)
-        logger.debug(f"Detected server storage for \'{test}\':")
-        logger.debug(msg_format, "Match", "Type", "Servers", "Storage")
-        logger.debug(msg_format, "-" * 5, "-" * 3, "-" * 20, "-" * 60)
+        msg_format = "%-8s  %-9s  %-20s  %s"
+        logger.debug(msg_format, "Verified", "Type", "Servers", "Detected Storage")
+        logger.debug(msg_format, "-" * 8, "-" * 9, "-" * 20, "-" * 60)
         for entry in detected:
             logger.debug(msg_format, *entry)
     return status
@@ -647,7 +645,7 @@ def record_variant_details(logger, job_results_dir, test_result, details):
     results_json = os.path.join(test_logs_dir, 'results.json')
     try:
         with open(results_json, "r", encoding="utf-8") as results:
-            data = json.loads(results.readlines())
+            data = json.loads(results.read())
             for test in data["tests"]:
                 details["test_variants"].append(
                     {"variant": test["id"].split(";")[0],
