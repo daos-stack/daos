@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -150,7 +151,7 @@ func newDrpcCall(method drpc.Method, bodyMessage proto.Message) (*drpc.Call, err
 	}
 
 	return &drpc.Call{
-		Module: method.Module().ID(),
+		Module: method.Module(),
 		Method: method.ID(),
 		Body:   bodyBytes,
 	}, nil
