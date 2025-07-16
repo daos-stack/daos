@@ -25,8 +25,8 @@ source ci/provisioning/post_provision_config_common_functions.sh
 # shellcheck disable=SC1091
 source ci/junit.sh
 
-
-: "${MLNX_VER_NUM:=24.04-0.6.6.0}"
+echo "MLNX_VER_NUM=$MLNX_VER_NUM"
+MLNX_VER_NUM="24.10-0.7.0.0"
 
 : "${DISTRO:=EL_7}"
 
