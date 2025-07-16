@@ -123,7 +123,7 @@ class PoolRedunFacProperty(IorTestBase):
             self.fail(f"Pool rd_fac was changed to invalid value: {invalid_rd_fac}!")
         except CommandFailure as command_failure:
             self.log.info(
-                f"Update pool's rd_fac to {invalid_rd_fac} failed as expected")
+                "Update pool's rd_fac to %s failed as expected", invalid_rd_fac)
             exp_msg = f"invalid redun fac value {invalid_rd_fac}"
             if exp_msg not in str(command_failure):
                 msg = (f"Updating pool's rd_fac to invalid value didn't return expected "
