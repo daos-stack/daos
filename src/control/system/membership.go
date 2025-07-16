@@ -204,8 +204,8 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	memberToReplace := &Member{}
 	*memberToReplace = *cm
 
-	m.log.Debugf("replace-rank: updating member with UUID %s->%s", memberToReplace.UUID,
-		req.UUID)
+	m.log.Debugf("replace-rank: updating member with UUID %s->%s, Addr %s",
+		memberToReplace.UUID, req.UUID, memberToReplace.Addr)
 
 	if err := m.db.RemoveMember(cm); err != nil {
 		return nil, errors.Wrap(err, "removing old member in replace-rank join request")
