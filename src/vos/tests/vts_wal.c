@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2900,6 +2901,125 @@ p2_fill_test(void **state)
 	D_FREE(buf);
 }
 
+/* Fill single evictable bucket with single array object */
+static void
+p2_fill_single(void **state)
+{
+	struct io_test_args  *arg  = *state;
+	struct vos_container *cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	struct umem_pool     *umm_pool;
+	struct vos_object    *obj;
+	daos_unit_oid_t       oid;
+	daos_epoch_t          epoch = 1;
+	uint64_t              dkey  = 0;
+	daos_key_t            dkey_iov;
+	daos_iod_t            iod  = {0};
+	daos_recx_t           recx = {0};
+	d_sg_list_t           sgl  = {0};
+	char                 *buf;
+	uint32_t              bkt_id = UMEM_DEFAULT_MBKT_ID;
+	uint32_t written = 0, total_written = 0, io_size = (128 << 10), chunk_size = (1 << 20);
+	uint64_t ne_used = 0, ne_init = 0, ne_total = 0;
+	uint64_t used = 0, total = 0, prev_used = 0;
+	int      rc;
+
+	D_ALLOC(buf, io_size);
+	assert_non_null(buf);
+	dts_buf_render(buf, io_size);
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	sgl.sg_iovs[0].iov_buf     = buf;
+	sgl.sg_iovs[0].iov_buf_len = io_size;
+	sgl.sg_iovs[0].iov_len     = io_size;
+
+	/* Get initial NE space usage */
+	rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, UMEM_DEFAULT_MBKT_ID, &ne_init,
+				  &ne_total);
+	assert_int_equal(rc, 0);
+
+	oid      = dts_unit_oid_gen(DAOS_OT_ARRAY, 0);
+	arg->oid = oid;
+
+	/* Fill one evictable bucket with single array object */
+	while (1) {
+		if ((written * io_size) >= chunk_size) {
+			dkey++;
+			written = 0;
+		}
+
+		d_iov_set(&dkey_iov, &dkey, sizeof(dkey));
+
+		iod.iod_name  = dkey_iov;
+		iod.iod_nr    = 1;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+		recx.rx_idx   = (written * io_size);
+		recx.rx_nr    = io_size;
+		iod.iod_recxs = &recx;
+
+		rc = io_test_obj_update(arg, epoch++, 0, &dkey_iov, &iod, &sgl, NULL, true);
+		if (rc != 0)
+			break;
+
+		if (bkt_id == UMEM_DEFAULT_MBKT_ID) {
+			rc = vos_obj_acquire(cont, oid, false, &obj);
+			assert_rc_equal(rc, 0);
+
+			bkt_id = obj->obj_bkt_ids[0];
+			vos_obj_release(obj, 0, false);
+			assert_true(bkt_id != UMEM_DEFAULT_MBKT_ID);
+		}
+
+		rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, bkt_id, &used, &total);
+		assert_int_equal(rc, 0);
+		assert_int_equal(total, MDTEST_MB_SIZE);
+
+		/* This evictable bucket is filled up */
+		if (used == prev_used)
+			break;
+
+		prev_used = used;
+		written += 1;
+		total_written += 1;
+	}
+
+	d_sgl_fini(&sgl, false);
+	D_FREE(buf);
+
+	/* Get NE usage */
+	rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, UMEM_DEFAULT_MBKT_ID, &ne_used,
+				  &ne_total);
+	assert_int_equal(rc, 0);
+	assert_true(ne_used > ne_init);
+
+	print_message("Bucket is filled. bkt_id:%u, io_size:%u, chunk_size:%u, written:%u, "
+		      "used:" DF_U64 "/" DF_U64 ", NE_used:" DF_U64 "/" DF_U64 "\n",
+		      bkt_id, io_size, chunk_size, total_written, used, total, ne_used - ne_init,
+		      ne_total);
+
+	checkpoint_fn(&arg->ctx.tc_po_hdl);
+	umm_pool = vos_cont2umm(cont)->umm_pool;
+	/* Close container */
+	rc = vos_cont_close(arg->ctx.tc_co_hdl);
+	assert_rc_equal(rc, 0);
+	arg->ctx.tc_step = TCX_CO_CREATE;
+
+	/* Destroy container */
+	rc = vos_cont_destroy(arg->ctx.tc_po_hdl, arg->ctx.tc_co_uuid);
+	assert_rc_equal(rc, 0);
+	arg->ctx.tc_step = TCX_PO_CREATE_OPEN;
+
+	gc_wait();
+
+	rc = umempobj_get_mbusage(umm_pool, bkt_id, &used, &total);
+	assert_int_equal(rc, 0);
+	assert_int_equal(total, MDTEST_MB_SIZE);
+	print_message("Bucket %u usage after cont destroy. " DF_U64 "/" DF_U64 "\n", bkt_id, used,
+		      total);
+}
+
 static const struct CMUnitTest wal_tests[] = {
     {"WAL01: Basic pool/cont create/destroy test", wal_tst_pool_cont, NULL, NULL},
     {"WAL02: Basic pool/cont create/destroy test with checkpointing", wal_tst_pool_cont,
@@ -2927,6 +3047,7 @@ static const struct CMUnitTest wal_io_int_tests[] = {
 };
 
 static const struct CMUnitTest wal_MB_tests[] = {
+    {"WAL43: P2 fill single", p2_fill_single, setup_mb_io, teardown_mb_io},
     {"WAL30: UMEM MB Basic Test", wal_mb_tests, setup_mb_io, teardown_mb_io},
     {"WAL31: UMEM MB EMB selection based on utilization Test", wal_mb_utilization_tests,
      setup_mb_io, teardown_mb_io},
@@ -2958,6 +3079,13 @@ run_wal_tests(const char *cfg)
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		print_message("MD_ON_SSD mode isn't enabled, skip all tests.\n");
 		return 0;
+	}
+
+	D_PRINT("Backend mode:%u\n", umempobj_get_backend_type());
+	if (umempobj_get_backend_type() == DAOS_MD_BMEM_V2) {
+		dts_create_config(test_name, "Memory Bucket tests with WAL %s", cfg);
+		D_PRINT("Running %s\n", test_name);
+		rc = cmocka_run_group_tests_name(test_name, wal_MB_tests, NULL, NULL);
 	}
 
 	dts_create_config(test_name, "WAL Pool and container tests %s", cfg);
