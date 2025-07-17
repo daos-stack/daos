@@ -59,9 +59,6 @@ echo "$CI_USER ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/$CI_USER"
 if [ -n "$DAOS_CI_INFO_DIR" ]; then
     mkdir -p /CIShare
     retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /CIShare
-    # This part only until DAOS is migrated to use /CIShare
-    rm -f /CIShare
-    ln -sfn /CIShare
 fi
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
