@@ -624,7 +624,7 @@ def create_steps_log(logger, job_results_dir, test_result):
     return 0
 
 
-def record_variant_details(logger, job_results_dir, test_result, details):
+def record_variant_details(logger, job_results_dir, test_result, details, loop):
     """Record variant test results to the details.json file.
 
     Args:
@@ -632,13 +632,15 @@ def record_variant_details(logger, job_results_dir, test_result, details):
         job_results_dir (str): path to the avocado job results
         test_result (TestResult): the test result used to update the status of the test
         details (dict): dictionary to update with test results
+        loop (int): the test repetition number (1s based)
 
     Returns:
         int: status code: 16384 = problem parsing the results.json; 0 = success
     """
     logger.debug("=" * 80)
     logger.info("Creating steps.log file")
-    details["test_variants"] = []
+    if loop == 1:
+        details["test_variants"] = []
 
     test_logs_lnk = os.path.join(job_results_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
@@ -646,11 +648,16 @@ def record_variant_details(logger, job_results_dir, test_result, details):
     try:
         with open(results_json, "r", encoding="utf-8") as results:
             data = json.loads(results.read())
-            for test in data["tests"]:
-                details["test_variants"].append(
-                    {"variant": test["id"].split(";")[0],
-                     "status": test["status"],
-                     "time": f"{round(test['time'], 2)}s"})
+            for index, test in enumerate(data["tests"]):
+                if loop == 1:
+                    # Add an entry for this test variant the first time its run in the loop
+                    details["test_variants"].append(
+                        {"variant": test["id"].split(";")[0],
+                         "status/loop": [],
+                         "time/loop": []})
+                # Append status and run times for each loop
+                details["test_variants"][index]["status/loop"].append(test["status"])
+                details["test_variants"][index]["time/loop"].append(f"{round(test['time'], 2)}s")
     except Exception:       # pylint: disable=broad-except
         message = f"Error parsing {results_json}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
@@ -920,7 +927,7 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
 
 
 def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, archive, rename,
-                        jenkins_xml, core_files, threshold, total_repeats, details):
+                        jenkins_xml, core_files, threshold, total_repeats, details, loop):
     # pylint: disable=too-many-arguments
     """Process the test results.
 
@@ -945,6 +952,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
         threshold (str): optional upper size limit for test log files
         total_repeats (int): total number of times the test will be repeated
         details (dict): dictionary to update with test results
+        loop (int): the test repetition number (1s based)
 
     Returns:
         int: status code: 0 = success, >0 = failure
@@ -1051,7 +1059,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
     return_code |= create_steps_log(logger, job_results_dir, test_result)
 
     # Add test variant results to the details
-    return_code |= record_variant_details(logger, job_results_dir, test_result, details)
+    return_code |= record_variant_details(logger, job_results_dir, test_result, details, loop)
 
     # Optionally rename the test results directory for this test
     if rename:
