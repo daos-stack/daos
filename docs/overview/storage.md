@@ -142,8 +142,8 @@ as shown in the <a href="#t4.2">table</a> below.
 |---|---|---|
 |Small size & RW  |Replication |static SCxRC, e.g. 1x4|
 |Small size & RM  |Erasure code|static SC+PC, e.g. 4+2|
-|Large size & RW  |Replication |static SCxRC over max #targets)|
-|Large size & RM  |Erasure code|static SCx(SC+PC) w/ max #TGT)|
+|Large size & RW  |Replication |static SCxRC over max #targets|
+|Large size & RM  |Erasure code|static SCx(SC+PC) w/ max #TGT|
 |Unknown size & RW|Replication |SCxRC, e.g. 1x4 initially and grows|
 |Unknown size & RM|Erasure code|SC+PC, e.g. 4+2 initially and grows|
 
