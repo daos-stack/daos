@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1573,6 +1574,20 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 	}
 }
 
+/** Clears the string
+ *
+ * \param[in] buf string object to be cleared
+ */
+void
+d_reset_string(struct d_string_buffer_t *buf)
+{
+	if (buf->str != NULL) {
+		buf->status   = 0;
+		buf->str_size = 0;
+		buf->str[0]   = 0;
+	}
+}
+
 /** Deallocate the memory used by d_string_buffer_t
  *
  * The d_string_buffer_t internal buffer is deallocated, and stats are reset.
@@ -1584,8 +1599,7 @@ d_free_string(struct d_string_buffer_t *buf)
 {
 	if (buf->str != NULL) {
 		D_FREE(buf->str);
-		buf->status = 0;
-		buf->str_size = 0;
+		d_reset_string(buf);
 		buf->buf_size = 0;
 	}
 }

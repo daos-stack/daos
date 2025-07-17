@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +35,14 @@ void
 dfuse_cb_forget(fuse_req_t req, fuse_ino_t ino, uintptr_t nlookup)
 {
 	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+
+	if (ino == DFUSE_CTRL_INO) {
+		D_SPIN_LOCK(&dfuse_info->di_lock);
+		dfuse_info->di_ctrl_dfs = NULL;
+		D_SPIN_UNLOCK(&dfuse_info->di_lock);
+		fuse_reply_none(req);
+		return;
+	}
 
 	fuse_reply_none(req);
 

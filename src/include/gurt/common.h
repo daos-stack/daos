@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -52,6 +53,22 @@
 #include <gurt/types.h>
 #include <gurt/debug.h>
 #include <gurt/fault_inject.h>
+
+#define assert_rc_equal(rc, expected_rc)                                                           \
+	do {                                                                                       \
+		int __rc = (rc);                                                                   \
+		if (__rc == (expected_rc))                                                         \
+			break;                                                                     \
+		print_message("Failure assert_rc_equal %s:%d "                                     \
+			      "%s(%d) != %s(%d)\n",                                                \
+			      __FILE__, __LINE__, d_errstr(__rc), __rc, d_errstr(expected_rc),     \
+			      expected_rc);                                                        \
+		assert_string_equal(d_errstr(__rc), d_errstr(expected_rc));                        \
+		assert_int_equal(__rc, expected_rc);                                               \
+	} while (0)
+
+/** Just use assert_rc_equal since it will ensure the problem is reported in the Jenkins output */
+#define assert_success(r) assert_rc_equal(r, 0)
 
 /** @addtogroup GURT
  * @{
@@ -609,6 +626,8 @@ int
 d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void
 d_free_string(struct d_string_buffer_t *buf);
+void
+d_reset_string(struct d_string_buffer_t *buf);
 
 typedef void (*d_alloc_track_cb_t)(void *arg, size_t size);
 
