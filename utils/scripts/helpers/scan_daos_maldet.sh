@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -48,7 +49,7 @@ sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               --exclude-dir=/sys                       \
               --exclude-dir=/proc                      \
               --exclude-dir=/dev                       \
-              --exclude-dir=/scratch                   \
+              --exclude-dir=/CIShare                   \
               --infected / | tee /var/tmp/clamscan.out
 malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
