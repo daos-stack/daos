@@ -202,11 +202,11 @@ build_package() {
   export EXTRA_OPTS=()
   install_list=()
 
+  DEPENDS=()
+  EXTERNAL_DEPENDS=()
   if [[ ! "${name}" =~ debuginfo ]]; then
     build_debug_package "${name}"
   fi
-  DEPENDS=()
-  EXTERNAL_DEPENDS=()
 }
 
 build_debug_package() {

@@ -64,8 +64,8 @@ export pmempool_lib
 set_lib_name protobufc lib protobuf-c libprotobuf-c1 libprotobuf-c1
 export protobufc_lib
 
-set_lib_name ndctl lib ndctl libndctl libndctl
-export ndctl_lib
+set_lib_name ndctl dev ndctl libndctl libndctl
+export ndctl_dev
 
 set_lib_name daos dev daos daos daos
 export daos_dev

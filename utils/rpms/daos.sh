@@ -350,7 +350,7 @@ if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
 fi
 EXTERNAL_DEPENDS+=("${capstone_lib}")
 EXTERNAL_DEPENDS+=("pciutils")
-EXTERNAL_DEPENDS+=("${ndctl_lib}")
+EXTERNAL_DEPENDS+=("${ndctl_dev}")
 if [[ "${DISTRO:-el8}" =~ el ]]; then
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
