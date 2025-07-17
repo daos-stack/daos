@@ -141,7 +141,12 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 loop + 1, self.loop_test_cnt, ranks, str(self.pool))
             for index, rank in enumerate(ranks):
                 if self.test_with_blank_node is True:
-                    ip_addr, p_num = self.get_ipaddr_for_rank(rank)
+                    # If dmg query times out, we retry 3 times before failing the test.
+                    ip_addr = None
+                    retry_count = 0
+                    while ip_addr is None and retry_count < 3:
+                        ip_addr, p_num = self.get_ipaddr_for_rank(rank)
+                        retry_count = retry_count + 1
                     self.remove_pool_dir(ip_addr, p_num)
                 if (index == 2 and "RP_2G" in oclass):
                     output = self.pool.reintegrate(rank, "0,2")
