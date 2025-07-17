@@ -287,7 +287,10 @@ class UpgradeDowngradeBase(IorTestBase):
         # Restart servers and/or agents
         if servers:
             self.log.info("Restarting servers after installing %s", version)
-            self.server_managers[0].restart(wait=True)
+            # TODO try DaosServerManager.restart
+            errors = self.restart_servers(stop=False)
+            if errors:
+                report_errors(self, errors)
             self.log.info("Sleeping 5 seconds after restarting servers")
             time.sleep(5)
 
