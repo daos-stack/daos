@@ -58,7 +58,7 @@ heap_soemb_active_iter_init(struct palloc_heap *heap);
 uint32_t
 heap_soemb_active_get(struct palloc_heap *heap);
 void
-heap_soemb_reserve(struct palloc_heap *heap);
+heap_soemb_active_update(struct palloc_heap *heap);
 int
 heap_ensure_zone0_initialized(struct palloc_heap *heap);
 int
