@@ -219,8 +219,8 @@ transport_config:
 # Haven't got ofi+tcp to work with QEMU. Need further investigation.
 provider: ofi+sockets
 control_log_mask: DEBUG
-control_log_file: /tmp/daos_server.log
-helper_log_file: /tmp/daos_server_helper.log
+control_log_file: /var/log/daos/daos_server.log
+helper_log_file: /var/log/daos/daos_server_helper.log
 engines:
 -
     targets: 1
@@ -229,7 +229,7 @@ engines:
     fabric_iface: enp0s2
     fabric_iface_port: 31316
     log_mask: DEBUG
-    log_file: /tmp/daos_engine_0.log
+    log_file: /var/log/daos/daos_engine_0.log
     storage:
     -
         class: ram
@@ -279,7 +279,7 @@ transport_config:
     ca_cert: /etc/daos/certs/daosCA.crt
     cert: /etc/daos/certs/agent.crt
     key: /etc/daos/certs/agent.key
-log_file: /tmp/daos_agent.log
+log_file: /var/log/daos/daos_agent.log
 control_log_mask: DEBUG
 ```
 6.  Start services.
