@@ -996,7 +996,7 @@ static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
 	return 0;
 }
 
-static int
+static void
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
@@ -1086,9 +1086,6 @@ parse(int argc, char **argv)
 			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size,
 					 "\"-H\"");
 			break;
-		case 'h':
-			usage(argv[0], stdout);
-			break;
 		case 'I':
 			rc = arg_strtoul(optarg, &dss_instance_idx, "\"-I\"");
 			break;
@@ -1110,15 +1107,16 @@ parse(int argc, char **argv)
 			}
 			snprintf(modules, sizeof(modules), "%s", MODS_LIST_CHK);
 			break;
+		case 'h':
+			usage(argv[0], stdout);
+			exit(EXIT_SUCCESS);
 		default:
 			usage(argv[0], stderr);
 			rc = -DER_INVAL;
 		}
-		if (rc < 0)
-			return rc;
+		if (rc)
+			exit(EXIT_FAILURE);
 	}
-
-	return 0;
 }
 
 struct abt_dump_arg {
@@ -1152,9 +1150,7 @@ main(int argc, char **argv)
 	int		rc;
 
 	/** parse command line arguments */
-	rc = parse(argc, argv);
-	if (rc)
-		exit(EXIT_FAILURE);
+	parse(argc, argv);
 
 	/** block all possible signals but faults */
 	sigfillset(&set);

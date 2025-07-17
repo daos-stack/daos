@@ -1,7 +1,8 @@
 #!/usr/bin/groovy
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
-/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
+/* groovylint-disable ParameterName-0, VariableName */
 /* Copyright 2019-2024 Intel Corporation
  * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
@@ -132,11 +133,12 @@ String vm9_label(String distro) {
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
-void rpm_test_post(String stage_name, String node) {
+void rpm_test_post(String stageName, String node) {
     sh label: 'Fetch and stage artifacts',
        script: 'hostname; ssh -i ci_key jenkins@' + node + ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
-               'scp -i ci_key jenkins@' + node + ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
-               env.STAGE_NAME + '/"'
+               'scp -i ci_key jenkins@' + node +
+               ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
+               stageName + '/"'
     archiveArtifacts artifacts: env.STAGE_NAME + '/**'
     job_status_update()
 }
@@ -146,7 +148,7 @@ String sconsArgs() {
         return sconsFaultsArgs()
     }
 
-    println("Compiling DAOS with custom arguments")
+    println('Compiling DAOS with custom arguments')
     return sconsFaultsArgs() + ' ' + params.CI_SCONS_ARGS
 }
 
@@ -156,7 +158,7 @@ String sconsArgs() {
 Map update_default_commit_pragmas() {
     String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
                                     returnStdout: true).trim()
-    println("pragmas from gen_commit_pragmas.py:")
+    println('pragmas from gen_commit_pragmas.py:')
     println(default_pragmas_str)
     if (default_pragmas_str) {
         updatePragmas(default_pragmas_str, false)
@@ -174,6 +176,7 @@ pipeline {
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsArgs()
+        HTTPS_PROXY = ''
     }
 
     options {

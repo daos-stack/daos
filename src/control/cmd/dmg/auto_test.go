@@ -594,6 +594,7 @@ disable_hotplug: false
 nr_hugepages: 0
 system_ram_reserved: 26
 disable_hugepages: false
+allow_numa_imbalance: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 core_dump_filter: 19
