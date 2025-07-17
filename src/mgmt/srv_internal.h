@@ -192,4 +192,8 @@ ds_mgmt_pbl_create(void);
 void
 ds_mgmt_pbl_destroy(void);
 
+/** srv_util_file.c */
+int
+mgmt_file_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
+
 #endif /* __SRV_MGMT_INTERNAL_H__ */

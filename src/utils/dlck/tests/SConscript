@@ -1,0 +1,75 @@
+"""Build versioned object store tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    # build the unit test
+    tenv = env.Clone()
+
+    tenv.Append(CPPPATH=[Dir('..').srcnode()])
+    tenv.Append(CPPPATH=[Dir('../../../vos').srcnode()])
+    tenv.Append(OBJPREFIX="dlck_ut_")
+    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DVOS_STANDALONE', '-DDLCK_ENABLED'])
+    tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=gc_init_cont'])
+    tenv.require('argobots', 'cmocka', 'pmdk')
+
+    libraries = ['uuid', 'bio', 'gurt', 'cmocka', 'daos_common_pmem', 'abt', 'vea', 'pthread']
+
+    vos_src = Glob('../../../vos/*.c')
+    dlck_ut_src = ['dlck_ut.c', 'vos_gc_mocks.c',
+                   '../../../dtx/tests/sched_mock.c',
+                   '../../../dtx/tests/srv_mock.c',
+                   ]
+    dlck_ut = tenv.d_test_program('dlck_ut', dlck_ut_src + vos_src, LIBS=libraries)
+    tenv.Install('$PREFIX/bin/', dlck_ut)
+
+    # build d_vector unit test
+    venv = env.Clone()
+
+    venv.Append(OBJPREFIX="dlck_d_vector_ut_")
+    venv.require('cmocka', 'pmdk')
+
+    libraries = ['cmocka', 'gurt', 'daos_common_pmem']
+
+    dlck_d_vector_ut_src = ['dlck_d_vector_ut.c']
+
+    dlck_d_vector_ut = venv.d_test_program('dlck_d_vector_ut', dlck_d_vector_ut_src, LIBS=libraries)
+    venv.Install('$PREFIX/bin/', dlck_d_vector_ut)
+
+    # build and install the ut helper
+    henv = env.Clone()
+
+    henv.Append(OBJPREFIX="dlck_ut_helper_")
+    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
+    henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    henv.require('argobots', 'cmocka')
+
+    libraries = [
+        'vos_srv', 'gurt', 'daos_common_pmem', 'bio', 'cmocka', 'uuid', 'dtx', 'abt', 'pthread'
+    ]
+
+    helper_src = [
+        'dlck_ut_helper.c',
+        '../dlck_abt.c',
+        '../dlck_tls.c',
+        '../dlck_args_engine.c',
+        '../dlck_args_files.c',
+        '../dlck_args_parse.c',
+        '../dlck_engine.c',
+        '../dlck_pool.c',
+        '../../../dtx/tests/srv_mock.c',
+        '../../../dtx/tests/ult_mock.c',
+        '../../../dtx/tests/pl_map_mock.c',
+        '../../../dtx/tests/sched_mock.c',
+        '../../../engine/util.c',
+        '../../../mgmt/srv_util_file.c',
+    ]
+    helper = henv.d_test_program('dlck_ut_helper', helper_src, LIBS=libraries)
+    henv.Install('$PREFIX/bin/', helper)
+
+
+if __name__ == "SCons.Script":
+    scons()
