@@ -10,7 +10,7 @@ def scons():
     senv.Append(CPPPATH=[Dir('..').srcnode()])
     senv.Append(OBJPREFIX="vts_")
     vts_src = ['vts_dtx.c', 'vts_io.c', 'vts_common.c', '../../object/srv_csum.c',
-               '../../object/srv_io_map.c']
+               '../../object/srv_io_map.c', 'vts_mark.c']
     vts_objs = senv.StaticObject(vts_src)
     Export('vts_objs')
 
