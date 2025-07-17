@@ -55,14 +55,13 @@ chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R "${ci_uid}.${ci_gid}" "/localhome/${CI_USER}/"
 echo "$CI_USER ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/$CI_USER"
 
-# /scratch is needed on test nodes to be CI info for now.
 # DAOS tests need to be changed to use /CIShare instead.
 if [ -n "$DAOS_CI_INFO_DIR" ]; then
     mkdir -p /CIShare
     retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /CIShare
     # This part only until DAOS is migrated to use /CIShare
-    rm -f /scratch
-    ln -sfn /CIShare /scratch
+    rm -f /CIShare
+    ln -sfn /CIShare
 fi
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
