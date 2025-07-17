@@ -7,7 +7,6 @@
 import re
 
 from exception_utils import CommandFailure
-from general_utils import report_errors
 from ior_test_base import IorTestBase
 
 
@@ -107,7 +106,8 @@ class PoolRedunFacProperty(IorTestBase):
         # 2. Verify pool's rd_fac by calling dmg pool get-prop.
         self.log_step("Verify pool's rd_fac by calling dmg pool get-prop.")
         pool_prop_expected = int(pool.properties.value.split(":")[1])
-        self.assertEqual(pool_prop_expected, pool.get_property("rd_fac"))
+        msg = "Unexpected initial pool rd_fac!"
+        self.assertEqual(pool_prop_expected, pool.get_property("rd_fac"), msg)
 
         # Create a container for later steps.
         container = self.get_container(pool=pool)
@@ -116,7 +116,6 @@ class PoolRedunFacProperty(IorTestBase):
         self.log_step("Verify pool's rd_fac can't be changed to invalid value.")
         invalid_rd_fac = 99
         dmg_command = self.get_dmg_command()
-        errors = []
         try:
             properties = f"rd_fac:{invalid_rd_fac}"
             dmg_command.pool_set_prop(pool=pool.identifier, properties=properties)
@@ -128,7 +127,7 @@ class PoolRedunFacProperty(IorTestBase):
             if exp_msg not in str(command_failure):
                 msg = (f"Updating pool's rd_fac to invalid value didn't return expected "
                        f"message! {exp_msg}")
-                errors.append(msg)
+                self.fail(msg)
 
         # 4. Verify that pool and container's rd_fac haven't been changed.
         self.log_step("Verify that pool and container's rd_fac haven't been changed.")
@@ -165,5 +164,3 @@ class PoolRedunFacProperty(IorTestBase):
         msg = "Unexpected container rd_fac after pool rd_fac was changed!"
         self.verify_container_rd_fac(
             container=container, expected_rd_fac=pool_prop_expected, msg=msg)
-
-        report_errors(test=self, errors=errors)

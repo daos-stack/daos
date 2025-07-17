@@ -405,10 +405,10 @@ forced to healthy via `daos cont set-prop tank mycont1 --properties status:healt
 The redundancy level (rd\_lvl) is another property that was introduced to
 specify the fault domain level to use for placement.
 
-In default (user doesn't supply `--properties rd_fac:N`), pool's `rd_fac` will be used
+By default (user doesn't supply `--properties rd_fac:N`), pool's `rd_fac` will be used
 for container's `rd_fac`. However, pool's `rd_fac` can be set to any value between 0 and
-4, which means it could be invalid. If following error appears during container create,
-try creating with valid `rd_fac`.
+4, which means it could be invalid. If the following error appears during container
+create, try creating with valid `rd_fac`.
 
 ```bash
 $ daos container create tank mycont1 --type=POSIX

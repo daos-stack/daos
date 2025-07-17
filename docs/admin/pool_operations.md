@@ -938,8 +938,8 @@ $ dmg pool get-prop tank2 reclaim
 ```
 
 Pool redundancy factor (`rd_fac`) can be modified after pool creation to any value between
-0 and 4. However, avoid setting it to value larger than the number of engines in the pool
-because pool's `rd_fac` will be used for container's `rd_fac` in default. If it's
+0 and 4. However, avoid setting it to a value larger than the number of engines in the
+pool because pool's `rd_fac` will be used for container's `rd_fac` by default. If it's
 invalid, container create without specifying `rd_fac` will fail.
 
 ### Reclaim Strategy (reclaim)
