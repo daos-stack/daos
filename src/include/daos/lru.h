@@ -176,4 +176,10 @@ daos_lru_is_last_user(struct daos_llink *llink)
 	return llink->ll_ref <= 2;
 }
 
+static inline uint32_t
+daos_lru_ref_count(struct daos_llink *llink)
+{
+	return llink->ll_ref;
+}
+
 #endif

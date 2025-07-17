@@ -166,8 +166,8 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_refcount;
 
 	uint32_t	rgt_opc;
-	unsigned int	rgt_abort:1,
-			rgt_init_scan:1;
+	unsigned int                    rgt_abort : 1, /* abort: kill rebuild */
+	    rgt_init_scan : 1, rgt_stop_admin : 1;     /* stop: kill rebuild (on all engines) */
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */
@@ -244,6 +244,11 @@ struct rebuild_task {
 	 * reclaim those half-rebuild/reintegrated job.
 	 */
 	uint32_t			dst_reclaim_ver;
+
+	/* For dst_rebuild_op == RB_OP_FAIL_RECLAIM: If true, rebuild was stopped by admin.
+	 * Then, on fail_reclaim finish, the pool rebuild state will be set to completed.
+	 */
+	bool                            dst_stop_admin;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -396,8 +401,9 @@ rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str);
 int
 rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc);
 
-void rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version,
-			 uint32_t rebuild_gen, uint64_t term);
+void
+rebuild_leader_abort(const uuid_t pool_uuid, unsigned int version, uint32_t rebuild_gen,
+		     uint64_t term);
 int
 rebuild_obj_tree_destroy(daos_handle_t btr_hdl);
 #endif /* __REBUILD_INTERNAL_H_ */
