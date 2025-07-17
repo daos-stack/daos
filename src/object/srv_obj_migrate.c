@@ -551,6 +551,8 @@ migrate_pool_tls_create_one(void *data)
 		pool_tls->mpt_tgt_obj_ult_cnt = &arg->obj_ult_cnts[tgt_id];
 		pool_tls->mpt_tgt_dkey_ult_cnt = &arg->dkey_ult_cnts[tgt_id];
 	}
+	atomic_init(&pool_tls->mpt_dkey_ult_waiters, 0);
+	atomic_init(&pool_tls->mpt_obj_ult_waiters, 0);
 
 	pool_tls->mpt_inflight_size = 0;
 	pool_tls->mpt_refcount = 1;
@@ -1908,7 +1910,12 @@ migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx, bool *yielded)
 			tgt_idx, tgt_cnt, tls->mpt_inflight_max_ult / dss_tgt_nr);
 		*yielded = true;
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
+
+
+		atomic_fetch_add(&tls->mpt_obj_ult_waiters, 1);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
+		atomic_fetch_sub(&tls->mpt_obj_ult_waiters, 1);
+
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
 		if (tls->mpt_fini)
 			D_GOTO(out, rc = -DER_SHUTDOWN);
@@ -1935,7 +1942,11 @@ migrate_tgt_enter(struct migrate_pool_tls *tls)
 		D_DEBUG(DB_REBUILD, "tgt %u max %u\n", dkey_cnt, tls->mpt_inflight_max_ult);
 
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
+
+		atomic_fetch_add(&tls->mpt_dkey_ult_waiters, 1);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
+		atomic_fetch_sub(&tls->mpt_dkey_ult_waiters, 1);
+
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
 		if (tls->mpt_fini)
 			D_GOTO(out, rc = -DER_SHUTDOWN);
@@ -3858,6 +3869,10 @@ migrate_check_one(void *data)
 {
 	struct migrate_query_arg	*arg = data;
 	struct migrate_pool_tls		*tls;
+	unsigned int	obj_ults;
+	unsigned int	obj_waiters;
+	unsigned int	dkey_ults;
+	unsigned int	dkey_waiters;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (tls == NULL)
@@ -3869,14 +3884,18 @@ migrate_check_one(void *data)
 	arg->dms.dm_total_size += tls->mpt_size;
 	if (arg->dms.dm_status == 0)
 		arg->dms.dm_status = tls->mpt_status;
-	arg->total_ult_cnt += atomic_load(tls->mpt_tgt_obj_ult_cnt) +
-			      atomic_load(tls->mpt_tgt_dkey_ult_cnt);
+
+	obj_ults     = atomic_load(tls->mpt_tgt_obj_ult_cnt);
+	obj_waiters  = atomic_load(&tls->mpt_obj_ult_waiters);
+	dkey_ults    = atomic_load(tls->mpt_tgt_dkey_ult_cnt);
+	dkey_waiters = atomic_load(&tls->mpt_dkey_ult_waiters);
+
+	arg->total_ult_cnt += obj_ults + obj_waiters + dkey_ults + dkey_waiters;
 	ABT_mutex_unlock(arg->status_lock);
-	D_DEBUG(DB_REBUILD, "status %d/%d/ ult %u/%u  rec/obj/size "
+	D_DEBUG(DB_REBUILD, "status %d/%d/ ult %u/%u waiters %u/%u rec/obj/size "
 		DF_U64"/"DF_U64"/"DF_U64"\n", tls->mpt_status,
-		arg->dms.dm_status, atomic_load(tls->mpt_tgt_obj_ult_cnt),
-		atomic_load(tls->mpt_tgt_dkey_ult_cnt), tls->mpt_rec_count,
-		tls->mpt_obj_count, tls->mpt_size);
+		arg->dms.dm_status, obj_ults, dkey_ults, obj_waiters, dkey_waiters,
+		tls->mpt_rec_count, tls->mpt_obj_count, tls->mpt_size);
 
 	migrate_pool_tls_put(tls);
 	return 0;
