@@ -920,7 +920,6 @@ class TestWithServers(TestWithoutServers):
 
         Returns:
             list: a list of strings identifying an errors found restarting the servers.
-
         """
         self.log.info("-" * 100)
         self.log.info("--- STOPPING SERVERS ---")
