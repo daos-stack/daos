@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -281,6 +282,9 @@ async_enable(void **state)
 
 	arg->overlap = 0;
 	arg->async   = true;
+	/* reset fail injection to avoid the case of previously failed test case affect next one */
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
 	return 0;
 }
 
@@ -291,6 +295,9 @@ async_disable(void **state)
 
 	arg->overlap = 0;
 	arg->async   = false;
+	/* reset fail injection to avoid the case of previously failed test case affect next one */
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
 	return 0;
 }
 

@@ -1,7 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
-// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -106,9 +105,6 @@ type (
 
 	// PoolQueryMask implements a bitmask for pool query options.
 	PoolQueryMask C.uint64_t
-
-	// PoolConnectFlag represents DAOS pool connect options.
-	PoolConnectFlag uint
 )
 
 const (
@@ -129,27 +125,12 @@ const (
 	PoolQueryOptionDeadEngines PoolQueryOption = "dead_engines"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
-	PoolConnectFlagReadOnly PoolConnectFlag = C.DAOS_PC_RO
+	PoolConnectFlagReadOnly = C.DAOS_PC_RO
 	// PoolConnectFlagReadWrite indicates that the connection is read-write.
-	PoolConnectFlagReadWrite PoolConnectFlag = C.DAOS_PC_RW
+	PoolConnectFlagReadWrite = C.DAOS_PC_RW
 	// PoolConnectFlagExclusive indicates that the connection is exclusive.
-	PoolConnectFlagExclusive PoolConnectFlag = C.DAOS_PC_EX
+	PoolConnectFlagExclusive = C.DAOS_PC_EX
 )
-
-func (pcf PoolConnectFlag) String() string {
-	flagStrs := []string{}
-	if pcf&PoolConnectFlagReadOnly != 0 {
-		flagStrs = append(flagStrs, "read-only")
-	}
-	if pcf&PoolConnectFlagReadWrite != 0 {
-		flagStrs = append(flagStrs, "read-write")
-	}
-	if pcf&PoolConnectFlagExclusive != 0 {
-		flagStrs = append(flagStrs, "exclusive")
-	}
-	sort.Strings(flagStrs)
-	return strings.Join(flagStrs, ",")
-}
 
 func (pqo PoolQueryOption) String() string {
 	return string(pqo)

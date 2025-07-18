@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -138,7 +137,8 @@ struct cmd_args_s {
 	char			*epcrange_str;	/* --epcrange cont epochs */
 	daos_epoch_t		epcrange_begin;
 	daos_epoch_t		epcrange_end;
-	daos_obj_id_t            oid;
+	daos_obj_id_t		oid;
+	daos_prop_t		*props;		/* --properties cont create */
 
 	/* Container datamover related */
 	struct dm_args		*dm_args;	/* datamover arguments */

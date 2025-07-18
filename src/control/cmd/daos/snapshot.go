@@ -1,6 +1,5 @@
 //
-// (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Google LLC
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,7 +39,7 @@ func (cmd *containerSnapCreateCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndOpen(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -100,7 +99,7 @@ func (cmd *containerSnapDestroyCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndOpen(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -219,7 +218,7 @@ func (cmd *containerSnapListCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndOpen(C.DAOS_COO_RO, ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}
@@ -260,7 +259,7 @@ func (cmd *containerSnapshotRollbackCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndOpen(C.DAOS_COO_RW, ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
