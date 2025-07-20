@@ -145,7 +145,7 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
         pool.skip_cleanup()
 
     def test_check_start_failout(self):
-        """Test dmg check start --failout=[on|off].
+        """Test dmg check start --failout=on.
 
         See the state diagram attached to the ticket.
 
