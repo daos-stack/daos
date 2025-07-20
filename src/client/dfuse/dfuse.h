@@ -206,8 +206,6 @@ struct dfuse_obj_hdl {
 	bool                      doh_kreaddir_finished;
 
 	bool                      doh_evict_on_close;
-	/* the handle is doing readhead for the moment */
-	bool                      doh_readahead_inflight;
 };
 
 /* Readdir support.
@@ -1033,6 +1031,9 @@ struct dfuse_inode_entry {
 
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
+
+	/* the inode is doing readhead for the moment */
+	bool                      ie_readahead_inflight;
 };
 
 struct active_inode {
@@ -1220,14 +1221,14 @@ bool
 dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
 void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct dfuse_event *ev);
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, struct dfuse_event *ev);
 
 int
 dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		    struct dfuse_event **evp);
 
 void
-dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
+dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		     struct dfuse_event *ev, int rc);
 
 int
