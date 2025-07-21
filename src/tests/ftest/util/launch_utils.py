@@ -452,6 +452,11 @@ class TestRunner():
         Returns:
             int: status code: 0 = success, >0 = failure
         """
+        def __add_detail_status(key):
+            if key not in details["status"]:
+                details["status"][key] = 0
+            details["status"][key] += 1
+
         # Avoid counting the test execution time as part of the processing time of this test
         self.test_result.end()
 
@@ -464,27 +469,29 @@ class TestRunner():
         result = run_local(logger, " ".join(command), capture_output=False)
         end_time = int(time.time())
         return_code = result.output[0].returncode
+        if repeat == 1:
+            details["status"] = {}
         if return_code == 0:
             logger.debug("All avocado test variants passed")
-            details["status"] = "Passed"
+            __add_detail_status("Passed")
         elif return_code & 1 == 1:
             logger.debug("At least one avocado test variant failed")
-            details["status"] = "Variant Failed"
+            __add_detail_status("Variant Failed")
         elif return_code & 2 == 2:
             logger.debug("At least one avocado job failed")
-            details["status"] = "Job Failed"
+            __add_detail_status("Job Failed")
         elif return_code & 4 == 4:
             message = "Failed avocado commands detected"
             self.test_result.fail_test(logger, "Execute", message)
-            details["status"] = "Command Failed"
+            __add_detail_status("Command Failed")
         elif return_code & 8 == 8:
             logger.debug("At least one avocado test variant was interrupted")
-            details["status"] = "Variant Failed - Interrupted"
+            __add_detail_status("Variant Failed - Interrupted")
         else:
             message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
             self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             return_code = 1
-            details["status"] = "Unknown Failure"
+            __add_detail_status("Unknown Failure")
         if return_code:
             self._collect_crash_files(logger)
 
@@ -1315,12 +1322,12 @@ class TestGroup():
                 # Run the test with avocado
                 return_code |= runner.execute(
                     logger, test, loop, index + 1, sparse, fail_fast,
-                    self._details["tests"][-1])
+                    self._details["tests"][loop - 1])
 
                 # Archive the test results
                 return_code |= runner.process(
                     logger, job_results_dir, test, loop, stop_daos, archive, rename,
-                    jenkins_log, core_files, threshold, self._details["tests"]["loops"][-1])
+                    jenkins_log, core_files, threshold, self._details["tests"][loop - 1])
 
                 # Display disk usage after the test is complete
                 display_disk_space(logger, logdir)
