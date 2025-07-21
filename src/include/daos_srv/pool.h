@@ -482,7 +482,8 @@ enum ds_pool_dir {
 enum ds_pool_tgt_status {
 	DS_POOL_TGT_NONEXIST,
 	DS_POOL_TGT_EMPTY,
-	DS_POOL_TGT_NORMAL
+	DS_POOL_TGT_NORMAL,
+	DS_POOL_TGT_ORPHAN
 };
 
 int
