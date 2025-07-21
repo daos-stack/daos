@@ -234,7 +234,7 @@ futex_wake(unsigned int *futex_ptr)
 	return futex((unsigned int *)futex_ptr, FUTEX_WAKE, 1, NULL, NULL, 0);
 }
 
-/* insert a robust mutex into the doubely linked list of all robust mutexes in current thread */
+/* insert a robust mutex into the doubly linked list of all robust mutexes in current thread */
 static void
 insert_robust_futex_to_list(d_shm_mutex_t *mutex)
 {
@@ -250,7 +250,7 @@ insert_robust_futex_to_list(d_shm_mutex_t *mutex)
 	((struct robust_list *)thread_robust_head)->next = (struct robust_list *)&mutex->next;
 }
 
-/* remove a robust mutex from the doubely linked list of all robust mutexes in current thread */
+/* remove a robust mutex from the doubly linked list of all robust mutexes in current thread */
 static void
 remove_robust_futex_from_list(d_shm_mutex_t *mutex)
 {

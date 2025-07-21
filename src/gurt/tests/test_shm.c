@@ -339,6 +339,145 @@ test_rwlock(void **state)
 	assert_true(rc == 0);
 }
 
+void
+test_lrucache(void **state)
+{
+	int              i;
+	int              rc;
+	int              key;
+	int              val;
+	int             *addr_val;
+	int              key_size;
+	char             key_long[16] = "aaaaaaaaaaaaaaa";
+	char             key_var[16];
+	char             data_long[16] = "bbbbbbbbbbbbbbbb";
+	shm_lru_node_t  *node_found;
+	int              capacity;
+	shm_lru_cache_t *cache;
+
+	/* test keys with various size */
+	/* key_size is zero, so key could have various length */
+	rc = shm_lru_create_cache(16, 0, sizeof(int), &cache);
+	assert_true(rc == 0);
+
+	for (key_size = 1; key_size <= 15; key_size++) {
+		memcpy(key_var, key_long, key_size);
+		val = key_size;
+		shm_lru_put(cache, key_var, key_size, &val, sizeof(int));
+	}
+
+	for (key_size = 1; key_size <= 15; key_size++) {
+		memcpy(key_var, key_long, key_size);
+		rc = shm_lru_get(cache, key_var, key_size, &node_found, (void **)&addr_val);
+		assert(rc == 0);
+		assert(*addr_val == key_size);
+		shm_lru_node_dec_ref(node_found);
+	}
+
+	shm_lru_destroy_cache(cache);
+
+	/* test various key size and data size */
+	rc = shm_lru_create_cache(16, 0, 0, &cache);
+	assert_true(rc == 0);
+
+	for (i = 1; i <= 16; i++) {
+		shm_lru_put(cache, key_long, i, data_long, i);
+	}
+
+	for (i = 1; i <= 16; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, key_long, i, &node_found, (void **)&addr_val);
+		assert(rc == 0);
+		assert_true(memcmp(addr_val, data_long, i) == 0);
+		shm_lru_node_dec_ref(node_found);
+	}
+
+	shm_lru_destroy_cache(cache);
+
+	/* test updating existing key */
+	rc = shm_lru_create_cache(2, sizeof(int), sizeof(int), &cache);
+	assert_true(rc == 0);
+
+	key = 1;
+	val = 1;
+	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+	key = 2;
+	val = 2;
+	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+
+	key = 1;
+	val = 10;
+	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+
+	key = 1;
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	assert(rc == 0);
+	assert(*addr_val == 10);
+	shm_lru_node_dec_ref(node_found);
+
+	key = 3;
+	val = 3;
+	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+
+	key = 2;
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	assert(rc == ENOENT);
+
+	key = 1;
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	assert(rc == 0);
+	assert(*addr_val == 10);
+	shm_lru_node_dec_ref(node_found);
+
+	shm_lru_destroy_cache(cache);
+
+	/* large number of operations */
+	capacity = 100;
+	rc       = shm_lru_create_cache(capacity, sizeof(int), sizeof(int), &cache);
+	assert_true(rc == 0);
+
+	/* make cache full */
+	for (i = 0; i < capacity; i++) {
+		key = i;
+		val = i;
+		shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+	}
+
+	/* verify all items exist */
+	for (i = 0; i < capacity; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		assert(rc == 0);
+		assert(*addr_val == i);
+		shm_lru_node_dec_ref(node_found);
+	}
+
+	/* add more items to force eviction */
+	for (i = capacity; i < capacity + 50; i++) {
+		key = i;
+		val = i;
+		shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+	}
+
+	/* verify first 50 items are evicted */
+	for (i = 0; i < 50; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		assert(rc == ENOENT);
+	}
+
+	/* verify remaining items do exist */
+	for (i = 50; i < capacity + 50; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		assert(rc == 0);
+		assert(*addr_val == i);
+		shm_lru_node_dec_ref(node_found);
+	}
+
+	shm_lru_destroy_cache(cache);
+}
+
 #define N_LOOP_MEM (8)
 
 void
@@ -714,6 +853,7 @@ do_lock_mutex_child(bool lock_only)
 void
 test_lock(void **state)
 {
+	int                     i;
 	int                     rc;
 	int                     err;
 	int                     status;
@@ -758,14 +898,21 @@ test_lock(void **state)
 	pid = fork();
 	if (pid == 0)
 		execvp(exe_path, argv);
-	else
-		/* take a short nap to allow the child process to lock the mutex first */
-		usleep(18000);
+	else {
+		/* take a few short naps until the child process locks the mutex */
+		for (i = 0; i < 100; i++) {
+			usleep(20000);
+			if (*((int *)mutex) != 0)
+				/* the mutex is locked now */
+				break;
+		}
+	}
 
 	gettimeofday(&tm1, NULL);
 	shm_mutex_lock(mutex, &owner_dead);
 	gettimeofday(&tm2, NULL);
 	dt = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
+	printf("Time diff = %4.2lf\n", fabs(dt - TIME_SLEEP));
 	assert_true(fabs(dt - TIME_SLEEP) < 0.15);
 	shm_mutex_unlock(mutex);
 	assert_true(owner_dead == false);
@@ -824,20 +971,20 @@ int
 main(int argc, char **argv)
 {
 	int                     opt = 0, index = 0, rc;
-	const struct CMUnitTest tests[] = {cmocka_unit_test(test_hash), cmocka_unit_test(test_lock),
-					   cmocka_unit_test(test_mem),
-					   cmocka_unit_test(test_rwlock)};
+	const struct CMUnitTest tests[] = {
+		cmocka_unit_test(test_hash), cmocka_unit_test(test_lock), cmocka_unit_test(test_mem),
+		cmocka_unit_test(test_rwlock), cmocka_unit_test(test_lrucache)};
 
 	// clang-format off
 	static struct option    long_options[] = {
-	    {"all", no_argument, NULL, 'a'},    {"hash", no_argument, NULL, 'h'},
-	    {"lock", no_argument, NULL, 'l'},   {"lockmutex", no_argument, NULL, 'k'},
-	    {"memory", no_argument, NULL, 'm'}, {"lockonly", no_argument, NULL, 'o'},
-	    {"rwlock", no_argument, NULL, 'r'}, {"verifykv", no_argument, NULL, 'v'},
-	    {NULL, 0, NULL, 0}};
+	    {"all", no_argument, NULL, 'a'},      {"hash", no_argument, NULL, 'h'},
+	    {"lock", no_argument, NULL, 'l'},     {"lockmutex", no_argument, NULL, 'k'},
+	    {"memory", no_argument, NULL, 'm'},   {"lockonly", no_argument, NULL, 'o'},
+	    {"rwlock", no_argument, NULL, 'r'},   {"verifykv", no_argument, NULL, 'v'},
+	    {"lrucache", no_argument, NULL, 'c'}, {NULL, 0, NULL, 0}};
 	// clang-format on
 
-	while ((opt = getopt_long(argc, argv, ":ahlkmorv", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, ":ahlkmorvc", long_options, &index)) != -1) {
 		switch (opt) {
 		case 'a':
 			break;

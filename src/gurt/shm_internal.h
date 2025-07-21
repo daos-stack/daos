@@ -57,6 +57,12 @@ struct d_shm_hdr {
 	/* the offset to the first hash table head */
 	long int         off_ht_head;
 
+	/* the offset to LRU data cache */
+	long int         off_lru_cache_dentry;
+
+	/* the offset to LRU data cache */
+	long int         off_lru_cache_data;
+
 	/* the total size of shared memory region */
 	uint64_t         size;
 	/* size of each shared memory allocator's pool */

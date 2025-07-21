@@ -530,4 +530,147 @@ shm_ht_rec_data(d_shm_ht_rec_loc_t rec_loc, int *err);
 int
 shm_ht_rec_num_ref(d_shm_ht_rec_loc_t rec_loc);
 
+/* dynamic allocation if data is larger than this threshold */
+#define LRU_ALLOC_SIZE_THRESHOLD (4096)
+
+/* Node in LRU cache */
+typedef struct shm_lru_node {
+	/* key size*/
+	int         key_size;
+	/* data size*/
+	int         data_size;
+	/* store key if length is not larger than sizeof(long int), otherwise store the offset to key */
+	long int    key;
+	/* store data if length is not larger than sizeof(long int), otherwise store offset to data */
+	long int    data;
+	/* the reference count of this record */
+	_Atomic int ref_count;
+	/* the index of hash bucket this record is in */
+	int         idx_bucket;
+	/* off_prev and off_next are used in doubly linked list for LRU */
+	int         off_prev;
+	int         off_next;
+	/* offset to the next node in hash chain in each bucket for allocated node. point to next
+	 * available node for free nodes
+	 */
+	int         off_hnext;
+} shm_lru_node_t;
+
+/* This implementation of shm LRU is mainly optimized for performance by using pre-allocated buffer
+ * when possible
+ */
+
+/* LRU Cache structure */
+typedef struct {
+	/* max number of nodes to hold */
+	int           capacity;
+	/* number of nodes */
+	int           size;
+	/* Most recently used node */
+	int           off_head;
+	/* Least recently used node */
+	int           off_tail;
+	/* First available/free node */
+	int           first_av;
+	/* the size of key. zero means key size is variable */
+	int           key_size;
+	/* the size of data. zero means data size is variable */
+	int           data_size;
+	/* the offset to the array of offset of hash buckets */
+	int           off_hashbuckets;
+	/* the offset to the array of preallocated array of nodes */
+	int           off_nodelist;
+	/* the offset to the array of preallocated array of keys */
+	long int      off_keylist;
+	/* the offset to the array of preallocated array of data */
+	long int      off_datalist;
+	d_shm_mutex_t lock;
+} shm_lru_cache_t;
+
+enum SHM_LRU_CACHE_TYPE {
+	CACHE_DENTRY = 0,
+	CACHE_DATA
+};
+
+/* key for data caching: object id of file + offset */
+#define KEY_SIZE_FILE_ID_OFF (sizeof(uint64_t)*2 + sizeof(off_t))
+
+#define DEFAULT_CACHE_DATA_CAPACITY (2048)
+#define DEFAULT_CACHE_DATA_SIZE     (512 * 1024)
+#define MAX_PREFETCH_READ_SIZE      (2 * 1024 * 1024)
+
+/**
+ * create LRU cache
+ *
+ * \param[in] capacity		max number of records in cache
+ * \param[in] key_size		size of key in bytes. zero for non-uniform size
+ * \param[in] data_size		size of data in bytes. zero for non-uniform size
+ *
+ * \param[out] cache		LRU cache created
+ *
+ * \return					error code
+ */
+int
+shm_lru_create_cache(int capacity, int key_size, int data_size, shm_lru_cache_t **cache);
+
+/**
+ * decrease the reference count of a LRU cache node after retrieving data
+ *
+ * \param[in] node			LRU node
+ */
+void
+shm_lru_node_dec_ref(shm_lru_node_t *node);
+
+/**
+ * create/update LRU record
+ *
+ * \param[in] cache			LRU cache
+ * \param[in] key			key
+ * \param[in] key_size		size of key in bytes
+ * \param[in] data			data
+ * \param[in] data_size		size of data in bytes
+ *
+ * \return					error code
+ */
+int
+shm_lru_put(shm_lru_cache_t *cache, void *key, int key_size, void *data, int data_size);
+
+/**
+ * query LRU cache
+ *
+ * \param[in] cache			LRU cache
+ * \param[in] key			key
+ * \param[in] key_size		size of key in bytes
+ *
+ * \param[out] node_found	LRU cache node containing the key
+ * \param[out] val			LRU cache node containing the key
+ *
+ * \return					error code. 0 - success, otherwise error
+ */
+int
+shm_lru_get(shm_lru_cache_t *cache, void *key, int key_size, shm_lru_node_t **node_found, void **val);
+
+/**
+ * destroy LRU cache
+ *
+ * \param[in] cache			LRU cache created
+ *
+ * \return					error code
+ */
+void
+shm_lru_destroy_cache(shm_lru_cache_t *cache);
+
+/**
+ * Query LRU cache saved in shm header
+ *
+ * \param[in] type			type of LRU cache: data cache or dentry
+ *
+ * \return					LRU cache
+ */
+shm_lru_cache_t *
+shm_lru_get_cache(enum SHM_LRU_CACHE_TYPE type);
+
+void
+printCache(shm_lru_cache_t *cache);
+
 #endif
