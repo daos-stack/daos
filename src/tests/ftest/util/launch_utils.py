@@ -453,7 +453,9 @@ class TestRunner():
             int: status code: 0 = success, >0 = failure
         """
         def __add_detail_status(key):
-            if key not in details["status"]:
+            if "status" not in details:
+                details["status"] = {key: 0}
+            elif key not in details["status"]:
                 details["status"][key] = 0
             details["status"][key] += 1
 
@@ -469,8 +471,6 @@ class TestRunner():
         result = run_local(logger, " ".join(command), capture_output=False)
         end_time = int(time.time())
         return_code = result.output[0].returncode
-        if repeat == 1:
-            details["status"] = {}
         if return_code == 0:
             logger.debug("All avocado test variants passed")
             __add_detail_status("Passed")
