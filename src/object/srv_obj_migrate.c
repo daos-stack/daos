@@ -807,6 +807,20 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
 		flags |= DIOF_TO_LEADER;
 
+	if (iods[0].iod_type == DAOS_IOD_ARRAY &&
+	    daos_oclass_is_ec(&mrone->mo_oca) &&
+	    is_ec_data_shard_by_layout_ver(mrone->mo_oid.id_layout_ver, mrone->mo_dkey_hash,
+					   &mrone->mo_oca, mrone->mo_oid.id_shard) &&
+	    obj_ec_parity_alive(oh, mrone->mo_dkey_hash, NULL)) {
+		static int logged;
+
+		if (!logged) {
+			D_INFO("force degraded fetch\n");
+			logged = 1;
+		}
+		flags |= DIOF_FOR_FORCE_DEGRADE;
+	}
+
 	rc = mrone_obj_fetch_internal(mrone, oh, sgls, iods, iod_num, eph,
 				      flags, csum_iov_fetch, tls);
 	if (rc != 0)
