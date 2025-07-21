@@ -624,7 +624,7 @@ def create_steps_log(logger, job_results_dir, test_result):
     return 0
 
 
-def record_variant_details(logger, job_results_dir, test_result, details, loop):
+def record_variant_details(logger, job_results_dir, test_result, details):
     """Record variant test results to the details.json file.
 
     Args:
@@ -632,14 +632,13 @@ def record_variant_details(logger, job_results_dir, test_result, details, loop):
         job_results_dir (str): path to the avocado job results
         test_result (TestResult): the test result used to update the status of the test
         details (dict): dictionary to update with test results
-        loop (int): the test repetition number (1s based)
 
     Returns:
         int: status code: 16384 = problem parsing the results.json; 0 = success
     """
     logger.debug("=" * 80)
     logger.info("Creating steps.log file")
-    if loop == 1:
+    if "test_variants" not in details:
         details["test_variants"] = []
 
     test_logs_lnk = os.path.join(job_results_dir, "latest")
@@ -649,7 +648,7 @@ def record_variant_details(logger, job_results_dir, test_result, details, loop):
         with open(results_json, "r", encoding="utf-8") as results:
             data = json.loads(results.read())
             for index, test in enumerate(data["tests"]):
-                if loop == 1:
+                if len(details["test_variants"]) == index:
                     # Add an entry for this test variant the first time its run in the loop
                     details["test_variants"].append(
                         {"variant": test["id"].split(";")[0],
@@ -927,7 +926,7 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
 
 
 def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, archive, rename,
-                        jenkins_xml, core_files, threshold, total_repeats, details, loop):
+                        jenkins_xml, core_files, threshold, total_repeats, details):
     # pylint: disable=too-many-arguments
     """Process the test results.
 
@@ -952,7 +951,6 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
         threshold (str): optional upper size limit for test log files
         total_repeats (int): total number of times the test will be repeated
         details (dict): dictionary to update with test results
-        loop (int): the test repetition number (1s based)
 
     Returns:
         int: status code: 0 = success, >0 = failure
@@ -1059,7 +1057,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
     return_code |= create_steps_log(logger, job_results_dir, test_result)
 
     # Add test variant results to the details
-    return_code |= record_variant_details(logger, job_results_dir, test_result, details, loop)
+    return_code |= record_variant_details(logger, job_results_dir, test_result, details)
 
     # Optionally rename the test results directory for this test
     if rename:

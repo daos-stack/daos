@@ -534,7 +534,7 @@ class TestRunner():
             test, loop, self.total_repeats)
         status = collect_test_result(
             logger, test, self.test_result, job_results_dir, stop_daos, archive, rename,
-            jenkins_xml, core_files, threshold, self.total_repeats, details, loop)
+            jenkins_xml, core_files, threshold, self.total_repeats, details)
 
         # Mark the execution of the test as passed if nothing went wrong
         if self.test_result.status is None:
