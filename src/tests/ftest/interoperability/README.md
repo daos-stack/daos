@@ -61,15 +61,15 @@ For example, to list daos and mercury:
 dnf list --repo daos-packages-v2.6.2 | grep -E '^daos|^mercury'
 ```
 ```
-clush -S -B -w $DAOS_CLIENTS "sudo dnf install -y daos-2.6.2-2.el8 \
-                                                  daos-admin-2.6.2-2.el8  \
-                                                  daos-client-2.6.2-2.el8 \
-                                                  daos-client-tests-2.6.2-2.el8 \
-                                                  ior mpich hdf5-vol-daos-mpich" && \
-clush -S -B -w $DAOS_SERVERS "sudo dnf install -y daos-2.6.2-2.el8 \
-                                                  daos-admin-2.6.2-2.el8 \
-                                                  daos-server-2.6.2-2.el8" && \
-clush -S -B -w "$ALL_NODES" "rpm -qa | grep -E '^daos|^mercury' | sort"
+clush -S -B -w $DAOS_CLIENTS "sudo dnf install -y daos-2.6.3-4.el8 \
+                                                  daos-admin-2.6.3-4.el8  \
+                                                  daos-client-2.6.3-4.el8 \
+                                                  daos-client-tests-2.6.3-4.el8 \
+                                                  ior mpich hdf5-mpich hdf5-vol-daos hdf5-vol-daos-mpich" && \
+clush -S -B -w $DAOS_SERVERS "sudo dnf install -y daos-2.6.3-4.el8 \
+                                                  daos-admin-2.6.3-4.el8 \
+                                                  daos-server-2.6.3-4.el8" && \
+clush -S -B -w "$ALL_NODES" "rpm -qa | grep -E '^daos|^mercury|^hdf5' | sort"
 ```
 
 ## Make sure mpich is loaded
