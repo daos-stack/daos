@@ -10,7 +10,7 @@ if [ -z "${SL_ISAL_CRYPTO_PREFIX}" ]; then
 fi
 
 VERSION="${isal_crypto_version}"
-RELEASE="2"
+RELEASE="${isal_crypto_release}"
 LICENSE="BSD-3-Clause"
 ARCH=${isa}
 DESCRIPTION="ISA-L_crypto is a collection of optimized low-level functions
@@ -53,6 +53,6 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto/*"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${isal_crypto_lib} = ${isal_crypto_version}")
+  DEPENDS=("${isal_crypto_lib} = ${isal_crypto_full}")
   build_package "${isal_crypto_dev}"
 fi
