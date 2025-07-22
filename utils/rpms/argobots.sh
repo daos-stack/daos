@@ -40,6 +40,6 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   list_files files "${SL_ARGOBOTS_PREFIX}/include/abt.h"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${argobots_lib} = ${argobots_full}-${RELEASE}")
+  DEPENDS=("${argobots_lib} = ${argobots_full}")
   build_package "${argobots_dev}"
 fi
