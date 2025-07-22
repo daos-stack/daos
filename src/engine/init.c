@@ -1,6 +1,8 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -646,10 +648,6 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
-
-	if (server_init_state != DSS_INIT_STATE_SET_UP)
-		return;
-
 	if (uid != NULL && dss_abt_init) {
 		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
 		int rc;
@@ -972,17 +970,17 @@ Options:\n\
   --bypass_health_chk, -b\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
-      Allocates mem_size MB for SPDK when using primary process mode\n\
+      Allocates mem_size MiB for SPDK when using primary process mode\n\
   --hugepage_size=hugepage_size, -H hugepage_size\n\
-      Passes the configured hugepage size(2MB or 1GB)\n\
+      Passes the configured hugepage size(2MiB or 1GiB)\n\
   --storage_tiers=ntiers, -T ntiers\n\
       Number of storage tiers\n\
   --check, -C\n\
       Start engine with check mode, global consistency check\n\
   --help, -h\n\
       Print this description\n",
-		prog, prog, modules, daos_sysname, dss_storage_path,
-		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
+		prog, prog, modules, daos_sysname, dss_storage_path, dss_socket_dir, dss_nvme_conf,
+		dss_instance_idx);
 }
 
 static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
@@ -998,7 +996,7 @@ static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
 	return 0;
 }
 
-static int
+static void
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
@@ -1088,9 +1086,6 @@ parse(int argc, char **argv)
 			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size,
 					 "\"-H\"");
 			break;
-		case 'h':
-			usage(argv[0], stdout);
-			break;
 		case 'I':
 			rc = arg_strtoul(optarg, &dss_instance_idx, "\"-I\"");
 			break;
@@ -1112,15 +1107,16 @@ parse(int argc, char **argv)
 			}
 			snprintf(modules, sizeof(modules), "%s", MODS_LIST_CHK);
 			break;
+		case 'h':
+			usage(argv[0], stdout);
+			exit(EXIT_SUCCESS);
 		default:
 			usage(argv[0], stderr);
 			rc = -DER_INVAL;
 		}
-		if (rc < 0)
-			return rc;
+		if (rc)
+			exit(EXIT_FAILURE);
 	}
-
-	return 0;
 }
 
 struct abt_dump_arg {
@@ -1154,9 +1150,7 @@ main(int argc, char **argv)
 	int		rc;
 
 	/** parse command line arguments */
-	rc = parse(argc, argv);
-	if (rc)
-		exit(EXIT_FAILURE);
+	parse(argc, argv);
 
 	/** block all possible signals but faults */
 	sigfillset(&set);

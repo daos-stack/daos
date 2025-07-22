@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -62,7 +63,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 // non-exported package-scope function variable for mocking in unit tests
 var osSetenv = os.Setenv
 
-func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet, mi *common.MemInfo, lookupNetIF ifLookupFn, affSrcs ...config.EngineAffinityFn) error {
+func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet, smi *common.SysMemInfo, lookupNetIF ifLookupFn, affSrcs ...config.EngineAffinityFn) error {
 	processFabricProvider(cfg)
 
 	if err := cfg.SetEngineAffinities(log, affSrcs...); err != nil {
@@ -73,11 +74,11 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
-	if err := cfg.SetNrHugepages(log, mi); err != nil {
+	if err := cfg.SetNrHugepages(log, smi.HugepageSizeKiB); err != nil {
 		return err
 	}
 
-	if err := cfg.SetRamdiskSize(log, mi); err != nil {
+	if err := cfg.SetRamdiskSize(log, smi); err != nil {
 		return err
 	}
 
@@ -343,7 +344,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 
 // addEngines creates and adds engine instances to harness then starts goroutine to execute
 // callbacks when all engines are started.
-func (srv *server) addEngines(ctx context.Context) error {
+func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
@@ -353,7 +354,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 	}
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
+	if err := prepBdevStorage(srv, iommuEnabled, smi); err != nil {
 		return err
 	}
 
@@ -594,12 +595,12 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	mi, err := common.GetMemInfo()
+	smi, err := common.GetSysMemInfo()
 	if err != nil {
 		return errors.Wrapf(err, "retrieve system memory info")
 	}
 
-	if err = processConfig(log, cfg, fis, mi, lookupIF, genFiAffFn(fis)); err != nil {
+	if err = processConfig(log, cfg, fis, smi, lookupIF, genFiAffFn(fis)); err != nil {
 		return err
 	}
 
@@ -631,7 +632,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.addEngines(ctx); err != nil {
+	if err := srv.addEngines(ctx, smi); err != nil {
 		return err
 	}
 
