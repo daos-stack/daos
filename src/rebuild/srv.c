@@ -877,23 +877,25 @@ enum {
 static uuid_t test_stop_start_puuid;
 
 /* administrator (via dmg command) asks to stop the currently-running rebuild for pool */
-void
-ds_rebuild_admin_stop(uuid_t pool_uuid)
+int
+ds_rebuild_admin_stop(struct ds_pool *pool)
 {
 	struct rebuild_global_pool_tracker *rgt;
 
 	/* look up the running rebuild and mark it as aborted (and by the administrator) */
-	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1 /* ver */, -1 /* gen */);
+	rgt = rebuild_global_pool_tracker_lookup(pool->sp_uuid, -1 /* ver */, -1 /* gen */);
 	if (rgt == NULL) {
 		/* nothing running, make it a no-op */
 		D_INFO(DF_UUID ": received request to stop rebuild - but nothing found to stop\n",
-		       DP_UUID(pool_uuid));
-		return;
+		       DP_UUID(pool->sp_uuid));
+		return 0;
 	}
 
+	D_INFO(DF_RB ": stop rebuild\n", DP_RB_RGT(rgt));
 	rgt->rgt_abort      = 1;
 	rgt->rgt_stop_admin = 1;
 	rgt_put(rgt);
+	return 0;
 }
 
 /*
@@ -2518,6 +2520,31 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 		return rc;
 
 	return DER_SUCCESS;
+}
+
+/* administrator (via dmg command) asks to start/resume rebuild for pool */
+int
+ds_rebuild_admin_start(struct ds_pool *pool)
+{
+	daos_prop_t prop = {0};
+	int         rc;
+
+	D_INFO(DF_UUID ": resume/start rebuild\n", DP_UUID(pool->sp_uuid));
+
+	rc = ds_pool_iv_prop_fetch(pool, &prop);
+	if (rc) {
+		daos_prop_fini(&prop);
+		DL_ERROR(rc, DF_UUID ": cannot fetch properties", DP_UUID(pool->sp_uuid));
+		goto out;
+	}
+
+	rc = ds_rebuild_regenerate_task(pool, &prop);
+	daos_prop_fini(&prop);
+	if (rc)
+		DL_ERROR(rc, DF_UUID ": regenerate rebuild task failed", DP_UUID(pool->sp_uuid));
+
+out:
+	return rc;
 }
 
 static int
