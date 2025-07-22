@@ -915,27 +915,23 @@ class TestWithServers(TestWithoutServers):
             self.register_cleanup(self.stop_servers)
         return force_agent_start
 
-    def restart_servers(self, stop=True):
+    def restart_servers(self):
         """Stop and start the servers without reformatting the storage.
-
-        Args:
-            stop (bool, optional): whether to stop first. Defaults to True.
 
         Returns:
             list: a list of strings identifying an errors found restarting the servers.
 
         """
+        self.log.info("-" * 100)
+        self.log.info("--- STOPPING SERVERS ---")
         errors = []
-        if stop:
-            self.log.info("-" * 100)
-            self.log.info("--- STOPPING SERVERS ---")
-            status = self.check_running("servers", self.server_managers)
-            if status["restart"] and not status["expected"]:
-                errors.append(
-                    "ERROR: At least one multi-variant server was not found in its expected state "
-                    "prior to stopping all servers")
-            self.log.info("Stopping %s group(s) of servers", len(self.server_managers))
-            errors.extend(self._stop_managers(self.server_managers, "servers"))
+        status = self.check_running("servers", self.server_managers)
+        if status["restart"] and not status["expected"]:
+            errors.append(
+                "ERROR: At least one multi-variant server was not found in its expected state "
+                "prior to stopping all servers")
+        self.log.info("Stopping %s group(s) of servers", len(self.server_managers))
+        errors.extend(self._stop_managers(self.server_managers, "servers"))
 
         self.log.info("-" * 100)
         self.log.debug("--- RESTARTING SERVERS ---")
