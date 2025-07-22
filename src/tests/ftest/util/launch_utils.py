@@ -1300,7 +1300,7 @@ class TestGroup():
                 test_file_handler = get_file_handler(test_log_file, LOG_FILE_FORMAT, logging.DEBUG)
                 logger.addHandler(test_file_handler)
 
-                if loop == 1:
+                if len(self._details["tests"]) == index:
                     # Add an entry for this test the first time its run in the loop
                     self._details["tests"].append({
                         "index": index + 1,
@@ -1309,6 +1309,7 @@ class TestGroup():
                         "clients": str(test.yaml_info["test_clients"]),
                         "servers": str(test.yaml_info["test_servers"]),
                         "bdev_list": test.yaml_info["bdev_list"]})
+                self._details["tests"][index]["repetitions"] = loop
 
                 # Prepare the hosts to run the tests
                 step_status = runner.prepare(
@@ -1322,12 +1323,12 @@ class TestGroup():
                 # Run the test with avocado
                 return_code |= runner.execute(
                     logger, test, loop, index + 1, sparse, fail_fast,
-                    self._details["tests"][loop - 1])
+                    self._details["tests"][index])
 
                 # Archive the test results
                 return_code |= runner.process(
                     logger, job_results_dir, test, loop, stop_daos, archive, rename,
-                    jenkins_log, core_files, threshold, self._details["tests"][loop - 1])
+                    jenkins_log, core_files, threshold, self._details["tests"][index])
 
                 # Display disk usage after the test is complete
                 display_disk_space(logger, logdir)
