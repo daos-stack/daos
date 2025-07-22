@@ -485,18 +485,3 @@ shm_lru_destroy_cache(shm_lru_cache_t *cache)
 	shm_mutex_unlock(&cache->lock);
 }
 
-/* Print current state */
-void
-printCache(shm_lru_cache_t *cache)
-{
-	int             offset = cache->off_head;
-	shm_lru_node_t *node;
-
-	printf("Cache [MRU -> LRU]: ");
-	while (offset) {
-		node = (shm_lru_node_t *)((long int)cache + (long int)offset);
-		printf("(%ld:%ld) ", node->key, node->data);
-		offset = node->off_next;
-	}
-	printf("\n");
-}

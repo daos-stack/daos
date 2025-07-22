@@ -670,7 +670,4 @@ shm_lru_destroy_cache(shm_lru_cache_t *cache);
 shm_lru_cache_t *
 shm_lru_get_cache(enum SHM_LRU_CACHE_TYPE type);
 
-void
-printCache(shm_lru_cache_t *cache);
-
 #endif
