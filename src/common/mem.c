@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,7 +22,7 @@
 #include "dav/dav.h"
 #include "dav_v2/dav_v2.h"
 #endif
-
+#define CACHELINE_SIZE          64ULL
 #define UMEM_TX_DATA_MAGIC	(0xc01df00d)
 
 #define TXD_CB_NUM		(1 << 5)	/* 32 callbacks */
@@ -36,8 +37,7 @@ struct umem_tx_stage_item {
 
 #ifdef DAOS_PMEM_BUILD
 
-static int  daos_md_backend      = DAOS_MD_PMEM;
-static bool daos_disable_bmem_v2 = false;
+static int daos_md_backend = DAOS_MD_PMEM;
 #define UMM_SLABS_CNT 16
 
 /** Initializes global settings for the pmem objects.
@@ -51,8 +51,7 @@ umempobj_settings_init(bool md_on_ssd)
 {
 	int					rc;
 	enum pobj_arenas_assignment_type	atype;
-	unsigned int				md_mode = DAOS_MD_BMEM;
-	unsigned int                            md_disable_bmem_v2 = 0;
+	unsigned int                            md_mode = DAOS_MD_BMEM_V2;
 
 	if (!md_on_ssd) {
 		daos_md_backend = DAOS_MD_PMEM;
@@ -83,12 +82,6 @@ umempobj_settings_init(bool md_on_ssd)
 		return -DER_INVAL;
 	};
 
-	d_getenv_uint("DAOS_MD_DISABLE_BMEM_V2", &md_disable_bmem_v2);
-	if (md_disable_bmem_v2 && (md_mode != DAOS_MD_BMEM))
-		D_INFO("Ignoring DAOS_MD_DISABLE_BMEM_V2 tunable");
-	else
-		daos_disable_bmem_v2 = md_disable_bmem_v2;
-
 	daos_md_backend = md_mode;
 	return 0;
 }
@@ -97,12 +90,6 @@ int
 umempobj_get_backend_type(void)
 {
 	return daos_md_backend;
-}
-
-bool
-umempobj_allow_md_bmem_v2()
-{
-	return !daos_disable_bmem_v2;
 }
 
 int
@@ -127,7 +114,7 @@ umempobj_backend_type2class_id(int backend)
 size_t
 umempobj_pgsz(int backend)
 {
-	if (backend == DAOS_MD_BMEM_V2)
+	if (backend != DAOS_MD_PMEM)
 		return dav_obj_pgsz_v2();
 	else
 		return (1UL << 12);
@@ -2145,23 +2132,6 @@ cache_off2page(struct umem_cache *cache, umem_off_t offset)
 	return &cache->ca_pages[idx];
 }
 
-/* Convert memory pointer to memory page */
-static inline struct umem_page_info *
-cache_ptr2pinfo(struct umem_cache *cache, const void *ptr)
-{
-	struct umem_page_info	*pinfo;
-	uint32_t idx;
-
-	D_ASSERT(ptr >= cache->ca_base);
-	idx = (ptr - cache->ca_base) >> cache->ca_page_shift;
-
-	D_ASSERTF(idx < cache->ca_mem_pages, "ptr=%p, md_pages=%u, idx=%u\n",
-		  ptr, cache->ca_mem_pages, idx);
-	pinfo = (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages];
-
-	return &pinfo[idx];
-}
-
 /* Convert MD-blob offset to page offset */
 static inline uint32_t
 cache_off2pg_off(struct umem_cache *cache, umem_off_t offset)
@@ -2177,34 +2147,6 @@ umem_cache_offisloaded(struct umem_store *store, umem_off_t offset)
 	struct umem_page  *page  = cache_off2page(cache, offset);
 
 	return ((page->pg_info != NULL) && page->pg_info->pi_loaded);
-}
-
-/* Convert MD-blob offset to memory pointer */
-void *
-umem_cache_off2ptr(struct umem_store *store, umem_off_t offset)
-{
-	struct umem_cache	*cache = store->cache;
-	struct umem_page	*page = cache_off2page(cache, offset);
-
-	/* The page must be mapped */
-	D_ASSERT(page->pg_info != NULL);
-	return (void *)(page->pg_info->pi_addr + cache_off2pg_off(cache, offset));
-}
-
-/* Convert memory pointer to MD-blob offset */
-umem_off_t
-umem_cache_ptr2off(struct umem_store *store, const void *ptr)
-{
-	struct umem_cache	*cache = store->cache;
-	struct umem_page_info	*pinfo = cache_ptr2pinfo(cache, ptr);
-	umem_off_t		 offset;
-
-	/* The page must be mapped */
-	D_ASSERT(pinfo->pi_mapped);
-	offset = cache_id2off(cache, pinfo->pi_pg_id);
-	offset += (ptr - cache->ca_base) & cache->ca_page_mask;
-
-	return offset;
 }
 
 static int
@@ -2291,6 +2233,11 @@ umem_cache_free(struct umem_store *store)
 
 	}
 
+	if (store->cache->off2ptr)
+		D_FREE(store->cache->off2ptr);
+	if (store->cache->ptr2off)
+		D_FREE(store->cache->ptr2off);
+
 	D_FREE(store->cache);
 	return 0;
 }
@@ -2363,10 +2310,10 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 		cmode = 2;
 
 	bmap_sz = (1 << (page_shift - UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT));
-
-	D_ALLOC(cache, sizeof(*cache) + sizeof(cache->ca_pages[0]) * md_pgs +
-			   sizeof(cache->ca_pages[0].pg_info[0]) * mem_pgs +
-			   bmap_sz * sizeof(uint64_t) * mem_pgs);
+	D_ALIGNED_ALLOC(cache, CACHELINE_SIZE,
+			sizeof(*cache) + sizeof(cache->ca_pages[0]) * md_pgs +
+			    sizeof(cache->ca_pages[0].pg_info[0]) * mem_pgs +
+			    bmap_sz * sizeof(uint64_t) * mem_pgs);
 	if (cache == NULL)
 		return -DER_NOMEM;
 
@@ -2428,6 +2375,11 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 				goto error;
 			pinfo++;
 		}
+		D_ALLOC(cache->off2ptr, sizeof(uintptr_t) * md_pgs);
+		D_ALLOC_NZ(cache->ptr2off, sizeof(uint64_t) * cache->ca_mem_pages);
+		if (!cache->off2ptr || !cache->ptr2off)
+			goto error;
+		memset(cache->ptr2off, 0xf, sizeof(uint64_t) * cache->ca_mem_pages);
 		return 0;
 	}
 
@@ -2471,10 +2423,15 @@ cache_push_free_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 static inline void
 cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 {
+	unsigned int cache_idx;
+
 	verify_clean_page(pinfo, 1);
 	D_ASSERT(pinfo->pi_pg_id < cache->ca_md_pages);
 	D_ASSERT(cache->ca_pages[pinfo->pi_pg_id].pg_info == pinfo);
 
+	cache->off2ptr[pinfo->pi_pg_id] = 0;
+	cache_idx = (pinfo - (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages]);
+	cache->ptr2off[cache_idx]                = (-1UL);
 	pinfo->pi_mapped = 0;
 	pinfo->pi_loaded = 0;
 	pinfo->pi_last_inflight                  = 0;
@@ -2492,6 +2449,7 @@ cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 static inline void
 cache_map_page(struct umem_cache *cache, struct umem_page_info *pinfo, unsigned int pg_id)
 {
+	unsigned int cache_idx;
 	verify_clean_page(pinfo, 0);
 	D_ASSERT(pinfo->pi_loaded == 0);
 
@@ -2501,6 +2459,10 @@ cache_map_page(struct umem_cache *cache, struct umem_page_info *pinfo, unsigned 
 	pinfo->pi_evictable            = is_id_evictable(cache, pg_id);
 	if (!pinfo->pi_evictable)
 		cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] += 1;
+
+	cache->off2ptr[pg_id] = (uintptr_t)pinfo->pi_addr;
+	cache_idx = (pinfo - (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages]);
+	cache->ptr2off[cache_idx] = (pg_id * (1UL << cache->ca_page_shift)) + cache->ca_base_off;
 }
 
 static inline void

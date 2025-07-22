@@ -235,6 +235,55 @@ func TestControl_PoolUpgrade(t *testing.T) {
 	}
 }
 
+func TestControl_PoolRanksReq_Convert(t *testing.T) {
+	req := &PoolRanksReq{
+		ID:        "foo",
+		Ranks:     []ranklist.Rank{1, 2, 3},
+		TargetIdx: []uint32{1, 2},
+		Force:     true,
+	}
+
+	cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolDrainReq{}, mgmtpb.PoolReintReq{},
+		mgmtpb.PoolExcludeReq{})
+
+	drainPB := new(mgmtpb.PoolDrainReq)
+	if err := convert.Types(req, drainPB); err != nil {
+		t.Fatal(err)
+	}
+	expDrainPB := &mgmtpb.PoolDrainReq{
+		Id:        "foo",
+		TargetIdx: []uint32{1, 2},
+	}
+	if diff := cmp.Diff(expDrainPB, drainPB, cmpOpt); diff != "" {
+		t.Fatalf("Unexpected drain request (-want, +got):\n%s\n", diff)
+	}
+
+	reintPB := new(mgmtpb.PoolReintReq)
+	if err := convert.Types(req, reintPB); err != nil {
+		t.Fatal(err)
+	}
+	expReintPB := &mgmtpb.PoolReintReq{
+		Id:        "foo",
+		TargetIdx: []uint32{1, 2},
+	}
+	if diff := cmp.Diff(expReintPB, reintPB, cmpOpt); diff != "" {
+		t.Fatalf("Unexpected reint request (-want, +got):\n%s\n", diff)
+	}
+
+	excludePB := new(mgmtpb.PoolExcludeReq)
+	if err := convert.Types(req, excludePB); err != nil {
+		t.Fatal(err)
+	}
+	expExcludePB := &mgmtpb.PoolExcludeReq{
+		Id:        "foo",
+		TargetIdx: []uint32{1, 2},
+		Force:     true,
+	}
+	if diff := cmp.Diff(expExcludePB, excludePB, cmpOpt); diff != "" {
+		t.Fatalf("Unexpected exclude request (-want, +got):\n%s\n", diff)
+	}
+}
+
 func TestControl_PoolRanksResp_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp   *PoolRanksResp
@@ -1195,24 +1244,28 @@ func TestControl_UpdateState(t *testing.T) {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
-					UUID:            poolUUID,
-					TotalTargets:    1,
-					DisabledTargets: 0,
+					UUID:         poolUUID,
+					TotalTargets: 1,
 				},
 			},
 			expState: daos.PoolServiceStateReady.String(),
 		},
-		"Pool state as Degraded": {
+		"Pool state as TargetsExcluded": {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
 					UUID:            poolUUID,
-					TotalTargets:    1,
-					DisabledTargets: 4,
+					TotalTargets:    2,
+					DisabledTargets: 1,
 					State:           daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
+						Objects: 1,
+						Records: 2,
+					},
 				},
 			},
-			expState: daos.PoolServiceStateDegraded.String(),
+			expState: daos.PoolServiceStateTargetsExcluded.String(),
 		},
 		"Pool state as Unknown": {
 			pqr: &PoolQueryResp{
@@ -1438,7 +1491,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            mgmtpb.PoolServiceState_Degraded,
+						State:            mgmtpb.PoolServiceState_TargetsExcluded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -1473,7 +1526,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					Rebuild: &daos.PoolRebuildStatus{
 						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
@@ -1510,7 +1563,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            mgmtpb.PoolServiceState_Degraded,
+						State:            mgmtpb.PoolServiceState_TargetsExcluded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -1546,7 +1599,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					Rebuild: &daos.PoolRebuildStatus{
 						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
@@ -1584,7 +1637,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            mgmtpb.PoolServiceState_Degraded,
+						State:            mgmtpb.PoolServiceState_TargetsExcluded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -1620,7 +1673,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					Rebuild: &daos.PoolRebuildStatus{
 						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
@@ -1658,7 +1711,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            mgmtpb.PoolServiceState_Degraded,
+						State:            mgmtpb.PoolServiceState_TargetsExcluded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -1694,7 +1747,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					Rebuild: &daos.PoolRebuildStatus{
 						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
@@ -2413,7 +2466,7 @@ func TestControl_ListPools(t *testing.T) {
 						TierStats:       expTierStats,
 					},
 					{
-						State:           daos.PoolServiceStateDegraded,
+						State:           daos.PoolServiceStateTargetsExcluded,
 						UUID:            test.MockPoolUUID(2),
 						TotalTargets:    42,
 						ActiveTargets:   16,
@@ -2457,7 +2510,7 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 					},
 					{
-						State:           daos.PoolServiceStateDegraded,
+						State:           daos.PoolServiceStateTargetsExcluded,
 						UUID:            test.MockPoolUUID(2),
 						TotalTargets:    42,
 						ActiveTargets:   16,
@@ -2507,7 +2560,7 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 					},
 					{
-						State:           daos.PoolServiceStateDegraded,
+						State:           daos.PoolServiceStateTargetsExcluded,
 						UUID:            test.MockPoolUUID(2),
 						TotalTargets:    42,
 						ActiveTargets:   16,

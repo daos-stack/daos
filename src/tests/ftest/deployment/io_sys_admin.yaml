@@ -84,6 +84,7 @@ ior:
   block_size: '1Mib'
 dfuse:
   disable_caching: True
+  enable_local_flock: true
 
 mdtest:
   client_processes:

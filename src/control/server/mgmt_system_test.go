@@ -84,6 +84,18 @@ func mockRankSuccess(a string, r uint32, n ...int32) *sharedpb.RankResult {
 	return rr
 }
 
+func mockRankIgnored(a string, r uint32, n ...int32) *sharedpb.RankResult {
+	rr := &sharedpb.RankResult{
+		Rank: r, Msg: a + " ignored on AdminExcluded rank",
+		State:  stateString(system.MemberStateAdminExcluded),
+		Action: a,
+	}
+	if len(n) > 0 {
+		rr.Addr = test.MockHostAddr(n[0]).String()
+	}
+	return rr
+}
+
 var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreUnexported(events.RASEvent{}),
 	cmpopts.IgnoreFields(events.RASEvent{}, "Timestamp"))
@@ -494,7 +506,7 @@ func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 			t.Fatal(err)
 		}
 		cmpOpts := append(test.DefaultCmpOpts(),
-			cmpopts.EquateApproxTime(time.Second),
+			cmpopts.IgnoreFields(system.Member{}, "LastUpdate"),
 		)
 		if diff := cmp.Diff(em, am, cmpOpts...); diff != "" {
 			t.Fatalf("unexpected members (-want, +got)\n%s\n", diff)
@@ -523,6 +535,125 @@ func checkRankResults(t *testing.T, exp, got []*sharedpb.RankResult) {
 	)
 	if diff := cmp.Diff(exp, got, cmpOpts...); diff != "" {
 		t.Fatalf("unexpected rank results (-want, +got)\n%s\n", diff)
+	}
+}
+
+func TestServer_MgmtSvc_getPoolRanks(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+
+	for name, tc := range map[string]struct {
+		pools        []string
+		inRanks      *ranklist.RankSet
+		getEnabled   bool
+		drpcResps    []*mockDrpcResponse // Sequential list of dRPC responses.
+		expErr       error
+		expPoolRanks poolRanksMap
+		expDrpcCount int
+	}{
+		"zero pools": {},
+		"match all ranks; two pools": {
+			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
+			getEnabled: true,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "1-7",
+					},
+				},
+			},
+			expPoolRanks: map[string]*ranklist.RankSet{
+				test.MockUUID(1): ranklist.MustCreateRankSet("0-4"),
+				test.MockUUID(2): ranklist.MustCreateRankSet("1-7"),
+			},
+			expDrpcCount: 2,
+		},
+		"match subset of ranks; two pools; get disabled ranks": {
+			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
+			inRanks:    ranklist.MustCreateRankSet("1,8"),
+			getEnabled: false,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "0-4",
+						DisabledRanks: "5-8",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "1-7",
+						DisabledRanks: "",
+					},
+				},
+			},
+			expPoolRanks: map[string]*ranklist.RankSet{
+				test.MockUUID(1): ranklist.MustCreateRankSet("8"),
+			},
+			expDrpcCount: 2,
+		},
+		"match zero ranks; two pools": {
+			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
+			inRanks:    ranklist.MustCreateRankSet("8-10"),
+			getEnabled: true,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "1-7",
+					},
+				},
+			},
+			expDrpcCount: 2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf.Reset()
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t)
+			svc := newTestMgmtSvc(t, log)
+
+			for _, uuidStr := range tc.pools {
+				addTestPoolService(t, svc.sysdb, &system.PoolService{
+					PoolUUID: uuid.MustParse(uuidStr),
+					State:    system.PoolServiceStateReady,
+					Replicas: []ranklist.Rank{0},
+				})
+			}
+
+			cfg := new(mockDrpcClientConfig)
+			for _, mock := range tc.drpcResps {
+				cfg.setSendMsgResponseList(t, mock)
+			}
+			mdc := newMockDrpcClient(cfg)
+			setupSvcDrpcClient(svc, 0, mdc)
+
+			gotPoolIDs, gotPoolRanks, gotErr := svc.getPoolRanks(ctx, tc.inRanks,
+				tc.getEnabled)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, len(tc.expPoolRanks), len(gotPoolRanks),
+				"len pool ranks")
+
+			for _, id := range gotPoolIDs {
+				test.AssertEqual(t, tc.expPoolRanks[id].String(),
+					gotPoolRanks[id].String(), "pool ranks")
+			}
+
+			test.AssertEqual(t, tc.expDrpcCount, len(mdc.CalledMethods()),
+				"rpc client invoke count")
+		})
 	}
 }
 
@@ -1315,6 +1446,14 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 		return []string{e.String()}
 	}
 
+	getMemberRanks := func(members system.Members) *ranklist.RankSet {
+		ranks := ranklist.NewRankSet()
+		for _, m := range members {
+			ranks.Add(m.Rank)
+		}
+		return ranks
+	}
+
 	for name, tc := range map[string]struct {
 		req            *mgmtpb.SystemStartReq
 		members        system.Members
@@ -1325,6 +1464,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 		expAbsentHosts string
 		expAPIErr      error
 		expDispatched  []string
+		expFanoutRanks *ranklist.RankSet
 	}{
 		"nil req": {
 			req:       (*mgmtpb.SystemStartReq)(nil),
@@ -1383,6 +1523,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1"),
 			expAbsentRanks: "4-9",
 			expDispatched:  expEventsStartFail("failed rank 0"),
 		},
@@ -1407,6 +1548,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "errored").WithInfo("start failed"),
 				mockMember(t, 3, 2, "ready"),
 			},
+			expFanoutRanks: ranklist.MustCreateRankSet("2-3"),
 			expAbsentHosts: "10.0.0.[3-5]",
 			expDispatched:  expEventsStartFail("failed rank 2"),
 		},
@@ -1435,12 +1577,141 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "joined"),
 			},
 		},
+		"ignore admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(1, mockRankSuccess("start", 0), mockRankSuccess("start", 1)),
+				hr(2, mockRankSuccess("start", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("start", 0, 1),
+				mockRankSuccess("start", 1, 1),
+				mockRankSuccess("start", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "ready"),
+				mockMember(t, 1, 1, "ready"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "ready"),
+			},
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
+		},
+		"requested admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks: "1-3",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
+		},
+		"requested hosts with admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Hosts: "10.0.0.[1-2]",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
+		},
+		"ignore requested admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks:               "1-3",
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(1, mockRankSuccess("start", 1)),
+				hr(2, mockRankSuccess("start", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("start", 1, 1),
+				mockRankSuccess("start", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "ready"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "ready"),
+			},
+			expFanoutRanks: ranklist.MustCreateRankSet("1,3"),
+		},
+		"ignore requested admin-excluded ranks (hosts)": {
+			req: &mgmtpb.SystemStartReq{
+				Hosts:               "10.0.0.2",
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(2, mockRankSuccess("start", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("start", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "ready"),
+			},
+			expFanoutRanks: ranklist.MustCreateRankSet("3"),
+		},
+		"requested only admin-excluded ranks": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks: "1-2",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.MustCreateRankSet("1-2").Ranks()),
+		},
+		"requested only admin-excluded ranks with ignore": {
+			req: &mgmtpb.SystemStartReq{
+				Ranks:               "1-2",
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expAPIErr: errors.New("all requested ranks are administratively excluded"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			if tc.expFanoutRanks == nil {
+				tc.expFanoutRanks = getMemberRanks(tc.members)
+			}
 
 			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
@@ -1464,6 +1735,11 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			checkMembers(t, tc.expMembers, svc.membership)
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+
+			mockInvoker := svc.rpcClient.(*control.MockInvoker)
+			test.AssertEqual(t, len(mockInvoker.SentReqs), 1, "fanoutRequests sent")
+			ranksReqSent := mockInvoker.SentReqs[0].(*control.RanksReq)
+			test.AssertEqual(t, tc.expFanoutRanks.String(), ranksReqSent.Ranks, "")
 
 			<-ctx.Done()
 
@@ -1531,6 +1807,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		req            *mgmtpb.SystemStopReq
+		members        system.Members
 		mResps         [][]*control.HostResponse
 		expMembers     func() system.Members
 		expResults     []*sharedpb.RankResult
@@ -1539,6 +1816,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 		expAPIErr      error
 		expDispatched  []string
 		expInvokeCount int
+		expFanoutRanks *ranklist.RankSet
 	}{
 		"nil req": {
 			req:       (*mgmtpb.SystemStopReq)(nil),
@@ -1557,6 +1835,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expMembers:     expMembersPrepFail,
 			expDispatched:  expEventsStopFail("prep shutdown"),
 			expInvokeCount: 1,
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
 		},
 		"prep success stop fail": {
 			req:            &mgmtpb.SystemStopReq{},
@@ -1565,6 +1844,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expMembers:     expMembersStopFail,
 			expDispatched:  expEventsStopFail("stop"),
 			expInvokeCount: 2,
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
 		},
 		"stop some ranks": {
 			req: &mgmtpb.SystemStopReq{Ranks: "0,1", Force: true},
@@ -1585,6 +1865,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 1, // prep should not be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1"),
 		},
 		"stop with all ranks": {
 			req:        &mgmtpb.SystemStopReq{Ranks: "0,1,3", Force: true},
@@ -1598,6 +1879,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 1, // prep should not be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
 		},
 		"full system stop": {
 			req:        &mgmtpb.SystemStopReq{},
@@ -1611,11 +1893,35 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 2, // prep should be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
 		},
 		"full system stop; partial ranks in req": {
-			req:       &mgmtpb.SystemStopReq{Ranks: "0,1"},
-			mResps:    hostRespStopSuccess,
-			expAPIErr: errSysForceNotFull,
+			req: &mgmtpb.SystemStopReq{Ranks: "0,1"},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(1, mockRankSuccess("prep shutdown", 0), mockRankSuccess("prep shutdown", 1)),
+				},
+				{
+					hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 0, 1), mockRankSuccess("stop", 1, 1),
+			},
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 3, 2, "joined"),
+				}
+			},
+			expInvokeCount: 2, // prep should be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1"),
 		},
 		"full system stop (forced)": {
 			req:        &mgmtpb.SystemStopReq{Force: true},
@@ -1629,6 +1935,126 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				}
 			},
 			expInvokeCount: 1, // prep should not be called
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
+		},
+		"stop with admin-excluded ranks": {
+			req: &mgmtpb.SystemStopReq{Force: true},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(1, mockRankSuccess("stop", 0)),
+					hr(1, mockRankSuccess("stop", 1)),
+					hr(2, mockRankSuccess("stop", 3)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 0, 1),
+				mockRankSuccess("stop", 1, 1),
+				mockRankSuccess("stop", 3, 2),
+			},
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "stopped"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 2, 2, "adminexcluded"),
+					mockMember(t, 3, 2, "stopped"),
+				}
+			},
+			expInvokeCount: 1,
+			expFanoutRanks: ranklist.MustCreateRankSet("0-1,3"),
+		},
+		"requested admin-excluded ranks": {
+			req: &mgmtpb.SystemStopReq{
+				Ranks: "1-3",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
+		},
+		"requested hosts with admin-excluded ranks": {
+			req: &mgmtpb.SystemStopReq{
+				Hosts: "10.0.0.[1-2]",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expAPIErr: FaultRankAdminExcluded(ranklist.RankList{2}),
+		},
+		"ignore requested admin-excluded ranks": {
+			req: &mgmtpb.SystemStopReq{
+				Ranks:               "1-3",
+				Force:               true,
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(1, mockRankSuccess("stop", 1)),
+					hr(2, mockRankSuccess("stop", 3)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 1, 1),
+				mockRankSuccess("stop", 3, 2),
+			},
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "joined"),
+					mockMember(t, 1, 1, "stopped"),
+					mockMember(t, 2, 2, "adminexcluded"),
+					mockMember(t, 3, 2, "stopped"),
+				}
+			},
+			expInvokeCount: 1,
+			expFanoutRanks: ranklist.MustCreateRankSet("1,3"),
+		},
+		"ignore requested admin-excluded ranks (hosts)": {
+			req: &mgmtpb.SystemStopReq{
+				Hosts:               "10.0.0.2",
+				Force:               true,
+				IgnoreAdminExcluded: true,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "adminexcluded"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			mResps: [][]*control.HostResponse{
+				{
+					hr(2, mockRankSuccess("stop", 3)),
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("stop", 3, 2),
+			},
+			expMembers: func() system.Members {
+				return system.Members{
+					mockMember(t, 0, 1, "joined"),
+					mockMember(t, 1, 1, "joined"),
+					mockMember(t, 2, 2, "adminexcluded"),
+					mockMember(t, 3, 2, "stopped"),
+				}
+			},
+			expInvokeCount: 1,
+			expFanoutRanks: ranklist.MustCreateRankSet("3"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1638,12 +2064,14 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			if tc.mResps == nil {
 				tc.mResps = [][]*control.HostResponse{{}}
 			}
-			members := system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "joined"),
-				mockMember(t, 3, 2, "joined"),
+			if tc.members == nil {
+				tc.members = system.Members{
+					mockMember(t, 0, 1, "joined"),
+					mockMember(t, 1, 1, "joined"),
+					mockMember(t, 3, 2, "joined"),
+				}
 			}
-			svc := mgmtSystemTestSetup(t, log, members, tc.mResps...)
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps...)
 
 			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
 			defer cancel()
@@ -1667,6 +2095,13 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			checkMembers(t, tc.expMembers(), svc.membership)
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+
+			if tc.expInvokeCount > 0 {
+				mockInvoker := svc.rpcClient.(*control.MockInvoker)
+				test.AssertEqual(t, tc.expInvokeCount, len(mockInvoker.SentReqs), "fanoutRequests sent")
+				ranksReqSent := mockInvoker.SentReqs[0].(*control.RanksReq)
+				test.AssertEqual(t, tc.expFanoutRanks.String(), ranksReqSent.Ranks, "")
+			}
 
 			<-ctx.Done()
 
@@ -1846,14 +2281,16 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 
 func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 	for name, tc := range map[string]struct {
-		members        system.Members
 		req            *mgmtpb.SystemDrainReq
-		poolRanks      map[string]string
 		useLabels      bool
-		mic            *control.MockInvokerConfig
+		pools          []string
+		members        system.Members
+		drpcResps      []*mockDrpcResponse // For dRPC PoolQuery
+		expDrpcCount   int
+		mic            *control.MockInvokerConfig // For control-API PoolDrain/Reint
+		expCtlApiCount int
 		expErr         error
 		expResp        *mgmtpb.SystemDrainResp
-		expInvokeCount int
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemDrainReq)(nil),
@@ -1882,20 +2319,35 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			req:    &mgmtpb.SystemDrainReq{Hosts: "host-[1-2]"},
 			expErr: errors.New("invalid host(s)"),
 		},
-		"no matching ranks": {
-			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
-			poolRanks: map[string]string{
-				test.MockUUID(1): "2-5",
+		"requested admin excluded ranks": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0-2"},
+			members: system.Members{
+				system.MockMember(t, 0, system.MemberStateAdminExcluded),
+				system.MockMember(t, 1, system.MemberStateJoined),
+				system.MockMember(t, 2, system.MemberStateAdminExcluded),
 			},
-			mic: &control.MockInvokerConfig{
-				UnaryError: errors.New("local failed"),
-			},
-			expErr: errors.New("no pool-ranks found to operate on"),
+			expErr: FaultRankAdminExcluded(ranklist.RankList{0, 2}),
 		},
-		"local failure": {
-			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
-			poolRanks: map[string]string{
-				test.MockUUID(1): "0-5",
+		"local failure on pool query": {
+			req:   &mgmtpb.SystemDrainReq{Ranks: "0"},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Error: errors.New("local failed"),
+				},
+			},
+			expErr:       errors.New("local failed"),
+			expDrpcCount: 1,
+		},
+		"local failure on pool drain": {
+			req:   &mgmtpb.SystemDrainReq{Ranks: "0"},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
 			},
 			mic: &control.MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -1910,25 +2362,64 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 								Errored: true,
 								Msg:     "local failed",
 							},
+						},
+					},
+				},
+			},
+			expDrpcCount: 1,
+		},
+		"remote failure on pool drain": {
+			req:   &mgmtpb.SystemDrainReq{Ranks: "0"},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
+			},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", errors.New("remote failed"),
+						nil),
+				},
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id: test.MockUUID(1),
+						Results: []*sharedpb.RankResult{
 							{
-								Rank:    1,
+								Rank:    0,
 								Errored: true,
-								Msg:     "local failed",
+								Msg:     "remote failed",
 							},
 						},
 					},
 				},
 			},
+			expDrpcCount:   1,
+			expCtlApiCount: 1,
 		},
-		"remote failure": {
-			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
-			poolRanks: map[string]string{
-				test.MockUUID(1): "0-5",
+		"drain single rank on one pool": {
+			req:   &mgmtpb.SystemDrainReq{Ranks: "0"},
+			pools: []string{test.MockUUID(1), test.MockUUID(2)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "1-7",
+					},
+				},
 			},
 			mic: &control.MockInvokerConfig{
 				UnaryResponseSet: []*control.UnaryResponse{
-					control.MockMSResponse("host1", nil, &mgmtpb.PoolDrainResp{}),
-					control.MockMSResponse("host1", errors.New("remote failed"), nil),
+					control.MockMSResponse("host1", nil,
+						&mgmtpb.PoolDrainResp{}),
 				},
 			},
 			expResp: &mgmtpb.SystemDrainResp{
@@ -1937,48 +2428,152 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 						Id: test.MockUUID(1),
 						Results: []*sharedpb.RankResult{
 							{Rank: 0},
-							{
-								Rank:    1,
-								Errored: true,
-								Msg:     "remote failed",
-							},
 						},
 					},
 				},
 			},
-			expInvokeCount: 2,
+			expDrpcCount:   2,
+			expCtlApiCount: 1,
 		},
-		"matching ranks; multiple pools; successful drpc responses": {
-			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
-			poolRanks: map[string]string{
-				test.MockUUID(1): "0-4",
-				test.MockUUID(2): "1-7",
+		"reintegrate single rank on one pool": {
+			req:   &mgmtpb.SystemDrainReq{Ranks: "0", Reint: true},
+			pools: []string{test.MockUUID(1), test.MockUUID(2)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "0-4",
+						DisabledRanks: "",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "1-7",
+						DisabledRanks: "0,8",
+					},
+				},
 			},
-			// Mock invoker will return empty drpc drain resp (with zero value status
-			// field indicating a success) by default.
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil,
+						&mgmtpb.PoolReintResp{}),
+				},
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Reint: true,
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id: test.MockUUID(2),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+						},
+					},
+				},
+			},
+			expDrpcCount:   2,
+			expCtlApiCount: 1,
+		},
+		"drain multiple ranks on multiple pools": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0-3"},
+			members: system.Members{
+				system.MockMember(t, 1, system.MemberStateJoined),
+				system.MockMember(t, 2, system.MemberStateJoined),
+				system.MockMember(t, 3, system.MemberStateJoined),
+			},
+			pools: []string{test.MockUUID(1), test.MockUUID(2)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "0,2,4",
+						DisabledRanks: "1,3,5",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "1-7",
+						DisabledRanks: "0,8",
+					},
+				},
+			},
 			expResp: &mgmtpb.SystemDrainResp{
 				Responses: []*mgmtpb.PoolRanksResp{
 					{
 						Id: test.MockUUID(1),
 						Results: []*sharedpb.RankResult{
-							{Rank: 0}, {Rank: 1},
+							{Rank: 0}, {Rank: 2},
 						},
 					},
 					{
 						Id: test.MockUUID(2),
 						Results: []*sharedpb.RankResult{
-							{Rank: 1},
+							{Rank: 1}, {Rank: 2}, {Rank: 3},
 						},
 					},
 				},
 			},
-			expInvokeCount: 3,
+			expDrpcCount:   2,
+			expCtlApiCount: 5,
 		},
-		"matching ranks; multiple pools; errored drpc response": {
+		"reintegrate multiple ranks on multiple pools": {
+			req: &mgmtpb.SystemDrainReq{Ranks: "0-3", Reint: true},
+			members: system.Members{
+				system.MockMember(t, 1, system.MemberStateJoined),
+				system.MockMember(t, 2, system.MemberStateJoined),
+				system.MockMember(t, 3, system.MemberStateJoined),
+			},
+			pools: []string{test.MockUUID(1), test.MockUUID(2)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "0,2,4",
+						DisabledRanks: "1,3,5",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "1-7",
+						DisabledRanks: "0,8",
+					},
+				},
+			},
+			expResp: &mgmtpb.SystemDrainResp{
+				Reint: true,
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id: test.MockUUID(1),
+						Results: []*sharedpb.RankResult{
+							{Rank: 1}, {Rank: 3},
+						},
+					},
+					{
+						Id: test.MockUUID(2),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+						},
+					},
+				},
+			},
+			expDrpcCount:   2,
+			expCtlApiCount: 3,
+		},
+		"drain ranks on multiple pools; errored control api call": {
 			req: &mgmtpb.SystemDrainReq{Ranks: "0,1"},
-			poolRanks: map[string]string{
-				test.MockUUID(1): "0-4",
-				test.MockUUID(2): "1-7",
+			members: system.Members{
+				system.MockMember(t, 1, system.MemberStateJoined),
+			},
+			pools: []string{test.MockUUID(1), test.MockUUID(2)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "0-4",
+						DisabledRanks: "5",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "1-7",
+						DisabledRanks: "0,8",
+					},
+				},
 			},
 			mic: &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("host1", nil,
@@ -2013,85 +2608,86 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 					},
 				},
 			},
-			expInvokeCount: 3,
+			expDrpcCount:   2,
+			expCtlApiCount: 3,
 		},
-		"matching hosts; multiple pools; pool labels": {
+		"reintegrate rank on multiple pools; use labels": {
 			useLabels: true,
 			req: &mgmtpb.SystemDrainReq{
-				// Resolves to ranks 0-3.
+				Reint: true,
+				// Resolves to ranks 1-2.
 				Hosts: fmt.Sprintf("%s,%s", test.MockHostAddr(1),
 					test.MockHostAddr(2)),
 			},
-			poolRanks: map[string]string{
-				test.MockUUID(1): "0-1",
-				test.MockUUID(2): "1-3",
+			members: system.Members{
+				system.MockMember(t, 1, system.MemberStateJoined),
+				system.MockMember(t, 2, system.MemberStateJoined),
+				system.MockMember(t, 3, system.MemberStateJoined),
 			},
-			// Mock invoker will return empty drpc drain resp (with zero value status
-			// field indicating a success) by default.
+			pools: []string{test.MockUUID(1), test.MockUUID(2)},
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "0,2,4",
+						DisabledRanks: "1,3,5",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "3-7",
+						DisabledRanks: "0-2,8",
+					},
+				},
+			},
 			expResp: &mgmtpb.SystemDrainResp{
+				Reint: true,
 				Responses: []*mgmtpb.PoolRanksResp{
 					{
 						Id: "00000001",
 						Results: []*sharedpb.RankResult{
-							{Rank: 0}, {Rank: 1},
+							{Rank: 1},
 						},
 					},
 					{
 						Id: "00000002",
 						Results: []*sharedpb.RankResult{
-							{Rank: 1}, {Rank: 2}, {Rank: 3},
-						},
-					},
-				},
-			},
-			expInvokeCount: 5,
-		},
-		"reintegrate; matching ranks; multiple pools; successful drpc responses": {
-			req: &mgmtpb.SystemDrainReq{Ranks: "0,1", Reint: true},
-			poolRanks: map[string]string{
-				test.MockUUID(1): "0-4",
-				test.MockUUID(2): "1-7",
-			},
-			// Mock invoker will return empty drpc drain resp (with zero value status
-			// field indicating a success) by default.
-			expResp: &mgmtpb.SystemDrainResp{
-				Reint: true,
-				Responses: []*mgmtpb.PoolRanksResp{
-					{
-						Id: test.MockUUID(1),
-						Results: []*sharedpb.RankResult{
-							{Rank: 0},
-							{Rank: 1},
-						},
-					},
-					{
-						Id: test.MockUUID(2),
-						Results: []*sharedpb.RankResult{
 							{Rank: 1},
 						},
 					},
 				},
 			},
-			expInvokeCount: 3,
+			expDrpcCount:   2,
+			expCtlApiCount: 2,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
 			ctx := test.MustLogContext(t)
-			log := logging.FromContext(ctx)
+			svc := newTestMgmtSvc(t, log)
 
-			members := system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 2, "joined"),
-				mockMember(t, 2, 2, "joined"),
-				mockMember(t, 3, 1, "joined"),
-				mockMember(t, 4, 3, "joined"),
-				mockMember(t, 5, 3, "joined"),
-				mockMember(t, 6, 4, "joined"),
-				mockMember(t, 7, 4, "joined"),
+			for _, m := range tc.members {
+				if _, err := svc.membership.Add(m); err != nil {
+					t.Fatal(err)
+				}
 			}
-			svc := mgmtSystemTestSetup(t, log, members, nil)
 
-			for uuidStr, ranksStr := range tc.poolRanks {
+			cfg := new(mockDrpcClientConfig)
+			for _, mock := range tc.drpcResps {
+				cfg.setSendMsgResponseList(t, mock)
+			}
+			mdc := newMockDrpcClient(cfg)
+			setupSvcDrpcClient(svc, 0, mdc)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = control.DefaultMockInvokerConfig()
+			}
+			mi := control.NewMockInvoker(log, mic)
+			svc.rpcClient = mi
+
+			for _, uuidStr := range tc.pools {
 				var label string
 				if tc.useLabels {
 					label = uuidStr[:8]
@@ -2100,20 +2696,9 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 					PoolUUID:  uuid.MustParse(uuidStr),
 					PoolLabel: label,
 					State:     system.PoolServiceStateReady,
-					Storage: &system.PoolServiceStorage{
-						CurrentRankStr: ranksStr,
-					},
-					Replicas: []ranklist.Rank{0},
+					Replicas:  []ranklist.Rank{0},
 				})
 			}
-
-			mic := tc.mic
-			if mic == nil {
-				mic = control.DefaultMockInvokerConfig()
-			}
-
-			mi := control.NewMockInvoker(log, mic)
-			svc.rpcClient = mi
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -2132,7 +2717,10 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				}
 			}
 
-			test.AssertEqual(t, tc.expInvokeCount, mi.GetInvokeCount(), "rpc client invoke count")
+			test.AssertEqual(t, tc.expDrpcCount, len(mdc.CalledMethods()),
+				"dRPC invoke count")
+			test.AssertEqual(t, tc.expCtlApiCount, mi.GetInvokeCount(),
+				"rpc client invoke count")
 		})
 	}
 }
@@ -2249,6 +2837,82 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_checkReplaceRank(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+
+	for name, tc := range map[string]struct {
+		pools         []string
+		rankToReplace ranklist.Rank
+		drpcResps     []*mockDrpcResponse // Sequential list of dRPC responses.
+		expErr        error
+	}{
+		"nil rank supplied": {
+			pools:         []string{test.MockUUID(1), test.MockUUID(2)},
+			rankToReplace: ranklist.NilRank,
+			expErr:        errors.New("nil rank"),
+		},
+		"rank in use on a pool": {
+			pools:         []string{test.MockUUID(1), test.MockUUID(2)},
+			rankToReplace: 5,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "1-7",
+					},
+				},
+			},
+			expErr: errors.New("rank 5 is enabled on pool 00000002"),
+		},
+		"rank not in use on any pools": {
+			pools:         []string{test.MockUUID(1), test.MockUUID(2)},
+			rankToReplace: 5,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "1-4,6,7",
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf.Reset()
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t)
+			svc := newTestMgmtSvc(t, log)
+
+			for _, uuidStr := range tc.pools {
+				addTestPoolService(t, svc.sysdb, &system.PoolService{
+					PoolUUID: uuid.MustParse(uuidStr),
+					State:    system.PoolServiceStateReady,
+					Replicas: []ranklist.Rank{0},
+				})
+			}
+
+			cfg := new(mockDrpcClientConfig)
+			for _, mock := range tc.drpcResps {
+				cfg.setSendMsgResponseList(t, mock)
+			}
+			mdc := newMockDrpcClient(cfg)
+			setupSvcDrpcClient(svc, 0, mdc)
+
+			gotErr := svc.checkReplaceRank(ctx, tc.rankToReplace)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -2523,7 +3187,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				if len(calls) == 0 {
 					continue
 				}
-				if calls[len(calls)-1].Method == drpc.MethodGroupUpdate {
+				if calls[len(calls)-1].Method == daos.MethodGroupUpdate.ID() {
 					break
 				}
 			}

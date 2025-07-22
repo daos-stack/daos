@@ -56,6 +56,7 @@ struct dtx_req_args {
 	uuid_t				 dra_po_uuid;
 	/* container UUID */
 	uuid_t				 dra_co_uuid;
+	uint32_t                         dra_version;
 	/* The count of sub requests. */
 	int				 dra_length;
 	/* The collective RPC result. */
@@ -261,8 +262,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		din = crt_req_get(req);
 		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
 		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
-		din->di_epoch = epoch;
-		din->di_dtx_array.ca_count = drr->drr_count;
+		din->di_epoch               = epoch;
+		din->di_version             = dra->dra_version;
+		din->di_dtx_array.ca_count  = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 		if (drr->drr_flags != NULL) {
 			din->di_flags.ca_count = drr->drr_count;
@@ -666,7 +668,8 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 	dra->dra_cmt_list = cmt_list;
 	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
-	dra->dra_opc = opc;
+	dra->dra_version  = pool->sp_map_version;
+	dra->dra_opc      = opc;
 	uuid_copy(dra->dra_po_uuid, pool->sp_uuid);
 	uuid_copy(dra->dra_co_uuid, cont->sc_uuid);
 
@@ -1360,59 +1363,16 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		return -DER_IO;
 
-	rc = dtx_refresh_internal(cont, &dth->dth_share_tbd_count,
-				  &dth->dth_share_tbd_list,
-				  &dth->dth_share_cmt_list,
-				  &dth->dth_share_abt_list,
+	rc = dtx_refresh_internal(cont, &dth->dth_share_tbd_count, &dth->dth_share_tbd_list,
+				  &dth->dth_share_cmt_list, &dth->dth_share_abt_list,
 				  &dth->dth_share_act_list, true);
-
-	/* If we can resolve the DTX status, then return -DER_AGAIN
-	 * to the caller that will retry related operation locally.
-	 */
 	if (rc == 0) {
 		D_ASSERT(dth->dth_share_tbd_count == 0);
 
-		if (dth->dth_need_validation) {
-			rc = vos_dtx_validation(dth);
-			switch (rc) {
-			case DTX_ST_INITED:
-				if (!dth->dth_aborted)
-					break;
-				/* Fall through */
-			case DTX_ST_PREPARED:
-			case DTX_ST_PREPARING:
-				/* The DTX has been ever aborted and related resent RPC
-				 * is in processing. Return -DER_AGAIN to make this ULT
-				 * to retry sometime later without dtx_abort().
-				 */
-				rc = -DER_AGAIN;
-				break;
-			case DTX_ST_ABORTED:
-				D_ASSERT(dth->dth_ent == NULL);
-				/* Aborted, return -DER_INPROGRESS for client retry.
-				 *
-				 * Fall through.
-				 */
-			case DTX_ST_ABORTING:
-				rc = -DER_INPROGRESS;
-				break;
-			case DTX_ST_COMMITTED:
-			case DTX_ST_COMMITTING:
-			case DTX_ST_COMMITTABLE:
-				/* Aborted then prepared/committed by race.
-				 * Return -DER_ALREADY to avoid repeated modification.
-				 */
-				dth->dth_already = 1;
-				rc = -DER_ALREADY;
-				break;
-			default:
-				D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n",
-					  DP_DTI(&dth->dth_xid), rc);
-			}
-		} else {
+		rc = vos_dtx_validation(dth);
+		if (rc == 0) {
 			vos_dtx_cleanup(dth, false);
-			dtx_handle_reinit(dth);
-			rc = -DER_AGAIN;
+			rc = dtx_handle_reinit(dth);
 		}
 	}
 

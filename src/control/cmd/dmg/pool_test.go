@@ -258,7 +258,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (% size nranks)",
 			"pool create label --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --nranks"),
+			errors.New("--size=% may not be mixed with --nranks"),
 		},
 		{
 			"Create pool with incompatible arguments (% size tier-ratio)",
@@ -834,6 +834,19 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set pool rd_fac property",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("rd_fac", "1"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool property invalid property",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb whoops:foo",
 			"",
@@ -856,18 +869,6 @@ func TestPoolCommands(t *testing.T) {
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb perf_domain:root",
 			"",
 			errors.New("can't set perf_domain on existing pool."),
-		},
-		{
-			"Set pool rd_fac property is not allowed",
-			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
-			"",
-			errors.New("can't set redundancy factor on existing pool."),
-		},
-		{
-			"Set pool rf property is not allowed",
-			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
-			"",
-			errors.New("can't set redundancy factor on existing pool."),
 		},
 		{
 			"Set pool ec_pda property is not allowed",

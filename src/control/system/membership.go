@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,6 +95,71 @@ func (m *Membership) Count() (int, error) {
 	return m.db.MemberCount()
 }
 
+// FindRankFromJoinRequest finds the first rank that matches join request parameters. UUID shouldn't
+// match.
+func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
+	if !req.Rank.Equals(NilRank) {
+		return NilRank, errors.New("unexpected rank in replace-rank request")
+	}
+
+	currentMembers, err := m.Members(nil)
+	if err != nil {
+		return NilRank, errors.Wrap(err, "failed to get all system members")
+	}
+	if len(currentMembers) == 0 {
+		return NilRank, errors.New("empty system membership")
+	}
+
+	var minMissing []string
+	rank := NilRank
+	for _, cm := range currentMembers {
+		// Only match identical member with different UUID.
+		var missing []string
+		if cm.Addr.String() != req.ControlAddr.String() {
+			missing = append(missing, "control address")
+		}
+		if cm.PrimaryFabricURI != req.PrimaryFabricURI {
+			missing = append(missing, "primary fabric address")
+		}
+		if !slices.Equal(cm.SecondaryFabricURIs, req.SecondaryFabricURIs) {
+			missing = append(missing, "secondary fabric addresses")
+		}
+		if cm.PrimaryFabricContexts != req.FabricContexts {
+			missing = append(missing, "primary fabric contexts")
+		}
+		if !slices.Equal(cm.SecondaryFabricContexts, req.SecondaryFabricContexts) {
+			missing = append(missing, "secondary fabric contexts")
+		}
+		if !cm.FaultDomain.Equals(req.FaultDomain) {
+			missing = append(missing, "Fault domain")
+		}
+
+		if len(missing) != 0 {
+			if minMissing == nil || len(missing) < len(minMissing) {
+				minMissing = missing
+			}
+			continue
+		}
+
+		if cm.UUID == req.UUID {
+			m.log.Errorf("unexpected matching uuid %q in replace-rank join request",
+				req.UUID)
+			return NilRank, ErrUuidExists(req.UUID)
+		}
+
+		rank = cm.Rank
+		break
+	}
+
+	if rank == NilRank {
+		m.log.Errorf("replace-rank join request failed because fields %v didn't match",
+			minMissing)
+		return NilRank, FaultJoinReplaceRankNotFound(len(minMissing))
+	}
+
+	return rank, nil
+}
+
 // JoinRequest contains information needed for join membership update.
 type JoinRequest struct {
 	Rank                    Rank
@@ -106,6 +172,7 @@ type JoinRequest struct {
 	FaultDomain             *FaultDomain
 	Incarnation             uint64
 	CheckMode               bool
+	Replace                 bool
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -114,6 +181,54 @@ type JoinResponse struct {
 	Created    bool
 	PrevState  MemberState
 	MapVersion uint32
+}
+
+// If in replace mode, attempt to update UUID of existing member if identical control address and
+// fabric URIs. Neither UUID or rank in request will match MS-db member.
+func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
+	if req.Rank == NilRank {
+		return nil, errors.New("unexpected nil rank in replace-rank join request")
+	}
+
+	// Update (remove then add) member with new UUID and set state to joined (regardless
+	// of previous state). Retain existing member record incarnation value.
+
+	cm, err := m.db.FindMemberByRank(req.Rank)
+	if err != nil {
+		return nil, err
+	}
+
+	if cm.State == MemberStateAdminExcluded {
+		return nil, ErrJoinAdminExcluded(cm.UUID, cm.Rank)
+	}
+	memberToReplace := &Member{}
+	*memberToReplace = *cm
+
+	m.log.Debugf("replace-rank: updating member with UUID %s->%s, Addr %s",
+		memberToReplace.UUID, req.UUID, memberToReplace.Addr)
+
+	if err := m.db.RemoveMember(cm); err != nil {
+		return nil, errors.Wrap(err, "removing old member in replace-rank join request")
+	}
+
+	resp := JoinResponse{
+		PrevState: memberToReplace.State,
+	}
+	memberToReplace.State = MemberStateJoined
+	memberToReplace.Info = ""
+	memberToReplace.UUID = req.UUID
+
+	if err := m.db.AddMember(memberToReplace); err != nil {
+		return nil, errors.Wrap(err, "adding new member in replace-rank join request")
+	}
+
+	resp.Member = memberToReplace
+	resp.MapVersion, err = m.db.CurMapVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp, err
 }
 
 // Join creates or updates an entry in the membership for the given
@@ -126,17 +241,24 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		return nil, errors.New("no primary fabric URI in JoinRequest")
 	}
 
-	resp = new(JoinResponse)
+	if req.Replace {
+		return m.joinReplace(req)
+	}
+
 	var curMember *Member
 	if !req.Rank.Equals(NilRank) {
 		curMember, err = m.db.FindMemberByRank(req.Rank)
 	} else {
 		curMember, err = m.db.FindMemberByUUID(req.UUID)
 	}
+
+	resp = new(JoinResponse)
+
+	// Request for an existing MS-db member.
 	if err == nil {
 		// Fault domain check only matters if there are other members
 		// besides the one being updated.
-		if count, err := m.db.MemberCount(); err != nil {
+		if count, err := m.Count(); err != nil {
 			return nil, err
 		} else if count != 1 {
 			if err := m.checkReqFaultDomain(req); err != nil {
@@ -145,21 +267,22 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		if curMember.State == MemberStateAdminExcluded {
-			return nil, ErrAdminExcluded(curMember.UUID, curMember.Rank)
+			return nil, ErrJoinAdminExcluded(curMember.UUID, curMember.Rank)
 		}
+
 		// If the member is already in the membership, don't allow rejoining
 		// with a different rank, as this may indicate something strange
 		// has happened on the node. The only exception is if the rejoin
 		// request has a rank of NilRank, which would indicate that
 		// the original join response was never received.
 		if !curMember.Rank.Equals(req.Rank) && !req.Rank.Equals(NilRank) {
-			return nil, ErrRankChanged(req.Rank, curMember.Rank, curMember.UUID)
+			return nil, ErrJoinRankChanged(req.Rank, curMember.Rank, curMember.UUID)
 		}
 		if curMember.UUID != req.UUID {
-			return nil, ErrUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
+			return nil, ErrJoinUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
 		if curMember.Addr.String() != req.ControlAddr.String() {
-			return nil, ErrControlAddrChanged(req.ControlAddr, curMember.Addr, curMember.UUID, curMember.Rank)
+			return nil, ErrJoinControlAddrChanged(req.ControlAddr, curMember.Addr, curMember.UUID, curMember.Rank)
 		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
@@ -204,6 +327,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		return nil, err
 	}
 
+	// Process join request for a new rank.
 	newMember := &Member{
 		Rank:                    req.Rank,
 		Incarnation:             req.Incarnation,
@@ -490,6 +614,8 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	if err != nil {
 		return nil, nil, err
 	}
+	m.log.Debugf("hostset to check for ranks: %s (host-ranks: %v)", hs.String(), hostRanks)
+
 	missHS, err := hostlist.CreateSet("")
 	if err != nil {
 		return nil, nil, err
@@ -523,6 +649,17 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	}
 
 	return rs, missHS, nil
+}
+
+// IsRankAdminExcluded checks whether a given rank is in the AdminExcluded State.
+func (m *Membership) IsRankAdminExcluded(rank Rank) bool {
+	cm, err := m.db.FindMemberByRank(rank)
+	if err != nil {
+		m.log.Errorf("unable to find rank %d: %s", err.Error())
+		return false
+	}
+
+	return cm.State == MemberStateAdminExcluded
 }
 
 // MarkRankDead is a helper method to mark a rank as dead in response to a

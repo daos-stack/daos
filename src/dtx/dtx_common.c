@@ -118,45 +118,14 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	D_ASSERT(d_list_empty(&cont->sc_dtx_cos_list));
 	D_ASSERT(d_list_empty(&cont->sc_dtx_coll_list));
 
-	/* Even if the container is reopened during current deregister, the
-	 * reopen will use new dbca, so current dbca needs to be cleanup.
-	 */
+	if (dbca->dbca_cleanup_req != NULL)
+		sched_req_abort(dbca->dbca_cleanup_req);
 
-	if (dbca->dbca_cleanup_req != NULL) {
-		if (!dbca->dbca_cleanup_done)
-			sched_req_wait(dbca->dbca_cleanup_req, true);
-		/* dtx_batched_commit might put it while we were waiting. */
-		if (dbca->dbca_cleanup_req != NULL) {
-			D_ASSERT(dbca->dbca_cleanup_done);
-			sched_req_put(dbca->dbca_cleanup_req);
-			dbca->dbca_cleanup_req = NULL;
-			dbca->dbca_cleanup_done = 0;
-		}
-	}
+	if (dbca->dbca_commit_req != NULL)
+		sched_req_abort(dbca->dbca_commit_req);
 
-	if (dbca->dbca_commit_req != NULL) {
-		if (!dbca->dbca_commit_done)
-			sched_req_wait(dbca->dbca_commit_req, true);
-		/* dtx_batched_commit might put it while we were waiting. */
-		if (dbca->dbca_commit_req != NULL) {
-			D_ASSERT(dbca->dbca_commit_done);
-			sched_req_put(dbca->dbca_commit_req);
-			dbca->dbca_commit_req = NULL;
-			dbca->dbca_commit_done = 0;
-		}
-	}
-
-	if (dbca->dbca_agg_req != NULL) {
-		if (!dbca->dbca_agg_done)
-			sched_req_wait(dbca->dbca_agg_req, true);
-		/* Just to be safe... */
-		if (dbca->dbca_agg_req != NULL) {
-			D_ASSERT(dbca->dbca_agg_done);
-			sched_req_put(dbca->dbca_agg_req);
-			dbca->dbca_agg_req = NULL;
-			dbca->dbca_agg_done = 0;
-		}
-	}
+	if (dbca->dbca_agg_req != NULL)
+		sched_req_abort(dbca->dbca_agg_req);
 
 	/* batched_commit/aggreagtion ULT may hold reference on the dbca. */
 	while (dbca->dbca_refs > 0) {
@@ -168,6 +137,15 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 		d_list_del(&dbpa->dbpa_sys_link);
 		D_FREE(dbpa);
 	}
+
+	if (dbca->dbca_cleanup_req != NULL)
+		sched_req_put(dbca->dbca_cleanup_req);
+
+	if (dbca->dbca_commit_req != NULL)
+		sched_req_put(dbca->dbca_commit_req);
+
+	if (dbca->dbca_agg_req != NULL)
+		sched_req_put(dbca->dbca_agg_req);
 
 	D_FREE(dbca);
 	cont->sc_dtx_registered = 0;
@@ -482,6 +460,7 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 				    dbca_pool_link);
 		D_ASSERT(!dbca->dbca_deregister);
 
+		dtx_get_dbca(dbca);
 		if (dbca->dbca_agg_req != NULL && dbca->dbca_agg_done) {
 			sched_req_put(dbca->dbca_agg_req);
 			dbca->dbca_agg_req = NULL;
@@ -489,36 +468,41 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		}
 
 		/* Finish this cycle scan. */
-		if (dbca->dbca_agg_gen == tls->dt_agg_gen)
+		if (dbca->dbca_agg_gen == tls->dt_agg_gen) {
+			dtx_put_dbca(dbca);
 			break;
+		}
+
+		if (unlikely(dbca->dbca_deregister)) {
+			/* Someone is stopping current container. */
+			D_ASSERT(d_list_empty(&dbca->dbca_pool_link));
+			goto next;
+		}
 
 		dbca->dbca_agg_gen = tls->dt_agg_gen;
 		d_list_move_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 
 		if (dbca->dbca_agg_req != NULL)
-			continue;
+			goto next;
 
 		cont = dbca->dbca_cont;
 		dtx_stat(cont, &stat);
-		if (stat.dtx_cont_cmt_count == 0 ||
-		    stat.dtx_first_cmt_blob_time_lo == 0)
-			continue;
+		if (stat.dtx_cont_cmt_count == 0 || stat.dtx_first_cmt_blob_time_lo == 0)
+			goto next;
 
 		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
-			continue;
+			goto next;
 
 		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
 		    ((stat.dtx_cont_cmt_count > dtx_agg_thd_cnt_lo ||
 		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
 		     (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) >= dtx_agg_thd_age_up))) {
 			D_ASSERT(!dbca->dbca_agg_done);
-			dtx_get_dbca(dbca);
 			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
 			if (dbca->dbca_agg_req == NULL) {
 				D_WARN("Fail to start DTX agg ULT (1) for "DF_UUID"\n",
 				       DP_UUID(cont->sc_uuid));
-				dtx_put_dbca(dbca);
-				continue;
+				goto next;
 			}
 
 			dbpa->dbpa_aggregating++;
@@ -532,9 +516,15 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		    (victim_stat.dtx_first_cmt_blob_time_lo == stat.dtx_first_cmt_blob_time_lo &&
 		     victim_stat.dtx_first_cmt_blob_time_up == stat.dtx_first_cmt_blob_time_up &&
 		     victim_stat.dtx_cont_cmt_count < stat.dtx_cont_cmt_count)) {
+			if (victim_dbca != NULL)
+				dtx_put_dbca(victim_dbca);
+			dtx_get_dbca(dbca);
 			victim_stat = stat;
 			victim_dbca = dbca;
 		}
+
+next:
+		dtx_put_dbca(dbca);
 	}
 
 	/* No single container exceeds DTX thresholds, but the whole pool does,
@@ -545,16 +535,18 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 	    victim_dbca != NULL && victim_stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) {
 		D_ASSERT(victim_dbca->dbca_agg_req == NULL && !victim_dbca->dbca_agg_done);
 
-		dtx_get_dbca(victim_dbca);
 		victim_dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, victim_dbca, 0);
 		if (victim_dbca->dbca_agg_req == NULL) {
-			D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID"\n",
-				DP_UUID(victim_dbca->dbca_cont->sc_uuid));
-			dtx_put_dbca(victim_dbca);
+			D_WARN("Fail to start DTX agg ULT (2) for " DF_UUID "\n",
+			       DP_UUID(victim_dbca->dbca_cont->sc_uuid));
 		} else {
 			dbpa->dbpa_aggregating++;
+			victim_dbca = NULL;
 		}
 	}
+
+	if (victim_dbca != NULL)
+		dtx_put_dbca(victim_dbca);
 }
 
 void
@@ -859,18 +851,19 @@ dtx_shares_fini(struct dtx_handle *dth)
 int
 dtx_handle_reinit(struct dtx_handle *dth)
 {
+	D_ASSERT(dth->dth_aborted == 0);
+	D_ASSERT(dth->dth_already == 0);
+
 	if (dth->dth_modification_cnt > 0) {
 		D_ASSERT(dth->dth_ent != NULL);
 		D_ASSERT(dth->dth_pinned != 0);
 	}
-	D_ASSERT(dth->dth_already == 0);
 
-	dth->dth_modify_shared = 0;
-	dth->dth_active = 0;
+	dth->dth_modify_shared      = 0;
+	dth->dth_active             = 0;
 	dth->dth_touched_leader_oid = 0;
-	dth->dth_local_tx_started = 0;
-	dth->dth_cos_done = 0;
-	dth->dth_aborted = 0;
+	dth->dth_local_tx_started   = 0;
+	dth->dth_cos_done           = 0;
 
 	dth->dth_op_seq = 0;
 	dth->dth_oid_cnt = 0;
@@ -1268,15 +1261,14 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result)
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int result)
 {
-	struct ds_cont_child		*cont = coh->sch_cont;
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;
 	size_t				 size;
 	uint32_t			 flags;
-	int				 status = -1;
+	int                              status;
 	int				 rc = 0;
 	bool				 aborted = false;
 
@@ -1287,56 +1279,22 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY))
 		goto out;
 
-	if (unlikely(coh->sch_closed)) {
-		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
-			DP_UUID(coh->sch_uuid));
-		if (result == -DER_AGAIN || result == -DER_INPROGRESS || result == -DER_TIMEDOUT ||
-		    result == -DER_STALE || daos_crt_network_error(result))
-			result = -DER_IO;
-		goto abort;
-	}
-
 	/* For solo transaction, the validation has already been processed inside vos
 	 * when necessary. That is enough, do not need to revalid again.
 	 */
 	if (dth->dth_solo)
 		goto out;
 
-	if (dth->dth_need_validation) {
-		/* During waiting for bulk data transfer or other non-leaders, the DTX
-		 * status may be changes by others (such as DTX resync or DTX refresh)
-		 * by race. Let's check it before handling the case of 'result < 0' to
-		 * avoid aborting 'ready' one.
-		 */
-		status = vos_dtx_validation(dth);
-		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE ||
-			     status == DTX_ST_COMMITTING))
-			D_GOTO(out, result = -DER_ALREADY);
-	}
-
-	if (result < 0)
+	/* During waiting for bulk data transfer or other non-leaders, the DTX status maybe
+	 * changes by others (such as DTX resync or DTX refresh) by race. Let's check it
+	 * before handling the case of 'result < 0' to avoid aborting 'ready' one.
+	 */
+	status = vos_dtx_validation(dth);
+	if (status != -DER_ALREADY && result < 0)
 		goto abort;
 
-	switch (status) {
-	case -1:
-		break;
-	case DTX_ST_PREPARED:
-		if (likely(!dth->dth_aborted))
-			break;
-		/* Fall through */
-	case DTX_ST_INITED:
-	case DTX_ST_PREPARING:
-		aborted = true;
-		result = -DER_AGAIN;
-		goto out;
-	case DTX_ST_ABORTED:
-	case DTX_ST_ABORTING:
-		aborted = true;
-		result = -DER_INPROGRESS;
-		goto out;
-	default:
-		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
-	}
+	if (status < 0)
+		D_GOTO(out, result = status);
 
 	if (dlh->dlh_relay)
 		goto out;

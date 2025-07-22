@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -74,9 +75,8 @@ class ContainerListConsolidationTest(RecoveryTestBase):
                 server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
                 mount_point=scm_mount, pool_uuid=pool.uuid, vos_file=vos_file)
             cmd_result = ddb_command.list_component()
-            ls_out = "\n".join(cmd_result[0]["stdout"])
             uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
-            match = re.search(uuid_regex, ls_out)
+            match = re.search(uuid_regex, cmd_result.joined_stdout)
             if match is None:
                 self.fail("Unexpected output from ddb command, unable to parse.")
             self.log.info("Container UUID from ddb ls = %s", match.group(1))
@@ -133,9 +133,8 @@ class ContainerListConsolidationTest(RecoveryTestBase):
                    "(PMEM only).")
             self.log_step(msg)
             cmd_result = ddb_command.list_component()
-            ls_out = "\n".join(cmd_result[0]["stdout"])
             uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
-            match = re.search(uuid_regex, ls_out)
+            match = re.search(uuid_regex, cmd_result.joined_stdout)
             if match:
                 errors.append("Container UUID is found in shard! Checker didn't remove it.")
 
