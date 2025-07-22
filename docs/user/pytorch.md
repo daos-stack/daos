@@ -27,7 +27,7 @@ from pydaos.torch import Dataset
 with Dataset(pool='pool', container='container', path='/training/samples') as dataset
     # That's it, when the Dataset is created, it will connect to DAOS, scan the namaspace of the container
     # and will be ready to load data from it.
-    # With statement is used to release connection and used resources one Dataset is no longer needed.
+    # With statement is used to release connection and used resources once Dataset is no longer needed.
 
     for i, sample in enumerate(dataset):
         print(f"Sample {i} size: {len(sample)}")
