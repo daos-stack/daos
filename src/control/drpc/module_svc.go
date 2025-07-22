@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,23 +16,31 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// Module is an interface that a type must implement to provide the
-// functionality needed by the ModuleService to process dRPC requests.
+// Method is an interface that allows methods to describe themselves.
+type Method interface {
+	ID() int32
+	Module() int32
+	String() string
+}
+
+// Module is an interface that describes a dRPC module's capabilities.
 type Module interface {
 	HandleCall(context.Context, *Session, Method, []byte) ([]byte, error)
-	ID() ModuleID
+	ID() int32
+	GetMethod(int32) (Method, error)
+	String() string
 }
 
 // ModuleService is the collection of Modules used by
 // DomainSocketServer to be used to process messages.
 type ModuleService struct {
 	log     logging.Logger
-	modules map[ModuleID]Module
+	modules map[int32]Module
 }
 
 // NewModuleService creates an initialized ModuleService instance
 func NewModuleService(log logging.Logger) *ModuleService {
-	modules := make(map[ModuleID]Module)
+	modules := make(map[int32]Module)
 	return &ModuleService{
 		log:     log,
 		modules: modules,
@@ -53,7 +62,7 @@ func (r *ModuleService) RegisterModule(mod Module) {
 
 // GetModule fetches the module for the given ID. Returns true if found, false
 // otherwise.
-func (r *ModuleService) GetModule(id ModuleID) (Module, bool) {
+func (r *ModuleService) GetModule(id int32) (Module, bool) {
 	mod, found := r.modules[id]
 	return mod, found
 }
@@ -101,21 +110,32 @@ func (r *ModuleService) ProcessMessage(ctx context.Context, session *Session, ms
 	if err != nil {
 		return marshalResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil)
 	}
-	module, ok := r.GetModule(ModuleID(msg.GetModule()))
+	module, ok := r.GetModule(msg.GetModule())
 	if !ok {
 		r.log.Errorf("Attempted to call unregistered module %d", msg.GetModule())
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
 	}
 	var method Method
-	method, err = module.ID().GetMethod(msg.GetMethod())
+	method, err = module.GetMethod(msg.GetMethod())
 	if err != nil {
+		r.log.Errorf("Attempted to call unregistered method %d", msg.GetMethod())
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_METHOD, nil)
 	}
 	respBody, err := module.HandleCall(ctx, session, method, msg.GetBody())
 	if err != nil {
-		r.log.Errorf("HandleCall for %s:%s failed: %s\n", module.ID().String(), method.String(), err)
+		r.log.Errorf("HandleCall for %s:%s failed: %s", module.String(), method.String(), err)
 		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
 	}
 
 	return marshalResponse(msg.GetSequence(), Status_SUCCESS, respBody)
+}
+
+// Marshal is a utility function that can be used by dRPC method handlers to
+// marshal their method-specific response to be passed back to the ModuleService.
+func Marshal(message proto.Message) ([]byte, error) {
+	msgBytes, err := proto.Marshal(message)
+	if err != nil {
+		return nil, MarshalingFailure()
+	}
+	return msgBytes, nil
 }
