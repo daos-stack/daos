@@ -1443,14 +1443,14 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			    daos_epoch_t update_eph,
 			    uint32_t flags, struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t		 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
-	daos_handle_t		 ioh;
-	int			 rc, rc1, i, sgl_cnt = 0;
-	d_iov_t			csum_iov = {0};
-	struct daos_csummer	*csummer = NULL;
-	struct dcs_iod_csums	*iod_csums = NULL;
-	d_iov_t			*p_csum_iov = NULL;
-	bool                     stale      = false;
+	d_sg_list_t           sgls[OBJ_ENUM_UNPACK_MAX_IODS];
+	daos_handle_t         ioh;
+	int                   sgl_cnt    = 0;
+	d_iov_t               csum_iov   = {0};
+	struct daos_csummer  *csummer    = NULL;
+	struct dcs_iod_csums *iod_csums  = NULL;
+	d_iov_t              *p_csum_iov = NULL;
+	int                   rc, rc1, i;
 
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
@@ -1539,13 +1539,12 @@ post:
 			 * failure for this rebuild, then reschedule
 			 * the rebuild and retry.
 			 */
-			rc = -DER_STALE;
+			rc = -DER_DATA_LOSS;
 			D_INFO(DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
 				     " nr %d/%d eph " DF_U64 " " DF_RC "\n",
 			       DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone,
 			       DP_KEY(&mrone->mo_dkey), DP_KEY(&iods[i].iod_name), iod_num, i,
 			       mrone->mo_epoch, DP_RC(rc));
-			stale = true;
 			D_GOTO(end, rc);
 		}
 	}
@@ -1558,8 +1557,8 @@ end:
 		rc = rc1;
 
 	if (rc)
-		DL_CDEBUG(stale, DLOG_INFO, DLOG_ERR, rc, DF_RB ": " DF_UOID " migrate error",
-			  DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid));
+		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate error", DP_RB_MRO(mrone),
+			 DP_UOID(mrone->mo_oid));
 
 	return rc;
 }
@@ -2120,8 +2119,13 @@ migrate_one_ult(void *arg)
 	 *   (nonexistent)
 	 * This is just a workaround...
 	 */
-	if (rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0)
+	if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
+		DL_ERROR(rc, DF_RB ": " DF_UOID " rebuild failed, set mpt_fini for tgt %d.",
+			 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), dss_get_module_info()->dmi_tgt_id);
 		tls->mpt_status = rc;
+		D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
+		tls->mpt_fini = 1;
+	}
 out:
 	migrate_one_destroy(mrone);
 	if (tls != NULL) {
@@ -2887,6 +2891,14 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 			arg->tgt_idx, mrone->mo_iod_num);
 
+		if (tls->mpt_status != 0) {
+			DL_ERROR(tls->mpt_status, DF_RB ": " DF_UOID " rebuild failed already",
+				 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid));
+			d_list_del_init(&mrone->mo_list);
+			migrate_one_destroy(mrone);
+			continue;
+		}
+
 		rc = migrate_tgt_enter(tls);
 		if (rc)
 			break;
@@ -3200,6 +3212,7 @@ migrate_fini_one_ult(void *data)
 	if (tls == NULL)
 		return 0;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
@@ -3230,6 +3243,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	struct migrate_stop_arg arg;
 	int			 rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	if (tls == NULL || tls->mpt_fini) {
 		if (tls != NULL)
