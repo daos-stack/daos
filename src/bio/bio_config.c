@@ -957,7 +957,7 @@ bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max
 				SPDK_COUNTOF(auto_faulty_decoders), &auto_faulty_criteria);
 	if (rc != 0) {
 		if (rc == JSON_NOT_FOUND) {
-			rc = 0;
+			rc             = 0;
 			*enable        = false;
 			*max_io_errs   = UINT32_MAX;
 			*max_csum_errs = UINT32_MAX;
