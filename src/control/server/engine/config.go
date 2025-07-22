@@ -442,7 +442,6 @@ func (c *Config) UpdateABTEnvars() error {
 		return nil
 	}
 
-	// Ensure at least 20KiB ABT stack size for an engine with DCPM storage class.
 	stackSizeValue, err := strconv.Atoi(stackSizeStr)
 	if err != nil {
 		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
