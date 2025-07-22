@@ -22,7 +22,7 @@ pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2:-}"
 rm -f ./*.rpm
-utils/rpms/build_packages.sh
+BUILD_EXTRANEOUS=yes utils/rpms/build_packages.sh
 mkdir -p /home/daos/rpms
 rm -rf /home/daos/rpms/*
 cp ./*.rpm /home/daos/rpms
