@@ -431,6 +431,50 @@ func ignoreFaultDomainIDOption() cmp.Option {
 		}, cmp.Ignore())
 }
 
+func checkMemberDB(t *testing.T, mdb *MemberDatabase, expMember *Member, opts ...cmp.Option) {
+	t.Helper()
+
+	cmpOpts := []cmp.Option{
+		cmp.AllowUnexported(Member{}),
+		cmpopts.IgnoreFields(Member{}, "LastUpdate"),
+	}
+	cmpOpts = append(cmpOpts, opts...)
+
+	uuidM, ok := mdb.Uuids[expMember.UUID]
+	if !ok {
+		t.Errorf("member not found for UUID %s", expMember.UUID)
+	}
+	if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
+		t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
+	}
+
+	rankM, ok := mdb.Ranks[expMember.Rank]
+	if !ok {
+		t.Errorf("member not found for rank %d", expMember.Rank)
+	}
+	if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
+		t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
+	}
+
+	addrMs, ok := mdb.Addrs[expMember.Addr.String()]
+	if !ok {
+		t.Errorf("slice not found for addr %s", expMember.Addr.String())
+	}
+
+	found := false
+	for _, am := range addrMs {
+		if am.Rank == expMember.Rank {
+			found = true
+			if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
+				t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
+	}
+}
+
 func genTestMembers(t *testing.T, num int) []*Member {
 	ctx := test.Context(t)
 	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 1)
@@ -448,48 +492,20 @@ func genTestMembers(t *testing.T, num int) []*Member {
 }
 
 func expectMembersInDB(t *testing.T, db *Database, expMembers []*Member) {
-	cmpOpts := []cmp.Option{
-		cmp.AllowUnexported(Member{}),
-		cmpopts.IgnoreFields(Member{}, "LastUpdate"),
-	}
 	for _, expMember := range expMembers {
-		uuidM, ok := db.data.Members.Uuids[expMember.UUID]
-		if !ok {
-			t.Errorf("member not found for UUID %s", expMember.UUID)
-		}
-		if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
-			t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
-		}
-
-		rankM, ok := db.data.Members.Ranks[expMember.Rank]
-		if !ok {
-			t.Errorf("member not found for rank %d", expMember.Rank)
-		}
-		if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
-			t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
-		}
-
-		addrMs, ok := db.data.Members.Addrs[expMember.Addr.String()]
-		if !ok {
-			t.Errorf("slice not found for addr %s", expMember.Addr.String())
-		}
-
-		found := false
-		for _, am := range addrMs {
-			if am.Rank == expMember.Rank {
-				found = true
-				if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
-					t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
-				}
-			}
-		}
-		if !found {
-			t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
-		}
+		checkMemberDB(t, db.data.Members, expMember)
 	}
 
 	if len(db.data.Members.Uuids) != len(expMembers) {
 		t.Fatalf("expected %d members, got %d", len(expMembers), len(db.data.Members.Uuids))
+	}
+
+	totalMemberAddrs := 0
+	for _, members := range db.data.Members.Addrs {
+		totalMemberAddrs += len(members)
+	}
+	if totalMemberAddrs != len(expMembers) {
+		t.Fatalf("expected %d members in address table, got %d: %+v", len(expMembers), totalMemberAddrs, db.data.Members.Addrs)
 	}
 }
 
@@ -942,7 +958,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 	}
 }
 
-func TestSystemDatabase_PoolServiceList(t *testing.T) {
+func TestSystem_Database_PoolServiceList(t *testing.T) {
 	ready := &PoolService{
 		PoolUUID:   uuid.New(),
 		PoolLabel:  "pool0001",
@@ -1184,7 +1200,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 	}
 }
 
-func Test_Database_ResignLeadership(t *testing.T) {
+func TestSystem_Database_ResignLeadership(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cause     error
 		expErr    error
@@ -1239,7 +1255,7 @@ func Test_Database_ResignLeadership(t *testing.T) {
 	}
 }
 
-func TestDatabase_TakePoolLock(t *testing.T) {
+func TestSystem_Database_TakePoolLock(t *testing.T) {
 	mockUUID := uuid.MustParse(test.MockUUID(1))
 	parentLock := makeLock(1, 1, 1)
 	wrongIdLock := makeLock(1, 2, 1)

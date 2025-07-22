@@ -493,7 +493,8 @@ func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, common.FormatTime(m.Member.LastUpdate))
+	db.log.Debugf("member %d:%x %s @ %s", m.Member.Rank, m.Member.Incarnation, op,
+		common.FormatTime(m.Member.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 

@@ -345,7 +345,7 @@ class ListVerboseTest(IorTestBase):
         targets_disabled[0] = 1
         scm_size[0] = reduced_scm_size
         nvme_size[0] = reduced_nvme_size
-        state[0] = "Degraded"
+        state[0] = "TargetsExcluded"
         rebuild_state[0] = "busy"
 
         self.verify_pool_lists(

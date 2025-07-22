@@ -137,7 +137,7 @@ var (
 
 	daos_default_PoolInfo daos.PoolInfo = daos.PoolInfo{
 		QueryMask:       daos.DefaultPoolQueryMask,
-		State:           daos.PoolServiceStateDegraded,
+		State:           daos.PoolServiceStateTargetsExcluded,
 		UUID:            test.MockPoolUUID(1),
 		Label:           "test-pool",
 		TotalTargets:    48,
