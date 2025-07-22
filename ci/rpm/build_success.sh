@@ -41,7 +41,7 @@ elif [ -d /var/cache/pbuilder/ ]; then
 fi
 
 if [ -d /home/daos/rpms/ ]; then
-  cp /home/daos/rpms/*.rpm "${artdir}"
+  cp /home/daos/rpms/daos*.rpm "${artdir}"
 else
   mockroot="/var/lib/mock/${CHROOT_NAME}"
   cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
