@@ -1456,6 +1456,13 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
+	if (daos_is_dkey_uint64(mrone->mo_oid.id_pub) &&
+	    mrone->mo_dkey.iov_len == sizeof(uint64_t) &&
+	    *((uint64_t *)mrone->mo_dkey.iov_buf) == 4)
+		D_INFO("lxz cont "DF_UUID",cont_child %p, uoid "DF_UOID", update_eph "DF_X64"\n",
+		       DP_UUID(mrone->mo_cont_uuid), ds_cont, DP_UOID(mrone->mo_oid),
+		       update_eph);
+
 	D_ASSERT(iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, update_eph, VOS_OF_REBUILD,
 			      &mrone->mo_dkey, iod_num, iods, mrone->mo_iods_csums,
@@ -1578,6 +1585,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	int i;
 	int j;
 	int rc = 0;
+	bool log = false;
 
 	if (!daos_oclass_is_ec(&mrone->mo_oca))
 		return __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods,
@@ -1585,6 +1593,11 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 						   mrone->mo_epoch,
 						   mrone->mo_min_epoch,
 						   DIOF_FOR_MIGRATION, ds_cont);
+
+	if (daos_is_dkey_uint64(mrone->mo_oid.id_pub) &&
+	    mrone->mo_dkey.iov_len == sizeof(uint64_t) &&
+	    *((uint64_t *)mrone->mo_dkey.iov_buf) == 4)
+		log = true;
 
 	/* For EC object, if the migration include both extent from parity rebuild
 	 * and extent from replicate rebuild, let rebuild the extent with parity first,
@@ -1614,10 +1627,32 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			 * impact this process as well.
 			 */
 			if (ds_cont->sc_ec_agg_eph_boundary >
-			    mrone->mo_iods_update_ephs_from_parity[i][j])
+			    mrone->mo_iods_update_ephs_from_parity[i][j]) {
 				fetch_eph = mrone->mo_epoch;
-			else
+				if (log)
+					D_INFO("lxz cont "DF_UUID",cont_child %p, uoid "DF_UOID
+					       " sc_ec_agg_eph_boundary "DF_X64
+					       ", mo_iods_update_ephs_from_parity "DF_X64
+					       " mo_epoch "DF_X64", fetch_eph "DF_X64"\n",
+					       DP_UUID(mrone->mo_cont_uuid), ds_cont,
+					       DP_UOID(mrone->mo_oid),
+					       ds_cont->sc_ec_agg_eph_boundary,
+					       mrone->mo_iods_update_ephs_from_parity[i][j],
+					       mrone->mo_epoch, fetch_eph);
+			} else {
 				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+				if (log)
+					D_INFO("lxz cont "DF_UUID",cont_child %p, uoid "DF_UOID
+					       " sc_ec_agg_eph_boundary "DF_X64
+					       ", mo_iods_update_ephs_from_parity "DF_X64
+					       " mo_epoch "DF_X64", fetch_eph "DF_X64"\n",
+					       DP_UUID(mrone->mo_cont_uuid), ds_cont,
+					       DP_UOID(mrone->mo_oid),
+					       ds_cont->sc_ec_agg_eph_boundary,
+					       mrone->mo_iods_update_ephs_from_parity[i][j],
+					       mrone->mo_epoch, fetch_eph);
+			}
+
 			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph,
 						mrone->mo_iods_update_ephs_from_parity[i][j],
 						DIOF_EC_RECOV_FROM_PARITY | DIOF_FOR_MIGRATION,
@@ -1639,6 +1674,16 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			iod = mrone->mo_iods[i];
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods[i].iod_recxs[j];
+			if (log)
+				D_INFO("lxz cont "DF_UUID",cont_child %p, uoid "DF_UOID
+				       " sc_ec_agg_eph_boundary "DF_X64
+				       ", mo_iods_update_ephs "DF_X64
+				       " mo_epoch "DF_X64"\n",
+				       DP_UUID(mrone->mo_cont_uuid), ds_cont,
+				       DP_UOID(mrone->mo_oid),
+				       ds_cont->sc_ec_agg_eph_boundary,
+				       mrone->mo_iods_update_ephs[i][j],
+				       mrone->mo_epoch);
 			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1,
 							 mrone->mo_epoch,
 							 mrone->mo_iods_update_ephs[i][j],
