@@ -10,7 +10,7 @@ if [ -z "${SL_ISAL_PREFIX}" ]; then
 fi
 
 VERSION="${isal_version}"
-RELEASE="3"
+RELEASE="${isal_release}"
 LICENSE="BSD-3-Clause"
 ARCH=${isa}
 DESCRIPTION="Intelligent Storage Acceleration Library.
@@ -57,6 +57,6 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   list_files files "${SL_ISAL_PREFIX}/include/isa-l/*"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${isal_lib} = ${isal_version}")
+  DEPENDS=("${isal_lib} = ${isal_full}")
   build_package "${isal_dev}"
 fi
