@@ -54,38 +54,36 @@ append_install_list "${files[@]}"
 ARCH="${isa}"
 build_package "mercury-ucx"
 
-if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
 TARGET_PATH="${libdir}"
-  list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so"
-  append_install_list "${files[@]}"
+list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${includedir}"
-  list_files files "${SL_MERCURY_PREFIX}/include/*.h"
-  append_install_list "${files[@]}"
+TARGET_PATH="${includedir}"
+list_files files "${SL_MERCURY_PREFIX}/include/*.h"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${libdir/pkgconfig}"
-  list_files files "${SL_MERCURY_PREFIX}/lib64/pkgconfig/*.pc"
-  replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
-  if [ -n "${SL_OFI_PREFIX}" ]; then
-    replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
-  fi
-  if [ -n "${SL_UCX_PREFIX}" ]; then
-    replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
-  fi
-  append_install_list "${files[@]}"
-
-  TARGET_PATH="${libdir}/cmake/mercury"
-  list_files files "${SL_MERCURY_PREFIX}/lib64/cmake/mercury/*"
-  replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
-  if [ -n "${SL_OFI_PREFIX}" ]; then
-    replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
-  fi
-  if [ -n "${SL_UCX_PREFIX}" ]; then
-    replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
-  fi
-  append_install_list "${files[@]}"
-
-  DEPENDS=("mercury = ${mercury_full}")
-  build_package "${mercury_dev}"
-  DEPENDS=()
+TARGET_PATH="${libdir/pkgconfig}"
+list_files files "${SL_MERCURY_PREFIX}/lib64/pkgconfig/*.pc"
+replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
+if [ -n "${SL_OFI_PREFIX}" ]; then
+  replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
 fi
+if [ -n "${SL_UCX_PREFIX}" ]; then
+  replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
+fi
+append_install_list "${files[@]}"
+
+TARGET_PATH="${libdir}/cmake/mercury"
+list_files files "${SL_MERCURY_PREFIX}/lib64/cmake/mercury/*"
+replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
+if [ -n "${SL_OFI_PREFIX}" ]; then
+  replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
+fi
+if [ -n "${SL_UCX_PREFIX}" ]; then
+  replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
+fi
+append_install_list "${files[@]}"
+
+DEPENDS=("mercury = ${mercury_full}")
+build_package "${mercury_dev}"
+DEPENDS=()

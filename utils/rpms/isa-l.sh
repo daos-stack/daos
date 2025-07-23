@@ -36,27 +36,25 @@ list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
-DEPENDS=("isa-l")
+DEPENDS=("isa-l = ${isal_full}")
 build_package "${isal_lib}"
 
-if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
-  TARGET_PATH="${libdir}"
-  list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so"
-  append_install_list "${files[@]}"
+TARGET_PATH="${libdir}"
+list_files files "${SL_ISAL_PREFIX}/lib64/libisal.so"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${libdir/pkgconfig}"
-  list_files files "${SL_ISAL_PREFIX}/lib64/pkgconfig/libisal.pc"
-  replace_paths "${SL_ISAL_PREFIX}" "${files[@]}"
-  append_install_list "${files[@]}"
+TARGET_PATH="${libdir/pkgconfig}"
+list_files files "${SL_ISAL_PREFIX}/lib64/pkgconfig/libisal.pc"
+replace_paths "${SL_ISAL_PREFIX}" "${files[@]}"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${includedir}"
-  list_files files "${SL_ISAL_PREFIX}/include/isa-l.h"
-  append_install_list "${files[@]}"
+TARGET_PATH="${includedir}"
+list_files files "${SL_ISAL_PREFIX}/include/isa-l.h"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${includedir}/isa-l"
-  list_files files "${SL_ISAL_PREFIX}/include/isa-l/*"
-  append_install_list "${files[@]}"
+TARGET_PATH="${includedir}/isa-l"
+list_files files "${SL_ISAL_PREFIX}/include/isa-l/*"
+append_install_list "${files[@]}"
 
-  DEPENDS=("${isal_lib} = ${isal_full}")
-  build_package "${isal_dev}"
-fi
+DEPENDS=("${isal_lib} = ${isal_full}")
+build_package "${isal_dev}"
