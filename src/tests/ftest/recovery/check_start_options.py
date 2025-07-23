@@ -7,7 +7,7 @@ import time
 
 from general_utils import check_file_exists
 from recovery_test_base import RecoveryTestBase
-from run_utils import run_remote
+from run_utils import command_as_user, run_remote
 
 
 class DMGCheckStartOptionsTest(RecoveryTestBase):
@@ -201,11 +201,11 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
             dmg_command.system_start()
             # return results in PASS.
             return
-        command = f"sudo rm -rf {pool_path}"
+        command = command_as_user(command=f"rm -rf {pool_path}", user="root")
         remove_result = run_remote(
             log=self.log, hosts=self.hostlist_servers, command=command)
         if not remove_result.passed:
-            self.fail(f"Failed to remove {pool_path} from {self.hostlist_servers}")
+            self.fail(f"Failed to remove {pool_path} from {remove_result.failed_hosts}")
         success_nodes = remove_result.passed_hosts
         if self.hostlist_servers != success_nodes:
             msg = (f"Failed to remove pool directory! All = {self.hostlist_servers}, "
