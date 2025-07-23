@@ -173,7 +173,7 @@ def check_server_storage(logger, test, stage):
         "scm_list":
             r"ndctl list -c -v | grep pmem | sed -e 's/.*:\"\(.*\)\"/\/dev\/\1/' | grep '{}'",
         "bdev_list":
-            r"lspci -D | grep -E '{}'"
+            r"lspci -nnk -s '{}'"
     }
     detected = []
     logger.debug("-" * 80)
