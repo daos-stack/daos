@@ -83,36 +83,3 @@ func (pss *PoolServiceStorage) CreationRanks() []ranklist.Rank {
 	}
 	return pss.creationRanks.Ranks()
 }
-
-//// TotalSCM returns the total amount of SCM storage allocated to
-//// the pool, calculated from the current set of ranks multiplied
-//// by the per-rank SCM allocation made at creation time.
-//func (pss *PoolServiceStorage) TotalSCM() uint64 {
-//	if len(pss.PerRankTierStorage) >= 1 {
-//		return uint64(len(pss.CreationRanks())) * pss.PerRankTierStorage[0]
-//	}
-//	return 0
-//}
-//
-//// TotalNVMe returns the total amount of NVMe storage allocated to
-//// the pool, calculated from the current set of ranks multiplied
-//// by the per-rank NVMe allocation made at creation time.
-//func (pss *PoolServiceStorage) TotalNVMe() uint64 {
-//	if len(pss.PerRankTierStorage) >= 2 {
-//		sum := uint64(0)
-//		for _, tierStorage := range pss.PerRankTierStorage[1:] {
-//			sum += uint64(len(pss.CreationRanks())) * tierStorage
-//		}
-//		return sum
-//	}
-//	return 0
-//}
-//
-//func (pss *PoolServiceStorage) String() string {
-//	if pss == nil {
-//		return "no pool storage info available"
-//	}
-//	return fmt.Sprintf("total SCM: %s, total NVMe: %s",
-//		humanize.Bytes(pss.TotalSCM()),
-//		humanize.Bytes(pss.TotalNVMe()))
-//}
