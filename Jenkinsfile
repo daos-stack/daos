@@ -656,6 +656,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
+						' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg COMPILER=icc'
                         }
                     }
