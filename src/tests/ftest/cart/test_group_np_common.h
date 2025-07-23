@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -858,6 +859,14 @@ test_parse_args(int argc, char **argv)
 	if (optind < argc) {
 		fprintf(stderr, "non-option argv elements encountered");
 		return 1;
+	}
+
+	if (test_g.t_save_cfg) {
+		rc = crt_group_config_path_set(test_g.t_cfg_path);
+		if (rc != 0) {
+			fprintf(stderr, "Failed to set config path; rc=%d\n", rc);
+			return rc;
+		}
 	}
 
 	return 0;
