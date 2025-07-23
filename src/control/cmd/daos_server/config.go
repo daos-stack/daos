@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,9 +9,6 @@
 package main
 
 import (
-	"os"
-	"path"
-
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -56,23 +55,21 @@ func (c *cfgCmd) loadConfig(log logging.Logger) error {
 		return nil
 	}
 
-	setInArgs := false
-	if c.ConfigPath != "" {
-		setInArgs = true
-	} else {
-		// Set config path to build directory if not supplied in command args.
-		c.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
+	c.config = config.DefaultServer()
+	if c.ConfigPath == "" {
+		if path, err := build.FindConfigFilePath(defaultConfigFile); err == nil {
+			c.ConfigPath = path
+		} else if c.configOptional() {
+			log.Debugf("optional config file not found: %s", err.Error())
+			return nil
+		} else {
+			// not found and not optional
+			c.config = nil
+			return err
+		}
 	}
 
-	c.config = config.DefaultServer()
 	if err := c.config.SetPath(c.ConfigPath); err != nil {
-		if os.IsNotExist(err) && c.configOptional() && !setInArgs {
-			// Situation permitted where for an optCfgCmd -o has not been set and no
-			// file exists at the default path.
-			c.ConfigPath = ""
-			return nil
-		}
-
 		return err
 	}
 
