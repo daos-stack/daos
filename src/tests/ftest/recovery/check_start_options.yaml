@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 2
+  test_servers: 1
 
 timeout: 180
 
@@ -10,3 +10,7 @@ server_config:
     0:
       targets: 1
       storage: auto
+  system_ram_reserved: 1
+
+pool:
+  size: 5G
