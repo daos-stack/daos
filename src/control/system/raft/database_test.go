@@ -679,7 +679,10 @@ func TestSystem_Database_UpdateMember(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t, log)
 
 			replicaAddrs := make([]*net.TCPAddr, 0, numReplicas)
 			for i := 0; i < numReplicas; i++ {
@@ -710,7 +713,10 @@ func TestSystem_Database_UpdateMember(t *testing.T) {
 			test.CmpErr(t, tc.expErr, err)
 			expectMembersInDB(t, db, tc.expMembers)
 
-			test.CmpAny(t, "AddVoter calls", tc.expVotersAdded, mockRaftSvc.addVoterCalledForAddrs)
+			test.AssertEqual(t, len(tc.expVotersAdded), len(mockRaftSvc.addVoterCalledForAddrs), "")
+			for i, exp := range tc.expVotersAdded {
+				test.AssertEqual(t, exp, mockRaftSvc.addVoterCalledForAddrs[i], fmt.Sprintf("expected voter %d", i))
+			}
 		})
 	}
 }
