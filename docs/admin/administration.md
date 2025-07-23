@@ -1103,6 +1103,24 @@ After extending the system, the cache of the `daos_agent` service of the client
 nodes needs to be refreshed.  For detailed information, please refer to the
 [1][System Deployment documentation].
 
+### Adding or removing Management Service (MS) replicas
+
+The DAOS Management Service (MS) runs on a selected subset of `daos_server` nodes.
+An administrator may add or remove hosts from the MS replica list.
+
+1. Stop I/O and safely shut down all `daos_server` and `daos_agent` processes.
+2. Update the `mgmt_svc_replicas` list in the `daos_server` configuration file.
+3. Update the `access_points` list in the `daos_agent` configuration file.
+4. Update `hostlist` in the `dmg` configuration file, if applicable.
+5. Restart all `daos_server` and `daos_agent` processes.
+6. To ensure the updated MS replicas came up, check: `dmg system query`
+
+!!! warning
+    When removing or replacing MS replicas, do *not* replace all old replicas with
+    new ones.
+    At least one old replica must remain in the list to act as a data source for
+    the new replicas. 
+
 
 ## Software Upgrade
 
