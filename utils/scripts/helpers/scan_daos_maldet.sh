@@ -49,7 +49,8 @@ sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               --exclude-dir=/sys                       \
               --exclude-dir=/proc                      \
               --exclude-dir=/dev                       \
-              --exclude-dir=/CIShare                   \
+              --exclude-dir=/scratch                   \
+              --exclude-dir=/mnt                       \
               --infected / | tee /var/tmp/clamscan.out
 malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
