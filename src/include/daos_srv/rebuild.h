@@ -84,9 +84,10 @@ typedef enum {
 	    RB_OP_STR((mro)->mo_opc)
 
 int
-     ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t stable_eph,
+     ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t reclaim_eph,
 			 uint32_t layout_version, struct pool_target_id_list *tgts,
-			 daos_rebuild_opc_t rebuild_op, bool stop_admin, uint64_t delay_sec);
+			 daos_rebuild_opc_t rebuild_op, daos_rebuild_opc_t retry_rebuild_op,
+			 uint32_t retry_map_ver, bool stop_admin, uint64_t delay_sec);
 void ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank);
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);

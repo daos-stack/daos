@@ -6205,6 +6205,7 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
 		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
 					 DS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE,
+					 RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
 					 false /* stop_admin */, 0);
 		if (rc == 0)
 			*scheduled_layout_upgrade = true;
@@ -7520,7 +7521,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	if (tgt_map_ver != 0) {
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
-					 RB_OP_REBUILD, false /* stop_admin */, delay);
+					 RB_OP_REBUILD, RB_OP_NONE /* retry_rebuild_op */,
+					 0 /* retry_map_ver */, false /* stop_admin */, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
