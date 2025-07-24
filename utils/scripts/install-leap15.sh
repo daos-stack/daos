@@ -75,6 +75,10 @@ dnf --nodocs install ${dnf_install_args} \
     which \
     yasm
 
+# Make sure we have lua-lmod > 8.7.34
+dnf -y remove lua-lmod
+dnf -y --nogpgcheck install lua-lmod '--repo=*lua*' --repo '*network-cluster*'
+
 # shellcheck disable=SC2086
 dnf install ${dnf_install_args} ruby-devel
 gem install json -v 2.7.6
