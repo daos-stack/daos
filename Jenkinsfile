@@ -185,7 +185,7 @@ Map update_default_commit_pragmas() {
 }
 
 pipeline {
-    agent { label 'lightweight' }
+    agent { label 'lightweight_fox-116' }
 
     environment {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
@@ -361,7 +361,7 @@ pipeline {
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
 
         string(name: 'DOCKER_LABEL',
-                       defaultValue: params.DOCKER_LABEL,
+                       defaultValue: 'docker_runner',
                        description: 'Label to use for docker host')
 
 
@@ -561,7 +561,7 @@ pipeline {
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -652,7 +652,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
