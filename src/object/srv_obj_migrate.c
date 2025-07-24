@@ -747,11 +747,19 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			 daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
 			 d_iov_t *csum_iov_fetch, struct migrate_pool_tls *tls)
 {
-	int rc;
+	uint32_t *extra_arg = NULL;
+	int       rc;
+
+	/* pass rebuild epoch by extra_arg */
+	if (flags & DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
+		D_ASSERTF(eph <= mrone->mo_epoch, "bad eph " DF_X64 ", mo_epoch " DF_X64 "\n", eph,
+			  mrone->mo_epoch);
+		extra_arg = (uint32_t *)mrone->mo_epoch;
+	}
 
 retry:
-	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls,
-			   NULL, flags, NULL, csum_iov_fetch);
+	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
+			   csum_iov_fetch);
 	if (rc == -DER_TIMEDOUT &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
