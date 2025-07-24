@@ -2920,6 +2920,33 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle	*dth;
 
+		/* ORF_FETCH_EPOCH_EC_AGG_BOUNDARY only used for rebuild fetch. The container's
+		 * sc_ec_agg_eph_boundary possibly be different on the initiator and target engines
+		 * of the rebuild fetch, initiator selected fetch epoch possibly lower than readable
+		 * epoch at target engine side if vos aggregation merged adjacent extents to higher
+		 * epoch. For this case increase the fetch epoch to sc_ec_agg_eph_boundary.
+		 */
+		if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
+			D_ASSERTF(orw->orw_epoch <= ioc.ioc_coc->sc_pool->spc_rebuild_fence,
+				  "bad orw_epoch " DF_X64 ", spc_rebuild_fence " DF_X64 "\n",
+				  orw->orw_epoch, ioc.ioc_coc->sc_pool->spc_rebuild_fence);
+			if (orw->orw_epoch < ioc.ioc_coc->sc_ec_agg_eph_boundary) {
+				uint64_t fetch_epoch;
+
+				/* Both EC and VOS aggregation don't across rebuild epoch */
+				fetch_epoch = min(ioc.ioc_coc->sc_ec_agg_eph_boundary,
+						  ioc.ioc_coc->sc_pool->spc_rebuild_fence);
+				D_DEBUG(DB_IO,
+					DF_UOID " increase fetch epoch from " DF_X64 " to " DF_X64
+						", sc_ec_agg_eph_boundary: " DF_X64
+						", spc_rebuild_fence: " DF_X64 "\n",
+					DP_UOID(orw->orw_oid), orw->orw_epoch, fetch_epoch,
+					ioc.ioc_coc->sc_ec_agg_eph_boundary,
+					ioc.ioc_coc->sc_pool->spc_rebuild_fence);
+				orw->orw_epoch = fetch_epoch;
+			}
+		}
+
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
 			D_GOTO(out, rc = 0);
