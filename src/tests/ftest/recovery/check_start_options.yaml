@@ -1,5 +1,6 @@
 hosts:
   test_servers: 1
+  test_clients: 1
 
 timeout: 180
 
@@ -14,3 +15,6 @@ server_config:
 
 pool:
   size: 5G
+
+container:
+  control_method: daos
