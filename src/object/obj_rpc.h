@@ -191,6 +191,8 @@ enum obj_rpc_flags {
 	ORF_EMPTY_SGL		= (1 << 24),
 	/* The CPD RPC only contains read-only transaction. */
 	ORF_CPD_RDONLY		= (1 << 25),
+	/* Use for rebuild fetch epoch selection */
+	ORF_FETCH_EPOCH_EC_AGG_BOUNDARY = (1 << 26),
 };
 /* clang-format on */
 
