@@ -1472,7 +1472,7 @@ class DFuse():
         if self._sp:
             self.stop()
 
-    def stop(self, ignore_einval=False):
+    def stop(self, ignore_einval=False, run_log_test=True):
         """Stop a previously started dfuse instance"""
         fatal_errors = False
         if not self._sp:
@@ -1504,7 +1504,9 @@ class DFuse():
             fatal_errors = True
             run_leak_test = False
         self._sp = None
-        log_test(self.conf, self.log_file, show_memleaks=run_leak_test, ignore_einval=ignore_einval)
+        if run_log_test:
+            log_test(self.conf, self.log_file, show_memleaks=run_leak_test,
+                     ignore_einval=ignore_einval)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -2237,6 +2239,85 @@ class PosixTests():
             self.fatal_errors = True
 
         container.destroy()
+
+    def test_dfuse_ctrl(self):
+        """Test .dfuse_ctrl feature"""
+
+        run_daos_cmd(self.conf,
+                     ['container', 'query',
+                      self.pool.id(), self.container.id()],
+                     show_stdout=True)
+
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start()
+
+        tests = {}
+
+        enable_debug = """log
+log_mask=debug
+"""
+        tests["enable_debug"] = {"payload": enable_debug}
+        enable_debug_all_streams = """log
+log_mask=debug
+streams=all
+"""
+        tests["enable_debug_all_streams"] = {"payload": enable_debug_all_streams}
+        bogus_field = """log
+xyz=debug
+"""
+        tests["bogus_field"] = {"payload": bogus_field}
+        tests["empty"] = {"payload": "log\n"}
+        whitespace = """log
+log_mask=info
+streams=mem
+"""
+        tests["whitespace"] = {"payload": whitespace}
+        duplicates = """log
+log_mask=debug
+log_mask=info
+streams=all
+"""
+        tests["duplicates"] = {"payload": duplicates}
+        warn = """log
+log_mask=warn
+"""
+        tests["warn"] = {"payload": warn}
+
+        tests["stats"] = {"payload": "stats\n"}
+        ctrl = os.path.join(dfuse.dir, ".dfuse_ctrl")
+
+        for name, test in tests.items():
+            try:
+                with open(ctrl, "w") as ctrlfile:
+                    ctrlfile.write(test["payload"])
+                print("Output:")
+                with open(ctrl, "r") as ctrlfile:
+                    for line in ctrlfile.readlines():
+                        sys.stdout.write(line)
+                print(f"Test {name} passed")
+            except OSError:
+                print(f"Test {name} should have passed but failed")
+                self.fail()
+
+        try:
+            os.mkdir(ctrl)
+            print("Should not be able to create a directory named .dfuse_ctrl")
+            self.fail()
+        except OSError:
+            print("mkdir correctly prevented for .dfuse_ctrl")
+
+        try:
+            os.unlink(ctrl)
+            print("Should not be able to remove .dfuse_ctrl")
+            self.fail()
+        except OSError:
+            print("mkdir correctly prevented for .dfuse_ctrl")
+
+        # Skip the log test due to errors and fake leaks from changing levels
+        if dfuse.stop(run_log_test=False):
+            self.fatal_errors = True
+
+        print(f"Done with dfuse_ctrl test fatal_errors={self.fatal_errors}")
 
     def test_cache(self):
         """Test with caching enabled"""

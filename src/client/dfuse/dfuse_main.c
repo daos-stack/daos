@@ -26,6 +26,8 @@
 #include <daos_uns.h>
 
 #include <gurt/common.h>
+#include <gurt/parser.h>
+#include <gurt/dlog.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
  * presence makes pselect() return EINTR in the dfuse_bg() function which
  * is used to detect abnormal exit.
@@ -405,6 +407,53 @@ check_fd_mountpoint(const char *mountpoint)
 	return fd;
 }
 
+#define PRINT_STAT(sname, ...)                                                                     \
+	{                                                                                          \
+		uint64_t __stat =                                                                  \
+		    atomic_fetch_add_relaxed(&ctrl_dfs->dfs_stat_value[DS_##sname], 0);            \
+		if (__stat != 0)                                                                   \
+			d_parser_output_put(parser, "%-16s: " DF_U64 "\n", #sname, __stat);        \
+	}
+
+static void
+stat_parser_cb(d_parser_t *parser, char *buf, int len, void *arg)
+{
+	struct dfuse_cont *ctrl_dfs = arg;
+	if (arg == NULL) {
+		d_parser_output_put(parser, "No active container\n");
+		return;
+	}
+
+	d_parser_output_put(parser, "DFUSE statistics:\n");
+	D_FOREACH_DFUSE_STATX(PRINT_STAT);
+}
+
+static int
+init_parser(struct dfuse_info *dfuse_info)
+{
+	int rc;
+
+	rc = d_parser_init(&dfuse_info->di_parser);
+	if (rc != 0)
+		return rc;
+
+	rc = d_log_register_parser(dfuse_info->di_parser);
+	if (rc != 0)
+		return rc;
+
+	rc = d_parser_handler_register(dfuse_info->di_parser, "stats", stat_parser_cb);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
+
+static void
+finalize_parser(struct dfuse_info *dfuse_info)
+{
+	d_parser_fini(dfuse_info->di_parser);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -454,6 +503,9 @@ main(int argc, char **argv)
 	D_ALLOC_PTR(dfuse_info);
 	if (dfuse_info == NULL)
 		D_GOTO(out_debug, rc = -DER_NOMEM);
+
+	if ((rc = init_parser(dfuse_info)) != 0)
+		goto out_debug;
 
 	dfuse_info->di_caching     = true;
 	dfuse_info->di_wb_cache    = true;
@@ -784,6 +836,7 @@ out_fini:
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:
+	finalize_parser(dfuse_info);
 	D_FREE(dfuse_info);
 	DL_INFO(rc, "Exiting with status");
 	daos_debug_fini();
