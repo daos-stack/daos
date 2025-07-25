@@ -820,6 +820,20 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set pool properties with semi-colon separated self_heal value",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:exclude;rebuild,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "exclude;rebuild"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool properties with pool flag",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:foo,space_rb:42",
 			strings.Join([]string{
@@ -890,6 +904,20 @@ func TestPoolCommands(t *testing.T) {
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", ""),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Get pool properties",
+			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label,self_heal",
+			strings.Join([]string{
+				printRequest(t, &control.PoolGetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", ""),
+						propWithVal("self_heal", ""),
 					},
 				}),
 			}, " "),
