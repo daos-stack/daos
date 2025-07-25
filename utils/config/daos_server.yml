@@ -158,13 +158,14 @@
 #disable_vmd: true
 #
 #
-## Enable NVMe SSD Hotplug
+## Disable NVMe SSD Hotplug
 #
-## When hotplug is enabled, io engine will periodically check device hot
+## NVMe SSD hotplug is enabled by default but can be optionally disabled.
+## When enabled io engine will periodically check device hot
 ## plug/remove event, and setup/teardown the device automatically.
 #
 ## default: false
-#enable_hotplug: true
+#disable_hotplug: true
 #
 #
 ## Use Hyperthreads
