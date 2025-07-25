@@ -336,7 +336,7 @@ int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
 int
-vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool init_spdk);
 
 /**
  * Finalize the environment for a VOS instance
