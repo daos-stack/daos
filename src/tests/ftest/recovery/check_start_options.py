@@ -292,7 +292,7 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
             # Even if "status" is RUNNING, "reports" may be null/None, so check both.
             status = check_query_out["response"]["status"]
             query_reports = check_query_out["response"]["reports"]
-            if status == "RUNNING" and query_reports != None:
+            if status == "RUNNING" and query_reports:
                 break
             time.sleep(5)
         if not query_reports:
@@ -335,8 +335,7 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
         for query_report in query_reports:
             fault_msg = query_report["msg"]
             if orphan_pool in fault_msg:
-                msg = (f"Checker detected orphan pool! Fault msg = {fault_msg}")
-                self.fail(msg)
+                self.fail(f"Checker detected orphan pool! Fault msg = {fault_msg}")
 
         # 9. Stop the checker and start with --find-orphans.
         self.log_step("Stop the checker and start with --find-orphans.")
