@@ -707,6 +707,34 @@ vos_cont_tab_register();
 int
 vos_obj_tab_register();
 
+struct vos_iterator;
+
+/**
+ * Find active ILOG entries of the provided object and write them down in \p dv.
+ *
+ * \param[in]	coh	Parent container.
+ * \param[in]	iter	Object iterator to process
+ * \param[out]	dv	Vector to store the found active ILOG entries.
+ *
+ * \retval 0		Success.
+ * \retval -DER_*	Error when ilog_fetch fails.
+ */
+int
+dlck_obj_get_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv);
+
+/**
+ * Find active ILOG entries of the provided (d/a)key and write them down in \p dv.
+ *
+ * \param[in]	coh	Parent container.
+ * \param[in]	iter	(d/a)key iterator to process
+ * \param[out]	dv	Vector to store the found active ILOG entries.
+ *
+ * \retval 0		Success.
+ * \retval -DER_*	Error when ilog_fetch fails.
+ */
+int
+dlck_irec_get_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv);
+
 /**
  * DTX table destroy
  * Called from vos_cont_destroy
@@ -1514,6 +1542,18 @@ vos_obj_iter_check_punch(daos_handle_t ih);
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
+
+/**
+ * Check if a single value is part of an active transaction; if it is, record it in \p dv.
+ *
+ * \param[in]	coh	Parent container.
+ * \param[in]	iter	single value iterator to process
+ * \param[out]	dv	Vector to store the single value.
+ *
+ * \retval 0		Success.
+ */
+int
+dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv);
 
 /** Internal vos iterator API for iterating through keys using an
  *  open tree handle to initialize the iterator
