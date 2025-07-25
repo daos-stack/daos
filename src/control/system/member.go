@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -160,6 +161,14 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		MemberStateCheckerStarted: {
 			MemberStateReady:  true,
 			MemberStateJoined: true,
+		},
+		MemberStateExcluded: {
+			MemberStateErrored:      true,
+			MemberStateStopping:     true,
+			MemberStateStopped:      true,
+			MemberStateStarting:     true,
+			MemberStateReady:        true,
+			MemberStateUnresponsive: true,
 		},
 	}[ms][to]
 }
