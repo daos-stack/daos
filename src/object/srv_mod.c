@@ -41,6 +41,7 @@ obj_mod_init(void)
 		goto out_class;
 	}
 
+	D_INFO("with lxz debug PR\n");
 	return 0;
 
 out_class:
