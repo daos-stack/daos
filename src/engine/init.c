@@ -100,6 +100,25 @@ static bool dss_abt_init;
 /** Start daos_engine under check mode. */
 static bool dss_check_mode;
 
+/**
+ * DAOS Engine Runtime Version Initialization
+ * This version identifier is exclusively used during
+ * engine initialization when joining the system cluster.
+ */
+static daos_version_t   dss_join_version;
+
+void
+dss_set_join_version(daos_version_t version)
+{
+	dss_join_version = version;
+}
+
+daos_version_t
+dss_get_join_version(void)
+{
+	return dss_join_version;
+}
+
 bool
 engine_in_check(void)
 {

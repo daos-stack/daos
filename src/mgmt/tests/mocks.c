@@ -511,6 +511,11 @@ dss_init_state_set(enum dss_init_state state)
 {
 }
 
+void
+dss_set_join_version(daos_version_t version)
+{
+}
+
 int
 dss_module_setup_all()
 {

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +18,7 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 #include <cart/api.h>
+#include <daos_version.h>
 
 /* Opcode registered in crt will be
  * client/server | mod_id | rpc_version | op_code
@@ -63,6 +65,68 @@ enum daos_module_id {
 #undef X
 
 };
+
+#define DAOS_VOS_VERSION      1
+#define DAOS_MGMT_VERSION     4
+#define DAOS_POOL_VERSION     7
+#define DAOS_CONT_VERSION     8
+#define DAOS_OBJ_VERSION      10
+#define DAOS_REBUILD_VERSION  4
+#define DAOS_RSVC_VERSION     4
+#define DAOS_RDB_VERSION      4
+#define DAOS_RDBT_VERSION     3
+#define DAOS_SEC_VERSION      1
+#define DAOS_DTX_VERSION      4
+#define DAOS_PIPELINE_VERSION 1
+#define DAOS_CHK_VERSION      1
+
+#define DAOS_MAX_PROTOCOLS    2
+struct daos_protocol_table {
+	uint8_t protocol;
+	uint8_t versions[DAOS_NR_MODULE];
+};
+
+static const struct daos_protocol_table daos_rpc_protocol_tables[] = {
+    {
+	/* Latest protocol */
+	.protocol = DAOS_VERSION_PROTOCAL,
+	.versions = {DAOS_VOS_VERSION, DAOS_MGMT_VERSION, DAOS_POOL_VERSION, DAOS_CONT_VERSION,
+		     DAOS_OBJ_VERSION, DAOS_REBUILD_VERSION, DAOS_RSVC_VERSION, DAOS_RDB_VERSION,
+		     DAOS_RDBT_VERSION, DAOS_SEC_VERSION, DAOS_DTX_VERSION, DAOS_PIPELINE_VERSION,
+		     DAOS_CHK_VERSION},
+    },
+    /* Please update DAOS_VERSION_PROTOCOL - 1 table when rolling upgrade is supported.
+    {
+    .protocol = DAOS_VERSION_PROTOCAL - 1;
+    .versions = {DAOS_VOS_VERSION, DAOS_MGMT_VERSION, DAOS_POOL_VERSION, DAOS_CONT_VERSION,
+		 DAOS_OBJ_VERSION, DAOS_REBUILD_VERSION, DAOS_RSVC_VERSION, DAOS_RDB_VERSION,
+		 DAOS_RDBT_VERSION, DAOS_SEC_VERSION, DAOS_DTX_VERSION, DAOS_PIPELINE_VERSION,
+		 DAOS_CHK_VERSION},
+    },
+    */
+};
+
+static inline int
+daos_get_rpc_version(int module_id, uint8_t protocol, uint8_t *version)
+{
+	int i;
+
+	if (!version)
+		return -DER_INVAL;
+
+	if (module_id < 0 || module_id >= DAOS_NR_MODULE)
+		return -DER_INVAL;
+
+	for (i = 0; i < sizeof(daos_rpc_protocol_tables) / sizeof(daos_rpc_protocol_tables[0]);
+	     i++) {
+		if (daos_rpc_protocol_tables[i].protocol == protocol) {
+			*version = daos_rpc_protocol_tables[i].versions[module_id];
+			return 0;
+		}
+	}
+
+	return -DER_PROTO;
+}
 
 static inline char *
 daos_opc_to_module_str(uint32_t daos_opc)
@@ -129,8 +193,10 @@ struct daos_req_comm_in {
 struct daos_req_comm_out {
 	/** Enqueue ID of the request returned to client, for server overloaded retry */
 	uint64_t	req_out_enqueue_id;
+	daos_version_t  req_out_version;
+	uint32_t        req_out_padding;
 	/** Reserved for future extension */
-	uint64_t	req_out_paddings[4];
+	uint64_t        req_out_paddings[3];
 };
 
 
