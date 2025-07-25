@@ -695,7 +695,8 @@ func TestSystem_Database_UpdateMember(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
+			log, _ := logging.NewTestLogger(t.Name())
+			ctx := test.MustLogContext(t, log)
 
 			replicaAddrs := make([]*net.TCPAddr, 0, numReplicas)
 			for i := 0; i < numReplicas; i++ {
@@ -726,7 +727,9 @@ func TestSystem_Database_UpdateMember(t *testing.T) {
 			test.CmpErr(t, tc.expErr, err)
 			expectMembersInDB(t, db, tc.expMembers)
 
-			test.CmpAny(t, "AddVoter calls", tc.expVotersAdded, mockRaftSvc.addVoterCalledForAddrs)
+			if diff := cmp.Diff(tc.expVotersAdded, mockRaftSvc.addVoterCalledForAddrs); diff != "" {
+				t.Fatalf("wrong raft voters added (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

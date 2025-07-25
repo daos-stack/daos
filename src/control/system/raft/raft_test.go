@@ -171,7 +171,8 @@ func TestRaft_recoverIfReplicasRemoved(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
+			log, _ := logging.NewTestLogger(t.Name())
+			ctx := test.MustLogContext(t, log)
 
 			mockGetCfg := func(_ logging.Logger, _ *DatabaseConfig) (raft.Configuration, error) {
 				return tc.getCfgResult, tc.getCfgErr
