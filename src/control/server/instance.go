@@ -35,7 +35,7 @@ type (
 	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, error, int) error
+	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, uint64, error, int) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -50,6 +50,7 @@ type EngineInstance struct {
 
 	log             logging.Logger
 	runner          EngineRunner
+	incarnation     uint64
 	storage         *storage.Provider
 	waitFormat      atm.Bool
 	storageReady    chan bool
@@ -284,6 +285,9 @@ func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
 func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	ei.incarnation = ready.Incarnation
+	ei.log.Debugf("engine idx=%d ready with incarnation=%d", ei.Index(), ei.incarnation)
+
 	if err := ei.updateFaultDomainInSuperblock(); err != nil {
 		ei.log.Error(err.Error()) // nonfatal
 	}
