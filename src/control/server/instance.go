@@ -282,11 +282,30 @@ func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
 	return nil
 }
 
+func (ei *EngineInstance) updateIncarnation(req *srvpb.NotifyReadyReq) error {
+	ei.incarnation = req.Incarnation
+	ei.log.Debugf("engine idx=%d ready notification with incarnation=%d", ei.Index(), ei.incarnation)
+
+	sb := ei.getSuperblock()
+	if sb == nil {
+		return errors.New("nil superblock while updating incarnation")
+	}
+	sb.Incarnation = req.Incarnation
+	ei.setSuperblock(sb)
+	if err := ei.WriteSuperblock(); err != nil {
+		return errors.Wrapf(err, "write incarnation=%d to superblock", req.Incarnation)
+	}
+
+	ei.log.Debugf("engine idx=%d wrote incarnation=%d to superblock", ei.Index(), ei.incarnation)
+	return nil
+}
+
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
 func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	ei.incarnation = ready.Incarnation
-	ei.log.Debugf("engine idx=%d ready with incarnation=%d", ei.Index(), ei.incarnation)
+	if err := ei.updateIncarnation(ready); err != nil {
+		return err
+	}
 
 	if err := ei.updateFaultDomainInSuperblock(); err != nil {
 		ei.log.Error(err.Error()) // nonfatal

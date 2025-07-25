@@ -57,12 +57,32 @@ func (ei *EngineInstance) format(ctx context.Context) error {
 	return nil
 }
 
+func (ei *EngineInstance) initIncarnationFromSuperblock() error {
+	if ei.incarnation > 0 {
+		return nil
+	}
+
+	sb := ei.getSuperblock()
+	if sb == nil {
+		return errors.New("no superblock found")
+	}
+
+	ei.incarnation = sb.Incarnation
+
+	ei.log.Debugf("engine %d initialized with incarnation %d", ei.Index(), ei.incarnation)
+	return nil
+}
+
 // start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_engine instance.
 func (ei *EngineInstance) start(ctx context.Context) (chan *engine.RunnerExitInfo, error) {
 	if err := ei.logScmStorage(); err != nil {
 		ei.log.Errorf("instance %d: unable to log SCM storage stats: %s", ei.Index(), err)
+	}
+
+	if err := ei.initIncarnationFromSuperblock(); err != nil {
+		return nil, err
 	}
 
 	return ei.runner.Start(ctx)
