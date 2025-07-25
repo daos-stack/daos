@@ -10,7 +10,7 @@ if [ -z "${SL_PMDK_PREFIX}" ]; then
 fi
 
 VERSION="${pmdk_version}"
-RELEASE="${pmdk_release}"
+RELEASE="4"
 LICENSE="BSD-3-Clause"
 ARCH=${isa}
 DESCRIPTION="The Persistent Memory Development Kit is a collection of libraries for
@@ -163,8 +163,8 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
     "${SL_PMDK_PREFIX}/share/man/man1/pmempool-*.1.gz"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${pmem_lib} = ${pmdk_full}" "${pmemobj_lib} = ${pmdk_full}")
-  DEPENDS+=("${pmempool_lib} = ${pmdk_full}")
+  DEPENDS=("${pmem_lib} = ${pmdk_version}-${RELEASE}" "${pmemobj_lib} = ${pmdk_version}-${RELEASE}")
+  DEPENDS+=("${pmempool_lib} = ${pmdk_version}-${RELEASE}")
   build_package "pmempool"
 
   #pmreorder
@@ -194,6 +194,6 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   list_files files "${SL_PMDK_PREFIX}/share/man/man1/daxio.1.gz"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${pmem_lib} = ${pmdk_full}")
+  DEPENDS=("${pmem_lib} = ${pmdk_version}-${RELEASE}")
   build_package "daxio"
 fi

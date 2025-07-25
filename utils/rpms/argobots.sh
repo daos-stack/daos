@@ -10,7 +10,7 @@ if [ -z "${SL_ARGOBOTS_PREFIX}" ]; then
 fi
 
 VERSION="${argobots_version}"
-RELEASE="${argobots_release}"
+RELEASE="2"
 LICENSE="UChicago Argonne, LLC -- Argobots License"
 DESCRIPTION="Argobots is a lightweight, low-level threading and tasking framework.
 This release is an experimental version of Argobots that contains
@@ -40,6 +40,6 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   list_files files "${SL_ARGOBOTS_PREFIX}/include/abt.h"
   append_install_list "${files[@]}"
 
-  DEPENDS=("${argobots_lib} = ${argobots_full}-${RELEASE}")
+  DEPENDS=("${argobots_lib} = ${argobots_version}-${RELEASE}")
   build_package "${argobots_dev}"
 fi

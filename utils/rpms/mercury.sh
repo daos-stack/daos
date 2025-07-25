@@ -10,7 +10,7 @@ if [ -z "${SL_MERCURY_PREFIX}" ]; then
 fi
 
 VERSION="${mercury_version}"
-RELEASE="${mercury_release}"
+RELEASE="2"
 LICENSE="BSD"
 ARCH=${isa}
 DESCRIPTION="Mercury is a Remote Procedure Call (RPC) framework specifically
@@ -42,7 +42,7 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("${libfabric_lib} >= ${libfabric_full}")
+DEPENDS=("${libfabric_lib} >= ${libfabric_version}")
 build_package "mercury"
 DEPENDS=()
 
@@ -85,7 +85,7 @@ TARGET_PATH="${libdir}"
   fi
   append_install_list "${files[@]}"
 
-  DEPENDS=("mercury = ${mercury_full}")
+  DEPENDS=("mercury = ${mercury_version}")
   build_package "${mercury_dev}"
   DEPENDS=()
 fi
