@@ -1784,26 +1784,7 @@ out:
 	 * Let's check resent again before further process.
 	 */
 	if (rc == 0 && obj_rpc_is_update(rpc) && sched_cur_seq() != sched_seq) {
-		if (dth->dth_need_validation) {
-			daos_epoch_t	epoch = 0;
-			int		rc1;
-
-			rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &orw->orw_dti, &epoch, NULL);
-			switch (rc1) {
-			case 0:
-				orw->orw_epoch = epoch;
-				/* Fall through */
-			case -DER_ALREADY:
-				rc = -DER_ALREADY;
-				break;
-			case -DER_NONEXIST:
-			case -DER_EP_OLD:
-				break;
-			default:
-				rc = rc1;
-				break;
-			}
-		}
+		rc = vos_dtx_validation(dth);
 
 		/* For solo update, it will be handled via one-phase transaction.
 		 * If there is CPU yield after its epoch generated, we will renew
@@ -1829,7 +1810,7 @@ out:
 	}
 
 	/* re-generate the recx_list if some akeys skipped */
-	if (skips != NULL && orwo->orw_rels.ca_arrays != NULL && orw->orw_nr != iods_nr)
+	if (rc == 0 && skips != NULL && orwo->orw_rels.ca_arrays != NULL && orw->orw_nr != iods_nr)
 		rc = obj_rw_recx_list_post(orw, orwo, skips, rc);
 
 	rc = obj_rw_complete(rpc, ioc, ioh, rc, dth);
@@ -1844,7 +1825,7 @@ out:
 	}
 	if (iods_dup != NULL)
 		daos_iod_recx_free(iods_dup, iods_nr);
-	return unlikely(rc == -DER_ALREADY) ? 0 : rc;
+	return rc;
 }
 
 /* Extract local iods/offs/csums by orw_oid.id_shard from @orw */
@@ -2082,7 +2063,7 @@ again:
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
 		if (++retry < 3) {
 			rc = dtx_refresh(dth, ioc->ioc_coc);
-			if (rc == -DER_AGAIN)
+			if (rc == 0)
 				goto again;
 		} else if (orw->orw_flags & ORF_MAYBE_STARVE) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
@@ -2795,7 +2776,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	rc = obj_local_rw(rpc, &ioc, dth);
 	if (rc != 0)
 		DL_CDEBUG(
-		    rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+		    rc == -DER_INPROGRESS || rc == -DER_TX_RESTART || rc == -DER_ALREADY ||
 			(rc == -DER_EXIST &&
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
 			(rc == -DER_NONEXIST &&
@@ -3310,7 +3291,7 @@ re_pack:
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		/* After DTX refresh, re_pack will resume from the position at \@anchors. */
-		if (rc == -DER_AGAIN)
+		if (rc == 0)
 			goto re_pack;
 	}
 
@@ -3618,44 +3599,15 @@ again:
 		}
 
 		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc != -DER_AGAIN)
+		if (rc != 0)
 			goto out;
-
-		if (unlikely(sched_cur_seq() == sched_seq))
-			goto again;
-
-		/*
-		 * There is CPU yield after DTX start, and the resent RPC may be handled
-		 * during that. Let's check resent again before further process.
-		 */
-
-		if (dth->dth_need_validation) {
-			daos_epoch_t	epoch = 0;
-			int		rc1;
-
-			rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &opi->opi_dti, &epoch, NULL);
-			switch (rc1) {
-			case 0:
-				opi->opi_epoch = epoch;
-				/* Fall through */
-			case -DER_ALREADY:
-				rc = -DER_ALREADY;
-				break;
-			case -DER_NONEXIST:
-			case -DER_EP_OLD:
-				break;
-			default:
-				rc = rc1;
-				break;
-			}
-		}
 
 		/*
 		 * For solo punch, it will be handled via one-phase transaction. If there is CPU
 		 * yield after its epoch generated, we will renew the epoch, then we can use the
 		 * epoch to sort related solo DTXs based on their epochs.
 		 */
-		if (rc == -DER_AGAIN && dth->dth_solo) {
+		if (dth->dth_solo && sched_cur_seq() != sched_seq) {
 			struct dtx_epoch	epoch;
 
 			epoch.oe_value = d_hlc_get();
@@ -3747,8 +3699,8 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 exec:
 	rc = obj_local_punch(opi, otpa->opc, count, shards, p_ioc, dth);
 	if (rc != 0)
-		DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-			  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
+		DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART || rc == -DER_ALREADY ||
+			      (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
 			  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
 
 out:
@@ -4167,7 +4119,7 @@ again:
 				       p_recx, p_epoch, cell_size, stripe_size, dth);
 		if (obj_dtx_need_refresh(dth, rc)) {
 			rc = dtx_refresh(dth, ioc->ioc_coc);
-			if (rc == -DER_AGAIN)
+			if (rc == 0)
 				goto again;
 		}
 
@@ -4825,24 +4777,11 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 	 * Let's check resent again before further process.
 	 */
 	if (rc == 0 && dth->dth_modification_cnt > 0 && sched_cur_seq() != sched_seq) {
-		if (dth->dth_need_validation) {
-			daos_epoch_t	epoch = 0;
-			int		rc1;
+		rc = vos_dtx_validation(dth);
+		if (rc != 0)
+			goto out;
 
-			rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &epoch, NULL);
-			switch (rc1) {
-			case 0:
-			case -DER_ALREADY:
-				D_GOTO(out, rc = -DER_ALREADY);
-			case -DER_NONEXIST:
-			case -DER_EP_OLD:
-				break;
-			default:
-				D_GOTO(out, rc = rc1);
-			}
-		}
-
-		if (rc == 0 && dth->dth_solo) {
+		if (dth->dth_solo) {
 			daos_epoch_t	epoch = dcsh->dcsh_epoch.oe_value;
 
 			D_ASSERT(dcde->dcde_read_cnt == 0);
@@ -5010,7 +4949,7 @@ again:
 	if (obj_dtx_need_refresh(dth, rc)) {
 		if (++retry < 3) {
 			rc = dtx_refresh(dth, ioc->ioc_coc);
-			if (rc == -DER_AGAIN)
+			if (rc == 0)
 				goto again;
 		} else if (oci->oci_flags & ORF_MAYBE_STARVE) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next,
