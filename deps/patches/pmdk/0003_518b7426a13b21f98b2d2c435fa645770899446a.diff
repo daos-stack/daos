@@ -1,0 +1,375 @@
+diff --git a/src/common/bad_blocks.c b/src/common/bad_blocks.c
+index 54f89d65d1..90186d1ad7 100644
+--- a/src/common/bad_blocks.c
++++ b/src/common/bad_blocks.c
+@@ -9,11 +9,12 @@
+ #include <errno.h>
+ 
+ #include "libpmem2.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ #include "out.h"
+ #include "core_assert.h"
+ #include "vec.h"
+ #include "os.h"
++#include "../libpmem2/badblocks.h"
+ 
+ /*
+  * badblocks_count -- returns number of bad blocks in the file
+@@ -73,7 +74,7 @@ badblocks_get(const char *file, struct badblocks *bbs)
+ 		goto exit_delete_source;
+ 
+ 	bb_found = 0;
+-	while ((pmem2_badblock_next(bbctx, &bb)) == 0) {
++	while ((pmem2_badblock_next_internal(bbctx, &bb)) == 0) {
+ 		bb_found++;
+ 		/*
+ 		 * Form a new bad block structure with offset and length
+@@ -211,7 +212,7 @@ badblocks_clear_all(const char *file)
+ 		goto exit_delete_source;
+ 	}
+ 
+-	while ((pmem2_badblock_next(bbctx, &bb)) == 0) {
++	while ((pmem2_badblock_next_internal(bbctx, &bb)) == 0) {
+ 		ret = pmem2_badblock_clear(bbctx, &bb);
+ 		if (ret) {
+ 			CORE_LOG_ERROR("pmem2_badblock_clear -- %s", file);
+diff --git a/src/common/badblocks.h b/src/common/bad_blocks.h
+similarity index 92%
+rename from src/common/badblocks.h
+rename to src/common/bad_blocks.h
+index d06e81adb2..3385c4d758 100644
+--- a/src/common/badblocks.h
++++ b/src/common/bad_blocks.h
+@@ -2,11 +2,11 @@
+ /* Copyright 2017-2020, Intel Corporation */
+ 
+ /*
+- * badblocks.h -- bad blocks API based on the libpmem2 library
++ * bad_blocks.h -- bad blocks API based on the libpmem2 library
+  */
+ 
+-#ifndef PMDK_BADBLOCKS_H
+-#define PMDK_BADBLOCKS_H 1
++#ifndef PMDK_BAD_BLOCKS_H
++#define PMDK_BAD_BLOCKS_H 1
+ 
+ #include <string.h>
+ #include <stdint.h>
+@@ -74,4 +74,4 @@ int badblocks_check_file(const char *path);
+ }
+ #endif
+ 
+-#endif /* PMDK_BADBLOCKS_H */
++#endif /* PMDK_BAD_BLOCKS_H */
+diff --git a/src/common/set_badblocks.c b/src/common/set_badblocks.c
+index f39ac85966..fac19fb3f6 100644
+--- a/src/common/set_badblocks.c
++++ b/src/common/set_badblocks.c
+@@ -14,7 +14,7 @@
+ #include "os.h"
+ #include "out.h"
+ #include "set_badblocks.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ 
+ /* helper structure for badblocks_check_file_cb() */
+ struct check_file_cb {
+diff --git a/src/common/shutdown_state.c b/src/common/shutdown_state.c
+index fb101d38e5..8dd6cf533b 100644
+--- a/src/common/shutdown_state.c
++++ b/src/common/shutdown_state.c
+@@ -14,7 +14,7 @@
+ #include "os_deep.h"
+ #include "set.h"
+ #include "libpmem2.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ #include "../libpmem2/pmem2_utils.h"
+ 
+ #define FLUSH_SDS(sds, rep) \
+diff --git a/src/libpmem2/badblocks.c b/src/libpmem2/badblocks.c
+index e39304b295..fbd8f871b7 100644
+--- a/src/libpmem2/badblocks.c
++++ b/src/libpmem2/badblocks.c
+@@ -5,6 +5,9 @@
+  * badblocks.c -- implementation of common bad blocks API
+  */
+ 
++#include "libpmem2.h"
++#include "pmem2_utils.h"
++#include "bad_blocks.h"
+ #include "badblocks.h"
+ #include "alloc.h"
+ #include "out.h"
+@@ -40,3 +43,27 @@ badblocks_delete(struct badblocks *bbs)
+ 	Free(bbs->bbv);
+ 	Free(bbs);
+ }
++
++/*
++ * pmem2_badblock_next -- get the next bad block
++ */
++int
++pmem2_badblock_next(struct pmem2_badblock_context *bbctx,
++			struct pmem2_badblock *bb)
++{
++	LOG(3, "bbctx %p bb %p", bbctx, bb);
++	PMEM2_ERR_CLR();
++
++	ASSERTne(bbctx, NULL);
++	ASSERTne(bb, NULL);
++
++	int ret = pmem2_badblock_next_internal(bbctx, bb);
++
++	if (ret == ENODEV) {
++		ERR_WO_ERRNO(
++			"Cannot find any matching device, no bad blocks found");
++		ret = PMEM2_E_NO_BAD_BLOCK_FOUND;
++	}
++
++	return ret;
++}
+diff --git a/src/libpmem2/badblocks.h b/src/libpmem2/badblocks.h
+new file mode 100644
+index 0000000000..f5ab6ada30
+--- /dev/null
++++ b/src/libpmem2/badblocks.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: BSD-3-Clause */
++/* Copyright 2024, Intel Corporation */
++
++/*
++ * badblocks.h -- badblock internal iterator function
++ */
++
++#ifndef PMEM2_BADBLOCKS_H
++#define PMEM2_BADBLOCKS_H 1
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++int pmem2_badblock_next_internal(struct pmem2_badblock_context *bbctx,
++				struct pmem2_badblock *bb);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* PMEM2_BADBLOCKS_H */
+diff --git a/src/libpmem2/badblocks_ndctl.c b/src/libpmem2/badblocks_ndctl.c
+index c7a8b4dd58..6c8cd226e2 100644
+--- a/src/libpmem2/badblocks_ndctl.c
++++ b/src/libpmem2/badblocks_ndctl.c
+@@ -24,9 +24,10 @@
+ 
+ #include "file.h"
+ #include "out.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ #include "set_badblocks.h"
+ #include "extent.h"
++#include "badblocks.h"
+ 
+ typedef int pmem2_badblock_next_type(
+ 		struct pmem2_badblock_context *bbctx,
+@@ -527,17 +528,13 @@ pmem2_badblock_next_region(struct pmem2_badblock_context *bbctx,
+ }
+ 
+ /*
+- * pmem2_badblock_next -- get the next bad block
++ * pmem2_badblock_next_internal -- get the next bad block
+  */
+ int
+-pmem2_badblock_next(struct pmem2_badblock_context *bbctx,
++pmem2_badblock_next_internal(struct pmem2_badblock_context *bbctx,
+ 			struct pmem2_badblock *bb)
+ {
+-	LOG(3, "bbctx %p bb %p", bbctx, bb);
+-	PMEM2_ERR_CLR();
+-
+-	ASSERTne(bbctx, NULL);
+-	ASSERTne(bb, NULL);
++	LOG(4, "bbctx %p bb %p", bbctx, bb);
+ 
+ 	struct pmem2_badblock bbn;
+ 	unsigned long long bb_beg;
+@@ -550,9 +547,8 @@ pmem2_badblock_next(struct pmem2_badblock_context *bbctx,
+ 	int ret;
+ 
+ 	if (bbctx->rgn.region == NULL && bbctx->ndns == NULL) {
+-		ERR_WO_ERRNO(
+-			"Cannot find any matching device, no bad blocks found");
+-		return PMEM2_E_NO_BAD_BLOCK_FOUND;
++		/* Cannot find any matching device, no bad blocks found */
++		return ENODEV;
+ 	}
+ 
+ 	struct extents *exts = bbctx->exts;
+diff --git a/src/libpmem2/badblocks_none.c b/src/libpmem2/badblocks_none.c
+index 869e94d39d..0cb5f009aa 100644
+--- a/src/libpmem2/badblocks_none.c
++++ b/src/libpmem2/badblocks_none.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+-/* Copyright 2018-2022, Intel Corporation */
++/* Copyright 2018-2024, Intel Corporation */
+ 
+ /*
+  * badblocks_none.c -- fake bad blocks functions
+@@ -9,6 +9,8 @@
+ 
+ #include "libpmem2.h"
+ #include "out.h"
++#include "bad_blocks.h"
++#include "badblocks.h"
+ 
+ /*
+  * pmem2_badblock_context_new -- allocate and create a new bad block context
+@@ -32,10 +34,10 @@ pmem2_badblock_context_delete(
+ }
+ 
+ /*
+- * pmem2_badblock_next -- get the next bad block
++ * pmem2_badblock_next_internal -- get the next bad block
+  */
+ int
+-pmem2_badblock_next(struct pmem2_badblock_context *bbctx,
++pmem2_badblock_next_internal(struct pmem2_badblock_context *bbctx,
+ 	struct pmem2_badblock *bb)
+ {
+ 	SUPPRESS_UNUSED(bbctx, bb);
+diff --git a/src/libpmempool/check_bad_blocks.c b/src/libpmempool/check_bad_blocks.c
+index d9d58fbbae..bc759d7821 100644
+--- a/src/libpmempool/check_bad_blocks.c
++++ b/src/libpmempool/check_bad_blocks.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+-/* Copyright 2016-2020, Intel Corporation */
++/* Copyright 2016-2024, Intel Corporation */
+ 
+ /*
+  * check_bad_blocks.c -- pre-check bad_blocks
+@@ -15,7 +15,7 @@
+ #include "pool.h"
+ #include "check_util.h"
+ #include "set_badblocks.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ 
+ /*
+  * check_bad_blocks -- check poolset for bad_blocks
+diff --git a/src/libpmempool/replica.c b/src/libpmempool/replica.c
+index 1a90bb6cbb..1718fd9c91 100644
+--- a/src/libpmempool/replica.c
++++ b/src/libpmempool/replica.c
+@@ -27,7 +27,7 @@
+ #include "util.h"
+ #include "uuid.h"
+ #include "shutdown_state.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ #include "set_badblocks.h"
+ 
+ /*
+diff --git a/src/libpmempool/replica.h b/src/libpmempool/replica.h
+index 4f7a8f0e10..67ecc9ec29 100644
+--- a/src/libpmempool/replica.h
++++ b/src/libpmempool/replica.h
+@@ -1,5 +1,5 @@
+ /* SPDX-License-Identifier: BSD-3-Clause */
+-/* Copyright 2016-2022, Intel Corporation */
++/* Copyright 2016-2024, Intel Corporation */
+ 
+ /*
+  * replica.h -- module for synchronizing and transforming poolset
+@@ -9,7 +9,7 @@
+ 
+ #include "libpmempool.h"
+ #include "pool.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ 
+ #ifdef __cplusplus
+ extern "C" {
+diff --git a/src/test/pmem2_badblock_mocks/pmem2_badblock_mocks.c b/src/test/pmem2_badblock_mocks/pmem2_badblock_mocks.c
+index e69456b47e..b7b0f396e6 100644
+--- a/src/test/pmem2_badblock_mocks/pmem2_badblock_mocks.c
++++ b/src/test/pmem2_badblock_mocks/pmem2_badblock_mocks.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+-/* Copyright 2020, Intel Corporation */
++/* Copyright 2020-2024, Intel Corporation */
+ 
+ /*
+  * pmem2_badblock_mocks.c -- unit test for pmem2_badblock_*()
+@@ -11,7 +11,7 @@
+ #include "out.h"
+ #include "ut_pmem2_utils.h"
+ #include "source.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ #include "pmem2_badblock_mocks.h"
+ 
+ #define BAD_BLOCKS_NUMBER 10
+diff --git a/src/test/util_badblock/util_badblock.c b/src/test/util_badblock/util_badblock.c
+index eb9aaa0aae..a3509740cc 100644
+--- a/src/test/util_badblock/util_badblock.c
++++ b/src/test/util_badblock/util_badblock.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+-/* Copyright 2018-2020, Intel Corporation */
++/* Copyright 2018-2024, Intel Corporation */
+ 
+ /*
+  * util_badblock.c -- unit test for the linux bad block API
+@@ -10,7 +10,7 @@
+ #include "util.h"
+ #include "out.h"
+ #include "set.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ #include "set_badblocks.h"
+ #include "fault_injection.h"
+ #include "file.h"
+diff --git a/src/tools/daxio/daxio.c b/src/tools/daxio/daxio.c
+index 3aa152f9e1..710f32516d 100644
+--- a/src/tools/daxio/daxio.c
++++ b/src/tools/daxio/daxio.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+-/* Copyright 2018-2022, Intel Corporation */
++/* Copyright 2018-2024, Intel Corporation */
+ 
+ /*
+  * daxio.c -- simple app for reading and writing data from/to
+@@ -26,7 +26,7 @@
+ 
+ #include "util.h"
+ #include "os.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ 
+ #define ALIGN_UP(size, align) (((size) + (align) - 1) & ~((align) - 1))
+ #define ALIGN_DOWN(size, align) ((size) & ~((align) - 1))
+diff --git a/src/tools/pmempool/info.c b/src/tools/pmempool/info.c
+index 8a5ddb2cd8..d65441a146 100644
+--- a/src/tools/pmempool/info.c
++++ b/src/tools/pmempool/info.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+-/* Copyright 2014-2023, Intel Corporation */
++/* Copyright 2014-2024, Intel Corporation */
+ 
+ /*
+  * info.c -- pmempool info command main source file
+@@ -25,7 +25,7 @@
+ #include "info.h"
+ #include "set.h"
+ #include "file.h"
+-#include "badblocks.h"
++#include "bad_blocks.h"
+ #include "set_badblocks.h"
+ 
+ #define DEFAULT_CHUNK_TYPES\
