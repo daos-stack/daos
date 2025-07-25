@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,6 +50,7 @@
 	X(RAS_POOL_REPS_UPDATE, "pool_replicas_updated")                                           \
 	X(RAS_POOL_DF_INCOMPAT, "pool_durable_format_incompatible")                                \
 	X(RAS_POOL_DEFER_DESTROY, "pool_destroy_deferred")                                         \
+	X(RAS_POOL_START_FAILED, "pool_start_failed")                                              \
 	X(RAS_CONT_DF_INCOMPAT, "container_durable_format_incompatible")                           \
 	X(RAS_RDB_DF_INCOMPAT, "rdb_durable_format_incompatible")                                  \
 	X(RAS_SWIM_RANK_ALIVE, "swim_rank_alive")                                                  \
