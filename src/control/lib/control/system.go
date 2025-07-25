@@ -42,6 +42,10 @@ const (
 	SystemJoinRetryTimeout = 10 * time.Second
 )
 
+const (
+	RollingUpgradePrefix = "ROLLING_UPGRADE"
+)
+
 var (
 	errMSConnectionFailure = errors.Errorf("unable to contact the %s", build.ManagementServiceName)
 )
@@ -1072,6 +1076,10 @@ type SystemSetAttrReq struct {
 	Attributes map[string]string
 }
 
+func IsSystemReservedKey(key string) bool {
+	return strings.HasPrefix(strings.ToUpper(key), RollingUpgradePrefix)
+}
+
 // SystemSetAttr sets system attributes.
 func SystemSetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemSetAttrReq) error {
 	if req == nil {
@@ -1079,6 +1087,11 @@ func SystemSetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemSetAt
 	}
 	if len(req.Attributes) == 0 {
 		return errors.New("attributes cannot be empty")
+	}
+	for key := range req.Attributes {
+		if IsSystemReservedKey(key) {
+			return errors.Errorf("attribute key %q is system reserved", key)
+		}
 	}
 
 	pbReq := &mgmtpb.SystemSetAttrReq{
