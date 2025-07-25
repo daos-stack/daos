@@ -762,11 +762,11 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 		resp.Nvme = respNvme
 	}
 
-	mi, err := cs.getSysMemInfo()
+	smi, err := cs.getSysMemInfo()
 	if err != nil {
 		return nil, err
 	}
-	if err := convert.Types(mi, &resp.SysMemInfo); err != nil {
+	if err := convert.Types(smi, &resp.SysMemInfo); err != nil {
 		return nil, err
 	}
 
@@ -805,11 +805,11 @@ func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getS
 		memRamdisks += uint64(sc.Scm.RamdiskSize) * humanize.GiByte
 	}
 
-	mi, err := getSysMemInfo()
+	smi, err := getSysMemInfo()
 	if err != nil {
 		return errors.Wrap(err, "retrieving system meminfo")
 	}
-	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
+	memAvail := uint64(smi.MemAvailableKiB) * humanize.KiByte
 
 	if err := checkMemForRamdisk(log, memRamdisks, memAvail); err != nil {
 		return errors.Wrap(err, "check ram available for all tmpfs")
@@ -1107,11 +1107,19 @@ func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.Nvme
 	}
 
 	prepReq := storage.BdevPrepareRequest{
-		// zero as hugepages already allocated on start-up
-		HugepageCount: 0,
-		TargetUser:    cu.Username,
-		PCIAllowList:  req.PciAddr,
-		Reset_:        false,
+		TargetUser:   cu.Username,
+		PCIAllowList: req.PciAddr,
+		Reset_:       false,
+	}
+
+	smi, err := cs.getSysMemInfo()
+	if err != nil {
+		return nil, errors.Wrapf(err, "retrieve system memory info")
+	}
+
+	// Set hugepage allocations in prepare request.
+	if err := SetHugeNodes(cs.log, cs.srvCfg, smi, &prepReq); err != nil {
+		return nil, errors.Wrap(err, "setting hugenodes in bdev prep request")
 	}
 
 	resp := new(ctlpb.NvmeRebindResp)
