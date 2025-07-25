@@ -487,7 +487,10 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, uint32
 			if (status == CHK__CHECK_POOL_STATUS__CPS_STOPPED)
 				ins->ci_pool_stopped = 1;
 			cbk->cb_time.ct_stop_time = time(NULL);
-			uuid_unparse_lower(uuid, uuid_str);
+			if (ins->ci_is_leader)
+				uuid_unparse_upper(uuid, uuid_str);
+			else
+				uuid_unparse_lower(uuid, uuid_str);
 			rc = chk_bk_update_pool(cbk, uuid_str);
 		}
 
@@ -579,7 +582,10 @@ chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen)
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			rc;
 
-	uuid_unparse_lower(uuid, uuid_str);
+	if (ins->ci_is_leader)
+		uuid_unparse_upper(uuid, uuid_str);
+	else
+		uuid_unparse_lower(uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		goto out;
@@ -621,7 +627,10 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 				break;
 		}
 
-		uuid_unparse_lower(pools[i], uuid_str);
+		if (ins->ci_is_leader)
+			uuid_unparse_upper(pools[i], uuid_str);
+		else
+			uuid_unparse_lower(pools[i], uuid_str);
 		rc = chk_bk_fetch_pool(&cbk, uuid_str);
 		if (rc != 0 && rc != -DER_NONEXIST)
 			break;
@@ -694,8 +703,13 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	struct chk_bookmark		 cbk;
 	int				 rc = 0;
 
-	if (!daos_is_valid_uuid_string(uuid_str))
-		D_GOTO(out, rc = 0);
+	if (ins->ci_is_leader) {
+		if (!daos_is_valid_uuid_upper_string(uuid_str))
+			D_GOTO(out, rc = 0);
+	} else {
+		if (!daos_is_valid_uuid_lower_string(uuid_str))
+			D_GOTO(out, rc = 0);
+	}
 
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc != 0)
@@ -761,7 +775,10 @@ chk_pools_update_bk(struct chk_instance *ins, uint32_t phase)
 		if (cbk->cb_phase < phase &&
 		    cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING) {
 			cbk->cb_phase = phase;
-			uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+			if (ins->ci_is_leader)
+				uuid_unparse_upper(cpr->cpr_uuid, uuid_str);
+			else
+				uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
 			rc1 = chk_bk_update_pool(cbk, uuid_str);
 			if (rc1 != 0)
 				rc = rc1;
@@ -816,7 +833,10 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 	if (iv->ci_phase != cbk->cb_phase || iv->ci_pool_status != cbk->cb_pool_status) {
 		cbk->cb_phase = iv->ci_phase;
 		cbk->cb_pool_status = iv->ci_pool_status;
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		if (ins->ci_is_leader)
+			uuid_unparse_upper(cpr->cpr_uuid, uuid_str);
+		else
+			uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 	}
 
