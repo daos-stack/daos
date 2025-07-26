@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -49,6 +50,18 @@ def git_files_changed(target):
         ['git', 'diff', target, '--name-only', '--relative'],
         stdout=subprocess.PIPE, cwd=git_root, check=True)
     return [os.path.join(git_root, path) for path in result.stdout.decode().split('\n') if path]
+
+
+def git_fetch():
+    """Run git fetch.
+
+    Returns:
+        str: the fetch result
+    """
+    result = subprocess.run(
+        ['git', 'fetch', '--all'],
+        stdout=subprocess.PIPE, check=True, cwd=PARENT_DIR)
+    return result.stdout.decode().rstrip('\n')
 
 
 def git_merge_base(*commits):
@@ -103,6 +116,9 @@ def main():
         required=True,
         help="git target to as reference diff")
     args = parser.parse_args()
+
+    # Fetch latest repo
+    git_fetch()
 
     commit_pragmas = gen_commit_pragmas(git_merge_base('HEAD', args.target))
     for pragma, value in commit_pragmas.items():
