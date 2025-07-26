@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3785,6 +3786,62 @@ cr_maintenance_mode(void **state)
 	cr_cleanup(arg, &pool, 1);
 }
 
+/*
+ * 1. Exclude rank 0.
+ * 2. Create pool without inconsistency.
+ * 3. Start checker without options.
+ * 4. Query checker, it should be completed instead of being blocked.
+ * 5. Switch to normal mode and cleanup.
+ */
+static void
+cr_lost_rank0(void **state)
+{
+	test_arg_t            *arg  = *state;
+	struct test_pool       pool = {0};
+	struct daos_check_info dci  = {0};
+	int                    rc;
+
+	print_message("CR29: run CR with rank 0 excluded at the beginning\n");
+
+	print_message("CR: excluding the rank 0 ...\n");
+	rc = dmg_system_exclude_rank(dmg_config_file, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_create(state, &pool, false, TCC_NONE);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Reint the rank for subsequent test. */
+	rc = cr_rank_reint(0, true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
+	cr_cleanup(arg, &pool, 1);
+}
+
+/* clang-format off */
 static const struct CMUnitTest cr_tests[] = {
 	{ "CR1: start checker for specified pools",
 	  cr_start_specified, async_disable, test_case_teardown},
@@ -3842,7 +3899,10 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_handle_fail_pool2, async_disable, test_case_teardown},
 	{ "CR28: maintenance mode after dry-run check",
 	  cr_maintenance_mode, async_disable, test_case_teardown},
+	{ "CR29: run CR with rank 0 excluded at the beginning",
+	  cr_lost_rank0, async_disable, test_case_teardown},
 };
+/* clang-format on */
 
 static int
 cr_setup(void **state)
