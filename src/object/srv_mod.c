@@ -41,6 +41,9 @@ obj_mod_init(void)
 		goto out_class;
 	}
 
+	/* Enforce server protocol when reusing client stack during rebuild */
+	dc_obj_proto_version = DAOS_OBJ_VERSION;
+
 	return 0;
 
 out_class:
