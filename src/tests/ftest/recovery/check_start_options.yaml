@@ -14,7 +14,7 @@ server_config:
   system_ram_reserved: 1
 
 pool:
-  size: 5G
+  size: 3G
 
 container:
   control_method: daos
