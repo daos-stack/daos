@@ -89,8 +89,6 @@ crt_deadline_to_timeout(uint32_t deadline_sec)
 	struct timespec now;
 
 	clock_gettime(CLOCK_REALTIME, &now);
-
-	D_DEBUG(DB_ALL, "now.tv_sec = %ld\n", now.tv_sec);
 	return deadline_sec - now.tv_sec - 1;
 }
 
@@ -100,7 +98,6 @@ crt_timeout_to_deadline(int timeout_sec)
 	struct timespec now;
 
 	clock_gettime(CLOCK_REALTIME, &now);
-	D_DEBUG(DB_ALL, "now.tv_sec = %ld\n", now.tv_sec);
 
 	/* Deadline is the next second after timeout */
 	return now.tv_sec + timeout_sec + 1;
