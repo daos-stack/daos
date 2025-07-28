@@ -436,10 +436,9 @@ func checkMemberDB(t *testing.T, mdb *MemberDatabase, expMember *Member, opts ..
 
 	cmpOpts := []cmp.Option{
 		cmp.AllowUnexported(Member{}),
+		cmpopts.IgnoreFields(Member{}, "LastUpdate"),
 	}
-	for _, o := range opts {
-		cmpOpts = append(cmpOpts, o)
-	}
+	cmpOpts = append(cmpOpts, opts...)
 
 	uuidM, ok := mdb.Uuids[expMember.UUID]
 	if !ok {
@@ -476,12 +475,11 @@ func checkMemberDB(t *testing.T, mdb *MemberDatabase, expMember *Member, opts ..
 	}
 }
 
-func TestSystem_Database_memberRaftOps(t *testing.T) {
+func genTestMembers(t *testing.T, num int) []*Member {
 	ctx := test.Context(t)
-
-	testMembers := make([]*Member, 0)
-	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
-	for i := 0; i < 3; i++ {
+	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 1)
+	testMembers := make([]*Member, 0, num)
+	for i := 0; i < num; i++ {
 		testMembers = append(testMembers, &Member{
 			Rank:        Rank(i),
 			UUID:        uuid.New(),
@@ -490,6 +488,29 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			FaultDomain: MustCreateFaultDomainFromString("/rack0"),
 		})
 	}
+	return testMembers
+}
+
+func expectMembersInDB(t *testing.T, db *Database, expMembers []*Member) {
+	for _, expMember := range expMembers {
+		checkMemberDB(t, db.data.Members, expMember)
+	}
+
+	if len(db.data.Members.Uuids) != len(expMembers) {
+		t.Fatalf("expected %d members, got %d", len(expMembers), len(db.data.Members.Uuids))
+	}
+
+	totalMemberAddrs := 0
+	for _, members := range db.data.Members.Addrs {
+		totalMemberAddrs += len(members)
+	}
+	if totalMemberAddrs != len(expMembers) {
+		t.Fatalf("expected %d members in address table, got %d: %+v", len(expMembers), totalMemberAddrs, db.data.Members.Addrs)
+	}
+}
+
+func TestSystem_Database_memberRaftOps(t *testing.T) {
+	testMembers := genTestMembers(t, 3)
 
 	changedFaultDomainMember := &Member{
 		Rank:        testMembers[1].Rank,
@@ -504,6 +525,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 		op              raftOp
 		updateMember    *Member
 		expMembers      []*Member
+		expVotersAdded  []string
 		expFDTree       *FaultDomainTree
 	}{
 		"add success": {
@@ -585,27 +607,125 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			raftUpdateTestMember(t, db, tc.op, tc.updateMember)
 
 			// Check member DB was updated
-			for _, expMember := range tc.expMembers {
-				checkMemberDB(t, db.data.Members, expMember)
-			}
-			if len(db.data.Members.Uuids) != len(tc.expMembers) {
-				t.Fatalf("expected %d member UUIDs, got %d: %+v", len(tc.expMembers), len(db.data.Members.Uuids), db.data.Members.Uuids)
-			}
-			if len(db.data.Members.Ranks) != len(tc.expMembers) {
-				t.Fatalf("expected %d member ranks, got %d: %+v", len(tc.expMembers), len(db.data.Members.Ranks), db.data.Members.Ranks)
-			}
-
-			totalMemberAddrs := 0
-			for _, members := range db.data.Members.Addrs {
-				totalMemberAddrs += len(members)
-			}
-			if totalMemberAddrs != len(tc.expMembers) {
-				t.Fatalf("expected %d members in address table, got %d: %+v", len(tc.expMembers), totalMemberAddrs, db.data.Members.Addrs)
-			}
+			expectMembersInDB(t, db, tc.expMembers)
 
 			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestSystem_Database_UpdateMember(t *testing.T) {
+	const numReplicas = 3
+	testMembers := genTestMembers(t, 5)
+	fakeUUID := uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")
+
+	for name, tc := range map[string]struct {
+		startingMembers []*Member
+		notLeader       bool
+		updateMember    *Member
+		expMembers      []*Member
+		expErr          error
+		expVotersAdded  []string
+	}{
+		"not leader": {
+			startingMembers: testMembers,
+			updateMember:    testMembers[1],
+			notLeader:       true,
+			expMembers:      testMembers,
+			expErr:          errors.New("Management Service leader"),
+		},
+		"member not found": {
+			startingMembers: testMembers,
+			updateMember: &Member{
+				Rank: 123,
+				UUID: fakeUUID,
+			},
+			expMembers: testMembers,
+			expErr:     ErrMemberUUIDNotFound(fakeUUID),
+		},
+		"update replica": {
+			startingMembers: testMembers,
+			updateMember: &Member{
+				Rank:        testMembers[1].Rank,
+				UUID:        testMembers[1].UUID,
+				Addr:        testMembers[1].Addr,
+				State:       MemberStateReady,
+				FaultDomain: testMembers[1].FaultDomain,
+			},
+			expMembers: []*Member{
+				testMembers[0],
+				{
+					Rank:        testMembers[1].Rank,
+					UUID:        testMembers[1].UUID,
+					Addr:        testMembers[1].Addr,
+					State:       MemberStateReady,
+					FaultDomain: testMembers[1].FaultDomain,
+				},
+				testMembers[2],
+				testMembers[3],
+				testMembers[4],
+			},
+			expVotersAdded: []string{testMembers[1].Addr.String()},
+		},
+		"update non-replica": {
+			startingMembers: testMembers,
+			updateMember: &Member{
+				Rank:        testMembers[4].Rank,
+				UUID:        testMembers[4].UUID,
+				Addr:        testMembers[4].Addr,
+				State:       MemberStateReady,
+				FaultDomain: testMembers[4].FaultDomain,
+			},
+			expMembers: []*Member{
+				testMembers[0],
+				testMembers[1],
+				testMembers[2],
+				testMembers[3],
+				{
+					Rank:        testMembers[4].Rank,
+					UUID:        testMembers[4].UUID,
+					Addr:        testMembers[4].Addr,
+					State:       MemberStateReady,
+					FaultDomain: testMembers[4].FaultDomain,
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			replicaAddrs := make([]*net.TCPAddr, 0, numReplicas)
+			for i := 0; i < numReplicas; i++ {
+				replicaAddrs = append(replicaAddrs, tc.startingMembers[i].Addr)
+			}
+			t.Logf("%+v", replicaAddrs)
+
+			db := MockDatabaseWithCfg(t, logging.FromContext(ctx), &DatabaseConfig{
+				Replicas: replicaAddrs,
+			})
+			db.replicaAddr = replicaAddrs[0]
+
+			// setup initial member DB
+			for _, initMember := range tc.startingMembers {
+				raftUpdateTestMember(t, db, raftOpAddMember, initMember)
+			}
+
+			mockRaftSvc, ok := db.raft.svc.(*mockRaftService)
+			if !ok {
+				t.Fatal("raft service used wasn't a mockRaftService!")
+			}
+			if tc.notLeader {
+				mockRaftSvc.cfg.State = raft.Follower
+			}
+
+			err := db.UpdateMember(tc.updateMember)
+
+			test.CmpErr(t, tc.expErr, err)
+			expectMembersInDB(t, db, tc.expMembers)
+
+			test.CmpAny(t, "AddVoter calls", tc.expVotersAdded, mockRaftSvc.addVoterCalledForAddrs)
 		})
 	}
 }
