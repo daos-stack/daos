@@ -167,7 +167,7 @@ struct rebuild_global_pool_tracker {
 
 	uint32_t	rgt_opc;
 	unsigned int                    rgt_abort : 1, /* abort: kill rebuild */
-	    rgt_init_scan : 1, rgt_stop_admin : 1;     /* stop: kill rebuild (on all engines) */
+	    rgt_init_scan : 1, rgt_stop_admin : 1;     /* stop: admin has asked to kill rebuild */
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */

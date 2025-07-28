@@ -891,10 +891,18 @@ ds_rebuild_admin_stop(struct ds_pool *pool)
 		return 0;
 	}
 
-	D_INFO(DF_RB ": stop rebuild\n", DP_RB_RGT(rgt));
-	rgt->rgt_abort      = 1;
-	rgt->rgt_stop_admin = 1;
+	/* admin stop command does not terminate reclaim/fail_reclaim jobs */
+	if ((rgt->rgt_opc == RB_OP_REBUILD) || (rgt->rgt_opc == RB_OP_UPGRADE)) {
+		D_INFO(DF_RB ": stopping rebuild opc %u(%s)\n", DP_RB_RGT(rgt), rgt->rgt_opc,
+		       RB_OP_STR(rgt->rgt_opc));
+		rgt->rgt_abort      = 1;
+		rgt->rgt_stop_admin = 1;
+	} else {
+		D_INFO(DF_RB ": NOT stopping rebuild during opc %u(%s)\n", DP_RB_RGT(rgt),
+		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
+	}
 	rgt_put(rgt);
+
 	return 0;
 }
 
@@ -940,9 +948,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		if (!fi_admin_stop_fi)
 			fi_admin_stop_fi = DAOS_FAIL_CHECK(DAOS_REBUILD_ADMIN_STOP);
 		fi_admin_stop = (fi_admin_stop_fi && (op == RB_OP_REBUILD));
-
-		D_INFO(DF_RB ": fi_admin_stop_fi=%d, fi_admin_stop=%d, nsleeps=%u\n",
-		       DP_RB_RGT(rgt), fi_admin_stop_fi, fi_admin_stop, nsleeps);
 
 		if (fi_admin_stop && (nsleeps > 0)) {
 			uuid_copy(test_stop_start_puuid, rgt->rgt_pool_uuid);
@@ -1002,17 +1007,10 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			goto done;
 		}
 
-		/* leader send status to target engines if still running, or if admin stopped the
-		 * rebuild */
-		if (myrank == pool->sp_iv_ns->iv_master_rank) {
-			if ((!rgt->rgt_abort && !is_rebuild_global_done(rgt)) ||
-			    (rgt->rgt_abort && rgt->rgt_stop_admin))
-				D_INFO(DF_RB ": send status to tgts, abort=%d, stop_admin=%d, "
-					     "global_done=%d\n",
-				       DP_RB_RGT(rgt), rgt->rgt_abort, rgt->rgt_stop_admin,
-				       is_rebuild_global_done(rgt));
+		/* leader send status to target engines if still running */
+		if (!rgt->rgt_abort && !is_rebuild_global_done(rgt) &&
+		    myrank == pool->sp_iv_ns->iv_master_rank)
 			rebuild_leader_status_notify(rgt, pool, op, myrank);
-		}
 
 		/* query the current rebuild status */
 		if (is_rebuild_global_done(rgt))
@@ -1678,6 +1676,12 @@ retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker
 
 	/* Only be called if rebuild task failed */
 
+	/* Do not retry if the administrator manually stopped the rebuild */
+	if (rgt->rgt_stop_admin) {
+		*opc = RB_OP_NONE;
+		return;
+	}
+
 	/* retry with network error, since the pool map will be changed accordingly, so
 	 * rebuild job can be fixed by the new pool map anyway.
 	 */
@@ -1706,12 +1710,6 @@ retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker
 		return;
 	}
 
-	/* Do not retry if the administrator manually stopped the rebuild */
-	if (rgt->rgt_stop_admin) {
-		*opc = RB_OP_NONE;
-		return;
-	}
-
 	DL_INFO(error, DF_UUID" opc %u/%u, revert pool map", DP_UUID(task->dst_pool_uuid),
 		task->dst_rebuild_op, task->dst_map_ver);
 	rc = ds_pool_tgt_revert_rebuild(task->dst_pool_uuid, &task->dst_tgts);
@@ -1734,7 +1732,6 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			       struct rebuild_global_pool_tracker *rgt, int ret)
 {
 	uint64_t delay_sec        = 5; /* reschedule next op at now + 5 seconds time */
-	bool     update_rb_status = false;
 	int      rc               = 0;
 	int      rc1              = 0;
 
@@ -1838,27 +1835,24 @@ complete:
 		 */
 		if (rgt->rgt_stop_admin && rgt->rgt_abort)
 			rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
-		update_rb_status = true;
 		rc1 = rebuild_status_completed_update(task->dst_pool_uuid, &rgt->rgt_status);
+		DL_CDEBUG(rc1, DLOG_ERR, DLOG_INFO, rc1, DF_RB ": updated, state %d errno " DF_RC,
+			  DP_RB_RGT(rgt), rgt->rgt_status.rs_state,
+			  DP_RC(rgt->rgt_status.rs_errno));
 	} else if (task->dst_rebuild_op == RB_OP_FAIL_RECLAIM && task->dst_stop_admin) {
 		/* Fail_reclaim normally does not update status - except in the manual admin stop
 		 * case */
 		rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 		rgt->rgt_status.rs_state = DRS_NOT_STARTED;
-		update_rb_status         = true;
 		rc1                      = rebuild_status_completed_update_partial(
                     task->dst_pool_uuid, rgt->rgt_status.rs_state, rgt->rgt_status.rs_errno);
-	}
-
-	if (update_rb_status) {
 		DL_CDEBUG(rc1, DLOG_ERR, DLOG_INFO, rc1, DF_RB ": updated, state %d errno " DF_RC,
 			  DP_RB_RGT(rgt), rgt->rgt_status.rs_state,
 			  DP_RC(rgt->rgt_status.rs_errno));
-		if (rc1 != 0) {
-			if (rc == 0)
-				rc = rc1;
-		}
 	}
+
+	if ((rc1 != 0) && (rc == 0))
+		rc = rc1;
 	return rc;
 }
 
@@ -1984,15 +1978,17 @@ done:
 			 * all engines). Notify all engines to stop with
 			 * rebuild_leader_status_notify().
 			 */
-			D_INFO(DF_RB ": stop rebuild due to admin command.\n", DP_RB_RGT(rgt));
+			D_INFO(DF_RB ": stop rebuild due to admin command, change rc %d -> " DF_RC
+				     "\n",
+			       DP_RB_RGT(rgt), rgt->rgt_status.rs_errno, DP_RC(-DER_OP_CANCELED));
+			rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 		} else if (rgt->rgt_abort && rgt->rgt_status.rs_errno == 0) {
 			/* If the leader rebuild is aborted due to a leader change, then do not
 			 * abort the real rebuild(scan/pull ults), because the new leader will
 			 * resend the scan requests, which will then become the new leader to track
 			 * the rebuild.
 			 */
-			D_DEBUG(DB_REBUILD, DF_RB " abort rebuild on leader only\n",
-				DP_RB_RGT(rgt));
+			D_DEBUG(DB_REBUILD, DF_RB " Only stop the leader\n", DP_RB_RGT(rgt));
 			D_GOTO(out_pool, rc);
 		}
 	} else if (rgt->rgt_status.rs_errno == 0) {
@@ -2169,11 +2165,15 @@ ds_rebuild_abort(uuid_t pool_uuid, unsigned int ver, unsigned int gen, uint64_t 
 	while(1) {
 		bool aborted = true;
 
-		rpt = rpt_lookup(pool_uuid, -1 /* opc */, ver, gen);
-		if (rpt) {
-			rpt->rt_abort = 1;
-			aborted       = false;
-			rpt_put(rpt);
+		d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+			if (uuid_compare(rpt->rt_pool_uuid, pool_uuid) == 0 &&
+			    (ver == (unsigned int)(-1) || rpt->rt_rebuild_ver == ver) &&
+			    (gen == (unsigned int)(-1) || rpt->rt_rebuild_gen == gen) &&
+			    (term == (uint64_t)(-1) || rpt->rt_leader_term == term)) {
+				D_INFO(DF_RB " try abort rpt %p\n", DP_RB_RPT(rpt), rpt);
+				rpt->rt_abort = 1;
+				aborted       = false;
+			}
 		}
 
 		if (aborted)
