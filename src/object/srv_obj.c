@@ -3428,7 +3428,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	anchors->ia_ev = oei->oei_anchor;
 
 	/* TODO: Transfer the inline_thres from enumerate RPC */
-	enum_arg.inline_thres = 32;
+	enum_arg.inline_thres = 128;
 
 	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		oeo->oeo_eprs.ca_count = 0;

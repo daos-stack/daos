@@ -608,6 +608,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 				data_size = iod_size;
 		} else {
 			iod_size = key_ent->ie_rsize;
+			data_size = iod_size * key_ent->ie_recx.rx_nr;
 		}
 	}
 
@@ -680,12 +681,13 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		 * may be invisible to current enumeration. Then it
 		 * may be located on SCM or NVMe.
 		 */
-		D_ASSERT(type != OBJ_ITER_RECX);
-		D_ASSERTF(key_ent->ie_biov.bi_addr.ba_type ==
-			  DAOS_MEDIA_SCM, "Invalid storage media type %d, ba_off "
-			  DF_X64", thres %ld, data_size %ld, type %d, iod_size %ld\n",
-			  key_ent->ie_biov.bi_addr.ba_type, key_ent->ie_biov.bi_addr.ba_off,
-			  arg->inline_thres, data_size, type, iod_size);
+		if (type != OBJ_ITER_RECX) {
+			D_ASSERTF(key_ent->ie_biov.bi_addr.ba_type ==
+				DAOS_MEDIA_SCM, "Invalid storage media type %d, ba_off "
+				DF_X64", thres %ld, data_size %ld, type %d, iod_size %ld\n",
+				key_ent->ie_biov.bi_addr.ba_type, key_ent->ie_biov.bi_addr.ba_off,
+				arg->inline_thres, data_size, type, iod_size);
+		}
 
 		d_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
 				       iovs[arg->sgl_idx].iov_len, data_size);
