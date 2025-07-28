@@ -1731,9 +1731,9 @@ static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			       struct rebuild_global_pool_tracker *rgt, int ret)
 {
-	uint64_t delay_sec        = 5; /* reschedule next op at now + 5 seconds time */
-	int      rc               = 0;
-	int      rc1              = 0;
+	uint64_t delay_sec = 5; /* reschedule next op at now + 5 seconds time */
+	int      rc        = 0;
+	int      rc1       = 0;
 
 	/* The original job is not being started correctly, let's give another chance */
 	if (rgt == NULL) {
