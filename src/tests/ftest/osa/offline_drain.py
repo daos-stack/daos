@@ -50,7 +50,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
 
         # Get a random rank(s) based on num_ranks input.
         ranklist = list(self.server_managers[0].ranks.keys())
-        # For tests which uses num_ranks equal to 1, use the YAML file informaton.
+        # For tests which uses num_ranks equal to 1, use the YAML file information.
         if num_ranks > 1:
             self.ranks = [",".join(map(str, self.random.sample(ranklist, k=num_ranks)))]
 
