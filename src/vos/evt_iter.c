@@ -474,7 +474,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 
 		rc = 0;
 	}
- out:
+out:
 	return rc;
 }
 
