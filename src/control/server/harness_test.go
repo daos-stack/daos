@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
@@ -56,7 +58,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		waitTimeout      time.Duration            // time after which test context is cancelled
 		expStartErr      error                    // error from harness.Start()
 		expStartCount    uint32                   // number of instance.runner.Start() calls
-		expDrpcCalls     map[uint32][]drpc.Method // method ids called for each instance.Index()
+		expDrpcCalls     map[uint32][]int32       // method ids called for each instance.Index()
 		expGrpcCalls     map[uint32][]string      // string repr of call for each instance.Index()
 		expRanks         map[uint32]ranklist.Rank // ranks to have been set during Start()
 		expMembers       system.Members           // members to have been registered during Start()
@@ -79,14 +81,14 @@ func TestServer_Harness_Start(t *testing.T) {
 				1: MockUUID(1),
 			},
 			expStartCount: maxEngines,
-			expDrpcCalls: map[uint32][]drpc.Method{
+			expDrpcCalls: map[uint32][]int32{
 				0: {
-					drpc.MethodSetRank,
-					drpc.MethodSetUp,
+					daos.MethodSetRank.ID(),
+					daos.MethodSetUp.ID(),
 				},
 				1: {
-					drpc.MethodSetRank,
-					drpc.MethodSetUp,
+					daos.MethodSetRank.ID(),
+					daos.MethodSetUp.ID(),
 				},
 			},
 			expGrpcCalls: map[uint32][]string{
@@ -112,14 +114,14 @@ func TestServer_Harness_Start(t *testing.T) {
 			},
 			rankInSuperblock: true,
 			expStartCount:    maxEngines,
-			expDrpcCalls: map[uint32][]drpc.Method{
+			expDrpcCalls: map[uint32][]int32{
 				0: {
-					drpc.MethodSetRank,
-					drpc.MethodSetUp,
+					daos.MethodSetRank.ID(),
+					daos.MethodSetUp.ID(),
 				},
 				1: {
-					drpc.MethodSetRank,
-					drpc.MethodSetUp,
+					daos.MethodSetRank.ID(),
+					daos.MethodSetUp.ID(),
 				},
 			},
 			expGrpcCalls: map[uint32][]string{
@@ -181,14 +183,14 @@ func TestServer_Harness_Start(t *testing.T) {
 				1: MockUUID(1),
 			},
 			expStartCount: maxEngines,
-			expDrpcCalls: map[uint32][]drpc.Method{
+			expDrpcCalls: map[uint32][]int32{
 				0: {
-					drpc.MethodSetRank,
-					drpc.MethodSetUp,
+					daos.MethodSetRank.ID(),
+					daos.MethodSetUp.ID(),
 				},
 				1: {
-					drpc.MethodSetRank,
-					drpc.MethodSetUp,
+					daos.MethodSetRank.ID(),
+					daos.MethodSetUp.ID(),
 				},
 			},
 			expGrpcCalls: map[uint32][]string{
