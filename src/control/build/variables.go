@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,9 +10,6 @@ package build
 import "time"
 
 var (
-	// DefaultConfigDir is a directory where we should always search for config files if the build's
-	// config dir has none.
-	DefaultConfigDir = "/etc/daos"
 	// ConfigDir should be set via linker flag using the value of CONF_DIR.
 	ConfigDir = "./"
 	// DaosVersion should be set via linker flag using the value of DAOS_VERSION.
