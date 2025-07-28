@@ -1113,7 +1113,11 @@ An administrator may add or remove hosts from the MS replica list.
 3. Update the `access_points` list in the `daos_agent` configuration file.
 4. Update `hostlist` in the `dmg` configuration file, if applicable.
 5. Restart all `daos_server` and `daos_agent` processes.
-6. To ensure the updated MS replicas came up, check: `dmg system query`
+
+To verify that the updated MS replicas came up correctly:
+1. Use the `dmg system query` command to check that all expected ranks have come up in the Joined state.
+   The command should not time out.
+2. Use the `dmg system leader-query` to ensure a leader election has completed.
 
 !!! warning
     When removing or replacing MS replicas, do *not* replace all old replicas with
