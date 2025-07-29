@@ -42,7 +42,8 @@ void get_rpm_relval() {
                           if git diff-index --name-only HEAD^ | grep -q TAG; then
                               echo ""
                           else
-                              echo ".$(git rev-list HEAD --count).g$(git rev-parse --short=8 HEAD)"
+			      export commit=$(git log -1 --pretty=format:"%h" deps utils/build.config)
+                              echo ".$(git rev-list $commit --count).g$(git rev-parse --short=8 $commit)"
                           fi''',
                 returnStdout: true).trim()
 }
@@ -543,7 +544,9 @@ pipeline {
                                         scons_args: sconsArgs() +
                                                     ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el8 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
                         }
                     }
                     post {
@@ -590,7 +593,9 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el9 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
                         }
                     }
                     post {
@@ -634,7 +639,9 @@ pipeline {
                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
                         }
                     }
                     post {
