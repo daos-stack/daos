@@ -163,4 +163,3 @@ class DMGCheckPolicyTest(RecoveryTestBase):
                 f"Pool query failed after fault is fixed by checker! {command_failure}")
 
         report_errors(test=self, errors=errors)
-
