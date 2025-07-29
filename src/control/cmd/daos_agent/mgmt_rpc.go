@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -72,15 +73,15 @@ func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, me
 	}
 
 	switch method {
-	case drpc.MethodGetAttachInfo:
+	case daos.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
-	case drpc.MethodSetupClientTelemetry:
+	case daos.MethodSetupClientTelemetry:
 		return mod.handleSetupClientTelemetry(ctx, req, cred)
-	case drpc.MethodNotifyPoolConnect:
+	case daos.MethodNotifyPoolConnect:
 		return nil, mod.handleNotifyPoolConnect(ctx, req, cred.Pid)
-	case drpc.MethodNotifyPoolDisconnect:
+	case daos.MethodNotifyPoolDisconnect:
 		return nil, mod.handleNotifyPoolDisconnect(ctx, req, cred.Pid)
-	case drpc.MethodNotifyExit:
+	case daos.MethodNotifyExit:
 		// There isn't anything we can do here if this fails so just
 		// call the disconnect handler and return success.
 		mod.handleNotifyExit(ctx, cred.Pid)
@@ -90,8 +91,27 @@ func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, me
 	return nil, drpc.UnknownMethodFailure()
 }
 
-func (mod *mgmtModule) ID() drpc.ModuleID {
-	return drpc.ModuleMgmt
+// GetMethod returns the corresponding method for a given method ID.
+func (mod *mgmtModule) GetMethod(id int32) (drpc.Method, error) {
+	switch id {
+	case daos.MethodGetAttachInfo.ID(),
+		daos.MethodSetupClientTelemetry.ID(),
+		daos.MethodNotifyPoolConnect.ID(),
+		daos.MethodNotifyPoolDisconnect.ID(),
+		daos.MethodNotifyExit.ID():
+		return daos.MgmtMethod(id), nil
+	}
+
+	return nil, fmt.Errorf("invalid method ID %d for module %s", id, mod.String())
+}
+
+// ID returns the module ID for this module.
+func (mod *mgmtModule) ID() int32 {
+	return daos.ModuleMgmt
+}
+
+func (mod *mgmtModule) String() string {
+	return "agent_mgmt"
 }
 
 // handleGetAttachInfo invokes the GetAttachInfo dRPC.  The agent determines the

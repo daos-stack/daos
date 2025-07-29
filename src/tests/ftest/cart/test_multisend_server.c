@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -118,21 +119,23 @@ test_run(d_rank_t my_rank)
 	uint32_t		 grp_size;
 	int			 rc;
 
-	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx[0],
-				  &test.tg_tid[0], &grp, &grp_size, NULL);
-	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
-
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
+	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx[0], &test.tg_tid[0],
+				  &grp, &grp_size, NULL, &my_proto_fmt);
+	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
+
+	/* Rank 0 is chosen to save group config file for all servers */
 	if (my_rank == 0) {
+		/* Allow 5 seconds for other servers to register protocol */
+		sleep(5);
+
+		/* Note: saving group config file tells clients they can send rpcs */
 		DBG_PRINT("Saving group (%s) config file\n", test.tg_local_group_name);
 		rc = crt_group_config_save(grp, true);
-		D_ASSERTF(rc == 0,
-			  "crt_group_config_save() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n", rc);
 	}
-	rc = crt_proto_register(&my_proto_fmt);
-	D_ASSERT(rc == 0);
 
 	rc = pthread_join(test.tg_tid[0], NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
