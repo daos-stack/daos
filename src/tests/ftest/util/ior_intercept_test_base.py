@@ -1,10 +1,12 @@
 """
   (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
+import time
 
 from general_utils import percent_change
 from ior_test_base import IorTestBase
@@ -44,6 +46,10 @@ class IorInterceptTestBase(IorTestBase):
         self.container = None
         self.pool.destroy()
         self.pool = None
+
+        # Wait for aggregation
+        self.log.info("Waiting 30s for aggregation")
+        time.sleep(30)
 
         # Run IOR with dfuse + IL
         self.ior_cmd.api.update("POSIX")
