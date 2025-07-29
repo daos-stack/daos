@@ -1,7 +1,11 @@
 hosts:
   test_servers: 1
+  test_clients: 1
 
 timeout: 180
+
+setup:
+  start_servers_once: False
 
 server_config:
   name: daos_server
@@ -13,4 +17,7 @@ server_config:
   system_ram_reserved: 1
 
 pool:
-  size: 5G
+  size: 3G
+
+container:
+  control_method: daos
