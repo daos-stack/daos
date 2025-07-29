@@ -34,6 +34,17 @@ void get_rpm_relval() {
                               echo ".$(git rev-list HEAD --count).g$(git rev-parse --short=8 HEAD)"
                           fi''',
                 returnStdout: true).trim()
+    // If head is a TAG, keep it the same but otherwise, use the commit where deps changed
+    env.DAOS_DEPS_RELVAL = sh(label: 'get deps git tag',
+               script: '''if [ -n "$GIT_CHECKOUT_DIR" ] && [ -d "$GIT_CHECKOUT_DIR" ]; then
+                              cd "$GIT_CHECKOUT_DIR"
+                          fi
+                          if git diff-index --name-only HEAD^ | grep -q TAG; then
+                              echo ""
+                          else
+                              echo ".$(git rev-list HEAD --count).g$(git rev-parse --short=8 HEAD)"
+                          fi''',
+                returnStdout: true).trim()
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
