@@ -750,24 +750,29 @@ func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 
 	switch op {
 	case raftOpAddMember:
+		db.log.Debugf("adding %s as a new raft voter", vc)
+		if err := db.raft.withReadLock(func(svc raftService) error {
+			return svc.AddVoter(rsi, rsa, 0, 0).Error()
+		}); err != nil {
+			return errors.Wrapf(err, "failed to add %q as raft replica", vc.Addr)
+		}
 	case raftOpUpdateMember, raftOpRemoveMember:
 		// If we're updating an existing member, we need to kick it out of the
 		// raft cluster and then re-add it so that it doesn't hijack the campaign.
-		db.log.Debugf("removing %s as a current raft voter", vc)
+		db.log.Debugf("removing and re-adding %s as a current raft voter", vc)
 		if err := db.raft.withReadLock(func(svc raftService) error {
-			return svc.RemoveServer(rsi, 0, 0).Error()
+			if err := svc.RemoveServer(rsi, 0, 0).Error(); err != nil {
+				return errors.Wrapf(err, "failed to remove %q as a raft replica", vc.Addr)
+			}
+			if err := svc.AddVoter(rsi, rsa, 0, 0).Error(); err != nil {
+				return errors.Wrapf(err, "failed to re-add %q as raft replica", vc.Addr)
+			}
+			return nil
 		}); err != nil {
-			return errors.Wrapf(err, "failed to remove %q as a raft replica", vc.Addr)
+			return err
 		}
 	default:
 		return errors.Errorf("unhandled manageVoter op: %s", op)
-	}
-
-	db.log.Debugf("adding %s as a new raft voter", vc)
-	if err := db.raft.withReadLock(func(svc raftService) error {
-		return svc.AddVoter(rsi, rsa, 0, 0).Error()
-	}); err != nil {
-		return errors.Wrapf(err, "failed to add %q as raft replica", vc.Addr)
 	}
 
 	return nil
