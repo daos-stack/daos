@@ -143,6 +143,10 @@ int ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
 			chk_query_pool_cb_t pool_cb, void *buf);
 int ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
 int ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all);
+int
+ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks);
+int
+     ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
