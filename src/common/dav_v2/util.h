@@ -158,7 +158,7 @@ util_div_ceil(unsigned a, unsigned b)
 #define util_atomic_load64(object, dest)\
 	util_atomic_load_explicit64(object, dest, memory_order_seq_cst)
 
-#define COMPILE_ERROR_ON(cond) ((void)sizeof(char[(cond) ? -1 : 1]))
+#define COMPILE_ERROR_ON(cond) _Static_assert(!(cond), "Static assertion failed: " #cond)
 
 /* macro for counting the number of varargs (up to 9) */
 #define COUNT(...)\
