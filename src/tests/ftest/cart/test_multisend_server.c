@@ -1,9 +1,11 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #include <semaphore.h>
+#include <daos/dpar.h>
 
 #include "crt_utils.h"
 #include "test_multisend_common.h"
@@ -125,7 +127,18 @@ test_run(d_rank_t my_rank)
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
+	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx[0], &test.tg_tid[0],
+				  &grp, &grp_size, NULL, &my_proto_fmt);
+	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
+
+	if (grp_size > 1) {
+		DBG_PRINT("Performing par_barrier on %d ranks\n", grp_size);
+		par_barrier(PAR_COMM_WORLD);
+	}
+
+	/* Rank 0 is chosen to save group config file for all servers */
 	if (my_rank == 0) {
+		/* Note: saving group config file tells clients they can send rpcs */
 		DBG_PRINT("Saving group (%s) config file\n", test.tg_local_group_name);
 		rc = crt_group_config_save(grp, true);
 		D_ASSERTF(rc == 0,
@@ -133,6 +146,8 @@ test_run(d_rank_t my_rank)
 	}
 	rc = crt_proto_register(&my_proto_fmt);
 	D_ASSERT(rc == 0);
+
+	DBG_PRINT("Server started\n");
 
 	rc = pthread_join(test.tg_tid[0], NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
