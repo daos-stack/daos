@@ -1268,13 +1268,13 @@ func TestSupport_getDateTime(t *testing.T) {
 			startTime, endTime, gotErr := getDateTime(log, collLogParams)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expStartTime != "" {
-				tmpStartTime, _ := time.Parse(MMDDYYYY_HHMMSS, tc.expStartTime)
+				tmpStartTime, _ := time.Parse(YYYYMMDD_HHMMSS, tc.expStartTime)
 				if tmpStartTime.Equal(startTime) == false {
 					t.Fatalf("Expected StartTime:=%s But Got :=%s", tmpStartTime, startTime)
 				}
 			}
 			if tc.expEndTime != "" {
-				tmpEndTime, _ := time.Parse(MMDDYYYY_HHMMSS, tc.expEndTime)
+				tmpEndTime, _ := time.Parse(YYYYMMDD_HHMMSS, tc.expEndTime)
 				if tmpEndTime.Equal(endTime) == false {
 					t.Fatalf("Expected EndTime:=%s But Got :=%s", tmpEndTime, endTime)
 				}
