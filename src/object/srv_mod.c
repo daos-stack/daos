@@ -70,7 +70,7 @@ obj_mod_setup(void)
 	/*
 	 * Server reuse client stack to issue some rebuild migration rpc.
 	 */
-	rc = daos_get_rpc_version(DAOS_OBJ_VERSION, daos_version_get_protocol(&version), &rpc_ver);
+	rc = daos_get_rpc_version(DAOS_OBJ_MODULE, daos_version_get_protocol(&version), &rpc_ver);
 	if (rc) {
 		D_ERROR("failed to get rpc protocol: %d\n", rc);
 		return rc;

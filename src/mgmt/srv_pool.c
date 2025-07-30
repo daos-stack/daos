@@ -102,7 +102,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, d_rank_list_t *rank_list, size_t
 	if (rc)
 		return rc;
 
-	opc  = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE, mgmt_ver);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE, mgmt_ver);
 	/*
 	 * Create a CoRPC to rank_list. Use CRT_RPC_FLAG_CO_FAILOUT because any
 	 * forwarding error will cause the current function to fail anyway.
