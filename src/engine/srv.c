@@ -1298,7 +1298,6 @@ enum {
 	XD_INIT_MUTEX,
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
-	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
 	XD_INIT_SYS_DB,
 	XD_INIT_XSTREAMS,
@@ -1335,9 +1334,6 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		vos_standalone_tls_fini();
-		/* fall through */
-	case XD_INIT_TLS_REG:
-		ds_tls_key_delete();
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1432,15 +1428,6 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
-
-	/* register xstream-local storage key */
-	rc = ds_tls_key_create();
-	if (rc) {
-		rc = dss_abterr2der(rc);
-		D_ERROR("Failed to register storage key: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(failed, rc);
-	}
-	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
 	rc = vos_standalone_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG);
