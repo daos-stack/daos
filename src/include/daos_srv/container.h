@@ -36,6 +36,8 @@ void ds_cont_svc_step_down(struct cont_svc *svc);
 int
     ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
+int
+    ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid);
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);

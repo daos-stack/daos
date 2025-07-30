@@ -1299,15 +1299,43 @@ daos_iod_recx_dup(daos_iod_t *iods, uint32_t iod_nr, daos_iod_t **iods_dup_ptr)
 	return 0;
 }
 
+static int
+get_agg_hae(struct obj_io_context *ioc)
+{
+	uint64_t        ec_agg_boundary = ioc->ioc_coc->sc_ec_agg_eph_boundary;
+	vos_cont_info_t cinfo;
+	int             rc;
+
+	if (ec_agg_boundary != 0) {
+		ioc->ioc_agg_hae = ec_agg_boundary;
+		return 0;
+	} else if (ioc->ioc_agg_hae != 0) {
+		return 0;
+	}
+
+	/* query vos aggregation hae */
+	rc = vos_cont_query(ioc->ioc_vos_coh, &cinfo);
+	if (rc) {
+		D_ERROR(DF_CONT " cont query failed, " DF_RC "\n",
+			DP_CONT(ioc->ioc_coc->sc_pool->spc_uuid, ioc->ioc_coc->sc_uuid), DP_RC(rc));
+		return rc;
+	}
+	ioc->ioc_agg_hae = cinfo.ci_hae;
+	return 0;
+}
+
 static bool
 obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_rw_out *orwo,
 			    struct obj_io_context *ioc)
 {
+	int rc;
+
 	D_ASSERT(orw->orw_flags & ORF_EC_RECOV);
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_AGG_BOUNDRY_MOVED))
 		return true;
 
+	rc = get_agg_hae(ioc);
 	/* agg_eph_boundary advanced, possibly cause epoch of EC data recovery
 	 * cannot get corresponding parity/data exts, need to retry the degraded
 	 * fetch from beginning. For ORF_EC_RECOV_SNAP case, need not retry as
@@ -1315,8 +1343,9 @@ obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_rw_out *orwo,
 	 */
 	if ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0 &&
 	    (orw->orw_flags & ORF_FOR_MIGRATION) == 0 &&
-	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundary) {
-		orwo->orw_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
+	    (rc || orw->orw_epoch < ioc->ioc_agg_hae)) {
+		if (rc == 0)
+			orwo->orw_epoch = ioc->ioc_agg_hae;
 		return true;
 	}
 
@@ -1462,6 +1491,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		bool                             size_only = false;
 		struct daos_recx_ep_list	*shadows = NULL;
 
+		rc = get_agg_hae(ioc);
+		if (rc) {
+			D_ERROR(DF_UOID " " DF_X64 "<" DF_X64 " ec_recov needs redo, " DF_RC "\n",
+				DP_UOID(orw->orw_oid), orw->orw_epoch, ioc->ioc_agg_hae, DP_RC(rc));
+			goto out;
+		}
+
 		bulk_op = CRT_BULK_PUT;
 		if (orw->orw_flags & ORF_CHECK_EXISTENCE)
 			fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
@@ -1493,8 +1529,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			rc = -DER_FETCH_AGAIN;
 			D_DEBUG(DB_IO,
 				DF_UOID " " DF_X64 "<" DF_X64 " ec_recov needs redo, " DF_RC "\n",
-				DP_UOID(orw->orw_oid), orw->orw_epoch,
-				ioc->ioc_coc->sc_ec_agg_eph_boundary, DP_RC(rc));
+				DP_UOID(orw->orw_oid), orw->orw_epoch, ioc->ioc_agg_hae, DP_RC(rc));
 			goto out;
 		}
 		if (ec_deg_fetch && (size_only || !spec_fetch)) {
@@ -1560,8 +1595,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		if (get_parity_list) {
 			parity_list = vos_ioh2recx_list(ioh);
 			if (parity_list != NULL) {
-				daos_recx_ep_list_set(parity_list, iods_nr,
-						      ioc->ioc_coc->sc_ec_agg_eph_boundary, 0);
+				daos_recx_ep_list_set(parity_list, iods_nr, ioc->ioc_agg_hae, 0);
 				daos_recx_ep_list_merge(parity_list, iods_nr);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = iods_nr;
@@ -1611,7 +1645,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 				 * Or, will recovery from max{parity_epoch, vos_epoch_
 				 * boundary}.
 				 */
-				vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundary;
+				vos_agg_epoch = ioc->ioc_agg_hae;
 				if (ioc->ioc_fetch_snap && orw->orw_epoch < vos_agg_epoch) {
 					recov_epoch = orw->orw_epoch;
 					recov_snap  = true;
@@ -2921,10 +2955,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		struct dtx_handle	*dth;
 
 		/* ORF_FETCH_EPOCH_EC_AGG_BOUNDARY only used for rebuild fetch. The container's
-		 * sc_ec_agg_eph_boundary possibly be different on the initiator and target engines
+		 * ioc_agg_hae possibly be different on the initiator and target engines
 		 * of the rebuild fetch, initiator selected fetch epoch possibly lower than readable
 		 * epoch at target engine side if vos aggregation merged adjacent extents to higher
-		 * epoch. For this case increase the fetch epoch to sc_ec_agg_eph_boundary.
+		 * epoch. For this case increase the fetch epoch to ioc_agg_hae.
 		 */
 		if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
 			uint64_t rebuild_epoch;
@@ -2933,18 +2967,23 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 				  "bad orw_epoch " DF_X64 ", orw_epoch_first " DF_X64 "\n",
 				  orw->orw_epoch, orw->orw_epoch_first);
 			rebuild_epoch = orw->orw_epoch_first;
-			if (orw->orw_epoch < ioc.ioc_coc->sc_ec_agg_eph_boundary) {
+			rc            = get_agg_hae(&ioc);
+			if (rc) {
+				D_ERROR(DF_UOID " get_agg_hae failed, " DF_RC "\n",
+					DP_UOID(orw->orw_oid), DP_RC(rc));
+				goto out;
+			}
+			if (orw->orw_epoch < ioc.ioc_agg_hae) {
 				uint64_t fetch_epoch;
 
 				/* Both EC and VOS aggregation don't across rebuild epoch */
-				fetch_epoch =
-				    min(ioc.ioc_coc->sc_ec_agg_eph_boundary, rebuild_epoch);
+				fetch_epoch = min(ioc.ioc_agg_hae, rebuild_epoch);
 				D_DEBUG(DB_IO,
 					DF_UOID " increase fetch epoch from " DF_X64 " to " DF_X64
-						", sc_ec_agg_eph_boundary: " DF_X64
-						", rebuild_epoch: " DF_X64 "\n",
+						", ioc_agg_hae: " DF_X64 ", rebuild_epoch: " DF_X64
+						"\n",
 					DP_UOID(orw->orw_oid), orw->orw_epoch, fetch_epoch,
-					ioc.ioc_coc->sc_ec_agg_eph_boundary, rebuild_epoch);
+					ioc.ioc_agg_hae, rebuild_epoch);
 				orw->orw_epoch = fetch_epoch;
 			}
 			orw->orw_epoch_first = orw->orw_epoch;
