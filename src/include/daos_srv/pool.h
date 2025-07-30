@@ -405,6 +405,10 @@ struct ds_pool *ds_pool_svc2pool(struct ds_pool_svc *ds_svc);
 struct cont_svc *ds_pool_ps2cs(struct ds_pool_svc *ds_svc);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
+int
+ds_pool_rebuild_start(uuid_t pool_uuid, struct rsvc_hint *hint);
+int
+	    ds_pool_rebuild_stop(uuid_t pool_uuid, struct rsvc_hint *hint);
 
 extern bool ec_agg_disabled;
 
