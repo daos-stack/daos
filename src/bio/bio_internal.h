@@ -386,6 +386,7 @@ struct bio_xs_context {
 	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
 	unsigned int		 bxc_self_polling:1;	/* for standalone VOS */
+	unsigned int             bxc_skip_draining : 1;
 };
 
 /* Per VOS instance I/O context */

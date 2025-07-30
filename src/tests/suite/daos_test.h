@@ -50,9 +50,12 @@
 /** Server crt group ID */
 extern const char *server_group;
 
-/** pool incremental reintegration */
+/** pool incremental reintegration rebuild */
 extern int dt_incr_reint;
 extern bool dt_no_punch;
+
+/** pool interactive rebuild */
+extern bool         dt_rb_interactive;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
@@ -137,11 +140,8 @@ typedef struct {
 	uint64_t		fail_loc;
 	uint64_t		fail_num;
 	uint64_t		fail_value;
-	uint32_t		overlap:1,
-				not_check_result:1,
-				idx_no_jump:1,
-				no_rebuild:1,
-				delay_rebuild:1;
+	uint32_t                 overlap : 1, not_check_result : 1, idx_no_jump : 1, no_rebuild : 1,
+	    delay_rebuild : 1, interactive_rebuild : 1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -286,6 +286,9 @@ async_enable(void **state)
 
 	arg->overlap = 0;
 	arg->async   = true;
+	/* reset fail injection to avoid the case of previously failed test case affect next one */
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
 	return 0;
 }
 
@@ -296,6 +299,9 @@ async_disable(void **state)
 
 	arg->overlap = 0;
 	arg->async   = false;
+	/* reset fail injection to avoid the case of previously failed test case affect next one */
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
 	return 0;
 }
 
@@ -461,6 +467,11 @@ int rebuild_small_sub_rf0_setup(void **state);
 int rebuild_sub_3nodes_rf0_setup(void **state);
 int rebuild_sub_6nodes_rf1_setup(void **state);
 int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
+
+int
+fi_rebuild_stop(void *data);
+int
+     fi_rebuild_resume_wait(void *data);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,
