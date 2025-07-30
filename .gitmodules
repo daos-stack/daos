@@ -28,3 +28,6 @@
 [submodule "mercury"]
 	path = deps/mercury
 	url = https://github.com/mercury-hpc/mercury.git
+[submodule "deps/pmdk"]
+	path = deps/pmdk
+	url = https://github.com/pmem/pmdk.git
