@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -62,7 +63,7 @@ type LogTypeSubCmd struct {
 }
 
 const (
-	MMDDYYYY        = "1-2-2006"
+	YYYYMMDD        = "2006-01-02"
 	HHMMSS          = "15:4:5"
 	MMDDHHMMSS      = "1/2-15:4:5"
 	MMDDYYYY_HHMMSS = "1-2-2006 15:4:5"
@@ -164,14 +165,14 @@ type logCopy struct {
 // Verify if the date and time argument is valid and return error if it's invalid
 func (cmd *CollectLogSubCmd) DateTimeValidate() error {
 	if cmd.LogStartDate != "" || cmd.LogEndDate != "" {
-		startDate, err := time.Parse(MMDDYYYY, cmd.LogStartDate)
+		startDate, err := time.Parse(YYYYMMDD, cmd.LogStartDate)
 		if err != nil {
-			return errors.New("Invalid date, please provide the startDate in MM-DD-YYYY format")
+			return errors.New("Invalid date, please provide the startDate in YYYY-MM-DD format")
 		}
 
-		endDate, err := time.Parse(MMDDYYYY, cmd.LogEndDate)
+		endDate, err := time.Parse(YYYYMMDD, cmd.LogEndDate)
 		if err != nil {
-			return errors.New("Invalid date, please provide the endDate in MM-DD-YYYY format")
+			return errors.New("Invalid date, please provide the endDate in YYYY-MM-DD format")
 		}
 
 		if startDate.After(endDate) {

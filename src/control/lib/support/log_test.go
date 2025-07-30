@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -893,30 +894,30 @@ func TestSupport_DateTimeValidate(t *testing.T) {
 			expErr: nil,
 		},
 		"Valid StartDate No EndDate": {
-			logStartDate: "12-01-2024",
-			expErr:       errors.New("Invalid date, please provide the endDate in MM-DD-YYYY format"),
+			logStartDate: "2024-12-01-2024",
+			expErr:       errors.New("Invalid date, please provide the endDate in YYYY-MM-DD format"),
 		},
 		"No StartDate Valid EndDate": {
-			logEndDate: "12-31-2024",
-			expErr:     errors.New("Invalid date, please provide the startDate in MM-DD-YYYY format"),
+			logEndDate: "2024-12-31",
+			expErr:     errors.New("Invalid date, please provide the startDate in YYYY-MM-DD format"),
 		},
 		"Invalid StartDate No EndDate": {
-			logStartDate: "44-22-2024",
-			expErr:       errors.New("Invalid date, please provide the startDate in MM-DD-YYYY format"),
+			logStartDate: "2024-44-22",
+			expErr:       errors.New("Invalid date, please provide the startDate in YYYY-MM-DD format"),
 		},
 		"Invalid EndDate": {
-			logStartDate: "12-01-2024",
-			logEndDate:   "44-22-2024",
-			expErr:       errors.New("Invalid date, please provide the endDate in MM-DD-YYYY format"),
+			logStartDate: "2024-12-01",
+			logEndDate:   "2024-44-22",
+			expErr:       errors.New("Invalid date, please provide the endDate in YYYY-MM-DD format"),
 		},
 		"StartDate after EndDate": {
-			logStartDate: "10-01-2024",
-			logEndDate:   "05-06-2024",
+			logStartDate: "2024-10-01",
+			logEndDate:   "2024-05-06",
 			expErr:       errors.New("start-date can not be after end-date"),
 		},
 		"Valid StartDate and EndDate": {
-			logStartDate: "12-01-2024",
-			logEndDate:   "12-31-2024",
+			logStartDate: "2024-12-01",
+			logEndDate:   "2024-12-31",
 			expErr:       nil,
 		},
 		"Valid StartTime No EndTime": {
