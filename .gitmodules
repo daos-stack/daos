@@ -13,9 +13,6 @@
 [submodule "ucx"]
 	path = deps/ucx
 	url = https://github.com/openucx/ucx.git
-[submodule "pmdk"]
-	path = deps/pmdk
-	url = https://github.com/pmem/pmdk.git
 [submodule "isal"]
 	path = deps/isal
 	url = https://github.com/intel/isa-l.git
