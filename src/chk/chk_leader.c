@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -178,13 +179,12 @@ chk_leader_get_iv_ns(void)
 static int
 chk_rank_del(struct chk_instance *ins, d_rank_t rank)
 {
-	struct chk_rank_rec	*crr;
-	struct chk_pending_rec	*cpr;
-	struct chk_pending_rec	*tmp;
-	d_iov_t			 riov;
-	d_iov_t			 kiov;
-	int			 rc;
-	int			 rc1;
+	struct chk_rank_rec    *crr;
+	struct chk_pending_rec *cpr;
+	d_iov_t                 riov;
+	d_iov_t                 kiov;
+	int                     rc;
+	int                     rc1;
 
 	d_iov_set(&riov, NULL, 0);
 	d_iov_set(&kiov, &rank, sizeof(rank));
@@ -198,7 +198,8 @@ chk_rank_del(struct chk_instance *ins, d_rank_t rank)
 
 	/* Cleanup all pending records belong to this rank. */
 	ABT_rwlock_wrlock(ins->ci_abt_lock);
-	d_list_for_each_entry_safe(cpr, tmp, &crr->crr_pending_list, cpr_rank_link) {
+	while ((cpr = d_list_pop_entry(&crr->crr_pending_list, struct chk_pending_rec,
+				       cpr_rank_link)) != NULL) {
 		rc1 = chk_pending_wakeup(ins, cpr);
 		if (rc1 != 0 && rc == 0)
 			rc = rc1;
@@ -3393,8 +3394,7 @@ chk_leader_prop(chk_prop_cb_t prop_cb, void *buf)
 }
 
 static int
-chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bool for_all,
-			bool locked, uint32_t *cla)
+chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act)
 {
 	struct chk_pending_rec	*pending = NULL;
 	struct chk_pool_rec	*pool = NULL;
@@ -3402,7 +3402,7 @@ chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bo
 	d_iov_t			 riov;
 	int			 rc;
 
-	rc = chk_pending_del(ins, seq, locked, &pending);
+	rc = chk_pending_del(ins, seq, &pending);
 	if (rc != 0)
 		goto out;
 
@@ -3417,9 +3417,6 @@ chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bo
 		pending->cpr_action = act;
 		ABT_cond_broadcast(pending->cpr_cond);
 		ABT_mutex_unlock(pending->cpr_mutex);
-
-		if (cla != NULL)
-			*cla = pending->cpr_class;
 	} else {
 		d_iov_set(&riov, NULL, 0);
 		d_iov_set(&kiov, pending->cpr_uuid, sizeof(uuid_t));
@@ -3428,14 +3425,10 @@ chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bo
 			pool = (struct chk_pool_rec *)riov.iov_buf;
 			if (pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING)
 				pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-		} else {
-			rc = 0;
 		}
 
-		/* For locked case, check engines have already processed related interaction. */
-		if (!locked)
-			rc = chk_act_remote(ins->ci_ranks, ins->ci_bk.cb_gen, seq,
-					    pending->cpr_class, act, pending->cpr_rank, for_all);
+		rc = chk_act_remote(ins->ci_ranks, ins->ci_bk.cb_gen, seq, pending->cpr_class, act,
+				    pending->cpr_rank);
 
 		chk_pending_destroy(pending);
 	}
@@ -3449,17 +3442,11 @@ out:
 }
 
 int
-chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
+chk_leader_act(uint64_t seq, uint32_t act)
 {
-	struct chk_instance	*ins = chk_leader;
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_property	*prop = &ins->ci_prop;
-	struct chk_pool_rec	*pool = NULL;
-	struct chk_pool_rec	*pool_tmp = NULL;
-	struct chk_pending_rec	*cpr = NULL;
-	struct chk_pending_rec	*cpr_tmp = NULL;
-	uint32_t		 cla = 0;
-	int			 rc;
+	struct chk_instance *ins = chk_leader;
+	struct chk_bookmark *cbk = &ins->ci_bk;
+	int                  rc;
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
@@ -3474,45 +3461,12 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = chk_leader_act_internal(ins, seq, act, for_all, false, &cla);
-	if (rc != 0 || !for_all)
-		goto out;
-
-	if (likely(prop->cp_policies[cla] != act)) {
-		prop->cp_policies[cla] = act;
-		chk_prop_update(prop, NULL);
-	}
-
-	/*
-	 * Hold reference on each to guarantee that the next 'tmp' will not be unlinked from the
-	 * pool list during current pool process.
-	 */
-	d_list_for_each_entry(pool, &ins->ci_pool_list, cpr_link)
-		chk_pool_get(pool);
-
-	d_list_for_each_entry_safe(pool, pool_tmp, &ins->ci_pool_list, cpr_link) {
-		if (rc == 0) {
-			ABT_rwlock_wrlock(ins->ci_abt_lock);
-			d_list_for_each_entry_safe(cpr, cpr_tmp, &pool->cpr_pending_list,
-						   cpr_pool_link) {
-				if (cpr->cpr_class != cla ||
-				    cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)
-					continue;
-
-				rc = chk_leader_act_internal(ins, cpr->cpr_seq, act, false, true,
-							     NULL);
-				if (rc != 0)
-					break;
-			}
-			ABT_rwlock_unlock(ins->ci_abt_lock);
-		}
-		chk_pool_put(pool);
-	}
+	rc = chk_leader_act_internal(ins, seq, act);
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_LEADER" takes action for report with seq "DF_X64", action %u, flags %s: %d\n",
-		 DP_LEADER(ins), seq, act, for_all ? "all" : "once", rc);
+		 DF_LEADER " takes action for report with seq " DF_X64 ", action %u: %d\n",
+		 DP_LEADER(ins), seq, act, rc);
 
 	return rc;
 }
