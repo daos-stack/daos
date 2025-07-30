@@ -646,7 +646,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %endif
 
 %changelog
-* Mon Jul 14 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-11
+* Wed Jul 30 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-11
 - pmemobj errors and warnings reported via DAOS logging system
 
 * Mon May 19 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-10

@@ -2,7 +2,7 @@ daos (2.7.101-11) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * pmemobj errors and warnings reported via DAOS logging system
 
- -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Mon, 14 Jul 2025 12:00:00 +0200
+ -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Wed, 30 Jul 2025 12:00:00 +0200
 
 daos (2.7.101-10) unstable; urgency=medium
   [ Jeff Olivier ]
