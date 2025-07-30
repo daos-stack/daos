@@ -1,5 +1,6 @@
 /*
  *  (C) Copyright 2016-2024 Intel Corporation.
+ *  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -129,35 +130,38 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	bool			 is_ec_obj;
 	struct dc_object	*obj = rw_args->shard_args->auxi.obj_auxi->obj;
 	struct dc_csum_veriry_args csum_verify_args = {
-	    .csummer    = rw_args->co->dc_csummer,
-	    .sgls       = rw_args->rwaa_sgls,
-	    .iods       = orw->orw_iod_array.oia_iods,
-	    .iods_csums = orwo->orw_iod_csums.ca_arrays,
-	    .maps       = orwo->orw_maps.ca_arrays,
-	    .dkey       = &orw->orw_dkey,
-	    .sizes      = orwo->orw_iod_sizes.ca_arrays,
-	    .oid        = orw->orw_oid,
-	    .iod_nr     = orw->orw_iod_array.oia_iod_nr,
-	    .maps_nr    = orwo->orw_maps.ca_count,
-	    .oiods      = rw_args->shard_args->oiods,
-	    .reasb_req  = rw_args->shard_args->reasb_req,
-	    .obj        = obj,
-	    .dkey_hash  = rw_args->shard_args->auxi.obj_auxi->dkey_hash,
-	    .shard_offs = rw_args->shard_args->offs,
-	    .oc_attr    = &obj->cob_oca,
-	    .iov_csum   = rw_args2csum_iov(rw_args->shard_args),
-	    .shard      = rw_args->shard_args->auxi.shard,
+	    .csummer      = rw_args->co->dc_csummer,
+	    .sgls         = rw_args->rwaa_sgls,
+	    .iods         = orw->orw_iod_array.oia_iods,
+	    .iods_csums   = orwo->orw_iod_csums.ca_arrays,
+	    .maps         = orwo->orw_maps.ca_arrays,
+	    .dkey         = &orw->orw_dkey,
+	    .sizes        = orwo->orw_iod_sizes.ca_arrays,
+	    .oid          = orw->orw_oid,
+	    .iod_nr       = orw->orw_iod_array.oia_iod_nr,
+	    .maps_nr      = orwo->orw_maps.ca_count,
+	    .oiods        = rw_args->shard_args->oiods,
+	    .reasb_req    = rw_args->shard_args->reasb_req,
+	    .obj          = obj,
+	    .dkey_hash    = rw_args->shard_args->auxi.obj_auxi->dkey_hash,
+	    .shard_offs   = rw_args->shard_args->offs,
+	    .oc_attr      = &obj->cob_oca,
+	    .iov_csum     = rw_args2csum_iov(rw_args->shard_args),
+	    .shard        = rw_args->shard_args->auxi.shard,
+	    .recov_list   = orwo->orw_rels.ca_arrays,
+	    .ec_deg_fetch = false,
 	};
 
-	if (obj_is_ec(obj))
+	if (obj_is_ec(obj)) {
 		csum_verify_args.shard_idx =
 		    obj_ec_shard_off(obj,
 				     rw_args->shard_args->auxi.obj_auxi->dkey_hash,
 				     orw->orw_oid.id_shard);
-	else
+		csum_verify_args.ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
+	} else {
 		csum_verify_args.shard_idx = orw->orw_oid.id_shard %
 					     daos_oclass_grp_size(&obj->cob_oca);
-
+	}
 
 	rc = dc_rw_cb_csum_verify(&csum_verify_args);
 
@@ -519,8 +523,8 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		struct shard_fetch_stat	*fetch_stat;
 		bool			conflict = false;
 
-		D_DEBUG(DB_IO, DF_UOID" size "DF_U64" eph "DF_U64"\n", DP_UOID(orw->orw_oid),
-			sizes[i], orw->orw_epoch);
+		D_DEBUG(DB_IO, DF_UOID " size[%d] " DF_U64 " eph " DF_U64 "\n",
+			DP_UOID(orw->orw_oid), i, sizes[i], orw->orw_epoch);
 
 		if (!is_ec_obj) {
 			iods[i].iod_size = sizes[i];
@@ -1176,6 +1180,16 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_api_flags = api_args->flags;
 	orw->orw_epoch = auxi->epoch.oe_value;
 	orw->orw_epoch_first = auxi->epoch.oe_first;
+	if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
+		D_ASSERTF(auxi->epoch.oe_value == auxi->epoch.oe_first,
+			  "bad epoch.oe_value " DF_X64 ", epoch.oe_first " DF_X64 "\n",
+			  auxi->epoch.oe_value, auxi->epoch.oe_first);
+		D_ASSERT(api_args->extra_arg != NULL);
+		orw->orw_epoch_first = (uintptr_t)api_args->extra_arg;
+		D_ASSERTF(orw->orw_epoch <= orw->orw_epoch_first,
+			  "bad orw_epoch " DF_X64 ", orw_epoch_first " DF_X64 "\n", orw->orw_epoch,
+			  orw->orw_epoch_first);
+	}
 	orw->orw_dkey_hash = auxi->obj_auxi->dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
