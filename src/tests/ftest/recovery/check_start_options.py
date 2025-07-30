@@ -87,7 +87,7 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
             dmg_command.system_start()
             # return results in PASS.
             return
-        command = f"sudo rm -rf {pool_path}"
+        command = command_as_user(command=f"rm -rf {pool_path}", user="root")
         remove_result = run_remote(
             log=self.log, hosts=self.hostlist_servers, command=command)
         if not remove_result.passed:
@@ -233,3 +233,159 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
         dmg_command.check_disable()
         # The pool is orphan pool, so skip the cleanup.
         pool.skip_cleanup()
+
+    def test_check_start_find_orphans(self):
+        """Test dmg check start --find-orphans.
+
+        When some fault is detected and not fixed due to --all-interactive, checker state
+        becomes stopped. At this point, we can restart the checker, but the checker can’t
+        detect orphan pool when its state is stopped. One way to detect is to reset it
+        (dmg check start --reset). However, admin may not want to reset it, so the
+        alternative is to use --find-orphans.
+
+        1. Create a pool and a container.
+        2. Inject non orphan pool fault such as orphan container.
+        3. Stop server, enable checker, set policy to --all-interactive, and start without
+        argument.
+        4. Check that orphan container is detected.
+        5. Stop and disable checker. Start system.
+        6. Create an orphan pool.
+        7. Enable checker and start without argument.
+        8. Check that orphan pool isn't detected. (At this point, two orphan containers
+        may be detected due to a bug.)
+        9. Stop the checker and start with --find-orphans.
+        10. Verify that the orphan pool is detected this time.
+        11. Verify that the checker can repair the orphan pool.
+
+        Jira ID: DAOS-17819
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=recovery,cat_recov
+        :avocado: tags=DMGCheckStartOptionsTest,test_check_start_find_orphans
+        """
+        # 1. Create a pool and a container.
+        self.log_step("Create a pool and a container.")
+        pool_1 = self.get_pool(connect=False)
+        container = self.get_container(pool=pool_1)
+
+        # 2. Inject non orphan pool fault such as orphan container.
+        self.log_step("Inject orphan container.")
+        daos_command = self.get_daos_command()
+        daos_command.faults_container(
+            pool=pool_1.identifier, cont=container.identifier,
+            location="DAOS_CHK_CONT_ORPHAN")
+
+        # Enable checker, set policy to --all-interactive, and start without argument.
+        msg = ("Enable checker, set policy to --all-interactive, and start without "
+               "argument.")
+        self.log_step(msg)
+        dmg_command = self.get_dmg_command()
+        dmg_command.check_enable()
+        dmg_command.check_set_policy(all_interactive=True)
+        dmg_command.check_start()
+
+        # 4. Check that orphan container is detected.
+        self.log_step("Check that orphan container is detected.")
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            # Even if "status" is RUNNING, "reports" may be null/None, so check both.
+            status = check_query_out["response"]["status"]
+            query_reports = check_query_out["response"]["reports"]
+            if status == "RUNNING" and query_reports:
+                break
+            time.sleep(5)
+        if not query_reports:
+            self.fail("Checker didn't detect any inconsistency!")
+        fault_msg = query_reports[0]["msg"]
+        orphan_container = "orphan container"
+        if orphan_container not in fault_msg:
+            msg = (f"Checker didn't detect the {orphan_container}! Fault msg = "
+                   f"{fault_msg}")
+            self.fail(msg)
+
+        # 5. Stop and disable checker. Start system.
+        self.log_step("Stop and disable checker.")
+        dmg_command.check_stop()
+        dmg_command.check_disable()
+
+        # 6. Create an orphan pool.
+        self.log_step("Create an orphan pool.")
+        pool_2 = self.get_pool(connect=False)
+        dmg_command.faults_mgmt_svc_pool(
+            pool=pool_2.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_MS")
+
+        # 7. Enable checker and start without argument.
+        self.log_step("Enable checker and start without argument.")
+        dmg_command.check_enable()
+        dmg_command.check_start()
+
+        # 8. Check that orphan pool isn't detected.
+        self.log_step("Check that orphan pool isn't detected.")
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "RUNNING":
+                query_reports = check_query_out["response"]["reports"]
+                break
+            time.sleep(5)
+        if not query_reports:
+            self.fail("Checker didn't detect any inconsistency!")
+        orphan_pool = "orphan pool"
+        # Now we have multiple faults, so iterate query_reports.
+        for query_report in query_reports:
+            fault_msg = query_report["msg"]
+            if orphan_pool in fault_msg:
+                self.fail(f"Checker detected orphan pool! Fault msg = {fault_msg}")
+
+        # 9. Stop the checker and start with --find-orphans.
+        self.log_step("Stop the checker and start with --find-orphans.")
+        dmg_command.check_stop()
+        dmg_command.check_start(find_orphans=True)
+
+        # 10. Verify that the orphan pool is detected this time.
+        self.log_step("Verify that the orphan pool is detected this time.")
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "RUNNING":
+                query_reports = check_query_out["response"]["reports"]
+                break
+            time.sleep(5)
+        if not query_reports:
+            self.fail("Checker didn't detect any inconsistency!")
+        orphan_pool_found = False
+        pool_2_seq_num = None
+        for query_report in query_reports:
+            fault_msg = query_report["msg"]
+            if orphan_pool in fault_msg:
+                orphan_pool_found = True
+                # Save sequence number for repair in the next step.
+                pool_2_seq_num = query_report["seq"]
+                break
+        if not orphan_pool_found:
+            msg = (
+                f"Checker didn't detect orphan pool! Repair reports = {query_reports}")
+            self.fail(msg)
+
+        # 11. Verify that the checker can repair the orphan pool.
+        self.log_step("Verify that the checker can repair the orphan pool.")
+        dmg_command.check_repair(seq_num=pool_2_seq_num, action="0")
+        repair_phase = None
+        orphan_pool_repaired = False
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "RUNNING":
+                # Check the "phase" field of pool_2. Look for CSP_DONE.
+                pool_2_status = check_query_out["response"]["pools"][pool_2.uuid.lower()]
+                repair_phase = pool_2_status["phase"]
+                if repair_phase == "CSP_DONE":
+                    orphan_pool_repaired = True
+                    break
+            time.sleep(5)
+        if not orphan_pool_repaired:
+            self.fail("Orphan pool wasn't repaired!")
+
+        # Prepare for tearDown.
+        dmg_command.check_disable()
+        pool_1.skip_cleanup()
+        pool_2.skip_cleanup()
+        container.skip_cleanup()
