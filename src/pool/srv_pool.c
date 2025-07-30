@@ -6203,9 +6203,9 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 		current_layout_ver = 0;
 
 	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
-		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
-					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
-					 RB_OP_UPGRADE, 0);
+		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
+					 DS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE,
+					 false /* stop_admin */, 0);
 		if (rc == 0)
 			*scheduled_layout_upgrade = true;
 	}
@@ -7434,8 +7434,8 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 int
 ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
-	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list,
-					NULL, NULL, NULL, NULL, NULL, NULL);
+	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, true, list, NULL, NULL, NULL,
+					NULL, NULL, NULL);
 }
 
 int
@@ -7519,8 +7519,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		tgt_map_ver);
 
 	if (tgt_map_ver != 0) {
-		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph,
-					 0, &target_list, RB_OP_REBUILD, delay);
+		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
+					 RB_OP_REBUILD, false /* stop_admin */, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -8232,6 +8232,45 @@ void
 ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 {
 	pool_svc_stop_handler(rpc, DAOS_POOL_VERSION);
+}
+
+/* TODO: make a real RPC handler ds_pool_rebuild_stop_handler(crt_rpc *rpc) to call this. */
+int
+ds_pool_rebuild_stop(uuid_t pool_uuid, struct rsvc_hint *hint)
+{
+	struct pool_svc *svc;
+	int              rc;
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
+	if (rc != 0)
+		return rc;
+
+	rc = ds_rebuild_admin_stop(svc->ps_pool);
+
+	/* TODO: ds_rsvc_set_hint(&svc->ps_rsvc, &out->hint); */
+	pool_svc_put_leader(svc);
+	return rc;
+}
+
+/* administrator (via dmg command) asks to resume normal rebuild behavior for pool
+ * (if it has not already happened due to another automatic or manual rebuild in the meantime).
+ * TODO: make a real RPC handler ds_pool_rebuild_start_handler(crt_rpc *rpc) to call this.
+ */
+int
+ds_pool_rebuild_start(uuid_t pool_uuid, struct rsvc_hint *hint)
+{
+	struct pool_svc *svc;
+	int              rc;
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
+	if (rc != 0)
+		return rc;
+
+	rc = ds_rebuild_admin_start(svc->ps_pool);
+
+	/* TODO: ds_rsvc_set_hint(&svc->ps_rsvc, &out->hint); */
+	pool_svc_put_leader(svc);
+	return rc;
 }
 
 /**

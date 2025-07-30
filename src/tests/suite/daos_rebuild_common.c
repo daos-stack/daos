@@ -1182,6 +1182,92 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 		*ranks_num = idx;
 }
 
+/* inject fault on leader engine to stop an in-progress rebuild */
+int
+fi_rebuild_stop(void *data)
+{
+	test_arg_t *arg = data;
+	d_rank_t    leader;
+	int         rc;
+
+	if (arg->myrank != 0)
+		return 0;
+
+	rc = test_get_leader(arg, &leader);
+	if (rc) {
+		print_message("get pool " DF_UUIDF " leader failed: %d\n",
+			      DP_UUID(arg->pool.pool_uuid), rc);
+		assert_rc_equal(rc, 0);
+	}
+
+	printf("%s(): pool " DF_UUIDF ": send ADMIN_STOP to leader rank %d\n", __FUNCTION__,
+	       DP_UUID(arg->pool.pool_uuid), leader);
+	test_set_engine_fail_loc(arg, leader, DAOS_REBUILD_ADMIN_STOP | DAOS_FAIL_ONCE);
+
+	return 0;
+}
+
+/* resume after a stopped rebuild, and optionally inject a fault to start a new rebuild */
+int
+fi_rebuild_resume_wait(void *data)
+{
+	test_arg_t                 *arg = data;
+	struct daos_rebuild_status *rst = &arg->pool.pool_info.pi_rebuild_st;
+
+	bool                        skip_restart = false;
+	d_rank_t                    leader;
+	int                         rc;
+
+	if (arg->myrank != 0)
+		return 0;
+
+	if (arg->rebuild_cb == fi_rebuild_resume_wait && arg->rebuild_cb_arg)
+		skip_restart = *((bool *)arg->rebuild_cb_arg);
+	if (arg->rebuild_post_cb == fi_rebuild_resume_wait && arg->rebuild_post_cb_arg)
+		skip_restart = *((bool *)arg->rebuild_post_cb_arg);
+
+	rc = test_get_leader(arg, &leader);
+	if (rc) {
+		print_message("get pool " DF_UUIDF " leader failed: %d\n",
+			      DP_UUID(arg->pool.pool_uuid), rc);
+		assert_rc_equal(rc, 0);
+	}
+
+	/* Verify that the stop resulted in the correct rebuild status */
+	print_message("check: stopped rebuild rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
+		      rst->rs_errno, -DER_OP_CANCELED, rst->rs_state, DRS_NOT_STARTED);
+	assert_int_equal(rst->rs_errno, -DER_OP_CANCELED);
+	assert_int_equal(rst->rs_state, DRS_NOT_STARTED);
+	print_message("check passed\n");
+
+	if (skip_restart)
+		return 0;
+
+	/* Issue start fault injection to re-run the rebuild to successful completion */
+	printf("%s(): pool " DF_UUIDF ": send ADMIN_START to leader rank %d\n", __FUNCTION__,
+	       DP_UUID(arg->pool.pool_uuid), leader);
+	test_set_engine_fail_loc(arg, leader, DAOS_REBUILD_ADMIN_START | DAOS_FAIL_ONCE);
+
+	/* Verify that the start resulted in a fully completed rebuild.
+	 * NB: loop to get past the immediate remnant state from the previous stop (OP_CANCELED)
+	 */
+	do {
+		sleep(2);
+		test_rebuild_wait(&arg, 1);
+		print_message(
+		    "current rebuild state: rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
+		    rst->rs_errno, 0, rst->rs_state, DRS_COMPLETED);
+	} while (rst->rs_errno == -DER_OP_CANCELED);
+	print_message(
+	    "check: resumed rebuild done: rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
+	    rst->rs_errno, 0, rst->rs_state, DRS_COMPLETED);
+	assert_int_equal(rst->rs_errno, 0);
+	assert_int_equal(rst->rs_state, DRS_COMPLETED);
+	print_message("check passed\n");
+
+	return 0;
+}
+
 void
 save_group_state(void **state)
 {
