@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -727,28 +728,24 @@ out:
 }
 
 int
-chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
-	       uint32_t act, d_rank_t rank, bool for_all)
+chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act,
+	       d_rank_t rank)
 {
 	crt_rpc_t		*req = NULL;
 	struct chk_act_in	*cai;
 	struct chk_act_out	*cao;
 	int			 rc;
 
-	if (for_all)
-		rc = chk_co_rpc_prepare(rank_list, CHK_ACT, &req, false);
-	else
-		rc = chk_sg_rpc_prepare(rank, CHK_ACT, &req);
-
+	rc = chk_sg_rpc_prepare(rank, CHK_ACT, &req);
 	if (rc != 0)
 		goto out;
 
-	cai = crt_req_get(req);
-	cai->cai_gen = gen;
-	cai->cai_seq = seq;
-	cai->cai_cla = cla;
-	cai->cai_act = act;
-	cai->cai_flags = for_all ? CAF_FOR_ALL : 0;
+	cai            = crt_req_get(req);
+	cai->cai_gen   = gen;
+	cai->cai_seq   = seq;
+	cai->cai_cla   = cla;
+	cai->cai_act   = act;
+	cai->cai_flags = 0;
 
 	rc = dss_rpc_send(req);
 	if (rc != 0)

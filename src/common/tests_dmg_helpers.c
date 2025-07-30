@@ -2087,7 +2087,7 @@ out:
 }
 
 int
-dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt, bool for_all)
+dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt)
 {
 	char			**args = NULL;
 	struct json_object	*dmg_out = NULL;
@@ -2098,16 +2098,10 @@ dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt, bool f
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	if (for_all) {
-		args = cmd_push_arg(args, &argcount, " -f");
-		if (args == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
-
 	rc = daos_dmg_json_pipe("check repair", dmg_config_file, args, argcount, &dmg_out);
 	if (rc != 0)
-		D_ERROR("dmg check repair with seq %lu, opt %u, for_all %s, failed: %d\n",
-			(unsigned long)seq, opt, for_all ? "yes" : "no", rc);
+		D_ERROR("dmg check repair with seq %lu, opt %u, failed: %d\n", (unsigned long)seq,
+			opt, rc);
 
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
