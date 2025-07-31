@@ -123,7 +123,7 @@ setup(void)
 	/*
 	 * Server reuse client stack to issue some pool rpc.
 	 */
-	rc = daos_get_rpc_version(DAOS_POOL_VERSION, daos_version_get_protocol(&version), &rpc_ver);
+	rc = daos_get_rpc_version(DAOS_POOL_MODULE, daos_version_get_protocol(&version), &rpc_ver);
 	if (rc) {
 		D_ERROR("failed to get rpc protocol: %d\n", rc);
 		return rc;
