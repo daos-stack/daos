@@ -88,6 +88,8 @@ struct dss_module_info {
 	int			dmi_ctx_id;
 	uint32_t		dmi_dtx_batched_started:1,
 				dmi_srv_shutting_down:1;
+	/* current daos system run-time version */
+	daos_version_t           dmi_version;
 	d_list_t		dmi_dtx_batched_cont_open_list;
 	d_list_t		dmi_dtx_batched_cont_close_list;
 	d_list_t		dmi_dtx_batched_pool_list;
@@ -405,7 +407,7 @@ struct dss_module {
 	/* Array of the count of RPCs which are dedicated for client nodes only */
 	uint32_t			sm_cli_count[2];
 	/* Array of RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler		*sm_handlers[2];
+	struct daos_rpc_handler         *sm_handlers[2];
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
 	struct dss_drpc_handler		*sm_drpc_handlers;
 
@@ -813,5 +815,38 @@ void
 dss_chore_diy(struct dss_chore *chore);
 bool
 engine_in_check(void);
+
+void
+dss_set_join_version(daos_version_t version);
+daos_version_t
+dss_get_join_version(void);
+
+/**
+ * @brief Selects the appropriate module version based on the protocol version
+ * for server side rpc.
+ *
+ * @param module_ver    Output parameter for the selected module version
+ * @return 0 or negative error
+ */
+static inline int
+dss_select_module_version(int module_id, uint8_t *module_ver)
+{
+	struct dss_module_info *dmi          = dss_get_module_info();
+	uint8_t                 protocol_ver = daos_version_get_protocol(&dmi->dmi_version);
+
+	return daos_get_rpc_version(module_id, protocol_ver, module_ver);
+}
+
+#define DEFINE_DS_RPC_PROTOCOL(module_prefix, module_id)                                           \
+	int ds_##module_prefix##_rpc_protocol(uint8_t *version)                                    \
+	{                                                                                          \
+		return dss_select_module_version(module_id, version);                              \
+	}
+
+#define DEFINE_RPC_PROTOCOL(module_prefix, module_id)                                              \
+	int module_prefix##_rpc_protocol(uint8_t *version)                                         \
+	{                                                                                          \
+		return dss_select_module_version(module_id, version);                              \
+	}
 
 #endif /* __DSS_API_H__ */

@@ -247,8 +247,15 @@ int
 ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 		     crt_opcode_t opcode, crt_rpc_t **rpc)
 {
-	return ds_pool_bcast_create(ctx, svc->cs_pool, DAOS_CONT_MODULE, opcode,
-				    DAOS_CONT_VERSION, rpc, NULL, NULL, NULL);
+	int     rc;
+	uint8_t rpc_ver;
+
+	rc = ds_cont_rpc_protocol(&rpc_ver);
+	if (rc)
+		return rc;
+
+	return ds_pool_bcast_create(ctx, svc->cs_pool, DAOS_CONT_MODULE, opcode, rpc_ver, rpc, NULL,
+				    NULL, NULL);
 }
 
 void
@@ -4483,6 +4490,11 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	bool				 filt_match = false;
 	int				 rc;
 	(void)val;
+	uint8_t proto_ver;
+
+	rc = ds_cont_rpc_protocol(&proto_ver);
+	if (rc)
+		return rc;
 
 	if (key->iov_len != sizeof(uuid_t)) {
 		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
@@ -4530,7 +4542,7 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uuid_copy(pcinfo->pci_id.pci_uuid, cont_uuid);
 
 	/* TODO: Specify client cont_proto_version. This is invoked from a pool client RPC */
-	rc = cont_info_read(ap->tx, cont, DAOS_CONT_VERSION /* engine protocol version */,
+	rc = cont_info_read(ap->tx, cont, proto_ver /* engine protocol version */,
 			    &pcinfo->pci_cinfo);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": read container info failed, "DF_RC"\n",
@@ -5779,6 +5791,11 @@ ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks
 	struct dss_module_info   *info = dss_get_module_info();
 	crt_rpc_t                *rpc;
 	struct cont_prop_set_out *out;
+	uint8_t                   cont_ver;
+
+	rc = ds_cont_rpc_protocol(&cont_ver);
+	if (rc)
+		return rc;
 
 	D_DEBUG(DB_MGMT, DF_UUID "/%s: Setting container prop\n", DP_UUID(pool_uuid), cont_id);
 
@@ -5801,19 +5818,19 @@ rechoose:
 		D_GOTO(out_client, rc);
 	}
 
-	rc = cont_req_create(info->dmi_ctx, &ep, opc, null_uuid, null_uuid, null_uuid,
-			     NULL /* req_timep */, &rpc);
+	rc = ds_cont_req_create(info->dmi_ctx, &ep, opc, null_uuid, null_uuid, null_uuid,
+				NULL /* req_timep */, &rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID "/%s: failed to create cont set prop rpc", DP_UUID(pool_uuid),
 			 cont_id);
 		D_GOTO(out_client, rc);
 	}
 
-	cont_prop_set_in_set_data(rpc, opc, DAOS_CONT_VERSION, prop, pool_uuid);
+	cont_prop_set_in_set_data(rpc, opc, cont_ver, prop, pool_uuid);
 	if (opc == CONT_PROP_SET_BYLABEL)
-		cont_prop_set_bylabel_in_set_label(rpc, opc, DAOS_CONT_VERSION, cont_id);
+		cont_prop_set_bylabel_in_set_label(rpc, opc, cont_ver, cont_id);
 	else /* CONT_PROP_SET */
-		cont_prop_set_in_set_cont_uuid(rpc, opc, DAOS_CONT_VERSION, cont_uuid);
+		cont_prop_set_in_set_cont_uuid(rpc, opc, cont_ver, cont_uuid);
 
 	rc  = dss_rpc_send(rpc);
 	out = crt_reply_get(rpc);
@@ -5853,13 +5870,16 @@ ds_cont_set_prop_srv_handler(crt_rpc_t *rpc)
 	char                      cont_id[DAOS_PROP_MAX_LABEL_BUF_LEN] = {0};
 	daos_prop_t              *prop;
 	struct cont              *cont;
+	uint8_t                   cont_ver;
 
+	rc = ds_cont_rpc_protocol(&cont_ver);
+	if (rc)
+		D_GOTO(out, rc);
 	/*
 	 * Server RPCs don't have pool or container handles. Just need the pool
 	 * and container IDs.
 	 */
-	cont_prop_set_in_get_data(rpc, opc, DAOS_CONT_VERSION, &prop, &pool_uuid, &cont_uuid,
-				  &cont_label);
+	cont_prop_set_in_get_data(rpc, opc, cont_ver, &prop, &pool_uuid, &cont_uuid, &cont_label);
 	if (opc == CONT_PROP_SET_BYLABEL)
 		strncpy(cont_id, cont_label, sizeof(cont_id) - 1);
 	else /* CONT_PROP_SET */

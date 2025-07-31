@@ -55,6 +55,8 @@ void
      ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 void dss_bind_to_xstream_cpuset(int tgt_id);
+int
+ds_mgmt_rpc_protocol(uint8_t *ver);
 
 /** srv_system.c */
 /* Management service (used only for map broadcast) */
