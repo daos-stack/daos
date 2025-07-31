@@ -1,0 +1,64 @@
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index 6e9c3b0..2f157da 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -441,6 +441,12 @@ na_ucp_ep_create(ucp_worker_h worker, ucp_ep_params_t *ep_params,
+ static void
+ na_ucp_ep_error_cb(void *arg, ucp_ep_h ep, ucs_status_t status);
+ 
++/**
++ * Flush endpoint.
++ */
++static ucs_status_ptr_t
++na_ucp_ep_flush(ucp_ep_h ep);
++
+ /**
+  * Close endpoint.
+  */
+@@ -1940,6 +1946,21 @@ na_ucp_ep_error_cb(
+     na_ucx_addr_ref_decr(na_ucx_addr);
+ }
+ 
++/*---------------------------------------------------------------------------*/
++static ucs_status_ptr_t
++na_ucp_ep_flush(ucp_ep_h ep)
++{
++    const ucp_request_param_t flush_params = {
++        .op_attr_mask = 0};
++    ucs_status_ptr_t status_ptr = ucp_ep_flush_nbx(ep, &flush_params);
++
++    NA_CHECK_SUBSYS_ERROR_DONE(addr,
++        status_ptr != NULL && UCS_PTR_IS_ERR(status_ptr),
++        "ucp_ep_flush_nb() failed (%s)",
++        ucs_status_string(UCS_PTR_STATUS(status_ptr)));
++    return status_ptr;
++}
++
+ /*---------------------------------------------------------------------------*/
+ static void
+ na_ucp_ep_close(ucp_ep_h ep)
+@@ -2859,8 +2880,23 @@ na_ucx_addr_release(struct na_ucx_addr *na_ucx_addr)
+     if (na_ucx_addr->ucp_ep != NULL) {
+         /* NB. for deserialized addresses that are not "connected" addresses, do
+          * not close the EP */
+-        if (na_ucx_addr->worker_addr == NULL)
++        if (na_ucx_addr->worker_addr == NULL) {
++            if (!na_ucx_addr->na_ucx_class->ucp_listener) {
++                ucs_status_ptr_t status_ptr = na_ucp_ep_flush(na_ucx_addr->ucp_ep);
++
++                if (UCS_PTR_IS_PTR(status_ptr)) {
++                    ucs_status_t status;
++
++                    do {
++                        ucp_worker_progress(na_ucx_addr->na_ucx_class->ucp_worker);
++                        status = ucp_request_check_status(status_ptr);
++                    } while (status == UCS_INPROGRESS);
++                    ucp_request_free(status_ptr);
++                }
++            }
++
+             na_ucp_ep_close(na_ucx_addr->ucp_ep);
++        }
+         na_ucx_addr->ucp_ep = NULL;
+     }
+ 
