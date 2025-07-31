@@ -425,7 +425,7 @@ func (c *Config) UpdatePMDKEnvars() error {
 }
 
 // Increase ABT stack size for UCX provider.
-func (c *Config) UpdateABTEnvars() error {
+func (c *Config) UpdateABTEnvarsUCX() error {
 
 	providerStr, err := c.Fabric.GetPrimaryProvider()
 	if err != nil {
