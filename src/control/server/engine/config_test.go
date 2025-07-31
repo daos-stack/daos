@@ -1162,6 +1162,62 @@ func TestConfig_UpdatePMDKEnvarsStackSizeDCPM(t *testing.T) {
 	}
 }
 
+func TestConfig_UpdateEnvarsStackSizeUCX(t *testing.T) {
+	validConfig := func() *Config {
+		return MockConfig().WithStorage(
+			storage.NewTierConfig().
+				WithStorageClass("dcpm"))
+	}
+
+	for name, tc := range map[string]struct {
+		cfg                   *Config
+		expErr                error
+		expABTthreadStackSize int
+	}{
+		"empty config should not fail": {
+			cfg:                   MockConfig(),
+			expABTthreadStackSize: minABTThreadStackSizeUCX,
+		},
+		"valid config for UCX should not fail": {
+			cfg:                   validConfig().WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX),
+			expABTthreadStackSize: minABTThreadStackSizeUCX,
+		},
+		"config for UCX without thread size should not fail": {
+			cfg:                   validConfig(),
+			expABTthreadStackSize: minABTThreadStackSizeUCX,
+		},
+		"config for UCX  with stack size big enough should not fail": {
+			cfg: validConfig().
+				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX + 1),
+			expABTthreadStackSize: minABTThreadStackSizeUCX + 1,
+		},
+		"config for UCX with stack size too small should fail": {
+			cfg: validConfig().
+				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX - 1),
+			expErr: errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE "+
+				"should be >= %d for UCX provider, found %d",
+				minABTThreadStackSizeDCPM, minABTThreadStackSizeUCX-1)),
+		},
+		"config for UCX with invalid ABT_THREAD_STACKSIZE value should fail": {
+			cfg:    validConfig().WithEnvVars("ABT_THREAD_STACKSIZE=foo_bar"),
+			expErr: errors.New("env_var ABT_THREAD_STACKSIZE has invalid value: foo_bar"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := tc.cfg.UpdateEnvarsStackSizeUCX()
+			test.CmpErr(t, tc.expErr, err)
+			if err == nil {
+				stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
+				test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
+				stackSizeVal, err := strconv.Atoi(stackSizeStr)
+				test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
+				test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
+					"Invalid ABT_THREAD_STACKSIZE value")
+			}
+		})
+	}
+}
+
 func TestConfig_UpdatePMDKEnvarsPMemobjConfDCPM(t *testing.T) {
 	validConfig := func() *Config {
 		return MockConfig().WithStorage(
