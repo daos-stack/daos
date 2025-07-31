@@ -38,7 +38,7 @@ struct dtx_batched_pool_args {
 };
 
 struct dtx_batched_cont_args {
-	/* Link to dss_module_info::dmi_dtx_batched_cont_{open,close}_list. */
+	/* Link to dss_module_info::dmi_dtx_batched_cont_open_list when opened. */
 	d_list_t			 dbca_sys_link;
 	/* Link to dtx_batched_pool_args::dbpa_cont_list. */
 	d_list_t			 dbca_pool_link;
@@ -623,9 +623,8 @@ dtx_batched_commit_one(void *arg)
 				D_ASSERT(!dtx_cont_opened(cont));
 
 				dbca->dbca_flush_pending = 0;
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_close_list);
+				if (likely(dbca->dbca_deregister == 0))
+					d_list_del_init(&dbca->dbca_sys_link);
 			}
 			break;
 		}
@@ -1652,13 +1651,10 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 
 out:
 	if (rc < 0) {
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
-		if (likely(!dtx_cont_opened(cont))) {
-			d_list_del(&dbca->dbca_sys_link);
-			/* Give it to the batched commit for further handling asynchronously. */
+		D_ERROR(DF_UUID ": Fail to flush CoS cache: rc = %d\n", DP_UUID(cont->sc_uuid), rc);
+		if (likely(!dtx_cont_opened(cont) && dbca->dbca_deregister == 0))
+			/* Add it to the batched commit for further handling asynchronously. */
 			d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
-		}
 	} else {
 		dbca->dbca_flush_pending = 0;
 	}
@@ -1830,7 +1826,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 	dbca->dbca_cont = cont;
 	dbca->dbca_pool = dbpa;
 	dbca->dbca_agg_gen = tls->dt_agg_gen;
-	d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_close_list);
+	D_INIT_LIST_HEAD(&dbca->dbca_sys_link);
 	d_list_add_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 	if (new_pool)
 		d_list_add_tail(&dbpa->dbpa_sys_link, &dmi->dmi_dtx_batched_pool_list);
@@ -1895,7 +1891,9 @@ dtx_cont_open(struct ds_cont_child *cont)
 					return rc;
 
 				dbca->dbca_flush_pending = 0;
-				d_list_del(&dbca->dbca_sys_link);
+				if (unlikely(dbca->dbca_deregister == 1))
+					return -DER_SHUTDOWN;
+
 				d_list_add_tail(&dbca->dbca_sys_link,
 						&dmi->dmi_dtx_batched_cont_open_list);
 				return 0;
@@ -1934,9 +1932,10 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 					return;
 				}
 
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_close_list);
+				if (unlikely(dbca->dbca_deregister == 1))
+					goto put;
+
+				d_list_del_init(&dbca->dbca_sys_link);
 
 				dtx_flush_on_close(dmi, dbca);
 
@@ -1950,6 +1949,7 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 				if (likely(!dtx_cont_opened(cont) && cont->sc_dtx_delay_reset == 0))
 					vos_dtx_cache_reset(cont->sc_hdl, false);
 
+put:
 				dtx_put_dbca(dbca);
 				return;
 			}
