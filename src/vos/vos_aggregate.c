@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -161,11 +162,13 @@ struct vos_agg_param {
 	daos_unit_oid_t		ap_oid;		/* current object ID */
 	/* Boundary for aggregatable write filter */
 	daos_epoch_t		ap_filter_epoch;
+	uint32_t                ap_cell_sz; /* cell size of EC object */
 	uint32_t		ap_flags;
 	unsigned int ap_discard : 1, ap_csum_err : 1, ap_nospc_err : 1, ap_in_progress : 1,
 	    ap_discard_obj : 1;
 	struct umem_instance	*ap_umm;
 	int			(*ap_yield_func)(void *arg);
+	uint32_t (*ap_cellsz_func)(void *arg, void *oid_arg);
 	void			*ap_yield_arg;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
@@ -394,6 +397,12 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	agg_param->ap_oid = entry->ie_oid;
+	if (agg_param->ap_cellsz_func != NULL)
+		agg_param->ap_cell_sz =
+		    agg_param->ap_cellsz_func(agg_param->ap_yield_arg, &agg_param->ap_oid.id_pub);
+	else
+		agg_param->ap_cell_sz = 0;
+
 	inc_agg_counter(agg_param, VOS_ITER_OBJ, AGG_OP_SCAN);
 
 	return 0;
@@ -1794,9 +1803,10 @@ out:
 }
 
 static bool
-trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
+trigger_flush(struct vos_agg_param *agg_param, struct evt_extent *lgc_ext)
 {
-	struct evt_extent *w_ext = &mw->mw_ext;
+	struct agg_merge_window *mw    = &agg_param->ap_window;
+	struct evt_extent       *w_ext = &mw->mw_ext;
 
 	D_AGG_ASSERTF(mw, w_ext->ex_lo <= lgc_ext->ex_lo,
 		      "w_ext->ex_lo(" DF_X64 ") > lgc_ext->ex_lo(" DF_X64 ")\n", w_ext->ex_lo,
@@ -1818,7 +1828,16 @@ trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
 		return true;
 
 	/* Trigger flush when entry is disjoint with window */
-	return !((w_ext->ex_hi + 1) == lgc_ext->ex_lo);
+	if ((w_ext->ex_hi + 1) != lgc_ext->ex_lo)
+		return true;
+
+	/* FIXME: This is to workaround data corruption issue happened on rebuild */
+	/* Trigger flush when entry isn't in the same EC cell of merge window */
+	if (agg_param->ap_cell_sz == 0)
+		return false;
+	else
+		return ((w_ext->ex_lo * mw->mw_rsize) / agg_param->ap_cell_sz) !=
+		       ((lgc_ext->ex_lo * mw->mw_rsize) / agg_param->ap_cell_sz);
 }
 
 static struct agg_phy_ent *
@@ -2098,7 +2117,7 @@ join_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 	}
 
 	/* Trigger current window flush when reaching threshold */
-	if (visible && trigger_flush(mw, &lgc_ext)) {
+	if (visible && trigger_flush(agg_param, &lgc_ext)) {
 		/* The window flush doesn't expect holes caused by removal records */
 		mw->mw_ext.ex_hi = lgc_ext.ex_lo - 1;
 		rc = flush_merge_window(ih, agg_param, false, acts);
@@ -2642,8 +2661,9 @@ vos_aggregate_exit(daos_handle_t coh)
 }
 
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
+vos_aggregate_ex(daos_handle_t coh, daos_epoch_range_t *epr, int (*yield_func)(void *arg),
+		 uint32_t (*cellsz_func)(void *arg, void *oid_arg), void *callback_arg,
+		 uint32_t flags)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct vos_agg_metrics  *vam  = agg_cont2metrics(cont);
@@ -2703,7 +2723,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	credits_set(&ad->ad_agg_param.ap_credits, true);
 	ad->ad_agg_param.ap_discard = 0;
 	ad->ad_agg_param.ap_yield_func = yield_func;
-	ad->ad_agg_param.ap_yield_arg = yield_arg;
+	ad->ad_agg_param.ap_cellsz_func = cellsz_func;
+	ad->ad_agg_param.ap_yield_arg   = callback_arg;
 	run_agg = true;
 	merge_window_init(&ad->ad_agg_param.ap_window);
 	ad->ad_agg_param.ap_flags = flags;
@@ -2766,6 +2787,13 @@ free_agg_data:
 	}
 
 	return rc;
+}
+
+int
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, int (*yield_func)(void *arg),
+	      void *yield_arg, uint32_t flags)
+{
+	return vos_aggregate_ex(coh, epr, yield_func, NULL, yield_arg, flags);
 }
 
 int
