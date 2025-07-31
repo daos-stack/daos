@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -210,14 +211,21 @@ ddb_print_ilog_entry(struct ddb_ctx *ctx, struct ddb_ilog_entry *entry)
 void
 ddb_print_dtx_committed(struct ddb_ctx *ctx, struct dv_dtx_committed_entry *entry)
 {
-	ddb_printf(ctx, "ID: "DF_DTIF"\n", DP_DTI(&entry->ddtx_id));
+	ddb_printf(ctx, "XID: " DF_DTI "\n", DP_DTI(&entry->ddtx_id));
 	ddb_printf(ctx, "\tEpoch: "DF_U64"\n", entry->ddtx_epoch);
 }
 
 void
 ddb_print_dtx_active(struct ddb_ctx *ctx, struct dv_dtx_active_entry *entry)
 {
-	ddb_printf(ctx, "ID: "DF_DTIF"\n", DP_DTI(&entry->ddtx_id));
+	struct dtx_daos_target *ddt = entry->ddtx_ddt;
+	char                    buf[80];
+	char                   *ptr = buf;
+	int                     cnt = entry->ddtx_tgt_cnt;
+	int                     rc;
+	int                     i;
+
+	ddb_printf(ctx, "XID: " DF_DTI "\n", DP_DTI(&entry->ddtx_xid));
 	ddb_printf(ctx, "\tEpoch: "DF_U64"\n", entry->ddtx_epoch);
 	ddb_printf(ctx, "\tHandle Time: "DF_U64"\n", entry->ddtx_handle_time);
 	ddb_printf(ctx, "\tGrp Cnt: %d\n", entry->ddtx_grp_cnt);
@@ -226,4 +234,23 @@ ddb_print_dtx_active(struct ddb_ctx *ctx, struct dv_dtx_active_entry *entry)
 	ddb_printf(ctx, "\tMbs Flags: %d\n", entry->ddtx_mbs_flags);
 	ddb_printf(ctx, "\tFlags: %d\n", entry->ddtx_flags);
 	ddb_printf(ctx, "\tOid: "DF_UOID"\n", DP_UOID(entry->ddtx_oid));
+	ddb_printf(ctx, "\tLID: %d\n", entry->ddtx_lid);
+	ddb_printf(ctx, "\tTgt Cnt: %d\n", entry->ddtx_tgt_cnt);
+
+	while (cnt >= 8) {
+		ddb_printf(ctx, "%8u%8u%8u%8u%8u%8u%8u%8u\n", ddt[0].ddt_id, ddt[1].ddt_id,
+			   ddt[2].ddt_id, ddt[3].ddt_id, ddt[4].ddt_id, ddt[5].ddt_id,
+			   ddt[6].ddt_id, ddt[7].ddt_id);
+		cnt -= 8;
+		ddt += 8;
+	}
+
+	if (cnt > 0) {
+		for (i = 0; i < cnt; i++) {
+			rc = snprintf(ptr, 79 - 8 * i, "%8u", ddt[i].ddt_id);
+			D_ASSERT(rc > 0);
+			ptr += rc;
+		}
+		ddb_printf(ctx, "\t%s\n", buf);
+	}
 }
