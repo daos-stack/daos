@@ -539,7 +539,8 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    tier_ratio=None, properties=None, label=None, nranks=None):
+                    tier_ratio=None, properties=None, label=None, nranks=None,
+                    mem_ratio=None):
         # pylint: disable=too-many-arguments
         """Create a pool with the dmg command.
 
@@ -565,6 +566,8 @@ class DmgCommand(DmgCommandBase):
                 Defaults to None
             label (str, optional): Pool label. Defaults to None.
             nranks (str, optional): Number of ranks to use. Defaults to None
+            mem_ratio (str, optional): memory file to metadata storage size ratio.
+                Defaults to None.
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -586,7 +589,8 @@ class DmgCommand(DmgCommandBase):
             "acl_file": acl_file,
             "properties": properties,
             "label": label,
-            "nranks": nranks
+            "nranks": nranks,
+            "mem_ratio": mem_ratio
         }
 
         if target_list is not None:
