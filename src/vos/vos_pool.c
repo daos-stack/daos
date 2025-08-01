@@ -1570,6 +1570,7 @@ lock_pool_memory(struct vos_pool *pool)
 
 		if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
 			D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
+			D_WARN("Dummy warning in strict mode\n");
 			lock_mem = LM_FLAG_DISABLED;
 			return;
 		}
