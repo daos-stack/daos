@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +32,7 @@ const (
 	envLogSubsystems = "DD_SUBSYS"
 
 	minABTThreadStackSizeDCPM = 20480
+	minABTThreadStackSizeUCX  = 32768
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -418,6 +420,38 @@ func (c *Config) UpdatePMDKEnvars() error {
 
 	if isDCPM {
 		return c.UpdatePMDKEnvarsStackSizeDCPM()
+	}
+	return nil
+}
+
+// Increase ABT stack size for UCX provider.
+func (c *Config) UpdateABTEnvarsUCX() error {
+
+	providerStr, err := c.Fabric.GetPrimaryProvider()
+	if err != nil {
+		return err
+	}
+
+	if strings.Index(providerStr, "ucx") == -1 {
+		return nil
+	}
+
+	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+	if err != nil {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeUCX))
+		return nil
+	}
+
+	stackSizeValue, err := strconv.Atoi(stackSizeStr)
+	if err != nil {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+			stackSizeStr)
+	}
+
+	if stackSizeValue < minABTThreadStackSizeUCX {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeUCX))
 	}
 	return nil
 }
