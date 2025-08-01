@@ -2727,7 +2727,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
 retry:
-	rc = vos_iterate_obj(&ad->ad_iter_param, true, &ad->ad_anchors, vos_aggregate_pre_cb,
+	rc = vos_iterate_obj(&ad->ad_iter_param, &ad->ad_anchors, vos_aggregate_pre_cb,
 			     vos_aggregate_post_cb, &ad->ad_agg_param, NULL);
 	if (rc == -DER_BUSY) {
 		/** Hit a conflict with obj_discard.   Rather than exiting, let's
