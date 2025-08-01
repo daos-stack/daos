@@ -18,6 +18,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@grom72/DAOS-17853') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -350,7 +351,7 @@ pipeline {
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
-               defaultValue: 'ci_nlt_1',
+               defaultValue: 'ci_node-hsw-105',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
@@ -1077,6 +1078,8 @@ pipeline {
                                                       scm: 'daos-stack/daos',
                                                       requiredResult: hudson.model.Result.UNSTABLE
                             recordIssues enabledForFailure: true,
+                                         /* ignore warning/errors from PMDK logging system */
+                                         filters: [excludeFile('pmdk/.+')],
                                          failOnError: false,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
