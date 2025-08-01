@@ -139,6 +139,19 @@ enum {
 	AGG_CREDS_MERGE_SLACK	= 2,
 };
 
+enum {
+	/** Disable VOS disagnose mode by default. */
+	VOS_DIAG_DEF = 0,
+	/** Only check potential corruption/inconsistency in VOS without repairing. */
+	VOS_DIAG_CHECK,
+	/** Check and repair potential corruption/inconsistency in VOS. */
+	VOS_DIAG_REPAIR,
+	/** Guard for boundary. */
+	VOS_DIAG_MAX
+};
+
+extern unsigned int vos_diag_mode;
+
 /* Throttle ENOSPACE error message */
 #define VOS_NOSPC_ERROR_INTVL	60	/* seconds */
 
