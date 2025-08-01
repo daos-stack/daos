@@ -1163,9 +1163,9 @@ func TestConfig_UpdatePMDKEnvarsStackSizeDCPM(t *testing.T) {
 }
 
 func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
-        validConfig := func() *Config {
-                return MockConfig().
-                        WithFabricProvider("ucx+ud_x")
+	validConfig := func() *Config {
+		return MockConfig().
+			WithFabricProvider("ucx+ud_x")
 	}
 
 	for name, tc := range map[string]struct {
