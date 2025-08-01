@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,7 +29,7 @@ extern bool g_verbose;
 #define is_true assert_true
 #define is_false assert_false
 
-#define PLT_LAYOUT_VERSION	1
+#define PLT_LAYOUT_VERSION	2
 extern bool fail_domain_node;
 void
 print_layout(struct pl_obj_layout *layout);
