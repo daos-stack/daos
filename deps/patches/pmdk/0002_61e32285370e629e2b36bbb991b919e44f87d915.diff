@@ -1,0 +1,445 @@
+diff --git a/src/libpmemobj/tx.c b/src/libpmemobj/tx.c
+index bdb9f18b07..857ae43182 100644
+--- a/src/libpmemobj/tx.c
++++ b/src/libpmemobj/tx.c
+@@ -941,9 +941,8 @@ obj_tx_abort(int errnum, int user)
+ 	}
+ 
+ 	tx->last_errnum = errnum;
+-	errno = errnum;
+ 	if (user)
+-		ERR_W_ERRNO("explicit transaction abort");
++		CORE_LOG_HARK("Explicit transaction abort: %d", errnum);
+ 
+ 	/* ONABORT */
+ 	obj_tx_callback(tx);
+diff --git a/src/test/core_log_max/call_all.c.generated b/src/test/core_log_max/call_all.c.generated
+index 1ef0385ab2..87024dfe7c 100644
+--- a/src/test/core_log_max/call_all.c.generated
++++ b/src/test/core_log_max/call_all.c.generated
+@@ -1098,9 +1098,6 @@ call_all_ERR_W_ERRNO(int errnum)
+ 	// src/libpmemobj/tx.c
+ 	ERR_W_ERRNO("Malloc");
+ 	UT_ASSERTeq(errno, errnum);
+-	// src/libpmemobj/tx.c
+-	ERR_W_ERRNO("explicit transaction abort");
+-	UT_ASSERTeq(errno, errnum);
+ }
+ 
+ void
+diff --git a/src/test/core_log_max/core_log_max.c b/src/test/core_log_max/core_log_max.c
+index 57cb19b696..71ef599aac 100644
+--- a/src/test/core_log_max/core_log_max.c
++++ b/src/test/core_log_max/core_log_max.c
+@@ -99,7 +99,7 @@ static int Total_TLS_message_num;
+  * A hard-coded value as obtained when the call_all_*() source code was
+  * generated.
+  */
+-#define TOTAL_TLS_MESSAGE_NUM_EXPECTED 311
++#define TOTAL_TLS_MESSAGE_NUM_EXPECTED 310
+ 
+ static int
+ test_ERR_W_ERRNO(const struct test_case *tc, int argc, char *argv[])
+diff --git a/src/test/obj_basic_integration/TEST0 b/src/test/obj_basic_integration/TEST0
+index 605c1edcce..060da00587 100755
+--- a/src/test/obj_basic_integration/TEST0
++++ b/src/test/obj_basic_integration/TEST0
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env bash
+ #
+ # SPDX-License-Identifier: BSD-3-Clause
+-# Copyright 2015-2019, Intel Corporation
++# Copyright 2015-2024, Intel Corporation
+ #
+ # Copyright (c) 2016, Microsoft Corporation. All rights reserved.
+ #
+@@ -45,7 +45,8 @@ setup
+ 
+ create_holey_file 16M $DIR/testfile1
+ 
+-expect_normal_exit ./obj_basic_integration$EXESUFFIX $DIR/testfile1
++expect_normal_exit ./obj_basic_integration$EXESUFFIX $DIR/testfile1 log 2>&1 | \
++	grep "Explicit transaction abort" > grep$UNITTEST_NUM.log
+ 
+ check
+ 
+diff --git a/src/test/obj_basic_integration/TEST1 b/src/test/obj_basic_integration/TEST1
+index bbd900edc5..b30893751e 100755
+--- a/src/test/obj_basic_integration/TEST1
++++ b/src/test/obj_basic_integration/TEST1
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env bash
+ #
+ # SPDX-License-Identifier: BSD-3-Clause
+-# Copyright 2015-2019, Intel Corporation
++# Copyright 2015-2024, Intel Corporation
+ #
+ # Copyright (c) 2016, Microsoft Corporation. All rights reserved.
+ #
+@@ -43,8 +43,8 @@ setup
+ 
+ create_holey_file 16M $DIR/testfile1
+ 
+-expect_normal_exit\
+-	./obj_basic_integration$EXESUFFIX $DIR/testfile1
++expect_normal_exit ./obj_basic_integration$EXESUFFIX $DIR/testfile1 log 2>&1 | \
++	grep "Explicit transaction abort" > grep$UNITTEST_NUM.log
+ 
+ check
+ 
+diff --git a/src/test/obj_basic_integration/TEST2 b/src/test/obj_basic_integration/TEST2
+index f6e5675a95..3fa03b8f9e 100755
+--- a/src/test/obj_basic_integration/TEST2
++++ b/src/test/obj_basic_integration/TEST2
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env bash
+ # SPDX-License-Identifier: BSD-3-Clause
+-# Copyright 2015-2019, Intel Corporation
++# Copyright 2015-2024, Intel Corporation
+ 
+ . ../unittest/unittest.sh
+ 
+@@ -11,8 +11,8 @@ setup
+ create_poolset $DIR/testset1 8M:$DIR/testfile1:x 8M:$DIR/testfile2:x \
+ 	r 16M:$DIR/testfile3:x
+ 
+-expect_normal_exit\
+-    ./obj_basic_integration$EXESUFFIX $DIR/testset1
++expect_normal_exit ./obj_basic_integration$EXESUFFIX $DIR/testset1 log 2>&1 | \
++	grep "Explicit transaction abort" > grep$UNITTEST_NUM.log
+ 
+ check
+ 
+diff --git a/src/test/obj_basic_integration/TEST3 b/src/test/obj_basic_integration/TEST3
+index 1965b1e2fb..ff74f95f1e 100755
+--- a/src/test/obj_basic_integration/TEST3
++++ b/src/test/obj_basic_integration/TEST3
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env bash
+ # SPDX-License-Identifier: BSD-3-Clause
+-# Copyright 2015-2019, Intel Corporation
++# Copyright 2015-2024, Intel Corporation
+ 
+ . ../unittest/unittest.sh
+ 
+@@ -10,8 +10,8 @@ setup
+ 
+ create_poolset $DIR/testset1 16M:$DIR/testfile1:x r 16M:$DIR/testfile2:x
+ 
+-expect_normal_exit\
+-    ./obj_basic_integration$EXESUFFIX $DIR/testset1
++expect_normal_exit ./obj_basic_integration$EXESUFFIX $DIR/testset1 log 2>&1 | \
++	grep "Explicit transaction abort" > grep$UNITTEST_NUM.log
+ 
+ compare_replicas "-soOaAb -l -Z -H -C" \
+ 	$DIR/testfile1 $DIR/testfile2 > diff$UNITTEST_NUM.log
+diff --git a/src/test/obj_basic_integration/TEST4 b/src/test/obj_basic_integration/TEST4
+index 204bc28589..bd20099fb2 100755
+--- a/src/test/obj_basic_integration/TEST4
++++ b/src/test/obj_basic_integration/TEST4
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env bash
+ # SPDX-License-Identifier: BSD-3-Clause
+-# Copyright 2015-2019, Intel Corporation
++# Copyright 2015-2024, Intel Corporation
+ 
+ . ../unittest/unittest.sh
+ 
+@@ -12,8 +12,8 @@ create_poolset $DIR/testset1 16M:$DIR/testfile1 \
+ 	r 18M:$DIR/testfile2 \
+ 	r 20M:$DIR/testfile3
+ 
+-expect_normal_exit\
+-    ./obj_basic_integration$EXESUFFIX $DIR/testset1
++expect_normal_exit ./obj_basic_integration$EXESUFFIX $DIR/testset1 log 2>&1 | \
++	grep "Explicit transaction abort" > grep$UNITTEST_NUM.log
+ 
+ compare_replicas "-soOaAb -l -Z -H -C" \
+ 	$DIR/testfile1 $DIR/testfile2 > diff$UNITTEST_NUM.log
+diff --git a/src/test/obj_basic_integration/TESTS.py b/src/test/obj_basic_integration/TESTS.py
+index f48cbbe15c..aaee207f7c 100755
+--- a/src/test/obj_basic_integration/TESTS.py
++++ b/src/test/obj_basic_integration/TESTS.py
+@@ -1,6 +1,6 @@
+ #!../env.py
+ # SPDX-License-Identifier: BSD-3-Clause
+-# Copyright 2019, Intel Corporation
++# Copyright 2019-2024, Intel Corporation
+ 
+ 
+ import testframework as t
+@@ -15,10 +15,10 @@ def run(self, ctx):
+ 
+ 
+ @t.require_valgrind_disabled('memcheck')
+-class TEST0(BASIC):
++class TEST14(BASIC):
+     pass
+ 
+ 
+ @t.require_valgrind_enabled('pmemcheck')
+-class TEST1(BASIC):
++class TEST15(BASIC):
+     pass
+diff --git a/src/test/obj_basic_integration/grep0.log.match b/src/test/obj_basic_integration/grep0.log.match
+new file mode 100644
+index 0000000000..f6212389db
+--- /dev/null
++++ b/src/test/obj_basic_integration/grep0.log.match
+@@ -0,0 +1,2 @@
++Explicit transaction abort: 125
++Explicit transaction abort: 13
+diff --git a/src/test/obj_basic_integration/grep1.log.match b/src/test/obj_basic_integration/grep1.log.match
+new file mode 100644
+index 0000000000..f6212389db
+--- /dev/null
++++ b/src/test/obj_basic_integration/grep1.log.match
+@@ -0,0 +1,2 @@
++Explicit transaction abort: 125
++Explicit transaction abort: 13
+diff --git a/src/test/obj_basic_integration/grep2.log.match b/src/test/obj_basic_integration/grep2.log.match
+new file mode 100644
+index 0000000000..f6212389db
+--- /dev/null
++++ b/src/test/obj_basic_integration/grep2.log.match
+@@ -0,0 +1,2 @@
++Explicit transaction abort: 125
++Explicit transaction abort: 13
+diff --git a/src/test/obj_basic_integration/grep3.log.match b/src/test/obj_basic_integration/grep3.log.match
+new file mode 100644
+index 0000000000..f6212389db
+--- /dev/null
++++ b/src/test/obj_basic_integration/grep3.log.match
+@@ -0,0 +1,2 @@
++Explicit transaction abort: 125
++Explicit transaction abort: 13
+diff --git a/src/test/obj_basic_integration/grep4.log.match b/src/test/obj_basic_integration/grep4.log.match
+new file mode 100644
+index 0000000000..f6212389db
+--- /dev/null
++++ b/src/test/obj_basic_integration/grep4.log.match
+@@ -0,0 +1,2 @@
++Explicit transaction abort: 125
++Explicit transaction abort: 13
+diff --git a/src/test/obj_basic_integration/obj_basic_integration.c b/src/test/obj_basic_integration/obj_basic_integration.c
+index 6eb6972aa5..a38e280dee 100644
+--- a/src/test/obj_basic_integration/obj_basic_integration.c
++++ b/src/test/obj_basic_integration/obj_basic_integration.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+-/* Copyright 2015-2022, Intel Corporation */
++/* Copyright 2015-2024, Intel Corporation */
+ 
+ /*
+  * obj_basic_integration.c -- Basic integration tests
+@@ -521,9 +521,15 @@ test_tx_api(PMEMobjpool *pop)
+ 
+ 	UT_OUT("%s", pmemobj_errormsg());
+ 	TX_BEGIN(pop) {
+-		pmemobj_tx_abort(ECANCELED);
++		pmemobj_tx_abort(0);
++		UT_ASSERT(0); /* should not get to this point */
+ 	} TX_END
+-	UT_OUT("%s", pmemobj_errormsg());
++	UT_ASSERT(errno == ECANCELED);
++	TX_BEGIN(pop) {
++		pmemobj_tx_abort(EACCES);
++		UT_ASSERT(0); /* should not get to this point */
++	} TX_END
++	UT_ASSERT(errno == EACCES);
+ }
+ 
+ static void
+@@ -619,6 +625,13 @@ test_root_size(PMEMobjpool *pop)
+ 	UT_ASSERTeq(pmemobj_root_size(pop), sizeof(struct dummy_root));
+ }
+ 
++static void
++test_core_log_function(enum pmemobj_log_level level, const char *file_name,
++	unsigned line_no, const char *function_name, const char *message)
++{
++	fprintf(stderr, "%s\n", message);
++}
++
+ int
+ main(int argc, char *argv[])
+ {
+@@ -627,10 +640,15 @@ main(int argc, char *argv[])
+ 	/* root doesn't count */
+ 	UT_COMPILE_ERROR_ON(POBJ_LAYOUT_TYPES_NUM(basic) != 2);
+ 
+-	if (argc < 2 || argc > 2)
+-		UT_FATAL("usage: %s file-name", argv[0]);
++	if (argc < 2 || argc > 3)
++		UT_FATAL("usage: %s file-name [log]", argv[0]);
++
++	if ((argc == 3) && 0 == strcmp("log", argv[2])) {
++		pmemobj_log_set_function(test_core_log_function);
++	}
+ 
+ 	const char *path = argv[1];
++
+ 	PMEMobjpool *pop = NULL;
+ 
+ 	if ((pop = pmemobj_create(path, POBJ_LAYOUT_NAME(basic),
+diff --git a/src/test/obj_basic_integration/out0.log.match b/src/test/obj_basic_integration/out0.log.match
+index ffab5566fd..fc9b60174a 100644
+--- a/src/test/obj_basic_integration/out0.log.match
++++ b/src/test/obj_basic_integration/out0.log.match
+@@ -1,5 +1,5 @@
+ obj_basic_integration$(nW)TEST0: START: obj_basic_integration
+- $(nW)obj_basic_integration$(nW) $(nW)testfile1
++ $(nW)obj_basic_integration$(nW) $(nW)testfile1 log
+ alloc: 128, size: $(N)
+ realloc: 128 => 655360, size: $(N)
+ realloc: 655360 => 1, size: $(N)
+@@ -29,5 +29,4 @@ POBJ_LIST_PREV: dummy_node 8
+ POBJ_LIST_PREV: dummy_node 7
+ POBJ_LIST_PREV: dummy_node 5
+ nested transaction for different pool
+-explicit transaction abort: Operation canceled
+ obj_basic_integration$(nW)TEST0: DONE
+diff --git a/src/test/obj_basic_integration/out1.log.match b/src/test/obj_basic_integration/out1.log.match
+index 2df9c4f6df..c035ce6c45 100644
+--- a/src/test/obj_basic_integration/out1.log.match
++++ b/src/test/obj_basic_integration/out1.log.match
+@@ -1,5 +1,5 @@
+ obj_basic_integration$(nW)TEST1: START: obj_basic_integration
+- $(nW)obj_basic_integration$(nW) $(nW)testfile1
++ $(nW)obj_basic_integration$(nW) $(nW)testfile1 log
+ alloc: 128, size: $(N)
+ realloc: 128 => 655360, size: $(N)
+ realloc: 655360 => 1, size: $(N)
+@@ -29,5 +29,4 @@ POBJ_LIST_PREV: dummy_node 8
+ POBJ_LIST_PREV: dummy_node 7
+ POBJ_LIST_PREV: dummy_node 5
+ nested transaction for different pool
+-explicit transaction abort: Operation canceled
+ obj_basic_integration$(nW)TEST1: DONE
+diff --git a/src/test/obj_basic_integration/out14.log.match b/src/test/obj_basic_integration/out14.log.match
+new file mode 100644
+index 0000000000..0e929cabaa
+--- /dev/null
++++ b/src/test/obj_basic_integration/out14.log.match
+@@ -0,0 +1,32 @@
++obj_basic_integration$(nW)TEST14: START: obj_basic_integration
++ $(nW)obj_basic_integration$(nW) $(nW)testfile1
++alloc: 128, size: $(N)
++realloc: 128 => 655360, size: $(N)
++realloc: 655360 => 1, size: $(N)
++free
++realloc: 0 => 777, size: $(N)
++realloc: 777 => 1, size: $(N)
++free
++realloc: 0 => 1, size: $(N)
++realloc: 1 => 1, size: $(N)
++free
++POBJ_LIST_FOREACH: dummy_node 0
++POBJ_LIST_FOREACH: dummy_node 5
++POBJ_LIST_FOREACH: dummy_node 6
++POBJ_LIST_NEXT: dummy_node 0
++POBJ_LIST_NEXT: dummy_node 5
++POBJ_LIST_NEXT: dummy_node 6
++POBJ_LIST_FOREACH_REVERSE: dummy_node 6
++POBJ_LIST_FOREACH_REVERSE: dummy_node 5
++POBJ_LIST_PREV: dummy_node 5
++POBJ_LIST_PREV: dummy_node 6
++POBJ_LIST_FOREACH_REVERSE: dummy_node 6
++POBJ_LIST_FOREACH_REVERSE: dummy_node 8
++POBJ_LIST_FOREACH_REVERSE: dummy_node 7
++POBJ_LIST_FOREACH_REVERSE: dummy_node 5
++POBJ_LIST_PREV: dummy_node 6
++POBJ_LIST_PREV: dummy_node 8
++POBJ_LIST_PREV: dummy_node 7
++POBJ_LIST_PREV: dummy_node 5
++nested transaction for different pool
++obj_basic_integration$(nW)TEST14: DONE
+diff --git a/src/test/obj_basic_integration/out15.log.match b/src/test/obj_basic_integration/out15.log.match
+new file mode 100644
+index 0000000000..804fcfa85f
+--- /dev/null
++++ b/src/test/obj_basic_integration/out15.log.match
+@@ -0,0 +1,32 @@
++obj_basic_integration$(nW)TEST15: START: obj_basic_integration
++ $(nW)obj_basic_integration$(nW) $(nW)testfile1
++alloc: 128, size: $(N)
++realloc: 128 => 655360, size: $(N)
++realloc: 655360 => 1, size: $(N)
++free
++realloc: 0 => 777, size: $(N)
++realloc: 777 => 1, size: $(N)
++free
++realloc: 0 => 1, size: $(N)
++realloc: 1 => 1, size: $(N)
++free
++POBJ_LIST_FOREACH: dummy_node 0
++POBJ_LIST_FOREACH: dummy_node 5
++POBJ_LIST_FOREACH: dummy_node 6
++POBJ_LIST_NEXT: dummy_node 0
++POBJ_LIST_NEXT: dummy_node 5
++POBJ_LIST_NEXT: dummy_node 6
++POBJ_LIST_FOREACH_REVERSE: dummy_node 6
++POBJ_LIST_FOREACH_REVERSE: dummy_node 5
++POBJ_LIST_PREV: dummy_node 5
++POBJ_LIST_PREV: dummy_node 6
++POBJ_LIST_FOREACH_REVERSE: dummy_node 6
++POBJ_LIST_FOREACH_REVERSE: dummy_node 8
++POBJ_LIST_FOREACH_REVERSE: dummy_node 7
++POBJ_LIST_FOREACH_REVERSE: dummy_node 5
++POBJ_LIST_PREV: dummy_node 6
++POBJ_LIST_PREV: dummy_node 8
++POBJ_LIST_PREV: dummy_node 7
++POBJ_LIST_PREV: dummy_node 5
++nested transaction for different pool
++obj_basic_integration$(nW)TEST15: DONE
+diff --git a/src/test/obj_basic_integration/out2.log.match b/src/test/obj_basic_integration/out2.log.match
+index 8581e07d73..32b39495cd 100644
+--- a/src/test/obj_basic_integration/out2.log.match
++++ b/src/test/obj_basic_integration/out2.log.match
+@@ -1,5 +1,5 @@
+ obj_basic_integration$(nW)TEST2: START: obj_basic_integration
+- $(nW)obj_basic_integration$(nW) $(nW)testset1
++ $(nW)obj_basic_integration$(nW) $(nW)testset1 log
+ alloc: 128, size: $(N)
+ realloc: 128 => 655360, size: $(N)
+ realloc: 655360 => 1, size: $(N)
+@@ -29,5 +29,4 @@ POBJ_LIST_PREV: dummy_node 8
+ POBJ_LIST_PREV: dummy_node 7
+ POBJ_LIST_PREV: dummy_node 5
+ nested transaction for different pool
+-explicit transaction abort: Operation canceled
+ obj_basic_integration$(nW)TEST2: DONE
+diff --git a/src/test/obj_basic_integration/out3.log.match b/src/test/obj_basic_integration/out3.log.match
+index be61224147..980280b597 100644
+--- a/src/test/obj_basic_integration/out3.log.match
++++ b/src/test/obj_basic_integration/out3.log.match
+@@ -1,5 +1,5 @@
+ obj_basic_integration$(nW)TEST3: START: obj_basic_integration
+- $(nW)obj_basic_integration$(nW) $(nW)testset1
++ $(nW)obj_basic_integration$(nW) $(nW)testset1 log
+ alloc: 128, size: $(N)
+ realloc: 128 => 655360, size: $(N)
+ realloc: 655360 => 1, size: $(N)
+@@ -29,5 +29,4 @@ POBJ_LIST_PREV: dummy_node 8
+ POBJ_LIST_PREV: dummy_node 7
+ POBJ_LIST_PREV: dummy_node 5
+ nested transaction for different pool
+-explicit transaction abort: Operation canceled
+ obj_basic_integration$(nW)TEST3: DONE
+diff --git a/src/test/obj_basic_integration/out4.log.match b/src/test/obj_basic_integration/out4.log.match
+index 488c87d1f9..21ba249c3f 100644
+--- a/src/test/obj_basic_integration/out4.log.match
++++ b/src/test/obj_basic_integration/out4.log.match
+@@ -1,5 +1,5 @@
+ obj_basic_integration$(nW)TEST4: START: obj_basic_integration
+- $(nW)obj_basic_integration$(nW) $(nW)testset1
++ $(nW)obj_basic_integration$(nW) $(nW)testset1 log
+ alloc: 128, size: $(N)
+ realloc: 128 => 655360, size: $(N)
+ realloc: 655360 => 1, size: $(N)
+@@ -29,5 +29,4 @@ POBJ_LIST_PREV: dummy_node 8
+ POBJ_LIST_PREV: dummy_node 7
+ POBJ_LIST_PREV: dummy_node 5
+ nested transaction for different pool
+-explicit transaction abort: Operation canceled
+ obj_basic_integration$(nW)TEST4: DONE
