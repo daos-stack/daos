@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,8 +10,10 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include <gurt/common.h>
+#include <gurt/parser.h>
 
 static pthread_mutex_t d_log_lock = PTHREAD_MUTEX_INITIALIZER;
 static int d_log_refcount;
@@ -620,4 +623,115 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		return 0;
 	}
 	return -DER_INVAL;
+}
+
+struct log_variables {
+	const char *mask;
+	const char *streams;
+};
+
+static int
+d_log_var_parse_one(d_parser_t *parser, const char *name, const char **ptr, const char *log_var,
+		    const char *value, int len)
+{
+	if (strncmp(name, log_var, len) == 0) {
+		if (*ptr != NULL) {
+			d_parser_output_put(parser,
+					    "Duplication definition not supported in log config\n");
+			return -DER_INVAL;
+		}
+
+		*ptr = value;
+
+		return 1;
+	}
+
+	return 0;
+}
+
+static int
+d_process_log_var(d_parser_t *parser, struct log_variables *lv, char *log_var, int log_var_len,
+		  char *value, int value_len)
+{
+	int rc;
+
+	log_var = d_parser_string_copy(parser, log_var, &log_var_len, true);
+	value   = d_parser_string_copy(parser, value, &value_len, true);
+
+	if (log_var_len == 0) {
+		if (value_len == 0)
+			return 0;
+		d_parser_output_put(parser, "Value without log_var %s in log config\n", value);
+		return -DER_INVAL;
+	}
+
+	if (value_len == 0) {
+		d_parser_output_put(parser, "Empty value not supported for %s in log config\n",
+				    log_var);
+		return -DER_INVAL;
+	}
+
+	rc = d_log_var_parse_one(parser, "log_mask", &lv->mask, log_var, value, sizeof("log_mask"));
+	if (rc == 1)
+		return 0;
+	if (rc < 0)
+		return rc;
+	rc =
+	    d_log_var_parse_one(parser, "streams", &lv->streams, log_var, value, sizeof("streams"));
+	if (rc == 1)
+		return 0;
+	if (rc == 0) {
+		d_parser_output_put(parser, "Unrecognized variable %s in log config\n", log_var);
+		rc = -DER_INVAL;
+	}
+	return rc;
+}
+
+static void
+d_log_parse_config(d_parser_t *parser, char *config, int len, void *arg)
+{
+	struct log_variables lv      = {0};
+	char                *log_var = NULL;
+	char                *value   = NULL;
+	int                  value_len;
+	int                  var_len;
+	int                  rc = 0;
+	char                *saveptr1;
+	char                *loc;
+	char                *str1;
+
+	for (str1 = config;; str1 = NULL) {
+		log_var = strtok_r(str1, "\n", &saveptr1);
+		if (log_var == NULL)
+			break;
+		loc = strchr(log_var, '=');
+		if (loc == NULL) {
+			d_parser_output_put(parser, "Could not parse value from '%s'\n", log_var);
+		}
+		*loc      = '\0';
+		var_len   = loc - log_var;
+		value     = loc + 1;
+		value_len = strlen(value);
+
+		rc = d_process_log_var(parser, &lv, log_var, var_len, value, value_len);
+		if (rc != 0)
+			return;
+	}
+
+	if (lv.mask)
+		d_parser_output_put(parser, "log_mask=%s\n", lv.mask);
+	else
+		d_parser_output_put(parser, "log_mask unchanged\n");
+	if (lv.streams)
+		d_parser_output_put(parser, "streams=%s\n", lv.streams);
+	else
+		d_parser_output_put(parser, "streams unchanged\n");
+
+	d_log_sync_mask_ex(lv.mask, lv.streams);
+}
+
+int
+d_log_register_parser(d_parser_t *parser)
+{
+	return d_parser_handler_register(parser, "log", d_log_parse_config);
 }
