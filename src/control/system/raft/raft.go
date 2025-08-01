@@ -119,7 +119,7 @@ func (db *Database) ResignLeadership(cause error) error {
 		cause = errors.New("unknown error")
 	}
 	db.log.Errorf("resigning leadership (%s)", cause)
-	return db.raft.withReadLock(func(svc raftService) error {
+	return db.raft.withWriteLock(func(svc raftService) error {
 		// One more belt-and-suspenders check to make sure we're
 		// actually the leader before we try to transfer leadership.
 		// This is important because trying to transfer leadership
@@ -134,7 +134,7 @@ func (db *Database) ResignLeadership(cause error) error {
 // Barrier blocks until the raft implementation has persisted all
 // outstanding log entries.
 func (db *Database) Barrier() error {
-	return db.raft.withReadLock(func(svc raftService) error {
+	return db.raft.withWriteLock(func(svc raftService) error {
 		barrierStart := time.Now()
 		err := svc.Barrier(0).Error()
 		barrierElapsed := time.Since(barrierStart)
@@ -169,7 +169,7 @@ func (db *Database) WaitForLeaderStepUp() {
 // is complete.
 func (db *Database) ShutdownRaft() error {
 	db.log.Debug("shutting down raft instance")
-	return db.raft.withReadLock(func(svc raftService) error {
+	return db.raft.withWriteLock(func(svc raftService) error {
 		// Call the raft implementation's shutdown and block
 		// until it completes.
 		shutdownErr := svc.Shutdown().Error()
@@ -408,7 +408,7 @@ func (db *Database) bootstrapRaft(newDB bool) error {
 
 	if db.IsBootstrap() && newDB {
 		db.log.Debugf("bootstrapping MS on %s", db.replicaAddr)
-		if err := db.raft.withReadLock(func(svc raftService) error {
+		if err := db.raft.withWriteLock(func(svc raftService) error {
 			if f := svc.BootstrapCluster(genBootstrapCfg(db.replicaAddr)); f.Error() != nil {
 				return errors.Wrapf(f.Error(), "failed to bootstrap raft instance on %s", db.replicaAddr)
 			}
@@ -531,7 +531,7 @@ func (db *Database) submitCheckerUpdate(op raftOp, f *checker.Finding) error {
 
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
-	return db.raft.withReadLock(func(svc raftService) error {
+	return db.raft.withWriteLock(func(svc raftService) error {
 		err := svc.Apply(data, 0).Error()
 
 		// In the case that leadership is lost while trying to
@@ -560,7 +560,7 @@ type fsm Database
 // to bring this node back into the raft cluster.
 func (f *fsm) EmergencyShutdown(err error) {
 	f.log.Errorf("EMERGENCY RAFT SHUTDOWN due to %s", err)
-	_ = f.raft.withReadLock(func(svc raftService) error {
+	_ = f.raft.withWriteLock(func(svc raftService) error {
 		// Call .Error() on the future returned from
 		// raft.Shutdown() in order to block on completion.
 		// The error returned from this future is always nil.
