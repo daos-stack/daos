@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,9 +85,9 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     unsigned int total_srv_ctx, bool use_cfg,
 		     crt_init_options_t *init_opt, bool use_daos_agent_env);
 int
-crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
-		     pthread_t *progress_thread, crt_group_t **grp,
-		     uint32_t *grp_size, crt_init_options_t *init_opt);
+crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx, pthread_t *progress_thread,
+		     crt_group_t **grp, uint32_t *grp_size, crt_init_options_t *init_opt,
+		     struct crt_proto_format *p_fmt);
 int
 crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg);
 
