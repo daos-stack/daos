@@ -151,20 +151,31 @@ func (sr *syncRaft) setSvc(svc raftService) {
 
 // getSvc returns the raft service implementation with a closure
 // to unlock it, or an error
-func (sr *syncRaft) getSvc() (raftService, func(), error) {
-	sr.RLock()
+func (sr *syncRaft) getSvc(lock func(), unlock func()) (raftService, func(), error) {
+	lock()
 
 	if sr.svc == nil {
-		sr.RUnlock()
+		unlock()
 		return nil, func() {}, system.ErrRaftUnavail
 	}
 
-	return sr.svc, sr.RUnlock, nil
+	return sr.svc, unlock, nil
 }
 
 // withReadLock executes the supplied closure under a read lock
 func (sr *syncRaft) withReadLock(fn func(raftService) error) error {
-	svc, unlock, err := sr.getSvc()
+	svc, unlock, err := sr.getSvc(sr.RLock, sr.RUnlock)
+	defer unlock()
+
+	if err != nil {
+		return err
+	}
+	return fn(svc)
+}
+
+// withWriteLock executes the supplied closure under a write lock
+func (sr *syncRaft) withWriteLock(fn func(raftService) error) error {
+	svc, unlock, err := sr.getSvc(sr.Lock, sr.Unlock)
 	defer unlock()
 
 	if err != nil {
@@ -751,7 +762,7 @@ func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 	switch op {
 	case raftOpAddMember:
 		db.log.Debugf("adding %s as a new raft voter", vc)
-		if err := db.raft.withReadLock(func(svc raftService) error {
+		if err := db.raft.withWriteLock(func(svc raftService) error {
 			return svc.AddVoter(rsi, rsa, 0, 0).Error()
 		}); err != nil {
 			return errors.Wrapf(err, "failed to add %q as raft replica", vc.Addr)
@@ -760,7 +771,7 @@ func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 		// If we're updating an existing member, we need to kick it out of the
 		// raft cluster and then re-add it so that it doesn't hijack the campaign.
 		db.log.Debugf("removing and re-adding %s as a current raft voter", vc)
-		if err := db.raft.withReadLock(func(svc raftService) error {
+		if err := db.raft.withWriteLock(func(svc raftService) error {
 			if err := svc.RemoveServer(rsi, 0, 0).Error(); err != nil {
 				return errors.Wrapf(err, "failed to remove %q as a raft replica", vc.Addr)
 			}
