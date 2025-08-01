@@ -1,8 +1,7 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 timeout: 120
 hosts:
   test_servers: 2
+  test_clients: 1
 server_config:
   name: daos_server
   engines_per_host: 1

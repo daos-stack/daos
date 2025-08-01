@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +15,7 @@
 #include <getopt.h>
 #include <semaphore.h>
 
+#include <daos/dpar.h>
 #include "crt_utils.h"
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"
@@ -61,8 +63,8 @@ test_run(d_rank_t my_rank)
 	int			 i;
 	int			 rc = 0;
 
-	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
-				  &test_g.t_tid[0], &grp, &grp_size, NULL);
+	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0], &test_g.t_tid[0],
+				  &grp, &grp_size, NULL, NULL);
 	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	/* Register event callback after CaRT has initialized */
@@ -98,13 +100,15 @@ test_run(d_rank_t my_rank)
 	}
 	DBG_PRINT("Contexts created %d\n", test_g.t_srv_ctx_num);
 
+	if (grp_size > 1)
+		par_barrier(PAR_COMM_WORLD);
+
 	if (my_rank == 0) {
 		rc = crt_group_config_save(NULL, true);
 		D_ASSERTF(rc == 0,
 			  "crt_group_config_save() failed. rc: %d\n", rc);
 		DBG_PRINT("Group config file saved\n");
 	}
-
 
 	if (test_g.t_hold)
 		sleep(test_g.t_hold_time);
