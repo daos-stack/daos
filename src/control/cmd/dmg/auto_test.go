@@ -1,6 +1,8 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -598,6 +600,7 @@ allow_numa_imbalance: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 core_dump_filter: 19
+client_behind_firewall: true
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+verbs
@@ -614,6 +617,7 @@ hyperthreads: false
 		WithMgmtSvcReplicas("hostX:10002").
 		WithDisableVMD(false).
 		WithDisableHotplug(false).
+		WithClientFirewallMode(true).
 		WithEngines(
 			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
