@@ -6,6 +6,7 @@ export DH_VERBOSE = 1
 name := daos
 prefix := /usr
 sysconfdir := /etc
+vardir := /var
 exec_prefix := $(prefix)
 buildroot := debian/tmp
 daoshome := $(exec_prefix)/lib/$(DEB_BUILD_MULTIARCH)/$(name)
@@ -55,6 +56,7 @@ override_dh_auto_install:
 	mkdir -p ${buildroot}$(prefix)/lib/systemd/system
 	install -m 644 utils/systemd/daos_agent.service ${buildroot}$(prefix)/lib/systemd/system
 	mkdir -p ${buildroot}$(sysconfdir)/daos/certs/clients
+	mkdir -p ${buildroot}${vardir}/log/daos
 	mv ${buildroot}$(sysconfdir)/daos/bash_completion.d ${buildroot}$(sysconfdir)/
 
 override_dh_missing:
