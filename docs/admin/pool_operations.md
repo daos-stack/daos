@@ -937,6 +937,11 @@ $ dmg pool get-prop tank2 reclaim
    Reclaim strategy (reclaim) lazy
 ```
 
+Pool redundancy factor (`rd_fac`) can be modified after pool creation to any value between
+0 and 4. However, avoid setting it to a value larger than the number of engines in the
+pool because pool's `rd_fac` will be used for container's `rd_fac` by default. If it's
+invalid, container create without specifying `rd_fac` will fail.
+
 ### Reclaim Strategy (reclaim)
 
 DAOS is a versioned object store that tags every I/O with an epoch number.

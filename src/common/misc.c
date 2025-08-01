@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -665,7 +666,16 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	return &daos_crt_init_opt;
 }
 
-static __thread uuid_t dti_uuid;
+/* For new created thread (via pthread_create), the pre-thread variable \@dti_uuid will be
+ * automatically reset as zero, then subsequent daos_dti_gen() will generate new UUID for
+ * the transactions sponsored by current thread.
+ *
+ * For new created process (via fork), the pre-thread variable \@dti_uuid will be reset as
+ * zero via daos_dti_reset(). The process owner needs to explicitly call it or in-directly
+ * trigger it (such as via daos_eq_lib_init) to guarantee that new process will not reuse
+ * parent's UUID for the transactions sponsored by current process.
+ */
+static __thread uuid_t dti_uuid = {0};
 
 void
 daos_dti_gen_unique(struct dtx_id *dti)
