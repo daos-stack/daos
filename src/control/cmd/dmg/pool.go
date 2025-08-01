@@ -799,7 +799,7 @@ type poolSetPropCmd struct {
 	poolCmd
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>" required:"1"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val1[;val2...]...]>" required:"1"`
 	} `positional-args:"yes"`
 }
 
