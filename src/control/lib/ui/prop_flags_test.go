@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -105,7 +106,6 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 
 }
 
-/* NB: Doesn't work with go < 1.18
 func FuzzUI_SetPropertiesFlag_UnmarshalFlag(f *testing.F) {
 	f.Fuzz(func(t *testing.T, fv string) {
 		f := ui.SetPropertiesFlag{}
@@ -118,7 +118,6 @@ func FuzzUI_SetPropertiesFlag_UnmarshalFlag(f *testing.F) {
 		}
 	})
 }
-*/
 
 func TestUI_SetPropertiesFlag_Complete(t *testing.T) {
 	comps := ui.CompletionMap{
