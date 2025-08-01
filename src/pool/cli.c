@@ -1768,8 +1768,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
 	}
 
-	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number,
-				    POOL_TGT_UPDATE_SKIP_RF_CHECK);
+	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number, 0 /* flags */);
 
 	crt_req_addref(rpc);
 
