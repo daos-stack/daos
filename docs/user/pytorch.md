@@ -24,12 +24,14 @@ import torch
 from torch.utils.data import DataLoader
 from pydaos.torch import Dataset
 
-dataset = Dataset(pool='pool', container='container', path='/training/samples')
-# That's it, when the Dataset is created, it will connect to DAOS, scan the namaspace of the container
-# and will be ready to load data from it.
+with Dataset(pool='pool', container='container', path='/training/samples') as dataset
+    # That's it, when the Dataset is created, it will connect to DAOS, scan the namaspace of the container
+    # and will be ready to load data from it.
+    # With statement is used to release connection and used resources once Dataset is no longer needed.
 
-for i, sample in enumerate(dataset):
-    print(f"Sample {i} size: {len(sample)}")
+    for i, sample in enumerate(dataset):
+        print(f"Sample {i} size: {len(sample)}")
+...
 ```
 
 To use Dataset with DataLoader, you can pass it directly to DataLoader constructor:
@@ -72,6 +74,7 @@ with chkp.writer('model.pt') as w:
 with chkp.reader('model.pt') as r:
     torch.load(r)
 
+chkp.close()
 ```
 
 See [pydaos.torch](https://github.com/daos-stack/daos/blob/master/src/client/pydaos/torch/Readme.md) plugin for an example of how to use checkpoints with DLIO benchmark
