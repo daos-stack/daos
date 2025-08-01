@@ -5,6 +5,15 @@ def scons():
     """Execute build"""
     Import('denv', 'drpc_test_utils')
 
+    # drpc communication integration test
+    comm_env = denv.Clone()
+    comm_env.AppendUnique(OBJPREFIX='drpctest_')
+
+    comm_env.d_test_program('drpc_comm_tests',
+                            ['drpc_comm_tests.c', 'drpc_test_listener.c', '../drpc_progress.c'],
+                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka', 'abt'])
+
+    # mocked unit tests
     unit_env = denv.Clone()
     unit_env.AppendUnique(OBJPREFIX='utest_')
 
@@ -13,8 +22,8 @@ def scons():
 
     Depends('drpc_progress_tests', common_mock_ld_script)
     unit_env.d_test_program('drpc_progress_tests',
-                            ['drpc_progress_tests.c', drpc_test_utils, '../drpc_progress.c'],
-                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
+                            ['drpc_progress_tests.c', drpc_test_utils, "../drpc_progress.c"],
+                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka', 'abt'])
 
     Depends('drpc_handler_tests', common_mock_ld_script)
     unit_env.d_test_program('drpc_handler_tests',
