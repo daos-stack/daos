@@ -2534,6 +2534,8 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 			expPrepCall: &storage.BdevPrepareRequest{
 				TargetUser:   username,
 				PCIAllowList: test.MockPCIAddr(1),
+				// Matches meminfo HugepageTotal stat returned for NUMA-0.
+				HugeNodes: "nodes_hp[0]=1024",
 			},
 			expResp: &ctlpb.NvmeRebindResp{
 				State: &ctlpb.ResponseState{
@@ -2560,6 +2562,7 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 			expPrepCall: &storage.BdevPrepareRequest{
 				TargetUser:   username,
 				PCIAllowList: test.MockPCIAddr(1),
+				HugeNodes:    "nodes_hp[0]=1024",
 			},
 			expResp: &ctlpb.NvmeRebindResp{},
 		},
