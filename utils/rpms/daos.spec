@@ -24,7 +24,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       10%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -646,6 +646,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %endif
 
 %changelog
+* Wed May 09 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-11
+  Update to spdk 24
+
 * Mon May 19 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-10
 - Start to deprecate this file being used to build DAOS but rather only source
   RPM
