@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -893,30 +894,30 @@ func TestSupport_DateTimeValidate(t *testing.T) {
 			expErr: nil,
 		},
 		"Valid StartDate No EndDate": {
-			logStartDate: "12-01-2024",
-			expErr:       errors.New("Invalid date, please provide the endDate in MM-DD-YYYY format"),
+			logStartDate: "2024-12-01-2024",
+			expErr:       errors.New("Invalid date, please provide the endDate in YYYY-MM-DD format"),
 		},
 		"No StartDate Valid EndDate": {
-			logEndDate: "12-31-2024",
-			expErr:     errors.New("Invalid date, please provide the startDate in MM-DD-YYYY format"),
+			logEndDate: "2024-12-31",
+			expErr:     errors.New("Invalid date, please provide the startDate in YYYY-MM-DD format"),
 		},
 		"Invalid StartDate No EndDate": {
-			logStartDate: "44-22-2024",
-			expErr:       errors.New("Invalid date, please provide the startDate in MM-DD-YYYY format"),
+			logStartDate: "2024-44-22",
+			expErr:       errors.New("Invalid date, please provide the startDate in YYYY-MM-DD format"),
 		},
 		"Invalid EndDate": {
-			logStartDate: "12-01-2024",
-			logEndDate:   "44-22-2024",
-			expErr:       errors.New("Invalid date, please provide the endDate in MM-DD-YYYY format"),
+			logStartDate: "2024-12-01",
+			logEndDate:   "2024-44-22",
+			expErr:       errors.New("Invalid date, please provide the endDate in YYYY-MM-DD format"),
 		},
 		"StartDate after EndDate": {
-			logStartDate: "10-01-2024",
-			logEndDate:   "05-06-2024",
+			logStartDate: "2024-10-01",
+			logEndDate:   "2024-05-06",
 			expErr:       errors.New("start-date can not be after end-date"),
 		},
 		"Valid StartDate and EndDate": {
-			logStartDate: "12-01-2024",
-			logEndDate:   "12-31-2024",
+			logStartDate: "2024-12-01",
+			logEndDate:   "2024-12-31",
 			expErr:       nil,
 		},
 		"Valid StartTime No EndTime": {
@@ -1034,51 +1035,51 @@ func TestSupport_cpLinesFromLog(t *testing.T) {
 
 	collLogParams := CollectLogsParams{}
 
-	DummyEngineLog := `01/01-01:01:01.90 system-01 LOG LINE 1
-02/02-04:04:04.90 system-02 LOG LINE 2
-03/03-06:06:06.90 system-02 LOG LINE 3
-04/04-08:08:08.90 system-02 LOG LINE 4
-05/05-10:10:10.90 system-02 LOG LINE 5
-06/06-12:12:12.90 system-02 LOG LINE 6
-07/07-14:14:14.90 system-02 LOG LINE 7
+	DummyEngineLog := `2025-01-01 01:01:01.90 system-01 LOG LINE 1
+2025-02-02 04:04:04.90 system-02 LOG LINE 2
+2025-03-03 06:06:06.90 system-02 LOG LINE 3
+2025-04-04 08:08:08.90 system-02 LOG LINE 4
+2025-05-05 10:10:10.90 system-02 LOG LINE 5
+2025-06-06 12:12:12.90 system-02 LOG LINE 6
+2025-07-07 14:14:14.90 system-02 LOG LINE 7
 LINE WITHOUT DATE AND TIME
-08/08-16:16:16.90 system-02 LOG LINE 8
-09/09-18:18:18.90 system-02 LOG LINE 9
-10/10-20:20:20.90 system-02 LOG LINE 10
-11/11-22:22:22.90 system-02 LOG LINE 11
-12/12-23:59:59.90 system-02 LOG LINE 12
+2025-08-08 16:16:16.90 system-02 LOG LINE 8
+2025-09-09 18:18:18.90 system-02 LOG LINE 9
+2025-10-10 20:20:20.90 system-02 LOG LINE 10
+2025-11-11 22:22:22.90 system-02 LOG LINE 11
+2025-12-12 23:59:59.90 system-02 LOG LINE 12
 `
 	MockEngineLogFile := test.CreateTestFile(t, targetTestDir, DummyEngineLog)
 
-	DummyControlLog := `hostname INFO 2023/01/01 01:01:01 LOG LINE 1
-hostname INFO 2023/02/02 04:04:04 LOG LINE 2
-hostname INFO 2023/03/03 06:06:06 LOG LINE 3
-hostname INFO 2023/04/04 08:08:08 LOG LINE 4
-hostname INFO 2023/05/05 10:10:10 LOG LINE 5
-hostname INFO 2023/06/06 12:12:12 LOG LINE 6
-hostname INFO 2023/07/07 14:14:14 LOG LINE 7
+	DummyControlLog := `hostname INFO 2023-01-01 01:01:01 LOG LINE 1
+hostname INFO 2023-02-02 04:04:04 LOG LINE 2
+hostname INFO 2023-03-03 06:06:06 LOG LINE 3
+hostname INFO 2023-04-04 08:08:08 LOG LINE 4
+hostname INFO 2023-05-05 10:10:10 LOG LINE 5
+hostname INFO 2023-06-06 12:12:12 LOG LINE 6
+hostname INFO 2023-07-07 14:14:14 LOG LINE 7
 LINE WITHOUT DATE AND TIME
-hostname INFO 2023/08/08 16:16:16 LOG LINE 8
-hostname INFO 2023/09/09 18:18:18 LOG LINE 9
-hostname INFO 2023/10/10 20:20:20 LOG LINE 10
-hostname INFO 2023/11/11 22:22:22 LOG LINE 11
-hostname INFO 2023/12/12 23:59:59 LOG LINE 12
+hostname INFO 2023-08-08 16:16:16 LOG LINE 8
+hostname INFO 2023-09-09 18:18:18 LOG LINE 9
+hostname INFO 2023-10-10 20:20:20 LOG LINE 10
+hostname INFO 2023-11-11 22:22:22 LOG LINE 11
+hostname INFO 2023-12-12 23:59:59 LOG LINE 12
 `
 	MockControlLogFile := test.CreateTestFile(t, targetTestDir, DummyControlLog)
 
-	DummyAdminLog := `INFO 2023/01/01 01:01:01.441231 LOG LINE 1
-INFO 2023/02/02 04:04:04.441232 LOG LINE 2
-INFO 2023/03/03 06:06:06.441233 LOG LINE 3
-INFO 2023/04/04 08:08:08.441234 LOG LINE 4
-INFO 2023/05/05 10:10:10.441235 LOG LINE 5
-INFO 2023/06/06 12:12:12.441235 LOG LINE 6
-INFO 2023/07/07 14:14:14.441236 LOG LINE 7
+	DummyAdminLog := `INFO 2023-01-01 01:01:01.441231 LOG LINE 1
+INFO 2023-02-02 04:04:04.441232 LOG LINE 2
+INFO 2023-03-03 06:06:06.441233 LOG LINE 3
+INFO 2023-04-04 08:08:08.441234 LOG LINE 4
+INFO 2023-05-05 10:10:10.441235 LOG LINE 5
+INFO 2023-06-06 12:12:12.441235 LOG LINE 6
+INFO 2023-07-07 14:14:14.441236 LOG LINE 7
 LINE WITHOUT DATE AND TIME
-INFO 2023/08/08 16:16:16.441237 LOG LINE 8
-INFO 2023/09/09 18:18:18.441238 LOG LINE 9
-INFO 2023/10/10 20:20:20.441239 LOG LINE 10
-INFO 2023/11/11 22:22:22.441240 LOG LINE 11
-INFO 2023/12/12 23:59:59.441241 LOG LINE 12
+INFO 2023-08-08 16:16:16.441237 LOG LINE 8
+INFO 2023-09-09 18:18:18.441238 LOG LINE 9
+INFO 2023-10-10 20:20:20.441239 LOG LINE 10
+INFO 2023-11-11 22:22:22.441240 LOG LINE 11
+INFO 2023-12-12 23:59:59.441241 LOG LINE 12
 `
 	MockAdminLogFile := test.CreateTestFile(t, targetTestDir, DummyAdminLog)
 
@@ -1223,39 +1224,39 @@ func TestSupport_getDateTime(t *testing.T) {
 		expErr       error
 	}{
 		"No StartTime": {
-			logStartDate: "1-2-2023",
-			logEndDate:   "1-3-2023",
+			logStartDate: "2023-01-02",
+			logEndDate:   "2023-01-03",
 			expErr:       nil,
 		},
 		"No EndTime": {
-			logStartDate: "1-2-2023",
-			logEndDate:   "1-3-2023",
+			logStartDate: "2023-01-02",
+			logEndDate:   "2023-01-03",
 			logStartTime: "10:10:10",
-			expStartTime: "01-02-2023 10:10:10",
-			expEndTime:   "01-03-2023 23:59:59",
+			expStartTime: "2023-01-02 10:10:10.234",
+			expEndTime:   "2023-01-03 23:59:59.567",
 			expErr:       nil,
 		},
 		"Valid Date and Invalid Start Time": {
-			logStartDate: "1-2-2023",
-			logEndDate:   "1-3-2023",
-			logStartTime: "99:99:99",
-			logEndTime:   "12:12:12",
-			expErr:       errors.New("parsing time \"1-2-2023 99:99:99\": hour out of range"),
+			logStartDate: "2023-01-02",
+			logEndDate:   "2023-01-03",
+			logStartTime: "99:99:99.123",
+			logEndTime:   "12:12:12.234",
+			expErr:       errors.New("parsing time \"2023-01-02 99:99:99\": hour out of range"),
 		},
 		"Valid Date and Invalid End Time": {
-			logStartDate: "1-2-2023",
-			logEndDate:   "1-3-2023",
-			logStartTime: "10:10:10",
-			logEndTime:   "99:99:99",
-			expErr:       errors.New("parsing time \"1-3-2023 99:99:99\": hour out of range"),
+			logStartDate: "2023-01-02",
+			logEndDate:   "2023-01-03",
+			logStartTime: "10:10:10.789",
+			logEndTime:   "99:99:99.234",
+			expErr:       errors.New("parsing time \"2023-01-03 99:99:99.234\": hour out of range"),
 		},
 		"Valid Date and Time": {
-			logStartDate: "1-2-2023",
-			logEndDate:   "1-3-2023",
+			logStartDate: "2023-1-2",
+			logEndDate:   "2023-1-3",
 			logStartTime: "10:10:10",
-			logEndTime:   "12:12:12",
-			expStartTime: "01-02-2023 10:10:10",
-			expEndTime:   "01-03-2023 12:12:12",
+			logEndTime:   "12:12:12.234",
+			expStartTime: "2023-01-02 10:10:10.345",
+			expEndTime:   "2023-01-03 12:12:12.456",
 			expErr:       nil,
 		},
 	} {
@@ -1267,13 +1268,13 @@ func TestSupport_getDateTime(t *testing.T) {
 			startTime, endTime, gotErr := getDateTime(log, collLogParams)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expStartTime != "" {
-				tmpStartTime, _ := time.Parse(MMDDYYYY_HHMMSS, tc.expStartTime)
+				tmpStartTime, _ := time.Parse(YYYYMMDD_HHMMSS, tc.expStartTime)
 				if tmpStartTime.Equal(startTime) == false {
 					t.Fatalf("Expected StartTime:=%s But Got :=%s", tmpStartTime, startTime)
 				}
 			}
 			if tc.expEndTime != "" {
-				tmpEndTime, _ := time.Parse(MMDDYYYY_HHMMSS, tc.expEndTime)
+				tmpEndTime, _ := time.Parse(YYYYMMDD_HHMMSS, tc.expEndTime)
 				if tmpEndTime.Equal(endTime) == false {
 					t.Fatalf("Expected EndTime:=%s But Got :=%s", tmpEndTime, endTime)
 				}
