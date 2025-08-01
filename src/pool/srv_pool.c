@@ -8234,9 +8234,26 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 	pool_svc_stop_handler(rpc, DAOS_POOL_VERSION);
 }
 
-/* TODO: make a real RPC handler ds_pool_rebuild_stop_handler(crt_rpc *rpc) to call this. */
+/* Administrator (via dmg command) asks to stop currently-running rebuild for a pool. */
+void
+ds_pool_rebuild_stop_handler(crt_rpc_t *rpc)
+{
+	struct pool_rebuild_stop_in  *in  = crt_req_get(rpc);
+	struct pool_rebuild_stop_out *out = crt_reply_get(rpc);
+	int                           rc;
+
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p\n", DP_UUID(in->rstpi_op.pi_uuid), rpc);
+
+	rc = ds_pool_rebuild_stop(in->rstpi_op.pi_uuid, in->rstpi_force, &out->rstpo_op.po_hint);
+
+	out->rstpo_op.po_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->rstpi_op.pi_uuid), rpc,
+		DP_RC(rc));
+	crt_reply_send(rpc);
+}
+
 int
-ds_pool_rebuild_stop(uuid_t pool_uuid, struct rsvc_hint *hint)
+ds_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, struct rsvc_hint *hint)
 {
 	struct pool_svc *svc;
 	int              rc;
@@ -8245,17 +8262,34 @@ ds_pool_rebuild_stop(uuid_t pool_uuid, struct rsvc_hint *hint)
 	if (rc != 0)
 		return rc;
 
-	rc = ds_rebuild_admin_stop(svc->ps_pool);
+	rc = ds_rebuild_admin_stop(svc->ps_pool, force);
 
-	/* TODO: ds_rsvc_set_hint(&svc->ps_rsvc, &out->hint); */
+	if (hint != NULL)
+		ds_rsvc_set_hint(&svc->ps_rsvc, hint);
 	pool_svc_put_leader(svc);
 	return rc;
 }
 
 /* administrator (via dmg command) asks to resume normal rebuild behavior for pool
  * (if it has not already happened due to another automatic or manual rebuild in the meantime).
- * TODO: make a real RPC handler ds_pool_rebuild_start_handler(crt_rpc *rpc) to call this.
  */
+void
+ds_pool_rebuild_start_handler(crt_rpc_t *rpc)
+{
+	struct pool_rebuild_start_in  *in  = crt_req_get(rpc);
+	struct pool_rebuild_start_out *out = crt_reply_get(rpc);
+	int                            rc;
+
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p\n", DP_UUID(in->rstai_op.pi_uuid), rpc);
+
+	rc = ds_pool_rebuild_start(in->rstai_op.pi_uuid, &out->rstao_op.po_hint);
+
+	out->rstao_op.po_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->rstai_op.pi_uuid), rpc,
+		DP_RC(rc));
+	crt_reply_send(rpc);
+}
+
 int
 ds_pool_rebuild_start(uuid_t pool_uuid, struct rsvc_hint *hint)
 {
@@ -8268,7 +8302,8 @@ ds_pool_rebuild_start(uuid_t pool_uuid, struct rsvc_hint *hint)
 
 	rc = ds_rebuild_admin_start(svc->ps_pool);
 
-	/* TODO: ds_rsvc_set_hint(&svc->ps_rsvc, &out->hint); */
+	if (hint != NULL)
+		ds_rsvc_set_hint(&svc->ps_rsvc, hint);
 	pool_svc_put_leader(svc);
 	return rc;
 }

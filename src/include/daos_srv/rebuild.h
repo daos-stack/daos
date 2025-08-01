@@ -97,7 +97,7 @@ void ds_rebuild_leader_stop_all(void);
 void ds_rebuild_abort(uuid_t pool_uuid, unsigned int version, uint32_t rebuild_gen,
 		      uint64_t term);
 int
-ds_rebuild_admin_stop(struct ds_pool *pool);
+ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force);
 int
 ds_rebuild_admin_start(struct ds_pool *pool);
 #endif
