@@ -126,7 +126,7 @@ class Test(avocadoTest):
         self._teardown_cancel = set()
         self._teardown_errors = []
         self.prefix = None
-        self.cancel_file = os.path.join(os.sep, "scratch", "CI-skip-list-master")
+        self.cancel_file = os.path.join(os.sep, "CIShare", "CI-skip-list-master")
 
         # List of methods to call during tearDown to cleanup after the steps
         # Use the register_cleanup() method to add methods with optional arguments
