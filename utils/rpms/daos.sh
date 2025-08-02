@@ -14,6 +14,7 @@ daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
 sysctl_script_name="10-daos_server.conf"
+daos_log_dir="/var/log/daos"
 
 VERSION=${daos_version}
 RELEASE=${daos_release}
@@ -139,6 +140,12 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
+# Ensure daos_log_dir exists
+if [ ! -d ${daos_log_dir} ]; then
+    mkdir -p ${daos_log_dir}
+    chown daos_server:daos_daemons ${daos_log_dir}
+    chmod 775 ${daos_log_dir}
+fi
 EOF
   EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_server")
 
@@ -268,6 +275,11 @@ cat << EOF  > "${tmp}/pre_install_client"
 getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
+# Ensure daos_log_dir exists
+if [ ! -d ${daos_log_dir} ]; then
+    mkdir -p ${daos_log_dir}
+    chmod 775 ${daos_log_dir}
+fi
 EOF
 EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_client")
 
