@@ -335,7 +335,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hs: defHostStorage,
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"MS replicas set": {
 			msReplicas: "moon-111,mars-115,jupiter-119",
@@ -344,7 +344,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
 				WithMgmtSvcReplicas("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"unmet min nr ssds": {
 			hf: defHostFabric,
@@ -388,7 +388,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"dcpm scm; control_metadata path set": {
 			extMetadataPath: metadataMountPath,
@@ -415,7 +415,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", mdOnSSDEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log").
+				WithControlLogFile("/var/log/daos/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
 		"tmpfs scm; md-on-ssd; no logging to stdout": {
@@ -507,7 +507,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					),
 			}).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

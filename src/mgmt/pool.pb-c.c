@@ -4460,24 +4460,18 @@ const ProtobufCEnumDescriptor mgmt__storage_media_type__descriptor =
   mgmt__storage_media_type__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue mgmt__pool_service_state__enum_values_by_number[5] =
-{
-  { "Creating", "MGMT__POOL_SERVICE_STATE__Creating", 0 },
-  { "Ready", "MGMT__POOL_SERVICE_STATE__Ready", 1 },
-  { "Destroying", "MGMT__POOL_SERVICE_STATE__Destroying", 2 },
-  { "Degraded", "MGMT__POOL_SERVICE_STATE__Degraded", 3 },
-  { "Unknown", "MGMT__POOL_SERVICE_STATE__Unknown", 4 },
+static const ProtobufCEnumValue mgmt__pool_service_state__enum_values_by_number[5] = {
+    {"Creating", "MGMT__POOL_SERVICE_STATE__Creating", 0},
+    {"Ready", "MGMT__POOL_SERVICE_STATE__Ready", 1},
+    {"Destroying", "MGMT__POOL_SERVICE_STATE__Destroying", 2},
+    {"TargetsExcluded", "MGMT__POOL_SERVICE_STATE__TargetsExcluded", 3},
+    {"Unknown", "MGMT__POOL_SERVICE_STATE__Unknown", 4},
 };
 static const ProtobufCIntRange mgmt__pool_service_state__value_ranges[] = {
 {0, 0},{0, 5}
 };
-static const ProtobufCEnumValueIndex mgmt__pool_service_state__enum_values_by_name[5] =
-{
-  { "Creating", 0 },
-  { "Degraded", 3 },
-  { "Destroying", 2 },
-  { "Ready", 1 },
-  { "Unknown", 4 },
+static const ProtobufCEnumValueIndex mgmt__pool_service_state__enum_values_by_name[5] = {
+    {"Creating", 0}, {"Destroying", 2}, {"Ready", 1}, {"TargetsExcluded", 3}, {"Unknown", 4},
 };
 const ProtobufCEnumDescriptor mgmt__pool_service_state__descriptor =
 {

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,13 +29,42 @@ import (
 	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
-func TestAgentSecurityModule_ID(t *testing.T) {
+func TestAgent_SecurityModule_ID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, defaultTestSecurityConfig())
 
-	test.AssertEqual(t, mod.ID(), drpc.ModuleSecurityAgent, "wrong drpc module")
+	test.AssertEqual(t, mod.ID(), daos.ModuleSecurityAgent, "wrong drpc module")
+}
+
+func TestAgent_SecurityModule_GetMethod(t *testing.T) {
+	for name, tc := range map[string]struct {
+		methodID  int32
+		expMethod drpc.Method
+		expErr    error
+	}{
+		"request-cred": {
+			methodID:  daos.MethodRequestCredentials.ID(),
+			expMethod: daos.MethodRequestCredentials,
+		},
+		"unknown": {
+			methodID: -1,
+			expErr:   errors.New("method ID -1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			parent := test.MustLogContext(t)
+			log := logging.FromContext(parent)
+
+			mod := NewSecurityModule(log, defaultTestSecurityConfig())
+
+			method, err := mod.GetMethod(tc.methodID)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "", tc.expMethod, method)
+		})
+	}
 }
 
 func newTestSession(t *testing.T, log logging.Logger, conn net.Conn) *drpc.Session {
@@ -49,21 +79,8 @@ func defaultTestSecurityConfig() *securityConfig {
 	}
 }
 
-func TestAgentSecurityModule_BadMethod(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	mod := NewSecurityModule(log, defaultTestSecurityConfig())
-	method, err := mod.ID().GetMethod(-1)
-	if method != nil {
-		t.Errorf("Expected no method, got %+v", method)
-	}
-
-	test.CmpErr(t, errors.New("invalid method -1 for module Agent Security"), err)
-}
-
 func callRequestCreds(mod *SecurityModule, t *testing.T, log logging.Logger, conn net.Conn) ([]byte, error) {
-	return mod.HandleCall(test.Context(t), newTestSession(t, log, conn), drpc.MethodRequestCredentials, nil)
+	return mod.HandleCall(test.Context(t), newTestSession(t, log, conn), daos.MethodRequestCredentials, nil)
 }
 
 func setupTestUnixConn(t *testing.T) (*net.UnixConn, func()) {
