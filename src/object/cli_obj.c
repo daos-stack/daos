@@ -5996,8 +5996,6 @@ dc_obj_fetch_task(tse_task_t *task)
 
 	if (args->extra_flags & DIOF_EC_RECOV_FROM_PARITY)
 		obj_auxi->flags |= ORF_EC_RECOV_FROM_PARITY;
-	if (args->extra_flags & DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY)
-		obj_auxi->flags |= ORF_FETCH_EPOCH_EC_AGG_BOUNDARY;
 
 	if (args->extra_flags & DIOF_FOR_FORCE_DEGRADE ||
 	    DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))
