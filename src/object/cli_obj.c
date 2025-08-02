@@ -56,7 +56,7 @@ open_retry:
 		D_GOTO(unlock, rc = -DER_NONEXIST);
 	}
 
-	D_DEBUG(DB_TRACE, "Open object shard %d\n", shard);
+	D_DEBUG(DB_TRACE, "Open object shard %d, lock_upgraded %d\n", shard, lock_upgraded);
 
 	if (obj_shard->do_obj == NULL) {
 		daos_unit_oid_t	 oid;
@@ -1087,7 +1087,7 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 			  grp_idx * daos_oclass_grp_size(obj_get_oca(obj_auxi->obj));
 
 		if (isclr(bitmap, tgt_idx)) {
-			D_DEBUG(DB_TRACE, DF_OID" shard %u is not in bitmap\n",
+			D_DEBUG(DB_IO, DF_OID " shard %u is not in bitmap\n",
 				DP_OID(obj->cob_md.omd_id), obj_shard->do_id.id_shard);
 			D_GOTO(close, rc = -DER_NONEXIST);
 		}
@@ -1956,12 +1956,8 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		 fail_info->efi_recov_tasks != NULL);
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		recov_task = &fail_info->efi_recov_tasks[i];
-		/* Set client hlc as recovery epoch only for the case that
-		 * singv recovery without fetch from server ahead - when
-		 * some targets un-available.
-		 */
-		if (recov_task->ert_epoch == DAOS_EPOCH_MAX)
-			recov_task->ert_epoch = d_hlc_get();
+		D_ASSERTF(recov_task->ert_epoch != DAOS_EPOCH_MAX && recov_task->ert_epoch != 0,
+			  "bad ert_epoch " DF_X64 "\n", recov_task->ert_epoch);
 		dc_cont2hdl_noref(obj->cob_co, &coh);
 		rc = dc_tx_local_open(coh, recov_task->ert_epoch, 0, &th);
 		if (rc) {
@@ -2280,7 +2276,7 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 				if ((iods[i].iod_size == DAOS_REC_ANY) ||
 				    (!update && check_exist))
 					continue;
-				D_ERROR("invalid req with NULL sgl\n");
+				D_ERROR("iods[%d] invalid req with NULL sgl\n", i);
 				return -DER_INVAL;
 			}
 			if (!size_fetch &&
@@ -5747,11 +5743,9 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 		if (likely(ec_deg_tgt == tgt_idx))
 			continue;
 
-		if (obj_auxi->ec_in_recov ||
-		    (obj_auxi->reasb_req.orr_singv_only && !obj_auxi->reasb_req.orr_size_fetch)) {
-			D_DEBUG(DB_IO, DF_OID" shard %d failed recovery(%d) or singv fetch(%d).\n",
-				DP_OID(obj->cob_md.omd_id), grp_start + tgt_idx,
-				obj_auxi->ec_in_recov, obj_auxi->reasb_req.orr_singv_only);
+		if (obj_auxi->ec_in_recov) {
+			D_DEBUG(DB_IO, DF_OID " shard %d failed recovery.\n",
+				DP_OID(obj->cob_md.omd_id), grp_start + tgt_idx);
 			D_GOTO(out, rc = -DER_TGT_RETRY);
 		}
 
@@ -6002,6 +5996,8 @@ dc_obj_fetch_task(tse_task_t *task)
 
 	if (args->extra_flags & DIOF_EC_RECOV_FROM_PARITY)
 		obj_auxi->flags |= ORF_EC_RECOV_FROM_PARITY;
+	if (args->extra_flags & DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY)
+		obj_auxi->flags |= ORF_FETCH_EPOCH_EC_AGG_BOUNDARY;
 
 	if (args->extra_flags & DIOF_FOR_FORCE_DEGRADE ||
 	    DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))
