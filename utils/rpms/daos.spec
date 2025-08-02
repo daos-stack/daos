@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -60,11 +60,7 @@ BuildRequires: boost-devel
 %if %{with server}
 BuildRequires: libpmemobj-devel >= 2.1.0
 %endif
-%if (0%{?rhel} >= 8)
-BuildRequires: fuse3-devel >= 3
-%else
-BuildRequires: fuse3-devel >= 3.4.2
-%endif
+BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
@@ -187,7 +183,6 @@ Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
-Requires: libfuse3-3 >= 3.4.2
 %endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -239,11 +234,6 @@ Requires: libcapstone-devel
 %else
 Requires: Lmod >= 8.7.36
 Requires: capstone-devel
-%endif
-%if (0%{?rhel} >= 8)
-Requires: fuse3-devel >= 3
-%else
-Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
 %if (0%{?suse_version} > 0)
@@ -632,6 +622,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Jun 20 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-2
+- Switch libfuse3 to libfused
+
 * Tue Jun 17 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.4-1
 - First release candidate for 2.6.4
 

@@ -1,4 +1,6 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -288,8 +290,7 @@ def define_components(reqs):
 
     reqs.define('argobots',
                 retriever=GitRepoRetriever(True),
-                commands=[['git', 'clean', '-dxf'],
-                          ['./autogen.sh'],
+                commands=[['./autogen.sh'],
                           abt_build,
                           ['make'],
                           ['make', 'install']],
@@ -297,13 +298,15 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
-    reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
+    reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever(),
-                commands=[['meson', 'setup', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
-                           '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
-                           '--default-library', 'both', '../fuse'],
+                commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
+                           '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '--default-library', 'static', '../fused'],
+                          ['meson', 'setup', '--reconfigure', '../fused'],
                           ['ninja', 'install']],
-                headers=['fuse3/fuse.h'],
+                pkgconfig='fused',
+                headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
 

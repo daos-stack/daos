@@ -1,3 +1,9 @@
+daos (2.6.4-2) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Switch from libfuse3 to libfused
+
+ -- Jeff Olivier <jeffolivier@google.com>  Fri, 20 Jun 2025 09:15:00 +0000
+
 daos (2.6.4-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * First release candidate for 2.6.4
