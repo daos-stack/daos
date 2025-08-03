@@ -2117,20 +2117,53 @@ static int
 regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 			 unsigned int tgts_cnt, uint64_t delay)
 {
+	struct pool_target_id_list id_list = {0};
+	struct pool_target_id	   tgt_id;
+	struct pool_target	  *tgt;
+	uint32_t		   map_ver = 0;
 	daos_epoch_t	eph = d_hlc_get();
 	daos_epoch_t	current_eph;
 	unsigned int	i;
+	int		down;
+	int		up;
 	int		rc;
 
 	/* If this rebuild task schedule is due to PS leader switch, then let's
 	 * use the stable epoch from current running rebuild task.
 	 */
 	ds_rebuild_running_query(pool->sp_uuid, RB_OP_REBUILD, NULL, &current_eph, NULL);
-	for (i = 0; i < tgts_cnt; i++) {
-		struct pool_target		*tgt = &tgts[i];
-		struct pool_target_id		tgt_id;
-		struct pool_target_id_list	id_list;
+	for (down = up = 0, i = 0; i < tgts_cnt; i++) {
+		tgt = &tgts[i];
+		if (tgt->ta_comp.co_status & (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN)) {
+			down++;
+			if (map_ver < tgt->ta_comp.co_fseq)
+				map_ver = tgt->ta_comp.co_fseq;
+		} else {
+			D_ASSERT(tgt->ta_comp.co_status == PO_COMP_ST_UP);
+			up++;
+			if (map_ver < tgt->ta_comp.co_in_ver)
+				map_ver = tgt->ta_comp.co_in_ver;
+		}
+	}
 
+	if (down == tgts_cnt || up == tgts_cnt) { /* all the same type */
+		for (i = 0; i < tgts_cnt; i++) {
+			tgt = &tgts[i];
+			tgt_id.pti_id = tgt->ta_comp.co_id;
+			rc = pool_target_id_list_append(&id_list, &tgt_id);
+                        if (rc != 0) {
+                                pool_target_id_list_free(&id_list);
+                                return -DER_NOMEM;
+                        }
+		}
+		rc = ds_rebuild_schedule(pool, map_ver, current_eph == 0 ? eph : current_eph,
+					 0, &id_list, RB_OP_REBUILD, delay);
+		pool_target_id_list_free(&id_list);
+		return rc;
+	}
+
+	for (i = 0; i < tgts_cnt; i++) {
+		tgt = &tgts[i];
 		tgt_id.pti_id = tgt->ta_comp.co_id;
 		id_list.pti_ids = &tgt_id;
 		id_list.pti_number = 1;
