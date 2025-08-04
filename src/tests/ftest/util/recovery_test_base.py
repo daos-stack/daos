@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -69,3 +70,29 @@ class RecoveryTestBase(TestWithServers):
             self.fail("Checker didn't detect or repair any inconsistency!")
 
         return repair_reports
+
+    def query_detect(self, fault):
+        """Query until status becomes RUNNING and check if given fault is found.
+
+        Args:
+            fault (str): Fault string to search in the query report.
+
+        Returns:
+            list: List of query reports.
+
+        """
+        for _ in range(8):
+            check_query_out = self.get_dmg_command().check_query()
+            if check_query_out["response"]["status"] == "RUNNING":
+                query_reports = check_query_out["response"]["reports"]
+                break
+            time.sleep(5)
+
+        if not query_reports:
+            self.fail("Checker didn't detect any inconsistency!")
+
+        fault_msg = query_reports[0]["msg"]
+        if fault not in fault_msg:
+            self.fail(f"Checker didn't detect {fault}! Fault msg = {fault_msg}")
+
+        return query_reports
