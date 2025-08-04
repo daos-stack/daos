@@ -82,12 +82,20 @@ d_vector_segment_append(d_vector_segment_t *dvs, void *entry)
  *
  * \param[in,out]	dst	The vector the \p src element append to.
  * \param[in]		src	Address of the element to append.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_INVAL	\p dst or \p src are NULL.
+ * \retval -DER_NOMEM	Run out of memory.
  */
 static inline int
 d_vector_append(d_vector_t *dst, void *src)
 {
 	d_vector_segment_t *dvs;
 	bool                new_segment = false;
+
+	if (dst == NULL || src == NULL) {
+		return -DER_INVAL;
+	}
 
 	if (d_list_empty(&dst->dv_list)) {
 		new_segment = true;
@@ -102,7 +110,7 @@ d_vector_append(d_vector_t *dst, void *src)
 	if (new_segment) {
 		dvs = d_vector_segment_alloc(dst);
 		if (dvs == NULL) {
-			return ENOMEM;
+			return -DER_NOMEM;
 		}
 
 		d_list_add_tail(&dvs->dvs_link, &dst->dv_list);
@@ -174,30 +182,28 @@ _d_vector_foreach_init(void **entry, d_vector_segment_t **segment, uint32_t *idx
 static inline void
 _d_vector_foreach_next(void **entry, d_vector_segment_t **segment, uint32_t *idx, d_list_t *head)
 {
-	bool load_entry = true;
-
-	if (*idx < (*segment)->dvs_len) {
+	if (*idx + 1 < (*segment)->dvs_len) { /** there is another entry in the current segment */
 		*idx += 1;
-	} else {
+	} else { /** look for the next segment */
 		d_list_t *next = (*segment)->dvs_link.next;
-		if (next != head) {
+		if (next != head) { /** the next segment exists */
 			(*segment) = d_list_entry(next, __typeof__(**segment), dvs_link);
 			prefetch((*segment)->dvs_link.next);
 			*idx = 0;
-		} else {
-			*idx += 1;
-			load_entry = false;
+		} else { /** there are no more segments */
+			*segment = NULL;
+			*idx     = 0;
+			*entry   = NULL;
 		}
 	}
 
-	if (load_entry) {
+	if (*segment != NULL) {
 		*entry = d_vector_segment_entry(*segment, *idx);
 	}
 }
 
 #define d_vector_for_each_entry(entry, segment, idx, head)                                         \
-	for (_d_vector_foreach_init((void **)&entry, &segment, &idx, head);                        \
-	     segment != NULL && (segment->dvs_link.next != (head) || idx < segment->dvs_len);      \
+	for (_d_vector_foreach_init((void **)&entry, &segment, &idx, head); segment != NULL;       \
 	     _d_vector_foreach_next((void **)&entry, &segment, &idx, head))
 
 /**
