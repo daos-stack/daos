@@ -856,6 +856,8 @@ bio_set_hotplug_filter(const char *nvme_conf)
 	D_INFO("'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
 	       hotplug_busid_range.begin, hotplug_busid_range.end);
 
+	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter, %X-%X\n",
+		hotplug_busid_range.begin, hotplug_busid_range.end);
 	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	return 0;
