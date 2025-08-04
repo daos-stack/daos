@@ -117,7 +117,7 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	oid = md->omd_id;
 	key = jm_oid_hash(layout_ver, oid);
 	for (i = 0; i < jmop->jmop_pd_nr; i++) {
-		key = (layout_ver <= 1) ? crc(key, i) : jm_crc(key, i, 0xcafebabe);
+		key         = (layout_ver <= 1) ? crc(key, i) : jm_crc(key, i, 0xcafebabe);
 		selected_pd = d_hash_jump(key, jmap->jmp_pd_nr);
 		do {
 			selected_pd = selected_pd % jmap->jmp_pd_nr;
@@ -243,8 +243,8 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
  */
 static int
 jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
-		      struct daos_obj_shard_md *shard_md,
-		      struct jm_obj_placement *jmop, uint32_t layout_ver)
+		      struct daos_obj_shard_md *shard_md, struct jm_obj_placement *jmop,
+		      uint32_t layout_ver)
 {
 	struct daos_oclass_attr *oc_attr;
 	struct pool_domain      *root;
@@ -405,7 +405,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 	current = remap_list->next;
 	spare_tgt = NULL;
 	oid = md->omd_id;
-	key = jm_oid_hash(layout_ver, oid);
+	key         = jm_oid_hash(layout_ver, oid);
 	spares_left = count_available_spares(jmap, layout, failed_in_layout);
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
@@ -442,11 +442,10 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 				rebuild_key = jm_crc(oid.lo, oid.hi, 0xDead2Bad);
 
 			curr_pd = jm_obj_shard_pd(jmop, shard_id);
-			get_target(root, curr_pd, layout_ver, &spare_tgt, &spare_dom,
-				   rebuild_key, dom_used, dom_full,
-				   dgu->dgu_used, dgu->dgu_real, tgts_used,
-				   shard_id, allow_version, gen_mode, fdom_lvl,
-				   jmop->jmop_grp_size, &spares_left, &spare_avail);
+			get_target(root, curr_pd, layout_ver, &spare_tgt, &spare_dom, rebuild_key,
+				   dom_used, dom_full, dgu->dgu_used, dgu->dgu_real, tgts_used,
+				   shard_id, allow_version, gen_mode, fdom_lvl, jmop->jmop_grp_size,
+				   &spares_left, &spare_avail);
 			if (layout_ver > 0) {
 				/*
 				 * After 2.4 (layout_ver > 0), it will always assign each shard
@@ -1121,7 +1120,7 @@ jump_map_obj_find_diff(struct pl_map *map, uint32_t layout_ver, struct daos_obj_
 	}
 
 	jmap = pl_map2jmap(map);
-	rc = jm_obj_placement_init(jmap, md, shard_md, &jop, layout_ver);
+	rc   = jm_obj_placement_init(jmap, md, shard_md, &jop, layout_ver);
 	if (rc) {
 		D_ERROR("jm_obj_placement_init failed, rc %d.\n", rc);
 		return rc;

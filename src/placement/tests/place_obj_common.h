@@ -29,7 +29,7 @@ extern bool g_verbose;
 #define is_true assert_true
 #define is_false assert_false
 
-#define PLT_LAYOUT_VERSION	2
+#define PLT_LAYOUT_VERSION 2
 extern bool fail_domain_node;
 void
 print_layout(struct pl_obj_layout *layout);

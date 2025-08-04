@@ -35,9 +35,9 @@ struct ds_pool_svc;
  * dkey to EC group start.
  */
 enum {
-	DS_POOL_OBJ_VERSION_1	=	1,
-	DS_POOL_OBJ_VERSION_2	=	2,
-	DS_POOL_OBJ_VERSION	=	DS_POOL_OBJ_VERSION_2,
+	DS_POOL_OBJ_VERSION_1 = 1,
+	DS_POOL_OBJ_VERSION_2 = 2,
+	DS_POOL_OBJ_VERSION   = DS_POOL_OBJ_VERSION_2,
 };
 
 /* age of an entry in svc_ops KVS before it may be evicted */
