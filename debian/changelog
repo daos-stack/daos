@@ -1,8 +1,14 @@
-daos (2.7.101-11) unstable; urgency=medium
+daos (2.7.101-12) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * pmemobj errors and warnings reported via DAOS logging system
 
- -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Mon, 14 Jul 2025 12:00:00 +0200
+ -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Wed, 30 Jul 2025 12:00:00 +0200
+
+daos (2.7.101-11) unstable; urgency=medium
+  [ Samirkumar Raval ]
+  * Changing the default log location to /var/log/daos from /tmp
+
+ -- Samirkumar Raval <samirkumar.raval@hpe.com>  Mon, 2 Jun 2025 10:00:00 +0000
 
 daos (2.7.101-10) unstable; urgency=medium
   [ Jeff Olivier ]
@@ -12,7 +18,6 @@ daos (2.7.101-10) unstable; urgency=medium
 
 daos (2.7.101-9) unstable; urgency=medium
   [Tomasz Gromadzki ]
-
   * Changes in rpm spec only
 
  -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com> Mon, 12 May 2025 14:00:00 -0700
