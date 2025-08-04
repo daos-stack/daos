@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
@@ -96,7 +97,21 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 if server_boot is False:
                     if (self.test_during_rebuild is True and index == 0):
                         # Exclude rank 5
-                        output = self.pool.exclude("5")
+                        # output = self.pool.exclude("5")
+                        # Stop rank 5 and 2
+                        test_ranks = ["5","2","1"]
+                        output = self.dmg_command.system_stop(ranks=test_ranks, force=True)
+                        self.log.info("Waiting for 20 seconds")
+                        self.log.info("System should be unresponsive at this point")
+                        self.log.info("Let's perform a system stop/start cycle")
+                        self.server_managers[0].manager.stop()
+                        self.log.info("Start daos_server and detect the DAOS I/O engine message")
+                        self.log.info("Sleeping for 20 seconds after stopping the servers")
+                        time.sleep(20)
+                        self.server_managers[0].restart(hosts=self.hostlist_servers) 
+                        self.log.info("Sleeping for 20 seconds after starting the servers")
+                        time.sleep(20)
+                        self.log.info("Waiting for rebuild to complete")
                         self.print_and_assert_on_rebuild_failure(output)
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
