@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,27 +49,31 @@ func (mrm MemberRankMap) MarshalJSON() ([]byte, error) {
 }
 
 func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *system.Member) {
-	if _, exists := mam[addr.String()]; !exists {
-		mam[addr.String()] = []*system.Member{}
-	}
-	mam[addr.String()] = append(mam[addr.String()], m)
+	as := addr.String()
+
+	mam[as] = append(mam[as], m)
 }
 
 func (mam MemberAddrMap) removeMember(m *system.Member) {
-	members, exists := mam[m.Addr.String()]
-	if !exists {
+	mas := m.Addr.String()
+
+	if _, exists := mam[mas]; !exists {
 		return
 	}
-	for i, cur := range members {
-		if m.UUID == cur.UUID {
-			// remove from slice
-			members = append(members[:i], members[i+1:]...)
-			break
+
+	newMembers := []*system.Member{}
+	for _, cur := range mam[mas] {
+		if m.UUID != cur.UUID {
+			nm := *cur
+			newMembers = append(newMembers, &nm)
 		}
 	}
-	if len(members) == 0 {
-		delete(mam, m.Addr.String())
+	if len(newMembers) == 0 {
+		delete(mam, mas)
+		return
 	}
+
+	mam[mas] = newMembers
 }
 
 // MarshalJSON creates a serialized representation of the MemberAddrMap.
@@ -170,7 +175,7 @@ func (mdb *MemberDatabase) updateMember(m *system.Member) {
 	mdb.addToFaultDomainTree(cur)
 }
 
-// removeMember is responsible for removing new Member and updating all
+// removeMember is responsible for removing Member and updating all
 // of the relevant maps.
 func (mdb *MemberDatabase) removeMember(m *system.Member) {
 	delete(mdb.Ranks, m.Rank)
