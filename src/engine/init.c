@@ -2,6 +2,7 @@
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -160,6 +161,27 @@ hlc_recovery_end(uint64_t bound)
 }
 
 static int
+init_tls_support(void)
+{
+	int rc;
+
+	rc = ds_tls_key_create();
+	if (rc != 0)
+		return daos_errno2der(rc);
+
+	dss_register_key(&daos_srv_modkey);
+
+	return 0;
+}
+
+static void
+fini_tls_support(void)
+{
+	dss_unregister_key(&daos_srv_modkey);
+	ds_tls_key_delete();
+}
+
+static int
 modules_load(void)
 {
 	char		*mod;
@@ -219,7 +241,6 @@ dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 		D_PRINT("#nr_xs_helpers(%d) cannot exceed 2 times #targets (2 x %d = %d).\n",
 			dss_tgt_offload_xs_nr, tgt_nr, 2 * tgt_nr);
 		dss_tgt_offload_xs_nr = 2 * tgt_nr;
-	} else if (dss_tgt_offload_xs_nr == 0) {
 		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
 	}
 
@@ -586,10 +607,6 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
-
-	if (server_init_state != DSS_INIT_STATE_SET_UP)
-		return;
-
 	if (uid != NULL && dss_abt_init) {
 		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
 		int rc;
@@ -641,10 +658,15 @@ server_init(int argc, char *argv[])
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
+	/* Must initialize TLS support before using server_id_cb. */
+	rc = init_tls_support();
+	if (rc != 0)
+		return rc;
+
 	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_INFO);
 	if (rc != 0)
-		return rc;
+		goto exit_tls_support;
 
 	/** initialize server topology data - this is needed to set up the number of targets */
 	rc = dss_topo_init();
@@ -817,6 +839,8 @@ exit_metrics_init:
 	/* dss_topo_fini cleans itself if it fails */
 exit_debug_init:
 	daos_debug_fini();
+exit_tls_support:
+	fini_tls_support();
 	return rc;
 }
 
@@ -877,6 +901,8 @@ server_fini(bool force)
 	D_INFO("dss_top_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
+	fini_tls_support();
+	D_INFO("fini_tls_support() done\n");
 }
 
 static void
@@ -938,7 +964,7 @@ static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
 	return 0;
 }
 
-static int
+static void
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
@@ -1028,9 +1054,6 @@ parse(int argc, char **argv)
 			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size,
 					 "\"-H\"");
 			break;
-		case 'h':
-			usage(argv[0], stdout);
-			break;
 		case 'I':
 			rc = arg_strtoul(optarg, &dss_instance_idx, "\"-I\"");
 			break;
@@ -1052,15 +1075,16 @@ parse(int argc, char **argv)
 			}
 			snprintf(modules, sizeof(modules), "%s", MODS_LIST_CHK);
 			break;
+		case 'h':
+			usage(argv[0], stdout);
+			exit(EXIT_SUCCESS);
 		default:
 			usage(argv[0], stderr);
 			rc = -DER_INVAL;
 		}
-		if (rc < 0)
-			return rc;
+		if (rc)
+			exit(EXIT_FAILURE);
 	}
-
-	return 0;
 }
 
 struct abt_dump_arg {
@@ -1094,9 +1118,7 @@ main(int argc, char **argv)
 	int		rc;
 
 	/** parse command line arguments */
-	rc = parse(argc, argv);
-	if (rc)
-		exit(EXIT_FAILURE);
+	parse(argc, argv);
 
 	/** block all possible signals but faults */
 	sigfillset(&set);

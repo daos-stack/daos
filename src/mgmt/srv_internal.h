@@ -187,6 +187,10 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 /** srv_util.c */
 int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
 void ds_mgmt_kill_rank(bool force);
+int
+ds_mgmt_pbl_create(void);
+void
+ds_mgmt_pbl_destroy(void);
 
 /** srv_util_file.c */
 int

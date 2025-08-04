@@ -191,6 +191,8 @@ enum obj_rpc_flags {
 	ORF_EMPTY_SGL		= (1 << 24),
 	/* The CPD RPC only contains read-only transaction. */
 	ORF_CPD_RDONLY		= (1 << 25),
+	/* Use for rebuild fetch epoch selection */
+	ORF_FETCH_EPOCH_EC_AGG_BOUNDARY = (1 << 26),
 };
 /* clang-format on */
 
@@ -643,7 +645,7 @@ struct daos_cpd_bulk {
 	struct daos_cpd_sub_head	 dcb_head;
 	uint32_t			 dcb_size;
 	uint32_t			 dcb_padding;
-	crt_bulk_t			*dcb_bulk;
+	crt_bulk_t                       dcb_bulk;
 	/*
 	 * The following are only used to handle the bulk for CPD RPC body temporarily,
 	 * do not pack on-wire.

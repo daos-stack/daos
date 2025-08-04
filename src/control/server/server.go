@@ -74,7 +74,7 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
-	if err := cfg.SetNrHugepages(log, smi); err != nil {
+	if err := cfg.SetNrHugepages(log, smi.HugepageSizeKiB); err != nil {
 		return err
 	}
 
@@ -344,7 +344,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 
 // addEngines creates and adds engine instances to harness then starts goroutine to execute
 // callbacks when all engines are started.
-func (srv *server) addEngines(ctx context.Context) error {
+func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
@@ -354,7 +354,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 	}
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
+	if err := prepBdevStorage(srv, iommuEnabled, smi); err != nil {
 		return err
 	}
 
@@ -632,7 +632,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.addEngines(ctx); err != nil {
+	if err := srv.addEngines(ctx, smi); err != nil {
 		return err
 	}
 
