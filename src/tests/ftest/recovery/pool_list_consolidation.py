@@ -1,18 +1,20 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
+from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, report_errors
-from recovery_test_base import RecoveryTestBase
+from recovery_utils import wait_for_check_complete
 from run_utils import run_remote
 
 
-class PoolListConsolidationTest(RecoveryTestBase):
+class PoolListConsolidationTest(TestWithServers):
     """Test Pass 1: Pool List Consolidation
 
     :avocado: recursive
@@ -50,12 +52,11 @@ class PoolListConsolidationTest(RecoveryTestBase):
         dmg_command.check_start(dry_run=True)
 
         # 2.2 Query the checker.
-        query_msg = self.wait_for_check_complete()[0]["msg"]
+        query_msg = wait_for_check_complete(dmg_command)[0]["msg"]
 
         # 2.3 Verify that the checker detected the inconsistency.
         if inconsistency not in query_msg:
-            errors.append(
-                "Checker didn't detect the {} (1)! msg = {}".format(inconsistency, query_msg))
+            errors.append(f"Checker didn't detect the {inconsistency} (1)! msg = {query_msg}")
             dmg_command.check_disable()
             return errors
 
@@ -67,12 +68,11 @@ class PoolListConsolidationTest(RecoveryTestBase):
         dmg_command.check_start(auto="on")
 
         # 4.2. Query the checker.
-        query_msg = self.wait_for_check_complete()[0]["msg"]
+        query_msg = wait_for_check_complete(dmg_command)[0]["msg"]
 
         # 4.3 Verify that the checker detected the inconsistency.
         if inconsistency not in query_msg:
-            errors.append(
-                "Checker didn't detect the {} (2)! msg = {}".format(inconsistency, query_msg))
+            errors.append(f"Checker didn't detect the {inconsistency} (2)! msg = {query_msg}")
             dmg_command.check_disable()
             return errors
 
@@ -84,12 +84,11 @@ class PoolListConsolidationTest(RecoveryTestBase):
         dmg_command.check_start(auto="off", policies=policies)
 
         # 6.2 Query the checker.
-        query_msg = self.wait_for_check_complete()[0]["msg"]
+        query_msg = wait_for_check_complete(dmg_command)[0]["msg"]
 
         # 6.3 Verify that the checker detected the inconsistency.
         if inconsistency not in query_msg:
-            errors.append(
-                "Checker didn't detect the {} (3)! msg = {}".format(inconsistency, query_msg))
+            errors.append(f"Checker didn't detect the {inconsistency} (3)! msg = {query_msg}")
 
         # 7. Disable check mode.
         dmg_command.check_disable()
@@ -116,16 +115,16 @@ class PoolListConsolidationTest(RecoveryTestBase):
         :avocado: tags=PoolListConsolidationTest,test_dangling_pool
         """
         # 1. Create a pool.
-        self.pool = self.get_pool(connect=False)
+        pool = self.get_pool(connect=False)
 
         # 2. Remove the pool shards on engine.
         dmg_command = self.get_dmg_command()
         dmg_command.faults_pool_svc(
-            pool=self.pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_ENGINE")
+            pool=pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_ENGINE")
 
         # 3. Show dangling pool entry.
         pools = dmg_command.get_pool_list_labels(no_query=True)
-        if self.pool.identifier not in pools:
+        if pool.identifier not in pools:
             self.fail("Dangling pool was not found!")
 
         errors = []
@@ -138,7 +137,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
             errors.append(f"Dangling pool was not removed! {pools}")
 
         # Don't try to destroy the pool during tearDown.
-        self.pool.skip_cleanup()
+        pool.skip_cleanup()
 
         report_errors(test=self, errors=errors)
 
@@ -160,12 +159,12 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         """
         # 1. Create a pool.
-        self.pool = self.get_pool(connect=False)
+        pool = self.get_pool(connect=False)
 
         # 2. Remove the PS entry on management service (MS).
         dmg_command = self.get_dmg_command()
         dmg_command.faults_mgmt_svc_pool(
-            pool=self.pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_MS")
+            pool=pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_MS")
 
         # 3. At this point, MS doesn't recognize any pool, but it exists on engine.
         pools = dmg_command.get_pool_list_labels()
@@ -270,7 +269,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
         self.log_step("Create a pool with --nsvc=3.")
-        self.pool = self.get_pool(svcn=3)
+        pool = self.get_pool(svcn=3)
 
         self.log_step("Stop servers")
         dmg_command = self.get_dmg_command()
@@ -278,7 +277,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
+        rdb_pool_path = f"{scm_mount}/{pool.uuid.lower()}/rdb-pool"
         command = f"sudo rm {rdb_pool_path}"
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
@@ -314,12 +313,11 @@ class PoolListConsolidationTest(RecoveryTestBase):
         for _ in range(5):
             time.sleep(5)
             try:
-                self.container = self.get_container(pool=self.pool)
+                self.get_container(pool=self.pool)
                 cont_create_success = True
                 break
             except TestFail as error:
-                msg = (f"## Container create failed after running checker! "
-                       f"error = {error}")
+                msg = f"## Container create failed after running checker! error = {error}"
                 self.log.debug(msg)
 
         if not cont_create_success:
@@ -363,7 +361,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
         self.log_step("Create a pool.")
-        self.pool = self.get_pool()
+        pool = self.get_pool()
 
         self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
@@ -371,7 +369,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.")
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
+        rdb_pool_path = f"{scm_mount}/{pool.uuid.lower()}/rdb-pool"
         rdb_pool_out = check_file_exists(
             hosts=self.hostlist_servers, filename=rdb_pool_path, sudo=True)
         if not rdb_pool_out[0]:
@@ -409,6 +407,6 @@ class PoolListConsolidationTest(RecoveryTestBase):
         errors = self.verify_pool_dir_removed(errors=errors)
 
         # Don't try to destroy the pool during tearDown.
-        self.pool.skip_cleanup()
+        pool.skip_cleanup()
 
         report_errors(test=self, errors=errors)

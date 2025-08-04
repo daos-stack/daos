@@ -7,14 +7,15 @@
 import re
 import time
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from general_utils import report_errors
-from recovery_test_base import RecoveryTestBase
+from recovery_utils import get_vos_file_path, wait_for_check_complete
 
 
-class ContainerListConsolidationTest(RecoveryTestBase):
+class ContainerListConsolidationTest(TestWithServers):
     """Test Pass 4: Container List Consolidation
 
     :avocado: recursive
@@ -67,7 +68,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         dmg_command.system_stop()
 
         self.log_step("Use ddb to verify that the container is left in shards (PMEM only).")
-        vos_file = self.get_vos_file_path(pool=pool)
+        vos_file = get_vos_file_path(self.log, self.server_managers[0], pool)
         if vos_file:
             # We're using a PMEM cluster.
             scm_mount = self.server_managers[0].get_config_value("scm_mount")
@@ -84,8 +85,8 @@ class ContainerListConsolidationTest(RecoveryTestBase):
             # UUID is found. Verify that it's the container UUID of the container we created.
             actual_uuid = match.group(1)
             if actual_uuid != expected_uuid:
-                msg = "Unexpected container UUID! Expected = {}; Actual = {}".format(
-                    expected_uuid, actual_uuid)
+                msg = (f"Unexpected container UUID! Expected = {expected_uuid}; "
+                       f"Actual = {actual_uuid}")
                 errors.append(msg)
 
         self.log_step("Enable the checker.")
@@ -116,7 +117,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         dmg_command.check_repair(seq_num=seq_num, action=0)
 
         self.log_step("Query the checker until the fault is repaired.")
-        repair_report = self.wait_for_check_complete()[0]
+        repair_report = wait_for_check_complete(dmg_command)[0]
 
         action_message = repair_report["act_msgs"][0]
         exp_msg = "Discard the container"
