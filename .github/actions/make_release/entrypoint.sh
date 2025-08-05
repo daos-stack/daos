@@ -20,13 +20,14 @@ if git diff-tree --diff-filter=A --no-commit-id --name-status -r HEAD |
      exit 0
 fi
 
-release=$(cat TAG)
+release=$(cat TAG)-test
 
-if [[ $release = *-* ]]; then
-    prerelease="true"
-else
-    prerelease="false"
-fi
+prerelease="true"
+# if [[ $release = *-* ]]; then
+#     prerelease="true"
+# else
+#     prerelease="false"
+# fi
 # Ensure that the GITHUB_TOKEN secret is included
 if [ -z "$GITHUB_TOKEN" ]; then
   echo "Set the GITHUB_TOKEN env variable."
