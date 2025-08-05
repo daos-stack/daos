@@ -525,7 +525,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 		op              raftOp
 		updateMember    *Member
 		expMembers      []*Member
-		expVotersAdded  []string
 		expFDTree       *FaultDomainTree
 	}{
 		"add success": {

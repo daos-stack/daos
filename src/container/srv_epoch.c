@@ -220,9 +220,8 @@ snap_oit_create(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 	out = crt_reply_get(rpc);
 	rc = out->tso_rc;
 	if (rc != 0) {
-		D_ERROR(DF_CONT": snapshot notify failed on %d targets\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-		rc = -DER_IO;
+		D_ERROR(DF_CONT " snapshot notify failed: " DF_RC "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
 		goto out_rpc;
 	}
 	*epoch = in->tsi_epoch;
