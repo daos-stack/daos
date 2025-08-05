@@ -106,3 +106,15 @@ if [ -e /tmp/install.sh ]; then
     /tmp/install.sh
 fi
 apt-get clean all
+
+# Setup the PyPi to use the artifactory as the installation packages source
+if [ -n "$REPO_FILE_URL" ]; then
+    trusted_host="${REPO_FILE_URL##*//}"
+    trusted_host="${trusted_host%%/*}"; \
+    {
+        echo "[global]"
+        echo "trusted-host = ${trusted_host}"
+        echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
+        echo "proxy = \"\""
+    } > /etc/pip.conf
+fi
