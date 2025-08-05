@@ -28,7 +28,7 @@ def build_dlck_test_helper(henv):
         '../../../engine/util.c',
         '../../../mgmt/srv_util_file.c',
     ]
-    program = henv.d_test_program('dlck_test_helper', srcs, LIBS=libs)
+    henv.d_test_program('dlck_test_helper', srcs, LIBS=libs)
 
 
 def scons():
