@@ -665,8 +665,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_redun_fac, &value);
 			break;
 		case DAOS_PROP_PO_OBJ_VERSION:
-			if (entry->dpe_val > DS_POOL_OBJ_VERSION ||
-			    entry->dpe_val < DS_POOL_OBJ_VERSION_2) {
+			if (entry->dpe_val > DS_POOL_OBJ_VERSION) {
 				rc = -DER_INVAL;
 				break;
 			}
