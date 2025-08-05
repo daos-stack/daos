@@ -920,7 +920,7 @@ access_points:
 port: 10001
 transport_config:
   allow_insecure: true
-log_file: /tmp/daos_agent-tmp.log
+log_file: /var/log/daos/daos_agent-tmp.log
 ```
 
 
