@@ -200,6 +200,8 @@ void
      ds_pool_query_info_handler(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 void ds_pool_upgrade_handler(crt_rpc_t *rpc);
+void
+     ds_pool_eval_self_heal_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
