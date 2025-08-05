@@ -77,7 +77,8 @@
 	X(POOL_ACL_DELETE, 0, &CQF_pool_acl_delete, ds_pool_acl_delete_handler, NULL)              \
 	X(POOL_RANKS_GET, 0, &CQF_pool_ranks_get, ds_pool_ranks_get_handler, NULL)                 \
 	X(POOL_UPGRADE, 0, &CQF_pool_upgrade, ds_pool_upgrade_handler, NULL)                       \
-	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)
+	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)           \
+	X(POOL_EVAL_SELF_HEAL, 0, &CQF_pool_eval_self_heal, ds_pool_eval_self_heal_handler, NULL)
 
 #define POOL_PROTO_RPC_LIST                                                                        \
 	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)                                                 \
@@ -901,6 +902,15 @@ CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP, DAOS_OSEQ_POOL
 	((int32_t)			(ptdo_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_DISCARD)
+
+#define DAOS_ISEQ_POOL_EVAL_SELF_HEAL	/* input fields */		 \
+	((struct pool_op_in)		(pesi_op)		CRT_VAR) \
+	((uint64_t)			(pesi_sys_self_heal)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_EVAL_SELF_HEAL	/* output fields */		 \
+	((struct pool_op_out)		(peso_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_eval_self_heal, DAOS_ISEQ_POOL_EVAL_SELF_HEAL, DAOS_OSEQ_POOL_EVAL_SELF_HEAL)
 
 /* clang-format on */
 

@@ -415,7 +415,7 @@ out_reqb:
 int
 ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t *policy)
 {
-#if 1
+#if 0
 	Mgmt__SystemGetPropReq   req = MGMT__SYSTEM_GET_PROP_REQ__INIT;
 	char                    *key = "self_heal";
 	Mgmt__SystemGetPropResp *resp;

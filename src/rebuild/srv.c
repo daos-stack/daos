@@ -2545,7 +2545,7 @@ ds_rebuild_admin_start(struct ds_pool *pool)
 		goto out;
 	}
 
-	rc = ds_rebuild_regenerate_task(pool, &prop);
+	rc = ds_rebuild_regenerate_task(pool, &prop, DS_MGMT_SELF_HEAL_ALL);
 	daos_prop_fini(&prop);
 	if (rc)
 		DL_ERROR(rc, DF_UUID ": regenerate rebuild task failed", DP_UUID(pool->sp_uuid));

@@ -10,6 +10,8 @@
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
+#include <daos_srv/daos_mgmt_srv.h>
+
 #include <signal.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
@@ -1795,6 +1797,16 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
+
+#ifndef DRPC_TEST
+	rc = dsc_pool_svc_eval_self_heal(uuid, svc_ranks, mgmt_ps_call_deadline(),
+					 DS_MGMT_SELF_HEAL_ALL);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": Failed to evaluate self-heal for pool: " DF_RC "\n",
+			DP_UUID(uuid), DP_RC(rc));
+		D_GOTO(error, rc);
+	}
+#endif
 
 	pool_info.pi_bits = req->query_mask;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &dead_ranks,

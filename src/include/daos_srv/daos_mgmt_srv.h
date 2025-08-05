@@ -47,6 +47,7 @@ ds_mgmt_pbl_has_pool(uuid_t uuid);
 #define DS_MGMT_SELF_HEAL_EXCLUDE      (1ULL << 0) /* self_heal.exclude */
 #define DS_MGMT_SELF_HEAL_POOL_EXCLUDE (1ULL << 1) /* self_heal.pool_exclude */
 #define DS_MGMT_SELF_HEAL_POOL_REBUILD (1ULL << 2) /* self_heal.pool_rebuild */
+#define DS_MGMT_SELF_HEAL_ALL          ((unsigned long long)-1)
 
 int
 ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t *policy);
