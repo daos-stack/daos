@@ -10,6 +10,8 @@
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
+#include <daos_srv/daos_mgmt_srv.h>
+
 #include <signal.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>

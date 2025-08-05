@@ -3781,6 +3781,60 @@ out:
 	return rc;
 }
 
+void
+ds_pool_eval_self_heal_handler(crt_rpc_t *rpc)
+{
+	struct pool_eval_self_heal_in  *in  = crt_req_get(rpc);
+	struct pool_eval_self_heal_out *out = crt_reply_get(rpc);
+	struct pool_svc                *svc;
+	struct rdb_tx                   tx;
+	daos_prop_t                    *prop = NULL;
+	struct daos_prop_entry         *entry;
+	int                             rc;
+
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc %p: sys_self_heal=" DF_X64 "\n",
+		DP_UUID(in->pesi_op.pi_uuid), rpc, in->pesi_sys_self_heal);
+
+	rc = pool_svc_lookup_leader(in->pesi_op.pi_uuid, &svc, &out->peso_op.po_hint);
+	if (rc != 0)
+		goto out;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out_svc;
+	ABT_rwlock_rdlock(svc->ps_lock);
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_SELF_HEAL, &prop);
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		goto out_svc;
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
+	D_ASSERT(entry != NULL);
+	D_ASSERT(daos_prop_is_set(entry));
+	if (in->pesi_sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE &&
+	    entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE) {
+		D_INFO(DF_UUID ": evaluate pool_exclude\n", DP_UUID(svc->ps_uuid));
+		resume_event_handling(svc);
+	}
+	if (in->pesi_sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD &&
+	    entry->dpe_val & DAOS_SELF_HEAL_AUTO_REBUILD) {
+		D_INFO(DF_UUID ": evaluate pool_rebuild\n", DP_UUID(svc->ps_uuid));
+		rc = ds_rebuild_admin_start(svc->ps_pool);
+		if (rc != 0)
+			DL_ERROR(rc, DF_UUID ": failed to evaluate pool_rebuild",
+				 DP_UUID(svc->ps_uuid));
+	}
+
+	daos_prop_free(prop);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->peso_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->peso_op.po_rc = rc;
+	crt_reply_send(rpc);
+}
+
 /*
  * We use this RPC to not only create the pool metadata but also initialize the
  * pool/container service DB.
