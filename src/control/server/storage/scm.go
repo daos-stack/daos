@@ -341,8 +341,7 @@ type (
 	// ScmScanRequest defines the parameters for a Scan operation.
 	ScmScanRequest struct {
 		pbin.ForwardableRequest
-		SocketID     *uint // Only process PMem attached to this socket.
-		PMemInConfig bool  // Indicate whether server config file contains PMem.
+		SocketID *uint // Only process PMem attached to this socket.
 	}
 
 	// ScmScanResponse contains information gleaned during a successful Scan operation.

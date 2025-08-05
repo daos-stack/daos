@@ -96,10 +96,6 @@ func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.Sc
 // Usage is only retrieved for active mountpoints being used by online DAOS I/O
 // Server instances.
 func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.ScmScanResponse, error) {
-	if ssr == nil {
-		return nil, errors.New("input scm scan response is nil")
-	}
-
 	instances := cs.harness.Instances()
 
 	nss := make(storage.ScmNamespaces, 0, len(instances))
@@ -127,6 +123,10 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 				Size:        uint64(humanize.GiByte * cfg.Scm.RamdiskSize),
 			}
 		case storage.ClassDcpm: // update namespace mount info for online storage
+			if ssr == nil {
+				return nil, errors.New("input scm scan response is nil when dcpm configured")
+			}
+
 			if ssr.Namespaces == nil {
 				return nil, errors.Errorf("instance %d: input scm scan response missing namespaces",
 					engine.Index())

@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -572,7 +571,6 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 	scmScanReqPayload, err := json.Marshal(storage.ScmScanRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
-		PMemInConfig:       true,
 	})
 	if err != nil {
 		t.Fatal(err)

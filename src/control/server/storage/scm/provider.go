@@ -1,5 +1,4 @@
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -106,7 +105,7 @@ func NewProvider(log logging.Logger, backend Backend, sys SystemProvider, mounte
 }
 
 // Scan attempts to scan the system for SCM storage components.
-func (p *Provider) Scan(req storage.ScmScanRequest) (resp *storage.ScmScanResponse, err error) {
+func (p *Provider) Scan(req storage.ScmScanRequest) (_ *storage.ScmScanResponse, err error) {
 	msg := fmt.Sprintf("scm backend scan: req %+v", req)
 	defer func() {
 		if err != nil {
@@ -115,7 +114,7 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (resp *storage.ScmScanRespon
 		p.log.Debug(msg)
 	}()
 
-	resp = &storage.ScmScanResponse{
+	resp := &storage.ScmScanResponse{
 		Modules:    storage.ScmModules{},
 		Namespaces: storage.ScmNamespaces{},
 	}
@@ -128,14 +127,6 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (resp *storage.ScmScanRespon
 
 	modules, err := p.backend.getModules(sockSelector)
 	if err != nil {
-		if !req.PMemInConfig {
-			// Log but don't return a fatal error if PMem discovery fails and SCM
-			// config doesn't include PMem. Example scenario is missing ipmctl binary
-			// in MD-on-SSD deployments.
-			p.log.Debugf("getModules: %s: no pmem in engine cfg: skip scm scan",
-				err.Error())
-			return resp, nil
-		}
 		return nil, err
 	}
 	if len(modules) == 0 {
@@ -165,8 +156,7 @@ func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage
 	p.log.Debug("scm provider prepare: calling provider scan")
 
 	scanReq := storage.ScmScanRequest{
-		SocketID:     req.SocketID,
-		PMemInConfig: true,
+		SocketID: req.SocketID,
 	}
 
 	scanResp, err := scan(scanReq)
