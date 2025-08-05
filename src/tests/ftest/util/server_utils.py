@@ -1158,3 +1158,14 @@ class DaosServerManager(SubprocessManager):
             result = run_remote(self.log, self._hosts, command, verbose=verbose, timeout=timeout)
             engines.append(result)
         return engines
+
+    def get_vos_path(self, pool):
+        """Get the VOS file path.
+
+        Args:
+            pool (TestPool): the pool containing the vos file
+
+        Returns:
+            str: the full path too the vos file
+        """
+        return os.path.join(self.get_config_value("scm_mount"), pool.uuid.lower())

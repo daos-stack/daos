@@ -7,8 +7,8 @@
 import os
 import time
 
-from .exception_utils import CommandFailure
-from .run_utils import run_remote
+from exception_utils import CommandFailure
+from run_utils import run_remote
 
 
 def get_vos_file_path(log, server_manager, pool):
@@ -21,44 +21,24 @@ def get_vos_file_path(log, server_manager, pool):
         server_manager (DaosServerManager): the servers running the pool
         pool (TestPool): the pool in which to find the vos file
 
-    Raises:
-        CommandFailure: if there is an error obtaining the vos file from the pool
-
     Returns:
-        str: VOS file path such as /mnt/daos0/<pool_uuid>/vos-0
+        str: VOS file path such as /mnt/daos0/<pool_uuid>/vos-0 if found, else "".
     """
     hosts = server_manager.hosts[0:1]
-    scm_mount = server_manager.get_config_value("scm_mount")
-    vos_path = os.path.join(scm_mount, pool.uuid.lower())
-    command = " ".join(["sudo", "ls", vos_path])
+    vos_path = server_manager.get_vos_path(pool)
+    command = f"sudo ls {vos_path}"
     result = run_remote(log, hosts, command)
     if not result.passed:
         raise CommandFailure(f"Command '{command}' failed on {hosts}")
 
-    # return vos_file
     for file in result.output[0].stdout:
         # Assume the VOS file has "vos" in the file name.
         if "vos" in file:
             log.info("vos_file: %s", file)
-            return file
+            return os.path.join(vos_path, file)
 
-    raise CommandFailure(f"Unable to find vos file in '{command}' output")
-
-
-def get_check_query_response(dmg, *args, **kwargs):
-    """Ccall dmg check query and return the response.
-
-    Args:
-        dmg (DmgCommand): the dmg command object used to run the check query
-
-    Raises:
-        CommandFailure: if there is an error running dmg check query
-
-    Returns:
-        dict: response from dmg check query.
-    """
-    check_query_out = dmg.check_query(*args, **kwargs)
-    return check_query_out["response"]
+    # No VOS file found
+    return ""
 
 
 def wait_for_check_query(dmg, status=None):
@@ -76,9 +56,9 @@ def wait_for_check_query(dmg, status=None):
         dict: response from dmg check query.
     """
     for _ in range(8):
-        response = get_check_query_response(dmg)
-        if status is None or response["status"] == status:
-            return response
+        check_query_out = dmg.check_query()
+        if status is None or check_query_out["response"]["status"] == status:
+            return check_query_out["response"]
         time.sleep(5)
 
     if status == "COMPLETED":
@@ -115,7 +95,7 @@ def find_report_message(reports, match):
         match (str): item to search for in each report message
 
     Returns:
-        bool: True if the match was found; False othewrwise
+        bool: True if the match was found; False otherwise
     """
     for report in reports:
         if match in report["msg"]:

@@ -8,7 +8,6 @@ import re
 import time
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from general_utils import report_errors
@@ -68,13 +67,10 @@ class ContainerListConsolidationTest(TestWithServers):
         dmg_command.system_stop()
 
         self.log_step("Use ddb to verify that the container is left in shards (PMEM only).")
-        vos_file = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if vos_file:
+        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
+        if vos_path:
             # We're using a PMEM cluster.
-            scm_mount = self.server_managers[0].get_config_value("scm_mount")
-            ddb_command = DdbCommand(
-                server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
-                mount_point=scm_mount, pool_uuid=pool.uuid, vos_file=vos_file)
+            ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_path)
             cmd_result = ddb_command.list_component()
             uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
             match = re.search(uuid_regex, cmd_result.joined_stdout)
@@ -128,7 +124,7 @@ class ContainerListConsolidationTest(TestWithServers):
         self.log_step("Disable the checker.")
         dmg_command.check_disable(start=False)
 
-        if vos_file:
+        if vos_path:
             # ddb requires the vos file. PMEM cluster only.
             msg = ("Run the ddb command and verify that the container is removed from shard "
                    "(PMEM only).")

@@ -9,7 +9,6 @@ import os
 import re
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from file_utils import distribute_files
@@ -149,13 +148,10 @@ class DdbTest(TestWithServers):
         container = self.get_container(pool)
 
         # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        vos_file = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if vos_file is None:
-            self.fail(f"vos file wasn't found in {scm_mount}/{pool.uuid.lower()}")
-        ddb_command = DdbCommand(
-            server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
-            mount_point=scm_mount, pool_uuid=pool.uuid, vos_file=vos_file)
+        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
+        if not vos_path:
+            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_path)
 
         errors = []
 
@@ -342,14 +338,10 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 3. Find the vos file name.
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        vos_file = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if vos_file is None:
-            self.fail(f"vos file wasn't found in {scm_mount}/{pool.uuid.lower()}")
-        host = NodeSet(self.hostlist_servers[0])
-        ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point=scm_mount,
-            pool_uuid=pool.uuid, vos_file=vos_file)
+        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
+        if not vos_path:
+            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_path)
 
         # 4. Call ddb rm to remove the akey.
         cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]/[0]")
@@ -487,14 +479,11 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 4. Find the vos file name.
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        vos_file = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if vos_file is None:
-            self.fail(f"vos file wasn't found in {scm_mount}/{pool.uuid.lower()}")
-        host = NodeSet(self.hostlist_servers[0])
-        ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point=scm_mount,
-            pool_uuid=pool.uuid, vos_file=vos_file)
+        host = self.server_managers[0].hosts[0:1]
+        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
+        if not vos_path:
+            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+        ddb_command = DdbCommand(host, self.bin, vos_path)
 
         # 5. Load new data into [0]/[0]/[0]/[0]
         # Create a file in test node.
@@ -572,14 +561,10 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 4. Find the vos file name.
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        vos_file = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if vos_file is None:
-            self.fail(f"vos file wasn't found in {scm_mount}/{pool.uuid.lower()}")
-        host = NodeSet(self.hostlist_servers[0])
-        ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point=scm_mount,
-            pool_uuid=pool.uuid, vos_file=vos_file)
+        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
+        if not vos_path:
+            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_path)
 
         # 5. Dump the two akeys to files.
         akey1_file_path = os.path.join(self.test_dir, "akey1.txt")
