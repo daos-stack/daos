@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       11%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -488,6 +488,7 @@ fi
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
 %{_bindir}/ddb
+%{_bindir}/dlck
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libchk.so
@@ -658,6 +659,9 @@ fi
 %endif
 
 %changelog
+* Tue Aug 05 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-12
+- DAOS Local Consistency Checker (DLCK)
+
 * Mon Jun 2 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-11
 - Changing the default log location to /var/log/daos from /tmp
 

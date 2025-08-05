@@ -1,33 +1,6 @@
 """Build versioned object store tests"""
 
 
-def build_dlck_d_vector_ut(venv):
-    """Build d_vector.h test"""
-    venv.require('cmocka', 'pmdk')
-    libs = ['cmocka', 'gurt', 'daos_common_pmem']
-    srcs = ['dlck_d_vector_ut.c']
-
-    program = venv.d_test_program('dlck_d_vector_ut', srcs, LIBS=libs)
-    venv.Install('$PREFIX/bin/', program)
-
-
-def build_dlck_dtx_act_recs_recover_ut(venv):
-    """Build dlck_dtx_act_recs_recover.c unit test"""
-    venv.Append(OBJPREFIX="dlck_ut_")
-    venv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
-    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc'])
-    venv.require('cmocka', 'argobots')
-    libs = ['cmocka', 'gurt', 'uuid', 'daos_common_pmem', 'abt', 'vos', 'bio']
-    srcs = [
-        'dlck_dtx_act_recs_recover_ut.c',
-        'mocks.c',
-        '../dlck_dtx_act_recs_recover.c',
-    ]
-
-    program = venv.d_test_program('dlck_dtx_act_recs_recover_ut', srcs, LIBS=libs)
-    venv.Install('$PREFIX/bin/', program)
-
-
 def build_dlck_test_helper(henv):
     """Build dlck_test_helper"""
     henv.Append(OBJPREFIX="dlck_ut_helper_")
@@ -56,15 +29,12 @@ def build_dlck_test_helper(henv):
         '../../../mgmt/srv_util_file.c',
     ]
     program = henv.d_test_program('dlck_test_helper', srcs, LIBS=libs)
-    henv.Install('$PREFIX/bin/', program)
 
 
 def scons():
     """Execute build"""
     Import('env')
 
-    build_dlck_d_vector_ut(env.Clone())
-    build_dlck_dtx_act_recs_recover_ut(env.Clone())
     build_dlck_test_helper(env.Clone())
 
 
