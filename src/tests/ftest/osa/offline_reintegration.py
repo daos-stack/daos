@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
+
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
@@ -108,7 +109,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                         self.log.info("Start daos_server and detect the DAOS I/O engine message")
                         self.log.info("Sleeping for 20 seconds after stopping the servers")
                         time.sleep(20)
-                        self.server_managers[0].restart(hosts=self.hostlist_servers) 
+                        self.server_managers[0].restart(hosts=self.hostlist_servers)
                         self.log.info("Sleeping for 20 seconds after starting the servers")
                         time.sleep(20)
                         self.log.info("Waiting for rebuild to complete")
