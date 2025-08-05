@@ -7,9 +7,6 @@ on:
     branches:
       - master
       - 'release/**'
-  pull_request:
-    paths:
-      - TAG
 
 permissions: {}
 
