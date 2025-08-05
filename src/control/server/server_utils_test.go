@@ -1205,13 +1205,6 @@ func TestServer_cleanEngineSpdkResources(t *testing.T) {
 		expErr      error
 		expPrepCall *storage.BdevPrepareRequest
 	}{
-		"bdevs configured; hugepages disabled": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithDisableHugepages(true).
-					WithEngines(pmemEngine(1))
-			},
-			// Returns early so no prep call.
-		},
 		"no bdevs configured": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(pmemOnlyEngine(1))
@@ -1302,7 +1295,8 @@ func TestServer_cleanEngineSpdkResources(t *testing.T) {
 			storageCfg := ei.runner.GetConfig().Storage
 			pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
 
-			test.CmpErr(t, tc.expErr, cleanSpdkResources(srv, pciAddrs))
+			test.CmpErr(t, tc.expErr, cleanSpdkResources(srv.log, srv.ctlSvc.NvmePrepare,
+				pciAddrs))
 
 			mbb.RLock()
 			if tc.expPrepCall != nil {
