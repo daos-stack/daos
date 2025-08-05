@@ -475,6 +475,12 @@ recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
 			message_ptr = message;
 		}
 
+		if (header->chunk_data_size > DRPC_MAX_DATA_SIZE) {
+			D_ERROR("chunk data size=%lu too large (max allowed=%lu)\n",
+				header->chunk_data_size, DRPC_MAX_DATA_SIZE);
+			D_GOTO(out, rc = -DER_TRUNC);
+		}
+
 		if (header->chunk_data_size > message_remaining) {
 			D_ERROR(
 			    "chunk (idx=%u/%u, size=%lu) would overrun remaining message len=%lu\n",

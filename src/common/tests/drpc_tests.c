@@ -638,8 +638,8 @@ test_drpc_recv_call_no_chunks(void **state)
 	hdr                  = (struct drpc_header *)recvmsg_msg_content;
 	hdr->chunk_idx       = 0;
 	hdr->total_chunks    = 0;
-	hdr->chunk_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content));
-	hdr->total_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content));
+	hdr->chunk_data_size = DRPC_MAX_DATA_SIZE;
+	hdr->total_data_size = DRPC_MAX_DATA_SIZE;
 
 	assert_rc_equal(drpc_recv_call(ctx, &call), -DER_PROTO);
 
@@ -661,10 +661,10 @@ test_drpc_recv_call_chunk_too_big(void **state)
 	hdr                  = (struct drpc_header *)recvmsg_msg_content;
 	hdr->chunk_idx       = 0;
 	hdr->total_chunks    = 1;
-	hdr->chunk_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content)) + 1;
-	hdr->total_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content)) + 1;
+	hdr->chunk_data_size = DRPC_MAX_DATA_SIZE + 1;
+	hdr->total_data_size = DRPC_MAX_DATA_SIZE + 1;
 
-	assert_rc_equal(drpc_recv_call(ctx, &call), -DER_PROTO);
+	assert_rc_equal(drpc_recv_call(ctx, &call), -DER_TRUNC);
 
 	assert_null(call);
 
