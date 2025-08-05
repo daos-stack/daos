@@ -39,17 +39,9 @@ import (
 )
 
 const (
-	// extraHugepages is the number of extra hugepages to request beyond the minimum required,
-	// often one or two are not reported as available.
-	extraHugepages = 2
-
 	// memCheckThreshold is the percentage of configured RAM-disk size that needs to be met by
 	// available memory in order to start the engines.
 	memCheckThreshold = 90
-
-	// scanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
-	// SPDK memory requirements when performing a NVMe device scan.
-	scanMinHugepageCount = 128
 
 	// maxLineChars is the maximum number of chars per line in a formatted byte string.
 	maxLineChars = 32
@@ -271,37 +263,112 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 	return netDevClass, nil
 }
 
-// Detect the number of engine configs assigned to each NUMA node and return error if engines are
-// distributed unevenly across NUMA nodes. Otherwise return sorted list of NUMA nodes in use.
-// Configurations where all engines are on a single NUMA node will be allowed.
-func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]string, error) {
-	nodeMap := make(map[int]int)
-	for _, ec := range engineCfgs {
-		nodeMap[int(ec.Storage.NumaNodeIndex)] += 1
+// getHugeNodesStr builds HUGENODE string to be used to allocate hugepages through SPDK setup
+// script. For each NUMA node request max(existing, configured) hugepages.
+func getHugeNodesStr(log logging.Logger, perNumaNrWant int, smi *common.SysMemInfo, numaNodes ...int) (string, error) {
+	if len(numaNodes) == 0 {
+		return "", errors.New("no numa-nodes supplied")
 	}
 
-	var lastCount int
-	nodes := make([]string, 0, len(engineCfgs))
-	for k, v := range nodeMap {
-		if lastCount != 0 && v != lastCount {
-			return nil, FaultEngineNUMAImbalance(nodeMap)
+	nodeNrs := make(map[int]int) // How many nr_hugepages to be set for each NUMA-node.
+
+	for _, nID := range numaNodes {
+		if nID < 0 {
+			return "", errors.New("invalid negative numa-node supplied")
 		}
-		lastCount = v
-		nodes = append(nodes, fmt.Sprintf("%d", k))
-	}
-	sort.Strings(nodes)
 
-	return nodes, nil
+		found := false
+		for _, nn := range smi.NumaNodes {
+			if nn.NumaNodeIndex != nID {
+				continue
+			}
+			// Ensure that if there is already sufficient number allocated then the
+			// script will request the existing number which results in a no-op.
+			//
+			// FIXME DAOS-16921: SPDK https://review.spdk.io/c/spdk/spdk/+/25831 adds
+			//                   SKIP_HUGE which can be used to simplify this logic.
+			if nn.HugepagesTotal >= perNumaNrWant {
+				nodeNrs[nID] = nn.HugepagesTotal // Maintain
+			} else {
+				msg := fmt.Sprintf("NUMA-%d from %d to %d", nID, nn.HugepagesTotal,
+					perNumaNrWant)
+				log.Noticef("Increasing number of hugepages on %s", msg)
+				nodeNrs[nID] = perNumaNrWant // Grow
+			}
+			found = true
+			break
+		}
+
+		// Handle case where per-NUMA meminfo is missing. If not available, fall-back to
+		// legacy behavior where requested number of pages are set for each NUMA.
+		if !found {
+			nodeNrs[nID] = perNumaNrWant
+		}
+	}
+
+	nodeNrsKeys := []int{}
+	for k := range nodeNrs {
+		nodeNrsKeys = append(nodeNrsKeys, k)
+	}
+	sort.Ints(nodeNrsKeys)
+
+	// Build string for req.HugeNodes e.g. "HUGENODE='nodes_hp[0]=2048,nodes_hp[1]=512'"
+	hnStrs := []string{}
+	for _, nID := range nodeNrsKeys {
+		hnStrs = append(hnStrs, fmt.Sprintf("nodes_hp[%d]=%d", nID, nodeNrs[nID]))
+	}
+
+	return fmt.Sprintf("%s", strings.Join(hnStrs, ",")), nil
+}
+
+// SetHugeNodes derives HUGENODE string to be used to allocate hugepages across NUMA nodes in spdk
+// setup and sets value in prepare request HugeNodes field. If config is present, use its parameters
+// otherwise use HugepageCount from the request and allocate only on NUMA node 0.
+func SetHugeNodes(log logging.Logger, srvCfg *config.Server, smi *common.SysMemInfo, req *storage.BdevPrepareRequest) (err error) {
+	if req == nil {
+		return errors.Errorf("nil %T", req)
+	}
+	if smi == nil {
+		return errors.Errorf("nil %T", smi)
+	}
+
+	nrHugepages := req.HugepageCount
+	nodes := []int{0}
+	if srvCfg != nil {
+		nrHugepages = srvCfg.NrHugepages
+		nodes, err = srvCfg.GetNumaNodes()
+		if err != nil {
+			return errors.Wrap(err, "get engine numa nodes from server config")
+		}
+	}
+
+	perNumaNrWant := nrHugepages / len(nodes)
+
+	log.Debugf("attempting to allocate %d hugepages on nodes %v", perNumaNrWant, nodes)
+
+	hnStr, err := getHugeNodesStr(log, perNumaNrWant, smi, nodes...)
+	if err != nil {
+		return errors.Wrap(err, "get hugenode string for spdk setup")
+	}
+	req.HugeNodes = hnStr
+	req.HugepageCount = 0 // HugeNodes will be used instead to specify per-NUMA allocations.
+
+	log.Debugf("sending HUGENODE=%q to SPDK setup script", req.HugeNodes)
+
+	return nil
 }
 
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
 // are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
 // mandatory requirements for emulated NVMe.
-func prepBdevStorage(srv *server, iommuEnabled bool) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, smi *common.SysMemInfo) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
+	if srv.cfg == nil {
+		return errors.New("nil server config")
+	}
 	if srv.cfg.DisableHugepages {
-		srv.log.Debugf("skip nvme prepare as disable_hugepages: true in config")
+		srv.log.Debugf("skip nvme prepare as disable_hugepages is set true in config")
 		return nil
 	}
 
@@ -351,45 +418,9 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		prepReq.EnableVMD = enableVMD
 	}
 
-	if bdevCfgs.HaveBdevs() {
-		// The NrHugepages config value is a total for all engines. Distribute allocation
-		// of hugepages across each engine's numa node (as validation ensures that
-		// TargetsCount is equal for each engine). Assumes an equal number of engine's per
-		// numa node.
-		numaNodes, err := getEngineNUMANodes(srv.log, srv.cfg.Engines)
-		if err != nil {
-			return err
-		}
-
-		if len(numaNodes) == 0 {
-			return errors.New("invalid number of numa nodes detected (0)")
-		}
-
-		// Request a few more hugepages than actually required for each NUMA node
-		// allocation as some overhead may result in one or two being unavailable.
-		prepReq.HugepageCount = srv.cfg.NrHugepages / len(numaNodes)
-
-		// Extra pages to be allocated per engine but take into account the page count
-		// will be issued on each NUMA node.
-		extraPages := (extraHugepages * len(srv.cfg.Engines)) / len(numaNodes)
-		prepReq.HugepageCount += extraPages
-		prepReq.HugeNodes = strings.Join(numaNodes, ",")
-
-		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
-			prepReq.HugepageCount, numaNodes)
-	} else {
-		if srv.cfg.NrHugepages == 0 {
-			// If nr_hugepages is unset then set minimum needed for scanning in prepare
-			// request.
-			prepReq.HugepageCount = scanMinHugepageCount
-		} else {
-			// If nr_hugepages has been set manually but no bdevs in config then
-			// allocate on numa node 0 (for example if a bigger number of hugepages are
-			// required in discovery mode for an unusually large number of SSDs).
-			prepReq.HugepageCount = srv.cfg.NrHugepages
-		}
-
-		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugepageCount)
+	// Set hugepage allocations in prepare request.
+	if err := SetHugeNodes(srv.log, srv.cfg, smi, &prepReq); err != nil {
+		return errors.Wrap(err, "setting hugenodes in bdev prep request")
 	}
 
 	// Run prepare to bind devices to user-space driver and allocate hugepages.
@@ -419,10 +450,10 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-// Minimum recommended number of hugepages has already been calculated and set in config so verify
-// we have enough free hugepage memory to satisfy this requirement before setting mem_size and
-// hugepage_size parameters for engine.
-func updateHugeMemValues(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
+// Per-NUMA hugepage allocations have been calculated and requested from kernel in prepBdevStorage
+// so now set mem-size values for engines and verify there are enough free hugepages to satisfy
+// typical DMA buffer requirements.
+func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) {
 	ei.RLock()
 	ec := ei.runner.GetConfig()
 	eIdx := ec.Index
@@ -430,35 +461,40 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, smi *common.SysMemInfo
 	if ec.Storage.Tiers.Bdevs().Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", eIdx)
 		ei.RUnlock()
-		return nil
+		return
 	}
 	ei.RUnlock()
 
-	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
+	// Mem-size for each engine to be calculated based on server config total hugepage
+	// requirements. Mem-size should be the same for each engine to avoid performance imbalance
+	// and will act as memory cap to stop DMA buffer growing beyond mem-size.
 	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
+
+	// Global (rather than per-NUMA) meminfo stats used to verify sufficient free hugepages as
+	// engines should be started even if hugemem has to be used across NUMA boundaries.
+	nrPagesFree := smi.HugepagesFree
+
+	// Calculate mem_size per I/O engine (in MB) based on number of pages required per engine.
 	pageSizeMiB := smi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
-	memSizeFreeMiB := smi.HugepagesFree * pageSizeMiB
+	memSizeFreeMiB := nrPagesFree * pageSizeMiB
 
 	// If free hugepage mem is not enough to meet requested number of hugepages, log notice and
 	// set mem_size engine parameter to free value. Otherwise set to requested value.
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %+v)", memSizeReqMiB,
-		pageSizeMiB, *smi)
+	memSizeMiB := memSizeReqMiB
 	if memSizeFreeMiB < memSizeReqMiB {
-		srv.log.Noticef("The amount of hugepage memory allocated for engine %d does not "+
-			"meet nr_hugepages requested in config: want %s (%d hugepages), got %s ("+
-			"%d hugepages)", ei, humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)),
-			nrPagesRequired, humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)),
-			smi.HugepagesFree)
-		ei.setMemSize(memSizeFreeMiB)
-	} else {
-		ei.setMemSize(memSizeReqMiB)
+		srv.log.Noticef("The amount of hugepage memory available for engine %d (%s, %d "+
+			"hugepages) does not meet what is required (%s, %d hugepages)", ei.Index(),
+			humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)), nrPagesFree,
+			humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)), nrPagesRequired)
+		memSizeMiB = memSizeFreeMiB
 	}
 
 	// Set hugepage_size (MiB) values based on hugepage info.
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %s)", memSizeMiB,
+		pageSizeMiB, smi.Summary())
+	ei.setMemSize(memSizeMiB)
 	ei.setHugepageSz(pageSizeMiB)
-
-	return nil
 }
 
 // Clean SPDK resources, both lockfiles and orphaned hugepages. Orphaned hugepages will be cleaned
@@ -619,9 +655,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Update engine memory related config parameters before starting.
-		if err := updateHugeMemValues(srv, engine, smi); err != nil {
-			return errors.Wrap(err, "updating engine memory parameters")
-		}
+		setEngineMemSize(srv, engine, smi)
 
 		// Check available RAM can satisfy tmpfs size before starting a new engine.
 		if err := checkEngineTmpfsMem(srv, engine, smi); err != nil {
