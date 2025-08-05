@@ -100,7 +100,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                         # Exclude rank 5
                         # output = self.pool.exclude("5")
                         # Stop rank 5 and 2
-                        test_ranks = ["5","2","1"]
+                        test_ranks = ["5,2,1"]
                         output = self.dmg_command.system_stop(ranks=test_ranks, force=True)
                         self.log.info("Waiting for 20 seconds")
                         self.log.info("System should be unresponsive at this point")
