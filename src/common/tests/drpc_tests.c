@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,6 +31,19 @@ static char *TEST_SOCK_ADDR = "/good/socket.sock";
 /*
  * Test setup and teardown
  */
+static int
+setup_suite(void **state)
+{
+	return ut_log_init();
+}
+
+static int
+teardown_suite(void **state)
+{
+	ut_log_fini();
+	return 0;
+}
+
 static int
 setup_drpc_mocks(void **state)
 {
@@ -215,15 +229,38 @@ test_drpc_call_fails_if_sendmsg_fails(void **state)
 	free_drpc(ctx);
 }
 
+static size_t
+pack_call_with_header(Drpc__Call *call, uint8_t **packed)
+{
+	size_t              data_len = drpc__call__get_packed_size(call);
+	size_t              len      = data_len + DRPC_HEADER_LEN;
+	uint8_t            *buf;
+	struct drpc_header *hdr;
+
+	D_ALLOC(buf, len);
+	assert_non_null(buf);
+
+	hdr                  = (struct drpc_header *)buf;
+	hdr->chunk_data_size = data_len;
+	hdr->total_data_size = data_len;
+	hdr->chunk_idx       = 0;
+	hdr->total_chunks    = 1;
+
+	drpc__call__pack(call, DRPC_CHUNK_DATA_PTR(buf));
+	*packed = buf;
+
+	return len;
+}
+
 static void
 test_drpc_call_sends_call_as_mesg(void **state)
 {
-	int		expected_fd = 3;
-	struct drpc	*ctx = new_drpc_with_fd(expected_fd);
-	Drpc__Response	*resp = NULL;
-	Drpc__Call	*call = new_drpc_call();
-	size_t		expected_msg_size;
-	uint8_t		*expected_msg;
+	int             expected_fd = 3;
+	struct drpc    *ctx         = new_drpc_with_fd(expected_fd);
+	Drpc__Response *resp        = NULL;
+	Drpc__Call     *call        = new_drpc_call();
+	size_t          expected_msg_size;
+	uint8_t        *expected_msg;
 
 	ctx->sequence = 10; /* arbitrary but nonzero */
 	call->sequence = 0;
@@ -233,10 +270,8 @@ test_drpc_call_sends_call_as_mesg(void **state)
 	/* drpc_call updated call seq number and incremented ctx seq num */
 	assert_int_equal(ctx->sequence, call->sequence + 1);
 
-	/* Packed message is the call struct updated by drpc_call */
-	expected_msg_size = drpc__call__get_packed_size(call);
-	D_ALLOC(expected_msg, expected_msg_size);
-	drpc__call__pack(call, expected_msg);
+	/* Packed message is the call struct updated by drpc_call, with the chunk header */
+	expected_msg_size = pack_call_with_header(call, &expected_msg);
 
 	/* Sent to the proper socket */
 	assert_int_equal(sendmsg_sockfd, expected_fd);
@@ -244,8 +279,7 @@ test_drpc_call_sends_call_as_mesg(void **state)
 	/* Check structure and contents of the message */
 	assert_non_null(sendmsg_msg_ptr);
 	assert_non_null(sendmsg_msg_iov_base_ptr);
-	assert_int_equal(sendmsg_msg_iov_len,
-			expected_msg_size);
+	assert_int_equal(sendmsg_msg_iov_len, expected_msg_size);
 	assert_memory_equal(sendmsg_msg_content, expected_msg,
 			expected_msg_size);
 
@@ -278,32 +312,59 @@ test_drpc_call_with_no_flags_returns_async(void **state)
 	free_drpc(ctx);
 }
 
+static size_t
+pack_resp_with_header(Drpc__Response *resp, uint8_t **packed)
+{
+	size_t              data_len = drpc__response__get_packed_size(resp);
+	size_t              len      = data_len + DRPC_HEADER_LEN;
+	uint8_t            *buf;
+	struct drpc_header *hdr;
+
+	D_ALLOC(buf, len);
+	assert_non_null(buf);
+
+	hdr                  = (struct drpc_header *)buf;
+	hdr->chunk_data_size = data_len;
+	hdr->total_data_size = data_len;
+	hdr->chunk_idx       = 0;
+	hdr->total_chunks    = 1;
+
+	drpc__response__pack(resp, DRPC_CHUNK_DATA_PTR(buf));
+	*packed = buf;
+
+	return len;
+}
+
 static void
 test_drpc_call_with_sync_flag_gets_socket_response(void **state)
 {
-	struct drpc	*ctx = new_drpc_with_fd(1);
-	Drpc__Response	*resp = NULL;
-	Drpc__Call	*call = new_drpc_call();
-	Drpc__Response	*expected_resp;
+	struct drpc    *ctx           = new_drpc_with_fd(1);
+	Drpc__Response *resp          = NULL;
+	Drpc__Call     *call          = new_drpc_call();
+	Drpc__Response  expected_resp = DRPC__RESPONSE__INIT;
+	uint8_t        *exp_msg;
+	size_t          exp_len;
 
 	/* Actual contents of the message are arbitrary - just needs to be
 	 * identifiable.
 	 */
-	expected_resp = calloc(1, sizeof(Drpc__Response));
-	drpc__response__init(expected_resp);
-	expected_resp->sequence = 12345;
-	expected_resp->status = DRPC__STATUS__FAILURE;
+	expected_resp.sequence = 12345;
+	expected_resp.status   = DRPC__STATUS__FAILURE;
 
-	drpc__response__pack(expected_resp, recvmsg_msg_content);
+	exp_len        = pack_resp_with_header(&expected_resp, &exp_msg);
+	recvmsg_return = exp_len;
+
+	memcpy(recvmsg_msg_content, exp_msg, exp_len);
 
 	assert_rc_equal(drpc_call(ctx, R_SYNC, call, &resp), DER_SUCCESS);
 
-	assert_int_equal(resp->sequence, expected_resp->sequence);
-	assert_int_equal(resp->status, expected_resp->status);
-	assert_int_equal(resp->body.len, expected_resp->body.len);
+	assert_int_equal(resp->sequence, expected_resp.sequence);
+	assert_int_equal(resp->status, expected_resp.status);
+	assert_int_equal(resp->body.len, expected_resp.body.len);
+
+	assert_int_equal(UNIXCOMM_MAXMSGSIZE, recvmsg_msg_iov_len);
 
 	drpc__response__free_unpacked(resp, NULL);
-	drpc__response__free_unpacked(expected_resp, NULL);
 	drpc__call__free_unpacked(call, NULL);
 	free_drpc(ctx);
 }
@@ -565,14 +626,68 @@ test_drpc_recv_call_recvmsg_would_block(void **state)
 }
 
 static void
-test_drpc_recv_call_malformed(void **state)
+test_drpc_recv_call_no_chunks(void **state)
 {
-	struct drpc	*ctx = new_drpc_with_fd(6);
-	Drpc__Call	*call = NULL;
+	struct drpc        *ctx  = new_drpc_with_fd(6);
+	Drpc__Call         *call = NULL;
+	struct drpc_header *hdr;
 
-	/* Incoming message is weird garbage */
+	recvmsg_return = sizeof(recvmsg_msg_content);
+	memset(recvmsg_msg_content, 0, sizeof(recvmsg_msg_content));
+
+	hdr                  = (struct drpc_header *)recvmsg_msg_content;
+	hdr->chunk_idx       = 0;
+	hdr->total_chunks    = 0;
+	hdr->chunk_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content));
+	hdr->total_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content));
+
+	assert_rc_equal(drpc_recv_call(ctx, &call), -DER_PROTO);
+
+	assert_null(call);
+
+	free_drpc(ctx);
+}
+
+static void
+test_drpc_recv_call_chunk_too_big(void **state)
+{
+	struct drpc        *ctx  = new_drpc_with_fd(6);
+	Drpc__Call         *call = NULL;
+	struct drpc_header *hdr;
+
+	recvmsg_return = sizeof(recvmsg_msg_content);
+	memset(recvmsg_msg_content, 0, sizeof(recvmsg_msg_content));
+
+	hdr                  = (struct drpc_header *)recvmsg_msg_content;
+	hdr->chunk_idx       = 0;
+	hdr->total_chunks    = 1;
+	hdr->chunk_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content)) + 1;
+	hdr->total_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content)) + 1;
+
+	assert_rc_equal(drpc_recv_call(ctx, &call), -DER_PROTO);
+
+	assert_null(call);
+
+	free_drpc(ctx);
+}
+
+static void
+test_drpc_recv_call_malformed_data(void **state)
+{
+	struct drpc        *ctx  = new_drpc_with_fd(6);
+	Drpc__Call         *call = NULL;
+	struct drpc_header *hdr;
+
+	/* data is garbage */
 	recvmsg_return = sizeof(recvmsg_msg_content);
 	memset(recvmsg_msg_content, 1, sizeof(recvmsg_msg_content));
+
+	/* header should be valid */
+	hdr                  = (struct drpc_header *)recvmsg_msg_content;
+	hdr->chunk_idx       = 0;
+	hdr->total_chunks    = 1;
+	hdr->chunk_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content));
+	hdr->total_data_size = DRPC_CHUNK_DATA_SIZE(sizeof(recvmsg_msg_content));
 
 	assert_rc_equal(drpc_recv_call(ctx, &call), -DER_PROTO);
 
@@ -666,10 +781,10 @@ test_drpc_send_response_sendmsg_fails(void **state)
 static void
 test_drpc_send_response_success(void **state)
 {
-	struct drpc	*ctx = new_drpc_with_fd(6);
+	struct drpc     *ctx  = new_drpc_with_fd(6);
 	Drpc__Response	*resp = new_drpc_response();
-	uint8_t		expected_response[UNIXCOMM_MAXMSGSIZE];
-	size_t		expected_response_size;
+	uint8_t         *expected_response;
+	size_t           expected_response_size;
 
 	assert_rc_equal(drpc_send_response(ctx, resp), DER_SUCCESS);
 
@@ -677,11 +792,7 @@ test_drpc_send_response_success(void **state)
 	 * Sent response message - should be the one returned from
 	 * the handler
 	 */
-	memset(expected_response, 0, sizeof(expected_response));
-	drpc__response__pack(resp, expected_response);
-	expected_response_size =
-			drpc__response__get_packed_size(
-					mock_drpc_handler_resp_return);
+	expected_response_size = pack_resp_with_header(resp, &expected_response);
 
 	assert_int_equal(sendmsg_call_count, 1);
 	assert_int_equal(sendmsg_sockfd, ctx->comm->fd);
@@ -833,54 +944,55 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		DRPC_UTEST(test_drpc_connect_returns_null_if_socket_fails),
-		DRPC_UTEST(test_drpc_connect_returns_null_if_connect_fails),
-		DRPC_UTEST(test_drpc_connect_success),
-		DRPC_UTEST(test_drpc_close_fails_if_ctx_null),
-		DRPC_UTEST(test_drpc_close_fails_if_ctx_comm_null),
-		DRPC_UTEST(test_drpc_close_closing_socket_fails),
-		DRPC_UTEST(test_drpc_close_success),
-		DRPC_UTEST(test_drpc_close_with_unexpected_ref_count),
-		DRPC_UTEST(test_drpc_close_with_multiple_refs),
-		DRPC_UTEST(test_drpc_call_fails_if_sendmsg_fails),
-		DRPC_UTEST(test_drpc_call_sends_call_as_mesg),
-		DRPC_UTEST(test_drpc_call_with_no_flags_returns_async),
-		DRPC_UTEST(test_drpc_call_with_sync_flag_gets_socket_response),
-		DRPC_UTEST(test_drpc_call_with_sync_flag_fails_on_recvmsg_fail),
-		DRPC_UTEST(test_drpc_listen_fails_with_null_path),
-		DRPC_UTEST(test_drpc_listen_fails_with_null_handler),
-		DRPC_UTEST(test_drpc_listen_success),
-		DRPC_UTEST(test_drpc_listen_fails_if_socket_fails),
-		DRPC_UTEST(test_drpc_listen_fails_if_fcntl_fails),
-		DRPC_UTEST(test_drpc_listen_fails_if_bind_fails),
-		DRPC_UTEST(test_drpc_listen_fails_if_listen_fails),
-		DRPC_UTEST(test_drpc_accept_fails_with_null_ctx),
-		DRPC_UTEST(test_drpc_accept_fails_with_null_handler),
-		DRPC_UTEST(test_drpc_accept_success),
-		DRPC_UTEST(test_drpc_accept_fails_if_accept_fails),
-		DRPC_UTEST(test_drpc_recv_call_null_ctx),
-		DRPC_UTEST(test_drpc_recv_call_bad_handler),
-		DRPC_UTEST(test_drpc_recv_call_null_call),
-		DRPC_UTEST(test_drpc_recv_call_recvmsg_fails),
-		DRPC_UTEST(test_drpc_recv_call_recvmsg_would_block),
-		DRPC_UTEST(test_drpc_recv_call_malformed),
-		DRPC_UTEST(test_drpc_recv_call_success),
-		DRPC_UTEST(test_drpc_send_response_null_ctx),
-		DRPC_UTEST(test_drpc_send_response_bad_handler),
-		DRPC_UTEST(test_drpc_send_response_null_resp),
-		DRPC_UTEST(test_drpc_send_response_sendmsg_fails),
-		DRPC_UTEST(test_drpc_send_response_success),
-		cmocka_unit_test(test_drpc_call_create_null_ctx),
-		cmocka_unit_test(test_drpc_call_create_free),
-		cmocka_unit_test(test_drpc_call_free_null),
-		cmocka_unit_test(test_drpc_response_create_null_call),
-		cmocka_unit_test(test_drpc_response_create_free_success),
-		cmocka_unit_test(test_drpc_response_free_null),
-		cmocka_unit_test(test_drpc_add_ref_null),
-		cmocka_unit_test(test_drpc_add_ref_success),
-		cmocka_unit_test(test_drpc_add_ref_doesnt_update_max_count)
-	};
-	return cmocka_run_group_tests_name("common_drpc", tests, NULL, NULL);
+	    DRPC_UTEST(test_drpc_connect_returns_null_if_socket_fails),
+	    DRPC_UTEST(test_drpc_connect_returns_null_if_connect_fails),
+	    DRPC_UTEST(test_drpc_connect_success),
+	    DRPC_UTEST(test_drpc_close_fails_if_ctx_null),
+	    DRPC_UTEST(test_drpc_close_fails_if_ctx_comm_null),
+	    DRPC_UTEST(test_drpc_close_closing_socket_fails),
+	    DRPC_UTEST(test_drpc_close_success),
+	    DRPC_UTEST(test_drpc_close_with_unexpected_ref_count),
+	    DRPC_UTEST(test_drpc_close_with_multiple_refs),
+	    DRPC_UTEST(test_drpc_call_fails_if_sendmsg_fails),
+	    DRPC_UTEST(test_drpc_call_sends_call_as_mesg),
+	    DRPC_UTEST(test_drpc_call_with_no_flags_returns_async),
+	    DRPC_UTEST(test_drpc_call_with_sync_flag_gets_socket_response),
+	    DRPC_UTEST(test_drpc_call_with_sync_flag_fails_on_recvmsg_fail),
+	    DRPC_UTEST(test_drpc_listen_fails_with_null_path),
+	    DRPC_UTEST(test_drpc_listen_fails_with_null_handler),
+	    DRPC_UTEST(test_drpc_listen_success),
+	    DRPC_UTEST(test_drpc_listen_fails_if_socket_fails),
+	    DRPC_UTEST(test_drpc_listen_fails_if_fcntl_fails),
+	    DRPC_UTEST(test_drpc_listen_fails_if_bind_fails),
+	    DRPC_UTEST(test_drpc_listen_fails_if_listen_fails),
+	    DRPC_UTEST(test_drpc_accept_fails_with_null_ctx),
+	    DRPC_UTEST(test_drpc_accept_fails_with_null_handler),
+	    DRPC_UTEST(test_drpc_accept_success),
+	    DRPC_UTEST(test_drpc_accept_fails_if_accept_fails),
+	    DRPC_UTEST(test_drpc_recv_call_null_ctx),
+	    DRPC_UTEST(test_drpc_recv_call_bad_handler),
+	    DRPC_UTEST(test_drpc_recv_call_null_call),
+	    DRPC_UTEST(test_drpc_recv_call_recvmsg_fails),
+	    DRPC_UTEST(test_drpc_recv_call_recvmsg_would_block),
+	    DRPC_UTEST(test_drpc_recv_call_no_chunks),
+	    DRPC_UTEST(test_drpc_recv_call_chunk_too_big),
+	    DRPC_UTEST(test_drpc_recv_call_malformed_data),
+	    DRPC_UTEST(test_drpc_recv_call_success),
+	    DRPC_UTEST(test_drpc_send_response_null_ctx),
+	    DRPC_UTEST(test_drpc_send_response_bad_handler),
+	    DRPC_UTEST(test_drpc_send_response_null_resp),
+	    DRPC_UTEST(test_drpc_send_response_sendmsg_fails),
+	    DRPC_UTEST(test_drpc_send_response_success),
+	    cmocka_unit_test(test_drpc_call_create_null_ctx),
+	    cmocka_unit_test(test_drpc_call_create_free),
+	    cmocka_unit_test(test_drpc_call_free_null),
+	    cmocka_unit_test(test_drpc_response_create_null_call),
+	    cmocka_unit_test(test_drpc_response_create_free_success),
+	    cmocka_unit_test(test_drpc_response_free_null),
+	    cmocka_unit_test(test_drpc_add_ref_null),
+	    cmocka_unit_test(test_drpc_add_ref_success),
+	    cmocka_unit_test(test_drpc_add_ref_doesnt_update_max_count)};
+	return cmocka_run_group_tests_name("common_drpc", tests, setup_suite, teardown_suite);
 }
 
 #undef DRPC_UTEST

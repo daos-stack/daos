@@ -22,43 +22,18 @@
 #include "drpc_test_listener.h"
 #include <daos/drpc_test.pb-c.h>
 
-#define CHUNK_SIZE (1 << 17) /* dRPC chunk size = 1 MB */
-
-static int
-init_logging(void)
-{
-	int rc;
-
-	rc = d_log_init();
-	if (rc != 0) {
-		D_PRINT_ERR("failed d_log_init: " DF_RC "\n", DP_RC(rc));
-		return rc;
-	}
-
-	rc = D_LOG_REGISTER_FAC(DAOS_FOREACH_LOG_FAC);
-	if (rc != 0)
-		D_PRINT_ERR("Failed to register daos log facilities: " DF_RC "\n", DP_RC(rc));
-
-	rc = D_LOG_REGISTER_DB(DAOS_FOREACH_DB);
-	if (rc != 0)
-		D_PRINT_ERR("Failed to register daos debug bits: " DF_RC "\n", DP_RC(rc));
-
-	d_log_sync_mask();
-
-	return 0;
-}
+#define CHUNK_SIZE UNIXCOMM_MAXMSGSIZE
 
 static int
 test_suite_init(void **arg)
 {
-	return init_logging();
+	return ut_log_init();
 }
 
 static int
 test_suite_fini(void **arg)
 {
-	d_log_fini();
-
+	ut_log_fini();
 	return 0;
 }
 

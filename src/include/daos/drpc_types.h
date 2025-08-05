@@ -59,4 +59,11 @@ struct drpc_header {
 	uint32_t total_chunks;
 };
 
+#define DRPC_HEADER_LEN sizeof(struct drpc_header)
+#define DRPC_CHUNK_SIZE(bytes_left)                                                                \
+	(bytes_left > DRPC_MAX_DATA_SIZE ? UNIXCOMM_MAXMSGSIZE : bytes_left + DRPC_HEADER_LEN)
+#define DRPC_CHUNK_DATA_SIZE(bytes) (bytes - DRPC_HEADER_LEN)
+#define DRPC_MAX_DATA_SIZE          DRPC_CHUNK_DATA_SIZE(UNIXCOMM_MAXMSGSIZE)
+#define DRPC_CHUNK_DATA_PTR(ptr)    (ptr + DRPC_HEADER_LEN)
+
 #endif /* __DAOS_DRPC_TYPES_H__ */

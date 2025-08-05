@@ -21,6 +21,8 @@ import (
 )
 
 func TestDrpc_Hello_Integration(t *testing.T) {
+	largeStrLen := drpc.MaxChunkSize + 1
+
 	for name, tc := range map[string]struct {
 		method      drpc.Method
 		name        string
@@ -37,10 +39,10 @@ func TestDrpc_Hello_Integration(t *testing.T) {
 			name:        "friend",
 			expGreeting: "Hello friend",
 		},
-		"large message": {
+		"multi-chunk": {
 			method:      MethodGreeting,
-			name:        strings.Repeat("a", drpc.MaxChunkSize),
-			expGreeting: fmt.Sprintf("Hello %s", strings.Repeat("a", drpc.MaxChunkSize)),
+			name:        strings.Repeat("a", largeStrLen),
+			expGreeting: fmt.Sprintf("Hello %s", strings.Repeat("a", largeStrLen)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

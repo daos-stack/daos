@@ -349,30 +349,23 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 	return buf_len;
 }
 
-#define HEADER_LEN sizeof(struct drpc_header)
-#define CHUNK_SIZE(bytes_left)                                                                     \
-	(bytes_left > MAX_DATA_SIZE ? UNIXCOMM_MAXMSGSIZE : bytes_left + HEADER_LEN)
-#define CHUNK_DATA_SIZE(bytes) (bytes - HEADER_LEN)
-#define MAX_DATA_SIZE          CHUNK_DATA_SIZE(UNIXCOMM_MAXMSGSIZE)
-#define CHUNK_DATA_PTR(ptr)    (ptr + HEADER_LEN)
-
 static int
 send_chunked(struct drpc *ctx, uint8_t *msg, size_t msg_len)
 {
 	size_t   remaining_len = msg_len;
 	uint8_t *remaining_msg = msg;
 	size_t   chunk_idx     = 0;
-	size_t   num_chunks    = msg_len / MAX_DATA_SIZE;
+	size_t   num_chunks    = msg_len / DRPC_MAX_DATA_SIZE;
 
-	if (msg_len % MAX_DATA_SIZE != 0)
+	if (msg_len % DRPC_MAX_DATA_SIZE != 0)
 		num_chunks++;
 
 	D_DEBUG(DB_MGMT, "sending dRPC message (len=%lu) in %lu chunks\n", msg_len, num_chunks);
 
 	do {
 		uint8_t            *chunk_buf = NULL;
-		size_t              chunk_len = CHUNK_SIZE(remaining_len);
-		size_t              data_len  = CHUNK_DATA_SIZE(chunk_len);
+		size_t              chunk_len = DRPC_CHUNK_SIZE(remaining_len);
+		size_t              data_len  = DRPC_CHUNK_DATA_SIZE(chunk_len);
 		struct drpc_header *header;
 		ssize_t             sent = 0;
 		int                 rc;
@@ -395,7 +388,7 @@ send_chunked(struct drpc *ctx, uint8_t *msg, size_t msg_len)
 		header->chunk_data_size = data_len;
 		header->total_data_size = msg_len;
 
-		memcpy(CHUNK_DATA_PTR(chunk_buf), remaining_msg, CHUNK_DATA_SIZE(chunk_len));
+		memcpy(DRPC_CHUNK_DATA_PTR(chunk_buf), remaining_msg, data_len);
 
 		D_DEBUG(DB_MGMT, "sending chunk size=%lu\n", chunk_len);
 		rc = unixcomm_send(ctx->comm, chunk_buf, chunk_len, &sent);
@@ -407,7 +400,12 @@ send_chunked(struct drpc *ctx, uint8_t *msg, size_t msg_len)
 		}
 		D_DEBUG(DB_MGMT, "sent %ld bytes\n", sent);
 
-		D_ASSERT(sent == chunk_len);
+		if (sent < chunk_len) {
+			D_ERROR("failed to send full dRPC chunk (sent=%ld, expected=%ld)", sent,
+				chunk_len);
+			return -DER_TRUNC;
+		}
+
 		remaining_len -= data_len;
 		remaining_msg += data_len;
 		chunk_idx++;
@@ -450,10 +448,10 @@ recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		if (recv < HEADER_LEN) {
+		if (recv < DRPC_HEADER_LEN) {
 			D_ERROR("received dRPC message len=%ld, smaller than expected header "
 				"size=%lu\n",
-				recv, HEADER_LEN);
+				recv, DRPC_HEADER_LEN);
 			D_GOTO(out, rc = -DER_TRUNC);
 		}
 
@@ -466,9 +464,14 @@ recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
 			D_DEBUG(DB_MGMT, "receiving dRPC message len=%lu, num_chunks=%u\n",
 				message_size, num_chunks);
 
+			if (num_chunks == 0) {
+				D_ERROR("malformed dRPC header, total_chunks=0\n");
+				D_GOTO(out, rc = -DER_PROTO);
+			}
+
 			D_ALLOC(message, message_size);
 			if (message == NULL)
-				D_GOTO(out, -DER_NOMEM);
+				D_GOTO(out, rc = -DER_NOMEM);
 			message_ptr = message;
 		}
 
@@ -501,7 +504,7 @@ recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
 
 		D_DEBUG(DB_MGMT, "receiving chunk %u/%u\n", header->chunk_idx + 1,
 			header->total_chunks);
-		memcpy(message_ptr, CHUNK_DATA_PTR(buffer), header->chunk_data_size);
+		memcpy(message_ptr, DRPC_CHUNK_DATA_PTR(buffer), header->chunk_data_size);
 		message_ptr += header->chunk_data_size;
 		message_remaining -= header->chunk_data_size;
 		chunk_idx++;
@@ -513,10 +516,17 @@ recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
 	} while (message_remaining > 0);
 
 	D_DEBUG(DB_MGMT, "recv message len=%lu done\n", message_size);
-	*msg     = message;
-	*msg_len = message_size;
 
 out:
+	if (rc != 0) {
+		D_FREE(message);
+		message_size = 0;
+	} else {
+		D_DEBUG(DB_MGMT, "returning message len=%lu\n", message_size);
+		*msg     = message;
+		*msg_len = message_size;
+	}
+
 	D_FREE(buffer);
 	return rc;
 }
@@ -562,10 +572,9 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg, Drpc__Response **resp)
 	}
 
 	ret = recv_chunked(ctx, &responseBuf, &response_len);
-	if (ret < 0) {
-		D_FREE(responseBuf);
+	if (ret < 0)
 		return ret;
-	}
+
 	response = drpc__response__unpack(&alloc.alloc, response_len, responseBuf);
 	D_FREE(responseBuf);
 	if (alloc.oom)
