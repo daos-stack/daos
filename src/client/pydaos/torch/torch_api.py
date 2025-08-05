@@ -48,6 +48,9 @@ class Dataset(TorchDataset):
     If this Dataset is planned to be used via multiple workers in different processes,
     before accessing the data, workers needs to call worker_init function to re-initialize
     DAOS internals after fork(s).
+    It's necessary to free resources when the dataset is no longer required,
+    either by calling the close() method manually or by using a with statement.
+
 
     Attributes
     ----------
@@ -94,6 +97,7 @@ class Dataset(TorchDataset):
         self._dfs = _Dfs(pool=pool, cont=cont, dir_cache_size=dir_cache_size)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
+        self._closed = False
 
         self.objects = self._dfs.parallel_list(path, readdir_batch_size=self._readdir_batch_size)
 
@@ -126,14 +130,39 @@ class Dataset(TorchDataset):
         # to use that global connection and dfs
         self._dfs.worker_init()
 
-    def __del__(self):
-        """ Cleanups the used resources and connection """
-
-        if self._dfs is None:
+    def close(self):
+        """ Cleanups the used resources and connections """
+        if self._closed:
             return
+        self._closed = True
 
         self._dfs.disconnect()
-        self._dfs = None
+        self.objects = None
+
+    def __enter__(self):
+        """Enter the context manager.
+
+        Returns:
+            self: The instance itself to allow method calls within the with block.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager and clean up resources.
+
+        Returns:
+            None: Allows any exceptions to propagate normally.
+        """
+        self.close()
+
+    def __del__(self):
+        """Destructor that ensures resources are cleaned up when object is garbage collected.
+
+        Note:
+            This is a fallback cleanup mechanism. Explicit cleanup via close() or
+            context manager usage is preferred as __del__ is not guaranteed to be called.
+        """
+        self.close()
 
 
 # pylint: disable=abstract-method # iterable dataset should implement only __iter__()
@@ -148,6 +177,8 @@ class IterableDataset(TorchIterableDataset):
     If this Dataset is planned to be used via multiple workers in different processes,
     before accessing the data, workers needs to call worker_init function to re-initialize
     DAOS internals after fork(s) and to split work between them.
+    It's necessary to free resources when the dataset is no longer required,
+    either by calling the close() method manually or by using a with statement.
 
     The typical usage with pytorch.DataLoader would look like the following example:
 
@@ -164,6 +195,7 @@ class IterableDataset(TorchIterableDataset):
     for i, sample in enumerate(dl):
         print(f"Sample {i}: {sample}")
 
+    ds.close()
 
     Attributes
     ----------
@@ -207,6 +239,7 @@ class IterableDataset(TorchIterableDataset):
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
         self._batch_size = batch_size
+        self._closed = False
 
         self.objects = self._dfs.parallel_list(path, readdir_batch_size=self._readdir_batch_size)
         self.workset = self.objects
@@ -247,16 +280,40 @@ class IterableDataset(TorchIterableDataset):
         # to use that global connection and dfs
         self._dfs.worker_init()
 
-    def __del__(self):
-        """ Cleanups the used resources and connection """
-
-        if self._dfs is None:
+    def close(self):
+        """ Cleanups the used resources and connections """
+        if self._closed:
             return
+        self._closed = True
 
         self._dfs.disconnect()
-        self._dfs = None
-        self.objects = None
         self.workset = None
+        self.objects = None
+
+    def __enter__(self):
+        """Enter the context manager.
+
+        Returns:
+            self: The instance itself to allow method calls within the with block.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager and clean up resources.
+
+        Returns:
+            None: Allows any exceptions to propagate normally.
+        """
+        self.close()
+
+    def __del__(self):
+        """Destructor that ensures resources are cleaned up when object is garbage collected.
+
+        Note:
+            This is a fallback cleanup mechanism. Explicit cleanup via close() or
+            context manager usage is preferred as __del__ is not guaranteed to be called.
+        """
+        self.close()
 
     def __load_batch(self, items):
         """ load items in batch and applies data transformation function """
@@ -421,6 +478,11 @@ class Checkpoint():
     Class representing checkpoint interface for pytorch to save and load
     model's stave over DAOS DFS.
 
+    As the connection establishes to the container, it's necessary to free resources
+    when the checkpoint operations has been completed, either by calling the close() method
+    manually or by using a with statement.
+
+
     Attributes
     ----------
     pool : string
@@ -440,7 +502,7 @@ class Checkpoint():
     transfer_chunk_size : int (optional)
         Chunk size for data buffering/transfer, default is DEFAULT_CHUNK_SIZE = 64MB.
         To disable chunking set it to 0, then all writes go to in memory buffer
-        and actual flush to storage will happen on close() call.
+        and actual flush to storage will happen on close() call of the writer buffer.
     chunks_limits: int (optional)
         Number of chunks to be used for buffering and transfer.
         Setting it to 0 means no limit.
@@ -481,14 +543,40 @@ class Checkpoint():
         self._chunks_limit = chunks_limit
         self._workers = workers
         self._dfs = _Dfs(pool=pool, cont=cont, rd_only=False)
+        self._closed = False
+
+    def close(self):
+        """ Cleanups the used resources and connections """
+        if self._closed:
+            return
+        self._closed = True
+
+        self._dfs.disconnect()
+
+    def __enter__(self):
+        """Enter the context manager.
+
+        Returns:
+            self: The instance itself to allow method calls within the with block.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager and clean up resources.
+
+        Returns:
+            None: Allows any exceptions to propagate normally.
+        """
+        self.close()
 
     def __del__(self):
-        """ Cleanups the used resources and connection """
+        """Destructor that ensures resources are cleaned up when object is garbage collected.
 
-        if self._dfs is None:
-            return
-        self._dfs.disconnect()
-        self._dfs = None
+        Note:
+            This is a fallback cleanup mechanism. Explicit cleanup via close() or
+            context manager usage is preferred as __del__ is not guaranteed to be called.
+        """
+        self.close()
 
     def reader(self, file, stream=None):
         """
