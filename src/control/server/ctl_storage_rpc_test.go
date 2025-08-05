@@ -1310,6 +1310,15 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			},
 		},
 		"successful scan; no scm namespaces": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmDeviceList("/dev/pmem0"),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr, test.MockPCIAddr(2)),
+			},
 			bdevScanRes: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
 					ctrlrPB,
@@ -1344,6 +1353,10 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			},
 			tierCfgs: storage.TierConfigs{
 				storage.NewTierConfig().
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmDeviceList("/dev/pmem0"),
+				storage.NewTierConfig().
 					WithStorageClass(storage.ClassNvme.String()).
 					WithBdevDeviceList(test.MockPCIAddr(1)),
 				storage.NewTierConfig().
@@ -1366,6 +1379,15 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			},
 		},
 		"spdk scan failure": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmDeviceList("/dev/pmem0"),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr, test.MockPCIAddr(2)),
+			},
 			bdevScanRes: &ctlpb.ScanNvmeResp{
 				State: &ctlpb.ResponseState{
 					Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
@@ -1391,6 +1413,15 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			},
 		},
 		"hugepages disabled": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmDeviceList("/dev/pmem0"),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr, test.MockPCIAddr(2)),
+			},
 			bdevScanRes: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
 					ctrlrPB,
