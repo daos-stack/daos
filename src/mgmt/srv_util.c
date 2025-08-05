@@ -59,6 +59,11 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 	for (i = 0; i < nservers; i++)
 		uris[i] = servers[i].se_uri;
 
+	for (i = 0; i < nservers; i++) {
+		D_INFO("rank: %d [incarnation: %ld] uri: '%s'\n",
+			ranks->rl_ranks[i], incarnations[i], uris[i]);
+	}
+
 	rc = crt_group_primary_modify(NULL /* grp */, &info->dmi_ctx, 1 /* num_ctxs */, ranks,
 				      incarnations, uris, CRT_GROUP_MOD_OP_REPLACE, version);
 	if (rc != 0) {
