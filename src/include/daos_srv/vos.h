@@ -577,6 +577,12 @@ int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
+/* Extended aggregate API to workaround rebuild data corruption issue */
+int
+vos_aggregate_ex(daos_handle_t coh, daos_epoch_range_t *epr, int (*yield_func)(void *arg),
+		 uint32_t (*cellsz_func)(void *arg, void *oid_arg), void *callback_arg,
+		 uint32_t flags);
+
 /**
  * Discards changes in all epochs with the epoch range \a epr
  *
