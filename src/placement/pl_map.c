@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -72,13 +73,7 @@ pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	if (rc != 0)
 		return rc;
 
-	rc = D_SPIN_INIT(&map->pl_lock, PTHREAD_PROCESS_PRIVATE);
-	if (rc != 0) {
-		dict->pd_ops->o_destroy(map);
-		return rc;
-	}
-
-	map->pl_ref  = 1; /* for the caller */
+	atomic_store_relaxed(&map->pl_ref, 1); /* for caller */
 	map->pl_connects = 0;
 	map->pl_type = mia->ia_type;
 	map->pl_ops  = dict->pd_ops;
@@ -94,11 +89,10 @@ pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 void
 pl_map_destroy(struct pl_map *map)
 {
-	D_ASSERT(map->pl_ref == 0);
+	D_ASSERT(atomic_load_relaxed(&map->pl_ref) == 0);
 	D_ASSERT(map->pl_ops != NULL);
 	D_ASSERT(map->pl_ops->o_destroy != NULL);
 
-	D_SPIN_DESTROY(&map->pl_lock);
 	map->pl_ops->o_destroy(map);
 }
 
@@ -349,25 +343,19 @@ pl_hop_rec_addref(struct d_hash_table *htab, d_list_t *link)
 {
 	struct pl_map *map = pl_link2map(link);
 
-	D_SPIN_LOCK(&map->pl_lock);
-	map->pl_ref++;
-	D_ASSERTF(map->pl_ref > 0, "refct overflow: %d\n", map->pl_ref);
-	D_SPIN_UNLOCK(&map->pl_lock);
+	atomic_fetch_add_relaxed(&map->pl_ref, 1);
 }
 
 static bool
 pl_hop_rec_decref(struct d_hash_table *htab, d_list_t *link)
 {
 	struct pl_map   *map = pl_link2map(link);
-	bool             zombie;
+	uint32_t         oldref;
 
-	D_SPIN_LOCK(&map->pl_lock);
-	D_ASSERT(map->pl_ref > 0);
-	map->pl_ref--;
-	zombie = (map->pl_ref == 0);
-	D_SPIN_UNLOCK(&map->pl_lock);
+	oldref = atomic_fetch_sub_relaxed(&map->pl_ref, 1);
+	D_ASSERT(oldref > 0);
 
-	return zombie;
+	return oldref == 1;
 }
 
 void
@@ -375,7 +363,6 @@ pl_hop_rec_free(struct d_hash_table *htab, d_list_t *link)
 {
 	struct pl_map *map = pl_link2map(link);
 
-	D_ASSERT(map->pl_ref == 0);
 	pl_map_destroy(map);
 }
 

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +16,8 @@
 #include <daos/common.h>
 #include <daos/pool_map.h>
 #include <daos/object.h>
+
+#include <gurt/atomic.h>
 
 /** default placement map when none are specified */
 #define DEFAULT_PL_TYPE PL_TYPE_JUMP_MAP
@@ -82,13 +85,11 @@ struct pl_map {
 	/** corresponding pool uuid */
 	uuid_t			 pl_uuid;
 	/** link chain on hash */
-	d_list_t		 pl_link;
-	/** protect refcount */
-	pthread_spinlock_t	 pl_lock;
+	d_list_t                 pl_link;
 	/** refcount */
-	int			 pl_ref;
+	ATOMIC uint32_t          pl_ref;
 	/** pool connections, protected by pl_rwlock */
-	int			 pl_connects;
+	int                      pl_connects;
 	/** type of placement map */
 	pl_map_type_t		 pl_type;
 	/** reference to pool map */
