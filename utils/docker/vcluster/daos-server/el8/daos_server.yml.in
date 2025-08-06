@@ -20,8 +20,8 @@ transport_config:
   key: /etc/daos/certs/server.key
 @DAOS_AUTH_END@
 
-helper_log_file: /tmp/daos_server_helper.log
-control_log_file: /tmp/daos_server.log
+helper_log_file: /var/log/daos/daos_server_helper.log
+control_log_file: /var/log/daos/daos_server.log
 control_log_mask: INFO
 @DAOS_MD_ON_SSD_BEGIN@
 control_metadata:
@@ -34,7 +34,7 @@ engines:
     nr_xs_helpers: 0
     fabric_iface: @DAOS_IFACE_NAME@
     fabric_iface_port: 31416
-    log_file: /tmp/daos_engine_0.log
+    log_file: /var/log/daos/daos_engine_0.log
     log_mask: INFO
     storage:
       - class: ram

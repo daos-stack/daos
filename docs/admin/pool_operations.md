@@ -716,7 +716,7 @@ This is important because dead ranks may cause commands to hang and timeout so i
 and restarting them is a useful procedure.
 
 ```bash
-Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=Degraded
+Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=2, leader=3, version=4, state=TargetsExcluded
     Pool health info:
     - Disabled ranks: 1
     - Dead ranks: 2
@@ -936,6 +936,11 @@ $ dmg pool get-prop tank2 reclaim
    ----                       -----
    Reclaim strategy (reclaim) lazy
 ```
+
+Pool redundancy factor (`rd_fac`) can be modified after pool creation to any value between
+0 and 4. However, avoid setting it to a value larger than the number of engines in the
+pool because pool's `rd_fac` will be used for container's `rd_fac` by default. If it's
+invalid, container create without specifying `rd_fac` will fail.
 
 ### Reclaim Strategy (reclaim)
 

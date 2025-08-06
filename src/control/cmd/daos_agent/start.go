@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -120,6 +121,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		monitor:       procmon,
 		providerIdx:   cmd.cfg.ProviderIdx,
 		cliMetricsSrc: clientMetricSource,
+		tmCfg:         &cmd.cfg.Telemetry,
 	}
 	drpcServer.RegisterRPCModule(mgmtMod)
 	cmd.Debugf("registered dRPC modules: %s", time.Since(drpcRegStart))
