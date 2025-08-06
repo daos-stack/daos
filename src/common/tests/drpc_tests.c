@@ -367,6 +367,7 @@ test_drpc_call_with_sync_flag_gets_socket_response(void **state)
 	drpc__response__free_unpacked(resp, NULL);
 	drpc__call__free_unpacked(call, NULL);
 	free_drpc(ctx);
+	D_FREE(exp_msg);
 }
 
 static void
@@ -804,6 +805,7 @@ test_drpc_send_response_success(void **state)
 
 	free_drpc(ctx);
 	drpc_response_free(resp);
+	D_FREE(expected_response);
 }
 
 /*
