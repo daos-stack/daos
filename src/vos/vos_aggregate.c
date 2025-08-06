@@ -1652,7 +1652,8 @@ need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_si
 	 * SCM records accumulated.
 	 */
 	if (tgt_media == DAOS_MEDIA_SCM)
-		return lgc_cnt >= VOS_EVT_ORDER;
+		//return lgc_cnt >= VOS_EVT_ORDER;
+		return lgc_cnt >= 2;
 
 	/*
 	 * Only trigger NVMe to NVMe data migration when:
