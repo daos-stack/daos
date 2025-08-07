@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       11%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -658,6 +658,9 @@ fi
 %endif
 
 %changelog
+* Mon Aug 2 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-12
+- Switch to fpm build for RPMs
+
 * Mon Jun 2 2025 Samirkumar Raval <samirkumar.raval@hpe.com> 2.7.101-11
 - Changing the default log location to /var/log/daos from /tmp
 
