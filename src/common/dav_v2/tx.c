@@ -1231,6 +1231,8 @@ dav_tx_add_range_v2(uint64_t hoff, size_t size)
 		.flags = flags,
 	};
 
+	if (hoff < 8192)
+		D_ERROR("Found %lu in address range", hoff);
 	ret = dav_tx_add_common(tx, &args);
 
 	DAV_API_END();
