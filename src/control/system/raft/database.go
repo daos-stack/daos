@@ -54,6 +54,7 @@ type (
 		Barrier(time.Duration) raft.Future
 		Shutdown() raft.Future
 		State() raft.RaftState
+		GetConfiguration() raft.ConfigurationFuture
 	}
 
 	// syncRaft provides a wrapper for synchronized access to the
@@ -734,6 +735,21 @@ func (db *Database) RemoveMember(m *system.Member) error {
 	return db.submitMemberUpdate(raftOpRemoveMember, &memberUpdate{Member: m})
 }
 
+func raftSvcHasVoter(svc raftService, voterAddr raft.ServerAddress) (bool, error) {
+	cfgFuture := svc.GetConfiguration()
+	if cfgFuture.Error() != nil {
+		return false, errors.Wrapf(cfgFuture.Error(), "get raft configuration")
+	}
+
+	cfg := cfgFuture.Configuration()
+	for _, rs := range cfg.Servers {
+		if rs.Address == voterAddr {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 	// Ignore self as a voter candidate.
 	if common.CmpTCPAddr(db.replicaAddr, vc.Addr) {
@@ -750,7 +766,18 @@ func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 
 	switch op {
 	case raftOpAddMember:
-	case raftOpUpdateMember, raftOpRemoveMember:
+	case raftOpUpdateMember:
+		return db.raft.withReadLock(func(svc raftService) error {
+			if hasVoter, err := raftSvcHasVoter(svc, rsa); err != nil {
+				return errors.Wrapf(err, "check if %s is already a raft voter", rsa)
+			} else if !hasVoter {
+				return svc.AddVoter(rsi, rsa, 0, 0).Error()
+			}
+
+			// It's already a voter
+			return nil
+		})
+	case raftOpRemoveMember:
 		// If we're updating an existing member, we need to kick it out of the
 		// raft cluster and then re-add it so that it doesn't hijack the campaign.
 		db.log.Debugf("removing %s as a current raft voter", vc)
