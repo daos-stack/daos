@@ -33,7 +33,7 @@ C_SOURCE_FILES = common/drpc.pb-c.c\
 		 mgmt/svc.pb-c.c\
 		 mgmt/check.pb-c.c\
 		 mgmt/system.pb-c.c\
-		 mgmt/ranks.pb-c.c\
+		 mgmt/shared/ranks.pb-c.c\
 		 chk/chk.pb-c.c\
 		 security/auth.pb-c.c\
 		 tests/drpc/drpc_test.pb-c.c
