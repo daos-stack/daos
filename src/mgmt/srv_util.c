@@ -78,6 +78,68 @@ out:
 	return rc;
 }
 
+int
+ds_mgmt_get_group_status(uint32_t group_version, d_rank_t **dead_ranks_out,
+			 size_t *n_dead_ranks_out)
+{
+	struct dss_module_info *info = dss_get_module_info();
+	uint32_t                version;
+	d_rank_list_t          *ranks;
+	d_rank_t               *dead_ranks;
+	size_t                  n_dead_ranks;
+	int                     i;
+	int                     rc;
+
+	D_ASSERTF(info->dmi_ctx_id == 0, "%d\n", info->dmi_ctx_id);
+
+	rc = crt_group_version(NULL /* grp */, &version);
+	D_ASSERTF(rc == 0, DF_RC "\n", DP_RC(rc));
+	if (group_version != version) {
+		rc = -DER_GRPVER;
+		goto out;
+	}
+
+	rc = crt_group_ranks_get(NULL /* group */, &ranks);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to get group ranks");
+		goto out;
+	}
+
+	D_ALLOC_ARRAY(dead_ranks, ranks->rl_nr);
+	if (dead_ranks == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ranks;
+	}
+	n_dead_ranks = 0;
+
+	for (i = 0; i < ranks->rl_nr; i++) {
+		struct swim_member_state state;
+
+		rc = crt_rank_state_get(NULL /* group */, ranks->rl_ranks[i], &state);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to get rank state for rank %u", ranks->rl_ranks[i]);
+			goto out_dead_ranks;
+		}
+
+		if (state.sms_status == SWIM_MEMBER_DEAD) {
+			dead_ranks[n_dead_ranks] = ranks->rl_ranks[i];
+			n_dead_ranks++;
+		}
+	}
+
+out_dead_ranks:
+	if (rc == 0) {
+		*dead_ranks_out   = dead_ranks;
+		*n_dead_ranks_out = n_dead_ranks;
+	} else {
+		D_FREE(dead_ranks);
+	}
+out_ranks:
+	d_rank_list_free(ranks);
+out:
+	return rc;
+}
+
 static struct d_uuid *pool_blacklist;
 static int            pool_blacklist_len;
 
