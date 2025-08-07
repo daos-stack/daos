@@ -2515,7 +2515,11 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		if (pool->sp_map == NULL || pool->sp_stopping)
 			goto yield;
 
-		rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid, &failed_tgts, &failed_tgts_nr);
+		/* on 2.6 branch no incremental reintegration, the UP status target will discard all
+		 * containers so it cannot report its EC aggregation boundary, so should skip
+		 * DOWN/DOWNOUT/UP ranks.
+		 */
+		rc = ds_pool_get_failedorup_tgt_idx(pool->sp_uuid, &failed_tgts, &failed_tgts_nr);
 		if (rc) {
 			D_DEBUG(DB_MD, DF_UUID "failed to get index : rc "DF_RC"\n",
 				DP_UUID(pool->sp_uuid), DP_RC(rc));

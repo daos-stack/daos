@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1426,11 +1427,12 @@ output:
 }
 
 int
-ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts, unsigned int *failed_tgts_cnt)
+ds_pool_get_failedorup_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
+			       unsigned int *failed_tgts_cnt)
 {
 	unsigned int status;
 
-	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
+	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP;
 	return ds_pool_get_tgt_idx_by_state(pool_uuid, status, failed_tgts, failed_tgts_cnt);
 }
 
