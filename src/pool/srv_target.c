@@ -2600,7 +2600,7 @@ ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(v
 }
 
 /* Discard the objects by epoch in this pool */
-static void
+static int
 ds_pool_tgt_discard_ult(void *data)
 {
 	struct ds_pool		*pool;
@@ -2627,6 +2627,7 @@ ds_pool_tgt_discard_ult(void *data)
 	ds_pool_put(pool);
 free:
 	tgt_discard_arg_free(arg);
+	return rc;
 }
 
 void
@@ -2659,7 +2660,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 
 	pool->sp_need_discard = 1;
 	pool->sp_discard_status = 0;
-	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
 
 	ds_pool_put(pool);
 out:
