@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -692,4 +693,39 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc, boo
 
 	/* Return EPOCH_MAX as last update timestamp on cache miss */
 	*epc = DAOS_EPOCH_MAX;
+}
+
+int
+dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, d_vector_t *dv)
+{
+	struct ilog_entries   entries = {0};
+	struct ilog_desc_cbs  cbs     = {0};
+	struct umem_instance *umm     = vos_cont2umm(vos_hdl2cont(coh));
+	struct ilog_entry     e;
+	struct dlck_dtx_rec   rec = {0};
+	int                   rc;
+
+	ilog_fetch_init(&entries);
+
+	vos_ilog_desc_cbs_init(&cbs, coh);
+	rc = ilog_fetch(umm, root_df, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
+	if (rc == -DER_NONEXIST) {
+		/* no entries exist ... not an error */
+		return 0;
+	}
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	ilog_foreach_entry(&entries, &e)
+	{
+		uint32_t tx_id = e.ie_id.id_tx_id;
+		if (tx_id != DTX_LID_COMMITTED && tx_id != DTX_LID_ABORTED) {
+			rec.lid   = tx_id;
+			rec.umoff = ilog_umoff_by_idx(umm, root_df, e.ie_idx);
+			d_vector_append(dv, &rec);
+		}
+	}
+
+	return DER_SUCCESS;
 }

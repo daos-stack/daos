@@ -1048,3 +1048,25 @@ vos_obj_tab_register()
 		D_ERROR("dbtree create failed\n");
 	return rc;
 }
+
+int
+dlck_obj_get_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv)
+{
+	struct vos_oi_iter *oiter = iter2oiter(iter);
+	struct vos_obj_df  *obj_df;
+	d_iov_t             iov;
+	int                 rc;
+
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	if (iov.iov_len != vos_obj_df_size(oiter->oit_cont->vc_pool)) {
+		return -DER_INVAL;
+	}
+
+	obj_df = (struct vos_obj_df *)iov.iov_buf;
+
+	return dlck_ilog_get_active(coh, &obj_df->vo_ilog, dv);
+}

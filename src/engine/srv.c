@@ -17,7 +17,6 @@
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
-#include <libgen.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/sys_db.h>
@@ -72,8 +71,6 @@
  * daos_rpc_tag() to query the target tag (context ID) of specific RPC request.
  */
 
-/** Number of dRPC xstreams */
-#define DRPC_XS_NR	(1)
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
 /** Number of offload per socket */
@@ -83,7 +80,7 @@ unsigned int            dss_tgt_per_numa_nr;
 /** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
 /** Number of system XS */
-unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
+unsigned int            dss_sys_xs_nr = DSS_SYS_XS_NR_DEFAULT;
 /**
  * Flag of helper XS as a pool.
  * false - the helper XS is near its main IO service XS. When there is one or
@@ -107,11 +104,6 @@ dss_ctx_nr_get(void)
 {
 	return DSS_CTX_NR_TOTAL;
 }
-
-#define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
-#define DSS_IO_XS_NAME_FMT	"daos_io_%d"
-#define DSS_OFFLOAD_XS_NAME_FMT	"daos_off_%d"
-
 struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
 	int			  xd_init_step;
@@ -1354,38 +1346,7 @@ dss_srv_fini(bool force)
 static int
 dss_sys_db_init()
 {
-	int	 rc;
-	char	*sys_db_path = NULL;
-	char	*nvme_conf_path = NULL;
-
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-		goto db_init;
-
-	if (dss_nvme_conf == NULL) {
-		D_ERROR("nvme conf path not set\n");
-		return -DER_INVAL;
-	}
-
-	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
-	if (nvme_conf_path == NULL)
-		return -DER_NOMEM;
-	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
-	D_FREE(nvme_conf_path);
-	if (sys_db_path == NULL)
-		return -DER_NOMEM;
-
-db_init:
-	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : dss_storage_path);
-	if (rc)
-		goto out;
-
-	rc = smd_init(vos_db_get());
-	if (rc)
-		vos_db_fini();
-out:
-	D_FREE(sys_db_path);
-
-	return rc;
+	return vos_init(dss_nvme_conf, dss_storage_path);
 }
 
 int
