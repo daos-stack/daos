@@ -830,29 +830,29 @@ class DmgCommand(DmgCommandBase):
         #     "response": {
         #         "status": 0,
         #         "pools": [
-        #         {
-        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
-        #             "label": "mkp1",
-        #             "svc_reps": [
-        #             0
-        #             ],
-        #             "total_targets": 8,
-        #             "disabled_targets": 0,
-        #             "usage": [
         #             {
-        #                 "tier_name": "SCM",
-        #                 "size": 3000000000,
-        #                 "free": 2995801112,
-        #                 "imbalance": 0
-        #             },
-        #             {
-        #                 "tier_name": "NVME",
-        #                 "size": 47000000000,
-        #                 "free": 26263322624,
-        #                 "imbalance": 36
+        #                 "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #                 "label": "mkp1",
+        #                 "svc_reps": [
+        #                     0
+        #                 ],
+        #                 "total_targets": 8,
+        #                 "disabled_targets": 0,
+        #                 "usage": [
+        #                     {
+        #                         "tier_name": "SCM",
+        #                         "size": 3000000000,
+        #                         "free": 2995801112,
+        #                         "imbalance": 0
+        #                     },
+        #                     {
+        #                         "tier_name": "NVME",
+        #                         "size": 47000000000,
+        #                         "free": 26263322624,
+        #                         "imbalance": 36
+        #                     }
+        #                 ]
         #             }
-        #             ]
-        #         }
         #         ]
         #     },
         #     "error": null,
@@ -1425,6 +1425,18 @@ class DmgCommand(DmgCommandBase):
             self.system_stop(force=True)
 
         return self._get_json_result(("check", "enable"), pool=pool)
+
+    def check_get_policy(self, classes=None):
+        """Call dmg check get-policy [get-policy-OPTIONS] [Classes].
+
+        Args:
+            classes (str, optional): Inconsistency class names. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary.
+
+        """
+        return self._get_json_result(("check", "get-policy"), classes=classes)
 
     def check_set_policy(self, reset_defaults=False, all_interactive=False, policies=None):
         """Call dmg check set-policy [options] [policies].

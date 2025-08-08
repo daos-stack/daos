@@ -542,7 +542,7 @@ recreate_pooltgts()
 	d_list_t                 pool_list;
 	int			 rc = 0;
 	int			 pool_list_cnt;
-	daos_size_t		 rdb_blob_sz = 0;
+	daos_size_t              rdb_blob_sz;
 
 	D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
 	D_INIT_LIST_HEAD(&pool_list);
@@ -571,6 +571,7 @@ recreate_pooltgts()
 		}
 
 		D_INFO("recreating files for pool "DF_UUID"\n", DP_UUID(pool_info->spi_id));
+		rdb_blob_sz = 0;
 		rc = smd_rdb_get_blob_sz(pool_info->spi_id, &rdb_blob_sz);
 		if (rc && (rc != -DER_NONEXIST)) {
 			D_ERROR(DF_UUID": failed to extract the size of rdb file: "DF_RC"\n",
@@ -1127,7 +1128,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	if (rc) {
 		D_ERROR(DF_UUID": failed to roundup the vos size: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
-		goto out_rec;
+		goto out;
 	}
 	tc_in->tc_scm_size  = tgt_scm_sz * dss_tgt_nr;
 	tc_in->tc_meta_size = tgt_meta_sz * dss_tgt_nr;
@@ -1401,8 +1402,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		ABT_cond_wait(pooltgts->dpt_cv, pooltgts->dpt_mutex);
 	} while (1);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
-	D_DEBUG(DB_MGMT, DF_UUID": ready to destroy targets\n",
-		DP_UUID(td_in->td_pool_uuid));
+	D_INFO(DF_UUID ": ready to destroy targets\n", DP_UUID(td_in->td_pool_uuid));
 
 	if (engine_in_check()) {
 		rc = chk_engine_pool_stop(td_in->td_pool_uuid, true);
