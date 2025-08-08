@@ -144,6 +144,8 @@ int ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
 int ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
 int
      ds_mgmt_check_act(uint64_t seq, uint32_t act);
+int
+     ds_mgmt_check_set_policy(uint32_t policy_nr, Mgmt__CheckInconsistPolicy **policies);
 bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
