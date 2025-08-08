@@ -131,6 +131,9 @@ def check_policies(dmg_command, interact_count):
     Raises:
         CommandFailure: if there is error running the dmg command or the expected policies are not
             INTERACT or DEFAULT.
+
+    Returns:
+            list: List of class name and its policy. e.g., "POOL_NONEXIST_ON_MS:DEFAULT"
     """
     policy_out = dmg_command.check_get_policy()
     policies = policy_out["response"]["policies"]
@@ -148,3 +151,4 @@ def check_policies(dmg_command, interact_count):
             class_name = policies[i].split(":")[0]
             msg = f"Unexpected policy for {class_name}! Expected = DEFAULT, Actual = {policy}"
             raise CommandFailure(msg)
+    return policies
