@@ -304,8 +304,8 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			key: /etc/daos/certs/server.key
 		provider: ofi+verbs;ofi_rxm
 		control_log_mask: DEBUG
-		control_log_file: /tmp/daos_server.log
-		helper_log_file: /tmp/daos_server_helper.log
+		control_log_file: /var/log/daos/daos_server.log
+		helper_log_file: /var/log/daos/daos_server_helper.log
 		engines:
 		-
 			pinned_numa_node: 0
@@ -314,7 +314,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			fabric_iface: ib0
 			fabric_iface_port: 31316
 			log_mask: INFO
-			log_file: /tmp/daos_engine_0.log
+			log_file: /var/log/daos/daos_engine_0.log
 			env_vars:
 				- CRT_TIMEOUT=30
 			storage:
@@ -334,7 +334,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			fabric_iface: ib1
 			fabric_iface_port: 31416
 			log_mask: INFO
-			log_file: /tmp/daos_engine_1.log
+			log_file: /var/log/daos/daos_engine_1.log
 			env_vars:
 				- CRT_TIMEOUT=30
 			storage:
@@ -364,7 +364,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			ca_cert: /etc/daos/certs/daosCA.crt
 			cert: /etc/daos/certs/agent.crt
 			key: /etc/daos/certs/agent.key
-		log_file: /tmp/daos_agent.log
+		log_file: /var/log/daos/daos_agent.log
 
 1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node.
    The following is an example of the `daos_control.yml`.
@@ -422,7 +422,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 2. (Optional) Check daos\_agent status:
 
 		# check status
-		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
+		pdsh -S -w $CLIENT_NODES "cat /var/log/daos/daos_agent.log"
 
 		# Sample output depending on number of client nodes
 		node-2: agent INFO 2023/02/05 22:38:46 DAOS Agent v2.6 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock

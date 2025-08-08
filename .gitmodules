@@ -15,7 +15,9 @@
 	url = https://github.com/openucx/ucx.git
 [submodule "pmdk"]
 	path = deps/pmdk
-	url = https://github.com/pmem/pmdk.git
+	url = https://github.com/daos-stack/pmdk.git
+	branch = stable-2.1.0-daos
+	shallow = true
 [submodule "isal"]
 	path = deps/isal
 	url = https://github.com/intel/isa-l.git

@@ -2233,7 +2233,8 @@ ds_cont_tgt_snapshot_notify_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	out_source = crt_reply_get(source);
 	out_result = crt_reply_get(result);
-	out_result->tso_rc += out_source->tso_rc;
+	if (out_result->tso_rc >= 0 && out_source->tso_rc < 0)
+		out_result->tso_rc = out_source->tso_rc;
 	return 0;
 }
 

@@ -32,6 +32,8 @@ class DaosClient():
         """Trigger the instance cleanup process."""
         if cls._instance is None:
             return
+        # pylint: disable=protected-access
+        cls._instance._close()
         cls._instance = None
 
     def __new__(cls):
