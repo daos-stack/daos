@@ -1166,6 +1166,6 @@ class DaosServerManager(SubprocessManager):
             pool (TestPool): the pool containing the vos file
 
         Returns:
-            str: the full path too the vos file
+            str: the full path to the vos file
         """
         return os.path.join(self.get_config_value("scm_mount"), pool.uuid.lower())

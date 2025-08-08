@@ -77,8 +77,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # 6. Remove the pool directory from the mount point.
         self.log_step("Remove the pool directory from the mount point.")
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        pool_path = f"{scm_mount}/{pool.uuid.lower()}"
+        pool_path = self.server_managers[0].get_vos_path(pool)
         pool_out = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_path, sudo=True)
         if not pool_out[0]:
@@ -191,8 +190,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # 6. Remove the pool directory from the mount point.
         self.log_step("Remove the pool directory from the mount point.")
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        pool_path = f"{scm_mount}/{pool.uuid.lower()}"
+        pool_path = self.server_managers[0].get_vos_path(pool)
         pool_out = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_path, sudo=True)
         if not pool_out[0]:

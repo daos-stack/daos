@@ -251,8 +251,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        vos_0_path = f"{scm_mount}/{pool.uuid.lower()}/vos-0"
+        vos_0_path = f"{self.server_managers[0].get_vos_path(pool)}/vos-0"
         vos_0_result = check_file_exists(hosts=self.hostlist_servers, filename=vos_0_path)
         if not vos_0_result[0]:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
@@ -333,8 +332,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        pool_directory = f"{scm_mount}/{self.pool.uuid.lower()}"
+        pool_directory = self.server_managers[0].get_vos_path(self.pool)
         pool_directory_result = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_directory, directory=True)
         if not pool_directory_result[0]:

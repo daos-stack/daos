@@ -28,14 +28,12 @@ def get_vos_file_path(log, server_manager, pool):
     vos_path = server_manager.get_vos_path(pool)
     command = f"sudo ls {vos_path}"
     result = run_remote(log, hosts, command)
-    if not result.passed:
-        raise CommandFailure(f"Command '{command}' failed on {hosts}")
-
-    for file in result.output[0].stdout:
-        # Assume the VOS file has "vos" in the file name.
-        if "vos" in file:
-            log.info("vos_file: %s", file)
-            return os.path.join(vos_path, file)
+    if result.passed:
+        for file in result.output[0].stdout:
+            # Assume the VOS file has "vos" in the file name.
+            if "vos" in file:
+                log.info("vos_file: %s", file)
+                return os.path.join(vos_path, file)
 
     # No VOS file found
     return ""
