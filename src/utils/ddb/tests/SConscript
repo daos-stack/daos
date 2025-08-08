@@ -42,8 +42,8 @@ def scons():
 
     # Build unit tests
     denv = env.Clone()
-    prereqs.require(denv, 'argobots', 'spdk')
-    libs = ['uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread']
+    prereqs.require(denv, 'argobots', 'spdk', 'pmdk')
+    libs = ['uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj']
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(CPPPATH=[Dir('../').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../../vos/').srcnode()])
