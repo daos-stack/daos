@@ -119,3 +119,32 @@ def query_detect(dmg, fault):
     if not find_report_message(response["reports"], fault):
         raise CommandFailure(f"Checker didn't detect {fault}!")
     return response["reports"]
+
+
+def check_policies(dmg_command, interact_count):
+    """Check the first interact_count policies are INTERACT and the remainder are default.
+
+    Args:
+        dmg_command (DmgCommand): DmgCommand object to call check get-policy.
+        interact_count (int): Number of policies to check whether it's INTERACT.
+
+    Raises:
+        CommandFailure: if there is error running the dmg command or the expected policies are not
+            INTERACT or DEFAULT.
+    """
+    policy_out = dmg_command.check_get_policy()
+    policies = policy_out["response"]["policies"]
+    # Check the first interact_count policies are INTERACT.
+    for i in range(interact_count):
+        policy = policies[i].split(":")[1]
+        if policy != "INTERACT":
+            class_name = policies[i].split(":")[0]
+            msg = f"Unexpected policy for {class_name}! Expected = INTERACT, Actual = {policy}"
+            raise CommandFailure(msg)
+    # Check the rest of the policies are DEFAULT.
+    for i in range(interact_count, len(policies)):
+        policy = policies[i].split(":")[1]
+        if policy != "DEFAULT":
+            class_name = policies[i].split(":")[0]
+            msg = f"Unexpected policy for {class_name}! Expected = DEFAULT, Actual = {policy}"
+            raise CommandFailure(msg)
