@@ -2131,6 +2131,12 @@ dmg_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *po
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	if (policies != NULL) {
+		args = cmd_push_arg(args, &argcount, " %s", policies);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
 	rc = daos_dmg_json_pipe("check set-policy", dmg_config_file, args, argcount, &dmg_out);
 	if (rc != 0)
 		D_ERROR("dmg check set-policy with flags %x, policies %s failed: %d\n", flags,
