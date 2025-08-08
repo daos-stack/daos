@@ -63,7 +63,7 @@ hdf5_vol:
 
 interop:
   old_version: "2.6.3-4.el8"
-  new_version: "2.6.4-1.el8"
+  new_version: "2.6.4-2.el8"
 
 client:
   env_vars:
