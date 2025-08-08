@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math"
 	"os/user"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -722,6 +723,9 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		pbMap[prop.GetNumber()] = prop
 	}
 
+	slices.SortFunc(req.Properties, func(a, b *daos.PoolProperty) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	resp := make([]*daos.PoolProperty, 0, len(req.Properties))
 	for _, prop := range req.Properties {
 		pbProp, found := pbMap[prop.Number]
