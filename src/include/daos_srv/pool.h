@@ -329,6 +329,9 @@ int dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
 int dsc_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline);
+int
+     dsc_pool_svc_eval_self_heal(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+				 uint64_t sys_self_heal);
 int ds_pool_failed_add(uuid_t uuid, int rc);
 void ds_pool_failed_remove(uuid_t uuid);
 int ds_pool_failed_lookup(uuid_t uuid);

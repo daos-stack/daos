@@ -10,6 +10,8 @@
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
+#include <daos_srv/daos_mgmt_srv.h>
+
 #include <signal.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
@@ -1796,6 +1798,16 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
 
+#ifndef DRPC_TEST
+	rc = dsc_pool_svc_eval_self_heal(uuid, svc_ranks, mgmt_ps_call_deadline(),
+					 DS_MGMT_SELF_HEAL_ALL);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": Failed to evaluate self-heal for pool: " DF_RC "\n",
+			DP_UUID(uuid), DP_RC(rc));
+		D_GOTO(error, rc);
+	}
+#endif
+
 	pool_info.pi_bits = req->query_mask;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &dead_ranks,
 				&pool_info, &resp.pool_layout_ver, &resp.upgrade_layout_ver,
@@ -3022,4 +3034,47 @@ ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	mgmt__check_act_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+ds_mgmt_drpc_get_group_status(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__GetGroupStatusReq *req   = NULL;
+	Mgmt__GetGroupStatusResp resp  = MGMT__GET_GROUP_STATUS_RESP__INIT;
+	uint8_t                 *body;
+	size_t                   len;
+	int                      rc;
+
+	req = mgmt__get_group_status_req__unpack(&alloc.alloc, drpc_req->body.len,
+						 drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (get group status)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to get group status: group_version=%u\n", req->group_version);
+
+	rc = ds_mgmt_get_group_status(req->group_version, &resp.dead_ranks, &resp.n_dead_ranks);
+	if (rc != 0) {
+		DL_CDEBUG(rc == -DER_GRPVER, DLOG_DBG, DLOG_ERR, rc, "Failed to get group status");
+		resp.dead_ranks   = NULL;
+		resp.n_dead_ranks = 0;
+	}
+	resp.status = rc;
+
+	len = mgmt__get_group_status_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (get group status)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__get_group_status_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__get_group_status_req__free_unpacked(req, &alloc.alloc);
+	D_FREE(resp.dead_ranks);
 }
