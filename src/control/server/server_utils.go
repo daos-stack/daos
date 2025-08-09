@@ -607,7 +607,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(createPublishInstanceExitFunc(srv.pubSub.Publish, srv.hostname))
 
-	engine.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
+	engine.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ uint64, _ error, _ int) error {
 		if engine.storage.BdevRoleMetaConfigured() {
 			return engine.storage.UnmountTmpfs()
 		}
