@@ -61,7 +61,7 @@ shm_chown(key_t key, uid_t new_owner)
 }
 
 static int
-init_root(const char *name, pid_t pid, int flags)
+init_root(const char *name, pid_t pid, int flags, bool register_metrics)
 {
 	uid_t agent_uid;
 	key_t key;
@@ -74,18 +74,13 @@ init_root(const char *name, pid_t pid, int flags)
 		return rc;
 	}
 
-	/* If the metrics will not be retained, don't register them with the agent. */
-	if (!daos_client_metric_retain)
+	if (!register_metrics)
 		goto skip_agent;
 
-	/* Request that the agent adds our segment into the tree. */
+	/* Request that the agent adds our root segment into the tree. */
 	rc = dc_mgmt_tm_register(NULL, dc_jobid, pid, &agent_uid);
 	if (rc != 0) {
-		if (rc == -DER_UNINIT && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR)) {
-			D_INFO("telemetry dump dir set -- proceeding without agent management.\n");
-			goto skip_agent;
-		}
-		DL_ERROR(rc, "client telemetry failed to register with agent.");
+		DL_ERROR(rc, "client telemetry failed to register with agent");
 		return rc;
 	}
 
@@ -108,28 +103,41 @@ dc_tm_init(crt_init_options_t *crt_info)
 	pid_t               pid = getpid();
 	int                 flags = (D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK);
 	char                root_name[D_TM_MAX_NAME_LEN];
+	bool                register_metrics = false;
 	int                 rc;
 
-	d_getenv_bool(DAOS_CLIENT_METRICS_ENABLE, &daos_client_metric);
-	if (!daos_client_metric && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR))
+	/* if dump dir is set, don't use shared memory or register with the agent */
+	if (d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR)) {
+		/* setting dump dir implies enable */
 		daos_client_metric = true;
+		/* setting dump dir overrides retain/register */
+		daos_client_metric_retain = false;
+		register_metrics          = false;
+	} else {
+		d_getenv_bool(DAOS_CLIENT_METRICS_REGISTER, &register_metrics);
+		if (register_metrics) {
+			/* if register is set, force enable/retain to true */
+			if (d_setenv(DAOS_CLIENT_METRICS_ENABLE, "1", 1) != 0) {
+				D_ERROR("failed to set %s\n", DAOS_CLIENT_METRICS_ENABLE);
+				return d_errno2der(errno);
+			}
+			if (d_setenv(DAOS_CLIENT_METRICS_RETAIN, "1", 1) != 0) {
+				D_ERROR("failed to set %s\n", DAOS_CLIENT_METRICS_RETAIN);
+				return d_errno2der(errno);
+			}
+		}
+
+		d_getenv_bool(DAOS_CLIENT_METRICS_ENABLE, &daos_client_metric);
+		d_getenv_bool(DAOS_CLIENT_METRICS_RETAIN, &daos_client_metric_retain);
+	}
 
 	if (!daos_client_metric)
 		return 0;
 
-	d_getenv_bool(DAOS_CLIENT_METRICS_RETAIN, &daos_client_metric_retain);
-	if (daos_client_metric_retain) {
-		if (d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR)) {
-			D_ERROR("cannot set both %s and %s\n", DAOS_CLIENT_METRICS_DUMP_DIR,
-				DAOS_CLIENT_METRICS_RETAIN);
-			daos_client_metric = false;
-			return -DER_INVAL;
-		}
-		flags |= D_TM_RETAIN_SHMEM;
-	} else {
-		if (d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR))
-			flags |= D_TM_NO_SHMEM;
-	}
+	if (!register_metrics && !daos_client_metric_retain)
+		flags |= D_TM_NO_SHMEM;
+	else if (daos_client_metric_retain)
+		flags |= D_TM_RETAIN_SHMEM_IF_NON_EMPTY;
 
 	D_INFO("Setting up client telemetry for %s/%d\n", dc_jobid, pid);
 
@@ -141,7 +149,7 @@ dc_tm_init(crt_init_options_t *crt_info)
 		D_GOTO(out, rc);
 
 	snprintf(root_name, sizeof(root_name), "%d", pid);
-	rc = init_root(root_name, pid, flags);
+	rc = init_root(root_name, pid, flags, register_metrics);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to initialize client telemetry");
 		D_GOTO(out, rc);
@@ -158,6 +166,8 @@ dc_tm_init(crt_init_options_t *crt_info)
 out:
 	if (rc != 0) {
 		daos_client_metric = false;
+		daos_client_metric_retain = false;
+		crt_info->cio_use_sensors = 0;
 		d_tm_fini();
 	}
 
