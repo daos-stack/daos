@@ -1,10 +1,12 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 import glob
+import json
 import os
 import re
 import sys
@@ -17,6 +19,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
 from util.run_utils import find_command, run_local, run_remote, stop_processes
+from util.storage_utils import find_pci_address
 from util.systemctl_utils import stop_service
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
@@ -152,6 +155,62 @@ def cleanup_processes(logger, test, result):
             result.warn_test(logger, "Process", message)
 
     return not any_found
+
+
+def check_server_storage(logger, test, stage):
+    """Verify that the expected server storage devices exist.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        test (TestInfo): the test information
+        stage (str): current launch test execution stage
+
+    Returns:
+        bool: True if all expected devices found on all server hosts; False otherwise
+    """
+    status = True
+    commands = {
+        "scm_list":
+            r"ndctl list -c -v | grep pmem | sed -e 's/.*:\"\(.*\)\"/\/dev\/\1/' | grep '{}'",
+        "bdev_list":
+            r"lspci -D | grep -E '{}'"
+    }
+    detected = []
+    logger.debug("-" * 80)
+    logger.debug(f"Verifying server storage during the {stage.lower()} stage for \'{test}\'")
+    for key, command in commands.items():
+        if key not in test.yaml_info or test.yaml_info[key] is None:
+            # No need to check storage w/o a scm/bdev entry
+            logger.debug(f" - No {key} storage defined for this test")
+            continue
+        if "daos" in test.yaml_info[key]:
+            # No need to check ram class storage (using /mnt/daos* scm)
+            logger.debug(f" - {key} storage using ram class")
+            continue
+        result = run_remote(
+            logger, test.host_info.servers.hosts, command.format('|'.join(test.yaml_info[key])))
+        if not result.passed:
+            logger.error(f" - Failure detected verifying {key} storage during for \'{test}\'")
+            status = False
+            continue
+        item_set = set(test.yaml_info[key])
+        logger.debug(f" - Expecting the following {key} storage: {item_set}")
+        for data in result.output:
+            if key == "bdev_list":
+                result_set = set(find_pci_address("\n".join(data.stdout)))
+            else:
+                result_set = set(data.stdout)
+            match = bool(item_set & result_set == item_set)
+            if not match:
+                status = False
+            detected.append([str(match), key, str(data.hosts), str(result_set)])
+
+        msg_format = "%-8s  %-9s  %-20s  %s"
+        logger.debug(msg_format, "Verified", "Type", "Servers", "Detected Storage")
+        logger.debug(msg_format, "-" * 8, "-" * 9, "-" * 20, "-" * 60)
+        for entry in detected:
+            logger.debug(msg_format, *entry)
+    return status
 
 
 def archive_files(logger, summary, hosts, source, pattern, destination, depth, threshold, timeout,
@@ -565,6 +624,46 @@ def create_steps_log(logger, job_results_dir, test_result):
     return 0
 
 
+def record_variant_details(logger, job_results_dir, test_result, details):
+    """Record variant test results to the details.json file.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        job_results_dir (str): path to the avocado job results
+        test_result (TestResult): the test result used to update the status of the test
+        details (dict): dictionary to update with test results
+
+    Returns:
+        int: status code: 16384 = problem parsing the results.json; 0 = success
+    """
+    logger.debug("=" * 80)
+    logger.info("Creating steps.log file")
+    if "test_variants" not in details:
+        details["test_variants"] = []
+
+    test_logs_lnk = os.path.join(job_results_dir, "latest")
+    test_logs_dir = os.path.realpath(test_logs_lnk)
+    results_json = os.path.join(test_logs_dir, 'results.json')
+    try:
+        with open(results_json, "r", encoding="utf-8") as results:
+            data = json.loads(results.read())
+            for index, test in enumerate(data["tests"]):
+                if len(details["test_variants"]) == index:
+                    # Add an entry for this test variant the first time its run in the loop
+                    details["test_variants"].append(
+                        {"variant": test["id"].split(";")[0],
+                         "status/loop": [],
+                         "time/loop": []})
+                # Append status and run times for each loop
+                details["test_variants"][index]["status/loop"].append(test["status"])
+                details["test_variants"][index]["time/loop"].append(f"{round(test['time'], 2)}s")
+    except Exception:       # pylint: disable=broad-except
+        message = f"Error parsing {results_json}"
+        test_result.fail_test(logger, "Process", message, sys.exc_info())
+        return 16384
+    return 0
+
+
 def rename_avocado_test_dir(logger, test, job_results_dir, test_result, jenkins_xml, total_repeats):
     """Append the test name to its avocado job-results directory name.
 
@@ -827,7 +926,7 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
 
 
 def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, archive, rename,
-                        jenkins_xml, core_files, threshold, total_repeats):
+                        jenkins_xml, core_files, threshold, total_repeats, details):
     # pylint: disable=too-many-arguments
     """Process the test results.
 
@@ -851,6 +950,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
         core_files (dict): location and pattern defining where core files may be written
         threshold (str): optional upper size limit for test log files
         total_repeats (int): total number of times the test will be repeated
+        details (dict): dictionary to update with test results
 
     Returns:
         int: status code: 0 = success, >0 = failure
@@ -868,6 +968,10 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             return_code |= 512
         if not cleanup_processes(logger, test, test_result):
             return_code |= 4096
+
+    # Check storage devices for servers
+    if not check_server_storage(logger, test, "Process"):
+        return_code |= 512
 
     # Mark the test execution as failed if a results.xml file is not found
     test_logs_dir = os.path.realpath(os.path.join(job_results_dir, "latest"))
@@ -951,6 +1055,9 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
 
     # Generate a steps.log file
     return_code |= create_steps_log(logger, job_results_dir, test_result)
+
+    # Add test variant results to the details
+    return_code |= record_variant_details(logger, job_results_dir, test_result, details)
 
     # Optionally rename the test results directory for this test
     if rename:
