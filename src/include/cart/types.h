@@ -99,6 +99,9 @@ typedef struct crt_init_options {
 
 	/** force busy wait (testing only, not in production) */
 	bool             cio_progress_busy;
+
+	/** use memory device */
+	bool             cio_mem_device;
 } crt_init_options_t;
 
 typedef int		crt_status_t;
