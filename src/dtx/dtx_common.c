@@ -7,7 +7,7 @@
 /**
  * dtx: DTX common logic
  */
-#define D_LOGFAC	DD_FAC(dtx)
+#define D_LOGFAC DD_FAC(dtx)
 
 #include <abt.h>
 #include <uuid/uuid.h>
@@ -404,7 +404,7 @@ dtx_aggregate(void *arg)
 		struct dtx_stat		stat = { 0 };
 		int			rc;
 
-		rc = vos_dtx_aggregate(cont->sc_hdl);
+		rc = vos_dtx_aggregate(cont->sc_hdl, NULL);
 		if (rc != 0)
 			break;
 
