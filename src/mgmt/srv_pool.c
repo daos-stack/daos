@@ -644,6 +644,43 @@ out:
 }
 
 /**
+ * Calls into the pool svc to request stopping a rebuild.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		force			boolean. force a rebuild in op:Fail_reclaim to stop.
+ * \param[in]		svc_ranks		Ranks of pool svc replicas.
+ *
+ * \return			0				Success
+ *					Negative value	Error
+ */
+int
+ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Sending request to stop rebuild for pool " DF_UUID "\n",
+		DP_UUID(pool_uuid));
+
+	return dsc_pool_svc_rebuild_stop(pool_uuid, force, svc_ranks, mgmt_ps_call_deadline());
+}
+
+/**
+ * Calls into the pool svc to request start/resume rebuilding.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		svc_ranks		Ranks of pool svc replicas.
+ *
+ * \return			0				Success
+ *					Negative value	Error
+ */
+int
+ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Sending request to start/resume rebuilding for pool " DF_UUID "\n",
+		DP_UUID(pool_uuid));
+
+	return dsc_pool_svc_rebuild_start(pool_uuid, svc_ranks, mgmt_ps_call_deadline());
+}
+
+/**
  * Destroy the specified pool shard on the specified storage rank
  */
 int
