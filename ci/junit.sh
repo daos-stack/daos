@@ -24,7 +24,7 @@ report_junit() {
     clush -o '-i ci_key' -l root -w "$nodes" --rcopy "$results"
 
     local results_files
-    results_files=$(find . -maxdepth 1 -name "$results.*")
+    readarray -d '' results_files < <(find .  -maxdepth 1 -name "$results.*" -print0)
 
     if [ ${#results_files[@]} -eq 0 ]; then
         echo "No results found to report as JUnit results"
