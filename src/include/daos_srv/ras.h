@@ -65,7 +65,8 @@
 	X(RAS_SYSTEM_FABRIC_PROV_CHANGED, "system_fabric_provider_changed")                        \
 	X(RAS_ENGINE_JOIN_FAILED, "engine_join_failed")                                            \
 	X(RAS_DEVICE_LINK_SPEED_CHANGED, "device_link_speed_changed")                              \
-	X(RAS_DEVICE_LINK_WIDTH_CHANGED, "device_link_width_changed")
+	X(RAS_DEVICE_LINK_WIDTH_CHANGED, "device_link_width_changed")                              \
+	X(RAS_ENGINE_EVICT_SUICIDE, "engine_evict_suicide")
 
 /** Define RAS event enum */
 typedef enum {
