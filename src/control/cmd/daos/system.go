@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2023-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +8,8 @@
 package main
 
 import (
+	"sort"
+
 	"github.com/pkg/errors"
 )
 
@@ -32,10 +35,16 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	cmd.Infof("\tname: %s", sysInfo.Name)
 	cmd.Infof("\tfabric provider: %s", sysInfo.Provider)
 	cmd.Info("\taccess point ranks:")
+	sort.Slice(sysInfo.AccessPointRankURIs, func(i, j int) bool {
+		return sysInfo.AccessPointRankURIs[i].Rank < sysInfo.AccessPointRankURIs[j].Rank
+	})
 	for _, apRankURI := range sysInfo.AccessPointRankURIs {
 		cmd.Infof("\t\trank[%d]: %s", apRankURI.Rank, apRankURI.URI)
 	}
 	cmd.Info("\trank URIs:")
+	sort.Slice(sysInfo.RankURIs, func(i, j int) bool {
+		return sysInfo.RankURIs[i].Rank < sysInfo.RankURIs[j].Rank
+	})
 	for _, rankURI := range sysInfo.RankURIs {
 		cmd.Infof("\t\trank[%d]: %s", rankURI.Rank, rankURI.URI)
 	}
