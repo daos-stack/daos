@@ -637,6 +637,51 @@ void   mgmt__check_set_policy_req__free_unpacked
   assert(message->base.descriptor == &mgmt__check_set_policy_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__check_set_policy_resp__init
+                     (Mgmt__CheckSetPolicyResp         *message)
+{
+  static const Mgmt__CheckSetPolicyResp init_value = MGMT__CHECK_SET_POLICY_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__check_set_policy_resp__get_packed_size
+                     (const Mgmt__CheckSetPolicyResp *message)
+{
+  assert(message->base.descriptor == &mgmt__check_set_policy_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__check_set_policy_resp__pack
+                     (const Mgmt__CheckSetPolicyResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__check_set_policy_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__check_set_policy_resp__pack_to_buffer
+                     (const Mgmt__CheckSetPolicyResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__check_set_policy_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__CheckSetPolicyResp *
+       mgmt__check_set_policy_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__CheckSetPolicyResp *)
+     protobuf_c_message_unpack (&mgmt__check_set_policy_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__check_set_policy_resp__free_unpacked
+                     (Mgmt__CheckSetPolicyResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__check_set_policy_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__check_prop_req__init
                      (Mgmt__CheckPropReq         *message)
 {
@@ -1827,6 +1872,44 @@ const ProtobufCMessageDescriptor mgmt__check_set_policy_req__descriptor =
   mgmt__check_set_policy_req__field_indices_by_name,
   1,  mgmt__check_set_policy_req__number_ranges,
   (ProtobufCMessageInit) mgmt__check_set_policy_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__check_set_policy_resp__field_descriptors[1] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__CheckSetPolicyResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__check_set_policy_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__check_set_policy_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__check_set_policy_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.CheckSetPolicyResp",
+  "CheckSetPolicyResp",
+  "Mgmt__CheckSetPolicyResp",
+  "mgmt",
+  sizeof(Mgmt__CheckSetPolicyResp),
+  1,
+  mgmt__check_set_policy_resp__field_descriptors,
+  mgmt__check_set_policy_resp__field_indices_by_name,
+  1,  mgmt__check_set_policy_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__check_set_policy_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__check_prop_req__field_descriptors[1] =
