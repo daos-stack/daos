@@ -17,6 +17,7 @@ class DMGCheckRepairTest(RecoveryTestBase):
     def test_check_repair_corner_case(self):
         """Test dmg check repair corner cases.
 
+        Test steps:
         1. Create a pool.
         2. Inject orphan pool fault.
         3. Start the checker with interactive mode.
