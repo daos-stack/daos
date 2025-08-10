@@ -64,8 +64,8 @@ class DMGCheckRepairTest(RecoveryTestBase):
         # We want to select "Re-add the pool", so action is 0.
         act_msgs = query_reports[0]["act_msgs"]
         action = None
-        for i in range(len(act_msgs)):
-            if act_msgs[i] == "Re-add the pool":
+        for i, act_msg in enumerate(act_msgs):
+            if act_msg == "Re-add the pool":
                 action = str(i)
                 break
         invalid_seq_num = "9"
