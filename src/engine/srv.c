@@ -23,6 +23,7 @@
 #include <daos/sys_db.h>
 #include <daos_errno.h>
 #include <daos_mgmt.h>
+#include <daos_version.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
 #include <daos_srv/vos.h>
@@ -415,7 +416,7 @@ dss_srv_handler(void *arg)
 	D_ASSERT(dmi != NULL);
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
-	dmi->dmi_ctx_id	= -1;
+	dmi->dmi_ctx_id = -1;
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_open_list);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_pool_list);
 
@@ -553,6 +554,9 @@ dss_srv_handler(void *arg)
 		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
+	/* SWIM doesn't require RPC protocol */
+	if (dx->dx_xs_id != 1)
+		dmi->dmi_version = dss_get_join_version();
 	if (dx->dx_comm)
 		dx->dx_progress_started = true;
 

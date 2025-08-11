@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -223,8 +224,14 @@ rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 	crt_opcode_t		opc_full;
 	crt_endpoint_t		ep;
 	struct dss_module_info *info = dss_get_module_info();
+	int                     rc;
+	uint8_t                 rdb_ver;
 
-	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, DAOS_RDB_VERSION);
+	rc = rdb_rpc_protocol(&rdb_ver);
+	if (rc)
+		return rc;
+
+	opc_full   = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, rdb_ver);
 	ep.ep_grp = NULL;
 	ep.ep_rank = raft_node_get_id(node);
 	ep.ep_tag = daos_rpc_tag(DAOS_REQ_RDB, 0);
