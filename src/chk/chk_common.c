@@ -578,6 +578,11 @@ chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen)
 	struct chk_bookmark	cbk = { 0 };
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			rc;
+	uint8_t                 chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	uuid_unparse_lower(uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
@@ -587,7 +592,7 @@ chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen)
 	if (cbk.cb_magic != CHK_BK_MAGIC_POOL) {
 		memset(&cbk, 0, sizeof(cbk));
 		cbk.cb_magic = CHK_BK_MAGIC_POOL;
-		cbk.cb_version = DAOS_CHK_VERSION;
+		cbk.cb_version = chk_ver;
 		cbk.cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 	}
 
@@ -610,6 +615,11 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 	d_iov_t                 riov;
 	int			i;
 	int			rc = 0;
+	uint8_t                 chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	for (i = 0; i < pool_nr; i++) {
 		if (!ins->ci_is_leader) {
@@ -629,7 +639,7 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 		if (rc == -DER_NONEXIST || flags & CHK__CHECK_FLAG__CF_RESET) {
 			memset(&cbk, 0, sizeof(cbk));
 			cbk.cb_magic = CHK_BK_MAGIC_POOL;
-			cbk.cb_version = DAOS_CHK_VERSION;
+			cbk.cb_version     = chk_ver;
 			cbk.cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 			cbk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
 		}
@@ -642,7 +652,7 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 		    cbk.cb_phase != CHK__CHECK_SCAN_PHASE__CSP_DONE) {
 			memset(&cbk, 0, sizeof(cbk));
 			cbk.cb_magic = CHK_BK_MAGIC_POOL;
-			cbk.cb_version = DAOS_CHK_VERSION;
+			cbk.cb_version     = chk_ver;
 			cbk.cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 			cbk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
 		}
@@ -693,9 +703,14 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	uuid_t				 uuid;
 	struct chk_bookmark		 cbk;
 	int				 rc = 0;
+	uint8_t                          chk_ver;
 
 	if (!daos_is_valid_uuid_string(uuid_str))
 		D_GOTO(out, rc = 0);
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc != 0)
@@ -720,7 +735,7 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	if (ins->ci_start_flags & CSF_RESET_NONCOMP) {
 		memset(&cbk, 0, sizeof(cbk));
 		cbk.cb_magic = CHK_BK_MAGIC_POOL;
-		cbk.cb_version = DAOS_CHK_VERSION;
+		cbk.cb_version     = chk_ver;
 		cbk.cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 		cbk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
 	}
