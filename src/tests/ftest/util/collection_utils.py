@@ -637,7 +637,7 @@ def record_variant_details(logger, job_results_dir, test_result, details):
         int: status code: 16384 = problem parsing the results.json; 0 = success
     """
     logger.debug("=" * 80)
-    logger.info("Creating steps.log file")
+    logger.info("Recording variant details/results")
     if "test_variants" not in details:
         details["test_variants"] = []
 
