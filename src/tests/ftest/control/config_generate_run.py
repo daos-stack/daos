@@ -64,6 +64,11 @@ class ConfigGenerateRun(TestWithServers):
         except yaml.YAMLError as error:
             self.fail(f"Error loading dmg generated config! {error}")
 
+        # Iterate & update the log file for each engine.
+        engines = generated_yaml["engines"]
+        for engine in engines:
+            engine["log_file"] = os.path.join(self.test_env.log_dir, engine["id"] + ".log")
+
         # Stop and restart daos_server. self.start_server_managers() has the
         # server start-up check built into it, so if there's something wrong,
         # it'll throw an error.
