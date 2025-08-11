@@ -11,7 +11,7 @@ from apricot import TestWithServers
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from general_utils import report_errors
-from recovery_utils import get_vos_file_path, wait_for_check_complete
+from recovery_utils import wait_for_check_complete
 
 
 class ContainerListConsolidationTest(TestWithServers):
@@ -67,10 +67,10 @@ class ContainerListConsolidationTest(TestWithServers):
         dmg_command.system_stop()
 
         self.log_step("Use ddb to verify that the container is left in shards (PMEM only).")
-        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if vos_path:
+        vos_paths = self.server_managers[0].get_vos_files(pool)
+        if vos_paths:
             # We're using a PMEM cluster.
-            ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_path)
+            ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
             cmd_result = ddb_command.list_component()
             uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
             match = re.search(uuid_regex, cmd_result.joined_stdout)
@@ -124,7 +124,7 @@ class ContainerListConsolidationTest(TestWithServers):
         self.log_step("Disable the checker.")
         dmg_command.check_disable(start=False)
 
-        if vos_path:
+        if vos_paths:
             # ddb requires the vos file. PMEM cluster only.
             msg = ("Run the ddb command and verify that the container is removed from shard "
                    "(PMEM only).")

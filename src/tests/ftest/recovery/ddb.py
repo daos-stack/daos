@@ -15,7 +15,6 @@ from file_utils import distribute_files
 from general_utils import (DaosTestError, create_string_buffer, get_random_string, report_errors,
                            run_command)
 from pydaos.raw import DaosObjClass, IORequest
-from recovery_utils import get_vos_file_path
 from run_utils import get_clush_command
 
 
@@ -148,10 +147,10 @@ class DdbTest(TestWithServers):
         container = self.get_container(pool)
 
         # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
-        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if not vos_path:
+        vos_paths = self.server_managers[0].get_vos_files(pool)
+        if not vos_paths:
             self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
-        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_path)
+        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         errors = []
 
@@ -338,10 +337,10 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 3. Find the vos file name.
-        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if not vos_path:
+        vos_paths = self.server_managers[0].get_vos_files(pool)
+        if not vos_paths:
             self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
-        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_path)
+        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         # 4. Call ddb rm to remove the akey.
         cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]/[0]")
@@ -480,10 +479,10 @@ class DdbTest(TestWithServers):
 
         # 4. Find the vos file name.
         host = self.server_managers[0].hosts[0:1]
-        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if not vos_path:
+        vos_paths = self.server_managers[0].get_vos_files(pool)
+        if not vos_paths:
             self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
-        ddb_command = DdbCommand(host, self.bin, vos_path)
+        ddb_command = DdbCommand(host, self.bin, vos_paths[0])
 
         # 5. Load new data into [0]/[0]/[0]/[0]
         # Create a file in test node.
@@ -561,10 +560,10 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 4. Find the vos file name.
-        vos_path = get_vos_file_path(self.log, self.server_managers[0], pool)
-        if not vos_path:
+        vos_paths = self.server_managers[0].get_vos_files(pool)
+        if not vos_paths:
             self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
-        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_path)
+        ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         # 5. Dump the two akeys to files.
         akey1_file_path = os.path.join(self.test_dir, "akey1.txt")

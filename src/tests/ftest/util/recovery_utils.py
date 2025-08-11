@@ -4,39 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
 import time
 
 from exception_utils import CommandFailure
-from run_utils import run_remote
-
-
-def get_vos_file_path(log, server_manager, pool):
-    """Get the VOS file path.
-
-    If there are multiple VOS files, returns the first file obtained by "ls".
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        server_manager (DaosServerManager): the servers running the pool
-        pool (TestPool): the pool in which to find the vos file
-
-    Returns:
-        str: VOS file path such as /mnt/daos0/<pool_uuid>/vos-0 if found, else "".
-    """
-    hosts = server_manager.hosts[0:1]
-    vos_path = server_manager.get_vos_path(pool)
-    command = f"sudo ls {vos_path}"
-    result = run_remote(log, hosts, command)
-    if result.passed:
-        for file in result.output[0].stdout:
-            # Assume the VOS file has "vos" in the file name.
-            if "vos" in file:
-                log.info("vos_file: %s", file)
-                return os.path.join(vos_path, file)
-
-    # No VOS file found
-    return ""
 
 
 def wait_for_check_query(dmg, status=None):
