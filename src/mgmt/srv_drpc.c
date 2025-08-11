@@ -170,6 +170,13 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0)
 		D_ERROR("Failed to set self rank %u: "DF_RC"\n", req->rank,
 			DP_RC(rc));
+	if (rc == 0) {
+		/* FIXME: get and set from req->daos_version */
+		daos_version_t version;
+
+		daos_version_pack(&version);
+		dss_set_join_version(version);
+	}
 
 	resp.status = rc;
 	pack_daos_response(&resp, drpc_resp);
@@ -978,6 +985,10 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
 				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, false);
+
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
+		  DF_UUID ": reintegrate: rank=%u n_target_idx=%zu target_idx[0]=%u", req->id,
+		  req->rank, req->n_target_idx, req->n_target_idx > 0 ? req->target_idx[0] : -1);
 
 	d_rank_list_free(svc_ranks);
 

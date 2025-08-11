@@ -130,8 +130,10 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.QuerySubCommand()
             elif self.sub_command.value == "repair":
                 self.sub_command_class = self.RepairSubCommand()
+            elif self.sub_command.value == "get-policy":
+                self.sub_command_class = self.GetPolicySubCommand()
             elif self.sub_command.value == "set-policy":
-                self.sub_command_class = self.SetpolicySubCommand()
+                self.sub_command_class = self.SetPolicySubCommand()
             elif self.sub_command.value == "start":
                 self.sub_command_class = self.StartSubCommand()
             elif self.sub_command.value == "stop":
@@ -181,7 +183,15 @@ class DmgCommandBase(YamlCommand):
                 self.action = BasicParameter(None, position=2)
                 self.for_all = FormattedParameter("--for-all", False)
 
-        class SetpolicySubCommand(CommandWithParameters):
+        class GetPolicySubCommand(CommandWithParameters):
+            """Defines an object for the dmg check get-policy command."""
+
+            def __init__(self):
+                """Create a dmg check get-policy object."""
+                super().__init__("/run/dmg/check/start/*", "get-policy")
+                self.classes = BasicParameter(None, position=1)
+
+        class SetPolicySubCommand(CommandWithParameters):
             """Defines an object for the dmg check set-policy command."""
 
             def __init__(self):
@@ -189,7 +199,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/check/start/*", "set-policy")
                 self.reset_defaults = FormattedParameter("--reset-defaults", False)
                 self.all_interactive = FormattedParameter("--all-interactive", False)
-                self.policies = FormattedParameter("--policies={}", None)
+                self.policies = BasicParameter(None, position=1)
 
         class StartSubCommand(CommandWithParameters):
             """Defines an object for the dmg check start command."""

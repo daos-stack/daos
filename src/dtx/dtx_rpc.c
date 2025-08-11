@@ -251,11 +251,16 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 	crt_opcode_t		 opc;
 	struct dtx_in		*din = NULL;
 	int			 rc;
+	uint8_t                  rpc_ver;
+
+	rc = dtx_rpc_protocol(&rpc_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = drr->drr_rank;
 	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, drr->drr_tag);
-	opc = DAOS_RPC_OPCODE(dra->dra_opc, DAOS_DTX_MODULE, DAOS_DTX_VERSION);
+	opc            = DAOS_RPC_OPCODE(dra->dra_opc, DAOS_DTX_MODULE, rpc_ver);
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc == 0) {
@@ -295,6 +300,7 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		  "DTX req for opc %x to %d/%d (req %p future %p) sent epoch "DF_X64,
 		  dra->dra_opc, drr->drr_rank, drr->drr_tag, req, dra->dra_future, epoch);
 
+out:
 	if (rc != 0) {
 		drr->drr_local_fail = 1;
 		if (drr->drr_comp == 0) {
@@ -1363,59 +1369,16 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		return -DER_IO;
 
-	rc = dtx_refresh_internal(cont, &dth->dth_share_tbd_count,
-				  &dth->dth_share_tbd_list,
-				  &dth->dth_share_cmt_list,
-				  &dth->dth_share_abt_list,
+	rc = dtx_refresh_internal(cont, &dth->dth_share_tbd_count, &dth->dth_share_tbd_list,
+				  &dth->dth_share_cmt_list, &dth->dth_share_abt_list,
 				  &dth->dth_share_act_list, true);
-
-	/* If we can resolve the DTX status, then return -DER_AGAIN
-	 * to the caller that will retry related operation locally.
-	 */
 	if (rc == 0) {
 		D_ASSERT(dth->dth_share_tbd_count == 0);
 
-		if (dth->dth_need_validation) {
-			rc = vos_dtx_validation(dth);
-			switch (rc) {
-			case DTX_ST_INITED:
-				if (!dth->dth_aborted)
-					break;
-				/* Fall through */
-			case DTX_ST_PREPARED:
-			case DTX_ST_PREPARING:
-				/* The DTX has been ever aborted and related resent RPC
-				 * is in processing. Return -DER_AGAIN to make this ULT
-				 * to retry sometime later without dtx_abort().
-				 */
-				rc = -DER_AGAIN;
-				break;
-			case DTX_ST_ABORTED:
-				D_ASSERT(dth->dth_ent == NULL);
-				/* Aborted, return -DER_INPROGRESS for client retry.
-				 *
-				 * Fall through.
-				 */
-			case DTX_ST_ABORTING:
-				rc = -DER_INPROGRESS;
-				break;
-			case DTX_ST_COMMITTED:
-			case DTX_ST_COMMITTING:
-			case DTX_ST_COMMITTABLE:
-				/* Aborted then prepared/committed by race.
-				 * Return -DER_ALREADY to avoid repeated modification.
-				 */
-				dth->dth_already = 1;
-				rc = -DER_ALREADY;
-				break;
-			default:
-				D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n",
-					  DP_DTI(&dth->dth_xid), rc);
-			}
-		} else {
+		rc = vos_dtx_validation(dth);
+		if (rc == 0) {
 			vos_dtx_cleanup(dth, false);
-			dtx_handle_reinit(dth);
-			rc = -DER_AGAIN;
+			rc = dtx_handle_reinit(dth);
 		}
 	}
 
@@ -1523,11 +1486,15 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 	crt_rpc_t		*req = NULL;
 	struct dtx_coll_in	*dci;
 	int			 rc;
+	uint8_t                  rpc_ver;
+
+	rc = dtx_rpc_protocol(&rpc_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, dcra->dcra_ranks,
-				  DAOS_RPC_OPCODE(dcra->dcra_opc, DAOS_DTX_MODULE,
-						  DAOS_DTX_VERSION),
-				  NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,
+				  DAOS_RPC_OPCODE(dcra->dcra_opc, DAOS_DTX_MODULE, rpc_ver), NULL,
+				  NULL, CRT_RPC_FLAG_FILTER_INVERT,
 				  crt_tree_topo(CRT_TREE_KNOMIAL, DTX_COLL_TREE_WIDTH), &req);
 	if (rc != 0) {
 		D_ERROR("crt_corpc_req_create failed for coll DTX ("DF_DTI") RPC %u: "DF_RC"\n",

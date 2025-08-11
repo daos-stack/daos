@@ -38,7 +38,7 @@ struct dtx_batched_pool_args {
 };
 
 struct dtx_batched_cont_args {
-	/* Link to dss_module_info::dmi_dtx_batched_cont_{open,close}_list. */
+	/* Link to dss_module_info::dmi_dtx_batched_cont_open_list when opened. */
 	d_list_t			 dbca_sys_link;
 	/* Link to dtx_batched_pool_args::dbpa_cont_list. */
 	d_list_t			 dbca_pool_link;
@@ -623,9 +623,8 @@ dtx_batched_commit_one(void *arg)
 				D_ASSERT(!dtx_cont_opened(cont));
 
 				dbca->dbca_flush_pending = 0;
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_close_list);
+				if (likely(dbca->dbca_deregister == 0))
+					d_list_del_init(&dbca->dbca_sys_link);
 			}
 			break;
 		}
@@ -851,18 +850,19 @@ dtx_shares_fini(struct dtx_handle *dth)
 int
 dtx_handle_reinit(struct dtx_handle *dth)
 {
+	D_ASSERT(dth->dth_aborted == 0);
+	D_ASSERT(dth->dth_already == 0);
+
 	if (dth->dth_modification_cnt > 0) {
 		D_ASSERT(dth->dth_ent != NULL);
 		D_ASSERT(dth->dth_pinned != 0);
 	}
-	D_ASSERT(dth->dth_already == 0);
 
-	dth->dth_modify_shared = 0;
-	dth->dth_active = 0;
+	dth->dth_modify_shared      = 0;
+	dth->dth_active             = 0;
 	dth->dth_touched_leader_oid = 0;
-	dth->dth_local_tx_started = 0;
-	dth->dth_cos_done = 0;
-	dth->dth_aborted = 0;
+	dth->dth_local_tx_started   = 0;
+	dth->dth_cos_done           = 0;
 
 	dth->dth_op_seq = 0;
 	dth->dth_oid_cnt = 0;
@@ -1267,7 +1267,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	struct dtx_memberships		*mbs;
 	size_t				 size;
 	uint32_t			 flags;
-	int				 status = -1;
+	int                              status;
 	int				 rc = 0;
 	bool				 aborted = false;
 
@@ -1284,41 +1284,16 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	if (dth->dth_solo)
 		goto out;
 
-	if (dth->dth_need_validation) {
-		/* During waiting for bulk data transfer or other non-leaders, the DTX
-		 * status may be changes by others (such as DTX resync or DTX refresh)
-		 * by race. Let's check it before handling the case of 'result < 0' to
-		 * avoid aborting 'ready' one.
-		 */
-		status = vos_dtx_validation(dth);
-		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE ||
-			     status == DTX_ST_COMMITTING))
-			D_GOTO(out, result = -DER_ALREADY);
-	}
-
-	if (result < 0)
+	/* During waiting for bulk data transfer or other non-leaders, the DTX status maybe
+	 * changes by others (such as DTX resync or DTX refresh) by race. Let's check it
+	 * before handling the case of 'result < 0' to avoid aborting 'ready' one.
+	 */
+	status = vos_dtx_validation(dth);
+	if (status != -DER_ALREADY && result < 0)
 		goto abort;
 
-	switch (status) {
-	case -1:
-		break;
-	case DTX_ST_PREPARED:
-		if (likely(!dth->dth_aborted))
-			break;
-		/* Fall through */
-	case DTX_ST_INITED:
-	case DTX_ST_PREPARING:
-		aborted = true;
-		result = -DER_AGAIN;
-		goto out;
-	case DTX_ST_ABORTED:
-	case DTX_ST_ABORTING:
-		aborted = true;
-		result = -DER_INPROGRESS;
-		goto out;
-	default:
-		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
-	}
+	if (status < 0)
+		D_GOTO(out, result = status);
 
 	if (dlh->dlh_relay)
 		goto out;
@@ -1677,13 +1652,10 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 
 out:
 	if (rc < 0) {
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
-		if (likely(!dtx_cont_opened(cont))) {
-			d_list_del(&dbca->dbca_sys_link);
-			/* Give it to the batched commit for further handling asynchronously. */
+		D_ERROR(DF_UUID ": Fail to flush CoS cache: rc = %d\n", DP_UUID(cont->sc_uuid), rc);
+		if (likely(!dtx_cont_opened(cont) && dbca->dbca_deregister == 0))
+			/* Add it to the batched commit for further handling asynchronously. */
 			d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
-		}
 	} else {
 		dbca->dbca_flush_pending = 0;
 	}
@@ -1855,7 +1827,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 	dbca->dbca_cont = cont;
 	dbca->dbca_pool = dbpa;
 	dbca->dbca_agg_gen = tls->dt_agg_gen;
-	d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_close_list);
+	D_INIT_LIST_HEAD(&dbca->dbca_sys_link);
 	d_list_add_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 	if (new_pool)
 		d_list_add_tail(&dbpa->dbpa_sys_link, &dmi->dmi_dtx_batched_pool_list);
@@ -1920,7 +1892,9 @@ dtx_cont_open(struct ds_cont_child *cont)
 					return rc;
 
 				dbca->dbca_flush_pending = 0;
-				d_list_del(&dbca->dbca_sys_link);
+				if (unlikely(dbca->dbca_deregister == 1))
+					return -DER_SHUTDOWN;
+
 				d_list_add_tail(&dbca->dbca_sys_link,
 						&dmi->dmi_dtx_batched_cont_open_list);
 				return 0;
@@ -1959,9 +1933,10 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 					return;
 				}
 
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_close_list);
+				if (unlikely(dbca->dbca_deregister == 1))
+					goto put;
+
+				d_list_del_init(&dbca->dbca_sys_link);
 
 				dtx_flush_on_close(dmi, dbca);
 
@@ -1975,6 +1950,7 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 				if (likely(!dtx_cont_opened(cont) && cont->sc_dtx_delay_reset == 0))
 					vos_dtx_cache_reset(cont->sc_hdl, false);
 
+put:
 				dtx_put_dbca(dbca);
 				return;
 			}

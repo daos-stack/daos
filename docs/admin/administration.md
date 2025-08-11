@@ -920,7 +920,7 @@ access_points:
 port: 10001
 transport_config:
   allow_insecure: true
-log_file: /tmp/daos_agent-tmp.log
+log_file: /var/log/daos/daos_agent-tmp.log
 ```
 
 
@@ -1102,6 +1102,28 @@ the system (this can be checked with `dmg system query -v`).
 After extending the system, the cache of the `daos_agent` service of the client
 nodes needs to be refreshed.  For detailed information, please refer to the
 [1][System Deployment documentation].
+
+### Adding or removing Management Service (MS) replicas
+
+The DAOS Management Service (MS) runs on a selected subset of `daos_server` nodes.
+An administrator may add or remove hosts from the MS replica list.
+
+1. Stop I/O and safely shut down all `daos_server` and `daos_agent` processes.
+2. Update the `mgmt_svc_replicas` list in the `daos_server` configuration file.
+3. Update the `access_points` list in the `daos_agent` configuration file.
+4. Update `hostlist` in the `dmg` configuration file, if applicable.
+5. Restart all `daos_server` and `daos_agent` processes.
+
+To verify that the updated MS replicas came up correctly:
+1. Use the `dmg system query` command to check that all expected ranks have come up in the Joined state.
+   The command should not time out.
+2. Use the `dmg system leader-query` to ensure a leader election has completed.
+
+!!! warning
+    When removing or replacing MS replicas, do *not* replace all old replicas with
+    new ones.
+    At least one old replica must remain in the list to act as a data source for
+    the new replicas. 
 
 
 ## Software Upgrade

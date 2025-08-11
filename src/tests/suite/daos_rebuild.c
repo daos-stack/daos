@@ -57,9 +57,7 @@ rebuild_drop_scan(void **state)
 
 	/* Set drop scan fail_loc on server 0 */
 	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
-				     0, NULL);
+		test_set_engine_fail_loc(arg, 0, DAOS_REBUILD_DROP_SCAN | DAOS_FAIL_ONCE);
 
 	par_barrier(PAR_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
