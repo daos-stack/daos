@@ -1184,7 +1184,8 @@ func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
 		"config for UCX without thread size should not fail": {
 			cfg:                   validConfig(),
 			expABTthreadStackSize: minABTThreadStackSizeUCX,
-		}, "config for UCX  with stack size big enough should not fail": {
+		},
+		"config for UCX  with stack size big enough should not fail": {
 			cfg: validConfig().
 				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX + 1),
 			expABTthreadStackSize: minABTThreadStackSizeUCX + 1,
