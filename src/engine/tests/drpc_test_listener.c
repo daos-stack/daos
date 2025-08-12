@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <cmocka.h>
+
+#include <pthread.h>
 #include <abt.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -22,12 +24,6 @@
 #include "../drpc_internal.h"
 
 #define GREETING_STR "Hello"
-
-#define PID_UNINIT   (-1)
-#define PID_CURRENT  (0) /* indicate that we are the listener */
-
-static pid_t listener_pid; /* If 0, the current process is the listener. If -1, unset. */
-static bool  is_parent;
 
 char *
 get_greeting(const char *name)
@@ -76,88 +72,74 @@ drpc_test_state_free(struct drpc_test_state *dts)
 }
 
 static bool
-is_listener_uninit(void)
+is_listening(struct drpc_test_state *dts)
 {
-	return listener_pid == PID_UNINIT;
-}
+	bool result;
 
-static bool
-is_listener_process(void)
-{
-	return listener_pid == PID_CURRENT;
+	pthread_mutex_lock(&dts->listener_running_mutex);
+	result = dts->listener_running;
+	pthread_mutex_unlock(&dts->listener_running_mutex);
+
+	return result;
 }
 
 static void
+set_listening(struct drpc_test_state *dts, bool listening)
+{
+	pthread_mutex_lock(&dts->listener_running_mutex);
+	dts->listener_running = listening;
+	pthread_mutex_unlock(&dts->listener_running_mutex);
+}
+
+static void *
 run_test_listener(void *arg)
 {
 	struct drpc_test_state *dts = arg;
 	int                     rc  = 0;
 
-	assert_false(is_parent);
-	while (true) {
+	while (is_listening(dts)) {
 		D_PRINT("dRPC listener loop\n");
 		rc = drpc_progress(dts->progress_ctx, 500);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_PRINT_ERR("drpc_progress failed: " DF_RC "\n", DP_RC(rc));
 			break;
 		}
-
-		if (!is_listener_process())
-			break;
 	}
 
-	/* free this thread's copy of the data */
-	drpc_progress_context_close(dts->progress_ctx);
-	drpc_test_state_free(dts);
-	exit(0);
-}
-
-int
-fork_process(void (*func)(void *), void *arg)
-{
-	pid_t pid;
-
-	pid = fork();
-	if (pid == 0) { /* child */
-		if (is_parent && is_listener_uninit())
-			/* the current process is the listener (not some other spawned process) */
-			listener_pid = PID_CURRENT;
-		else
-			/*
-			 * any other spawned process - should not be spawning any further children
-			 */
-			listener_pid = PID_UNINIT;
-		is_parent = false;
-		func(arg);
-	} else if (pid < 0) {
-		int err = errno;
-
-		D_PRINT_ERR("fork failed: %s\n", strerror(err));
-		return d_errno2der(err);
-	} else {               /* parent */
-		if (is_parent) /* Only the top level thread */
-			listener_pid = pid;
-		D_PRINT("forked to pid %d\n", listener_pid);
-	}
-
-	return 0;
+	pthread_exit(0);
+	return NULL;
 }
 
 /*
- * Simplified for testing to use fork() instead of argobots.
- * The engine module depends on nearly the entire codebase -- which isn't necessary to test this
- * simple dRPC communications functionality. Instead of linking everything or re-implementing
- * thread scheduling, this test implementation uses the simplest method of spinning off a child
- * process.
- * NB: This implementation assumes a single-threaded client. I.e. drpc_progress does not have to
- * track multiple sessions.
+ * Simplified implementation for testing.
+ * The engine module depends on nearly the entire codebase -- which isn't necessary to test
+ * simple dRPC communications functionality.
+ * NB: This test implementation assumes a single-threaded client. I.e. drpc_progress does not have
+ * to track multiple sessions.
  */
 int
 dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_idx, size_t stack_size,
 	       ABT_thread *ult)
 {
-	D_PRINT("TEST dss_ult_create: using fork\n");
-	return fork_process(func, arg);
+	func(arg);
+	return 0;
+}
+
+static int
+create_listener_thread(struct drpc_test_state *dts, void *(*func)(void *))
+{
+	pthread_attr_t attr;
+
+	pthread_attr_init(&attr);
+	pthread_mutex_init(&dts->listener_running_mutex, NULL);
+
+	D_PRINT("starting listener pthread\n");
+	if (pthread_create(&dts->listener_thread, &attr, func, (void *)dts) < 0) {
+		D_PRINT_ERR("test pthread create failed: %s\n", strerror(errno));
+		return -DER_MISC;
+	}
+
+	return 0;
 }
 
 static int
@@ -176,8 +158,10 @@ start_drpc_listener(struct drpc_test_state *state)
 		return -DER_MISC;
 	}
 
+	set_listening(state, true);
+
 	D_PRINT("kicking off listener\n");
-	rc = dss_ult_create(run_test_listener, (void *)state, 0, 0, 0, NULL);
+	rc = create_listener_thread(state, run_test_listener);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to create listener process\n");
 		drpc_progress_context_close(state->progress_ctx);
@@ -185,6 +169,13 @@ start_drpc_listener(struct drpc_test_state *state)
 	}
 
 	return 0;
+}
+
+static void
+stop_drpc_listener(struct drpc_test_state *state)
+{
+	set_listening(state, false);
+	pthread_join(state->listener_thread, NULL);
 }
 
 int
@@ -200,9 +191,6 @@ drpc_listener_setup(void **state)
 
 	D_ALLOC_PTR(dts);
 	assert_non_null(dts);
-
-	listener_pid = PID_UNINIT;
-	is_parent    = true;
 
 	D_ASPRINTF(template, "/tmp/drpc_test.XXXXXX");
 	dts->test_dir = mkdtemp(template);
@@ -229,21 +217,10 @@ drpc_listener_teardown(void **state)
 
 	D_PRINT("LISTENER TEARDOWN: start\n");
 
-	assert_true(is_parent);
 	assert_non_null(state);
 	dts = *state;
 
-	D_PRINT("killing listener PID %d\n", listener_pid);
-	if (kill(listener_pid, SIGKILL) < 0) {
-		D_PRINT_ERR("failed to kill listener process: %s\n", strerror(errno));
-		errored = true;
-	}
-
-	if (waitpid(listener_pid, NULL, 0) != listener_pid) {
-		D_PRINT_ERR("failed to wait for listener process to end: %s\n", strerror(errno));
-		errored = true;
-	}
-	listener_pid = PID_UNINIT;
+	stop_drpc_listener(dts);
 
 	drpc_progress_context_close(dts->progress_ctx);
 
