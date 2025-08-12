@@ -350,8 +350,8 @@ vos_self_fini(void);
 /**
  * Initialize the environment for a VOS instance as an engine.
  *
- * \param[in]	nvme_conf	XXX
- * \param[in]	storage_path	XXX
+ * \param[in]	nvme_conf	NVMe config file
+ * \param[in]	storage_path	Storage path e.g. /mnt/daos
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_NOMEM	Out of memory.

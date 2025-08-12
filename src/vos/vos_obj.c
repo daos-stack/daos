@@ -2769,7 +2769,5 @@ dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *
 	rec.umoff = umem_off2offset(rbund.rb_off);
 	umem_off_set_flags(&rec.umoff, DTX_UMOFF_SVT);
 
-	d_vector_append(dv, &rec);
-
-	return DER_SUCCESS;
+	return d_vector_append(dv, &rec);
 }

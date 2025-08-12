@@ -139,24 +139,31 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 
 		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
 		if (rc != DER_SUCCESS) {
-			return rc;
+			goto fail_tls_fini;
 		}
 
 		rc = ABT_eventual_create(0, &xs->nvme_poll_done);
 		if (rc != ABT_SUCCESS) {
-			dss_tls_fini(tls);
-			return dss_abterr2der(rc);
+			rc = dss_abterr2der(rc);
+			goto fail_xsctxt_free;
 		}
 
 		rc = dlck_ult_create(xs->pool, nvme_polling, xs, &xs->nvme_poll);
 		if (rc != DER_SUCCESS) {
-			ABT_eventual_free(&xs->nvme_poll_done);
-			dss_tls_fini(tls);
-			return rc;
+			goto fail_eventual_free;
 		}
 	}
 
 	return DER_SUCCESS;
+
+fail_eventual_free:
+	ABT_eventual_free(&xs->nvme_poll_done);
+fail_xsctxt_free:
+	bio_xsctxt_free(dmi->dmi_nvme_ctxt);
+fail_tls_fini:
+	dss_tls_fini(tls);
+
+	return rc;
 }
 
 static void
@@ -164,7 +171,7 @@ dlck_engine_xstream_init_ult(void *arg)
 {
 	struct dlck_xstream *xs = arg;
 
-	xs->rc_init = dlck_engine_xstream_init(xs);
+	xs->ult_rc = dlck_engine_xstream_init(xs);
 }
 
 int
@@ -220,7 +227,7 @@ dlck_engine_xstream_fini_ult(void *arg)
 {
 	struct dlck_xstream *xs = arg;
 
-	xs->rc_init = dlck_engine_xstream_fini(xs);
+	xs->ult_rc = dlck_engine_xstream_fini(xs);
 }
 
 /**
@@ -268,10 +275,10 @@ xstream_start_all(struct dlck_engine *engine)
 		return dss_abterr2der(rc);
 	}
 
-	if (xs->rc_init != DER_SUCCESS) {
+	if (xs->ult_rc != DER_SUCCESS) {
 		/** ULT has joined - the daos_sys_0 XS can be safely freed */
 		(void)dlck_xstream_free(xs);
-		return xs->rc_init;
+		return xs->ult_rc;
 	}
 
 	/**
@@ -345,11 +352,11 @@ xstream_stop_all(struct dlck_engine *engine)
 		 */
 		D_ASSERT(rc == ABT_SUCCESS);
 
-		if (xs->rc_init != DER_SUCCESS) {
-			/** the daos_sys_0 finalization failed  - cannot safely free the daos_sys_0
-			 * XS */
-			(void)dlck_xstream_free(xs);
-			return xs->rc_init;
+		if (xs->ult_rc != DER_SUCCESS) {
+			/**
+			 * the daos_sys_0 finalization failed - cannot safely free the daos_sys_0 XS
+			 */
+			return xs->ult_rc;
 		}
 	}
 
@@ -554,10 +561,15 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 
 fail_join_and_free:
 	for (int i = 0; i < engine->targets; ++i) {
-		rc2 = ABT_thread_join(ults[i].thread);
-		if (rc2 != ABT_SUCCESS) {
-			/** the ULT did not join - can't free the thread nor free the arguments */
-			continue;
+		if (ults[i].thread != ABT_THREAD_NULL) {
+			rc2 = ABT_thread_join(ults[i].thread);
+			if (rc2 != ABT_SUCCESS) {
+				/**
+				 * the ULT did not join - can't free the thread nor free the
+				 * arguments
+				 */
+				continue;
+			}
 		}
 		(void)ABT_thread_free(&ults[i].thread);
 		(void)arg_free_fn(custom, &ult_args[i]);
@@ -567,4 +579,63 @@ fail_join_and_free:
 	D_FREE(ults);
 
 	return rc;
+}
+
+int
+dlck_abt_pool_open(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
+		   daos_handle_t *poh)
+{
+	int rc;
+	int rc_abt;
+
+	rc_abt = ABT_mutex_lock(mtx);
+	if (rc_abt != ABT_SUCCESS) {
+		return dss_abterr2der(rc_abt);
+	}
+
+	rc = dlck_pool_open(storage_path, po_uuid, tgt_id, poh);
+
+	/** unlock ASAP */
+	rc_abt = ABT_mutex_unlock(mtx);
+
+	/** code returned from the open operation takes precedence */
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** unlock error is an error */
+	if (rc_abt != ABT_SUCCESS) {
+		return dss_abterr2der(rc_abt);
+	}
+
+	return DER_SUCCESS;
+}
+
+int
+dlck_abt_pool_close(ABT_mutex mtx, daos_handle_t poh)
+{
+	int rc;
+	int rc_abt;
+
+	rc_abt = ABT_mutex_lock(mtx);
+	if (rc_abt != ABT_SUCCESS) {
+		return dss_abterr2der(rc_abt);
+	}
+
+	rc = vos_pool_close(poh);
+
+	/** unlock ASAP */
+	rc_abt = ABT_mutex_unlock(mtx);
+
+	/** code returned from the close operation takes precedence */
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** unlock error is an error */
+	if (rc_abt != ABT_SUCCESS) {
+		return dss_abterr2der(rc_abt);
+	}
+
+	return DER_SUCCESS;
 }

@@ -17,7 +17,7 @@
  * \retval -DER_*	Error.
  */
 static int
-dlck_abt_attr_default_create(ABT_thread_attr *attr)
+dlck_abt_attr_create(ABT_thread_attr *attr)
 {
 	int rc;
 
@@ -122,7 +122,7 @@ dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *u
 	ABT_thread_attr attr;
 	int             rc;
 
-	rc = dlck_abt_attr_default_create(&attr);
+	rc = dlck_abt_attr_create(&attr);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}

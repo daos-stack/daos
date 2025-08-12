@@ -54,7 +54,7 @@ struct co_uuid_list_elem {
 };
 
 /**
- * Create a list of all containers.
+ * Add all container UUIDs of the \p poh pool to \p co_uuids.
  *
  * \param[in]	poh		Pool handle.
  * \param[out]	co_uuids	List of containers' UUIDs.

@@ -260,6 +260,7 @@ dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 		D_PRINT("#nr_xs_helpers(%d) cannot exceed 2 times #targets (2 x %d = %d).\n",
 			dss_tgt_offload_xs_nr, tgt_nr, 2 * tgt_nr);
 		dss_tgt_offload_xs_nr = 2 * tgt_nr;
+	} else if (dss_tgt_offload_xs_nr == 0) {
 		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
 	}
 

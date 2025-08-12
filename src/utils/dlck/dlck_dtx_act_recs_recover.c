@@ -137,14 +137,12 @@ exec_one(void *arg)
 
 	d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
 		/** do not process the given file if the target is excluded */
-		if ((file->targets & (1 << xa->xs->tgt_id)) == 0) {
+		if ((file->targets_bitmap & (1 << xa->xs->tgt_id)) == 0) {
 			continue;
 		}
 
-		ABT_mutex_lock(xa->engine->open_mtx);
-		rc = dlck_pool_open(xa->ctrl->engine.storage_path, file->po_uuid, xa->xs->tgt_id,
-				    &poh);
-		ABT_mutex_unlock(xa->engine->open_mtx);
+		rc = dlck_abt_pool_open(xa->engine->open_mtx, xa->ctrl->engine.storage_path,
+					file->po_uuid, xa->xs->tgt_id, &poh);
 		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
 			break;
@@ -158,13 +156,11 @@ exec_one(void *arg)
 
 		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
-			(void)vos_pool_close(poh);
+			(void)dlck_abt_pool_close(xa->engine->open_mtx, poh);
 			break;
 		}
 
-		ABT_mutex_lock(xa->engine->open_mtx);
-		rc = vos_pool_close(poh);
-		ABT_mutex_unlock(xa->engine->open_mtx);
+		rc = dlck_abt_pool_close(xa->engine->open_mtx, poh);
 		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
 			break;
@@ -289,25 +285,23 @@ dlck_dtx_act_recs_recover(struct dlck_control *ctrl)
 	}
 
 	rc = pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		return rc;
 	}
 
 	rc = dlck_engine_start(&ctrl->engine, &engine);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		return rc;
 	}
 
 	rc = dlck_engine_exec_all(engine, exec_one, arg_alloc, ctrl, arg_free);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		goto fail;
 	}
 
 	DLCK_PRINTF(ctrl, "Touched: %u\n", ctrl->stats.touched);
 
-	rc = dlck_engine_stop(engine);
-
-	return rc;
+	return dlck_engine_stop(engine);
 
 fail:
 	(void)dlck_engine_stop(engine);

@@ -73,7 +73,7 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
 		if (rc != 0) {
 			goto fail;
 		}
-		file->targets |= (1 << target);
+		file->targets_bitmap |= (1 << target);
 	}
 
 	D_FREE(arg_copy);

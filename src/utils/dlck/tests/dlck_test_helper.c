@@ -264,7 +264,7 @@ exec_one(void *arg)
 
 	d_list_for_each_entry(file, &xst->args_files->list, link) {
 		/** do not process the given file if the target is excluded */
-		if ((file->targets & (1 << xst->xs->tgt_id)) == 0) {
+		if ((file->targets_bitmap & (1 << xst->xs->tgt_id)) == 0) {
 			continue;
 		}
 

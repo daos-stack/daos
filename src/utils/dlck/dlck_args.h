@@ -52,7 +52,7 @@
 struct dlck_file {
 	d_list_t    link;
 	uuid_t      po_uuid; /** Pool UUID. */
-	int         targets; /** Bitmask of targets involved. */
+	int         targets_bitmap; /** Bitmap of targets involved. */
 	const char *desc;    /** Argument provided by the user. */
 };
 

@@ -723,9 +723,12 @@ dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, d_vector_t *dv)
 		if (tx_id != DTX_LID_COMMITTED && tx_id != DTX_LID_ABORTED) {
 			rec.lid   = tx_id;
 			rec.umoff = ilog_umoff_by_idx(umm, root_df, e.ie_idx);
-			d_vector_append(dv, &rec);
+			rc        = d_vector_append(dv, &rec);
+			if (rc != DER_SUCCESS) {
+				break;
+			}
 		}
 	}
 
-	return DER_SUCCESS;
+	return rc;
 }

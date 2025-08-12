@@ -63,7 +63,7 @@ dlck_pool_open(const char *storage_path, uuid_t po_uuid, int tgt_id, daos_handle
 {
 	char              *path;
 	char               po_uuid_str[UUID_STR_LEN];
-	const unsigned int flags = VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_FOR_FEATURE_FLAG;
+	const unsigned int flags = VOS_POF_EXCL | VOS_POF_FOR_FEATURE_FLAG;
 	int                rc;
 
 	uuid_unparse(po_uuid, po_uuid_str);

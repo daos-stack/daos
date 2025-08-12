@@ -3961,11 +3961,8 @@ dlck_dtx_ent_recs_remove(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 	DAE_REC_CNT(dae) = 0;
 
 	UMEM_TX_SET(umm, dae_df->dae_rec_cnt, 0, rc);
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
 
-	return DER_SUCCESS;
+	return rc;
 }
 
 static int
