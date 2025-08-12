@@ -16,7 +16,7 @@ def scons():
     comm_env.d_test_program('drpc_comm_tests',
                             ['drpc_comm_tests.c', drpc_test_utils, 'drpc_test_listener.c',
                              '../drpc_progress.c', mock_abt],
-                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
+                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka', 'pthread'])
 
     # mocked unit tests
     common_mock_ld_script = f"{Dir('.').srcnode()}/../../common/tests/common-mock-ld-opts"
