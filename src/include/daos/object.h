@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,9 +150,9 @@ struct daos_obj_md {
 	uint32_t		omd_fdom_lvl;
 	/* Performance domain affinity */
 	uint32_t		omd_pda;
-	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_GRP.
+	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_PERF.
 	 * Now will enable the performance domain feature only when omd_pdom_lvl set as
-	 * PO_COMP_TP_GRP and with PO_COMP_TP_GRP layer in pool map.
+	 * PO_COMP_TP_PERF and with PO_COMP_TP_PERF layer in pool map.
 	 */
 	uint32_t		omd_pdom_lvl;
 };
@@ -323,8 +324,10 @@ struct pl_obj_layout;
 
 int obj_class_init(void);
 void obj_class_fini(void);
-struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid,
-					       uint32_t *nr_grps);
+struct daos_oclass_attr *
+daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps);
+struct daos_oclass_attr              *
+daos_oclass_id2attr(daos_oclass_id_t oid, uint32_t *nr_grps);
 int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca);
 int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 			      daos_oclass_id_t cid, uint32_t args);
@@ -625,29 +628,31 @@ dc_obj_shard2anchor(daos_anchor_t *anchor, uint32_t shard)
 
 enum daos_io_flags {
 	/* The RPC will be sent to leader replica. */
-	DIOF_TO_LEADER		= 0x1,
+	DIOF_TO_LEADER = 0x1,
 	/* The RPC will be sent to specified replica. */
-	DIOF_TO_SPEC_SHARD	= 0x2,
+	DIOF_TO_SPEC_SHARD = 0x2,
 	/* The operation (enumeration) has specified epoch. */
-	DIOF_WITH_SPEC_EPOCH	= 0x4,
+	DIOF_WITH_SPEC_EPOCH = 0x4,
 	/* The operation is for EC recovering. */
-	DIOF_EC_RECOV		= 0x8,
+	DIOF_EC_RECOV = 0x8,
 	/* The key existence. */
-	DIOF_CHECK_EXISTENCE	= 0x10,
+	DIOF_CHECK_EXISTENCE = 0x10,
 	/* The RPC will be sent to specified redundancy group. */
-	DIOF_TO_SPEC_GROUP	= 0x20,
+	DIOF_TO_SPEC_GROUP = 0x20,
 	/* For data migration. */
-	DIOF_FOR_MIGRATION	= 0x40,
+	DIOF_FOR_MIGRATION = 0x40,
 	/* For EC aggregation. */
-	DIOF_FOR_EC_AGG		= 0x80,
+	DIOF_FOR_EC_AGG = 0x80,
 	/* The operation is for EC snapshot recovering */
-	DIOF_EC_RECOV_SNAP	= 0x100,
+	DIOF_EC_RECOV_SNAP = 0x100,
 	/* Only recover from parity */
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 	/* Force fetch/list to do degraded enumeration/fetch */
 	DIOF_FOR_FORCE_DEGRADE = 0x400,
 	/* reverse enumeration for recx */
 	DIOF_RECX_REVERSE = 0x800,
+	/* Use for rebuild fetch epoch selection */
+	DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY = 0x1000,
 };
 
 /**

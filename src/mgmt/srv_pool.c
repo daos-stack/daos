@@ -27,11 +27,15 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 	unsigned int			opc;
 	int				topo;
 	int				rc;
+	uint8_t                          mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		D_GOTO(fini_ranks, rc);
 
 	/* Collective RPC to destroy the pool on all of targets */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc  = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, mgmt_ver);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, filter_ranks, opc, NULL,
 				  NULL, CRT_RPC_FLAG_FILTER_INVERT, topo, &td_req);
 	if (rc)
@@ -90,18 +94,22 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, d_rank_list_t *rank_list, size_t
 	crt_opcode_t			opc;
 	struct mgmt_tgt_create_in	*tc_in;
 	struct mgmt_tgt_create_out	*tc_out = NULL;
-	int				topo;
-	int				rc;
-	int				rc_cleanup;
+	int                              rc;
 	uint32_t			timeout;
+	uint8_t                          mgmt_ver;
 
-	/* Collective RPC to all of targets of the pool */
-	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
-				  rank_list, opc, NULL, NULL,
-				  CRT_RPC_FLAG_FILTER_INVERT, topo, &tc_req);
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		return rc;
+
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE, mgmt_ver);
+	/*
+	 * Create a CoRPC to rank_list. Use CRT_RPC_FLAG_CO_FAILOUT because any
+	 * forwarding error will cause the current function to fail anyway.
+	 */
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, rank_list, opc, NULL, NULL,
+				  CRT_RPC_FLAG_FILTER_INVERT | CRT_RPC_FLAG_CO_FAILOUT,
+				  crt_tree_topo(CRT_TREE_KNOMIAL, 4), &tc_req);
 	if (rc) {
 		D_ERROR(DF_UUID": corpc_req_create failed: rc="DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -141,18 +149,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, d_rank_list_t *rank_list, size_t
 decref:
 	if (tc_out)
 		D_FREE(tc_out->tc_ranks.ca_arrays);
-
 	crt_req_decref(tc_req);
-	if (rc) {
-		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, rank_list);
-		if (rc_cleanup)
-			D_ERROR(DF_UUID": failed to clean up failed pool: "
-				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
-		else
-			D_DEBUG(DB_MGMT, DF_UUID": cleaned up failed create targets\n",
-				DP_UUID(pool_uuid));
-	}
-
 	return rc;
 }
 
@@ -218,9 +215,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 
 	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, targets, scm_size, nvme_size, meta_size);
 	if (rc != 0) {
-		D_ERROR("creating pool "DF_UUID" on ranks failed: rc "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_ERROR(rc, DF_UUID ": creating pool on ranks failed", DP_UUID(pool_uuid));
+		goto out_ranks;
 	}
 
 	D_INFO(DF_UUID": creating targets on ranks succeeded\n", DP_UUID(pool_uuid));
@@ -236,6 +232,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 		 * those here together with other pool resources to save one
 		 * round of RPCs.
 		 */
+out_ranks:
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
@@ -658,13 +655,17 @@ ds_mgmt_tgt_pool_shard_destroy(uuid_t pool_uuid, int shard_idx, d_rank_t rank)
 	crt_endpoint_t				 tgt_ep;
 	crt_opcode_t				 opc;
 	int					 rc;
+	uint8_t                                  mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		goto out;
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = rank;
 	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, shard_idx);
 
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_SHARD_DESTROY, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_SHARD_DESTROY, DAOS_MGMT_MODULE, mgmt_ver);
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc != 0)

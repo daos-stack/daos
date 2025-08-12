@@ -1,0 +1,44 @@
+#  (C) Copyright 2024 Intel Corporation.
+#  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+# Each key is a regex path to match.
+# The value for each key can either be the direct tags to use
+# or a dictionary containing
+#  handler: either "direct" or "FtestTagMap" for special handling. Default is "direct"
+#  stop_on_match: Whether to stop processing other entries if when a match is found.
+#                 For example, if "src/tests/ftest*" matches, we don't want to also process ".*"
+#  tags: the tags to use for a match
+
+# Special handling for ftest, defaulting to pr
+src/tests/ftest*:
+  test-tag:
+    handler: FtestTagMap
+    stop_on_match: True
+    tags: pr
+
+# Individual code areas
+src/client/dfs/:
+  test-tag: dfs
+
+# Everything runs pr unless a previous entry was matched with stop_on_match
+.*:
+  test-tag: pr
+
+
+# Examples for reference only. Each code area needs to be carefully evaluated.
+# Any files touch under "src/cart/" should run "cart" tests
+# src/cart/:
+#  test-tag: cart
+
+# Run "control" for files under "src/control/"
+# Run "control" and "security" for files under "src/control/security"
+# src/control/:
+#  test-tag: control
+# src/control/security/:
+#  test-tag: security
+
+# Use ".*" for wildcard match
+# src/tests/suite/daos.*:
+#  test-tag: daos_test

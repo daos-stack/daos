@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -86,7 +87,7 @@ struct bio_dma_chunk {
 	/* == Bulk handle caching related fields == */
 	struct bio_bulk_group	*bdc_bulk_grp;
 	struct bio_bulk_hdl	*bdc_bulks;
-	void			*bdc_bulk_hdl;	/* Bulk handle used by upper layer caller */
+	crt_bulk_t               bdc_bulk_hdl; /* Bulk handle used by upper layer caller */
 	unsigned int		 bdc_bulk_cnt;
 	unsigned int		 bdc_bulk_idle;
 };
@@ -384,6 +385,7 @@ struct bio_xs_context {
 	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
 	unsigned int		 bxc_self_polling:1;	/* for standalone VOS */
+	unsigned int             bxc_skip_draining : 1;
 };
 
 /* Per VOS instance I/O context */

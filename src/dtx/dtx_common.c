@@ -38,7 +38,7 @@ struct dtx_batched_pool_args {
 };
 
 struct dtx_batched_cont_args {
-	/* Link to dss_module_info::dmi_dtx_batched_cont_{open,close}_list. */
+	/* Link to dss_module_info::dmi_dtx_batched_cont_open_list when opened. */
 	d_list_t			 dbca_sys_link;
 	/* Link to dtx_batched_pool_args::dbpa_cont_list. */
 	d_list_t			 dbca_pool_link;
@@ -48,13 +48,10 @@ struct dtx_batched_cont_args {
 	struct sched_request		*dbca_agg_req;
 	struct ds_cont_child		*dbca_cont;
 	struct dtx_batched_pool_args	*dbca_pool;
-	int				 dbca_refs;
-	uint32_t			 dbca_reg_gen;
-	uint32_t			 dbca_cleanup_thd;
-	uint32_t			 dbca_deregister:1,
-					 dbca_cleanup_done:1,
-					 dbca_commit_done:1,
-					 dbca_agg_done:1;
+	int                              dbca_refs;
+	uint32_t                         dbca_cleanup_thd;
+	uint32_t dbca_deregister : 1, dbca_cleanup_done : 1, dbca_commit_done : 1,
+	    dbca_agg_done : 1, dbca_flush_pending : 1;
 };
 
 struct dtx_partial_cmt_item {
@@ -121,45 +118,14 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	D_ASSERT(d_list_empty(&cont->sc_dtx_cos_list));
 	D_ASSERT(d_list_empty(&cont->sc_dtx_coll_list));
 
-	/* Even if the container is reopened during current deregister, the
-	 * reopen will use new dbca, so current dbca needs to be cleanup.
-	 */
+	if (dbca->dbca_cleanup_req != NULL)
+		sched_req_abort(dbca->dbca_cleanup_req);
 
-	if (dbca->dbca_cleanup_req != NULL) {
-		if (!dbca->dbca_cleanup_done)
-			sched_req_wait(dbca->dbca_cleanup_req, true);
-		/* dtx_batched_commit might put it while we were waiting. */
-		if (dbca->dbca_cleanup_req != NULL) {
-			D_ASSERT(dbca->dbca_cleanup_done);
-			sched_req_put(dbca->dbca_cleanup_req);
-			dbca->dbca_cleanup_req = NULL;
-			dbca->dbca_cleanup_done = 0;
-		}
-	}
+	if (dbca->dbca_commit_req != NULL)
+		sched_req_abort(dbca->dbca_commit_req);
 
-	if (dbca->dbca_commit_req != NULL) {
-		if (!dbca->dbca_commit_done)
-			sched_req_wait(dbca->dbca_commit_req, true);
-		/* dtx_batched_commit might put it while we were waiting. */
-		if (dbca->dbca_commit_req != NULL) {
-			D_ASSERT(dbca->dbca_commit_done);
-			sched_req_put(dbca->dbca_commit_req);
-			dbca->dbca_commit_req = NULL;
-			dbca->dbca_commit_done = 0;
-		}
-	}
-
-	if (dbca->dbca_agg_req != NULL) {
-		if (!dbca->dbca_agg_done)
-			sched_req_wait(dbca->dbca_agg_req, true);
-		/* Just to be safe... */
-		if (dbca->dbca_agg_req != NULL) {
-			D_ASSERT(dbca->dbca_agg_done);
-			sched_req_put(dbca->dbca_agg_req);
-			dbca->dbca_agg_req = NULL;
-			dbca->dbca_agg_done = 0;
-		}
-	}
+	if (dbca->dbca_agg_req != NULL)
+		sched_req_abort(dbca->dbca_agg_req);
 
 	/* batched_commit/aggreagtion ULT may hold reference on the dbca. */
 	while (dbca->dbca_refs > 0) {
@@ -171,6 +137,18 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 		d_list_del(&dbpa->dbpa_sys_link);
 		D_FREE(dbpa);
 	}
+
+	if (dbca->dbca_cleanup_req != NULL)
+		sched_req_put(dbca->dbca_cleanup_req);
+
+	if (dbca->dbca_commit_req != NULL)
+		sched_req_put(dbca->dbca_commit_req);
+
+	if (dbca->dbca_agg_req != NULL)
+		sched_req_put(dbca->dbca_agg_req);
+
+	D_ASSERTF(d_list_empty(&dbca->dbca_sys_link), "dbca (%p) for " DF_UUID " is still linked\n",
+		  dbca, DP_UUID(dbca->dbca_cont->sc_uuid));
 
 	D_FREE(dbca);
 	cont->sc_dtx_registered = 0;
@@ -347,9 +325,7 @@ dtx_cleanup(void *arg)
 		D_WARN("Failed to scan DTX entry for cleanup "
 		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
 
-	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_st_list) &&
-	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
+	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_st_list)) {
 		if (dcca.dcca_st_count > DTX_REFRESH_MAX) {
 			count = DTX_REFRESH_MAX;
 			dcca.dcca_st_count -= DTX_REFRESH_MAX;
@@ -374,9 +350,7 @@ dtx_cleanup(void *arg)
 	D_ASSERT(d_list_empty(&abt_list));
 	D_ASSERT(d_list_empty(&act_list));
 
-	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_pc_list) &&
-	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
+	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_pc_list)) {
 		dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item, dpci_link);
 		dcca.dcca_pc_count--;
 
@@ -429,9 +403,7 @@ dtx_aggregate(void *arg)
 	if (dbca->dbca_agg_req == NULL)
 		goto out;
 
-	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (!dss_ult_exiting(dbca->dbca_agg_req) &&
-	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
+	while (!dss_ult_exiting(dbca->dbca_agg_req)) {
 		struct dtx_stat		stat = { 0 };
 		int			rc;
 
@@ -491,6 +463,7 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 				    dbca_pool_link);
 		D_ASSERT(!dbca->dbca_deregister);
 
+		dtx_get_dbca(dbca);
 		if (dbca->dbca_agg_req != NULL && dbca->dbca_agg_done) {
 			sched_req_put(dbca->dbca_agg_req);
 			dbca->dbca_agg_req = NULL;
@@ -498,36 +471,41 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		}
 
 		/* Finish this cycle scan. */
-		if (dbca->dbca_agg_gen == tls->dt_agg_gen)
+		if (dbca->dbca_agg_gen == tls->dt_agg_gen) {
+			dtx_put_dbca(dbca);
 			break;
+		}
+
+		if (unlikely(dbca->dbca_deregister)) {
+			/* Someone is stopping current container. */
+			D_ASSERT(d_list_empty(&dbca->dbca_pool_link));
+			goto next;
+		}
 
 		dbca->dbca_agg_gen = tls->dt_agg_gen;
 		d_list_move_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 
 		if (dbca->dbca_agg_req != NULL)
-			continue;
+			goto next;
 
 		cont = dbca->dbca_cont;
 		dtx_stat(cont, &stat);
-		if (stat.dtx_cont_cmt_count == 0 ||
-		    stat.dtx_first_cmt_blob_time_lo == 0)
-			continue;
+		if (stat.dtx_cont_cmt_count == 0 || stat.dtx_first_cmt_blob_time_lo == 0)
+			goto next;
 
 		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
-			continue;
+			goto next;
 
 		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
 		    ((stat.dtx_cont_cmt_count > dtx_agg_thd_cnt_lo ||
 		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
 		     (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) >= dtx_agg_thd_age_up))) {
 			D_ASSERT(!dbca->dbca_agg_done);
-			dtx_get_dbca(dbca);
 			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
 			if (dbca->dbca_agg_req == NULL) {
 				D_WARN("Fail to start DTX agg ULT (1) for "DF_UUID"\n",
 				       DP_UUID(cont->sc_uuid));
-				dtx_put_dbca(dbca);
-				continue;
+				goto next;
 			}
 
 			dbpa->dbpa_aggregating++;
@@ -541,9 +519,15 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		    (victim_stat.dtx_first_cmt_blob_time_lo == stat.dtx_first_cmt_blob_time_lo &&
 		     victim_stat.dtx_first_cmt_blob_time_up == stat.dtx_first_cmt_blob_time_up &&
 		     victim_stat.dtx_cont_cmt_count < stat.dtx_cont_cmt_count)) {
+			if (victim_dbca != NULL)
+				dtx_put_dbca(victim_dbca);
+			dtx_get_dbca(dbca);
 			victim_stat = stat;
 			victim_dbca = dbca;
 		}
+
+next:
+		dtx_put_dbca(dbca);
 	}
 
 	/* No single container exceeds DTX thresholds, but the whole pool does,
@@ -554,16 +538,18 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 	    victim_dbca != NULL && victim_stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) {
 		D_ASSERT(victim_dbca->dbca_agg_req == NULL && !victim_dbca->dbca_agg_done);
 
-		dtx_get_dbca(victim_dbca);
 		victim_dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, victim_dbca, 0);
 		if (victim_dbca->dbca_agg_req == NULL) {
-			D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID"\n",
-				DP_UUID(victim_dbca->dbca_cont->sc_uuid));
-			dtx_put_dbca(victim_dbca);
+			D_WARN("Fail to start DTX agg ULT (2) for " DF_UUID "\n",
+			       DP_UUID(victim_dbca->dbca_cont->sc_uuid));
 		} else {
 			dbpa->dbpa_aggregating++;
+			victim_dbca = NULL;
 		}
 	}
+
+	if (victim_dbca != NULL)
+		dtx_put_dbca(victim_dbca);
 }
 
 void
@@ -607,6 +593,12 @@ dtx_aggregation_main(void *arg)
 	dmi->dmi_dtx_agg_req = NULL;
 }
 
+static inline bool
+dtx_need_batched_commit(struct dtx_batched_cont_args *dbca)
+{
+	return dtx_cont_opened(dbca->dbca_cont) || dbca->dbca_flush_pending;
+}
+
 static void
 dtx_batched_commit_one(void *arg)
 {
@@ -620,9 +612,7 @@ dtx_batched_commit_one(void *arg)
 
 	tls->dt_batched_ult_cnt++;
 
-	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (!dss_ult_exiting(dbca->dbca_commit_req) && dtx_cont_opened(cont) &&
-		dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
+	while (!dss_ult_exiting(dbca->dbca_commit_req) && dtx_need_batched_commit(dbca)) {
 		struct dtx_entry	**dtes = NULL;
 		struct dtx_coll_entry	 *dce = NULL;
 		struct dtx_stat		  stat = { 0 };
@@ -631,8 +621,14 @@ dtx_batched_commit_one(void *arg)
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
 					    DAOS_EPOCH_MAX, false, &dtes, NULL, &dce);
-		if (cnt == 0)
+		if (cnt == 0) {
+			if (dbca->dbca_flush_pending) {
+				dbca->dbca_flush_pending = 0;
+				if (likely(dbca->dbca_deregister == 0))
+					d_list_del_init(&dbca->dbca_sys_link);
+			}
 			break;
+		}
 
 		if (cnt < 0) {
 			D_WARN("Fail to fetch committable for "DF_UUID": "DF_RC"\n",
@@ -717,8 +713,7 @@ dtx_batched_commit(void *arg)
 
 		dtx_get_dbca(dbca);
 		cont = dbca->dbca_cont;
-		d_list_move_tail(&dbca->dbca_sys_link,
-				 &dmi->dmi_dtx_batched_cont_open_list);
+		d_list_move_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
 		dtx_stat(cont, &stat);
 
 		if (dbca->dbca_commit_req != NULL && dbca->dbca_commit_done) {
@@ -727,13 +722,13 @@ dtx_batched_commit(void *arg)
 			dbca->dbca_commit_done = 0;
 		}
 
-		if (dtx_cont_opened(cont) && dbca->dbca_commit_req == NULL &&
+		if (dtx_need_batched_commit(dbca) && dbca->dbca_commit_req == NULL &&
 		    (dtx_batched_ult_max != 0 && tls->dt_batched_ult_cnt < dtx_batched_ult_max) &&
 		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		     (stat.dtx_committable_coll_count > 0) ||
 		     (stat.dtx_oldest_committable_time != 0 &&
 		      d_hlc_age2sec(stat.dtx_oldest_committable_time) >=
-		      DTX_COMMIT_THRESHOLD_AGE))) {
+			  DTX_COMMIT_THRESHOLD_AGE))) {
 			D_ASSERT(!dbca->dbca_commit_done);
 			sleep_time = 0;
 			dtx_get_dbca(dbca);
@@ -855,18 +850,19 @@ dtx_shares_fini(struct dtx_handle *dth)
 int
 dtx_handle_reinit(struct dtx_handle *dth)
 {
+	D_ASSERT(dth->dth_aborted == 0);
+	D_ASSERT(dth->dth_already == 0);
+
 	if (dth->dth_modification_cnt > 0) {
 		D_ASSERT(dth->dth_ent != NULL);
 		D_ASSERT(dth->dth_pinned != 0);
 	}
-	D_ASSERT(dth->dth_already == 0);
 
-	dth->dth_modify_shared = 0;
-	dth->dth_active = 0;
+	dth->dth_modify_shared      = 0;
+	dth->dth_active             = 0;
 	dth->dth_touched_leader_oid = 0;
-	dth->dth_local_tx_started = 0;
-	dth->dth_cos_done = 0;
-	dth->dth_aborted = 0;
+	dth->dth_local_tx_started   = 0;
+	dth->dth_cos_done           = 0;
 
 	dth->dth_op_seq = 0;
 	dth->dth_oid_cnt = 0;
@@ -1179,7 +1175,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 
 	D_ALLOC(dlh, sizeof(*dlh) + sizeof(struct dtx_sub_status) * tgt_cnt);
 	if (dlh == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	dlh->dlh_future = ABT_FUTURE_NULL;
 	dlh->dlh_coll_entry = dce;
@@ -1217,11 +1213,13 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
-	D_DEBUG(DB_IO, "Start (%s) DTX "DF_DTI" sub modification %d, ver %u, epoch "
-		DF_X64", leader "DF_UOID", dti_cos_cnt %d, tgt_cnt %d, flags %x: "DF_RC"\n",
-		dlh->dlh_coll ? (dlh->dlh_relay ? "relay" : "collective") : "regular",
-		DP_DTI(dti), sub_modification_cnt, dth->dth_ver, epoch->oe_value,
-		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
+out:
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+		  "Start (%s) DTX " DF_DTI " sub modification %d, "
+		  "ver %u, eph " DF_X64 ", leader " DF_UOID ", cos_cnt %d, tgt_cnt %d, flags %x: ",
+		  flags & DTX_TGT_COLL ? (flags & DTX_RELAY ? "relay" : "collective") : "regular",
+		  DP_DTI(dti), sub_modification_cnt, pm_ver, epoch->oe_value, DP_UOID(*leader_oid),
+		  dti_cos_cnt, tgt_cnt, flags);
 
 	if (rc != 0) {
 		D_FREE(dlh);
@@ -1262,15 +1260,14 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result)
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int result)
 {
-	struct ds_cont_child		*cont = coh->sch_cont;
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;
 	size_t				 size;
 	uint32_t			 flags;
-	int				 status = -1;
+	int                              status;
 	int				 rc = 0;
 	bool				 aborted = false;
 
@@ -1281,56 +1278,22 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY))
 		goto out;
 
-	if (unlikely(coh->sch_closed)) {
-		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
-			DP_UUID(coh->sch_uuid));
-		if (result == -DER_AGAIN || result == -DER_INPROGRESS || result == -DER_TIMEDOUT ||
-		    result == -DER_STALE || daos_crt_network_error(result))
-			result = -DER_IO;
-		goto abort;
-	}
-
 	/* For solo transaction, the validation has already been processed inside vos
 	 * when necessary. That is enough, do not need to revalid again.
 	 */
 	if (dth->dth_solo)
 		goto out;
 
-	if (dth->dth_need_validation) {
-		/* During waiting for bulk data transfer or other non-leaders, the DTX
-		 * status may be changes by others (such as DTX resync or DTX refresh)
-		 * by race. Let's check it before handling the case of 'result < 0' to
-		 * avoid aborting 'ready' one.
-		 */
-		status = vos_dtx_validation(dth);
-		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE ||
-			     status == DTX_ST_COMMITTING))
-			D_GOTO(out, result = -DER_ALREADY);
-	}
-
-	if (result < 0)
+	/* During waiting for bulk data transfer or other non-leaders, the DTX status maybe
+	 * changes by others (such as DTX resync or DTX refresh) by race. Let's check it
+	 * before handling the case of 'result < 0' to avoid aborting 'ready' one.
+	 */
+	status = vos_dtx_validation(dth);
+	if (status != -DER_ALREADY && result < 0)
 		goto abort;
 
-	switch (status) {
-	case -1:
-		break;
-	case DTX_ST_PREPARED:
-		if (likely(!dth->dth_aborted))
-			break;
-		/* Fall through */
-	case DTX_ST_INITED:
-	case DTX_ST_PREPARING:
-		aborted = true;
-		result = -DER_AGAIN;
-		goto out;
-	case DTX_ST_ABORTED:
-	case DTX_ST_ABORTING:
-		aborted = true;
-		result = -DER_INPROGRESS;
-		goto out;
-	default:
-		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
-	}
+	if (status < 0)
+		D_GOTO(out, result = status);
 
 	if (dlh->dlh_relay)
 		goto out;
@@ -1649,11 +1612,10 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 	int			 cnt;
 	int			 rc = 0;
 
+	dbca->dbca_flush_pending = 1;
 	dtx_stat(cont, &stat);
 
-	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (!dss_xstream_exiting(dx) &&
-	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen && rc >= 0) {
+	while (!dss_xstream_exiting(dx) && !dtx_cont_opened(cont) && rc >= 0) {
 		struct dtx_entry	**dtes = NULL;
 		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_coll_entry	 *dce = NULL;
@@ -1689,9 +1651,14 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 	}
 
 out:
-	if (rc < 0)
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
+	if (rc < 0) {
+		D_ERROR(DF_UUID ": Fail to flush CoS cache: rc = %d\n", DP_UUID(cont->sc_uuid), rc);
+		if (likely(d_list_empty(&dbca->dbca_sys_link) && dbca->dbca_deregister == 0))
+			/* Add it to the batched commit for further handling asynchronously. */
+			d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
+	} else {
+		dbca->dbca_flush_pending = 0;
+	}
 }
 
 /* Per VOS container DTX re-index ULT ***************************************/
@@ -1860,16 +1827,14 @@ dtx_cont_register(struct ds_cont_child *cont)
 	dbca->dbca_cont = cont;
 	dbca->dbca_pool = dbpa;
 	dbca->dbca_agg_gen = tls->dt_agg_gen;
-	d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_close_list);
+	D_INIT_LIST_HEAD(&dbca->dbca_sys_link);
 	d_list_add_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 	if (new_pool)
 		d_list_add_tail(&dbpa->dbpa_sys_link, &dmi->dmi_dtx_batched_pool_list);
 
 out:
 	if (rc == 0) {
-		cont->sc_dtx_batched_gen = 1;
 		cont->sc_dtx_registered = 1;
-		dbca->dbca_reg_gen = cont->sc_dtx_batched_gen;
 	} else {
 		D_FREE(dbca);
 		if (new_pool)
@@ -1926,10 +1891,14 @@ dtx_cont_open(struct ds_cont_child *cont)
 				if (rc != 0)
 					return rc;
 
-				dbca->dbca_reg_gen = ++(cont->sc_dtx_batched_gen);
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_open_list);
+				if (unlikely(dbca->dbca_deregister == 1))
+					return -DER_SHUTDOWN;
+
+				if (dbca->dbca_flush_pending)
+					dbca->dbca_flush_pending = 0;
+				else
+					d_list_add_tail(&dbca->dbca_sys_link,
+							&dmi->dmi_dtx_batched_cont_open_list);
 				return 0;
 			}
 		}
@@ -1957,10 +1926,18 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 
 		d_list_for_each_entry(dbca, &dbpa->dbpa_cont_list, dbca_pool_link) {
 			if (dbca->dbca_cont == cont) {
+				dtx_get_dbca(dbca);
 				stop_dtx_reindex_ult(cont, force);
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_close_list);
+
+				/* To handle potentially re-open by race. */
+				if (unlikely(dtx_cont_opened(cont)))
+					goto put;
+
+				if (unlikely(dbca->dbca_deregister == 1))
+					goto put;
+
+				d_list_del_init(&dbca->dbca_sys_link);
+
 				dtx_flush_on_close(dmi, dbca);
 
 				/* If nobody reopen the container during dtx_flush_on_close,
@@ -1972,6 +1949,9 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 				 */
 				if (likely(!dtx_cont_opened(cont) && cont->sc_dtx_delay_reset == 0))
 					vos_dtx_cache_reset(cont->sc_hdl, false);
+
+put:
+				dtx_put_dbca(dbca);
 				return;
 			}
 		}
@@ -2084,8 +2064,9 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 		sub->dss_comp = 1;
 		sub->dss_result = rc;
 
-		D_DEBUG(DB_TRACE, "execute from idx %d (%d:%d), flags %x: rc %d\n",
-			idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
+		DL_CDEBUG(rc == -DER_NOMEM, DLOG_ERR, DB_TRACE, rc,
+			  "execute from idx %d (%d:%d), flags %x", idx, tgt->st_rank,
+			  tgt->st_tgt_idx, tgt->st_flags);
 	}
 
 	rc = ABT_future_set(dlh->dlh_future, dlh);
@@ -2200,6 +2181,9 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dtx_chore.func_arg = func_arg;
 	dtx_chore.dlh = dlh;
 
+	dtx_chore.chore.cho_func     = dtx_leader_exec_ops_chore;
+	dtx_chore.chore.cho_priority = 0;
+
 	dlh->dlh_result = 0;
 	dlh->dlh_allow_failure = allow_failure;
 	dlh->dlh_normal_sub_done = 0;
@@ -2208,8 +2192,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dlh->dlh_need_agg = 0;
 	dlh->dlh_agg_done = 0;
 
-	if (sub_cnt > DTX_RPC_STEP_LENGTH) {
-		dlh->dlh_forward_cnt = DTX_RPC_STEP_LENGTH;
+	if (sub_cnt > DTX_REG_RPC_STEP_LENGTH) {
+		dlh->dlh_forward_cnt = DTX_REG_RPC_STEP_LENGTH;
 	} else {
 		dlh->dlh_forward_cnt = sub_cnt;
 		if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
@@ -2219,7 +2203,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	if (dlh->dlh_normal_sub_cnt == 0)
 		goto exec;
 
-again:
+again1:
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 
 	/*
@@ -2233,12 +2217,57 @@ again:
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
+again2:
+	dtx_chore.chore.cho_credits = dlh->dlh_forward_cnt;
+	dtx_chore.chore.cho_hint    = NULL;
+	rc                          = dss_chore_register(&dtx_chore.chore);
 	if (rc != 0) {
-		DL_ERROR(rc, "chore create failed [%u, %u] (2)", dlh->dlh_forward_idx,
-			 dlh->dlh_forward_cnt);
-		ABT_future_free(&dlh->dlh_future);
-		goto out;
+		if (rc != -DER_AGAIN) {
+			DL_ERROR(rc, "chore create failed [%u, %u] (2)", dlh->dlh_forward_idx,
+				 dlh->dlh_forward_cnt);
+			ABT_future_free(&dlh->dlh_future);
+			goto out;
+		}
+
+		d_tm_inc_counter(dtx_tls_get()->dt_chore_retry, 1);
+
+		/*
+		 * To avoid the whole task is split too many pieces. If there are very few
+		 * credits, we may prefer to wait instead of shrink the credits quirement.
+		 */
+		if (dtx_chore.chore.cho_credits > dlh->dlh_normal_sub_cnt / 8) {
+			D_DEBUG(DB_TRACE, "Retry IO forward with credits from %d to %d\n",
+				dlh->dlh_forward_cnt, dtx_chore.chore.cho_credits);
+			ABT_future_free(&dlh->dlh_future);
+			dlh->dlh_forward_cnt = dtx_chore.chore.cho_credits;
+			goto again1;
+		}
+
+		/*
+		 * If more than half sub-requests have been processed, let's handle the left
+		 * part ASAP to avoid the whole task timeout. Otherwise once timeout, it may
+		 * cause more overhead for rollback.
+		 */
+		if (dlh->dlh_forward_idx > sub_cnt / 2) {
+			dtx_chore.chore.cho_priority = 1;
+
+			if (dlh->dlh_forward_cnt > DTX_PRI_RPC_STEP_LENGTH) {
+				D_DEBUG(DB_TRACE, "Retry (prio) IO forward with credits %d => %d\n",
+					dlh->dlh_forward_cnt, DTX_PRI_RPC_STEP_LENGTH);
+				ABT_future_free(&dlh->dlh_future);
+				dlh->dlh_forward_cnt = DTX_PRI_RPC_STEP_LENGTH;
+				goto again1;
+			}
+
+			D_DEBUG(DB_TRACE, "Retry (prio) IO forward with credits %d\n",
+				dlh->dlh_forward_cnt);
+			goto again2;
+		}
+
+		D_DEBUG(DB_TRACE, "Not enough credits (%d vs %d) for IO forward, wait and retry\n",
+			dlh->dlh_forward_cnt, dtx_chore.chore.cho_credits);
+		ABT_thread_yield();
+		goto again2;
 	}
 
 exec:
@@ -2247,8 +2276,10 @@ exec:
 		local_rc = func(dlh, func_arg, -1, NULL);
 
 	/* Even the local request failure, we still need to wait for remote sub request. */
-	if (dlh->dlh_normal_sub_cnt > 0)
+	if (dlh->dlh_normal_sub_cnt > 0) {
 		remote_rc = dtx_leader_wait(dlh);
+		dss_chore_deregister(&dtx_chore.chore);
+	}
 
 	if (local_rc != 0 && local_rc != allow_failure)
 		D_GOTO(out, rc = local_rc);
@@ -2259,7 +2290,7 @@ exec:
 	sub_cnt -= dlh->dlh_forward_cnt;
 	if (sub_cnt > 0) {
 		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
-		if (sub_cnt <= DTX_RPC_STEP_LENGTH) {
+		if (sub_cnt <= DTX_REG_RPC_STEP_LENGTH) {
 			dlh->dlh_forward_cnt = sub_cnt;
 			if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
 				dlh->dlh_need_agg = 1;
@@ -2271,7 +2302,8 @@ exec:
 			dlh->dlh_delay_sub_cnt, dlh->dlh_forward_idx,
 			dlh->dlh_forward_cnt, allow_failure);
 
-		goto again;
+		dtx_chore.chore.cho_priority = 0;
+		goto again1;
 	}
 
 	dlh->dlh_normal_sub_done = 1;
@@ -2312,7 +2344,18 @@ exec:
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
-	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
+	/*
+	 * Since non-delay sub-requests have already been processed, let's use high priority
+	 * to apply chore credits, then the left delayed sub-requests can be handled quickly
+	 * to reduce the possibility of the whole IO timeout.
+	 */
+	if (unlikely(dlh->dlh_delay_sub_cnt > DTX_PRI_RPC_STEP_LENGTH))
+		D_WARN("Too many delayed sub-requests %u\n", dlh->dlh_delay_sub_cnt);
+
+	dtx_chore.chore.cho_priority = 1;
+	dtx_chore.chore.cho_credits  = dlh->dlh_delay_sub_cnt;
+	dtx_chore.chore.cho_hint     = NULL;
+	rc                           = dss_chore_register(&dtx_chore.chore);
 	if (rc != 0) {
 		DL_ERROR(rc, "chore create failed (4)");
 		ABT_future_free(&dlh->dlh_future);
@@ -2320,6 +2363,7 @@ exec:
 	}
 
 	remote_rc = dtx_leader_wait(dlh);
+	dss_chore_deregister(&dtx_chore.chore);
 	if (remote_rc != 0 && remote_rc != allow_failure)
 		rc = remote_rc;
 

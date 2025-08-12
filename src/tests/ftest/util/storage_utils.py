@@ -95,6 +95,9 @@ class StorageDevice():
             str: the string version of the parameter's value
 
         """
+        if self.is_pmem:
+            # Exclude the NUMA node for PMEM devices to avoid issues with persistent naming
+            return ' - '.join([str(self.address), self.description])
         return ' - '.join([str(self.address), self.description, str(self.numa_node)])
 
     def __repr__(self):

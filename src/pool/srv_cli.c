@@ -239,8 +239,8 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 			break;
 		}
 
-		rc = pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, uuid, no_uuid, &req_time,
-				     &rpc);
+		rc = ds_pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, uuid, no_uuid, &req_time,
+					&rpc);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_PRE ": create RPC", DP_PRE(uuid, cbs));
 			break;
@@ -888,11 +888,6 @@ dsc_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 
 	if (daos_prop_entry_get(prop, DAOS_PROP_PO_PERF_DOMAIN)) {
 		D_ERROR("Can't set perf_domain on existing pool.\n");
-		return -DER_NO_PERM;
-	}
-
-	if (daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC)) {
-		D_ERROR("Can't set set redundancy factor on existing pool.\n");
 		return -DER_NO_PERM;
 	}
 

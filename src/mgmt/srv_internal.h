@@ -55,6 +55,8 @@ void
      ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 void dss_bind_to_xstream_cpuset(int tgt_id);
+int
+ds_mgmt_rpc_protocol(uint8_t *ver);
 
 /** srv_system.c */
 /* Management service (used only for map broadcast) */
@@ -187,5 +189,9 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 /** srv_util.c */
 int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
 void ds_mgmt_kill_rank(bool force);
+int
+ds_mgmt_pbl_create(void);
+void
+ds_mgmt_pbl_destroy(void);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

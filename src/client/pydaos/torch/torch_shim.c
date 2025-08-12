@@ -556,10 +556,6 @@ out:
 	D_FREE(dentries);
 	D_FREE(stats);
 
-	if (obj) {
-		rc = dfs_release(obj);
-	}
-
 	return PyLong_FromLong(rc);
 }
 

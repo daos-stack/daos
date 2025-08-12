@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -643,13 +644,14 @@ map_distd(void *arg)
 		svc->s_map_dist_inp = false;
 		if (rc == 0) {
 			if (version > svc->s_map_dist_ver) {
-				D_DEBUG(DB_MD, "%s: version=%u->%u\n", svc->s_name,
-					svc->s_map_dist_ver, version);
+				D_INFO("%s: version=%u->%u\n", svc->s_name, svc->s_map_dist_ver,
+				       version);
 				svc->s_map_dist_ver = version;
 			}
 			ABT_cond_broadcast(svc->s_map_dist_cv);
 		} else {
 			/* Enqueue the request again. */
+			DL_INFO(rc, "%s: retrying due to error", svc->s_name);
 			svc->s_map_dist = true;
 		}
 	}
@@ -1192,9 +1194,15 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
 {
 	struct dss_module_info *info = dss_get_module_info();
 	crt_opcode_t		opc_full;
+	uint8_t                 rsvc_ver;
+	int                     rc;
+
+	rc = ds_rsvc_rpc_protocol(&rsvc_ver);
+	if (rc)
+		return rc;
 
 	D_ASSERT(!filter_invert || filter_ranks != NULL);
-	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, DAOS_RSVC_VERSION);
+	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, rsvc_ver);
 	return crt_corpc_req_create(info->dmi_ctx, NULL /* grp */,
 				    filter_ranks, opc_full,
 				    NULL /* co_bulk_hdl */, NULL /* priv */,
@@ -1483,3 +1491,5 @@ struct dss_module rsvc_module = {
     .sm_handlers    = {rsvc_handlers},
     .sm_key         = NULL,
 };
+
+DEFINE_DS_RPC_PROTOCOL(rsvc, DAOS_RSVC_MODULE);

@@ -1065,7 +1065,7 @@ const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor =
   (ProtobufCMessageInit) mgmt__group_update_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[12] =
+static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[13] =
 {
   {
     "sys",
@@ -1211,6 +1211,18 @@ static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[12] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "replace",
+    13,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, replace),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__join_req__field_indices_by_name[] = {
   5,   /* field[5] = addr */
@@ -1219,6 +1231,7 @@ static const unsigned mgmt__join_req__field_indices_by_name[] = {
   8,   /* field[8] = incarnation */
   4,   /* field[4] = nctxs */
   2,   /* field[2] = rank */
+  12,   /* field[12] = replace */
   10,   /* field[10] = secondary_nctxs */
   9,   /* field[9] = secondary_uris */
   6,   /* field[6] = srvFaultDomain */
@@ -1229,7 +1242,7 @@ static const unsigned mgmt__join_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__join_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 12 }
+  { 0, 13 }
 };
 const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
 {
@@ -1239,7 +1252,7 @@ const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
   "Mgmt__JoinReq",
   "mgmt",
   sizeof(Mgmt__JoinReq),
-  12,
+  13,
   mgmt__join_req__field_descriptors,
   mgmt__join_req__field_indices_by_name,
   1,  mgmt__join_req__number_ranges,
@@ -1276,108 +1289,69 @@ const ProtobufCEnumDescriptor mgmt__join_resp__state__descriptor =
   mgmt__join_resp__state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCFieldDescriptor mgmt__join_resp__field_descriptors[6] =
-{
-  {
-    "status",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinResp, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "rank",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinResp, rank),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "state",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinResp, state),
-    &mgmt__join_resp__state__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "faultDomain",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinResp, faultdomain),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "localJoin",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinResp, localjoin),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "map_version",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__JoinResp, map_version),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor mgmt__join_resp__field_descriptors[7] = {
+    {
+	"status", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_INT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinResp, status), NULL, NULL, 0,              /* flags */
+	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
+    },
+    {
+	"rank", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinResp, rank), NULL, NULL, 0,               /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"state", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_ENUM, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinResp, state), &mgmt__join_resp__state__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"faultDomain", 4, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinResp, faultdomain), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"localJoin", 5, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinResp, localjoin), NULL, NULL, 0,             /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"map_version", 6, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinResp, map_version), NULL, NULL, 0,               /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"daos_version", 7, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__JoinResp, daos_version), NULL, NULL, 0,               /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__join_resp__field_indices_by_name[] = {
-  3,   /* field[3] = faultDomain */
-  4,   /* field[4] = localJoin */
-  5,   /* field[5] = map_version */
-  1,   /* field[1] = rank */
-  2,   /* field[2] = state */
-  0,   /* field[0] = status */
+    6, /* field[6] = daos_version */
+    3, /* field[3] = faultDomain */
+    4, /* field[4] = localJoin */
+    5, /* field[5] = map_version */
+    1, /* field[1] = rank */
+    2, /* field[2] = state */
+    0, /* field[0] = status */
 };
-static const ProtobufCIntRange mgmt__join_resp__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 6 }
-};
-const ProtobufCMessageDescriptor mgmt__join_resp__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.JoinResp",
-  "JoinResp",
-  "Mgmt__JoinResp",
-  "mgmt",
-  sizeof(Mgmt__JoinResp),
-  6,
-  mgmt__join_resp__field_descriptors,
-  mgmt__join_resp__field_indices_by_name,
-  1,  mgmt__join_resp__number_ranges,
-  (ProtobufCMessageInit) mgmt__join_resp__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCIntRange   mgmt__join_resp__number_ranges[1 + 1] = {{1, 0}, {0, 7}};
+const ProtobufCMessageDescriptor mgmt__join_resp__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.JoinResp",
+    "JoinResp",
+    "Mgmt__JoinResp",
+    "mgmt",
+    sizeof(Mgmt__JoinResp),
+    7,
+    mgmt__join_resp__field_descriptors,
+    mgmt__join_resp__field_indices_by_name,
+    1,
+    mgmt__join_resp__number_ranges,
+    (ProtobufCMessageInit)mgmt__join_resp__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__leader_query_req__field_descriptors[2] =
 {
@@ -2214,56 +2188,45 @@ const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor =
   (ProtobufCMessageInit) mgmt__ping_rank_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__set_rank_req__field_descriptors[2] =
-{
-  {
-    "rank",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__SetRankReq, rank),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "map_version",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__SetRankReq, map_version),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor mgmt__set_rank_req__field_descriptors[3] = {
+    {
+	"rank", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__SetRankReq, rank), NULL, NULL, 0,             /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"map_version", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__SetRankReq, map_version), NULL, NULL, 0,             /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"daos_version", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__SetRankReq, daos_version), NULL, NULL, 0,             /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__set_rank_req__field_indices_by_name[] = {
-  1,   /* field[1] = map_version */
-  0,   /* field[0] = rank */
+    2, /* field[2] = daos_version */
+    1, /* field[1] = map_version */
+    0, /* field[0] = rank */
 };
-static const ProtobufCIntRange mgmt__set_rank_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 2 }
-};
-const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.SetRankReq",
-  "SetRankReq",
-  "Mgmt__SetRankReq",
-  "mgmt",
-  sizeof(Mgmt__SetRankReq),
-  2,
-  mgmt__set_rank_req__field_descriptors,
-  mgmt__set_rank_req__field_indices_by_name,
-  1,  mgmt__set_rank_req__number_ranges,
-  (ProtobufCMessageInit) mgmt__set_rank_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCIntRange   mgmt__set_rank_req__number_ranges[1 + 1] = {{1, 0}, {0, 3}};
+const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.SetRankReq",
+    "SetRankReq",
+    "Mgmt__SetRankReq",
+    "mgmt",
+    sizeof(Mgmt__SetRankReq),
+    3,
+    mgmt__set_rank_req__field_descriptors,
+    mgmt__set_rank_req__field_indices_by_name,
+    1,
+    mgmt__set_rank_req__number_ranges,
+    (ProtobufCMessageInit)mgmt__set_rank_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__pool_monitor_req__field_descriptors[4] =
 {

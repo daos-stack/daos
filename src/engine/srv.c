@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +23,7 @@
 #include <daos/sys_db.h>
 #include <daos_errno.h>
 #include <daos_mgmt.h>
+#include <daos_version.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
 #include <daos_srv/vos.h>
@@ -414,9 +416,8 @@ dss_srv_handler(void *arg)
 	D_ASSERT(dmi != NULL);
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
-	dmi->dmi_ctx_id	= -1;
+	dmi->dmi_ctx_id = -1;
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_open_list);
-	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_close_list);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_pool_list);
 
 	(void)pthread_setname_np(pthread_self(), dx->dx_name);
@@ -553,6 +554,9 @@ dss_srv_handler(void *arg)
 		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
+	/* SWIM doesn't require RPC protocol */
+	if (dx->dx_xs_id != 1)
+		dmi->dmi_version = dss_get_join_version();
 	if (dx->dx_comm)
 		dx->dx_progress_started = true;
 
@@ -570,8 +574,10 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx))
+		if (dss_xstream_exiting(dx)) {
+			rc = 0;
 			break;
+		}
 
 		ABT_thread_yield();
 	}
@@ -608,6 +614,7 @@ signal:
 		ABT_cond_signal(xstream_data.xd_ult_init);
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 	}
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc, "stopping");
 }
 
 static inline struct dss_xstream *
@@ -1047,8 +1054,10 @@ dss_start_xs_id(int tag, int xs_id)
 	}
 
 	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);
-	if (rc)
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to start one xstream: tag=%x xs_id=%d", tag, xs_id);
 		return rc;
+	}
 
 	return 0;
 }
@@ -1092,6 +1101,15 @@ dss_xstreams_init(void)
 
 	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
 	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
+
+	dss_chore_credits = DSS_CHORE_CREDITS_DEF;
+	d_getenv_uint("DAOS_IO_CHORE_CREDITS", &dss_chore_credits);
+	if (dss_chore_credits < DSS_CHORE_CREDITS_MIN) {
+		D_WARN("Invalid DAOS_IO_CHORE_CREDITS value, minimum is %u, set as default %u\n",
+		       DSS_CHORE_CREDITS_MIN, DSS_CHORE_CREDITS_DEF);
+		dss_chore_credits = DSS_CHORE_CREDITS_DEF;
+	}
+	D_INFO("Set DAOS IO chore credits as %u\n", dss_chore_credits);
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
@@ -1283,7 +1301,6 @@ enum {
 	XD_INIT_MUTEX,
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
-	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
 	XD_INIT_SYS_DB,
 	XD_INIT_XSTREAMS,
@@ -1320,9 +1337,6 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		vos_standalone_tls_fini();
-		/* fall through */
-	case XD_INIT_TLS_REG:
-		ds_tls_key_delete();
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1417,15 +1431,6 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
-
-	/* register xstream-local storage key */
-	rc = ds_tls_key_create();
-	if (rc) {
-		rc = dss_abterr2der(rc);
-		D_ERROR("Failed to register storage key: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(failed, rc);
-	}
-	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
 	rc = vos_standalone_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG);

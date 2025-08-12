@@ -77,24 +77,24 @@ void dss_set_start_epoch(void);
 bool dss_has_enough_helper(void);
 
 struct dss_module_info {
-	crt_context_t		dmi_ctx;
-	struct bio_xs_context  *dmi_nvme_ctxt;
-	struct dss_xstream     *dmi_xstream;
+	crt_context_t          dmi_ctx;
+	struct bio_xs_context *dmi_nvme_ctxt;
+	struct dss_xstream    *dmi_xstream;
 	/* the xstream id */
-	int			dmi_xs_id;
+	int                    dmi_xs_id;
 	/* the VOS target id */
-	int			dmi_tgt_id;
+	int                    dmi_tgt_id;
 	/* the cart context id */
-	int			dmi_ctx_id;
-	uint32_t		dmi_dtx_batched_started:1,
-				dmi_srv_shutting_down:1;
-	d_list_t		dmi_dtx_batched_cont_open_list;
-	d_list_t		dmi_dtx_batched_cont_close_list;
-	d_list_t		dmi_dtx_batched_pool_list;
+	int                    dmi_ctx_id;
+	uint32_t               dmi_dtx_batched_started : 1, dmi_srv_shutting_down : 1;
+	/* current daos system run-time version */
+	daos_version_t         dmi_version;
+	d_list_t               dmi_dtx_batched_cont_open_list;
+	d_list_t               dmi_dtx_batched_pool_list;
 	/* the profile information */
-	struct daos_profile	*dmi_dp;
-	struct sched_request	*dmi_dtx_cmt_req;
-	struct sched_request	*dmi_dtx_agg_req;
+	struct daos_profile   *dmi_dp;
+	struct sched_request  *dmi_dtx_cmt_req;
+	struct sched_request  *dmi_dtx_agg_req;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -236,6 +236,17 @@ void sched_req_sleep(struct sched_request *req, uint32_t msec);
  * \retval		N/A
  */
 void sched_req_wakeup(struct sched_request *req);
+
+/* clang-format off */
+/**
+ * Abort a sched request attached ULT (without waiting).
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		N/A
+ */
+void sched_req_abort(struct sched_request *req);
+/* clang-format on */
 
 /**
  * Wakeup a sched request attached ULT terminated. The associated ULT of \a req
@@ -394,7 +405,7 @@ struct dss_module {
 	/* Array of the count of RPCs which are dedicated for client nodes only */
 	uint32_t			sm_cli_count[2];
 	/* Array of RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler		*sm_handlers[2];
+	struct daos_rpc_handler         *sm_handlers[2];
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
 	struct dss_drpc_handler		*sm_drpc_handlers;
 
@@ -408,7 +419,18 @@ struct dss_module {
 /**
  * Stack size used for ULTs with deep stack
  */
-#define DSS_DEEP_STACK_SZ	65536
+#if defined(__clang__)
+#if defined(__has_feature) && __has_feature(address_sanitizer)
+#define DSS_DEEP_STACK_SZ 98304
+#endif
+#elif defined(__GNUC__)
+#ifdef __SANITIZE_ADDRESS__
+#define DSS_DEEP_STACK_SZ 98304
+#endif
+#endif
+#ifndef DSS_DEEP_STACK_SZ
+#define DSS_DEEP_STACK_SZ 65536
+#endif
 
 enum dss_xs_type {
 	/** current xstream */
@@ -769,23 +791,60 @@ struct dss_chore;
 typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool is_reentrance);
 
 /**
- * Chore (opaque)
- *
  * A simple task (e.g., an I/O forwarding task) that yields by returning
  * DSS_CHORE_YIELD instead of calling ABT_thread_yield. This data structure
  * shall be embedded in the user's own task data structure, which typically
- * also includes arguments and internal state variables for \a cho_func. All
- * fields are private. See dtx_chore for an example.
+ * also includes arguments and internal state variables for \a cho_func.
  */
 struct dss_chore {
 	d_list_t              cho_link;
 	enum dss_chore_status cho_status;
 	dss_chore_func_t      cho_func;
+	uint32_t              cho_priority : 1;
+	int32_t               cho_credits;
+	void                 *cho_hint;
 };
 
-int dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func);
-void dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func);
+int
+dss_chore_register(struct dss_chore *chore);
+void
+dss_chore_deregister(struct dss_chore *chore);
+void
+dss_chore_diy(struct dss_chore *chore);
+bool
+engine_in_check(void);
 
-bool engine_in_check(void);
+void
+dss_set_join_version(daos_version_t version);
+daos_version_t
+dss_get_join_version(void);
+
+/**
+ * @brief Selects the appropriate module version based on the protocol version
+ * for server side rpc.
+ *
+ * @param module_ver    Output parameter for the selected module version
+ * @return 0 or negative error
+ */
+static inline int
+dss_select_module_version(int module_id, uint8_t *module_ver)
+{
+	struct dss_module_info *dmi          = dss_get_module_info();
+	uint8_t                 protocol_ver = daos_version_get_protocol(&dmi->dmi_version);
+
+	return daos_get_rpc_version(module_id, protocol_ver, module_ver);
+}
+
+#define DEFINE_DS_RPC_PROTOCOL(module_prefix, module_id)                                           \
+	int ds_##module_prefix##_rpc_protocol(uint8_t *version)                                    \
+	{                                                                                          \
+		return dss_select_module_version(module_id, version);                              \
+	}
+
+#define DEFINE_RPC_PROTOCOL(module_prefix, module_id)                                              \
+	int module_prefix##_rpc_protocol(uint8_t *version)                                         \
+	{                                                                                          \
+		return dss_select_module_version(module_id, version);                              \
+	}
 
 #endif /* __DSS_API_H__ */

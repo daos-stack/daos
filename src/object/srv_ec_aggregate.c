@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1330,12 +1331,13 @@ agg_peer_update_ult(void *arg)
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
 		enqueue_id = 0;
 retry:
-		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
-				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
+		rc = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
+				       DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" pidx %d to peer %d, rank %d tag %d obj_req_create "
-				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
-				tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
+			D_ERROR(DF_UOID
+				" pidx %d to peer %d, rank %d tag %d ds_obj_req_create " DF_RC "\n",
+				DP_UOID(entry->ae_oid), pidx, peer, tgt_ep.ep_rank, tgt_ep.ep_tag,
+				DP_RC(rc));
 			goto out;
 		}
 		ec_agg_in = crt_req_get(rpc);
@@ -1678,10 +1680,10 @@ retry:
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
-		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
-				    DAOS_OBJ_RPC_EC_REPLICATE, &rpc);
+		rc             = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
+						   DAOS_OBJ_RPC_EC_REPLICATE, &rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" obj_req_create failed: "DF_RC"\n",
+			D_ERROR(DF_UOID " ds_obj_req_create failed: " DF_RC "\n",
 				DP_UOID(entry->ae_oid), DP_RC(rc));
 			goto out;
 		}
@@ -2443,6 +2445,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	struct pl_map		*map;
 	struct daos_oclass_attr  oca;
 	struct cont_props	 props;
+	uint32_t                 shard_nr;
 	int			 rc = 0;
 
 	/** We should have filtered it if it isn't EC */
@@ -2462,10 +2465,15 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
 	md.omd_pdom_lvl = props.dcp_perf_domain;
 	md.omd_pda = props.dcp_ec_pda;
+	shard_nr        = daos_oclass_grp_size(&oca) * daos_obj_id2grp_nr(md.omd_id);
+	agg_param->ap_credits += roundup(shard_nr, 128) / 128;
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 
 out:
+	if (map != NULL)
+		pl_map_decref(map);
+
 	return rc;
 }
 

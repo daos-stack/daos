@@ -119,19 +119,19 @@ struct  _Mgmt__JoinReq
    */
   char *sys;
   /*
-   * Server UUID.
+   * Engine UUID.
    */
   char *uuid;
   /*
-   * Server rank desired, if not MAX_UINT32.
+   * Engine rank desired, if not MAX_UINT32.
    */
   uint32_t rank;
   /*
-   * Server CaRT primary provider URI (i.e., for context 0).
+   * Engine CaRT primary provider URI (i.e., for context 0).
    */
   char *uri;
   /*
-   * Server CaRT context count.
+   * Engine CaRT context count.
    */
   uint32_t nctxs;
   /*
@@ -164,10 +164,14 @@ struct  _Mgmt__JoinReq
    * rank started in check mode
    */
   protobuf_c_boolean check_mode;
+  /*
+   * Rank's engine instance metadata to be replaced
+   */
+  protobuf_c_boolean replace;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,NULL, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,NULL, 0,NULL, 0, 0 }
 
 
 struct  _Mgmt__JoinResp
@@ -197,11 +201,20 @@ struct  _Mgmt__JoinResp
    * Join processed in this version of the system map.
    */
   uint32_t map_version;
+  /*
+   *DAOS version that system supported.
+   */
+  uint32_t              daos_version;
 };
-#define MGMT__JOIN_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
-    , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string, 0, 0 }
-
+#define MGMT__JOIN_RESP__INIT                                                                      \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__join_resp__descriptor),                                    \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 MGMT__JOIN_RESP__STATE__IN,                                                               \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 0,                                                                                        \
+	 0,                                                                                        \
+	 0}
 
 struct  _Mgmt__LeaderQueryReq
 {
@@ -450,11 +463,12 @@ struct  _Mgmt__SetRankReq
    * System map version in which the rank joined the system.
    */
   uint32_t map_version;
+  /*
+   * DAOS version that system supported.
+   */
+  uint32_t         daos_version;
 };
-#define MGMT__SET_RANK_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__set_rank_req__descriptor) \
-    , 0, 0 }
-
+#define MGMT__SET_RANK_REQ__INIT {PROTOBUF_C_MESSAGE_INIT(&mgmt__set_rank_req__descriptor), 0, 0, 0}
 
 struct  _Mgmt__PoolMonitorReq
 {

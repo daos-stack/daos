@@ -1,10 +1,12 @@
 hosts:
   test_servers: 1
   test_clients: 1
+
 # Hard limit the test at ten hours, however individual tests have lower timeouts, if the timeout
 # in the test is hit then the test itself will perform some diagnostics so it's preferable
 # to fail there rather than here.
 timeout: 36000
+
 server_config:
   name: daos_server
   crt_timeout: 120
@@ -13,20 +15,23 @@ server_config:
     0:
       targets: 4
       nr_xs_helpers: 0
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
   system_ram_reserved: 3
+
 pool:
-  size: 5GiB
+  size: 20G
+
 container:
   type: POSIX
   control_method: daos
+
 dfuse:
   cores: '0-17'
   thread_count: 36
+  enable_local_flock: true
+
 dfuse_vm:
   cores: '0-3'
   eq_count: 2
   thread_count: 8
+  enable_local_flock: true

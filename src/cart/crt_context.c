@@ -19,11 +19,6 @@ context_quotas_init(struct crt_context *ctx);
 static void
 context_quotas_finalize(struct crt_context *ctx);
 
-static inline int
-get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
-static inline void
-put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
-
 static struct crt_ep_inflight *
 epi_link2ptr(d_list_t *rlink)
 {
@@ -354,7 +349,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	}
 
 	*crt_ctx = (crt_context_t)ctx;
-	D_DEBUG(DB_TRACE, "created context (idx %d)\n", ctx->cc_idx);
+	D_DEBUG(DB_ALL, "created context (idx %d, self_uri %s)\n", ctx->cc_idx, ctx->cc_self_uri);
 
 out:
 	return rc;
@@ -1492,6 +1487,52 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 }
 
 static void
+add_rpc_to_list(struct crt_rpc_priv *rpc_priv, d_list_t *submit_list)
+{
+	struct crt_context     *crt_ctx = rpc_priv->crp_pub.cr_ctx;
+	struct crt_ep_inflight *epi     = rpc_priv->crp_epi;
+
+	D_ASSERT(epi != NULL);
+
+	RPC_ADDREF(rpc_priv);
+
+	crt_rpc_lock(rpc_priv);
+	D_MUTEX_LOCK(&epi->epi_mutex);
+	if (rpc_priv->crp_state == RPC_STATE_QUEUED) {
+		bool submit_rpc = true;
+		int  rc;
+
+		rpc_priv->crp_state = RPC_STATE_INITED;
+		/* RPC got cancelled or timed out before it got here */
+		if (rpc_priv->crp_timeout_ts == 0) {
+			submit_rpc = false;
+		} else {
+			crt_set_timeout(rpc_priv);
+
+			D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+			rc = crt_req_timeout_track(rpc_priv);
+			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+			if (rc != 0)
+				RPC_ERROR(rpc_priv, "crt_req_timeout_track failed, rc: %d.\n", rc);
+		}
+
+		d_list_move_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
+		/* add to submit list if not cancelled or timed out already  */
+		if (submit_rpc) {
+			/* prevent rpc from being released before it is dispatched below */
+			RPC_ADDREF(rpc_priv);
+
+			D_ASSERTF(d_list_empty(&rpc_priv->crp_tmp_link_submit),
+				  "already on submit list\n");
+			d_list_add_tail(&rpc_priv->crp_tmp_link_submit, submit_list);
+		}
+	}
+	D_MUTEX_UNLOCK(&epi->epi_mutex);
+	crt_rpc_unlock(rpc_priv);
+	RPC_DECREF(rpc_priv);
+}
+
+static void
 dispatch_rpc(struct crt_rpc_priv *rpc) {
 	int rc;
 
@@ -1524,8 +1565,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	struct crt_context	*crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	struct crt_ep_inflight	*epi;
 	d_list_t		 submit_list;
-	struct crt_rpc_priv	*tmp_rpc;
-	int			 rc;
+	struct crt_rpc_priv     *tmp_rpc;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1541,8 +1581,9 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 				   struct crt_rpc_priv, crp_waitq_link);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
+	D_INIT_LIST_HEAD(&submit_list);
 	if (tmp_rpc != NULL) {
-		dispatch_rpc(tmp_rpc);
+		add_rpc_to_list(tmp_rpc, &submit_list);
 		d_tm_dec_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
 	} else {
 		put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
@@ -1552,65 +1593,26 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* done if ep credit flow control is disabled */
 	if (crt_gdata.cg_credit_ep_ctx == 0)
-		return;
-
-	D_INIT_LIST_HEAD(&submit_list);
-
-	D_MUTEX_LOCK(&epi->epi_mutex);
+		goto out;
 
 	/* process waitq */
+	D_MUTEX_LOCK(&epi->epi_mutex);
 	while (credits_available(epi) > 0 && !d_list_empty(&epi->epi_req_waitq)) {
-		D_ASSERT(epi->epi_req_wait_num > 0);
-		tmp_rpc = d_list_entry(epi->epi_req_waitq.next, struct crt_rpc_priv, crp_epi_link);
-		RPC_ADDREF(tmp_rpc);
+		tmp_rpc = d_list_pop_entry(&epi->epi_req_waitq, struct crt_rpc_priv, crp_epi_link);
+		epi->epi_req_wait_num--;
+		D_ASSERTF(epi->epi_req_wait_num >= 0, "wait %jd\n", epi->epi_req_wait_num);
+		/* remove from waitq and add to in-flight queue */
+		epi->epi_req_num++;
+		D_ASSERTF(epi->epi_req_num >= epi->epi_reply_num, "req %jd reply %jd\n",
+			  epi->epi_req_num, epi->epi_reply_num);
 		D_MUTEX_UNLOCK(&epi->epi_mutex);
-
-		crt_rpc_lock(tmp_rpc);
-		D_MUTEX_LOCK(&epi->epi_mutex);
-		if (tmp_rpc->crp_state == RPC_STATE_QUEUED && credits_available(epi) > 0) {
-			bool submit_rpc = true;
-
-			tmp_rpc->crp_state = RPC_STATE_INITED;
-			/* RPC got cancelled or timed out before it got here */
-			if (tmp_rpc->crp_timeout_ts == 0) {
-				submit_rpc = false;
-			} else {
-				crt_set_timeout(tmp_rpc);
-
-				D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-				rc = crt_req_timeout_track(tmp_rpc);
-				D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-				if (rc != 0)
-					RPC_ERROR(tmp_rpc,
-						  "crt_req_timeout_track failed, rc: %d.\n", rc);
-			}
-
-			/* remove from waitq and add to in-flight queue */
-			d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);
-			epi->epi_req_wait_num--;
-			D_ASSERT(epi->epi_req_wait_num >= 0);
-			epi->epi_req_num++;
-			D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
-
-			/* add to submit list if not cancelled or timed out already  */
-			if (submit_rpc) {
-				/* prevent rpc from being released before it is dispatched below */
-				RPC_ADDREF(tmp_rpc);
-
-				D_ASSERTF(d_list_empty(&tmp_rpc->crp_tmp_link_submit),
-					  "already on submit list\n");
-				d_list_add_tail(&tmp_rpc->crp_tmp_link_submit, &submit_list);
-			}
-		}
-		D_MUTEX_UNLOCK(&epi->epi_mutex);
-		crt_rpc_unlock(tmp_rpc);
-		RPC_DECREF(tmp_rpc);
-
+		add_rpc_to_list(tmp_rpc, &submit_list);
 		D_MUTEX_LOCK(&epi->epi_mutex);
 	}
 
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
+out:
 	/* re-submit the rpc req */
 	while (
 	    (tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link_submit))) {
@@ -2048,6 +2050,10 @@ context_quotas_init(struct crt_context *ctx)
 	quotas->limit[CRT_QUOTA_RPCS]   = crt_gdata.cg_rpc_quota;
 	quotas->current[CRT_QUOTA_RPCS] = 0;
 	quotas->enabled[CRT_QUOTA_RPCS] = crt_gdata.cg_rpc_quota > 0 ? true : false;
+
+	quotas->limit[CRT_QUOTA_BULKS]   = crt_gdata.cg_bulk_quota;
+	quotas->current[CRT_QUOTA_BULKS] = 0;
+	quotas->enabled[CRT_QUOTA_BULKS] = crt_gdata.cg_bulk_quota > 0 ? true : false;
 }
 
 static void
@@ -2108,7 +2114,24 @@ out:
 	return rc;
 }
 
-static inline int
+/* bump tracked usage of the resource by 1 without checking for limits  */
+void
+record_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
+{
+	struct crt_context *ctx = crt_ctx;
+
+	D_ASSERTF(ctx != NULL, "NULL context\n");
+	D_ASSERTF(quota >= 0 && quota < CRT_QUOTA_COUNT, "Invalid quota\n");
+
+	/* If quotas not enabled or unlimited quota */
+	if (!ctx->cc_quotas.enabled[quota] || ctx->cc_quotas.limit[quota] == 0)
+		return;
+
+	atomic_fetch_add(&ctx->cc_quotas.current[quota], 1);
+}
+
+/* returns 0 if resource is available or -DER_QUOTA_LIMIT otherwise */
+int
 get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;
@@ -2134,7 +2157,8 @@ get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	return rc;
 }
 
-static inline void
+/* return resource back */
+void
 put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;

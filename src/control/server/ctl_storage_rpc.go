@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -240,8 +242,11 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if req == nil {
 		return nil, errNilReq
 	}
-	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
-		return nil, errors.New("cannot scan bdevs if hugepages have been disabled")
+	if cs.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+	if cs.srvCfg.DisableHugepages {
+		return nil, storage.FaultHugepagesDisabled
 	}
 
 	defer func() {
@@ -250,7 +255,7 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		}
 	}()
 
-	bdevCfgs := getBdevCfgsFromSrvCfg(cs.srvCfg)
+	bdevCfgs := cs.srvCfg.GetBdevConfigs()
 	nrCfgBdevs := bdevCfgs.Bdevs().Len()
 
 	if nrCfgBdevs == 0 {
@@ -757,11 +762,11 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 		resp.Nvme = respNvme
 	}
 
-	mi, err := cs.getMemInfo()
+	smi, err := cs.getSysMemInfo()
 	if err != nil {
 		return nil, err
 	}
-	if err := convert.Types(mi, &resp.MemInfo); err != nil {
+	if err := convert.Types(smi, &resp.SysMemInfo); err != nil {
 		return nil, err
 	}
 
@@ -790,7 +795,7 @@ func (cs *ControlService) formatMetadata(instances []Engine, reformat bool) (boo
 	return false, nil
 }
 
-func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getMemInfo func() (*common.MemInfo, error)) error {
+func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getSysMemInfo common.GetSysMemInfoFn) error {
 	if scmCfgs[0].Class != storage.ClassRam {
 		return nil
 	}
@@ -800,11 +805,11 @@ func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getM
 		memRamdisks += uint64(sc.Scm.RamdiskSize) * humanize.GiByte
 	}
 
-	mi, err := getMemInfo()
+	smi, err := getSysMemInfo()
 	if err != nil {
 		return errors.Wrap(err, "retrieving system meminfo")
 	}
-	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
+	memAvail := uint64(smi.MemAvailableKiB) * humanize.KiByte
 
 	if err := checkMemForRamdisk(log, memRamdisks, memAvail); err != nil {
 		return errors.Wrap(err, "check ram available for all tmpfs")
@@ -814,10 +819,11 @@ func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getM
 }
 
 type formatScmReq struct {
-	log        logging.Logger
-	reformat   bool
-	instances  []Engine
-	getMemInfo func() (*common.MemInfo, error)
+	log           logging.Logger
+	reformat      bool
+	replace       bool
+	instances     []Engine
+	getSysMemInfo common.GetSysMemInfoFn
 }
 
 func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatResp) (map[int]string, map[int]bool, error) {
@@ -831,10 +837,11 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "detecting if SCM format is needed")
 		}
-		if !needs {
+		if needs {
+			needFormat[idx] = true
+		} else {
 			allNeedFormat = false
 		}
-		needFormat[idx] = needs
 
 		scmCfg, err := ei.GetStorage().GetScmConfig()
 		if err != nil || scmCfg == nil {
@@ -852,9 +859,15 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 		}
 	}
 
+	if req.replace && len(needFormat) == 0 {
+		// Only valid if at least one engine requires format.
+		return nil, nil, errors.New("format replace option only valid if at " +
+			"least one engine requires format but no engines need format")
+	}
+
 	if allNeedFormat {
 		// Check available RAM is sufficient before formatting SCM on engines.
-		if err := checkTmpfsMem(req.log, scmCfgs, req.getMemInfo); err != nil {
+		if err := checkTmpfsMem(req.log, scmCfgs, req.getSysMemInfo); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -918,6 +931,22 @@ type formatNvmeReq struct {
 	mdFormatted bool
 }
 
+func getEngineBdevCtrlrs(ctx context.Context, engine Engine) (storage.NvmeControllers, error) {
+	respBdevs, err := scanEngineBdevs(ctx, engine, new(ctlpb.ScanNvmeReq))
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert proto ctrlr scan results to native when calling into storage provider.
+	pbCtrlrs := proto.NvmeControllers(respBdevs.Ctrlrs)
+	ctrlrs, err := pbCtrlrs.ToNative()
+	if err != nil {
+		return nil, errors.Wrapf(err, "convert %T to %T", pbCtrlrs, ctrlrs)
+	}
+
+	return ctrlrs, nil
+}
+
 func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageFormatResp) error {
 	// Allow format to complete on one instance even if another fails
 	for idx, engine := range req.instances {
@@ -938,7 +967,7 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 			continue
 		}
 
-		respBdevs, err := scanEngineBdevs(ctx, engine, new(ctlpb.ScanNvmeReq))
+		ctrlrs, err := getEngineBdevCtrlrs(ctx, engine)
 		if err != nil {
 			if errors.Is(err, errEngineBdevScanEmptyDevList) {
 				// No controllers assigned in config, continue.
@@ -947,13 +976,6 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 			req.errored[idx] = err.Error()
 			resp.Crets = append(resp.Crets, engine.newCret("", err))
 			continue
-		}
-
-		// Convert proto ctrlr scan results to native when calling into storage provider.
-		pbCtrlrs := proto.NvmeControllers(respBdevs.Ctrlrs)
-		ctrlrs, err := pbCtrlrs.ToNative()
-		if err != nil {
-			return errors.Wrapf(err, "convert %T to %T", pbCtrlrs, ctrlrs)
 		}
 
 		ei, ok := engine.(*EngineInstance)
@@ -1007,16 +1029,20 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
+	// DAOS-15947: control_metadata format is valid in --replace case where multiple engines
+	// require replacement or format on the same host. No need to handle independently for
+	// individual engine as if control_metadata is missing then it needs to be created.
 	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
 	if err != nil {
 		return nil, err
 	}
 
 	fsr := formatScmReq{
-		log:        cs.log,
-		reformat:   req.Reformat,
-		instances:  instances,
-		getMemInfo: cs.getMemInfo,
+		log:           cs.log,
+		reformat:      req.Reformat,
+		replace:       req.Replace,
+		instances:     instances,
+		getSysMemInfo: cs.getSysMemInfo,
 	}
 	cs.log.Tracef("formatScmReq: %+v", fsr)
 	instanceErrors, instanceSkips, err := formatScm(ctx, fsr, resp)
@@ -1057,7 +1083,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			cs.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
-		engine.NotifyStorageReady()
+		engine.NotifyStorageReady(req.Replace)
 	}
 
 	return resp, nil
@@ -1072,7 +1098,7 @@ func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.Nvme
 		return nil, errNoSrvCfg
 	}
 	if cs.srvCfg.DisableHugepages {
-		return nil, FaultHugepagesDisabled
+		return nil, storage.FaultHugepagesDisabled
 	}
 
 	cu, err := user.Current()
@@ -1081,11 +1107,19 @@ func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.Nvme
 	}
 
 	prepReq := storage.BdevPrepareRequest{
-		// zero as hugepages already allocated on start-up
-		HugepageCount: 0,
-		TargetUser:    cu.Username,
-		PCIAllowList:  req.PciAddr,
-		Reset_:        false,
+		TargetUser:   cu.Username,
+		PCIAllowList: req.PciAddr,
+		Reset_:       false,
+	}
+
+	smi, err := cs.getSysMemInfo()
+	if err != nil {
+		return nil, errors.Wrapf(err, "retrieve system memory info")
+	}
+
+	// Set hugepage allocations in prepare request.
+	if err := SetHugeNodes(cs.log, cs.srvCfg, smi, &prepReq); err != nil {
+		return nil, errors.Wrap(err, "setting hugenodes in bdev prep request")
 	}
 
 	resp := new(ctlpb.NvmeRebindResp)
@@ -1115,7 +1149,7 @@ func (cs *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.N
 		return nil, errNoSrvCfg
 	}
 	if cs.srvCfg.DisableHugepages {
-		return nil, FaultHugepagesDisabled
+		return nil, storage.FaultHugepagesDisabled
 	}
 
 	engines := cs.harness.Instances()

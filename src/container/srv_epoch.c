@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -219,9 +220,8 @@ snap_oit_create(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 	out = crt_reply_get(rpc);
 	rc = out->tso_rc;
 	if (rc != 0) {
-		D_ERROR(DF_CONT": snapshot notify failed on %d targets\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-		rc = -DER_IO;
+		D_ERROR(DF_CONT " snapshot notify failed: " DF_RC "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
 		goto out_rpc;
 	}
 	*epoch = in->tsi_epoch;
@@ -682,8 +682,10 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, "pool " DF_UUID " cont_svc_lookup_leader failed", DP_UUID(pool_uuid));
 		return rc;
+	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -691,13 +693,17 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
+	}
 
 	rc = read_snap_list(&tx, cont, snapshots, snap_count);
 	cont_put(cont);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT " read_snap_list failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
+	}
 
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
