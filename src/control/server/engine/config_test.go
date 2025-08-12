@@ -1177,6 +1177,10 @@ func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
 			cfg:                   validConfig().WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX),
 			expABTthreadStackSize: minABTThreadStackSizeUCX,
 		},
+		"valid config for non-UCX should not fail": {
+			cfg:                   validConfig().WithFabricProvider("ofi+verbs"),
+			expABTthreadStackSize: 0,
+		},
 		"config for UCX without thread size should not fail": {
 			cfg:                   validConfig(),
 			expABTthreadStackSize: minABTThreadStackSizeUCX,
@@ -1202,11 +1206,15 @@ func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
 			test.CmpErr(t, tc.expErr, err)
 			if err == nil {
 				stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
-				test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
-				stackSizeVal, err := strconv.Atoi(stackSizeStr)
-				test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
-				test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
+				if tc.expABTthreadStackSize == 0 {
+					test.CmpErr(t, os.ErrNotExist, err)
+				} else {
+					test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
+					stackSizeVal, err := strconv.Atoi(stackSizeStr)
+					 test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
+					test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
 					"Invalid ABT_THREAD_STACKSIZE value")
+				}
 			}
 		})
 	}

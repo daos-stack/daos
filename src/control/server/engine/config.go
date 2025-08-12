@@ -453,9 +453,6 @@ func (c *Config) UpdateABTEnvarsUCX() error {
 		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
 			"for UCX provider, found %d", minABTThreadStackSizeUCX,
 			stackSizeValue)
-		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
-			"for DCPM storage class, found %d", minABTThreadStackSizeDCPM,
-			stackSizeValue)
 	}
 	return nil
 }
