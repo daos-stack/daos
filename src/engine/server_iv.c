@@ -216,6 +216,8 @@ key_equal(struct ds_iv_entry *entry, struct ds_iv_key *key1,
 {
 	struct ds_iv_class *class = entry->iv_class;
 
+	if (daos_version_get_protocol(&key1->version) != daos_version_get_protocol(&key2->version))
+		return false;
 	if (key1->class_id != key2->class_id)
 		return false;
 
@@ -311,6 +313,7 @@ iv_entry_alloc(struct ds_iv_ns *ns, struct ds_iv_class *class,
 	if (rc)
 		D_GOTO(free, rc);
 
+	entry->iv_key.version = key->version;
 	entry->ns = ns;
 	entry->iv_valid = false;
 	entry->iv_class = class;
@@ -1172,9 +1175,12 @@ static int
 iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
       crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
+	struct dss_module_info *dmi = dss_get_module_info();
+
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
 
+	key->version = dmi->dmi_version;
 	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY)
 		return iv_op_async(ns, key, value, sync, shortcut, retry, opc);
 
