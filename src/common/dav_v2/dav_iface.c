@@ -74,7 +74,7 @@ dav_setup_zinfo_alloc_class(dav_obj_t *hdl, uint64_t *alloc_size, int *class_id)
 	p.units_per_block = 1;
 	p.header_type     = DAV_HEADER_NONE;
 	p.class_id        = 0;
-	rc                = dav_class_register_v2(hdl, &p);
+	rc                = dav_class_register_v2(hdl, &p, 0);
 	if (rc) {
 		D_ERROR("unable to register allocation class for zinfo, err %d\n", rc);
 		return rc;
@@ -452,10 +452,10 @@ dav_get_base_ptr_v2(dav_obj_t *hdl)
 }
 
 DAV_FUNC_EXPORT int
-dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p)
+dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p, int is_evictable_mb)
 {
 	uint8_t                        id        = (uint8_t)p->class_id;
-	struct alloc_class_collection *ac = heap_alloc_classes(pop->do_heap);
+	struct alloc_class_collection *ac = heap_alloc_classes(pop->do_heap, is_evictable_mb);
 	enum header_type               lib_htype = MAX_HEADER_TYPES;
 	size_t                         runsize_bytes;
 	uint32_t                       size_idx;
@@ -529,15 +529,9 @@ dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p)
 	if (size_idx > MAX_CHUNK)
 		size_idx = MAX_CHUNK;
 
-	c = alloc_class_new(id, heap_alloc_classes(pop->do_heap), CLASS_RUN, lib_htype,
-			    p->unit_size, p->alignment, size_idx);
+	c = alloc_class_new(id, ac, CLASS_RUN, lib_htype, p->unit_size, p->alignment, size_idx);
 	if (c == NULL) {
 		errno = EINVAL;
-		return -1;
-	}
-
-	if (heap_create_alloc_class_buckets(pop->do_heap, c) != 0) {
-		alloc_class_delete(ac, c);
 		return -1;
 	}
 
