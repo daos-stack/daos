@@ -1154,7 +1154,7 @@ class TestGroup():
         """
         yaml_file = os.path.join(yaml_dir, "extra_yaml_launch_params.yaml")
         lines = ['launch:']
-        lines.append('  nvme: !mux')
+        lines.append('  nvme:')
         labels = ['default']
         if self._nvme.startswith("auto_md_on_ssd"):
             labels.append('md_on_ssd_p2')
