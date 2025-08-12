@@ -60,7 +60,7 @@ type Engine interface {
 	LocalState() system.MemberState
 	RemoveSuperblock() error
 	Run(context.Context)
-	SetupRank(context.Context, ranklist.Rank, uint32) error
+	SetupRank(context.Context, ranklist.Rank, uint32, uint32) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
