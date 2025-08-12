@@ -15,6 +15,7 @@
 
 #include "dlck_args.h"
 #include "dlck_engine.h"
+#include "dlck_pool.h"
 
 int
 			     dss_register_dbtree_classes(void);
