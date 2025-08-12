@@ -1211,9 +1211,9 @@ func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
 				} else {
 					test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
 					stackSizeVal, err := strconv.Atoi(stackSizeStr)
-					 test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
+					test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
 					test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
-					"Invalid ABT_THREAD_STACKSIZE value")
+						"Invalid ABT_THREAD_STACKSIZE value")
 				}
 			}
 		})
