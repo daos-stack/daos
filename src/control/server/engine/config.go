@@ -432,7 +432,7 @@ func (c *Config) UpdateABTEnvarsUCX() error {
 		return err
 	}
 
-	if strings.Index(providerStr, "ucx") == -1 {
+	if !strings.HasPrefix(providerStr, "ucx+") {
 		return nil
 	}
 
@@ -450,8 +450,12 @@ func (c *Config) UpdateABTEnvarsUCX() error {
 	}
 
 	if stackSizeValue < minABTThreadStackSizeUCX {
-		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
-			minABTThreadStackSizeUCX))
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for UCX provider, found %d", minABTThreadStackSizeUCX,
+			stackSizeValue)
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for DCPM storage class, found %d", minABTThreadStackSizeDCPM,
+			stackSizeValue)
 	}
 	return nil
 }

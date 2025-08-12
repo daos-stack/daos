@@ -1173,10 +1173,6 @@ func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
 		expErr                error
 		expABTthreadStackSize int
 	}{
-		"empty config should not fail": {
-			cfg:                   MockConfig().WithFabricProvider("ucx+ud_x"),
-			expABTthreadStackSize: minABTThreadStackSizeUCX,
-		},
 		"valid config for UCX should not fail": {
 			cfg:                   validConfig().WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX),
 			expABTthreadStackSize: minABTThreadStackSizeUCX,
@@ -1184,11 +1180,17 @@ func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
 		"config for UCX without thread size should not fail": {
 			cfg:                   validConfig(),
 			expABTthreadStackSize: minABTThreadStackSizeUCX,
-		},
-		"config for UCX  with stack size big enough should not fail": {
+		}, "config for UCX  with stack size big enough should not fail": {
 			cfg: validConfig().
 				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX + 1),
 			expABTthreadStackSize: minABTThreadStackSizeUCX + 1,
+		},
+		"config for UCX  with stack size too small should fail)": {
+			cfg: validConfig().
+				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX - 1),
+			expErr: errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE "+
+				"should be >= %d for UCX provider, found %d",
+				minABTThreadStackSizeUCX, minABTThreadStackSizeUCX-1)),
 		},
 		"config for UCX with invalid ABT_THREAD_STACKSIZE value should fail": {
 			cfg:    validConfig().WithEnvVars("ABT_THREAD_STACKSIZE=foo_bar"),
