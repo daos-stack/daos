@@ -1185,12 +1185,12 @@ func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
 			cfg:                   validConfig(),
 			expABTthreadStackSize: minABTThreadStackSizeUCX,
 		},
-		"config for UCX  with stack size big enough should not fail": {
+		"config for UCX with stack size big enough should not fail": {
 			cfg: validConfig().
 				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX + 1),
 			expABTthreadStackSize: minABTThreadStackSizeUCX + 1,
 		},
-		"config for UCX  with stack size too small should fail)": {
+		"config for UCX with stack size too small should fail)": {
 			cfg: validConfig().
 				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX - 1),
 			expErr: errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE "+
