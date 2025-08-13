@@ -77,6 +77,32 @@ agg_rate_ctl(void *arg)
 	return 1;
 }
 
+static uint32_t
+agg_get_cellsz(void *arg, void *oid_arg)
+{
+	struct agg_param        *param = arg;
+	struct ds_cont_child    *cont  = param->ap_cont;
+	struct daos_oclass_attr *oca;
+	daos_obj_id_t           *oid_ptr = oid_arg;
+	uint32_t                 nr_grps;
+
+	oca = daos_oclass_attr_find(*oid_ptr, &nr_grps);
+	if (!oca) {
+		D_ERROR("Failed to get oclass attr for " DF_OID "\n", DP_OID(*oid_ptr));
+		return 0;
+	}
+
+	oca->ca_grp_nr = nr_grps;
+	if (!daos_oclass_is_ec(oca))
+		return 0;
+
+	if (cont->sc_props.dcp_ec_cell_sz)
+		return cont->sc_props.dcp_ec_cell_sz;
+
+	/* The cont prop isn't fetched yet */
+	return DAOS_PROP_PO_EC_CELL_SZ_MIN;
+}
+
 int
 ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		  uuid_t cont_uuid)
@@ -516,7 +542,7 @@ cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 {
 	int rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
+	rc = vos_aggregate_ex(cont->sc_hdl, epr, agg_rate_ctl, agg_get_cellsz, param, flags);
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)
