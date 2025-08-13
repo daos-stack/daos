@@ -650,16 +650,16 @@ def record_variant_details(logger, job_results_dir, test_result, details):
     try:
         with open(results_json, "r", encoding="utf-8") as results:
             data = json.loads(results.read())
-            for index, test in enumerate(data["tests"]):
-                if len(details["test_variants"]) == index:
-                    # Add an entry for this test variant the first time its run in the loop
-                    details["test_variants"].append(
-                        {"variant": test["id"].split(";")[0],
-                         "status/loop": [],
-                         "time/loop": []})
-                # Append status and run times for each loop
-                details["test_variants"][index]["status/loop"].append(test["status"])
-                details["test_variants"][index]["time/loop"].append(f"{round(test['time'], 2)}s")
+        for index, test in enumerate(data["tests"]):
+            if len(details["test_variants"]) == index:
+                # Add an entry for this test variant the first time its run in the loop
+                details["test_variants"].append({
+                    "variant": test["id"].split(";")[0],
+                    "status/loop": [],
+                    "time/loop": []})
+            # Append status and run times for each loop
+            details["test_variants"][index]["status/loop"].append(test["status"])
+            details["test_variants"][index]["time/loop"].append(f"{round(test['time'], 2)}s")
     except Exception:       # pylint: disable=broad-except
         message = f"Error parsing {results_json}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
