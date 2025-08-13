@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -174,23 +175,23 @@ func TestControl_PoolProperties(t *testing.T) {
 			expStr:  "self_heal:delay_rebuild",
 			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"delay_rebuild"}`),
 		},
-		"self_heal-exclude,rebuild": {
+		"self_heal-exclude;rebuild": {
 			name:    "self_heal",
-			value:   "exclude,rebuild",
-			expStr:  "self_heal:exclude,rebuild",
-			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,rebuild"}`),
+			value:   "exclude;rebuild",
+			expStr:  "self_heal:exclude;rebuild",
+			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude;rebuild"}`),
 		},
-		"self_heal-rebuild,exclude": {
+		"self_heal-rebuild;exclude": {
 			name:    "self_heal",
-			value:   "rebuild,exclude",
-			expStr:  "self_heal:exclude,rebuild",
-			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,rebuild"}`),
+			value:   "rebuild;exclude",
+			expStr:  "self_heal:exclude;rebuild",
+			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude;rebuild"}`),
 		},
-		"self_heal-exclude,delay_rebuild": {
+		"self_heal-exclude;delay_rebuild": {
 			name:    "self_heal",
-			value:   "exclude,delay_rebuild",
-			expStr:  "self_heal:exclude,delay_rebuild",
-			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,delay_rebuild"}`),
+			value:   "exclude;delay_rebuild",
+			expStr:  "self_heal:exclude;delay_rebuild",
+			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude;delay_rebuild"}`),
 		},
 		"self_heal-invalid": {
 			name:   "self_heal",
