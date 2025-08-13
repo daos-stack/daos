@@ -1143,7 +1143,7 @@ class TestGroup():
                 test.extra_yaml.insert(0, engine_storage_yaml[engines])
 
     def _add_launch_param_yaml(self, logger, yaml_dir):
-        """Add extra yaml for mux launch parameter branches.
+        """Optionally add an extra yaml to include (filter in) test variants.
 
         Args:
             logger (Logger): logger for the messages produced by this method
@@ -1152,19 +1152,15 @@ class TestGroup():
         Raises:
             YamlException: if there was an error writing the yaml file
         """
-        yaml_file = os.path.join(yaml_dir, "extra_yaml_launch_params.yaml")
-        lines = ['launch:']
-        lines.append('  nvme:')
-        labels = ['default']
+        yaml_file = os.path.join(yaml_dir, "extra_yaml_launch_filters.yaml")
         if self._nvme.startswith("auto_md_on_ssd"):
-            labels.append('md_on_ssd_p2')
-        for label in labels:
-            lines.append(f'    {label}:')
-            lines.append('      on: true')
-        write_yaml_file(logger, yaml_file, lines)
-
-        for test in self.tests:
-            test.extra_yaml.insert(0, yaml_file)
+            lines = [
+                'launch:'
+                '  !filter-only : /run/pool/md_on_ssd_p2'
+            ]
+            write_yaml_file(logger, yaml_file, lines)
+            for test in self.tests:
+                test.extra_yaml.insert(0, yaml_file)
 
     def setup_slurm(self, logger, setup, install, user, result):
         """Set up slurm on the hosts if any tests are using partitions.
