@@ -249,6 +249,7 @@ class TestInfo():
         "client_users",
         "scm_list",
         "bdev_list",
+        "skip_storage_check",
     ]
 
     def __init__(self, test_file, order, yaml_extension=None):
@@ -410,32 +411,30 @@ class TestRunner():
         self.test_result.start()
 
         # Setup the test host information, including creating any required slurm partitions
-        status = self._setup_host_information(
-            logger, test, slurm_setup, control_host, partition_hosts)
-        if status:
-            return status
+        if not self._setup_host_information(
+                logger, test, slurm_setup, control_host, partition_hosts):
+            return 128
 
         # Setup (remove/create/list) the common test directory on each test host
-        status = self._setup_test_directory(logger, test)
-        if status:
-            return status
+        if not self._setup_test_directory(logger, test):
+            return 128
 
         # Setup additional test users
-        status = self._user_setup(logger, test, user_create)
-        if status:
-            return status
+        if not self._user_setup(logger, test, user_create):
+            return 128
 
         # Remove existing mount points on each test host
-        status = self._clear_mount_points(logger, test, clear_mounts)
-        if status:
-            return status
+        if not self._clear_mount_points(logger, test, clear_mounts):
+            return 128
 
         # Check storage devices for servers
         if not check_server_storage(logger, test, "Prepare"):
-            return status
+            return 128
 
         # Generate certificate files for the test
-        return self._generate_certs(logger)
+        if not self._generate_certs(logger):
+            return 128
+        return 0
 
     def execute(self, logger, test, repeat, number, sparse, fail_fast):
         """Run the specified test.
@@ -542,7 +541,7 @@ class TestRunner():
             partition_hosts (NodeSet): slurm partition hosts
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            bool: True if successful; False otherwise
         """
         logger.debug("-" * 80)
         logger.debug("Setting up host information for %s", test)
@@ -555,14 +554,14 @@ class TestRunner():
             if not exists and not slurm_setup:
                 message = f"Error missing {partition} partition"
                 self.test_result.fail_test(logger, "Prepare", message, None)
-                return 128
+                return False
             if slurm_setup and exists:
                 logger.info(
                     "Removing existing %s partition to ensure correct configuration", partition)
                 if not delete_partition(logger, control_host, partition).passed:
                     message = f"Error removing existing {partition} partition"
                     self.test_result.fail_test(logger, "Prepare", message, None)
-                    return 128
+                    return False
             if slurm_setup:
                 hosts = partition_hosts.difference(test.yaml_info["test_servers"])
                 logger.debug(
@@ -571,12 +570,12 @@ class TestRunner():
                 if not hosts:
                     message = "Error no partition hosts exist after removing the test servers"
                     self.test_result.fail_test(logger, "Prepare", message, None)
-                    return 128
+                    return False
                 logger.info("Creating the '%s' partition with the '%s' hosts", partition, hosts)
                 if not create_partition(logger, control_host, partition, hosts).passed:
                     message = f"Error adding the {partition} partition"
                     self.test_result.fail_test(logger, "Prepare", message, None)
-                    return 128
+                    return False
 
         # Define the hosts for this test
         try:
@@ -584,7 +583,7 @@ class TestRunner():
         except LaunchException:
             message = "Error setting up host information"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-            return 128
+            return False
 
         # Log the test information
         msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
@@ -595,7 +594,7 @@ class TestRunner():
         logger.debug(
             msg_format, test.name.order, test.test_file, test.yaml_file,
             test.host_info.servers.hosts, test.host_info.clients.hosts)
-        return 0
+        return True
 
     def _setup_test_directory(self, logger, test):
         """Set up the common test directory on all hosts.
@@ -605,7 +604,7 @@ class TestRunner():
             test (TestInfo): the test information
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            bool: True if successful; False otherwise
         """
         logger.debug("-" * 80)
         test_env = TestEnvironment()
@@ -627,8 +626,8 @@ class TestRunner():
             if not run_remote(logger, hosts, command).passed:
                 message = "Error setting up the common test directory on all hosts"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
-        return 0
+                return False
+        return True
 
     def _user_setup(self, logger, test, create=False):
         """Set up test users on client nodes.
@@ -639,7 +638,7 @@ class TestRunner():
             create (bool, optional): whether to create extra test users defined by the test
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            bool: True if successful; False otherwise
         """
         users = test.get_yaml_client_users()
         clients = test.host_info.clients.hosts
@@ -660,16 +659,16 @@ class TestRunner():
                     group_gid[group] = self._query_create_group(logger, clients, group, create)
                 except LaunchException as error:
                     self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
-                    return 128
+                    return False
 
             gid = group_gid.get(group, None)
             try:
                 self._query_create_user(logger, clients, user, gid, create)
             except LaunchException as error:
                 self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
-                return 128
+                return False
 
-        return 0
+        return True
 
     @staticmethod
     def _query_create_group(logger, hosts, group, create=False):
@@ -753,10 +752,10 @@ class TestRunner():
             clear_mounts (list): mount points to remove before the test
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            bool: True if successful; False otherwise
         """
         if not clear_mounts:
-            return 0
+            return True
 
         logger.debug("-" * 80)
         hosts = test.host_info.all_hosts
@@ -776,20 +775,20 @@ class TestRunner():
             if not self._remove_super_blocks(logger, mount_hosts, mount_point):
                 message = "Error removing superblocks for existing mount points"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
+                return False
 
         if not self._remove_shared_memory_segments(logger, hosts):
             message = "Error removing shared memory segments for existing mount points"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-            return 128
+            return False
 
         for mount_point, mount_hosts in mount_point_hosts.items():
             if not self._remove_mount_point(logger, mount_hosts, mount_point):
                 message = "Error removing existing mount points"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
+                return False
 
-        return 0
+        return True
 
     def _remove_super_blocks(self, logger, hosts, mount_point):
         """Remove the super blocks from the specified mount point.
@@ -858,10 +857,11 @@ class TestRunner():
     def _generate_certs(self, logger):
         """Generate the certificates for the test.
 
-        Returns:
+        Args:
             logger (Logger): logger for the messages produced by this method
-            int: status code: 0 = success, 128 = failure
 
+        Returns:
+            bool: True if successful; False otherwise
         """
         logger.debug("-" * 80)
         logger.debug("Generating certificates")
@@ -873,12 +873,12 @@ class TestRunner():
         if not run_local(logger, f"/usr/bin/rm -rf {certs_dir}").passed:
             message = "Error removing old certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-            return 128
+            return False
         if not run_local(logger, f"{command} {test_env.log_dir}").passed:
             message = "Error generating certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-            return 128
-        return 0
+            return False
+        return True
 
     def _collect_crash_files(self, logger):
         """Move any avocado crash files into job-results/latest/crashes.

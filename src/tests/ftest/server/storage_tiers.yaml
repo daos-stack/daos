@@ -5,7 +5,9 @@ hosts:
 setup:
   start_servers: false
   start_agents: false
-  server_config_namespace: /run/server_configurations/*/server_config/*
+  server_config_namespace: /run/configurations/*/server_config/*
+
+skip_storage_check: true
 
 timeout: 1800
 

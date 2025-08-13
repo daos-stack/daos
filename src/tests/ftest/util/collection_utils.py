@@ -178,6 +178,9 @@ def check_server_storage(logger, test, stage):
     detected = []
     logger.debug("-" * 80)
     logger.debug(f"Verifying server storage during the {stage.lower()} stage for \'{test}\'")
+    if "skip_storage_check" in test.yaml_info and test.yaml_info["skip_storage_check"]:
+        logger.debug(" - Test requested skip via 'skip_storage_check' yaml entry")
+        return status
     for key, command in commands.items():
         if key not in test.yaml_info or test.yaml_info[key] is None:
             # No need to check storage w/o a scm/bdev entry
@@ -190,7 +193,7 @@ def check_server_storage(logger, test, stage):
         result = run_remote(
             logger, test.host_info.servers.hosts, command.format('|'.join(test.yaml_info[key])))
         if not result.passed:
-            logger.error(f" - Failure detected verifying {key} storage during for \'{test}\'")
+            logger.error(f" - Failure detected verifying {key} storage for \'{test}\'")
             status = False
             continue
         item_set = set(test.yaml_info[key])
