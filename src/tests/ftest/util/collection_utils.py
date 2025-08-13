@@ -157,12 +157,13 @@ def cleanup_processes(logger, test, result):
     return not any_found
 
 
-def check_server_storage(logger, test, stage):
+def check_server_storage(logger, test, test_result, stage):
     """Verify that the expected server storage devices exist.
 
     Args:
         logger (Logger): logger for the messages produced by this method
         test (TestInfo): the test information
+        test_result (TestResult): the test result used to update the status of the test
         stage (str): current launch test execution stage
 
     Returns:
@@ -175,11 +176,10 @@ def check_server_storage(logger, test, stage):
         "bdev_list":
             r"lspci -D | grep -E '{}'"
     }
-    detected = []
     logger.debug("-" * 80)
     logger.debug(f"Verifying server storage during the {stage.lower()} stage for \'{test}\'")
-    if "skip_storage_check" in test.yaml_info and test.yaml_info["skip_storage_check"]:
-        logger.debug(" - Test requested skip via 'skip_storage_check' yaml entry")
+    if "check_server_storage" in test.yaml_info and test.yaml_info["check_server_storage"] == "no":
+        logger.debug(" - Test requested skip via 'check_server_storage' yaml entry")
         return status
     for key, command in commands.items():
         if key not in test.yaml_info or test.yaml_info[key] is None:
@@ -193,7 +193,8 @@ def check_server_storage(logger, test, stage):
         result = run_remote(
             logger, test.host_info.servers.hosts, command.format('|'.join(test.yaml_info[key])))
         if not result.passed:
-            logger.error(f" - Failure detected verifying {key} storage for \'{test}\'")
+            message = f"Failure detected attempting to verify {key} storage for \'{test}\'"
+            test_result.fail_test(logger, stage, message)
             status = False
             continue
         item_set = set(test.yaml_info[key])
@@ -205,14 +206,10 @@ def check_server_storage(logger, test, stage):
                 result_set = set(data.stdout)
             match = bool(item_set & result_set == item_set)
             if not match:
+                logger.debug(f" - {key} mismatch: expected={item_set}, detected={result_set}")
+                message = f"Mismatch detected verifying {key} storage for \'{test}\'"
+                test_result.fail_test(logger, stage, message)
                 status = False
-            detected.append([str(match), key, str(data.hosts), str(result_set)])
-
-        msg_format = "%-8s  %-9s  %-20s  %s"
-        logger.debug(msg_format, "Verified", "Type", "Servers", "Detected Storage")
-        logger.debug(msg_format, "-" * 8, "-" * 9, "-" * 20, "-" * 60)
-        for entry in detected:
-            logger.debug(msg_format, *entry)
     return status
 
 
@@ -973,7 +970,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             return_code |= 4096
 
     # Check storage devices for servers
-    if not check_server_storage(logger, test, "Process"):
+    if not check_server_storage(logger, test, test_result, "Process"):
         return_code |= 512
 
     # Mark the test execution as failed if a results.xml file is not found

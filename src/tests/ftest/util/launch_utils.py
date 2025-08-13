@@ -249,7 +249,7 @@ class TestInfo():
         "client_users",
         "scm_list",
         "bdev_list",
-        "skip_storage_check",
+        "check_server_storage",
     ]
 
     def __init__(self, test_file, order, yaml_extension=None):
@@ -428,7 +428,7 @@ class TestRunner():
             return 128
 
         # Check storage devices for servers
-        if not check_server_storage(logger, test, "Prepare"):
+        if not check_server_storage(logger, test, self.test_result, "Prepare"):
             return 128
 
         # Generate certificate files for the test
