@@ -39,6 +39,10 @@ class DaosSystemQuery(TestWithServers):
             rank_numbers.append(rank_info["rank"])
         rank_numbers_sorted = rank_numbers.copy()
         rank_numbers_sorted.sort()
+        self.log.info("rank_numbers = %s", rank_numbers)
+        self.log.info("rank_numbers_sorted = %s", rank_numbers_sorted)
+        if not rank_numbers:
+            self.fail("rank_numbers is empty!")
         self.assertEqual(rank_numbers, rank_numbers_sorted, error_msg)
 
     def test_daos_system_query(self):
@@ -83,8 +87,10 @@ class DaosSystemQuery(TestWithServers):
         # Verify that elements in rank_uris and access_point_rank_uris are sorted by rank.
         rank_uris = query_output["rank_uris"]
         msg = "rank_uris entries aren't sorted!"
+        self.log.info("--- rank_uris ---")
         self.verify_rank_order(rank_list_out=rank_uris, error_msg=msg)
 
         ap_rank_uris = query_output["access_point_rank_uris"]
         msg = "access_point_rank_uris entries aren't sorted!"
+        self.log.info("--- access_point_rank_uris ---")
         self.verify_rank_order(rank_list_out=ap_rank_uris, error_msg=msg)
