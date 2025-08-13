@@ -17,7 +17,6 @@ class DMGCheckRepairTest(RecoveryTestBase):
     def test_check_repair_corner_case(self):
         """Test dmg check repair corner cases.
 
-        Test steps:
         1. Create a pool.
         2. Inject orphan pool fault.
         3. Start the checker with interactive mode.
@@ -64,11 +63,10 @@ class DMGCheckRepairTest(RecoveryTestBase):
         # ]
         # We want to select "Re-add the pool", so action is 0.
         act_msgs = query_reports[0]["act_msgs"]
-        action = None
-        for i, act_msg in enumerate(act_msgs):
-            if act_msg == "Re-add the pool":
-                action = str(i)
-                break
+        try:
+            action = str(act_msgs.index("Re-add the pool"))
+        except ValueError as value_error:
+            self.fail(f"Re-add the pool wasn't in the action options! {value_error}")
         invalid_seq_num = "9"
         errors = []
         try:
