@@ -1,4 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -168,7 +169,6 @@ def define_mercury(reqs):
 
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
-                     '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
                      '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
                      '-DBUILD_DOCUMENTATION:BOOL=OFF',
@@ -182,6 +182,19 @@ def define_mercury(reqs):
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
                      '../mercury']
+
+    build_type = "RelWithDebInfo"
+    try:
+        sanitizers = reqs.get_env('SANITIZERS').split(',')
+        if 'address' in sanitizers:
+            build_type = "Asan"
+        elif 'thread' in sanitizers:
+            build_type = "Tsan"
+        elif 'undefined' in sanitizers:
+            build_type = "Ubsan"
+    except KeyError:
+        pass
+    mercury_build.append(f'-DCMAKE_BUILD_TYPE:STRING={build_type}')
 
     if reqs.target_type == 'debug':
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
@@ -276,7 +289,15 @@ def define_components(reqs):
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
                  'CC=gcc',
-                 '--enable-stack-unwind']
+                 '--enable-stack-unwind=yes']
+    try:
+        if reqs.get_env('SANITIZERS') != "":
+            # NOTE the address sanitizer library add some extra info on the stack and thus ULTs
+            # need a bigger stack
+            print("Increase argobots default stack size from 16384 to 32768")
+            abt_build += ['--enable-default-stacksize=32768']
+    except KeyError:
+        pass
 
     if reqs.target_type == 'debug':
         abt_build.append('--enable-debug=most')
