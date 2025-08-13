@@ -11,9 +11,6 @@
 #include <argp.h>
 #include <uuid/uuid.h>
 #include <gurt/list.h>
-#include <daos_srv/dlck.h>
-
-#include "dlck_cmds.h"
 
 #define _STRINGIFY(x)                   #x
 #define STRINGIFY(x)                    _STRINGIFY(x)
@@ -51,9 +48,9 @@
  */
 struct dlck_file {
 	d_list_t    link;
-	uuid_t      po_uuid; /** Pool UUID. */
+	uuid_t      po_uuid;        /** Pool UUID. */
 	int         targets_bitmap; /** Bitmap of targets involved. */
-	const char *desc;    /** Argument provided by the user. */
+	const char *desc;           /** Argument provided by the user. */
 };
 
 /**
@@ -79,38 +76,23 @@ struct dlck_args_files {
 	d_list_t list;
 };
 
-struct dlck_args_common {
-	enum dlck_cmd cmd;
-	uuid_t        co_uuid;    /** Container UUID. */
-	bool          write_mode; /** false by default (dry run) */
-};
-
 struct dlck_print {
 	int (*dp_printf)(const char *fmt, ...);
 };
 
 struct dlck_control {
 	/** in */
-	struct dlck_args_common common;
 	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
 	/** print */
 	struct dlck_print       print;
-	/** out */
-	struct dlck_stats       stats;
 };
 
 /** helper definitions */
 
-#define OPT_HEADER(HEADER, GROUP)                                                                  \
-	{                                                                                          \
-		0, 0, 0, 0, HEADER, GROUP                                                          \
-	}
+#define OPT_HEADER(HEADER, GROUP) {0, 0, 0, 0, HEADER, GROUP}
 
-#define LIST_ENTRY(CMD, DESC)                                                                      \
-	{                                                                                          \
-		CMD, 0, 0, OPTION_DOC, DESC                                                        \
-	}
+#define LIST_ENTRY(CMD, DESC)     {CMD, 0, 0, OPTION_DOC, DESC}
 
 #define FAIL(STATE, RC, ERRNUM, ...)                                                               \
 	do {                                                                                       \
@@ -172,19 +154,7 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
 enum dlck_cmd
 parse_command(const char *arg);
 
-/** dlck_args.c */
-
-/**
- * \brief Parse provided argc/argv, validate and write down into \p args state.
- *
- * It may close the calling process if requested for version or help.
- *
- * \param[in]   argc	Length of the \p argv array.
- * \param[in]   argv  	Standard list of arguments.
- * \param[out]	control	Control state to store the arguments.
- */
-void
-dlck_args_parse(int argc, char *argv[], struct dlck_control *control);
+/** dlck_args_files.c */
 
 /**
  * Free arguments.

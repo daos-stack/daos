@@ -134,7 +134,6 @@ datamover
 dataset
 dbench
 dcp
-dlck
 ddb
 ddict
 dealloc
@@ -157,6 +156,7 @@ dirname
 distro
 dkey
 dkeys
+dlck
 dll
 dmg
 dnf

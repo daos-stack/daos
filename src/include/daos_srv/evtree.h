@@ -17,7 +17,6 @@
 #include <daos/mem.h>
 #include <gurt/list.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/d_vector.h>
 
 enum {
 	EVT_UMEM_TYPE	= 150,
@@ -781,21 +780,6 @@ int evt_iter_corrupt(daos_handle_t ih);
  */
 int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
 		   struct evt_entry *entry, daos_anchor_t *anchor);
-
-struct vos_iterator;
-
-/**
- * Add an EV extent to \p dv if the extent is active.
- *
- * \param[in]	coh	Parent container.
- * \param[in]	iter	EV extent iterator to process
- * \param[out]	dv	Vector for storing the identified active EV extent.
- *
- * \retval 0		Success.
- * \retval -DER_*	Error when ilog_fetch fails.
- */
-int
-    dlck_ev_add_if_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv);
 
 /** Get overhead constants for an evtree
  *

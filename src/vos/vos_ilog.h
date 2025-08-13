@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +14,6 @@
 #define __VOS_ILOG_H__
 
 #include <daos/common.h>
-#include <daos_srv/dlck.h>
 #include "ilog.h"
 #include "vos_ts.h"
 
@@ -367,21 +365,5 @@ vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type, bool standalone);
 void
 vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
 		     bool standalone);
-
-/**
- * \brief Find active ILOG entries.
- *
- * Fetch ILOG entries from the provided ILOG root. Find active ILOG entries and
- * write them down in \p dv.
- *
- * \param[in]	coh	Parent container.
- * \param[in]	root_df	ILOG root to process.
- * \param[out]	dv	Vector to store the found active ILOG entries.
- *
- * \retval 0		Success.
- * \retval -DER_*	Error when ilog_fetch fails.
- */
-int
-dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, d_vector_t *dv);
 
 #endif /* __VOS_ILOG_H__ */

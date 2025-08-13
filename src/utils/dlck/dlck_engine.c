@@ -9,7 +9,6 @@
 #include <daos/mem.h>
 #include <daos/btree_class.h>
 #include <daos_srv/vos.h>
-#include <daos_srv/dlck.h>
 #include <daos_version.h>
 #include <engine/srv_internal.h>
 

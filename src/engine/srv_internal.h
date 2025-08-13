@@ -324,10 +324,9 @@ void ds_iv_fini(void);
 #define DSS_XS_NR_TOTAL						\
 	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)
 /** Total number of cart contexts created */
-#define DSS_CTX_NR_TOTAL					\
-	(DAOS_TGT0_OFFSET + dss_tgt_nr +			\
-	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr :	\
-	  dss_tgt_offload_xs_nr))
+#define DSS_CTX_NR_TOTAL                                                                           \
+	(DAOS_TGT0_OFFSET + dss_tgt_nr +                                                           \
+	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr : dss_tgt_offload_xs_nr))
 /** main XS id of (vos) tgt_id when no helper pool is present */
 #define DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, sys_xs_nr) ((tgt_id) + (sys_xs_nr))
 /** main XS id of (vos) tgt_id */

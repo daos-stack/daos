@@ -89,13 +89,3 @@ free_file:
 
 	return rc;
 }
-
-enum dlck_cmd
-parse_command(const char *arg)
-{
-	if (strcmp(arg, DLCK_CMD_DTX_ACT_RECOVER_STR) == 0) {
-		return DLCK_CMD_DTX_ACT_RECOVER;
-	}
-
-	return DLCK_CMD_UNKNOWN;
-}

@@ -334,16 +334,4 @@ ilog_is_punch(const struct ilog_entry *entry)
 bool
 ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch);
 
-/**
- * Calculate and return the offset of the ilog entry based on its index.
- *
- * \param[in]	umm	umem instance
- * \param[in]	root_df	ilog root
- * \param[in]	idx	index of the ilog entry
- *
- * \return the offset of the ilog entry
- */
-umem_off_t
-ilog_umoff_by_idx(struct umem_instance *umm, struct ilog_df *root_df, int32_t idx);
-
 #endif /* __ILOG_H__ */

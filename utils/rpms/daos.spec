@@ -659,7 +659,7 @@ fi
 %endif
 
 %changelog
-* Sat Aug 09 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-13
+* Tue Aug 05 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-13
 - DAOS Local Consistency Checker (DLCK)
 
 * Wed Jul 30 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-12

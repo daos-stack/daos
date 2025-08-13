@@ -2736,36 +2736,3 @@ struct vos_iter_ops vos_obj_ev_iter_ops = {
 /**
  * @} vos_obj_iters
  */
-
-int
-dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv)
-{
-	struct vos_obj_iter  *oiter = vos_iter2oiter(iter);
-	d_iov_t               val;
-	struct vos_rec_bundle rbund = {0};
-	struct bio_iov        biov  = {0};
-	struct umem_instance *umm   = vos_cont2umm(vos_hdl2cont(coh));
-	struct vos_irec_df   *irec_df;
-	struct dlck_dtx_rec   rec = {0};
-	int                   rc;
-
-	tree_rec_bundle2iov(&rbund, &val);
-	rbund.rb_biov = &biov;
-
-	rc = dbtree_iter_fetch(oiter->it_hdl, NULL, &val, NULL);
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
-
-	irec_df = umem_off2ptr(umm, rbund.rb_off);
-	rec.lid = irec_df->ir_dtx;
-
-	if (rec.lid == DTX_LID_COMMITTED || rec.lid == DTX_LID_ABORTED) {
-		return DER_SUCCESS;
-	}
-
-	rec.umoff = umem_off2offset(rbund.rb_off);
-	umem_off_set_flags(&rec.umoff, DTX_UMOFF_SVT);
-
-	return d_vector_append(dv, &rec);
-}

@@ -1365,24 +1365,3 @@ vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid)
 
 	return svt->ir_dtx == dtx_lid;
 }
-
-int
-dlck_irec_get_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv)
-{
-	struct vos_obj_iter  *oiter = vos_iter2oiter(iter);
-	d_iov_t               iov;
-	struct vos_rec_bundle rbund = {0};
-	struct vos_krec_df   *krec_df;
-	int                   rc;
-
-	tree_rec_bundle2iov(&rbund, &iov);
-
-	rc = dbtree_iter_fetch(oiter->it_hdl, NULL, &iov, NULL);
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
-
-	krec_df = rbund.rb_krec;
-
-	return dlck_ilog_get_active(coh, &krec_df->kr_ilog, dv);
-}

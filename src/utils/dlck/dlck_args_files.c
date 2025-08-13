@@ -8,6 +8,7 @@
 #include <uuid/uuid.h>
 #include <argp.h>
 
+#include <gurt/common.h>
 #include <gurt/list.h>
 
 #include "dlck_args.h"

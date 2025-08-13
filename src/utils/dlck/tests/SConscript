@@ -15,12 +15,12 @@ def build_dlck_test_helper(henv):
     srcs = [
         'dlck_test_helper.c',
         '../dlck_abt.c',
-        '../dlck_tls.c',
         '../dlck_args_engine.c',
         '../dlck_args_files.c',
         '../dlck_args_parse.c',
         '../dlck_engine.c',
         '../dlck_pool.c',
+        '../dlck_tls.c',
         '../../../dtx/tests/srv_mock.c',
         '../../../dtx/tests/ult_mock.c',
         '../../../dtx/tests/pl_map_mock.c',
