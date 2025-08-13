@@ -29,10 +29,7 @@ class RebuildTestBase(TestWithServers):
         """Initialize a RebuildTestBase object."""
         super().__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
-        self.targets = None
         self.server_count = 0
-        self.info_checks = None
-        self.rebuild_checks = None
 
     def setUp(self):
         """Set up each test case."""
@@ -42,62 +39,55 @@ class RebuildTestBase(TestWithServers):
         # Get the test parameters
         self.inputs.get_params(self)
 
-        # Get the number of targets per engine for pool info calculations
-        self.targets = self.server_managers[0].get_config_value("targets")
-
         self.server_count = len(self.hostlist_servers)
 
-    def setup_test_pool(self):
-        """Define a TestPool object."""
-        self.add_pool(create=False)
+    def verify_pool_info_before_rebuild(self, pool):
+        """Verify the pool information before rebuild.
 
-    def setup_test_container(self):
-        """Define a TestContainer object."""
-        self.add_container(self.pool, create=False)
-
-    def setup_pool_verify(self):
-        """Set up pool verification initial expected values."""
-        self.info_checks = {
-            "pi_uuid": self.pool.uuid,
+        Args:
+            pool (TestPool): pool to verify
+        """
+        info_checks = {
+            "pi_uuid": pool.uuid,
             "pi_nnodes": self.server_count,
-            "pi_ntargets": (self.server_count * self.targets),
+            "pi_ntargets": (
+                self.server_count * self.server_managers[0].get_config_value("targets")),
             "pi_ndisabled": 0,
         }
-        self.rebuild_checks = {
+        rebuild_checks = {
             "rs_state": 1,
             "rs_obj_nr": 0,
             "rs_rec_nr": 0,
             "rs_errno": 0,
         }
+        status = pool.check_pool_info(**info_checks)
+        status &= pool.check_rebuild_status(**rebuild_checks)
+        if not status:
+            self.fail("Error confirming pool info before rebuild")
 
-    def update_pool_verify(self):
-        """Update the pool verification expected values."""
-        self.info_checks["pi_ndisabled"] = ">0"
-        self.rebuild_checks["rs_state"] = 2
-        self.rebuild_checks["rs_obj_nr"] = ">=0"
-        self.rebuild_checks["rs_rec_nr"] = ">=0"
-
-    def execute_pool_verify(self, msg=None):
-        """Verify the pool info.
+    def verify_pool_info_after_rebuild(self, pool):
+        """Verify the pool information after rebuild.
 
         Args:
-            msg (str, optional): additional information to include in the error
-                message. Defaults to None.
+            pool (TestPool): pool to verify
         """
-        status = self.pool.check_pool_info(**self.info_checks)
-        status &= self.pool.check_rebuild_status(**self.rebuild_checks)
-        self.assertTrue(
-            status,
-            "Error confirming pool info{}".format("" if msg is None else msg))
-
-    def create_test_pool(self):
-        """Create the pool and verify its info."""
-        # Create a pool
-        self.pool.create()
-
-        # Verify the pool information before rebuild
-        self.setup_pool_verify()
-        self.execute_pool_verify(" before rebuild")
+        info_checks = {
+            "pi_uuid": pool.uuid,
+            "pi_nnodes": self.server_count,
+            "pi_ntargets": (
+                self.server_count * self.server_managers[0].get_config_value("targets")),
+            "pi_ndisabled": ">0",
+        }
+        rebuild_checks = {
+            "rs_state": 2,
+            "rs_obj_nr": ">=0",
+            "rs_rec_nr": ">=0",
+            "rs_errno": 0,
+        }
+        status = pool.check_pool_info(**info_checks)
+        status &= pool.check_rebuild_status(**rebuild_checks)
+        if not status:
+            self.fail("Error confirming pool info after rebuild")
 
     def create_test_container(self):
         """Create a container and write objects."""
@@ -106,21 +96,29 @@ class RebuildTestBase(TestWithServers):
             self.container.write_objects(
                 self.inputs.rank.value, self.inputs.object_class.value)
 
-    def verify_rank_has_objects(self):
-        """Verify the rank to be excluded has at least one object."""
-        if self.container is not None:
+    def verify_rank_has_objects(self, container):
+        """Verify the rank to be excluded has at least one object.
+
+        Args:
+            container (TestContainer): container to verify
+        """
+        if container is not None:
             rank = self.inputs.rank.value
-            rank_list = self.container.get_target_rank_lists(" before rebuild")
-            qty = self.container.get_target_rank_count(rank, rank_list)
+            rank_list = container.get_target_rank_lists(" before rebuild")
+            qty = container.get_target_rank_count(rank, rank_list)
             self.assertGreater(
                 qty, 0, "No objects written to rank {}".format(rank))
 
-    def verify_rank_has_no_objects(self):
-        """Verify the excluded rank has zero objects."""
-        if self.container is not None:
+    def verify_rank_has_no_objects(self, container):
+        """Verify the excluded rank has zero objects.
+
+        Args:
+            container (TestContainer): container to verify
+        """
+        if container is not None:
             rank = self.inputs.rank.value
-            rank_list = self.container.get_target_rank_lists(" after rebuild")
-            qty = self.container.get_target_rank_count(rank, rank_list)
+            rank_list = container.get_target_rank_lists(" after rebuild")
+            qty = container.get_target_rank_count(rank, rank_list)
             self.assertEqual(
                 qty, 0, "Excluded rank {} still has objects".format(rank))
 
@@ -138,17 +136,18 @@ class RebuildTestBase(TestWithServers):
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
 
-    def verify_container_data(self, txn=None):
+    def verify_container_data(self, container, txn=None):
         """Verify the container data.
 
         Args:
+            container (TestContainer): container to verify
             txn (int, optional): transaction timestamp to read. Defaults to None
                 which uses the last timestamp written.
         """
-        if self.container is not None:
-            self.assertTrue(
-                self.container.read_objects(txn),
-                "Error verifying container data")
+        if container is None:
+            return
+        if not container.read_objects(txn):
+            self.fail("Error verifying container data")
 
     def execute_rebuild_test(self, create_container=True):
         """Execute the rebuild test steps.
@@ -158,18 +157,19 @@ class RebuildTestBase(TestWithServers):
                 container. Defaults to True.
         """
         # Get the test params
-        self.setup_test_pool()
+        self.add_pool(create=False)
         if create_container:
-            self.setup_test_container()
+            self.add_container(self.pool, create=False)
 
         # Create a pool and verify the pool information before rebuild
-        self.create_test_pool()
+        self.pool = self.get_pool()
+        self.verify_pool_info_before_rebuild(self.pool)
 
         # Create a container and write objects
         self.create_test_container()
 
         # Verify the rank to be excluded has at least one object
-        self.verify_rank_has_objects()
+        self.verify_rank_has_objects(self.container)
 
         # Start the rebuild process
         self.start_rebuild()
@@ -188,13 +188,12 @@ class RebuildTestBase(TestWithServers):
         self.container.query()
 
         # Verify the excluded rank is no longer used with the objects
-        self.verify_rank_has_no_objects()
+        self.verify_rank_has_no_objects(self.container)
 
         # Verify the pool information after rebuild
-        self.update_pool_verify()
-        self.execute_pool_verify(" after rebuild")
+        self.verify_pool_info_after_rebuild(self.pool)
 
         # Verify the container data can still be accessed
-        self.verify_container_data()
+        self.verify_container_data(self.container)
 
         self.log.info("Test passed")

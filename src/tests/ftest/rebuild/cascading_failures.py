@@ -24,22 +24,30 @@ class RbldCascadingFailures(RebuildTestBase):
         self.container.write_objects(
             self.inputs.rank.value[0], self.inputs.object_class.value)
 
-    def verify_rank_has_objects(self):
-        """Verify the first rank to be excluded has at least one object."""
-        rank_list = self.container.get_target_rank_lists(" before rebuild")
+    def verify_rank_has_objects(self, container):
+        """Verify the first rank to be excluded has at least one object.
+
+        Args:
+            container (TestContainer): container to verify
+        """
+        rank_list = container.get_target_rank_lists(" before rebuild")
         objects = {
-            rank: self.container.get_target_rank_count(rank, rank_list)
+            rank: container.get_target_rank_count(rank, rank_list)
             for rank in self.inputs.rank.value
         }
         self.assertGreater(
             objects[self.inputs.rank.value[0]], 0,
             "No objects written to rank {}".format(self.inputs.rank.value[0]))
 
-    def verify_rank_has_no_objects(self):
-        """Verify the excluded rank has zero objects."""
-        rank_list = self.container.get_target_rank_lists(" after rebuild")
+    def verify_rank_has_no_objects(self, container):
+        """Verify the excluded rank has zero objects.
+
+        Args:
+            container (TestContainer): container to verify
+        """
+        rank_list = container.get_target_rank_lists(" after rebuild")
         objects = {
-            rank: self.container.get_target_rank_count(rank, rank_list)
+            rank: container.get_target_rank_count(rank, rank_list)
             for rank in self.inputs.rank.value
         }
         for rank in self.inputs.rank.value:

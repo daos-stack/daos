@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -42,17 +43,18 @@ class RbldDeleteObjects(RebuildTestBase):
             self.punched_qty = self.container.punch_records(self.punched_indices)
             # self.punched_qty /= self.container.object_qty.value
 
-    def verify_container_data(self, txn=0):
+    def verify_container_data(self, container, txn=0):
         """Verify the container data.
 
         Args:
+            container (TestContainer): container to verify
             txn (int, optional): transaction timestamp to read. Defaults to 0.
         """
         # Verify the expected number of objects/records were punched
         if self.punch_type == "object":
             expected_qty = len(self.punched_indices)
         elif self.punch_type == "record":
-            expected_qty = len(self.punched_indices) * self.container.object_qty.value
+            expected_qty = len(self.punched_indices) * container.object_qty.value
         else:
             expected_qty = 0
         self.assertEqual(
@@ -61,7 +63,7 @@ class RbldDeleteObjects(RebuildTestBase):
                 self.punch_type, self.punched_qty, expected_qty))
 
         # Read objects from the last transaction
-        super().verify_container_data(txn)
+        super().verify_container_data(container, txn)
 
     def test_rebuild_delete_objects(self):
         """JIRA ID: DAOS-2572.
