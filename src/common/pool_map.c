@@ -13,6 +13,8 @@
 #include <daos/pool_map.h>
 #include "fault_domain.h"
 
+#include <gurt/atomic.h>
+
 /** counters for component (sub)tree */
 struct pool_comp_cntr {
 	/** # of domains in the top level */
@@ -55,12 +57,10 @@ struct pool_comp_sorter {
 
 /** In memory data structure for pool map */
 struct pool_map {
-	/** protect the refcount */
-	pthread_mutex_t		 po_lock;
 	/** Current version of pool map */
 	uint32_t		 po_version;
 	/** refcount on the pool map */
-	int			 po_ref;
+	ATOMIC uint32_t          po_ref;
 	/** # domain layers */
 	unsigned int		 po_domain_layers;
 	/**
@@ -932,8 +932,6 @@ pool_map_finalise(struct pool_map *map)
 		pool_tree_free(map->po_tree);
 		map->po_tree = NULL;
 	}
-
-	D_MUTEX_DESTROY(&map->po_lock);
 }
 
 void
@@ -982,10 +980,6 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 		goto out_tree;
 	}
 
-	rc = D_MUTEX_INIT(&map->po_lock, NULL);
-	if (rc != 0)
-		goto out_tree;
-
 	pool_tree_count(tree, &cntr);
 
 	/* po_map_print(map); */
@@ -998,7 +992,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 	D_ALLOC_ARRAY(map->po_comp_fail_cnts, map->po_domain_layers);
 	if (map->po_comp_fail_cnts == NULL) {
 		rc = -DER_NOMEM;
-		goto out_mutex;
+		goto out_domain_layers;
 	}
 
 	D_ALLOC_ARRAY(map->po_domain_sorters, map->po_domain_layers);
@@ -1061,9 +1055,8 @@ out_domain_sorters:
 	D_FREE(map->po_domain_sorters);
 out_comp_fail_cnts:
 	D_FREE(map->po_comp_fail_cnts);
-out_mutex:
+out_domain_layers:
 	map->po_domain_layers = 0;
-	D_MUTEX_DESTROY(&map->po_lock);
 out_tree:
 	pool_tree_free(map->po_tree);
 	map->po_tree = NULL;
@@ -1798,7 +1791,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 	}
 
 	map->po_version = version;
-	map->po_ref = 1; /* 1 for caller */
+	atomic_store_relaxed(&map->po_ref, 1); /* for caller */
 out:
 	if (rc != 0)
 		D_FREE(map);
@@ -1959,9 +1952,7 @@ pool_map_destroy(struct pool_map *map)
 void
 pool_map_addref(struct pool_map *map)
 {
-	D_MUTEX_LOCK(&map->po_lock);
-	map->po_ref++;
-	D_MUTEX_UNLOCK(&map->po_lock);
+	atomic_fetch_add_relaxed(&map->po_ref, 1);
 }
 
 /**
@@ -1971,15 +1962,11 @@ pool_map_addref(struct pool_map *map)
 void
 pool_map_decref(struct pool_map *map)
 {
-	bool free;
+	uint32_t oldref;
 
-	D_MUTEX_LOCK(&map->po_lock);
-	D_ASSERT(map->po_ref > 0);
-	map->po_ref--;
-	free = (map->po_ref == 0);
-	D_MUTEX_UNLOCK(&map->po_lock);
-
-	if (free)
+	oldref = atomic_fetch_sub_relaxed(&map->po_ref, 1);
+	D_ASSERT(oldref > 0);
+	if (oldref == 1)
 		pool_map_destroy(map);
 }
 
