@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -578,10 +579,6 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		D_ERROR("Rank list is empty\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-
-	rc = crt_group_psr_set(*grp, (*rank_list)->rl_ranks[0]);
-	if (rc != 0)
-		D_GOTO(out, rc);
 
 out:
 	if (rc != 0 && opts.assert_on_error) {
