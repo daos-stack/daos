@@ -1155,7 +1155,7 @@ class TestGroup():
         yaml_file = os.path.join(yaml_dir, "extra_yaml_launch_filters.yaml")
         if self._nvme.startswith("auto_md_on_ssd"):
             lines = [
-                'launch:'
+                'launch:',
                 '  !filter-only : /run/pool/md_on_ssd_p2'
             ]
             write_yaml_file(logger, yaml_file, lines)
