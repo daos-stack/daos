@@ -765,12 +765,12 @@ func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 	rsa := raft.ServerAddress(vc.Addr.String())
 
 	switch op {
-	case raftOpAddMember:
-	case raftOpUpdateMember:
+	case raftOpAddMember, raftOpUpdateMember:
 		return db.raft.withReadLock(func(svc raftService) error {
 			if hasVoter, err := raftSvcHasVoter(svc, rsa); err != nil {
 				return errors.Wrapf(err, "check if %s is already a raft voter", rsa)
 			} else if !hasVoter {
+				db.log.Debugf("adding %s as a new raft voter", vc)
 				return svc.AddVoter(rsi, rsa, 0, 0).Error()
 			}
 
@@ -778,23 +778,29 @@ func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 			return nil
 		})
 	case raftOpRemoveMember:
-		// If we're updating an existing member, we need to kick it out of the
-		// raft cluster and then re-add it so that it doesn't hijack the campaign.
-		db.log.Debugf("removing %s as a current raft voter", vc)
+		// We only need to remove a voter if all of its members are gone.
 		if err := db.raft.withReadLock(func(svc raftService) error {
+			members, err := db.FindMembersByAddr(vc.Addr)
+			if err != nil {
+				return errors.Wrapf(err, "look up members at address %s", rsa)
+			}
+			for _, m := range members {
+				if m.UUID == vc.UUID {
+					// This is the member we're planning to remove
+					continue
+				}
+
+				// There are members other than this one
+				return nil
+			}
+
+			db.log.Debugf("removing %s as a current raft voter", vc)
 			return svc.RemoveServer(rsi, 0, 0).Error()
 		}); err != nil {
 			return errors.Wrapf(err, "failed to remove %q as a raft replica", vc.Addr)
 		}
 	default:
 		return errors.Errorf("unhandled manageVoter op: %s", op)
-	}
-
-	db.log.Debugf("adding %s as a new raft voter", vc)
-	if err := db.raft.withReadLock(func(svc raftService) error {
-		return svc.AddVoter(rsi, rsa, 0, 0).Error()
-	}); err != nil {
-		return errors.Wrapf(err, "failed to add %q as raft replica", vc.Addr)
 	}
 
 	return nil
