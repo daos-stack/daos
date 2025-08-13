@@ -3,12 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from apricot import TestWithServers
 from exception_utils import CommandFailure
 from general_utils import report_errors
-from recovery_test_base import RecoveryTestBase
+from recovery_utils import query_detect, wait_for_check_complete
 
 
-class DMGCheckRepairTest(RecoveryTestBase):
+class DMGCheckRepairTest(TestWithServers):
     """Test dmg check repair.
 
     :avocado: recursive
@@ -51,7 +52,7 @@ class DMGCheckRepairTest(RecoveryTestBase):
 
         # 4. Verify that the orphan pool is detected.
         self.log_step("Verify that the orphan pool is detected.")
-        query_reports = self.query_detect(fault="orphan pool")
+        query_reports = query_detect(dmg=dmg_command, fault="orphan pool")
 
         # 5. Repair with invalid ID. Verify error message.
         self.log_step("Repair with invalid ID. Verify error message.")
@@ -97,7 +98,7 @@ class DMGCheckRepairTest(RecoveryTestBase):
         # 7. Repair with correct ID and action.
         self.log_step("Repair with correct ID and action.")
         dmg_command.check_repair(seq_num=seq_num, action=action)
-        self.wait_for_check_complete()
+        wait_for_check_complete(dmg=dmg_command)
 
         # 8. Repair again. Verify error message.
         self.log_step("Repair again. Verify error message.")
