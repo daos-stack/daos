@@ -14,8 +14,6 @@ from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
 
-import yaml
-
 THIS_FILE = os.path.realpath(__file__)
 FTEST_DIR = os.path.dirname(THIS_FILE)
 MANUAL_TAG = ('manual',)
@@ -54,6 +52,15 @@ def all_python_files(path):
         list: sorted path names of .py files
     """
     return sorted(map(str, Path(path).rglob("*.py")))
+
+
+def all_ftest_python_files():
+    """Get a list of all .py files recursively in the ftest directory.
+
+    Returns:
+        list: sorted path names of .py files in ftest
+    """
+    return all_python_files(FTEST_DIR)
 
 
 class FtestTagMap():
@@ -296,7 +303,7 @@ def run_linter(paths=None, verbose=False):
         LintFailure: if linting fails
     """
     if not paths:
-        paths = all_python_files(FTEST_DIR)
+        paths = all_ftest_python_files()
     all_files = []
     all_classes = defaultdict(int)
     all_methods = defaultdict(int)
@@ -391,7 +398,7 @@ def run_dump(paths=None, tags=None):
         int: 0 on success; 1 if no matches found
     """
     if not paths:
-        paths = all_python_files(FTEST_DIR)
+        paths = all_ftest_python_files()
 
     # Store output as {path: {class: {test: tags}}}
     output = defaultdict(lambda: defaultdict(dict))
@@ -417,114 +424,6 @@ def run_dump(paths=None, tags=None):
                 print(f'    {method_name_fm} - {tags_fm}')
 
     return 0 if output else 1
-
-
-def files_to_tags(paths):
-    """Get the unique tags for paths.
-
-    Args:
-        paths (list): paths to get tags for
-
-    Returns:
-        set: set of test tags representing paths
-    """
-    # Get tags for ftest paths
-    ftest_tag_map = FtestTagMap(all_python_files(FTEST_DIR))
-
-    tag_config = read_tag_config()
-    all_tags = set()
-
-    for path in paths:
-        for _pattern, _config in tag_config.items():
-            if re.search(rf'{_pattern}', path):
-                if _config['handler'] == 'FtestTagMap':
-                    # Special ftest handling
-                    try:
-                        all_tags.update(ftest_tag_map.minimal_tags(path))
-                    except KeyError:
-                        # Use default from config
-                        all_tags.update(_config['tags'].split(' '))
-                elif _config['handler'] == 'direct':
-                    # Use direct tags from config
-                    all_tags.update(_config['tags'].split(' '))
-                else:
-                    raise ValueError(f'Invalid handler: {_config["handler"]}')
-
-                if _config["stop_on_match"]:
-                    # Don't process further entries for this path
-                    break
-
-    return all_tags
-
-
-def read_tag_config():
-    """Read tags.yaml.
-
-    Also validates the config as read.
-
-    Returns:
-        dict: the config
-
-    Raises:
-        TypeError: If config types are invalid
-        ValueError: If config values are invalid
-    """
-    with open(os.path.join(FTEST_DIR, 'tags.yaml'), 'r') as file:
-        config = yaml.safe_load(file.read())
-
-    for key, val in config.items():
-        _type = type(val)
-        if _type not in (str, dict):
-            raise TypeError(f'Expected {str} or {dict}, not {_type}')
-        if _type == str:
-            # Expand shorthand to dict
-            config[key] = {'tags': val}
-
-        # Check for invalid config options
-        extra_keys = set(config[key].keys()) - set(['tags', 'handler', 'stop_on_match'])
-        if extra_keys:
-            raise ValueError(f'Unsupported keys in config: {", ".join(extra_keys)}')
-
-        # Set default handler and check for invalid values
-        if 'handler' not in config[key]:
-            config[key]['handler'] = 'direct'
-        elif config[key]['handler'] not in ('direct', 'FtestTagMap'):
-            raise ValueError(f'Invalid handler: {config[key]["handler"]}')
-
-        # Set default stop_on_match and check for invalid values
-        if 'stop_on_match' not in config[key]:
-            config[key]['stop_on_match'] = False
-        elif not isinstance(config[key]['stop_on_match'], bool):
-            raise ValueError(f'Invalid stop_on_match: {config[key]["stop_on_match"]}')
-
-        # Check for missing or invalid tags
-        if 'tags' not in config[key]:
-            raise ValueError(f'Missing tags for {key}')
-        if not isinstance(config[key]['tags'], str):
-            raise TypeError(f'Expected {str} for tags, not {type(config[key]["tags"])}')
-
-    return config
-
-
-def run_list(paths=None):
-    """List unique tags for paths.
-
-    Args:
-        paths (list, optional): paths to list tags of. Defaults to all ftest python files
-
-    Returns:
-        int: 0 on success; 1 if no matches found
-
-    Raises:
-        ValueError: if neither paths nor tags is given
-    """
-    if not paths:
-        paths = all_python_files(FTEST_DIR)
-    tags = files_to_tags(paths)
-    if tags:
-        print(' '.join(sorted(tags)))
-        return 0
-    return 1
 
 
 def test_tag_set():
@@ -643,7 +542,7 @@ def test_tags_util(verbose=False):
 
     print_step('__init__')
     # Just a smoke test to verify the map can parse real files
-    tag_map = FtestTagMap(all_python_files(FTEST_DIR))
+    tag_map = FtestTagMap(all_ftest_python_files())
     expected_tags = set(['test_harness_config', 'test_ior_small', 'test_dfuse_mu_perms'])
     assert len(tag_map.unique_tags().intersection(expected_tags)) == len(expected_tags)
 
@@ -683,7 +582,7 @@ def main():
     parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description=description)
     parser.add_argument(
         "command",
-        choices=("lint", "list", "dump", "unit"),
+        choices=("lint", "dump", "unit"),
         help="command to run")
     parser.add_argument(
         "-v", "--verbose",
@@ -728,8 +627,6 @@ def main():
             rc = 1
     elif args.command == "dump":
         rc = run_dump(args.paths, args.tags)
-    elif args.command == "list":
-        rc = run_list(args.paths)
     elif args.command == "unit":
         test_tag_set()
         test_tags_util(args.verbose)
