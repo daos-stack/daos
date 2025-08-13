@@ -2128,7 +2128,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 	arg.iv_hdls    = NULL;
 	rc = rdb_tx_iterate(&tx, &svc->ps_handles, false /* backward */, add_conn_cb, &arg);
 	if (rc != 0) {
-		DL_ERROR(rc, "Failed to find hdls for evict pool " DF_UUIDF " connections.\n",
+		DL_ERROR(rc, "Failed to find hdls for evict pool " DF_UUIDF " connections.",
 			 DP_UUID(svc->ps_uuid));
 		D_GOTO(out_free, rc);
 	}
