@@ -79,6 +79,10 @@ struct migrate_pool_tls {
 	ATOMIC uint32_t		*mpt_obj_ult_cnts;
 	ATOMIC uint32_t		*mpt_dkey_ult_cnts;
 
+	/* ULTs waiting for scheduling */
+	ATOMIC uint32_t		 mpt_obj_ult_waiters;
+	ATOMIC uint32_t		 mpt_dkey_ult_waiters;
+
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
 
