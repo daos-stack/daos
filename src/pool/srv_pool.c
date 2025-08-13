@@ -2035,8 +2035,7 @@ add_conn_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 static int
 read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 			uint32_t *map_version_out, daos_prop_t **prop_out,
-			struct pool_iv_conns **iv_hdls,
-			uuid_t srv_pool_hdl, uuid_t srv_cont_hdl)
+			struct pool_iv_conns **iv_hdls, uuid_t srv_pool_hdl, uuid_t srv_cont_hdl)
 {
 	struct rdb_tx           tx;
 	d_iov_t                 value;
@@ -2124,9 +2123,9 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 
 	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
 	D_ASSERT(prop_entry != NULL);
-	arg.obj_ver = prop_entry->dpe_val;
+	arg.obj_ver    = prop_entry->dpe_val;
 	arg.global_ver = svc->ps_global_version;
-	arg.iv_hdls = NULL;
+	arg.iv_hdls    = NULL;
 	rc = rdb_tx_iterate(&tx, &svc->ps_handles, false /* backward */, add_conn_cb, &arg);
 	if (rc != 0) {
 		DL_ERROR(rc, "Failed to find hdls for evict pool " DF_UUIDF " connections.\n",
@@ -2435,8 +2434,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (!primary_group_initialized())
 		return -DER_GRPVER;
 
-	rc = read_db_for_stepping_up(svc, &map_buf, &map_version, &prop, &iv_hdls,
-				     srv_pool_hdl, srv_cont_hdl);
+	rc = read_db_for_stepping_up(svc, &map_buf, &map_version, &prop, &iv_hdls, srv_pool_hdl,
+				     srv_cont_hdl);
 	if (rc != 0)
 		goto out;
 
