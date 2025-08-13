@@ -16,20 +16,24 @@ class RbldBasic(TestWithServers):
     :avocado: recursive
     """
 
-    def run_rebuild_test(self, pool_quantity):
-        """Run the rebuild test for the specified number of pools.
+    def test_rebuild_basic(self):
+        """JIRA ID: DAOS-XXXX Rebuild-001.
 
-        Args:
-            pool_quantity (int): number of pools to test
+        Test Description:
+            The most basic rebuild test.
+
+        Use Cases:
+            single pool rebuild, single client, various record/object counts
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=rebuild,pool,daos_cmd
+        :avocado: tags=RbldBasic,test_rebuild_basic
         """
         # Get the test parameters
-        pools = []
-        containers = []
-        for _ in range(pool_quantity):
-            pools.append(self.get_pool(create=False))
-            containers.append(self.get_container(pools[-1], create=False))
-        rank = self.params.get("rank", "/run/testparams/*")
-        obj_class = self.params.get("object_class", "/run/testparams/*")
+        rank = self.random.choice(list(self.server_managers[0].ranks.keys()))
+        datasets = self.params.get("datasets", "/run/testparams/*")
+        num_pools = self.params.get("num_pools", "/run/testparams/*")
 
         # Collect server configuration information
         server_count = len(self.hostlist_servers)
@@ -40,26 +44,33 @@ class RbldBasic(TestWithServers):
             "Running with %s servers, %s engines per server, and %s targets per engine",
             server_count, engine_count, target_count)
 
-        # Create the pools and confirm their status
+        self.log_step(f"Create {num_pools} pools")
+        pools = []
         status = True
-        for pool in pools:
-            pool.create()
+        for _ in range(num_pools):
+            pool = self.get_pool()
+            pools.append(pool)
             status &= pool.check_pool_info(
                 pi_nnodes=server_count * engine_count,
                 pi_ntargets=server_count * engine_count * target_count,
-                pi_ndisabled=0
-            )
+                pi_ndisabled=0)
             status &= pool.check_rebuild_status(rs_state=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info before rebuild")
 
-        # Create containers in each pool and fill them with data
-        rs_obj_nr = []
-        rs_rec_nr = []
-        for container in containers:
-            container.create()
-            container.write_objects(rank, obj_class)
+        self.log_step(f"Create {len(datasets)} containers and fill with data")
+        containers = []
+        for idx, dataset in enumerate(datasets):
+            # Round-robin create containers across pools
+            container = self.get_container(pools[idx % len(pools)])
+            containers.append(container)
+            (oclass, data_size, object_qty, record_qty) = dataset
+            container.update_params(
+                data_size=data_size, object_qty=object_qty, record_qty=record_qty)
+            container.write_objects(rank, oclass)
 
         # Determine how many objects will need to be rebuilt
+        rs_obj_nr = []
+        rs_rec_nr = []
         for container in containers:
             target_rank_lists = container.get_target_rank_lists(" prior to rebuild")
             rebuild_qty = container.get_target_rank_count(rank, target_rank_lists)
@@ -73,24 +84,21 @@ class RbldBasic(TestWithServers):
                 rs_rec_nr[-1], container.object_qty.value * container.record_qty.value, container,
                 rank)
 
-        # Manually exclude the specified rank
-        for index, pool in enumerate(pools):
-            if index == 0:
-                self.server_managers[0].stop_ranks([rank], True)
-            else:
-                # Use the direct dmg pool exclude command to avoid updating the pool version again
-                pool.exclude([rank])
-
-        # Wait for recovery to start for first pool.
-        pools[0].wait_for_rebuild_to_start()
-
-        # Wait for recovery to complete
+        self.log_step(f"Exclude random rank {rank}")
+        self.server_managers[0].stop_ranks([rank], True)
         for pool in pools:
-            pool.wait_for_rebuild_to_end()
+            pool.exclude([rank])
 
-        # Check the pool information after the rebuild
+        self.log_step("Wait for rebuild to start")
+        pools[0].wait_for_rebuild_to_start(interval=3)
+
+        self.log_step("Wait for rebuild to end")
+        for pool in pools:
+            pool.wait_for_rebuild_to_end(interval=3)
+
+        self.log_step("Verify pool info after rebuild")
         status = True
-        for index, pool in enumerate(pools):
+        for pool in pools:
             status &= pool.check_pool_info(
                 pi_nnodes=server_count * engine_count,
                 pi_ntargets=server_count * engine_count * target_count,
@@ -100,41 +108,10 @@ class RbldBasic(TestWithServers):
                 rs_state=2, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
-        # Verify the data after rebuild
+        self.log_step("Verify container data after rebuild")
         for container in containers:
             container.set_prop(prop="status", value="healthy")
             if container.object_qty.value != 0:
                 self.assertTrue(container.read_objects(), "Data verification error after rebuild")
-        self.log.info("Test Passed")
 
-    def test_simple_rebuild(self):
-        """JIRA ID: DAOS-XXXX Rebuild-001.
-
-        Test Description:
-            The most basic rebuild test.
-
-        Use Cases:
-            single pool rebuild, single client, various record/object counts
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=rebuild,pool,daos_cmd
-        :avocado: tags=RbldBasic,test_simple_rebuild
-        """
-        self.run_rebuild_test(1)
-
-    def test_multipool_rebuild(self):
-        """JIRA ID: DAOS-XXXX (Rebuild-002).
-
-        Test Description:
-            Expand on the basic test by rebuilding 2 pools at once.
-
-        Use Cases:
-            multi-pool rebuild, single client, various object and record counts
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=rebuild,pool
-        :avocado: tags=RbldBasic,test_multipool_rebuild
-        """
-        self.run_rebuild_test(self.params.get("pool_quantity", "/run/testparams/*"))
+        self.log_step("Test Passed")
