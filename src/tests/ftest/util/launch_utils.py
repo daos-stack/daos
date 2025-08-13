@@ -1153,7 +1153,7 @@ class TestGroup():
             YamlException: if there was an error writing the yaml file
         """
         yaml_file = os.path.join(yaml_dir, "extra_yaml_launch_filters.yaml")
-        if self._nvme.startswith("auto_md_on_ssd"):
+        if self._nvme and self._nvme.startswith("auto_md_on_ssd"):
             lines = [
                 'launch:',
                 '  !filter-only : /run/pool/md_on_ssd_p2'
