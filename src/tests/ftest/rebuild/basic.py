@@ -17,13 +17,12 @@ class RbldBasic(TestWithServers):
     """
 
     def test_rebuild_basic(self):
-        """JIRA ID: DAOS-XXXX Rebuild-001.
-
+        """
         Test Description:
             The most basic rebuild test.
 
         Use Cases:
-            single pool rebuild, single client, various record/object counts
+            Multiple pool rebuild, single client, various record/object counts
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
