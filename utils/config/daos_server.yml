@@ -218,6 +218,15 @@
 ## default: false
 #disable_hugepages: false
 #
+## Hugepages will be applied across NUMA-nodes based on engine affinity. Typical scenarios where an
+## equal number of engines exist across a number of NUMA-nodes or all engines on a single NUMA-node
+## will be handled but if it's expected that there are a different number of engines on multiple
+## NUMA-nodes e.g. two engines on NUMA-0 and one engine on NUMA-1, then explicitly setting this flag
+## will enable engine start-up with an imbalanced configuration.
+#
+## default: false
+#allow_numa_imbalance: true
+#
 #
 ## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
 ## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
@@ -246,19 +255,19 @@
 ## Force specific path for daos_server (control plane) logs.
 #
 ## default: print to stderr
-#control_log_file: /tmp/daos_server.log
+#control_log_file: /var/log/daos/daos_server.log
 #
 #
 ## Enable daos_server_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#helper_log_file: /tmp/daos_server_helper.log
+#helper_log_file: /var/log/daos/daos_server_helper.log
 #
 #
 ## Enable daos_firmware_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#firmware_helper_log_file: /tmp/daos_firmware_helper.log
+#firmware_helper_log_file: /var/log/daos/daos_firmware_helper.log
 #
 #
 ## Enable HTTP endpoint for remote telemetry collection.
@@ -359,7 +368,7 @@
 #  # Force specific path for DAOS debug logs.
 #
 #  # default: engine log goes to control_log_file
-#  log_file: /tmp/daos_engine.0.log
+#  log_file: /var/log/daos/daos_engine.0.log
 #
 #  # Pass specific environment variables to the engine process.
 #  # Empty by default. Values should be supplied without encapsulating quotes.
@@ -523,7 +532,7 @@
 #  # Force specific path for DAOS debug logs.
 #
 #  # default: engine log goes to control_log_file
-#  log_file: /tmp/daos_engine.1.log
+#  log_file: /var/log/daos/daos_engine.1.log
 #
 #  # Pass specific environment variables to the engine process.
 #  # Empty by default. Values should be supplied without encapsulating quotes.

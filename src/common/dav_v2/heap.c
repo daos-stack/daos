@@ -34,6 +34,7 @@
 #define MAX_RUN_LOCKS_VG MAX_CHUNK /* avoid perf issues /w drd */
 
 #define ZINFO_VERSION    0x1
+#define ZINFO_CAPACITY            262144
 
 struct zinfo_element {
 	unsigned char z_allotted   : 1;
@@ -42,9 +43,11 @@ struct zinfo_element {
 };
 
 struct zinfo_vec {
-	uint32_t             version;
-	uint32_t             num_elems;
-	struct zinfo_element z[];
+	uint32_t             zv_version;
+	uint32_t             zv_capacity;
+	uint32_t             zv_inuse;
+	uint64_t             zv_next_off;
+	struct zinfo_element zv_elems[];
 };
 
 TAILQ_HEAD(mbrt_q, mbrt);
@@ -97,7 +100,7 @@ struct mbrt_qbs {
 struct soemb_rt {
 	struct mbrt    *svec[SOEMB_ACTIVE_CNT];
 	int             cur_idx;
-	int             fur_idx;
+	int             far_idx;
 	struct mbrt_qbs qbs;
 };
 
@@ -138,7 +141,7 @@ heap_zinfo_set(struct palloc_heap *heap, uint32_t zid, bool allotted, bool evict
 	struct zinfo_element *ze;
 
 	if (heap->rt->zinfo_vec) {
-		ze                  = heap->rt->zinfo_vec->z;
+		ze                  = heap->rt->zinfo_vec->zv_elems;
 		ze[zid].z_allotted  = allotted;
 		ze[zid].z_evictable = evictable;
 		mo_wal_persist(&heap->p_ops, &ze[zid], sizeof(ze[zid]));
@@ -152,7 +155,7 @@ heap_zinfo_get(struct palloc_heap *heap, uint32_t zid, bool *allotted, bool *evi
 	struct zinfo_element *ze;
 
 	if (heap->rt->zinfo_vec) {
-		ze         = heap->rt->zinfo_vec->z;
+		ze         = heap->rt->zinfo_vec->zv_elems;
 		*allotted  = ze[zid].z_allotted;
 		*evictable = ze[zid].z_evictable;
 	} else {
@@ -165,7 +168,7 @@ heap_zinfo_get(struct palloc_heap *heap, uint32_t zid, bool *allotted, bool *evi
 static inline void
 heap_zinfo_set_usage(struct palloc_heap *heap, uint32_t zid, enum mb_usage_hint val)
 {
-	struct zinfo_element *ze = heap->rt->zinfo_vec->z;
+	struct zinfo_element *ze = heap->rt->zinfo_vec->zv_elems;
 
 	D_ASSERT(heap->rt->zinfo_vec && ze[zid].z_allotted && val < MB_UMAX_HINT);
 	ze[zid].z_usage_hint = val;
@@ -175,31 +178,51 @@ heap_zinfo_set_usage(struct palloc_heap *heap, uint32_t zid, enum mb_usage_hint 
 static inline void
 heap_zinfo_get_usage(struct palloc_heap *heap, uint32_t zid, enum mb_usage_hint *val)
 {
-	struct zinfo_element *ze = heap->rt->zinfo_vec->z;
+	struct zinfo_element *ze = heap->rt->zinfo_vec->zv_elems;
 
 	D_ASSERT(heap->rt->zinfo_vec && ze[zid].z_allotted && ze[zid].z_evictable &&
 		 ze[zid].z_usage_hint < MB_UMAX_HINT);
 	*val = ze[zid].z_usage_hint;
 }
 
-size_t
-heap_zinfo_get_size(uint32_t nzones)
+void
+heap_zinfo_get_size(uint64_t *alloc_size, uint64_t *capacity)
 {
-	return (sizeof(struct zinfo_vec) + sizeof(struct zinfo_element) * nzones);
+	*alloc_size = (sizeof(struct zinfo_vec) + sizeof(struct zinfo_element) * ZINFO_CAPACITY);
+	*capacity   = ZINFO_CAPACITY;
 }
 
-static inline void
-heap_zinfo_init(struct palloc_heap *heap)
+void
+heap_zinfo_init(struct palloc_heap *heap, bool is_create)
 {
-	struct zinfo_vec *z = heap->rt->zinfo_vec;
+	struct zinfo_vec *zv;
+	struct zone      *z0 = heap->layout_info.zone0;
+	uint64_t          alloc_size, capacity;
 
-	D_ASSERT(heap->layout_info.zone0->header.zone0_zinfo_size >=
-		 heap_zinfo_get_size(heap->rt->nzones));
+	heap_zinfo_get_size(&alloc_size, &capacity);
+	D_ASSERT(z0->header.zone0_zinfo_size == alloc_size);
 
-	z->version   = ZINFO_VERSION;
-	z->num_elems = heap->rt->nzones;
-	mo_wal_persist(&heap->p_ops, z, sizeof(*z));
-	heap_zinfo_set(heap, 0, 1, false);
+	heap->rt->zinfo_vec      = HEAP_OFF_TO_PTR(heap, z0->header.zone0_zinfo_off);
+	heap->rt->zinfo_vec_size = z0->header.zone0_zinfo_size;
+
+	zv = heap->rt->zinfo_vec;
+
+	if (is_create) {
+		zv->zv_version  = ZINFO_VERSION;
+		zv->zv_capacity = capacity;
+		zv->zv_inuse    = heap->rt->nzones;
+		mo_wal_persist(&heap->p_ops, zv, sizeof(*zv));
+		heap_zinfo_set(heap, 0, 1, false);
+	} else {
+		D_ASSERT(zv->zv_inuse <= heap->rt->nzones);
+		if (zv->zv_inuse < heap->rt->nzones) {
+			zv->zv_inuse = heap->rt->nzones;
+			mo_wal_persist(&heap->p_ops, &zv->zv_inuse, sizeof(zv->zv_inuse));
+		}
+	}
+	heap->rt->zones_exhausted    = 1;
+	heap->rt->zones_exhausted_ne = 1;
+	heap->rt->zones_exhausted_e  = 0;
 }
 
 static void
@@ -401,7 +424,7 @@ soemb_init(struct soemb_rt *smbrt)
 	memset(smbrt->svec, 0, sizeof(struct mbrt *) * SOEMB_ACTIVE_CNT);
 	mbrt_qbs_init(&smbrt->qbs);
 	smbrt->cur_idx = 0;
-	smbrt->fur_idx = 0;
+	smbrt->far_idx = 0;
 }
 
 static void
@@ -780,6 +803,32 @@ heap_soemb_active_iter_init(struct palloc_heap *heap)
 	heap->rt->smbrt.cur_idx = 0;
 }
 
+static int
+heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id);
+
+static struct mbrt *
+heap_soemb_passive_get(struct palloc_heap *heap)
+{
+	struct soemb_rt *smbrt = &heap->rt->smbrt;
+	struct mbrt     *mb    = NULL;
+	int              ret;
+	uint32_t         mb_id;
+
+	mb = mbrt_qbs_getmb(&smbrt->qbs, 0);
+	if (mb)
+		return mb;
+
+	ret = heap_create_soe_mb(heap, &mb_id);
+	if (ret == 0)
+		return heap_mbrt_get_mb(heap, mb_id);
+
+	mb = mbrt_qbs_getmb(&smbrt->qbs, 1);
+	if (mb)
+		return mb;
+
+	return 0;
+}
+
 uint32_t
 heap_soemb_active_get(struct palloc_heap *heap)
 {
@@ -789,35 +838,36 @@ heap_soemb_active_get(struct palloc_heap *heap)
 	if (heap->rt->nzones_e == 0)
 		return 0;
 
-	if (smbrt->cur_idx > smbrt->fur_idx)
-		smbrt->fur_idx = smbrt->cur_idx;
+	if (smbrt->cur_idx > smbrt->far_idx)
+		smbrt->far_idx = smbrt->cur_idx;
 
 	if (smbrt->cur_idx < SOEMB_ACTIVE_CNT) {
 		mb = smbrt->svec[smbrt->cur_idx];
-		smbrt->cur_idx++;
+		if (mb == NULL) {
+			mb = heap_soemb_passive_get(heap);
+			if (mb == NULL)
+				return 0;
+			smbrt->svec[smbrt->cur_idx] = mb;
+		}
+		if (mb) {
+			smbrt->cur_idx++;
+			return mb->mb_id;
+		}
 	}
-
-	if (mb)
-		return mb->mb_id;
-
 	return 0;
 }
 
-static int
-heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id);
-
 void
-heap_soemb_reserve(struct palloc_heap *heap)
+heap_soemb_active_update(struct palloc_heap *heap)
 {
-	int              i, ret;
-	uint32_t         mb_id;
-	struct mbrt     *mb;
+	int              i;
+	struct mbrt     *mb    = NULL;
 	struct soemb_rt *smbrt = &heap->rt->smbrt;
 
 	if (heap->rt->nzones_e == 0)
 		return;
 
-	if (smbrt->fur_idx > 1) {
+	if (smbrt->far_idx > 1) {
 		mb = smbrt->svec[0];
 		if (mb)
 			mbrt_qbs_insertmb(&smbrt->qbs, mb);
@@ -827,28 +877,7 @@ heap_soemb_reserve(struct palloc_heap *heap)
 		}
 
 		smbrt->svec[SOEMB_ACTIVE_CNT - 1] = NULL;
-		smbrt->fur_idx                    = 0;
-	}
-
-	for (i = 0; i < SOEMB_ACTIVE_CNT; i++) {
-		if (smbrt->svec[i] != NULL)
-			continue;
-		mb = mbrt_qbs_getmb(&smbrt->qbs, 0);
-		if (mb) {
-			smbrt->svec[i] = mb;
-			break;
-		}
-		ret = heap_create_soe_mb(heap, &mb_id);
-		if (ret == 0) {
-			smbrt->svec[i] = heap_mbrt_get_mb(heap, mb_id);
-			break;
-		}
-		mb = mbrt_qbs_getmb(&smbrt->qbs, 1);
-		if (mb) {
-			smbrt->svec[i] = mb;
-			break;
-		}
-		break;
+		smbrt->far_idx                    = 0;
 	}
 	smbrt->cur_idx = 0;
 }
@@ -1450,6 +1479,7 @@ heap_populate_bucket(struct palloc_heap *heap, struct bucket *bucket)
 
 	heap_zone_init(heap, zone_id, 0, 0);
 	heap_mark_zone_used_persist(heap, zone_id);
+	heap_incr_empty_nemb_cnt(heap);
 
 reclaim_garbage:
 	heap_reclaim_zone_garbage(heap, bucket, zone_id);
@@ -2130,7 +2160,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rc = heap_get_next_unused_zone(heap, &zone_id);
 	if (rc) {
 		D_ERROR("Failed to obtain free zone for evictable mb");
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2138,7 +2168,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	mb = heap_mbrt_setup_mb(heap, zone_id);
 	if (mb == NULL) {
 		ERR("Failed to setup mbrt for zone %u\n", zone_id);
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2227,7 +2257,7 @@ heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rc = heap_get_next_unused_zone(heap, &zone_id);
 	if (rc) {
 		D_ERROR("Failed to obtain free zone for evictable mb");
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2235,7 +2265,7 @@ heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	mb = heap_mbrt_setup_mb(heap, zone_id);
 	if (mb == NULL) {
 		ERR("Failed to setup mbrt for zone %u\n", zone_id);
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2352,26 +2382,17 @@ heap_off2mbid(struct palloc_heap *heap, uint64_t offset)
 }
 
 int
-heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
+heap_update_mbrt_zinfo(struct palloc_heap *heap)
 {
 	bool               allotted, evictable;
-	struct zone       *z0       = heap->layout_info.zone0;
 	int                nemb_cnt = 1, emb_cnt = 0, i;
 	struct mbrt       *mb;
 	struct zone       *z;
 	enum mb_usage_hint usage_hint;
 	int                last_allocated = 0;
 
-	heap->rt->zinfo_vec      = HEAP_OFF_TO_PTR(heap, z0->header.zone0_zinfo_off);
-	heap->rt->zinfo_vec_size = z0->header.zone0_zinfo_size;
-
-	if (init)
-		heap_zinfo_init(heap);
-	else {
-		D_ASSERT(heap->rt->zinfo_vec->num_elems == heap->rt->nzones);
-		heap_zinfo_get(heap, 0, &allotted, &evictable);
-		D_ASSERT((evictable == false) && (allotted == true));
-	}
+	heap_zinfo_get(heap, 0, &allotted, &evictable);
+	D_ASSERT((evictable == false) && (allotted == true));
 
 	for (i = 1; i < heap->rt->nzones; i++) {
 		heap_zinfo_get(heap, i, &allotted, &evictable);
@@ -2400,6 +2421,7 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
 		}
 		last_allocated = i;
 	}
+
 	heap->rt->zones_exhausted    = last_allocated + 1;
 	heap->rt->zones_exhausted_ne = nemb_cnt;
 	heap->rt->zones_exhausted_e  = emb_cnt;
@@ -2701,7 +2723,7 @@ heap_force_recycle(struct palloc_heap *heap)
 	struct bucket *defb;
 	struct mbrt   *mb;
 	uint32_t       zone_id;
-	uint32_t       max_reclaim = heap->rt->empty_nemb_gcth * 2;
+	uint32_t       max_reclaim = HEAP_NEMB_EMPTY_THRESHOLD * 2;
 
 	mb   = heap_mbrt_get_mb(heap, 0);
 
