@@ -649,19 +649,19 @@ int evt_debug(daos_handle_t toh, int debug_level);
 
 enum {
 	/** Return extents visible in the search rectangle */
-	EVT_ITER_VISIBLE = (1 << 0),
+	EVT_ITER_VISIBLE	= (1 << 0),
 	/** Add fully or partially covered extents to EVT_ITER_VISIBLE */
-	EVT_ITER_COVERED = (1 << 1) | EVT_ITER_VISIBLE,
+	EVT_ITER_COVERED	= (1 << 1) | EVT_ITER_VISIBLE,
 	/** Skip visible holes (Only valid with EVT_ITER_VISIBLE) */
-	EVT_ITER_SKIP_HOLES = (1 << 2),
+	EVT_ITER_SKIP_HOLES	= (1 << 2),
 	/**
 	 * Use the embedded iterator of the open handle.
 	 * It can reduce memory consumption, but state of iterator can be
 	 * overwritten by other tree operation.
 	 */
-	EVT_ITER_EMBEDDED = (1 << 3),
+	EVT_ITER_EMBEDDED	= (1 << 3),
 	/** Reverse iterator (ordered iterator only) */
-	EVT_ITER_REVERSE = (1 << 4),
+	EVT_ITER_REVERSE	= (1 << 4),
 	/* If EVT_ITER_VISIBLE is set, evt_iter_probe will calculate and cache
 	 * visible extents and iterate through the cached extents.   Each
 	 * rectangle will be marked as visible or covered.  The partial bit will
@@ -673,18 +673,15 @@ enum {
 	 * search rectangle, including punched extents, are returned.
 	 */
 	/** The iterator is for purge operation */
-	EVT_ITER_FOR_PURGE = (1 << 5),
+	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
-	EVT_ITER_FOR_MIGRATION = (1 << 6),
+	EVT_ITER_FOR_MIGRATION	= (1 << 6),
 	/** The iterator is for data discard */
-	EVT_ITER_FOR_DISCARD = (1 << 7),
+	EVT_ITER_FOR_DISCARD	= (1 << 7),
 	/** Skip visible data (Only valid with EVT_ITER_VISIBLE) */
-	EVT_ITER_SKIP_DATA = (1 << 8),
+	EVT_ITER_SKIP_DATA	= (1 << 8),
 	/** Only process removals */
-	EVT_ITER_REMOVALS = (1 << 9),
-	/** Checking whether the target is aborted or not. */
-	EVT_ITER_FOR_CHECK = (1 << 10),
-
+	EVT_ITER_REMOVALS	= (1 << 9),
 };
 
 D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);
