@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -247,6 +248,7 @@ struct crt_event_cb_priv {
 	ENV(FI_UNIVERSE_SIZE)                                                                      \
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
 	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \
+	ENV(SWIM_SUBGROUP_SIZE)                                                                    \
 	ENV(SWIM_SUSPECT_TIMEOUT)                                                                  \
 	ENV_STR(SWIM_TRAFFIC_CLASS)                                                                \
 	ENV_STR(UCX_IB_FORK_INIT)
@@ -411,6 +413,7 @@ struct crt_bulk {
 	bool            deferred;    /** whether handle allocation was deferred */
 	crt_context_t   crt_ctx;     /** context on which bulk is to be created  */
 	bool            bound;       /** whether crt_bulk_bind() was used on it */
+	d_iov_t        *iovs;        /** original iovs */
 	d_sg_list_t     sgl;         /** original sgl */
 	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
 };

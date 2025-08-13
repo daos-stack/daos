@@ -40,7 +40,7 @@ Pool health info:
 		"normal response": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -68,7 +68,7 @@ Pool health info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Rebuild busy, 42 objs, 21 recs
@@ -85,7 +85,7 @@ Pool space info:
 		"normal response; enabled ranks": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -114,7 +114,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Enabled ranks: 0-2
@@ -132,7 +132,7 @@ Pool space info:
 		"normal response; dead ranks": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.HealthOnlyPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -160,7 +160,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Disabled ranks: 0-1,3
@@ -171,7 +171,7 @@ Pool health info:
 		"normal response; disabled ranks": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -200,7 +200,7 @@ Pool health info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Disabled ranks: 0-1,3
@@ -218,7 +218,7 @@ Pool space info:
 		"unknown/invalid rebuild state response": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -247,7 +247,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Disabled ranks: 0-1,3
@@ -265,7 +265,7 @@ Pool space info:
 		"rebuild failed": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -295,7 +295,7 @@ Pool space info:
 				MemFileBytes: humanize.GiByte,
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Rebuild failed, status=2
@@ -312,7 +312,7 @@ Pool space info:
 		"normal response: MD-on-SSD": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -342,7 +342,7 @@ Pool space info:
 				MdOnSsdActive: true,
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Rebuild busy, 42 objs, 21 recs
@@ -860,7 +860,7 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 					TotalTargets:     16,
 					ActiveTargets:    8,
 					DisabledTargets:  8,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
 					Rebuild: &daos.PoolRebuildStatus{
@@ -872,9 +872,9 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 State    SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
------ ----                                 -----    ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
-one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%            6.0 TB    5.0 TB    4%             8/16     1->2           busy          
+Label UUID                                 State           SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----           ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 TargetsExcluded [0-2]   100 GB   80 GB    8%            6.0 TB    5.0 TB    4%             8/16     1->2           busy          
 
 `,
 		},
@@ -888,7 +888,7 @@ one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%
 					TotalTargets:     16,
 					ActiveTargets:    8,
 					DisabledTargets:  8,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
 					Rebuild: &daos.PoolRebuildStatus{
@@ -901,9 +901,9 @@ one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 State    SvcReps Meta Size Meta Used Meta Imbalance Data Size Data Used Data Imbalance Disabled UpgradeNeeded? Rebuild State 
------ ----                                 -----    ------- --------- --------- -------------- --------- --------- -------------- -------- -------------- ------------- 
-one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB    80 GB     8%             6.0 TB    5.0 TB    4%             8/16     1->2           done          
+Label UUID                                 State           SvcReps Meta Size Meta Used Meta Imbalance Data Size Data Used Data Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----           ------- --------- --------- -------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 TargetsExcluded [0-2]   100 GB    80 GB     8%             6.0 TB    5.0 TB    4%             8/16     1->2           done          
 
 `,
 		},

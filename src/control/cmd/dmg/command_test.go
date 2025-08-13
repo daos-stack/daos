@@ -241,7 +241,7 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 								{PciAddr: "0000:80:0.0"},
 							},
 						},
-						MemInfo: &ctlpb.MemInfo{
+						SysMemInfo: &ctlpb.SysMemInfo{
 							HugepageSizeKb: 2048,
 						},
 					},

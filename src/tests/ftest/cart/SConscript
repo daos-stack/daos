@@ -38,7 +38,7 @@ def scons():
     ##############################
     tenv = env.Clone()
 
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'dpar'])
     tenv.AppendUnique(LIBS=['daos', 'daos_common'])
     tenv.AppendUnique(CPPPATH=[Dir('../../../cart/utils').srcnode()])
     tenv.require('crypto', 'mercury', 'protobufc')

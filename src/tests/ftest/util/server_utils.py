@@ -7,7 +7,6 @@
 # pylint: disable=too-many-lines
 
 import os
-import random
 import time
 from getpass import getuser
 
@@ -918,10 +917,11 @@ class DaosServerManager(SubprocessManager):
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
 
-    def stop_random_rank(self, force=False, exclude_ranks=None):
+    def stop_random_rank(self, random, force=False, exclude_ranks=None):
         """Kill/Stop a random server rank that is expected to be running.
 
         Args:
+            random (obj): random object
             force (bool, optional): whether to use --force option to dmg system
                 stop. Defaults to False.
             exclude_ranks (list, optional): ranks to exclude from the random selection.
@@ -1158,3 +1158,36 @@ class DaosServerManager(SubprocessManager):
             result = run_remote(self.log, self._hosts, command, verbose=verbose, timeout=timeout)
             engines.append(result)
         return engines
+
+    def get_vos_path(self, pool):
+        """Get the VOS file path.
+
+        Args:
+            pool (TestPool): the pool containing the vos file
+
+        Returns:
+            str: the full path to the vos file
+        """
+        return os.path.join(self.get_config_value("scm_mount"), pool.uuid.lower())
+
+    def get_vos_files(self, pool, pattern="vos"):
+        """Get all the VOS file paths containing the pattern.
+
+        Args:
+            pool (TestPool): the pool in which to find the vos file
+            pattern (str): string used to match vos file names. Defaults to "vos".
+
+        Returns:
+            list: a list of all the VOS file paths matching the patterns, e.g.
+                /mnt/daos0/<pool_uuid>/vos-0. If no matches are found the list will be empty.
+        """
+        vos_files = []
+        vos_path = self.get_vos_path(pool)
+        command = command_as_user(f"ls {vos_path}", "root")
+        result = run_remote(self.log, self.hosts[0:1], command)
+        if result.passed:
+            for file in result.output[0].stdout:
+                if pattern in file:
+                    vos_files.append(os.path.join(vos_path, file))
+                    self.log.info("Found vos file path: %s", vos_files[-1])
+        return vos_files

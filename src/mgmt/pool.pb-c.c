@@ -4465,7 +4465,7 @@ static const ProtobufCEnumValue mgmt__pool_service_state__enum_values_by_number[
   { "Creating", "MGMT__POOL_SERVICE_STATE__Creating", 0 },
   { "Ready", "MGMT__POOL_SERVICE_STATE__Ready", 1 },
   { "Destroying", "MGMT__POOL_SERVICE_STATE__Destroying", 2 },
-  { "Degraded", "MGMT__POOL_SERVICE_STATE__Degraded", 3 },
+  { "TargetsExcluded", "MGMT__POOL_SERVICE_STATE__TargetsExcluded", 3 },
   { "Unknown", "MGMT__POOL_SERVICE_STATE__Unknown", 4 },
 };
 static const ProtobufCIntRange mgmt__pool_service_state__value_ranges[] = {
@@ -4474,9 +4474,9 @@ static const ProtobufCIntRange mgmt__pool_service_state__value_ranges[] = {
 static const ProtobufCEnumValueIndex mgmt__pool_service_state__enum_values_by_name[5] =
 {
   { "Creating", 0 },
-  { "Degraded", 3 },
   { "Destroying", 2 },
   { "Ready", 1 },
+  { "TargetsExcluded", 3 },
   { "Unknown", 4 },
 };
 const ProtobufCEnumDescriptor mgmt__pool_service_state__descriptor =

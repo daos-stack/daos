@@ -29,7 +29,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: '3'
       - name: Install extra python packages
@@ -90,7 +90,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: '3'
       - name: Add parser
@@ -143,7 +143,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: '3.11'
       - name: Install python packages
@@ -174,14 +174,22 @@ jobs:
     name: Clang Format
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout code
+      - name: Check out source repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - name: Pull via git
         run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Get merge-base ref
+        id: get_merge_base
+        run: |
+          ref="$(git merge-base HEAD ${{ github.event.pull_request.base.sha || github.ref }})"
+          echo "ref=$ref" >> $GITHUB_OUTPUT
       - name: Run check in docker
         uses: ./.github/actions/clang-format
         with:
-          target: origin/${{ github.event.pull_request.base.ref }}
+          target: ${{ steps.get_merge_base.outputs.ref }}
       - name: Export changes
         uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3  # v4.3.1
         if: failure()
@@ -198,7 +206,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: '3'
       - name: Install extra python packages

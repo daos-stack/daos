@@ -30,7 +30,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -49,8 +48,6 @@ const (
 	domainLabelsProp     = "domain_labels"
 	domainLabelsSep      = "=" // invalid in a label name
 )
-
-var errSysForceNotFull = errors.New("force must be used if not full system stop")
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
@@ -560,7 +557,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	}
 
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
-	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
+	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodGroupUpdate, req)
 	if err != nil {
 		if err == errEngineNotReady {
 			return err
@@ -918,6 +915,47 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 		}, nil
 }
 
+func (svc *mgmtSvc) getFanoutNoAdminExcluded(req systemReq, ignoreAdminExcluded bool) (*fanoutRequest, *fanoutResponse, error) {
+	fReq, fResp, err := svc.getFanout(req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// If ranks not explicitly requested, or the caller wants to ignore admin-excluded ranks in the range, we can filter them out.
+	if ignoreAdminExcluded || (req.GetRanks() == "" && req.GetHosts() == "") {
+		svc.filterAdminExcludedRanks(fReq)
+		if fReq.Ranks.Count() == 0 {
+			return nil, nil, errors.New("all requested ranks are administratively excluded")
+		}
+	} else if err := svc.checkRanksAdminExcluded(fReq.Ranks.Ranks()); err != nil {
+		// The user explicitly requested admin-excluded ranks
+		return nil, nil, err
+	}
+	return fReq, fResp, nil
+}
+
+func (svc *mgmtSvc) filterAdminExcludedRanks(fReq *fanoutRequest) {
+	for _, r := range fReq.Ranks.Ranks() {
+		if svc.membership.IsRankAdminExcluded(r) {
+			svc.log.Tracef("filtering admin-excluded rank %d from request", r)
+			fReq.Ranks.Delete(r)
+		}
+	}
+}
+
+func (svc *mgmtSvc) checkRanksAdminExcluded(ranks ranklist.RankList) error {
+	var adminExcludedRanks ranklist.RankList
+	for _, r := range ranks {
+		if svc.membership.IsRankAdminExcluded(r) {
+			adminExcludedRanks = append(adminExcludedRanks, r)
+		}
+	}
+	if len(adminExcludedRanks) > 0 {
+		return FaultRankAdminExcluded(adminExcludedRanks)
+	}
+	return nil
+}
+
 // SystemStop implements the method defined for the Management Service.
 //
 // Initiate two-phase controlled shutdown of DAOS system, return results for
@@ -933,7 +971,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
-	fReq, fResp, err := svc.getFanout(req)
+	fReq, fResp, err := svc.getFanoutNoAdminExcluded(req, req.IgnoreAdminExcluded)
 	if err != nil {
 		return nil, err
 	}
@@ -941,10 +979,6 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	// First phase: Prepare the ranks for shutdown, but only if the request is for an unforced
 	// full system stop.
 	if !fReq.Force {
-		if !fReq.FullSystem {
-			return nil, errSysForceNotFull
-		}
-
 		fReq.Method = control.PrepShutdownRanks
 		fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 		if err != nil {
@@ -1048,7 +1082,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	}
 	svc.log.Debug("Received SystemStart RPC")
 
-	fReq, fResp, err := svc.getFanout(req)
+	fReq, fResp, err := svc.getFanoutNoAdminExcluded(req, req.IgnoreAdminExcluded)
 	if err != nil {
 		return nil, err
 	}
@@ -1139,10 +1173,8 @@ func (svc *mgmtSvc) refuseUnavailableRanks(hosts, ranks string) (*ranklist.RankS
 	}
 
 	// Refuse to operate on AdminExcluded rank.
-	for _, r := range hitRanks.Ranks() {
-		if err := svc.membership.CheckRankNotAdminExcluded(r); err != nil {
-			return nil, err
-		}
+	if err := svc.checkRanksAdminExcluded(hitRanks.Ranks()); err != nil {
+		return nil, err
 	}
 
 	return hitRanks, nil
@@ -1503,7 +1535,7 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 			Id:      ps.PoolUUID.String(),
 		}
 
-		dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, evictReq)
+		dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolEvict, evictReq)
 		if err != nil {
 			return nil, err
 		}
@@ -1629,7 +1661,7 @@ func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemPrope
 	for _, ps := range pools {
 		pspr.Id = ps.PoolUUID.String()
 		pspr.SvcRanks = ranklist.RanksToUint32(ps.Replicas)
-		dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, pspr)
+		dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolSetProp, pspr)
 		if err != nil {
 			return err
 		}

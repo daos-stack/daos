@@ -258,7 +258,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (% size nranks)",
 			"pool create label --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --nranks"),
+			errors.New("--size=% may not be mixed with --nranks"),
 		},
 		{
 			"Create pool with incompatible arguments (% size tier-ratio)",
@@ -820,6 +820,20 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set pool properties with semi-colon separated self_heal value",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:exclude;rebuild,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "exclude;rebuild"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool properties with pool flag",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:foo,space_rb:42",
 			strings.Join([]string{
@@ -828,6 +842,19 @@ func TestPoolCommands(t *testing.T) {
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set pool rd_fac property",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("rd_fac", "1"),
 					},
 				}),
 			}, " "),
@@ -858,18 +885,6 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("can't set perf_domain on existing pool."),
 		},
 		{
-			"Set pool rd_fac property is not allowed",
-			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
-			"",
-			errors.New("can't set redundancy factor on existing pool."),
-		},
-		{
-			"Set pool rf property is not allowed",
-			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
-			"",
-			errors.New("can't set redundancy factor on existing pool."),
-		},
-		{
 			"Set pool ec_pda property is not allowed",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb ec_pda:1",
 			"",
@@ -889,6 +904,20 @@ func TestPoolCommands(t *testing.T) {
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", ""),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Get pool properties",
+			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label,self_heal",
+			strings.Join([]string{
+				printRequest(t, &control.PoolGetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", ""),
+						propWithVal("self_heal", ""),
 					},
 				}),
 			}, " "),

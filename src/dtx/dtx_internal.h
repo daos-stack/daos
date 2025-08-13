@@ -22,8 +22,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ * Please increment DAOS_DTX_VERSION whenever the protocol is changed.
  */
-#define DAOS_DTX_VERSION	4
 
 /** VOS reserves highest two minor epoch values for internal use so we must
  *  limit the number of dtx sub modifications to avoid conflict.
@@ -57,12 +57,16 @@ enum dtx_operation {
 #undef X
 
 /* DTX RPC input fields */
+/* clang-format off */
 #define DAOS_ISEQ_DTX							\
 	((uuid_t)		(di_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(di_co_uuid)		CRT_VAR)	\
 	((uint64_t)		(di_epoch)		CRT_VAR)	\
+	((uint32_t)		(di_version)		CRT_VAR)	\
+	((uint32_t)		(di_padding)		CRT_VAR)	\
 	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)	\
 	((uint32_t)		(di_flags)		CRT_ARRAY)
+/* clang-format on */
 
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
@@ -320,5 +324,8 @@ enum dtx_cos_flags {
 	/* For collective DTX. */
 	DCF_COLL		= (1 << 2),
 };
+
+int
+dtx_rpc_protocol(uint8_t *rsvc_ver);
 
 #endif /* __DTX_INTERNAL_H__ */

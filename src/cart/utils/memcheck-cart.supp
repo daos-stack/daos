@@ -11,6 +11,30 @@
     fun:_dl_open
 }
 {
+   _dl_fini leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fini
+   ...
+}
+{
+   dlerror_run leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dlerror_run
+   ...
+}
+{
+   _dl_fixup leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fixup
+   ...
+}
+{
    FI leak 6
    Memcheck:Leak
    match-leak-kinds: possible
@@ -565,7 +589,7 @@
    DAOS-15159
    Memcheck:Param
    write(buf)
-   fun:runtime/internal/syscall.Syscall6
+   fun:internal/runtime/syscall.Syscall6
 }
 {
    DAOS-15548
@@ -623,15 +647,24 @@
    fun:racecall
 }
 {
-   go 1.22.3 race
+   tsan::MemoryAccessRange
    Memcheck:Value8
    fun:_ZN6__tsan18MemoryAccessRangeTILb0EEEvPNS_11ThreadStateEmmm
+   ...
    fun:racecall
 }
 {
-   go 1.22.3 race
+   tsan::MemoryAccessRange
+   Memcheck:Value8
+   fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
+   ...
+   fun:racecall
+}
+{
+   tsan::TraceRestartMemoryAccess
    Memcheck:Value8
    fun:_ZN6__tsan24TraceRestartMemoryAccessEPNS_11ThreadStateEmmmm
+   ...
    fun:racecall
 }
 {
@@ -660,7 +693,7 @@
    Syscall6 param
    Memcheck:Param
    read(buf)
-   fun:runtime/internal/syscall.Syscall6
+   fun:internal/runtime/syscall.Syscall6
 }
 {
    __tsan_go_atomic32_load
@@ -694,12 +727,6 @@
    fun:runtime.asmcgocall.abi0
    ...
    fun:runtime.rt0_go.abi0
-}
-{
-   tsan::MemoryAccessRange
-   Memcheck:Value8
-   fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
-   fun:racecall
 }
 {
    bytealg.cmpbody 32-bit

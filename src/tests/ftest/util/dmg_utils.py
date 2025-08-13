@@ -247,10 +247,12 @@ class DmgCommand(DmgCommandBase):
 
         """
         saved_timeout = self.timeout
-        self.timeout = timeout
-        self._get_result(
-            ("storage", "format"), force=force, verbose=verbose)
-        self.timeout = saved_timeout
+        try:
+            self.timeout = timeout
+            self._get_result(
+                ("storage", "format"), force=force, verbose=verbose)
+        finally:
+            self.timeout = saved_timeout
         return self.result
 
     def storage_set_faulty(self, host, uuid, force=True):
@@ -825,29 +827,29 @@ class DmgCommand(DmgCommandBase):
         #     "response": {
         #         "status": 0,
         #         "pools": [
-        #         {
-        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
-        #             "label": "mkp1",
-        #             "svc_reps": [
-        #             0
-        #             ],
-        #             "total_targets": 8,
-        #             "disabled_targets": 0,
-        #             "usage": [
         #             {
-        #                 "tier_name": "SCM",
-        #                 "size": 3000000000,
-        #                 "free": 2995801112,
-        #                 "imbalance": 0
-        #             },
-        #             {
-        #                 "tier_name": "NVME",
-        #                 "size": 47000000000,
-        #                 "free": 26263322624,
-        #                 "imbalance": 36
+        #                 "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #                 "label": "mkp1",
+        #                 "svc_reps": [
+        #                     0
+        #                 ],
+        #                 "total_targets": 8,
+        #                 "disabled_targets": 0,
+        #                 "usage": [
+        #                     {
+        #                         "tier_name": "SCM",
+        #                         "size": 3000000000,
+        #                         "free": 2995801112,
+        #                         "imbalance": 0
+        #                     },
+        #                     {
+        #                         "tier_name": "NVME",
+        #                         "size": 47000000000,
+        #                         "free": 26263322624,
+        #                         "imbalance": 36
+        #                     }
+        #                 ]
         #             }
-        #             ]
-        #         }
         #         ]
         #     },
         #     "error": null,
@@ -1152,12 +1154,14 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
-    def system_start(self, ranks=None):
+    def system_start(self, ranks=None, ignore_admin_excluded=False):
         """Start the system.
 
         Args:
             ranks (str, optional): Comma separated rank-ranges to start e.g.
                 "0,2-5". Defaults to None.
+            ignore_admin_excluded (bool, optional): Ignore admin-excluded ranks
+                in list of ranks specified
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -1166,7 +1170,8 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "start"), ranks=ranks)
+        self._get_result(("system", "start"), ranks=ranks,
+                         ignore_admin_excluded=ignore_admin_excluded)
 
         # Populate a dictionary with host set keys for each unique state
         data = {}
@@ -1417,6 +1422,18 @@ class DmgCommand(DmgCommandBase):
             self.system_stop(force=True)
 
         return self._get_json_result(("check", "enable"), pool=pool)
+
+    def check_get_policy(self, classes=None):
+        """Call dmg check get-policy [get-policy-OPTIONS] [Classes].
+
+        Args:
+            classes (str, optional): Inconsistency class names. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary.
+
+        """
+        return self._get_json_result(("check", "get-policy"), classes=classes)
 
     def check_set_policy(self, reset_defaults=False, all_interactive=False, policies=None):
         """Call dmg check set-policy [options] [policies].
