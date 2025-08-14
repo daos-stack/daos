@@ -236,6 +236,89 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch, bool release_input,
 	}
 }
 
+static inline int
+obj_bulk_args_fini(struct obj_bulk_args *args)
+{
+	int	rc, *status;
+
+	D_ASSERT(args->inited);
+	rc = ABT_eventual_wait(args->eventual, (void **)&status);
+	if (rc)
+		rc = dss_abterr2der(rc);
+	else
+		rc = *status;
+
+	ABT_eventual_free(&args->eventual);
+	ABT_mutex_free(&args->lock);
+
+	return rc;
+}
+
+static inline int
+obj_bulk_args_init(struct obj_bulk_args *args)
+{
+	int	rc, *status;
+
+	rc = ABT_eventual_create(sizeof(*status), &args->eventual);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	rc = ABT_mutex_create(&args->lock);
+	if (rc != ABT_SUCCESS) {
+		ABT_eventual_free(&args->eventual);
+		return dss_abterr2der(rc);
+	}
+
+	args->inited = true;
+	args->bulks_inflight = 1;
+	args->result = 0;
+	return 0;
+}
+
+/* Get the original cart context that client intended to send to */
+static void *
+rpc2orig_ctx(crt_rpc_t *rpc, bool *is_primary)
+{
+	int	rc;
+
+	/*
+	 * TODO:
+	 * For forwarded RPC (server always uses primary context to create forward RPC),
+	 * we need some new cart API to query if the RPC is originated from a secondary
+	 * client, considering multiple secondary contexts need be supported, the new
+	 * API may need to return context ID as well. Then IO engine will be able to get
+	 * the proper secondary context by 'is_primary' and 'context id'.
+	 */
+	rc = crt_req_src_provider_is_primary(rpc, is_primary);
+	if (rc) {
+		D_ERROR("Failed to query provider info. "DF_RC"\n", DP_RC(rc));
+		*is_primary = true;
+	}
+
+	return rpc->cr_ctx;
+}
+
+static void
+obj_bulk_inflights(struct obj_bulk_args *args, crt_rpc_t *rpc, int val)
+{
+	bool	is_primary;
+
+	D_ASSERT(val == 1 || val == -1);
+	rpc2orig_ctx(rpc, &is_primary);
+
+	if (!is_primary)
+		ABT_mutex_lock(args->lock);
+
+	D_ASSERT(args->bulks_inflight > 0);
+	args->bulks_inflight += val;
+
+	if (!is_primary)
+		ABT_mutex_unlock(args->lock);
+
+	if (args->bulks_inflight == 0)
+		ABT_eventual_set(args->eventual, &args->result, sizeof(args->result));
+}
+
 static int
 obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 {
@@ -256,11 +339,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	if (arg->result == 0)
 		arg->result = cb_info->bci_rc;
 
-	D_ASSERT(arg->bulks_inflight > 0);
-	arg->bulks_inflight--;
-	if (arg->bulks_inflight == 0)
-		ABT_eventual_set(arg->eventual, &arg->result,
-				 sizeof(arg->result));
+	obj_bulk_inflights(arg, rpc, -1);
 
 	crt_req_decref(rpc);
 	return cb_info->bci_rc;
@@ -282,6 +361,13 @@ bulk_cp(const struct crt_bulk_cb_info *cb_info)
 static inline int
 cached_bulk_cp(const struct crt_bulk_cb_info *cb_info)
 {
+	struct	crt_bulk_desc	*bulk_desc = cb_info->bci_bulk_desc;
+	crt_rpc_t		*rpc = bulk_desc->bd_rpc;
+	bool			 is_primary;
+
+	rpc2orig_ctx(rpc, &is_primary);
+	D_ASSERT(is_primary);
+
 	return obj_bulk_comp_cb(cb_info);
 }
 
@@ -322,6 +408,26 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 			buf   += nob;
 		}
 	}
+}
+
+/* Get the proper cart context for local bulk handle creation */
+static inline void *
+rpc2bulk_ctx(crt_rpc_t *rpc, bool create)
+{
+	void	*orig_ctx;
+	bool	 is_primary;
+
+	/*
+	 * - When the bulk is on primary provider, return primary cart context;
+	 * - When the bulk is on secondary provider, return secondary cart context
+	 *   if 'create' is true, otherwise, return NULL since we don't use bulk
+	 *   cache for secondary provider now;
+	 */
+	orig_ctx = rpc2orig_ctx(rpc, &is_primary);
+	if (is_primary || create)
+		return orig_ctx;
+
+	return NULL;
 }
 
 #define MAX_BULK_IOVS	1024
@@ -438,7 +544,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			bulk_iovs += sgl_sent.sg_nr;
 
 again:
-			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
+			rc = crt_bulk_create(rpc2bulk_ctx(rpc, true), &sgl_sent, bulk_perm,
 					     &local_bulk);
 			if (rc == -DER_NOMEM) {
 				if (delay_tot >= BULK_DELAY_MAX) {
@@ -487,8 +593,8 @@ again:
 		bulk_desc.bd_remote_off	= remote_off;
 		bulk_desc.bd_local_off	= local_off;
 
+		obj_bulk_inflights(p_arg, rpc, 1);
 		p_arg->bulk_size += length;
-		p_arg->bulks_inflight++;
 		if (bulk_bind)
 			rc = crt_bulk_bind_transfer(&bulk_desc,
 				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
@@ -499,7 +605,7 @@ again:
 				&bulk_opid);
 		if (rc < 0) {
 			D_ERROR("crt_bulk_transfer %d error " DF_RC "\n", sgl_idx, DP_RC(rc));
-			p_arg->bulks_inflight--;
+			obj_bulk_inflights(p_arg, rpc, -1);
 			if (!cached_bulk)
 				crt_bulk_free(local_bulk);
 			crt_req_decref(rpc);
@@ -526,7 +632,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg)
 {
 	struct obj_bulk_args	arg = { 0 };
-	int			i, rc, *status, ret;
+	int			i, rc;
 	int			skip_nr = 0;
 	bool			async = true;
 	uint64_t		time = daos_get_ntime();
@@ -546,17 +652,14 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		async = false;
 	}
 
-	rc = ABT_eventual_create(sizeof(*status), &p_arg->eventual);
-	if (rc != 0)
-		return dss_abterr2der(rc);
+	rc = obj_bulk_args_init(p_arg);
+	if (rc)
+		return rc;
 
-	p_arg->inited = true;
 	D_DEBUG(DB_IO, "bulk_op %d, sgl_nr %d, bulk_nr %d\n", bulk_op, sgl_nr, bulk_nr);
 
-	p_arg->bulks_inflight++;
-
 	if (daos_handle_is_valid(ioh)) {
-		rc = vos_dedup_verify_init(ioh, rpc->cr_ctx, CRT_BULK_RW);
+		rc = vos_dedup_verify_init(ioh, rpc2bulk_ctx(rpc, false), CRT_BULK_RW);
 		if (rc) {
 			D_ERROR("Dedup verify prep failed. "DF_RC"\n",
 				DP_RC(rc));
@@ -623,17 +726,14 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 			  skip_nr, sgl_nr, bulk_nr);
 
 done:
-	if (--(p_arg->bulks_inflight) == 0)
-		ABT_eventual_set(p_arg->eventual, &rc, sizeof(rc));
+	if (rc)
+		p_arg->result = rc;
+	obj_bulk_inflights(p_arg, rpc, -1);
 
 	if (async)
 		return rc;
 
-	ret = ABT_eventual_wait(p_arg->eventual, (void **)&status);
-	if (rc == 0)
-		rc = ret ? dss_abterr2der(ret) : *status;
-
-	ABT_eventual_free(&p_arg->eventual);
+	rc = obj_bulk_args_fini(p_arg);
 
 	if (rc == 0)
 		obj_update_latency(opc_get(rpc->cr_opc), BULK_LATENCY, daos_get_ntime() - time,
@@ -1630,7 +1730,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 
 	time = daos_get_ntime();
 	biod = vos_ioh2desc(ioh);
-	rc   = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rma ? rpc->cr_ctx : NULL, CRT_BULK_RW);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rma ? rpc2bulk_ctx(rpc, false) : NULL,
+			  CRT_BULK_RW);
 	if (rc) {
 		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(orw->orw_oid),
 			DP_RC(rc));
@@ -2505,7 +2606,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx, CRT_BULK_RW);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc2bulk_ctx(rpc, false), CRT_BULK_RW);
 	if (rc) {
 		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(oer->er_oid),
 			DP_RC(rc));
@@ -2582,8 +2683,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto out;
 		}
 		biod = vos_ioh2desc(ioh);
-		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx,
-				  CRT_BULK_RW);
+		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc2bulk_ctx(rpc, false), CRT_BULK_RW);
 		if (rc) {
 			D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 				DP_RC(rc));
@@ -4664,8 +4764,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 		biods[i] = vos_ioh2desc(iohs[i]);
 		rc = bio_iod_prep(biods[i], BIO_CHK_TYPE_IO,
-				  dcu->dcu_flags & ORF_CPD_BULK ?
-					rpc->cr_ctx : NULL, CRT_BULK_RW);
+				  dcu->dcu_flags & ORF_CPD_BULK ? rpc2bulk_ctx(rpc, false) : NULL,
+				  CRT_BULK_RW);
 		if (rc != 0) {
 			D_ERROR("bio_iod_prep failed for obj "DF_UOID
 				", DTX "DF_DTI": "DF_RC"\n",
@@ -4715,20 +4815,10 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 	/* P3: bulk data transafer. */
 	for (i = 0; i < dcde->dcde_write_cnt && rma_idx < rma; i++) {
-		int	*status;
-
 		if (!bulks[i].inited)
 			continue;
 
-		rc = ABT_eventual_wait(bulks[i].eventual, (void **)&status);
-		if (rc != 0)
-			rc = dss_abterr2der(rc);
-		if (rc == 0 && *status != 0)
-			rc = *status;
-		if (rc == 0 && bulks[i].result != 0)
-			rc = bulks[i].result;
-
-		ABT_eventual_free(&bulks[i].eventual);
+		rc = obj_bulk_args_fini(&bulks[i]);
 		bio_iod_flush(biods[i]);
 		rma_idx++;
 
@@ -4855,6 +4945,7 @@ out:
 				if (!bulks[i].inited)
 					continue;
 
+				obj_bulk_args_fini(&bulks[i]);
 				if (bulks[i].eventual != ABT_EVENTUAL_NULL) {
 					ABT_eventual_wait(bulks[i].eventual, NULL);
 					ABT_eventual_free(&bulks[i].eventual);

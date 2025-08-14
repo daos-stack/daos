@@ -1065,6 +1065,7 @@ parse(int argc, char **argv)
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
 		{ "storage_tiers",	required_argument,	NULL,	'T' },
+		{ "nr_sec_ctx",		required_argument,	NULL,	'S' },
 		{ "check",		no_argument,		NULL,	'C' },
 		{ NULL,			0,			NULL,	0}
 	};
@@ -1076,7 +1077,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:C",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:S:C:",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -1147,6 +1148,9 @@ parse(int argc, char **argv)
 				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
+			break;
+		case 'S':
+			rc = arg_strtoul(optarg, &dss_sec_xs_nr, "\"-S\"");
 			break;
 		case 'C':
 			dss_check_mode = true;

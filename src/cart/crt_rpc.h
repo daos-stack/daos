@@ -70,8 +70,9 @@ struct crt_common_hdr {
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
 	/* destination tag */
-	uint32_t	cch_dst_tag;
-
+	uint16_t	cch_dst_tag;
+	/* indicates whether rpc originator intended to send on a primary ctx */
+	uint32_t	cch_src_is_primary : 1;
 
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	/* TODO: workaround for DAOS-13973 */

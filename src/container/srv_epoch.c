@@ -310,7 +310,8 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont
 
 	cont_epoch_op_in_get_data(rpc, CONT_SNAP_CREATE, cont_proto_ver, &snap_eph, &opts);
 
-	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, opts, rpc->cr_ctx, &snap_eph);
+	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, opts, dss_get_module_info()->dmi_ctx,
+			       &snap_eph);
 	if (rc == 0) {
 		out->ceo_epoch = snap_eph;
 		*(daos_epoch_t *)op_val->ov_resvd = snap_eph;

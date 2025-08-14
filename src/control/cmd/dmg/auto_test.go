@@ -569,7 +569,7 @@ engines:
     - "0000:03:00.0"
   provider: ofi+verbs
   fabric_iface: ib0
-  fabric_iface_port: 31416
+  fabric_iface_port: "31416"
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
@@ -586,7 +586,7 @@ engines:
     - "0000:06:00.0"
   provider: ofi+verbs
   fabric_iface: ib1
-  fabric_iface_port: 32416
+  fabric_iface_port: "32416"
   pinned_numa_node: 1
 disable_vfio: false
 disable_vmd: false

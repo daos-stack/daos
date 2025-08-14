@@ -122,6 +122,7 @@ struct obj_bulk_args {
 	int		bulks_inflight;
 	int		result;
 	bool		inited;
+	ABT_mutex       lock;
 };
 
 struct obj_tgt_query_args {

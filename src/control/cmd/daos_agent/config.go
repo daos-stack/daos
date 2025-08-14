@@ -135,7 +135,7 @@ type Config struct {
 	ExcludeFabricIfaces common.StringSet           `yaml:"exclude_fabric_ifaces,omitempty"`
 	IncludeFabricIfaces common.StringSet           `yaml:"include_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
-	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
+	ProviderIdx         uint                       `yaml:"provider_idx"`
 	Telemetry           TelemetryConfig            `yaml:",inline"`
 }
 
