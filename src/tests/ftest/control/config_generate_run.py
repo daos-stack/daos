@@ -31,6 +31,7 @@ class ConfigGenerateRun(TestWithServers):
         6. Restart daos_server.
 
         See yaml for the test cases.
+        This is dummy message... SAMIR
 
         Note: When running locally, use 50 sec timeout in DaosServerCommand.__init__()
 
