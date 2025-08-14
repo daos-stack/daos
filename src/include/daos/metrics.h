@@ -27,6 +27,11 @@
 extern bool daos_client_metric;
 extern bool daos_client_metric_retain;
 
+/* Container attributes used to control metrics dump behavior */
+#define DAOS_CLIENT_METRICS_DUMP_POOL_ATTR "client-metrics-dump-pool"
+#define DAOS_CLIENT_METRICS_DUMP_CONT_ATTR "client-metrics-dump-container"
+#define DAOS_CLIENT_METRICS_DUMP_DIR_ATTR  "client-metrics-dump-directory"
+
 struct daos_module_metrics {
 	/* Indicate where the keys should be instantiated */
 	enum daos_module_tag dmm_tags;
