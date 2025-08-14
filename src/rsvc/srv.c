@@ -47,11 +47,13 @@ char *
 ds_rsvc_state_str(enum ds_rsvc_state state)
 {
 	switch (state) {
+	case DS_RSVC_STEPPING_UP:
+		return "STEPPING_UP";
 	case DS_RSVC_UP_EMPTY:
 		return "UP_EMPTY";
 	case DS_RSVC_UP:
 		return "UP";
-	case DS_RSVC_DRAINING:
+	case DS_RSVC_STEPPING_DOWN:
 		return "DRAINING";
 	case DS_RSVC_DOWN:
 		return "DOWN";
@@ -457,6 +459,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 	}
 	D_ASSERTF(svc->s_state == DS_RSVC_DOWN, "%d\n", svc->s_state);
 	svc->s_term = term;
+	change_state(svc, DS_RSVC_STEPPING_UP);
 	D_DEBUG(DB_MD, "%s: stepping up to "DF_U64"\n", svc->s_name,
 		svc->s_term);
 
@@ -467,7 +470,9 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		map_distd_initialized = true;
 	}
 
+	ABT_mutex_unlock(svc->s_mutex);
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
+	ABT_mutex_lock(svc->s_mutex);
 	if (rc == DER_UNINIT) {
 		change_state(svc, DS_RSVC_UP_EMPTY);
 		rc = 0;
@@ -486,6 +491,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		 */
 		if (rc == -DER_DF_INCOMPT)
 			rc = -DER_SHUTDOWN;
+		change_state(svc, DS_RSVC_DOWN);
 		goto out_mutex;
 	}
 
@@ -507,10 +513,10 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 	ABT_mutex_lock(svc->s_mutex);
 
 	/*
-	 * This single-replica DB shall change from DS_RSVC_DOWN to
-	 * DS_RSVC_UP_EMPTY state promptly.
+	 * This single-replica DB shall change from DS_RSVC_DOWN via
+	 * DS_RSVC_STEPPING_UP to DS_RSVC_UP_EMPTY state promptly.
 	 */
-	while (svc->s_state == DS_RSVC_DOWN)
+	while (svc->s_state == DS_RSVC_DOWN || svc->s_state == DS_RSVC_STEPPING_UP)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 	D_ASSERTF(svc->s_state == DS_RSVC_UP_EMPTY, "%d\n", svc->s_state);
 
@@ -521,7 +527,9 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 
 	/* Try stepping up again. */
 	D_DEBUG(DB_MD, "%s: calling sc_step_up\n", svc->s_name);
+	ABT_mutex_unlock(svc->s_mutex);
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
+	ABT_mutex_lock(svc->s_mutex);
 	if (rc != 0) {
 		D_ASSERT(rc != DER_UNINIT);
 		goto out_mutex;
@@ -547,7 +555,7 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 	D_ASSERT(entry_state == DS_RSVC_UP_EMPTY || entry_state == DS_RSVC_UP);
 
 	/* Stop accepting new leader references (ds_rsvc_lookup_leader). */
-	change_state(svc, DS_RSVC_DRAINING);
+	change_state(svc, DS_RSVC_STEPPING_DOWN);
 
 	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
 		drain_map_distd(svc);
@@ -987,13 +995,15 @@ stop(struct ds_rsvc *svc, bool destroy)
 	svc->s_stop = true;
 	D_DEBUG(DB_MD, "%s: stopping\n", svc->s_name);
 
-	if (svc->s_state == DS_RSVC_UP || svc->s_state == DS_RSVC_UP_EMPTY)
+	if (svc->s_state == DS_RSVC_STEPPING_UP || svc->s_state == DS_RSVC_UP_EMPTY ||
+	    svc->s_state == DS_RSVC_UP)
 		/*
-		 * The service has stepped up. If it is still the leader of
-		 * svc->s_term, the following rdb_resign() call will trigger
-		 * the matching rsvc_step_down_cb() callback in svc->s_term;
-		 * otherwise, the callback must already be pending. Either way,
-		 * the service shall eventually enter the DS_RSVC_DOWN state.
+		 * The service is stepping up or has stepped up. If it is still
+		 * the leader of svc->s_term, the following rdb_resign() call
+		 * will trigger the matching rsvc_step_down_cb() callback in
+		 * svc->s_term; otherwise, the callback must already be pending.
+		 * Either way, the service shall eventually enter the
+		 * DS_RSVC_DOWN state.
 		 */
 		rdb_resign(svc->s_db, svc->s_term);
 	while (svc->s_state != DS_RSVC_DOWN)
