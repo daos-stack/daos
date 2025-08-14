@@ -246,7 +246,7 @@ func (mi *MockInstance) RemoveSuperblock() error {
 
 func (mi *MockInstance) Run(_ context.Context) {}
 
-func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank, _ uint32) error {
+func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank, _ uint32, _ uint32) error {
 	return mi.cfg.SetupRankErr
 }
 

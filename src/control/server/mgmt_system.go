@@ -7,6 +7,11 @@
 
 package server
 
+/*
+#include <daos_version.h>
+*/
+import "C"
+
 import (
 	"context"
 	"fmt"
@@ -46,6 +51,7 @@ const (
 	fabricProviderProp   = "fabric_providers"
 	groupUpdatePauseProp = "group_update_paused"
 	domainLabelsProp     = "domain_labels"
+	rollUpgradeCurVer    = "roll_upgrade_cur_ver"
 	domainLabelsSep      = "=" // invalid in a label name
 )
 
@@ -271,6 +277,14 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		Rank:       member.Rank.Uint32(),
 		MapVersion: joinResponse.MapVersion,
 	}
+	daosVersion, err := svc.getRollUpgradeCurVersion()
+	if system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf("Rolling Upgrade Current Version not found, use default one: %d", daosVersion)
+		var ver C.daos_version_t
+		C.daos_version_pack(&ver)
+		daosVersion = uint32(C.daos_version_to_uint32(&ver))
+	}
+	resp.DaosVersion = daosVersion
 
 	if svc.isGroupUpdatePaused() && svc.allRanksJoined() {
 		if err := svc.resumeGroupUpdate(); err != nil {
@@ -290,7 +304,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		}
 		srv := srvs[0]
 
-		if err := srv.SetupRank(ctx, joinResponse.Member.Rank, joinResponse.MapVersion); err != nil {
+		if err := srv.SetupRank(ctx, joinResponse.Member.Rank, joinResponse.MapVersion, daosVersion); err != nil {
 			return nil, errors.Wrap(err, "SetupRank on local instance failed")
 		}
 	}
@@ -426,6 +440,18 @@ func (svc *mgmtSvc) getFabricProvider() (string, error) {
 
 func (svc *mgmtSvc) setFabricProviders(val string) error {
 	return system.SetMgmtProperty(svc.sysdb, fabricProviderProp, val)
+}
+
+func (svc *mgmtSvc) getRollUpgradeCurVersion() (uint32, error) {
+	daosVersion, err := system.GetMgmtProperty(svc.sysdb, rollUpgradeCurVer)
+	if err != nil {
+		return 0, err
+	}
+	u64, err := strconv.ParseUint(daosVersion, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(u64), nil
 }
 
 func (svc *mgmtSvc) isGroupUpdatePaused() bool {
