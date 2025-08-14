@@ -493,7 +493,7 @@ pipeline {
                             args '--group-add mock'     +
                                  ' --cap-add=SYS_ADMIN' +
                                  ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
+                                 ' -v /CIShare:/CIShare'
                             additionalBuildArgs dockerBuildArgs()
                         }
                     }
@@ -531,7 +531,7 @@ pipeline {
                             label 'docker_runner'
                             args '--group-add mock'     +
                                  ' --cap-add=SYS_ADMIN' +
-                                 ' -v /scratch:/scratch'
+                                 ' -v /CIShare:/CIShare'
                             additionalBuildArgs dockerBuildArgs()
                         }
                     }
@@ -570,7 +570,7 @@ pipeline {
                             args '--group-add mock'     +
                                  ' --cap-add=SYS_ADMIN' +
                                  ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
+                                 ' -v /CIShare:/CIShare'
                             additionalBuildArgs dockerBuildArgs() +
                                 '--build-arg FVERSION=37'
                         }
