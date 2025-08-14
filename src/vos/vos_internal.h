@@ -1366,6 +1366,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
+int
+vos_tree_mark_corruption(struct vos_container *cont, struct vos_object *obj, daos_handle_t toh,
+			 enum vos_tree_class tclass, daos_epoch_t epoch, uint32_t pm_ver,
+			 bool is_dkey, daos_key_t *key, daos_handle_t *sub_toh);
 
 /* vos_io.c */
 int
