@@ -37,8 +37,7 @@ class DaosSystemQuery(TestWithServers):
         rank_numbers = []
         for rank_info in rank_list_out:
             rank_numbers.append(rank_info["rank"])
-        rank_numbers_sorted = rank_numbers.copy()
-        rank_numbers_sorted.sort()
+        rank_numbers_sorted = sorted(rank_numbers)
         self.log.info("rank_numbers = %s", rank_numbers)
         self.log.info("rank_numbers_sorted = %s", rank_numbers_sorted)
         if not rank_numbers:
