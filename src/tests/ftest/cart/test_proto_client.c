@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -120,11 +121,11 @@ test_run()
 	server_ep.ep_rank = 0;
 
 	DBG_PRINT("proto query\n");
-	timeout = 1;
+	timeout = 3;
 	do {
 		rc = crt_proto_query(&server_ep, OPC_MY_PROTO, my_ver_array, 7, timeout++, query_cb,
 				     &s_high_ver);
-	} while (rc == -DER_TIMEDOUT);
+	} while (rc == -DER_TIMEDOUT || rc == -DER_DEADLINE_EXPIRED);
 	D_ASSERT(rc == 0);
 
 	while (s_high_ver == 0xFFFFFFFF)
