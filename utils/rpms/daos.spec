@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       13%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -488,7 +488,6 @@ fi
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
 %{_bindir}/ddb
-%{_bindir}/dlck
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libchk.so
@@ -659,9 +658,6 @@ fi
 %endif
 
 %changelog
-* Tue Aug 05 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.7.101-13
-- DAOS Local Consistency Checker (DLCK)
-
 * Wed Jul 30 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-12
 - pmemobj errors and warnings reported via DAOS logging system
 
