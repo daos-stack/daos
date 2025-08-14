@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -61,7 +62,7 @@ class RbldDeleteObjects(RebuildTestBase):
                 self.punch_type, self.punched_qty, expected_qty))
 
         # Read objects from the last transaction
-        super().verify_container_data(txn)
+        super().verify_container_data(self.container, txn)
 
     def test_rebuild_delete_objects(self):
         """JIRA ID: DAOS-2572.
