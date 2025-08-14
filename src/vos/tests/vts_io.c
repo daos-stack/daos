@@ -167,9 +167,9 @@ inc_cntr(unsigned long op_flags)
 static enum daos_otype_t init_type;
 static int init_num_keys;
 
-void
-test_args_init(struct io_test_args *args,
-	       uint64_t pool_size)
+static void
+test_args_init(struct io_test_args *args, uint64_t scm_sz, uint64_t meta_sz, uint64_t data_sz,
+	       unsigned int flags)
 {
 	int	rc;
 
@@ -178,7 +178,7 @@ test_args_init(struct io_test_args *args,
 
 	vts_epoch_gen = d_hlc_get();
 
-	rc = vts_ctx_init(&args->ctx, pool_size);
+	rc = vts_ctx_init(&args->ctx, scm_sz, meta_sz, data_sz, flags);
 	if (rc != 0)
 		print_error("rc = "DF_RC"\n", DP_RC(rc));
 	assert_rc_equal(rc, 0);
@@ -207,10 +207,11 @@ test_args_init(struct io_test_args *args,
 }
 
 void
-test_args_reset(struct io_test_args *args, uint64_t pool_size)
+test_args_reset(struct io_test_args *args, uint64_t scm_sz, uint64_t meta_sz, uint64_t data_sz,
+		unsigned int flags)
 {
 	vts_ctx_fini(&args->ctx);
-	test_args_init(args, pool_size);
+	test_args_init(args, scm_sz, meta_sz, data_sz, flags);
 }
 
 static struct io_test_args	test_args;
@@ -223,7 +224,7 @@ setup_io(void **state)
 	struct vos_ts_table	*table;
 
 	srand(time(NULL));
-	test_args_init(&test_args, VPOOL_SIZE);
+	test_args_init(&test_args, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	table = vos_ts_table_get(true);
 	if (table == NULL)
@@ -1241,7 +1242,7 @@ io_obj_range_iter_test(struct io_test_args *args, vos_it_epc_expr_t expr)
 	int			akeys, recs;
 	daos_epoch_range_t	epr;
 
-	test_args_reset(args, VPOOL_SIZE);
+	test_args_reset(args, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	args->ta_flags = 0;
 	epr.epr_lo = gen_rand_epoch();
@@ -1297,7 +1298,7 @@ io_obj_recx_range_iteration(struct io_test_args *args, vos_it_epc_expr_t expr)
 	daos_epoch_t		epoch;
 	int			total_in_range = 0;
 
-	test_args_reset(args, VPOOL_SIZE);
+	test_args_reset(args, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	args->ta_flags = 0;
 	epoch = gen_rand_epoch();
@@ -1596,7 +1597,7 @@ vos_iterate_test(void **state)
 	unsigned long		old_flags = arg->ta_flags;
 
 	arg->ta_flags = 0;
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	gen_io(arg, ITER_OBJ_NR, ITER_DKEY_NR, ITER_SV_NR, ITER_EV_NR, &epoch);
 
@@ -2453,7 +2454,7 @@ io_pool_overflow_test(void **state)
 	int			 rc;
 	daos_epoch_t		 epoch;
 
-	test_args_reset(args, VPOOL_SIZE);
+	test_args_reset(args, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	epoch = gen_rand_epoch();
 	for (i = 0; i < init_num_keys; i++) {
@@ -2468,7 +2469,7 @@ io_pool_overflow_test(void **state)
 static int
 io_pool_overflow_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE);
+	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	return 0;
 }
 
