@@ -90,9 +90,15 @@ struct dlck_control {
 
 /** helper definitions */
 
-#define OPT_HEADER(HEADER, GROUP) {0, 0, 0, 0, HEADER, GROUP}
+#define OPT_HEADER(HEADER, GROUP)                                                                  \
+	{                                                                                          \
+		0, 0, 0, 0, HEADER, GROUP                                                          \
+	}
 
-#define LIST_ENTRY(CMD, DESC)     {CMD, 0, 0, OPTION_DOC, DESC}
+#define LIST_ENTRY(CMD, DESC)                                                                      \
+	{                                                                                          \
+		CMD, 0, 0, OPTION_DOC, DESC                                                        \
+	}
 
 #define FAIL(STATE, RC, ERRNUM, ...)                                                               \
 	do {                                                                                       \
