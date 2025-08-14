@@ -216,6 +216,7 @@ class TestPool(TestDaosApiBase):
         self.nranks = BasicParameter(None)
         self.size = BasicParameter(None)
         self.tier_ratio = BasicParameter(None)
+        self.mem_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
@@ -404,6 +405,7 @@ class TestPool(TestDaosApiBase):
             "gid": self.gid,
             "size": self.size.value,
             "tier_ratio": self.tier_ratio.value,
+            "mem_ratio": self.mem_ratio.value,
             "scm_size": self.scm_size.value,
             "nranks": self.nranks.value,
             "properties": self.properties.value,
