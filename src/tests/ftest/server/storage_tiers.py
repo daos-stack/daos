@@ -60,9 +60,9 @@ class StorageTiers(TestWithServers):
                         "class": storage_class,
                         "bdev_list": self.params.get("bdev_list", namespace),
                     }
-                    storage_roles = self.params.get("roles", namespace, None)
+                    storage_roles = self.params.get("bdev_roles", namespace, None)
                     if storage_roles:
-                        data["roles"] = storage_roles
+                        data["bdev_roles"] = storage_roles
                 storage.append(data)
             expected.append(storage)
         self.log.info("expected:\n%s", yaml.dump(expected, default_flow_style=False))
