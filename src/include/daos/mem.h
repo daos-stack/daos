@@ -178,7 +178,7 @@ struct umem_store {
 
 struct umem_slab_desc {
 	size_t		unit_size;
-	unsigned	class_id;
+	unsigned        class_id;
 };
 
 struct umem_pool {
