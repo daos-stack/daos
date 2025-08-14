@@ -8,6 +8,7 @@
 package main
 
 import (
+	"math"
 	"runtime"
 	"unsafe"
 
@@ -289,4 +290,36 @@ func ddbDevReplace(ctx *DdbContext, db_path string, old_devid string, new_devid 
 	defer freeString(options.new_devid)
 	/* Run the c code command */
 	return daosError(C.ddb_run_dev_replace(&ctx.ctx, &options))
+}
+
+func ddbDtxStat(ctx *DdbContext, path string) error {
+	/* Set up the options */
+	options := C.struct_dtx_stat_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dtx_stat(&ctx.ctx, &options))
+}
+
+func ddbDtxAggr(ctx *DdbContext, path string, epoch uint64, date string) error {
+	if epoch != math.MaxUint64 && date != "" {
+		return daosError(C.DER_INVAL)
+	}
+
+	/* Set up the options */
+	options := C.struct_dtx_aggr_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	options.format = C.DDB_DTX_AGGR_NOW
+	if epoch != math.MaxUint64 {
+		options.format = C.DDB_DTX_AGGR_EPOCH
+		options.epoch = C.uint64_t(epoch)
+	}
+	if date != "" {
+		options.format = C.DDB_DTX_AGGR_DATE
+		options.date = C.CString(date)
+		defer freeString(options.date)
+	}
+	/* Run the c code command */
+	return daosError(C.ddb_run_dtx_aggr(&ctx.ctx, &options))
 }
