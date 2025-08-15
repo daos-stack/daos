@@ -72,11 +72,6 @@
  * daos_rpc_tag() to query the target tag (context ID) of specific RPC request.
  */
 
-/** Number of dRPC xstreams */
-#define DRPC_XS_NR            (1)
-
-#define DSS_SYS_XS_NR_DEFAULT (DAOS_TGT0_OFFSET + DRPC_XS_NR)
-
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
 /** Number of offload per socket */

@@ -18,14 +18,10 @@
 /** documentation groups */
 
 #define GROUP_OPTIONS                   1
-#define GROUP_AVAILABLE_CMDS            2
 #define GROUP_AUTOMAGIC                 (-1) /** yes, -1 is the last group */
 
 /** all short options */
 
-#define KEY_COMMON_CMD                  'c'
-#define KEY_COMMON_CO_UUID              'q'
-#define KEY_COMMON_WRITE_MODE           'w'
 #define KEY_FILES                       'f'
 /** the options below follow the daos_engine options */
 #define KEY_ENGINE_NUMA_NODE            'p'

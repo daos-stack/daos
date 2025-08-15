@@ -268,10 +268,8 @@ exec_one(void *arg)
 			continue;
 		}
 
-		ABT_mutex_lock(xst->engine->open_mtx);
-		rc = dlck_pool_open(xst->args_engine->storage_path, file->po_uuid, xst->xs->tgt_id,
-				    &xst->poh);
-		ABT_mutex_unlock(xst->engine->open_mtx);
+		rc = dlck_abt_pool_open(xst->engine->open_mtx, xst->args_engine->storage_path,
+					file->po_uuid, xst->xs->tgt_id, &xst->poh);
 		if (rc != DER_SUCCESS) {
 			xst->rc = rc;
 			break;
@@ -279,9 +277,7 @@ exec_one(void *arg)
 
 		cont_process(xst, xst->co_uuid);
 
-		ABT_mutex_lock(xst->engine->open_mtx);
-		rc = vos_pool_close(xst->poh);
-		ABT_mutex_unlock(xst->engine->open_mtx);
+		rc = dlck_abt_pool_close(xst->engine->open_mtx, xst->poh);
 		if (rc != DER_SUCCESS) {
 			xst->rc = rc;
 			break;

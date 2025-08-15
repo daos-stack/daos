@@ -688,6 +688,6 @@ set_anchor:
 		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 	}
 	rc = 0;
-out:
+ out:
 	return rc;
 }
