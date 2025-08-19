@@ -4,7 +4,7 @@ set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
-if [ -z "${SL_FUSED_PREFIX}" ]; then
+if [ -z "${SL_FUSED_PREFIX:-}" ]; then
   echo "fused must be installed or was never built"
   exit 0
 fi

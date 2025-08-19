@@ -4,7 +4,7 @@ set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
-if [ -z "${SL_MERCURY_PREFIX}" ]; then
+if [ -z "${SL_MERCURY_PREFIX:-}" ]; then
   echo "Mercury must be installed or never built"
   exit 0
 fi
