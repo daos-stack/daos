@@ -1337,6 +1337,7 @@ cr_engine_interaction(void **state)
 static void
 cr_repair_forall_leader(void **state)
 {
+#if 0
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct daos_check_info		 dci = { 0 };
@@ -1348,10 +1349,13 @@ cr_repair_forall_leader(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+#endif
 
 	/* Skip for DAOS-17422. */
+	print_message("Skip obsolete test\n");
 	skip();
 
+#if 0
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR4: check repair option - for-all, on leader\n");
@@ -1430,6 +1434,7 @@ cr_repair_forall_leader(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+#endif
 }
 
 /*
@@ -1445,6 +1450,7 @@ cr_repair_forall_leader(void **state)
 static void
 cr_repair_forall_engine(void **state)
 {
+#if 0
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct test_cont		 conts[2] = { 0 };
@@ -1457,10 +1463,13 @@ cr_repair_forall_engine(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+#endif
 
 	/* Skip for DAOS-17422. */
+	print_message("Skip obsolete test\n");
 	skip();
 
+#if 0
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR5: check repair option - for-all, on engine\n");
@@ -1539,6 +1548,7 @@ cr_repair_forall_engine(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+#endif
 }
 
 /*
@@ -3414,6 +3424,7 @@ cr_fail_sync_orphan(void **state)
 static void
 cr_inherit_policy(void **state)
 {
+#if 0
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct daos_check_info		 dci = { 0 };
@@ -3425,10 +3436,13 @@ cr_inherit_policy(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+#endif
 
 	/* Skip for DAOS-17422. */
+	print_message("Skip obsolete test\n");
 	skip();
 
+#if 0
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR25: inherit check policy from former check repair\n");
@@ -3510,6 +3524,7 @@ cr_inherit_policy(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+#endif
 }
 
 /*
