@@ -582,7 +582,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
+                                                                deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
@@ -591,6 +591,12 @@ pipeline {
                     }
                     steps {
                         script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh el9 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -632,13 +638,19 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true) +
+                                                                deps_build: false) +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc"
                         }
                     }
                     steps {
                         script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh suse.lp155 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                 scons_args: sconsFaultsArgs() +
