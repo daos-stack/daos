@@ -106,8 +106,8 @@ list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmemobj_*.3.gz" \
   "${SL_PMDK_PREFIX}/share/man/man3/tx_*.3.gz"
 append_install_list "${files[@]}"
 
-DEPENDS=("libpmem-devel" "libpmemobj${LIBMAJOR:-}")
-build_package "libpmemobj-devel"
+DEPENDS=("${pmem_dev} = ${pmdk_full}" "${pmemobj_lib} = ${pmdk_full}")
+build_package "${pmemobj_dev}"
 
 if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   #libpmempool
@@ -118,40 +118,6 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
 
   ARCH="${isa}"
   build_package "${pmempool_lib}"
-
-  if [[ "${DISTRO:-el8}" =~ "suse" ]]; then
-    LIBMAJOR=1
-  fi
-
-
-  #libpmempool-devel
-  #TARGET_PATH="${libdir}"
-  #list_files files "${SL_PMDK_PREFIX}/lib64/libpmempool.so"
-  #append_install_list "${files[@]}"
-
-  #TARGET_PATH="${libdir/pkgconfig}"
-  #list_files files "${SL_PMDK_PREFIX}/lib64/pkgconfig/libpmempool.pc"
-  #replace_paths "${SL_PMDK_PREFIX}" "${files[@]}"
-  #append_install_list "${files[@]}"
-
-  #TARGET_PATH="${includedir}"
-  #list_files files "${SL_PMDK_PREFIX}/include/libpmempool.h"
-  #append_install_list "${files[@]}"
-
-  #TARGET_PATH="${mandir}/man7"
-  #list_files files "${SL_PMDK_PREFIX}/share/man/man7/libpmempool.7.gz"
-  #append_install_list "${files[@]}"
-
-  #TARGET_PATH="${mandir}/man5"
-  #list_files files "${SL_PMDK_PREFIX}/share/man/man5/poolset.5.gz"
-  #append_install_list "${files[@]}"
-
-  #TARGET_PATH="${mandir}/man3"
-  #list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmempool_*.3.gz"
-  #append_install_list "${files[@]}"
-
-  #DEPENDS=("libpmem-devel" "libpmempool${LIBMAJOR:-}")
-  #build_package "libpmemobj-devel"
 
   #pmempool
   TARGET_PATH="${bindir}"

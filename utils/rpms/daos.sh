@@ -69,9 +69,6 @@ build_package "daos"
 if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   echo "Creating server packages"
   # daos-server package
-  mkdir -p "${tmp}/${sysconfdir}/ld.so.conf.d"
-  echo "${libdir}/daos_srv" > "${tmp}/${sysconfdir}/ld.so.conf.d/daos.conf"
-  install_list+=("${tmp}/${sysconfdir}/ld.so.conf.d/daos.conf=${sysconfdir}/ld.so.conf.d/daos.conf")
   mkdir -p "${tmp}/${sysctldir}"
   install -m 644 "utils/rpms/${sysctl_script_name}" "${tmp}/${sysctldir}"
   install_list+=("${tmp}/${sysctldir}/${sysctl_script_name}=${sysctldir}/${sysctl_script_name}")
@@ -178,7 +175,7 @@ EOF
   EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
   EXTRA_OPTS+=("--rpm-attr" "2755,root,daos_server:${bindir}/daos_server")
 
-  DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${VERSION}-${RELEASE}" )
+  DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${daos_spdk_full}" )
   DEPENDS+=( "${pmemobj_lib} >= ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
   build_package "daos-server"
 

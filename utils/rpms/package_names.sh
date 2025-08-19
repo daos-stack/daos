@@ -55,11 +55,18 @@ set_lib_name mercury dev mercury mercury mercury
 export mercury_dev
 
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
+set_lib_name pmemobj dev libpmemobj libpmemobj1 libpmemobj1
 set_lib_name pmem lib libpmem libpmem1 libpmem1
+set_lib_name pmem dev libpmem libpmem1 libpmem1
 set_lib_name pmempool lib libpmempool libpmempool1 libpmempool1
 export pmem_lib
+export pmem_dev
 export pmemobj_lib
+export pmemobj_dev
 export pmempool_lib
+
+set_lib_name fused dev fused fused fused
+export fused_dev
 
 set_lib_name protobufc lib protobuf-c libprotobuf-c1 libprotobuf-c1
 export protobufc_lib
