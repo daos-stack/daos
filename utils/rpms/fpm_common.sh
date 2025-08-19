@@ -43,11 +43,17 @@ export pmdk_version="2.1.0"
 export pmdk_release="4${DAOS_DEPS_RELVAL:-}"
 export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.31.1"
-export isal_release="1${DAOS_DEPS_RELVAL:-}"
+export isal_release="6${DAOS_DEPS_RELVAL:-}"
 export isal_full="${isal_version}-${isal_release}"
 export isal_crypto_version="2.24.0"
 export isal_crypto_release="2${DAOS_DEPS_RELVAL:-}"
 export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
+export daos_spdk_version="1.0.0"
+export daos_spdk_release="1${DAOS_DEPS_RELVAL:-}"
+export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
+export fused_version="1.0.0"
+export fused_release="2${DAOS_DEPS_RELVAL:-}"
+export fused_full="${fused_version}-${fused_release}"
 
 source utils/rpms/package_names.sh
 

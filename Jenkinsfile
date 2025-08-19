@@ -527,7 +527,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
+                                                                deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
@@ -536,6 +536,12 @@ pipeline {
                     }
                     steps {
                         script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh el8 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                         stash_files: 'ci/test_files_to_stash.txt',
