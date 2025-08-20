@@ -385,6 +385,7 @@ class TestRunner():
 
     def prepare(self, logger, test_log_file, test, repeat, user_create, slurm_setup, control_host,
                 partition_hosts, clear_mounts):
+        # pylint: disable=too-many-return-statements
         """Prepare the test for execution.
 
         Args:
