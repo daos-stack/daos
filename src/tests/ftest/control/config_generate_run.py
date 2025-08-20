@@ -64,7 +64,7 @@ class ConfigGenerateRun(TestWithServers):
         except yaml.YAMLError as error:
             self.fail(f"Error loading dmg generated config! {error}")
 
-        # Iterate & update the log file for each engine.
+        # Iterate & update the log file path for each engine.
         engines = generated_yaml["engines"]
         for engine in engines:
             engine["log_file"] = os.path.join(self.test_env.log_dir, engine["id"] + ".log")
