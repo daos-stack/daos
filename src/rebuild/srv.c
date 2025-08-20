@@ -1261,6 +1261,11 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	d_rank_list_t		*excluded = NULL;
 	crt_rpc_t		*rpc;
 	int			rc;
+	uint8_t                  rebuild_ver;
+
+	rc = rebuild_rpc_protocol(&rebuild_ver);
+	if (rc)
+		return rc;
 
 	/* There might be some other ranks being queued for reintegration,
 	 * but not included in this reintegration, so let's exclude those
@@ -1307,10 +1312,8 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		map_ranks_fini(&up_ranks);
 	}
 
-	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
-				  pool, DAOS_REBUILD_MODULE,
-				  REBUILD_OBJECTS_SCAN, DAOS_REBUILD_VERSION,
-				  &rpc, NULL, excluded, NULL);
+	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx, pool, DAOS_REBUILD_MODULE,
+				  REBUILD_OBJECTS_SCAN, rebuild_ver, &rpc, NULL, excluded, NULL);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB " pool map broadcast failed", DP_RB_RGT(rgt));
 		D_GOTO(out, rc);
@@ -2490,10 +2493,13 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
+
 	D_ASSERT(entry != NULL);
-	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) {
+	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD) &&
+	    !pool->sp_disable_rebuild) {
 		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN,
-					    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : 0);
+					     pool->sp_self_heal & DAOS_SELF_HEAL_DELAY_REBUILD ? -1
+											       : 0);
 		if (rc != 0)
 			return rc;
 
@@ -3096,3 +3102,5 @@ struct dss_module rebuild_module = {
     .sm_key         = &rebuild_module_key,
     .sm_mod_ops     = &rebuild_mod_ops,
 };
+
+DEFINE_RPC_PROTOCOL(rebuild, DAOS_REBUILD_MODULE);

@@ -539,7 +539,8 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    tier_ratio=None, properties=None, label=None, nranks=None):
+                    tier_ratio=None, properties=None, label=None, nranks=None,
+                    mem_ratio=None):
         # pylint: disable=too-many-arguments
         """Create a pool with the dmg command.
 
@@ -565,6 +566,8 @@ class DmgCommand(DmgCommandBase):
                 Defaults to None
             label (str, optional): Pool label. Defaults to None.
             nranks (str, optional): Number of ranks to use. Defaults to None
+            mem_ratio (str, optional): memory file to metadata storage size ratio.
+                Defaults to None.
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -586,7 +589,8 @@ class DmgCommand(DmgCommandBase):
             "acl_file": acl_file,
             "properties": properties,
             "label": label,
-            "nranks": nranks
+            "nranks": nranks,
+            "mem_ratio": mem_ratio
         }
 
         if target_list is not None:
@@ -628,7 +632,10 @@ class DmgCommand(DmgCommandBase):
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
-        data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
+
+        # Maintain backwards compatibility with v2.6.1, where this does not exist
+        if "memfile_per_rank" in output["response"]:
+            data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
 
         return data
 
@@ -827,29 +834,29 @@ class DmgCommand(DmgCommandBase):
         #     "response": {
         #         "status": 0,
         #         "pools": [
-        #         {
-        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
-        #             "label": "mkp1",
-        #             "svc_reps": [
-        #             0
-        #             ],
-        #             "total_targets": 8,
-        #             "disabled_targets": 0,
-        #             "usage": [
         #             {
-        #                 "tier_name": "SCM",
-        #                 "size": 3000000000,
-        #                 "free": 2995801112,
-        #                 "imbalance": 0
-        #             },
-        #             {
-        #                 "tier_name": "NVME",
-        #                 "size": 47000000000,
-        #                 "free": 26263322624,
-        #                 "imbalance": 36
+        #                 "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #                 "label": "mkp1",
+        #                 "svc_reps": [
+        #                     0
+        #                 ],
+        #                 "total_targets": 8,
+        #                 "disabled_targets": 0,
+        #                 "usage": [
+        #                     {
+        #                         "tier_name": "SCM",
+        #                         "size": 3000000000,
+        #                         "free": 2995801112,
+        #                         "imbalance": 0
+        #                     },
+        #                     {
+        #                         "tier_name": "NVME",
+        #                         "size": 47000000000,
+        #                         "free": 26263322624,
+        #                         "imbalance": 36
+        #                     }
+        #                 ]
         #             }
-        #             ]
-        #         }
         #         ]
         #     },
         #     "error": null,
@@ -1422,6 +1429,18 @@ class DmgCommand(DmgCommandBase):
             self.system_stop(force=True)
 
         return self._get_json_result(("check", "enable"), pool=pool)
+
+    def check_get_policy(self, classes=None):
+        """Call dmg check get-policy [get-policy-OPTIONS] [Classes].
+
+        Args:
+            classes (str, optional): Inconsistency class names. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary.
+
+        """
+        return self._get_json_result(("check", "get-policy"), classes=classes)
 
     def check_set_policy(self, reset_defaults=False, all_interactive=False, policies=None):
         """Call dmg check set-policy [options] [policies].
