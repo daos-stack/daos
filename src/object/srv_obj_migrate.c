@@ -863,8 +863,7 @@ migrate_csum_calc(struct daos_csummer *csummer, struct migrate_one *mrone, daos_
 	return rc;
 }
 
-#define MIGRATE_STACK_SIZE	131072
-#define MAX_BUF_SIZE		2048
+#define MIGRATE_STACK_SIZE      131072
 #define CSUM_BUF_SIZE		256
 
 /**
@@ -883,7 +882,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 iod_cnt = 0;
 	int			 start;
-	char		 iov_buf[OBJ_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
+	char                    *iov_buf[OBJ_ENUM_UNPACK_MAX_IODS] = {0};
 	bool			 fetch = false;
 	int			 i;
 	int			 rc = 0;
@@ -905,7 +904,11 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		} else {
 			sgls[i].sg_nr = 1;
 			sgls[i].sg_nr_out = 1;
-			d_iov_set(&iov[i], iov_buf[i], MAX_BUF_SIZE);
+			D_ALLOC(iov_buf[i], DAOS_BULK_LIMIT);
+			if (iov_buf[i] == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			d_iov_set(&iov[i], iov_buf[i], DAOS_BULK_LIMIT);
 			sgls[i].sg_iovs = &iov[i];
 			fetch = true;
 		}
@@ -1005,6 +1008,8 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 out:
 	if (csum_iov.iov_buf != NULL)
 		D_FREE(csum_iov.iov_buf);
+	for (i = 0; i < mrone->mo_iod_num; i++)
+		D_FREE(iov_buf[i]);
 
 	return rc;
 }
@@ -1835,7 +1840,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 						  mrone->mo_dkey_hash, &mrone->mo_oca,
 						  mrone->mo_oid.id_shard))
 		rc = migrate_fetch_update_parity(mrone, oh, cont);
-	else if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
+	else if (data_size < DAOS_BULK_LIMIT || data_size == (daos_size_t)(-1))
 		rc = migrate_fetch_update_inline(mrone, oh, cont);
 	else
 		rc = migrate_fetch_update_bulk(mrone, oh, cont);
