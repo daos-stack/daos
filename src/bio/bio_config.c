@@ -856,6 +856,8 @@ bio_set_hotplug_filter(const char *nvme_conf)
 	D_INFO("'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
 	       hotplug_busid_range.begin, hotplug_busid_range.end);
 
+	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter, %X-%X\n",
+		hotplug_busid_range.begin, hotplug_busid_range.end);
 	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	return 0;
@@ -957,7 +959,7 @@ bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max
 				SPDK_COUNTOF(auto_faulty_decoders), &auto_faulty_criteria);
 	if (rc != 0) {
 		if (rc == JSON_NOT_FOUND) {
-			rc = 0;
+			rc             = 0;
 			*enable        = false;
 			*max_io_errs   = UINT32_MAX;
 			*max_csum_errs = UINT32_MAX;

@@ -2418,9 +2418,8 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	 * which otherwise might be written duplicately, which might cause
 	 * the failure in VOS.
 	 */
-	if ((flags & ORF_REBUILDING_IO) &&
-	    (!child->sc_pool->spc_pool->sp_disable_rebuild &&
-	      child->sc_pool->spc_rebuild_fence == 0)) {
+	if ((flags & ORF_REBUILDING_IO) && (ds_pool_rebuild_enabled(child->sc_pool->spc_pool) &&
+					    child->sc_pool->spc_rebuild_fence == 0)) {
 		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
@@ -2919,6 +2918,36 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle	*dth;
+
+		/* ORF_FETCH_EPOCH_EC_AGG_BOUNDARY only used for rebuild fetch. The container's
+		 * sc_ec_agg_eph_boundary possibly be different on the initiator and target engines
+		 * of the rebuild fetch, initiator selected fetch epoch possibly lower than readable
+		 * epoch at target engine side if vos aggregation merged adjacent extents to higher
+		 * epoch. For this case increase the fetch epoch to sc_ec_agg_eph_boundary.
+		 */
+		if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
+			uint64_t rebuild_epoch;
+
+			D_ASSERTF(orw->orw_epoch <= orw->orw_epoch_first,
+				  "bad orw_epoch " DF_X64 ", orw_epoch_first " DF_X64 "\n",
+				  orw->orw_epoch, orw->orw_epoch_first);
+			rebuild_epoch = orw->orw_epoch_first;
+			if (orw->orw_epoch < ioc.ioc_coc->sc_ec_agg_eph_boundary) {
+				uint64_t fetch_epoch;
+
+				/* Both EC and VOS aggregation don't across rebuild epoch */
+				fetch_epoch =
+				    min(ioc.ioc_coc->sc_ec_agg_eph_boundary, rebuild_epoch);
+				D_DEBUG(DB_IO,
+					DF_UOID " increase fetch epoch from " DF_X64 " to " DF_X64
+						", sc_ec_agg_eph_boundary: " DF_X64
+						", rebuild_epoch: " DF_X64 "\n",
+					DP_UOID(orw->orw_oid), orw->orw_epoch, fetch_epoch,
+					ioc.ioc_coc->sc_ec_agg_eph_boundary, rebuild_epoch);
+				orw->orw_epoch = fetch_epoch;
+			}
+			orw->orw_epoch_first = orw->orw_epoch;
+		}
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
@@ -5269,11 +5298,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	struct daos_cpd_bulk		**dcbs = NULL;
 	struct daos_cpd_bulk		 *dcb = NULL;
 	crt_bulk_t			 *bulks = NULL;
-	d_sg_list_t			**sgls = NULL;
-	struct daos_cpd_sub_head	 *dcsh;
-	struct daos_cpd_disp_ent	 *dcde;
-	struct daos_cpd_req_idx		 *dcri;
-	void				 *end;
+	d_sg_list_t                     **sgls  = NULL;
 	uint32_t			  total = 0;
 	uint32_t			  count = 0;
 	int				  rc = 0;
@@ -5356,21 +5381,28 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < count; i++) {
-		bulks[i] = *dcbs[i]->dcb_bulk;
+		bulks[i] = dcbs[i]->dcb_bulk;
 		sgls[i] = &dcbs[i]->dcb_sgl;
 	}
 
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL, DAOS_HDL_INVAL,
-			       sgls, count, count, NULL);
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, true, bulks, NULL, NULL, DAOS_HDL_INVAL, sgls,
+			       count, count, NULL);
 	if (rc != 0)
 		goto out;
 
 	for (i = 0; i < count; i++) {
 		switch (dcbs[i]->dcb_type) {
-		case DCST_BULK_HEAD:
-			dcsh = &dcbs[i]->dcb_head;
+		case DCST_BULK_HEAD: {
+			struct daos_cpd_sub_head *dcsh = &dcbs[i]->dcb_head;
+
 			dcsh->dcsh_mbs = dcbs[i]->dcb_iov.iov_buf;
+			D_ASSERTF(dcsh->dcsh_mbs->dm_data_size ==
+				      dcbs[i]->dcb_iov.iov_len - sizeof(*dcsh->dcsh_mbs),
+				  "Invalid bulk MBS data for CPD RPC on %s: %u vs %u\n",
+				  leader ? "leader" : "follower", dcsh->dcsh_mbs->dm_data_size,
+				  (uint32_t)(dcbs[i]->dcb_iov.iov_len - sizeof(*dcsh->dcsh_mbs)));
 			break;
+		}
 		case DCST_BULK_REQ:
 			rc = crt_proc_create(dss_get_module_info()->dmi_ctx,
 					     dcbs[i]->dcb_iov.iov_buf, dcbs[i]->dcb_iov.iov_len,
@@ -5390,17 +5422,36 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 					goto out;
 			}
 			break;
-		case DCST_BULK_ENT:
+		case DCST_BULK_ENT: {
+			struct daos_cpd_disp_ent *dcde;
+			struct daos_cpd_req_idx  *dcri;
+			void                     *end;
+
 			dcde = dcbs[i]->dcb_iov.iov_buf;
 			dcri = dcbs[i]->dcb_iov.iov_buf + sizeof(*dcde) * dcbs[i]->dcb_item_nr;
-			end = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
+			end  = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
 
 			for (j = 0; j < dcbs[i]->dcb_item_nr; j++) {
 				dcde[j].dcde_reqs = dcri;
 				dcri += dcde[j].dcde_read_cnt + dcde[j].dcde_write_cnt;
-				D_ASSERT((void *)dcri <= end);
+				D_ASSERTF((void *)dcri <= end,
+					  "Invalid bulk ENT data for CPD RPC on %s: pos %u, rd %u, "
+					  "wr %u, nr %u, size %u, base %p, cur %p, end %p\n",
+					  leader ? "leader" : "follower", j, dcde[j].dcde_read_cnt,
+					  dcde[j].dcde_write_cnt, dcbs[i]->dcb_item_nr,
+					  dcbs[i]->dcb_size, dcde, dcri, end);
 			}
 			break;
+		}
+		case DCST_BULK_TGT: {
+			struct daos_shard_tgt *tgts = dcbs[i]->dcb_iov.iov_buf;
+
+			D_ASSERTF(dss_self_rank() == tgts[0].st_rank &&
+				      dss_get_module_info()->dmi_tgt_id == tgts[0].st_tgt_idx,
+				  "Invalid bulk tgt data on %u: rank %u, tgt_idx %u\n",
+				  dss_self_rank(), tgts[0].st_rank, tgts[0].st_tgt_idx);
+			break;
+		}
 		default:
 			break;
 		}

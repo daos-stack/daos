@@ -34,6 +34,18 @@ void get_rpm_relval() {
                               echo ".$(git rev-list HEAD --count).g$(git rev-parse --short=8 HEAD)"
                           fi''',
                 returnStdout: true).trim()
+    // If head is a TAG, keep it the same but otherwise, use the commit where deps changed
+    env.DAOS_DEPS_RELVAL = sh(label: 'get deps git tag',
+               script: '''if [ -n "$GIT_CHECKOUT_DIR" ] && [ -d "$GIT_CHECKOUT_DIR" ]; then
+                              cd "$GIT_CHECKOUT_DIR"
+                          fi
+                          if git diff-index --name-only HEAD^ | grep -q TAG; then
+                              echo ""
+                          else
+			      export commit=$(git log -1 --pretty=format:"%h" deps utils/build.config)
+                              echo ".$(git rev-list $commit --count).g$(git rev-parse --short=8 $commit)"
+                          fi''',
+                returnStdout: true).trim()
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
@@ -515,7 +527,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
+                                                                deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
@@ -524,6 +536,12 @@ pipeline {
                     }
                     steps {
                         script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh el8 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                         stash_files: 'ci/test_files_to_stash.txt',
@@ -532,7 +550,9 @@ pipeline {
                                         scons_args: sconsArgs() +
                                                     ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el8 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
                         }
                     }
                     post {
@@ -562,7 +582,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
+                                                                deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
@@ -571,6 +591,12 @@ pipeline {
                     }
                     steps {
                         script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh el9 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -579,7 +605,9 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el9 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
                         }
                     }
                     post {
@@ -610,20 +638,28 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true) +
+                                                                deps_build: false) +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc"
                         }
                     }
                     steps {
                         script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh suse.lp155 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                 scons_args: sconsFaultsArgs() +
                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' +
+				        env.DAOS_RELVAL + '" "' +
+				        env.DAOS_DEPS_RELVAL + '"'
                         }
                     }
                     post {
@@ -656,6 +692,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
+						' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg COMPILER=icc'
                         }
                     }
@@ -973,6 +1010,8 @@ pipeline {
                                                       scm: 'daos-stack/daos',
                                                       requiredResult: hudson.model.Result.UNSTABLE
                             recordIssues enabledForFailure: true,
+                                         /* ignore warning/errors from PMDK logging system */
+                                         filters: [excludeFile('pmdk/.+')],
                                          failOnError: false,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],

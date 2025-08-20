@@ -27,7 +27,7 @@ def scons():
     # build dtx_ut
 
     libraries = ['abt', 'bio', 'ssl', 'cmocka', 'daos_common_pmem', 'gurt', 'uuid', 'vea',
-                 'pthread']
+                 'pthread', 'pmemobj']
 
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('../../vos').srcnode()])

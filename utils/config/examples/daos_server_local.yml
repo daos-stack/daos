@@ -3,7 +3,7 @@
 name: daos_server
 mgmt_svc_replicas: ['localhost']
 provider: ofi+tcp
-control_log_file: /tmp/daos_server.log
+control_log_file: /var/log/daos/daos_server.log
 transport_config:
   allow_insecure: true
 
@@ -16,7 +16,7 @@ engines:
     nr_xs_helpers: 0
     fabric_iface: eth0
     fabric_iface_port: 31416
-    log_file: /tmp/daos_engine.0.log
+    log_file: /var/log/daos/daos_engine.0.log
 
     env_vars:
       - FI_SOCKETS_MAX_CONN_RETRY=1

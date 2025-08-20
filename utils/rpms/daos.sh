@@ -5,7 +5,7 @@ set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
-if [ -z "${SL_PREFIX}" ]; then
+if [ -z "${SL_PREFIX:-}" ]; then
   echo "daos is not built"
   exit 1
 fi
@@ -14,6 +14,7 @@ daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
 sysctl_script_name="10-daos_server.conf"
+daos_log_dir="/var/log/daos"
 
 VERSION=${daos_version}
 RELEASE=${daos_release}
@@ -68,9 +69,6 @@ build_package "daos"
 if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   echo "Creating server packages"
   # daos-server package
-  mkdir -p "${tmp}/${sysconfdir}/ld.so.conf.d"
-  echo "${libdir}/daos_srv" > "${tmp}/${sysconfdir}/ld.so.conf.d/daos.conf"
-  install_list+=("${tmp}/${sysconfdir}/ld.so.conf.d/daos.conf=${sysconfdir}/ld.so.conf.d/daos.conf")
   mkdir -p "${tmp}/${sysctldir}"
   install -m 644 "utils/rpms/${sysctl_script_name}" "${tmp}/${sysctldir}"
   install_list+=("${tmp}/${sysctldir}/${sysctl_script_name}=${sysctldir}/${sysctl_script_name}")
@@ -139,6 +137,12 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
+# Ensure daos_log_dir exists
+if [ ! -d ${daos_log_dir} ]; then
+    mkdir -p ${daos_log_dir}
+    chown daos_server:daos_daemons ${daos_log_dir}
+    chmod 775 ${daos_log_dir}
+fi
 EOF
   EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_server")
 
@@ -171,7 +175,7 @@ EOF
   EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
   EXTRA_OPTS+=("--rpm-attr" "2755,root,daos_server:${bindir}/daos_server")
 
-  DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${VERSION}-${RELEASE}" )
+  DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${daos_spdk_full}" )
   DEPENDS+=( "${pmemobj_lib} >= ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
   build_package "daos-server"
 
@@ -268,6 +272,11 @@ cat << EOF  > "${tmp}/pre_install_client"
 getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
+# Ensure daos_log_dir exists
+if [ ! -d ${daos_log_dir} ]; then
+    mkdir -p ${daos_log_dir}
+    chmod 775 ${daos_log_dir}
+fi
 EOF
 EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_client")
 

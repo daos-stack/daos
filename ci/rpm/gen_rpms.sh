@@ -20,7 +20,8 @@ env
 
 pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
-export DAOS_RELVAL="${2:-}"
+export DAOS_RELVAL="${2}"
+export DAOS_DEPS_RELVAL="${3}"
 rm -f ./*.rpm
 utils/rpms/build_packages.sh
 mkdir -p /home/daos/rpms
