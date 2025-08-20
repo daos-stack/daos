@@ -54,7 +54,7 @@ ds_rsvc_state_str(enum ds_rsvc_state state)
 	case DS_RSVC_UP:
 		return "UP";
 	case DS_RSVC_STEPPING_DOWN:
-		return "DRAINING";
+		return "STEPPING_DOWN";
 	case DS_RSVC_DOWN:
 		return "DOWN";
 	default:
