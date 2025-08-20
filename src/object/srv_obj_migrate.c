@@ -1964,7 +1964,7 @@ migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx, bool *yielded)
 		D_DEBUG(DB_REBUILD, DF_RB ": tgt%d:%u max %u\n", DP_RB_MPT(tls), tgt_idx, tgt_cnt,
 			tls->mpt_inflight_max_ult / dss_tgt_nr);
 		*yielded = true;
-		dss_sleep(1);
+		dss_sleep(0);
 		if (tls->mpt_fini)
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 
