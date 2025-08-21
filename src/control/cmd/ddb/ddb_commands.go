@@ -381,4 +381,19 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Completer: nil,
 	})
+	// Command dtx_stat
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_stat",
+		Aliases:   nil,
+		Help:      "Stat on DTX entries",
+		LongHelp:  "Print statistic on the DTX entries",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to query.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxStat(ctx, c.Args.String("path"))
+		},
+		Completer: nil,
+	})
 }
