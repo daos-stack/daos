@@ -71,34 +71,40 @@ func newTestModule(ID int32) *mockModule {
 // mockConn is a mock of the net.Conn interface
 type mockConn struct {
 	sync.Mutex
-	ReadCallCount       int
-	ReadInputBytes      []byte
-	ReadOutputNumBytes  int
-	ReadOutputError     error
-	ReadOutputBytes     []byte // Bytes copied into buffer
-	WriteCallCount      int
-	WriteOutputNumBytes int
-	WriteOutputError    error
-	WriteInputBytes     []byte
-	CloseCallCount      int // Number of times called
-	CloseOutputError    error
+	ReadCallCount    int
+	ReadInputBytes   [][]byte
+	ReadOutputError  error
+	ReadOutputBytes  [][]byte // Bytes copied into buffer
+	WriteCallCount   int
+	WriteOutputError error
+	WriteInputBytes  [][]byte
+	CloseCallCount   int // Number of times called
+	CloseOutputError error
 }
 
 func (m *mockConn) Read(b []byte) (n int, err error) {
 	m.Lock()
 	defer m.Unlock()
+	var bytes int
+	if len(m.ReadOutputBytes) > 0 {
+		idx := m.ReadCallCount
+		if idx >= len(m.ReadOutputBytes) {
+			idx = len(m.ReadOutputBytes) - 1
+		}
+		copy(b, m.ReadOutputBytes[idx])
+		bytes = len(m.ReadOutputBytes[idx])
+	}
 	m.ReadCallCount++
-	m.ReadInputBytes = b
-	copy(b, m.ReadOutputBytes)
-	return m.ReadOutputNumBytes, m.ReadOutputError
+	m.ReadInputBytes = append(m.ReadInputBytes, b)
+	return bytes, m.ReadOutputError
 }
 
-func (m *mockConn) Write(b []byte) (n int, err error) {
+func (m *mockConn) Write(b []byte) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 	m.WriteCallCount++
-	m.WriteInputBytes = b
-	return m.WriteOutputNumBytes, m.WriteOutputError
+	m.WriteInputBytes = append(m.WriteInputBytes, b)
+	return len(b), m.WriteOutputError
 }
 
 func (m *mockConn) Close() error {
@@ -144,20 +150,19 @@ func (m *mockConn) SetReadOutputBytesToResponse(t *testing.T, resp *Response) {
 	t.Helper()
 
 	rawRespBytes := marshallResponseToBytes(t, resp)
-	m.ReadOutputNumBytes = len(rawRespBytes)
+	numChunks := getNumChunks(len(rawRespBytes))
+	start := 0
+	for i := 0; i < numChunks; i++ {
+		size := maxDataSize
+		if start+size >= len(rawRespBytes) {
+			size = len(rawRespBytes) - start
+		}
 
-	// The result from Read() will be MaxMsgSize since we have no way to
-	// know the size of a read before we read it
-	m.ReadOutputBytes = make([]byte, MaxMsgSize)
-	copy(m.ReadOutputBytes, rawRespBytes)
-}
+		buf := genTestBuf(uint(i), uint(numChunks), uint(len(rawRespBytes)), rawRespBytes[start:start+size])
 
-func (m *mockConn) SetWriteOutputBytesForCall(t *testing.T, call *Call) []byte {
-	t.Helper()
-
-	callBytes := marshallCallToBytes(t, call)
-
-	return callBytes
+		m.ReadOutputBytes = append(m.ReadOutputBytes, buf)
+		start += size
+	}
 }
 
 // mockListener is a mock of the net.Listener interface
