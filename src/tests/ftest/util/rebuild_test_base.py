@@ -29,7 +29,6 @@ class RebuildTestBase(TestWithServers):
         """Initialize a RebuildTestBase object."""
         super().__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
-        self.server_count = 0
 
     def setUp(self):
         """Set up each test case."""
@@ -39,8 +38,6 @@ class RebuildTestBase(TestWithServers):
         # Get the test parameters
         self.inputs.get_params(self)
 
-        self.server_count = len(self.hostlist_servers)
-
     def verify_pool_info_before_rebuild(self, pool):
         """Verify the pool information before rebuild.
 
@@ -49,9 +46,9 @@ class RebuildTestBase(TestWithServers):
         """
         info_checks = {
             "pi_uuid": pool.uuid,
-            "pi_nnodes": self.server_count,
+            "pi_nnodes": len(self.hostlist_servers),
             "pi_ntargets": (
-                self.server_count * self.server_managers[0].get_config_value("targets")),
+                len(self.hostlist_servers) * self.server_managers[0].get_config_value("targets")),
             "pi_ndisabled": 0,
         }
         rebuild_checks = {
@@ -73,9 +70,9 @@ class RebuildTestBase(TestWithServers):
         """
         info_checks = {
             "pi_uuid": pool.uuid,
-            "pi_nnodes": self.server_count,
+            "pi_nnodes": len(self.hostlist_servers),
             "pi_ntargets": (
-                self.server_count * self.server_managers[0].get_config_value("targets")),
+                len(self.hostlist_servers) * self.server_managers[0].get_config_value("targets")),
             "pi_ndisabled": ">0",
         }
         rebuild_checks = {
@@ -89,52 +86,75 @@ class RebuildTestBase(TestWithServers):
         if not status:
             self.fail("Error confirming pool info after rebuild")
 
-    def create_test_container(self):
-        """Create a container and write objects."""
-        if self.container is not None:
-            self.container.create()
-            self.container.write_objects(
-                self.inputs.rank.value, self.inputs.object_class.value)
+    def create_test_container(self, pool, rank):
+        """Create a container and write objects.
 
-    def verify_rank_has_objects(self, container):
+        Args:
+            pool (TestPool) pool to create the container in
+            rank (int): rank to write data to
+
+        Returns:
+            TestContainer: the container created
+        """
+        container = self.get_container(pool)
+        container.write_objects(rank, self.inputs.object_class.value)
+        return container
+
+    def verify_rank_has_objects(self, container, ranks):
         """Verify the rank to be excluded has at least one object.
 
         Args:
             container (TestContainer): container to verify
+            ranks (int/list): single rank or list of ranks to verify
         """
-        if container is not None:
-            rank = self.inputs.rank.value
-            rank_list = container.get_target_rank_lists(" before rebuild")
-            qty = container.get_target_rank_count(rank, rank_list)
-            self.assertGreater(
-                qty, 0, "No objects written to rank {}".format(rank))
+        if not isinstance(ranks, list):
+            ranks = [ranks]
+        rank_list = container.get_target_rank_lists(" after rebuild")
+        objects = {
+            rank: container.get_target_rank_count(rank, rank_list)
+            for rank in ranks
+        }
+        for rank in ranks:
+            self.assertGreater(objects[rank], 0, f"No objects written to rank {rank}")
 
-    def verify_rank_has_no_objects(self, container):
-        """Verify the excluded rank has zero objects.
+    def verify_rank_has_no_objects(self, container, ranks):
+        """Verify the excluded ranks have zero objects.
 
         Args:
             container (TestContainer): container to verify
+            ranks (int/list): single rank or a list of ranks
         """
-        if container is not None:
-            rank = self.inputs.rank.value
-            rank_list = container.get_target_rank_lists(" after rebuild")
-            qty = container.get_target_rank_count(rank, rank_list)
-            self.assertEqual(
-                qty, 0, "Excluded rank {} still has objects".format(rank))
+        if not isinstance(ranks, list):
+            ranks = [ranks]
+        rank_list = container.get_target_rank_lists(" after rebuild")
+        objects = {
+            rank: container.get_target_rank_count(rank, rank_list)
+            for rank in ranks
+        }
+        for rank in ranks:
+            self.assertEqual(objects[rank], 0, f"Excluded rank {rank} still has objects")
 
-    def start_rebuild(self):
-        """Start the rebuild process."""
+    def start_rebuild(self, pool, ranks):
+        """Start the rebuild process.
+
+        Args:
+            pool (TestPool): pool to start rebuild on
+            ranks (int/list): single rank or list of ranks to stop
+        """
         # Exclude the rank from the pool to initiate rebuild
-        if isinstance(self.inputs.rank.value, list):
-            self.server_managers[0].stop_ranks(self.inputs.rank.value, force=True)
-        else:
-            self.server_managers[0].stop_ranks([self.inputs.rank.value], force=True)
+        if not isinstance(ranks, list):
+            ranks = [ranks]
+        self.server_managers[0].stop_ranks(ranks, force=True)
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild_to_start(1)
+        pool.wait_for_rebuild_to_start(1)
 
-    def execute_during_rebuild(self):
-        """Execute test steps during rebuild."""
+    def execute_during_rebuild(self, container):
+        """Execute test steps during rebuild.
+
+        Args:
+            container (TestContainer): container to use
+        """
 
     def verify_container_data(self, container, txn=None):
         """Verify the container data.
@@ -149,51 +169,51 @@ class RebuildTestBase(TestWithServers):
         if not container.read_objects(txn):
             self.fail("Error verifying container data")
 
-    def execute_rebuild_test(self, create_container=True):
+    def execute_rebuild_test(self, pool=None, container=None):
         """Execute the rebuild test steps.
 
         Args:
-            create_container (bool, optional): should the test create a
-                container. Defaults to True.
+            pool (TestPool, optional): pool to use. Default is None, which will create one
+            container (TestContainer, optional): container to use.
+                Default is None, which will create one
         """
-        # Get the test params
-        self.add_pool(create=False)
-        if create_container:
-            self.add_container(self.pool, create=False)
-
         # Create a pool and verify the pool information before rebuild
-        self.pool = self.get_pool()
-        self.verify_pool_info_before_rebuild(self.pool)
+        if pool is None:
+            pool = self.get_pool()
+        self.verify_pool_info_before_rebuild(pool)
 
         # Create a container and write objects
-        self.create_test_container()
+        if container is None:
+            ranks = self.inputs.rank.value
+            container = self.create_test_container(
+                pool, ranks[0] if isinstance(ranks, list) else ranks)
 
         # Verify the rank to be excluded has at least one object
-        self.verify_rank_has_objects(self.container)
+        self.verify_rank_has_objects(container, self.inputs.rank.value)
 
         # Start the rebuild process
-        self.start_rebuild()
+        self.start_rebuild(pool, self.inputs.rank.value)
 
         # Execute the test steps during rebuild
-        self.execute_during_rebuild()
+        self.execute_during_rebuild(container)
 
         # Confirm rebuild completes
-        self.pool.wait_for_rebuild_to_end(1)
+        pool.wait_for_rebuild_to_end(1)
 
         # clear container status for the RF issue
-        self.container.set_prop(prop="status", value="healthy")
+        container.set_prop(prop="status", value="healthy")
 
         # Refresh local pool and container
-        self.pool.check_pool_info()
-        self.container.query()
+        pool.check_pool_info()
+        container.query()
 
         # Verify the excluded rank is no longer used with the objects
-        self.verify_rank_has_no_objects(self.container)
+        self.verify_rank_has_no_objects(container, self.inputs.rank.value)
 
         # Verify the pool information after rebuild
-        self.verify_pool_info_after_rebuild(self.pool)
+        self.verify_pool_info_after_rebuild(pool)
 
         # Verify the container data can still be accessed
-        self.verify_container_data(self.container)
+        self.verify_container_data(container)
 
         self.log.info("Test passed")

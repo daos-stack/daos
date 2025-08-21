@@ -16,70 +16,63 @@ class RbldCascadingFailures(RebuildTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a CascadingFailures object."""
         super().__init__(*args, **kwargs)
-        self.mode = None
+        self.__mode = None
 
-    def create_test_container(self):
-        """Create a container and write objects."""
-        self.container.create()
-        self.container.write_objects(
-            self.inputs.rank.value[0], self.inputs.object_class.value)
-
-    def verify_rank_has_objects(self, container):
+    def verify_rank_has_objects(self, container, ranks):
         """Verify the first rank to be excluded has at least one object.
 
         Args:
             container (TestContainer): container to verify
+            ranks (int/list): single rank or list of ranks to verify
         """
+        if not isinstance(ranks, list):
+            ranks = [ranks]
         rank_list = container.get_target_rank_lists(" before rebuild")
         objects = {
             rank: container.get_target_rank_count(rank, rank_list)
-            for rank in self.inputs.rank.value
+            for rank in ranks
         }
         self.assertGreater(
-            objects[self.inputs.rank.value[0]], 0,
-            "No objects written to rank {}".format(self.inputs.rank.value[0]))
+            objects[ranks[0]], 0,
+            "No objects written to rank {}".format(ranks[0]))
 
-    def verify_rank_has_no_objects(self, container):
-        """Verify the excluded rank has zero objects.
+    def start_rebuild(self, pool, ranks):
+        """Start the rebuild process.
 
         Args:
-            container (TestContainer): container to verify
+            pool (TestPool): pool to start rebuild on
+            ranks (int/list): single rank or list of ranks to stop
         """
-        rank_list = container.get_target_rank_lists(" after rebuild")
-        objects = {
-            rank: container.get_target_rank_count(rank, rank_list)
-            for rank in self.inputs.rank.value
-        }
-        for rank in self.inputs.rank.value:
-            self.assertEqual(
-                objects[rank], 0,
-                "Excluded rank {} still has objects".format(rank))
+        if not isinstance(ranks, list):
+            ranks = [ranks]
 
-    def start_rebuild(self):
-        """Start the rebuild process."""
-        if self.mode == "simultaneous":
+        if self.__mode == "simultaneous":
             # Exclude both ranks from the pool to initiate rebuild
-            self.server_managers[0].stop_ranks(self.inputs.rank.value, force=True)
+            self.server_managers[0].stop_ranks(ranks, force=True)
         else:
             # Exclude the first rank from the pool to initiate rebuild
-            self.server_managers[0].stop_ranks([self.inputs.rank.value[0]], force=True)
+            self.server_managers[0].stop_ranks([ranks[0]], force=True)
 
-        if self.mode == "sequential":
+        if self.__mode == "sequential":
             # Exclude the second rank from the pool
-            self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], force=True)
+            self.server_managers[0].stop_ranks([ranks[1]], force=True)
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild_to_start(1)
+        pool.wait_for_rebuild_to_start(1)
 
-    def execute_during_rebuild(self):
-        """Execute test steps during rebuild."""
-        if self.mode == "cascading":
+    def execute_during_rebuild(self, container):
+        """Execute test steps during rebuild.
+
+        Args:
+            container (TestContainer): container to write data to
+        """
+        if self.__mode == "cascading":
             # Exclude the second rank from the pool during rebuild
             self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], force=True)
 
-        self.container.set_prop(prop="status", value="healthy")
+        container.set_prop(prop="status", value="healthy")
         # Populate the container with additional data during rebuild
-        self.container.write_objects(obj_class=self.inputs.object_class.value)
+        container.write_objects(obj_class=self.inputs.object_class.value)
 
     def test_simultaneous_failures(self):
         """Jira ID: DAOS-842.
@@ -99,7 +92,7 @@ class RbldCascadingFailures(RebuildTestBase):
         :avocado: tags=rebuild,multitarget,simultaneous
         :avocado: tags=RbldCascadingFailures,test_simultaneous_failures
         """
-        self.mode = "simultaneous"
+        self.__mode = "simultaneous"
         self.execute_rebuild_test()
 
     def test_sequential_failures(self):
@@ -121,7 +114,7 @@ class RbldCascadingFailures(RebuildTestBase):
         :avocado: tags=rebuild,multitarget,sequential
         :avocado: tags=RbldCascadingFailures,test_sequential_failures
         """
-        self.mode = "sequential"
+        self.__mode = "sequential"
         self.execute_rebuild_test()
 
     def test_cascading_failures(self):
@@ -143,5 +136,5 @@ class RbldCascadingFailures(RebuildTestBase):
         :avocado: tags=rebuild,multitarget,sequential
         :avocado: tags=RbldCascadingFailures,test_cascading_failures
         """
-        self.mode = "cascading"
+        self.__mode = "cascading"
         self.execute_rebuild_test()

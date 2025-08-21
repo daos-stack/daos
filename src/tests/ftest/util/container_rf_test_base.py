@@ -16,35 +16,24 @@ class ContRedundancyFactor(RebuildTestBase):
 
     :avocado: recursive
     """
-    def verify_rank_has_objects(self, container):
+    def verify_rank_has_objects(self, container, ranks):
         """Verify the first rank to be excluded has at least one object.
 
         Args:
             container (TestContainer): container to verify
+            ranks (int/list): single rank or list of ranks to verify
 
         """
+        if not isinstance(ranks, list):
+            ranks = [ranks]
         rank_list = container.get_target_rank_lists(" before rebuild")
         objects = {
             rank: container.get_target_rank_count(rank, rank_list)
-            for rank in self.inputs.rank.value
+            for rank in ranks
         }
         self.assertGreater(
-            objects[self.inputs.rank.value[0]], 0,
-            "#No objects written to rank {}".format(self.inputs.rank.value[0]))
-
-    def verify_rank_has_no_objects(self, container):
-        """Verify the excluded rank has zero objects.
-
-        Args:
-            container (TestContainer): container to verify
-        """
-        rank_list = container.get_target_rank_lists(" after rebuild")
-        objects = {
-            rank: container.get_target_rank_count(rank, rank_list)
-            for rank in self.inputs.rank.value
-        }
-        for rank in self.inputs.rank.value:
-            self.assertEqual(objects[rank], 0, "#Excluded rank {} still has objects".format(rank))
+            objects[ranks[0]], 0,
+            "#No objects written to rank {}".format(ranks[0]))
 
     def verify_cont_rf_healthstatus(self, container, expected_rf, expected_health):
         """Verify the container redundancy factor and health status.
@@ -172,7 +161,7 @@ class ContRedundancyFactor(RebuildTestBase):
             else:
                 expect_cont_status = "HEALTHY"
             # Verify the rank to be excluded has at least one object
-            self.verify_rank_has_objects(container)
+            self.verify_rank_has_objects(container, self.inputs.rank.value)
             # Start the rebuild process
             self.start_rebuild_cont_rf(container, rd_fac)
             # Execute the test steps during rebuild
@@ -182,7 +171,7 @@ class ContRedundancyFactor(RebuildTestBase):
             pool.check_pool_info()
             container.query()
             # Verify the excluded rank is no longer used with the objects
-            self.verify_rank_has_no_objects(container)
+            self.verify_rank_has_no_objects(container, self.inputs.rank.value)
             # Verify the pool information after rebuild
             if expect_cont_status == "HEALTHY":
                 self.verify_pool_info_after_rebuild(pool)
