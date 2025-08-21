@@ -205,6 +205,13 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	struct mgmt_tgt_params_set_in	*tc_in;
 	struct mgmt_params_set_out	*out;
 	int				rc;
+	uint8_t                          mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc) {
+		D_ERROR("Failed to get mgmt rpc protocol: %d\n", rc);
+		D_GOTO(out, rc);
+	}
 
 	ps_in = crt_req_get(rpc);
 	D_ASSERT(ps_in != NULL);
@@ -224,8 +231,7 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	}
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc  = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE, mgmt_ver);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
@@ -261,13 +267,17 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	struct mgmt_profile_in	*tc_in;
 	struct mgmt_profile_out	*out;
 	int			rc;
+	uint8_t                  mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_PROFILE, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc  = DAOS_RPC_OPCODE(MGMT_TGT_PROFILE, DAOS_MGMT_MODULE, mgmt_ver);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
@@ -302,13 +312,17 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 	struct mgmt_mark_in	*tc_in;
 	struct mgmt_mark_out	*out;
 	int			rc;
+	uint8_t                  mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_MARK, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc  = DAOS_RPC_OPCODE(MGMT_TGT_MARK, DAOS_MGMT_MODULE, mgmt_ver);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
@@ -632,3 +646,5 @@ struct dss_module mgmt_module = {
     .sm_handlers      = {mgmt_handlers_v3, mgmt_handlers_v4},
     .sm_drpc_handlers = mgmt_drpc_handlers,
 };
+
+DEFINE_DS_RPC_PROTOCOL(mgmt, DAOS_MGMT_MODULE);
