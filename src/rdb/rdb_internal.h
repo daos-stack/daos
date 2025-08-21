@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -211,8 +212,8 @@ int rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx)
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ * Please increment DAOS_RDB_VERSION whenever the protocol is changed.
  */
-#define DAOS_RDB_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -489,6 +490,9 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 }
 
 int rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
+
+int
+    rdb_rpc_protocol(uint8_t *rpc_protcol);
 
 /* rdb_tx.c *******************************************************************/
 
