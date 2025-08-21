@@ -8,8 +8,8 @@
 /**
  * This file is part of CaRT. It is the header file of bridging to mercury.
  */
-#ifndef __CRT_MERCURY_H__
-#define __CRT_MERCURY_H__
+#ifndef __CRT_HG_H__
+#define __CRT_HG_H__
 
 #include <gurt/list.h>
 
@@ -267,9 +267,10 @@ crt_hg_bulk_bind(hg_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int
 crt_hg_bulk_access(hg_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int
-crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
-		     crt_bulk_opid_t *opid, bool bind);
+crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
+		     crt_bulk_cb_t complete_cb, void *arg, crt_bulk_opid_t *opid, bool bind);
+
 void
 crt_hg_republish_diags(struct crt_hg_context *hg_ctx);
 
-#endif /* __CRT_MERCURY_H__ */
+#endif /* __CRT_HG_H__ */
