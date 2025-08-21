@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /* Copyright 2015-2024, Intel Corporation */
+/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
 
 /*
  * heap.h -- internal definitions for heap
@@ -74,6 +75,8 @@ heap_zinfo_init(struct palloc_heap *heap, bool is_create);
 
 struct alloc_class *
 heap_get_best_class(struct palloc_heap *heap, size_t size);
+struct alloc_class *
+mbrt_get_best_class(struct mbrt *mb, size_t size);
 struct bucket *
 mbrt_bucket_acquire(struct mbrt *mb, uint8_t class_id);
 void
@@ -102,7 +105,9 @@ heap_foreach_object(struct palloc_heap *heap, object_callback cb, void *arg,
 		    struct memory_block start);
 
 struct alloc_class_collection *
-heap_alloc_classes(struct palloc_heap *heap);
+heap_alloc_classes(struct palloc_heap *heap, bool evictable_mb);
+struct alloc_class_collection *
+mbrt_alloc_classes(struct mbrt *mb);
 
 void
 heap_vg_open(struct palloc_heap *heap, object_callback cb, void *arg, int objects);
