@@ -1839,7 +1839,9 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": Failed to start rdb tx: %d\n", DP_UUID(svc->cs_pool_uuid), rc);
+		DL_CDEBUG(rc != -DER_NOTLEADER, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to start rdb tx.",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		return rc;
 	}
 
@@ -1853,7 +1855,7 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 
 	d_iov_set(&value, &agg_eph, sizeof(agg_eph));
 	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
-	DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+	DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST && rc != -DER_NOTLEADER, DLOG_ERR, DB_MD, rc,
 		  DF_CONT ": rdb_tx_lookup ec_agg_eph " DF_X64,
 		  DP_CONT(svc->cs_pool_uuid, cont_uuid), agg_eph);
 	if (rc == -DER_NONEXIST) {
@@ -1895,12 +1897,15 @@ cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph)
 	struct rdb_tx tx;
 	struct cont  *cont = NULL;
 	d_iov_t       value;
+	uint64_t      old_eph;
 	int           rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": Failed to start rdb tx: %d\n", DP_UUID(svc->cs_pool_uuid), rc);
+		DL_CDEBUG(rc != -DER_NOTLEADER, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to start rdb tx.",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		return rc;
 	}
 
@@ -1912,15 +1917,30 @@ cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph)
 		D_GOTO(out_lock, rc);
 	}
 
-	d_iov_set(&value, &ec_agg_eph, sizeof(ec_agg_eph));
-	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
-	if (rc == 0)
-		rc = rdb_tx_commit(&tx);
-	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc, DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64,
+	d_iov_set(&value, &old_eph, sizeof(old_eph));
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
+	if (rc == -DER_NONEXIST) {
+		rc = 0;
+		old_eph = 0;
+	}
+	if (rc != 0)
+		goto out;
+
+	if (ec_agg_eph > old_eph) {
+		d_iov_set(&value, &ec_agg_eph, sizeof(ec_agg_eph));
+		rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
+		if (rc == 0)
+			rc = rdb_tx_commit(&tx);
+	} else {
+		D_DEBUG(DB_MD, DF_CONT ": bypass rdb update ec_agg_eph "DF_X64", in rdb eph "DF_X64,
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), ec_agg_eph, old_eph);
+	}
+
+out:
+	DL_CDEBUG(rc != 0 && rc != -DER_NOTLEADER, DLOG_ERR, DB_MD, rc,
+		  DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64,
 		  DP_CONT(svc->cs_pool_uuid, cont_uuid), ec_agg_eph);
-
 	cont_put(cont);
-
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
