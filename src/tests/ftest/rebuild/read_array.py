@@ -14,36 +14,45 @@ class RbldReadArrayTest(RebuildTestBase):
     :avocado: recursive
     """
 
-    def execute_during_rebuild(self):
-        """Read the objects during rebuild."""
-        self.container.set_prop(prop="status", value="healthy")
+    def execute_during_rebuild(self, container):
+        """Read the objects during rebuild.
+
+        Args:
+            container (TestContainer): container to read from
+        """
+        container.set_prop(prop="status", value="healthy")
 
         message = "Reading the array objects during rebuild"
         self.log.info(message)
-        self.assertTrue(self.read_data_during_rebuild(), "Error reading data during rebuild")
+        self.assertTrue(
+            self.read_data_during_rebuild(container), "Error reading data during rebuild")
 
-    def read_data_during_rebuild(self):
+    def read_data_during_rebuild(self, container):
         """Read data from the container while rebuild is active.
+
+        Args:
+            container (TestContainer): container to read from
 
         Returns:
             bool: True if all the data is read successfully before rebuild completes; False
                 otherwise
-
         """
-        self.container.open()
-        self.log.info("Reading objects in container %s during rebuild", self.pool.identifier)
+        container.open()
+        self.log.info(
+            "Reading objects in container %s/%s during rebuild",
+            container.pool.identifier, container.identifier)
 
         # Attempt to read all of the data from the container during rebuild
         index = 0
-        status = read_incomplete = index < len(self.container.written_data)
-        while not self.pool.has_rebuild_completed() and read_incomplete:
+        status = read_incomplete = index < len(container.written_data)
+        while not container.pool.has_rebuild_completed() and read_incomplete:
             try:
-                status &= self.container.written_data[index].read_object(self.container)
+                status &= container.written_data[index].read_object(container)
             except DaosTestError as error:
                 self.log.error(str(error))
                 status = False
             index += 1
-            read_incomplete = index < len(self.container.written_data)
+            read_incomplete = index < len(container.written_data)
 
         # Verify that all of the container data was read successfully
         if read_incomplete:
