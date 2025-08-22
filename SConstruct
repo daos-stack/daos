@@ -166,7 +166,7 @@ def update_rpm_version(version, tag):
                       "rpmdevtools RPM on EL7) in order to make releases.\n\n"
                       "Additionally, you should define %packager in "
                       "~/.rpmmacros as such:\n"
-                      "%packager	John A. Doe <john.doe@intel.com>"
+                      "%packager	John A. Doe <john.doe@hpe.com>"
                       "so that package changelog entries are well defined")
                 return False
             date_str = time.strftime('%a %b %d %Y', time.gmtime())
