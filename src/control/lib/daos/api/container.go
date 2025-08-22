@@ -9,6 +9,8 @@ package api
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -649,6 +651,136 @@ func ContainerSetProperties(ctx context.Context, sysName, poolID, contID string,
 
 	if err := daosError(daos_cont_set_prop(contConn.daosHandle, (*C.daos_prop_t)(propList.ToPtr()), nil)); err != nil {
 		return errors.Wrap(err, "failed to set container properties")
+	}
+
+	return nil
+}
+
+func deleteContTelemAttrs(contConn *ContainerHandle) error {
+	dumpAttrs := []string{daos.ClientMetricsDumpPoolAttr, daos.ClientMetricsDumpContAttr, daos.ClientMetricsDumpDirAttr}
+	return delDaosAttributes(contConn.daosHandle, contAttr, dumpAttrs)
+}
+
+// ContainerTelemetryRequest defines the parameters for managing container telemetry.
+type ContainerTelemetryRequest struct {
+	DumpPoolID      string
+	DumpContainerID string
+	DumpPathRoot    string
+	DfuseMountPath  string
+	SysName         string
+	PoolID          string
+	ContainerID     string
+}
+
+// EnableTelemetry calls ContainerEnableTelemetry() for the container in the handle.
+func (ch *ContainerHandle) EnableTelemetry(ctx context.Context, req ContainerTelemetryRequest) error {
+	if !ch.IsValid() {
+		return ErrInvalidContainerHandle
+	}
+	return ContainerEnableTelemetry(ch.toCtx(ctx), req)
+}
+
+// ContainerEnableTelemetry enables telemetry for the specified container.
+func ContainerEnableTelemetry(ctx context.Context, req ContainerTelemetryRequest) error {
+	contConn, cleanup, err := getContConn(ctx, req.SysName, req.PoolID, req.ContainerID, daos.ContainerOpenFlagReadWrite)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	log := logging.FromContext(ctx)
+	log.Debugf("ContainerEnableTelemetry(%s:%#v)", contConn, req)
+	if err := ctx.Err(); err != nil {
+		return ctxErr(err)
+	}
+
+	if req.DumpPoolID == "" && req.DumpContainerID != "" {
+		req.DumpPoolID = contConn.PoolHandle.ID()
+	}
+	if req.DumpPoolID != "" && req.DumpContainerID == "" {
+		return errors.New("DumpContainerID must be set if DumpPoolID is set")
+	}
+	if req.DumpContainerID == "" && req.DumpPathRoot == "" {
+		return errors.New("either DumpContainerID or DumpPathRoot must be set")
+	}
+	if req.DumpContainerID == contConn.Label || req.DumpContainerID == contConn.UUID().String() {
+		return errors.New("DumpContainerID may not be the same as the source container")
+	}
+
+	if req.DumpPoolID != "" && req.DumpContainerID != "" {
+		if dCont, dContCleanup, err := getContConn(context.Background(), req.SysName, req.DumpPoolID, req.DumpContainerID, daos.ContainerOpenFlagReadOnly); err == nil {
+			log.Debugf("Found dump container %s", dCont)
+			dContCleanup()
+		} else {
+			return errors.Wrapf(err, "failed to find dump container %s/%s", req.DumpPoolID, req.DumpContainerID)
+		}
+	}
+
+	// Clear any existing telemetry attributes.
+	if err := deleteContTelemAttrs(contConn); err != nil {
+		return errors.Wrap(err, "failed to clear existing telemetry attributes")
+	}
+
+	dumpAttrs := daos.AttributeList{}
+	if req.DumpPoolID != "" {
+		dumpAttrs = append(dumpAttrs, &daos.Attribute{Name: daos.ClientMetricsDumpPoolAttr, Value: []byte(req.DumpPoolID)})
+	}
+	if req.DumpContainerID != "" {
+		dumpAttrs = append(dumpAttrs, &daos.Attribute{Name: daos.ClientMetricsDumpContAttr, Value: []byte(req.DumpContainerID)})
+	}
+	if req.DumpPathRoot != "" {
+		if !strings.HasPrefix(req.DumpPathRoot, "/") {
+			req.DumpPathRoot = "/" + req.DumpPathRoot
+		}
+		req.DumpPathRoot = filepath.Clean(req.DumpPathRoot)
+		dumpAttrs = append(dumpAttrs, &daos.Attribute{Name: daos.ClientMetricsDumpDirAttr, Value: []byte(req.DumpPathRoot)})
+	}
+	if err := contConn.SetAttributes(ctx, dumpAttrs...); err != nil {
+		return err
+	}
+
+	if req.DfuseMountPath != "" {
+		if err := call_dfuse_telemetry_ioctl(req.DfuseMountPath, true); err != nil {
+			return errors.Wrapf(err, "failed to enable container telemetry for dfuse at %q", req.DfuseMountPath)
+		}
+	}
+
+	return nil
+}
+
+// DisableTelemetry calls ContainerDisableTelemetry() for the container in the handle.
+func (ch *ContainerHandle) DisableTelemetry(ctx context.Context, dfusePath *string) error {
+	if !ch.IsValid() {
+		return ErrInvalidContainerHandle
+	}
+	req := ContainerTelemetryRequest{}
+	if dfusePath != nil {
+		req.DfuseMountPath = *dfusePath
+	}
+	return ContainerDisableTelemetry(ch.toCtx(ctx), req)
+}
+
+// ContainerDisableTelemetry disables telemetry for the specified container.
+func ContainerDisableTelemetry(ctx context.Context, req ContainerTelemetryRequest) error {
+	contConn, cleanup, err := getContConn(ctx, req.SysName, req.PoolID, req.ContainerID, daos.ContainerOpenFlagReadWrite)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	logging.FromContext(ctx).Debugf("ContainerDisableTelemetry(%s:%#v)", contConn, req)
+	if err := ctx.Err(); err != nil {
+		return ctxErr(err)
+	}
+
+	if err := deleteContTelemAttrs(contConn); err != nil {
+		return err
+	}
+
+	if req.DfuseMountPath != "" {
+		if err := call_dfuse_telemetry_ioctl(req.DfuseMountPath, false); err != nil {
+			return errors.Wrapf(err, "failed to disable container telemetry for dfuse at %q", req.DfuseMountPath)
+		}
 	}
 
 	return nil
