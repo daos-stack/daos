@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -239,7 +240,8 @@ func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
 	}
 
 	req := storage.ScmScanRequest{
-		SocketID: cmd.SocketID,
+		SocketID:     cmd.SocketID,
+		PMemInConfig: true,
 	}
 
 	cmd.Tracef("scm scan request: %+v", req)
