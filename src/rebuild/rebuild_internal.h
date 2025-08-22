@@ -245,8 +245,13 @@ struct rebuild_task {
 	 */
 	uint32_t			dst_reclaim_ver;
 
+	/* For failed tasks that may be retried after RB_OP_FAIL_RECLAIM, original map ver and opc
+	 */
+	uint32_t                        dst_retry_map_ver;
+	daos_rebuild_opc_t              dst_retry_rebuild_op;
+
 	/* For dst_rebuild_op == RB_OP_FAIL_RECLAIM: If true, rebuild was stopped by admin.
-	 * Then, on fail_reclaim finish, the pool rebuild state will be set to completed.
+	 * Then, on fail_reclaim finish, the pool rebuild state will be set to idle (NOT_STARTED).
 	 */
 	bool                            dst_stop_admin;
 };
