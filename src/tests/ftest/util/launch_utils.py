@@ -15,7 +15,7 @@ from pathlib import Path
 from ClusterShell.NodeSet import NodeSet
 from slurm_setup import SlurmSetup, SlurmSetupException
 # pylint: disable=import-error,no-name-in-module
-from util.collection_utils import TEST_RESULTS_DIRS, collect_test_result
+from util.collection_utils import TEST_RESULTS_DIRS, check_server_storage, collect_test_result
 from util.data_utils import dict_extract_values, list_flatten, list_unique
 from util.environment_utils import TestEnvironment
 from util.host_utils import HostException, HostInfo, get_local_host, get_node_set
@@ -183,7 +183,8 @@ def summarize_run(logger, mode, status):
         1024: "ERROR: Failed to rename logs and results after one or more tests!",
         2048: "ERROR: Core stack trace files detected!",
         4096: "ERROR: Unexpected processes or mounts found running!",
-        8192: "ERROR: Failed to create steps.log!"
+        8192: "ERROR: Failed to create steps.log!",
+        16384: "ERROR: Failed to parse test variant status!"
     }
     for bit_code, error_message in bit_error_map.items():
         if status & bit_code == bit_code:
@@ -246,6 +247,8 @@ class TestInfo():
         "client_partition",
         "client_reservation",
         "client_users",
+        "scm_list",
+        "bdev_list",
     ]
 
     def __init__(self, test_file, order, yaml_extension=None):
@@ -291,6 +294,8 @@ class TestInfo():
         """
         self.yaml_info = {"include_local_host": include_local_host}
         yaml_data = get_yaml_data(self.yaml_file)
+        for extra_yaml in self.extra_yaml:
+            yaml_data.update(get_yaml_data(extra_yaml))
         info = {}
         for key in self.YAML_INFO_KEYS:
             # Get the unique values with lists flattened
@@ -425,10 +430,14 @@ class TestRunner():
         if status:
             return status
 
+        # Check storage devices for servers
+        if not check_server_storage(logger, test, "Prepare"):
+            return status
+
         # Generate certificate files for the test
         return self._generate_certs(logger)
 
-    def execute(self, logger, test, repeat, number, sparse, fail_fast):
+    def execute(self, logger, test, repeat, number, sparse, fail_fast, details):
         """Run the specified test.
 
         Args:
@@ -438,10 +447,18 @@ class TestRunner():
             number (int): the test sequence number in this repetition
             sparse (bool): whether to use avocado sparse output
             fail_fast(bool): whether to use the avocado fail fast option
+            details (dict): dictionary to update with test results
 
         Returns:
             int: status code: 0 = success, >0 = failure
         """
+        def __add_detail_status(key):
+            if "status" not in details:
+                details["status"] = {key: 0}
+            elif key not in details["status"]:
+                details["status"][key] = 0
+            details["status"][key] += 1
+
         # Avoid counting the test execution time as part of the processing time of this test
         self.test_result.end()
 
@@ -456,27 +473,33 @@ class TestRunner():
         return_code = result.output[0].returncode
         if return_code == 0:
             logger.debug("All avocado test variants passed")
+            __add_detail_status("Passed")
         elif return_code & 1 == 1:
             logger.debug("At least one avocado test variant failed")
+            __add_detail_status("Variant Failed")
         elif return_code & 2 == 2:
             logger.debug("At least one avocado job failed")
+            __add_detail_status("Job Failed")
         elif return_code & 4 == 4:
             message = "Failed avocado commands detected"
             self.test_result.fail_test(logger, "Execute", message)
+            __add_detail_status("Command Failed")
         elif return_code & 8 == 8:
             logger.debug("At least one avocado test variant was interrupted")
+            __add_detail_status("Variant Failed - Interrupted")
         else:
             message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
             self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             return_code = 1
+            __add_detail_status("Unknown Failure")
         if return_code:
             self._collect_crash_files(logger)
 
         logger.info("Total test time: %ss", end_time - start_time)
         return return_code
 
-    def process(self, logger, job_results_dir, test, repeat, stop_daos, archive, rename,
-                jenkins_xml, core_files, threshold):
+    def process(self, logger, job_results_dir, test, loop, stop_daos, archive, rename,
+                jenkins_xml, core_files, threshold, details):
         # pylint: disable=too-many-arguments
         """Process the test results.
 
@@ -490,13 +513,14 @@ class TestRunner():
         Args:
             logger (Logger): logger for the messages produced by this method
             test (TestInfo): the test information
-            repeat (int): the test repetition number
+            loop (int): the test repetition number (1s based)
             stop_daos (bool): whether or not to stop daos servers/clients after the test
             archive (bool): whether or not to collect remote files generated by the test
             rename (bool): whether or not to rename the default avocado job-results directory names
             jenkins_xml (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
+            details (dict): dictionary to update with test results
 
         Returns:
             int: status code: 0 = success, >0 = failure
@@ -507,10 +531,10 @@ class TestRunner():
         logger.debug("=" * 80)
         logger.info(
             "Processing the %s test after the run on repeat %s/%s",
-            test, repeat, self.total_repeats)
+            test, loop, self.total_repeats)
         status = collect_test_result(
             logger, test, self.test_result, job_results_dir, stop_daos, archive, rename,
-            jenkins_xml, core_files, threshold, self.total_repeats)
+            jenkins_xml, core_files, threshold, self.total_repeats, details)
 
         # Mark the execution of the test as passed if nothing went wrong
         if self.test_result.status is None:
@@ -1285,6 +1309,8 @@ class TestGroup():
         if not code_coverage.setup(logger, result.tests[0]):
             return_code |= 128
 
+        self._details["tests"] = []
+
         # Run each test for as many repetitions as requested
         for loop in range(1, repeat + 1):
             logger.info("-" * 80)
@@ -1298,6 +1324,17 @@ class TestGroup():
                 test_file_handler = get_file_handler(test_log_file, LOG_FILE_FORMAT, logging.DEBUG)
                 logger.addHandler(test_file_handler)
 
+                if len(self._details["tests"]) == index:
+                    # Add an entry for this test the first time its run in the loop
+                    self._details["tests"].append({
+                        "index": index + 1,
+                        "test_file": str(test),
+                        "results": test_log_file,
+                        "clients": str(test.yaml_info["test_clients"]),
+                        "servers": str(test.yaml_info["test_servers"]),
+                        "bdev_list": test.yaml_info["bdev_list"]})
+                self._details["tests"][index]["repetitions"] = loop
+
                 # Prepare the hosts to run the tests
                 step_status = runner.prepare(
                     logger, test_log_file, test, loop, user_create, slurm_setup, self._control,
@@ -1308,12 +1345,14 @@ class TestGroup():
                     continue
 
                 # Run the test with avocado
-                return_code |= runner.execute(logger, test, loop, index + 1, sparse, fail_fast)
+                return_code |= runner.execute(
+                    logger, test, loop, index + 1, sparse, fail_fast,
+                    self._details["tests"][index])
 
                 # Archive the test results
                 return_code |= runner.process(
                     logger, job_results_dir, test, loop, stop_daos, archive, rename,
-                    jenkins_log, core_files, threshold)
+                    jenkins_log, core_files, threshold, self._details["tests"][index])
 
                 # Display disk usage after the test is complete
                 display_disk_space(logger, logdir)
