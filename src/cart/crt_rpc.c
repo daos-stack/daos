@@ -1545,7 +1545,6 @@ crt_reply_send(crt_rpc_t *req)
 				rc, rpc_priv->crp_pub.cr_opc);
 	}
 
-	rpc_priv->crp_reply_pending = 0;
 out:
 	return rc;
 }
@@ -1791,9 +1790,8 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc = -DER_BAD_TARGET);
 	}
 skip_check:
-
 	/* Set the reply pending bit unless this is a one-way OPCODE */
-	if (!rpc_priv->crp_opc_info->coi_no_reply)
+	if (!rpc_priv->crp_opc_info->coi_no_reply && !rpc_priv->crp_reply_sent)
 		rpc_priv->crp_reply_pending = 1;
 
 	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub) &&
