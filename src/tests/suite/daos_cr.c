@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -341,11 +342,11 @@ cr_check_query(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 }
 
 static inline int
-cr_check_repair(uint64_t seq, uint32_t opt, bool for_all)
+cr_check_repair(uint64_t seq, uint32_t opt)
 {
 	print_message("CR: handle check interaction for seq %lu, option %u ...\n",
 		      (unsigned long)seq, opt);
-	return dmg_check_repair(dmg_config_file, seq, opt, for_all);
+	return dmg_check_repair(dmg_config_file, seq, opt);
 }
 
 static inline int
@@ -1199,7 +1200,7 @@ cr_leader_interaction(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1290,7 +1291,7 @@ cr_engine_interaction(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1336,6 +1337,7 @@ cr_engine_interaction(void **state)
 static void
 cr_repair_forall_leader(void **state)
 {
+#if 0
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct daos_check_info		 dci = { 0 };
@@ -1347,7 +1349,13 @@ cr_repair_forall_leader(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+#endif
 
+	/* Skip for DAOS-17422. */
+	print_message("Skip obsolete test\n");
+	skip();
+
+#if 0
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR4: check repair option - for-all, on leader\n");
@@ -1381,7 +1389,7 @@ cr_repair_forall_leader(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1426,6 +1434,7 @@ cr_repair_forall_leader(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+#endif
 }
 
 /*
@@ -1441,6 +1450,7 @@ cr_repair_forall_leader(void **state)
 static void
 cr_repair_forall_engine(void **state)
 {
+#if 0
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct test_cont		 conts[2] = { 0 };
@@ -1453,7 +1463,13 @@ cr_repair_forall_engine(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+#endif
 
+	/* Skip for DAOS-17422. */
+	print_message("Skip obsolete test\n");
+	skip();
+
+#if 0
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR5: check repair option - for-all, on engine\n");
@@ -1490,7 +1506,7 @@ cr_repair_forall_engine(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1532,6 +1548,7 @@ cr_repair_forall_engine(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+#endif
 }
 
 /*
@@ -1776,7 +1793,7 @@ cr_stop_specified(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1889,7 +1906,7 @@ cr_auto_reset(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -2843,7 +2860,7 @@ cr_engine_death(void **state)
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
 			/* Repair the pool label with the lost rank. */
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -2959,7 +2976,7 @@ cr_engine_rejoin_succ(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3065,7 +3082,7 @@ cr_engine_rejoin_fail(void **state)
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
 			/* Repair the inconsistency with the lost rank. */
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3214,7 +3231,7 @@ cr_multiple_pools(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == actions[1]) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3271,7 +3288,7 @@ again:
 		dcri = cr_locate_dcri(&dci, dcri, uuids[i]);
 		for (j = 0; j < dcri->dcri_option_nr; j++) {
 			if (dcri->dcri_options[j] == actions[0]) {
-				rc = cr_check_repair(dcri->dcri_seq, j, false);
+				rc = cr_check_repair(dcri->dcri_seq, j);
 				break;
 			}
 		}
@@ -3312,7 +3329,7 @@ again:
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == actions[1]) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3407,6 +3424,7 @@ cr_fail_sync_orphan(void **state)
 static void
 cr_inherit_policy(void **state)
 {
+#if 0
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct daos_check_info		 dci = { 0 };
@@ -3418,7 +3436,13 @@ cr_inherit_policy(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+#endif
 
+	/* Skip for DAOS-17422. */
+	print_message("Skip obsolete test\n");
+	skip();
+
+#if 0
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR25: inherit check policy from former check repair\n");
@@ -3455,7 +3479,7 @@ cr_inherit_policy(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3500,6 +3524,7 @@ cr_inherit_policy(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+#endif
 }
 
 /*
@@ -3785,6 +3810,7 @@ cr_maintenance_mode(void **state)
 	cr_cleanup(arg, &pool, 1);
 }
 
+/* clang-format off */
 static const struct CMUnitTest cr_tests[] = {
 	{ "CR1: start checker for specified pools",
 	  cr_start_specified, async_disable, test_case_teardown},
@@ -3843,6 +3869,7 @@ static const struct CMUnitTest cr_tests[] = {
 	{ "CR28: maintenance mode after dry-run check",
 	  cr_maintenance_mode, async_disable, test_case_teardown},
 };
+/* clang-format on */
 
 static int
 cr_setup(void **state)
