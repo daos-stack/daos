@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,8 +15,6 @@
 #include <daos_types.h>
 #include <daos_srv/daos_engine.h>
 #include "auth.pb-c.h"
-
-#define DAOS_SEC_VERSION 1
 
 extern char *ds_sec_server_socket_path;
 

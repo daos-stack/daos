@@ -31,8 +31,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos/rpc.h.
+ * Please increment DAOS_CHK_VERSION whenever the protocol is changed.
  */
-#define DAOS_CHK_VERSION	1
 
 #define CHK_PROTO_SRV_RPC_LIST									\
 	X(CHK_START,										\
@@ -1225,5 +1225,8 @@ chk_report_seq_gen(struct chk_instance *ins)
 
 	return ins->ci_seq;
 }
+
+int
+chk_rpc_protocol(uint8_t *obj_ver);
 
 #endif /* __CHK_INTERNAL_H__ */
