@@ -347,9 +347,18 @@ func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*
 		return nil, errors.New("nil scm request")
 	}
 
-	ssr, err := cs.ScmScan(storage.ScmScanRequest{})
-	if err != nil || !req.GetUsage() {
-		return newScanScmResp(ssr, err)
+	var err error
+	var ssr *storage.ScmScanResponse
+
+	if cs.srvCfg.HasPMem() {
+		ssr, err = cs.ScmScan(storage.ScmScanRequest{})
+		if err != nil || !req.GetUsage() {
+			return newScanScmResp(ssr, err)
+		}
+	} else if !req.GetUsage() {
+		return &ctlpb.ScanScmResp{
+			State: new(ctlpb.ResponseState),
+		}, nil
 	}
 
 	ssr, err = cs.getScmUsage(ssr)
