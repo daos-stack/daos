@@ -1688,8 +1688,7 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	uuid_copy(ec_agg->ea_cont_uuid, cont_uuid);
 	ec_agg->ea_servers_num = rank_nr;
 	ec_agg->ea_current_eph = 0;
-	ec_agg->ea_rdb_eph        = 0;
-	ec_agg->ea_rdb_eph_loaded = 0;
+	ec_agg->ea_rdb_eph     = 0;
 	for (i = 0; i < rank_nr; i++) {
 		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
 		ec_agg->ea_server_ephs[i].eph = 0;
@@ -1822,7 +1821,7 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				     PO_COMP_ST_DOWNOUT, cont_refresh_vos_agg_eph_one,
 				     &arg, DSS_ULT_FL_PERIODIC);
-	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc, DF_CONT ": refresh ec_agg_eph " DF_X64,
+	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, rc, DF_CONT ": refresh ec_agg_eph " DF_X64,
 		  DP_CONT(pool_uuid, cont_uuid), eph);
 	return rc;
 }
@@ -1892,7 +1891,7 @@ ds_cont_ec_agg_eph_rdb_lookup(uuid_t pool_uuid, uuid_t cont_uuid, uint64_t *ec_a
 }
 
 static int
-cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph)
+cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph, uint64_t *rdb_eph)
 {
 	struct rdb_tx tx;
 	struct cont  *cont = NULL;
@@ -1920,19 +1919,23 @@ cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph)
 	d_iov_set(&value, &old_eph, sizeof(old_eph));
 	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
 	if (rc == -DER_NONEXIST) {
-		rc = 0;
+		rc      = 0;
 		old_eph = 0;
 	}
 	if (rc != 0)
 		goto out;
 
+	*rdb_eph = old_eph;
 	if (ec_agg_eph > old_eph) {
 		d_iov_set(&value, &ec_agg_eph, sizeof(ec_agg_eph));
 		rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
 		if (rc == 0)
 			rc = rdb_tx_commit(&tx);
+		if (rc == 0)
+			*rdb_eph = ec_agg_eph;
 	} else {
-		D_DEBUG(DB_MD, DF_CONT ": bypass rdb update ec_agg_eph "DF_X64", in rdb eph "DF_X64,
+		D_DEBUG(DB_MD,
+			DF_CONT ": bypass rdb update ec_agg_eph " DF_X64 ", in rdb eph " DF_X64,
 			DP_CONT(svc->cs_pool_uuid, cont_uuid), ec_agg_eph, old_eph);
 	}
 
@@ -1973,11 +1976,9 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			continue;
 		}
 
-		if (ec_agg->ea_rdb_eph_loaded == 0) {
+		if (ec_agg->ea_rdb_eph == 0) {
 			rc = cont_agg_eph_load(svc, ec_agg->ea_cont_uuid, &ec_agg->ea_rdb_eph);
-			if (rc == 0)
-				ec_agg->ea_rdb_eph_loaded = 1;
-			else
+			if (rc)
 				DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.",
 					 DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
 		}
@@ -1997,10 +1998,10 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		}
 
 		/* for reboot case the ea_rdb_eph possibly higher than min_eph */
-		if (ec_agg->ea_rdb_eph_loaded && min_eph < ec_agg->ea_rdb_eph)
+		if (min_eph < ec_agg->ea_rdb_eph)
 			min_eph = ec_agg->ea_rdb_eph;
 
-		if (min_eph == ec_agg->ea_current_eph)
+		if (min_eph == ec_agg->ea_current_eph && !pool->sp_rebuilding)
 			continue;
 
 		/**
@@ -2021,15 +2022,12 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			       new_eph - cur_eph);
 
 		if (min_eph > ec_agg->ea_rdb_eph) {
-			rc = cont_agg_eph_store(svc, ec_agg->ea_cont_uuid, min_eph);
-			if (rc == 0) {
-				ec_agg->ea_rdb_eph        = min_eph;
-				ec_agg->ea_rdb_eph_loaded = 1;
-			} else {
+			rc = cont_agg_eph_store(svc, ec_agg->ea_cont_uuid, min_eph,
+						&ec_agg->ea_rdb_eph);
+			if (rc)
 				DL_ERROR(rc,
 					 DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64 " failed.",
 					 DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), min_eph);
-			}
 		}
 
 		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph);
@@ -2086,16 +2084,11 @@ cont_agg_eph_leader_ult(void *arg)
 		goto out;
 
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
-		if (pool->sp_rebuilding) {
-			D_DEBUG(DB_MD, DF_UUID "skip during rebuilding.\n", DP_UUID(pool->sp_uuid));
-			goto yield;
-		}
-
 		cont_agg_eph_sync(pool, svc);
 
 		if (dss_ult_exiting(svc->cs_ec_leader_ephs_req))
 			break;
-yield:
+
 		sched_req_sleep(svc->cs_ec_leader_ephs_req, EC_AGG_EPH_INTV);
 	}
 
