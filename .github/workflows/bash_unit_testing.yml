@@ -20,11 +20,11 @@ jobs:
     runs-on: [self-hosted, light]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Checkout bash_unit project
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: 'pgrange/bash_unit'
           path: bash_unit
