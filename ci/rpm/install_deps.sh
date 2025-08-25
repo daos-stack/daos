@@ -13,7 +13,7 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
   # shellcheck source=parse_ci_envs.sh disable=SC1091
-  source "${ci_envs}"
+  echo foo # source "${ci_envs}"
 fi
 
 env
@@ -22,7 +22,6 @@ pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
 export DAOS_DEPS_RELVAL="${3}"
-ls -laR .
 libfabric_pkg="$(utils/rpms/package_version.sh libfabric dev)"
 mercury_pkg="$(utils/rpms/package_version.sh mercury dev)"
 argobots_pkg="$(utils/rpms/package_version.sh argobots dev)"

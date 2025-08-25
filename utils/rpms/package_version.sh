@@ -2,7 +2,7 @@
 # (C) Copyright 2025 Google LLC
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
-. "${root}/fpm_common.sh"
+. "${root}/package_info.sh"
 
 group=$1
 pkgtype="$2"

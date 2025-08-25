@@ -42,8 +42,8 @@ void get_rpm_relval() {
                           if git diff-index --name-only HEAD^ | grep -q TAG; then
                               echo ""
                           else
-			      export commit=$(git log -1 --pretty=format:"%h" deps utils/build.config)
-                              echo ".$(git rev-list $commit --count).g$(git rev-parse --short=8 $commit)"
+			      # Just add commit hash so shallow clone has no effect
+                              echo ".g$(git rev-parse --short=8 $commit)"
                           fi''',
                 returnStdout: true).trim()
 }
