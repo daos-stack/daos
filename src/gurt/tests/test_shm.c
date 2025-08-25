@@ -357,7 +357,7 @@ test_lrucache(void **state)
 
 	/* test keys with various size */
 	/* key_size is zero, so key could have various length */
-	rc = shm_lru_create_cache(16, 0, sizeof(int), &cache);
+	rc = shm_lru_create_cache(1, 16, 0, sizeof(int), &cache);
 	assert_true(rc == 0);
 
 	for (key_size = 1; key_size <= 15; key_size++) {
@@ -377,7 +377,7 @@ test_lrucache(void **state)
 	shm_lru_destroy_cache(cache);
 
 	/* test various key size and data size */
-	rc = shm_lru_create_cache(16, 0, 0, &cache);
+	rc = shm_lru_create_cache(1, 16, 0, 0, &cache);
 	assert_true(rc == 0);
 
 	for (i = 1; i <= 16; i++) {
@@ -395,7 +395,7 @@ test_lrucache(void **state)
 	shm_lru_destroy_cache(cache);
 
 	/* test updating existing key */
-	rc = shm_lru_create_cache(2, sizeof(int), sizeof(int), &cache);
+	rc = shm_lru_create_cache(1, 2, sizeof(int), sizeof(int), &cache);
 	assert_true(rc == 0);
 
 	key = 1;
@@ -433,7 +433,7 @@ test_lrucache(void **state)
 
 	/* large number of operations */
 	capacity = 100;
-	rc       = shm_lru_create_cache(capacity, sizeof(int), sizeof(int), &cache);
+	rc       = shm_lru_create_cache(1, capacity, sizeof(int), sizeof(int), &cache);
 	assert_true(rc == 0);
 
 	/* make cache full */
