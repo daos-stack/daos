@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1556,7 +1557,7 @@ vos_pool_checkpoint(daos_handle_t poh);
 
 typedef void (*bind_cpu_fn_t)(int tgt_id);
 /**
- * Recreate pool vos and rdb files on storage_path
+ * Recreate pool vos and rdb files on \p storage_path.
  *
  * \param[in] pool_uuid		Pool uuid
  * \param[in] scm_size		Per vos file size
@@ -1577,7 +1578,7 @@ vos_pool_recreate_tgt(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_s
  * \param[in] pool_uuid		Pool uuid
  * \param[in] dir		Base path for scm mountpoint
  * \param[in] fname		Vos/rdb name
- * \param[in] idx Vos		file index
+ * \param[in] idx		Vos file index
  * \param[in] fpath		Save the generated path
  */
 int

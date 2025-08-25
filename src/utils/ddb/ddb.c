@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -854,6 +855,12 @@ dtx_stat_option_parse(struct ddb_ctx *ctx, struct dtx_stat_options *cmd_args, ui
 	return 0;
 }
 
+static inline bool
+arg_exists(int64_t argc, int64_t index)
+{
+	return (argc - index > 0);
+}
+
 /* Parse command line options for the 'prov_mem' command */
 static int
 prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, uint32_t argc,
@@ -861,7 +868,8 @@ prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, ui
 {
 	char         *options_short  = "s";
 	int           index          = 0, opt;
-	struct option options_long[] = {{"scm_mount_size", required_argument, NULL, 's'}, {NULL}};
+	const struct option options_long[] = {{"scm_mount_size", required_argument, NULL, 's'},
+					      {NULL}};
 
 	memset(cmd_args, 0, sizeof(*cmd_args));
 
@@ -882,14 +890,14 @@ prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, ui
 	}
 
 	index = optind;
-	if (argc - index > 0) {
+	if (arg_exists(argc, index)) {
 		cmd_args->db_path = argv[index];
 		index++;
 	} else {
 		ddb_print(ctx, "Expected argument 'db_path'\n");
 		return -DER_INVAL;
 	}
-	if (argc - index > 0) {
+	if (arg_exists(argc, index)) {
 		cmd_args->scm_mount = argv[index];
 		index++;
 	} else {
@@ -897,7 +905,7 @@ prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, ui
 		return -DER_INVAL;
 	}
 
-	if (argc - index > 0) {
+	if (arg_exists(argc, index)) {
 		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
@@ -1466,12 +1474,12 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tPrepare the memory environment for md-on-ssd mode.\n");
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -s, --scm_mount_size\n");
-	ddb_print(ctx,
-		  "\tSpecify tmpfs size(GiB) for scm_mount. Default automatically calculated.\n");
+	ddb_print(ctx, "\tSpecify tmpfs size(GiB) for scm_mount. By default, the value is computed "
+		       "automatically, mirroring the logic used by daos_server\n");
 	ddb_print(ctx, "    <db_path>\n");
-	ddb_print(ctx, "\tPath to the vos db. (default /mnt/daos)\n");
+	ddb_print(ctx, "\tPath to the vos db. (default: /var/daos/config/daos_control/engine0/)\n");
 	ddb_print(ctx, "    <scm_mount>\n");
-	ddb_print(ctx, "\tSpecify the path to the mount the tmpfs.\n");
+	ddb_print(ctx, "\tPath to the scm mountpoint. (default: /mnt/daos\n");
 	ddb_print(ctx, "\n");
 }
 

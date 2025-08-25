@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2025 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2445,7 +2446,7 @@ vos_pool_recreate_tgt(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_s
 	if (rc) {
 		D_ERROR("newborn vos_path_gen failed for " DF_UUID ": " DF_RC "\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
+		return rc;
 	}
 
 	/** Skip recreation if directory already exists */
@@ -2454,7 +2455,7 @@ vos_pool_recreate_tgt(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_s
 		goto out;
 
 	/** create the pool directory under NEWBORNS */
-	D_ASPRINTF(newborns_path, "%s/NEWBORNS", storage_path);
+	D_ASPRINTF(newborns_path, "%s/" VOS_DIR_NEWBORNS "", storage_path);
 	if (newborns_path == NULL) {
 		rc = -DER_NOMEM;
 		D_ERROR("newborns_path alloc failed for " DF_UUID ": " DF_RC "\n",
@@ -2473,7 +2474,6 @@ vos_pool_recreate_tgt(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_s
 		rc = daos_errno2der(errno);
 		D_ERROR("failed to created pool directory: " DF_RC "\n", DP_RC(rc));
 		/* avoid tgt_destroy(), nothing to do */
-		D_FREE(pool_newborns_path);
 		goto out;
 	}
 

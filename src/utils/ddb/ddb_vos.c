@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2025 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2316,17 +2317,17 @@ ddb_recreate_pooltgts(const char *scm_mount)
 			continue;
 		}
 
-		D_INFO("recreating files (ddb mode) for pool " DF_UUID "\n",
-		       DP_UUID(pool_info->spi_id));
+		D_INFO("Recreating files for the pool " DF_UUID "\n", DP_UUID(pool_info->spi_id));
 		D_ASSERT(pool_info->spi_scm_sz > 0);
 		/* specify rdb_blob_sz zero to ignore rdb file create */
 		rc = vos_pool_recreate_tgt(pool_info->spi_id, pool_info->spi_scm_sz,
 					   pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], 0, scm_mount,
 					   NULL);
-		if (rc)
-			goto out;
+		if (rc) {
+			break;
+		}
 	}
-out:
+
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		d_list_del(&pool_info->spi_link);
 		/* Frees spi_tgts, spi_blobs, and pool_info */
@@ -2415,7 +2416,7 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 	if (need_mount) {
 		/* Mount */
 		memset(options, 0, sizeof(options));
-		snprintf(options, sizeof(options), "mpol=prefer:0,size=%dg,huge=always", sz);
+		snprintf(options, sizeof(options), "mpol=prefer:0,size=%ug,huge=always", sz);
 		rc = mount("tmpfs", scm_mount, "tmpfs", MS_NOATIME, (void *)options);
 		if (rc) {
 			D_ERROR("Failed to mount tmpfs on %s " DF_RC "", scm_mount, DP_RC(rc));
@@ -2423,7 +2424,8 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 			goto out;
 		}
 	} else {
-		D_INFO("Detect scm mount %s has already mounted. will setup vos file directly.",
+		D_INFO("Detected the scm mount %s has already been mounted. The VOS files will be "
+		       "created directly.",
 		       scm_mount);
 	}
 
