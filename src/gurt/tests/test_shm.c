@@ -972,8 +972,8 @@ main(int argc, char **argv)
 {
 	int                     opt = 0, index = 0, rc;
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test_hash), cmocka_unit_test(test_lock), cmocka_unit_test(test_mem),
-		cmocka_unit_test(test_rwlock), cmocka_unit_test(test_lrucache)};
+	    cmocka_unit_test(test_hash), cmocka_unit_test(test_lock), cmocka_unit_test(test_mem),
+	    cmocka_unit_test(test_rwlock), cmocka_unit_test(test_lrucache)};
 
 	// clang-format off
 	static struct option    long_options[] = {
