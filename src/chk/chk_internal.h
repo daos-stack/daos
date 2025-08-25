@@ -1231,6 +1231,27 @@ chk_report_seq_gen(struct chk_instance *ins)
 	return ins->ci_seq;
 }
 
+static inline void
+chk_uuid_unparse(struct chk_instance *ins, const uuid_t uuid, char *uuid_str)
+{
+	if (ins->ci_is_leader == 1)
+		uuid_unparse_upper(uuid, uuid_str);
+	else
+		uuid_unparse_lower(uuid, uuid_str);
+}
+
+static inline bool
+chk_is_valid_uuid_string(struct chk_instance *ins, const char *uuid_str)
+{
+	if (ins->ci_is_leader == 1 && daos_is_valid_uuid_string(uuid_str, UUID_SST_UPPER))
+		return true;
+
+	if (ins->ci_is_leader == 0 && daos_is_valid_uuid_string(uuid_str, UUID_SST_LOWER))
+		return true;
+
+	return false;
+}
+
 int
 chk_rpc_protocol(uint8_t *obj_ver);
 
