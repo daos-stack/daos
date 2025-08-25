@@ -335,7 +335,7 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 	node_new->off_next = cache_list[idx_subcache].off_head;
 	if (cache_list[idx_subcache].off_head) {
 		node_head           = (shm_lru_node_t *)((long int)cache +
-					(long int)cache_list[idx_subcache].off_head);
+						(long int)cache_list[idx_subcache].off_head);
 		node_head->off_prev = (long int)node_new - (long int)cache;
 	}
 	cache_list[idx_subcache].off_head = (long int)node_new - (long int)cache;
@@ -378,14 +378,14 @@ shm_lru_create_cache(uint32_t n_subcache, uint32_t capacity, uint32_t key_size, 
 	}
 	capacity_per_subcache = capacity / n_subcache;
 	/* the space pre-allocated for the array of key of all records if keys have a fixed size */
-	size_key_buf = (key_size > sizeof(long int) && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
-			? (key_size * capacity)
-			: 0;
+	size_key_buf = (key_size > 0 && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
+			   ? (key_size * capacity)
+			   : 0;
 
 	/* the space pre-allocated for the array of data of all records if data have a fixed size */
-	size_data_buf = (data_size > sizeof(long int) && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
-			? (data_size * capacity)
-			: 0;
+	size_data_buf = (data_size > 0 && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
+			    ? (data_size * capacity)
+			    : 0;
 
 	shm_lru_cache_t *cache = (shm_lru_cache_t *)shm_alloc(
 	    sizeof(shm_lru_cache_t) + sizeof(shm_lru_cache_var_t) * n_subcache +
