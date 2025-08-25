@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Vdura Inc.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -385,11 +386,11 @@ the path must include the extent, otherwise, it must not.`,
 	app.AddCommand(&grumble.Command{
 		Name:      "prov_mem",
 		Aliases:   nil,
-		Help:      "Prepare the memory environment for Metadata On SSD mode",
+		Help:      "Prepare the memory environment for md-on-ssd mode",
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
-			f.Uint("s", "scm_mount_size", 0, "Specify tmpfs size(GiB) for scm_mount. Default automatically calculated.")
+			f.Uint("s", "scm_mount_size", 0, "Specify tmpfs size(GiB) for scm_mount. By default, the value is computed automatically, mirroring the logic used by daos_server.")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("db_path", "Path to the vos db.")
