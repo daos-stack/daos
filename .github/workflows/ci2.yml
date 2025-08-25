@@ -34,7 +34,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -100,7 +100,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: 'recursive'
           fetch-depth: 500
