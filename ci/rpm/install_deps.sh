@@ -22,6 +22,7 @@ pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
 export DAOS_DEPS_RELVAL="${3}"
+ls -laR .
 libfabric_pkg="$(utils/rpms/package_version.sh libfabric dev)"
 mercury_pkg="$(utils/rpms/package_version.sh mercury dev)"
 argobots_pkg="$(utils/rpms/package_version.sh argobots dev)"
