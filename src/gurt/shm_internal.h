@@ -24,7 +24,7 @@
 #define N_SHM_FIXED_POOL (8)
 
 /* the size of each shm pool */
-#define SHM_POOL_SIZE    (256 * 1024 * 1024L)
+#define SHM_POOL_SIZE    (1 * 1024 * 1024 * 1024L)
 
 /* the total size of shared memory that will be allocated */
 #define SHM_SIZE_TOTAL   (SHM_POOL_SIZE * N_SHM_FIXED_POOL)
@@ -57,10 +57,22 @@ struct d_shm_hdr {
 	/* the offset to the first hash table head */
 	long int         off_ht_head;
 
+	/* the offset to LRU data cache */
+	long int         off_lru_cache_dentry;
+
+	/* the offset to LRU data cache */
+	long int         off_lru_cache_data;
+
 	/* the total size of shared memory region */
 	uint64_t         size;
 	/* size of each shared memory allocator's pool */
 	uint64_t         shm_pool_size;
+	/* fault injection counter for testing */
+	_Atomic uint64_t fi_counter;
+	/* index of the first fi point */
+	_Atomic int      fi_point1;
+	/* index of the second fi point */
+	_Atomic int      fi_point2;
 	/* reserved for future usage */
 	char             reserved[256];
 };
