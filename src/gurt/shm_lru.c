@@ -179,7 +179,7 @@ lru_remove_near_tail(shm_lru_cache_t *cache, shm_lru_cache_var_t *subcache)
 
 	first_av_saved = subcache->first_av;
 	subcache->first_av =
-	    (off_node_to_remove - (long int)subcache->off_nodelist)/sizeof(shm_lru_node_t);
+	    (off_node_to_remove - (long int)subcache->off_nodelist) / sizeof(shm_lru_node_t);
 
 	/* remove from list */
 	if (node->off_prev > 0) {
@@ -225,8 +225,8 @@ shm_lru_get(shm_lru_cache_t *cache, void *key, uint32_t key_size, shm_lru_node_t
 	    (shm_lru_cache_var_t *)((long int)cache + cache->off_cache_list);
 	int *off_hash =
 	    (int *)((long int)cache + (long int)cache_list[idx_subcache].off_hashbuckets);
-	uint32_t        index    = hash % cache->capacity;
-	int             offset   = off_hash[index];
+	uint32_t        index  = hash % cache->capacity;
+	int             offset = off_hash[index];
 	shm_lru_node_t *node;
 	bool            pre_owner_dead;
 
@@ -265,7 +265,7 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 	uint32_t             hash         = d_hash_murmur64(key, key_size, 12345);
 	uint32_t             idx_subcache = (hash >> 16) % cache->n_subcache;
 	uint32_t             index        = hash % cache->capacity;
-	shm_lru_cache_var_t *cache_list   =
+	shm_lru_cache_var_t *cache_list =
 	    (shm_lru_cache_var_t *)((long int)cache + cache->off_cache_list);
 	int *off_hash =
 	    (int *)((long int)cache + (long int)cache_list[idx_subcache].off_hashbuckets);
@@ -335,7 +335,7 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 	node_new->off_next = cache_list[idx_subcache].off_head;
 	if (cache_list[idx_subcache].off_head) {
 		node_head           = (shm_lru_node_t *)((long int)cache +
-				      (long int)cache_list[idx_subcache].off_head);
+					(long int)cache_list[idx_subcache].off_head);
 		node_head->off_prev = (long int)node_new - (long int)cache;
 	}
 	cache_list[idx_subcache].off_head = (long int)node_new - (long int)cache;
@@ -379,8 +379,8 @@ shm_lru_create_cache(uint32_t n_subcache, uint32_t capacity, uint32_t key_size, 
 	capacity_per_subcache = capacity / n_subcache;
 	/* the space pre-allocated for the array of key of all records if keys have a fixed size */
 	size_key_buf = (key_size > sizeof(long int) && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
-		       ? (key_size * capacity)
-		       : 0;
+			? (key_size * capacity)
+			: 0;
 
 	/* the space pre-allocated for the array of data of all records if data have a fixed size */
 	size_data_buf = (data_size > sizeof(long int) && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
@@ -389,18 +389,18 @@ shm_lru_create_cache(uint32_t n_subcache, uint32_t capacity, uint32_t key_size, 
 
 	shm_lru_cache_t *cache = (shm_lru_cache_t *)shm_alloc(
 	    sizeof(shm_lru_cache_t) + sizeof(shm_lru_cache_var_t) * n_subcache +
-	    sizeof(int)*capacity + sizeof(shm_lru_node_t) * capacity + size_key_buf +
+	    sizeof(int) * capacity + sizeof(shm_lru_node_t) * capacity + size_key_buf +
 	    size_data_buf);
 	if (cache == NULL)
 		return ENOMEM;
-	size_per_subcache = (sizeof(int)*capacity + sizeof(shm_lru_node_t)*capacity +
+	size_per_subcache = (sizeof(int) * capacity + sizeof(shm_lru_node_t) * capacity +
 			     size_key_buf + size_data_buf) /
-			     n_subcache;
+			    n_subcache;
 
 	memset(cache, 0,
 	       sizeof(shm_lru_cache_t) + sizeof(shm_lru_cache_var_t) * n_subcache +
-	       sizeof(int)*capacity + sizeof(shm_lru_node_t)*capacity + size_key_buf +
-	       size_data_buf);
+		   sizeof(int) * capacity + sizeof(shm_lru_node_t) * capacity + size_key_buf +
+		   size_data_buf);
 	cache->n_subcache     = n_subcache;
 	cache->capacity       = capacity_per_subcache;
 	cache->key_size       = key_size;
@@ -416,9 +416,9 @@ shm_lru_create_cache(uint32_t n_subcache, uint32_t capacity, uint32_t key_size, 
 		cache_list[i].off_hashbuckets =
 		    off + (sizeof(shm_lru_cache_var_t) * n_subcache) + (i * size_per_subcache);
 		cache_list[i].off_nodelist =
-		    cache_list[i].off_hashbuckets + sizeof(int)*capacity_per_subcache;
+		    cache_list[i].off_hashbuckets + sizeof(int) * capacity_per_subcache;
 		cache_list[i].off_keylist =
-		    cache_list[i].off_nodelist + sizeof(shm_lru_node_t)*capacity_per_subcache;
+		    cache_list[i].off_nodelist + sizeof(shm_lru_node_t) * capacity_per_subcache;
 		cache_list[i].off_datalist =
 		    cache_list[i].off_keylist + (size_key_buf / n_subcache);
 
@@ -446,8 +446,8 @@ lru_free_dymaic_buff(shm_lru_cache_t *cache)
 	int                  i;
 	int                  offset;
 	shm_lru_node_t      *node;
-	shm_lru_cache_var_t *cache_list = (shm_lru_cache_var_t *)((long int)cache +
-					   cache->off_cache_list);
+	shm_lru_cache_var_t *cache_list =
+	    (shm_lru_cache_var_t *)((long int)cache + cache->off_cache_list);
 
 	if (cache->key_size > 0 && cache->key_size <= LRU_ALLOC_SIZE_THRESHOLD &&
 	    cache->data_size > 0 && cache->data_size <= LRU_ALLOC_SIZE_THRESHOLD)
