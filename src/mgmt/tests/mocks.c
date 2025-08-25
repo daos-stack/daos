@@ -689,3 +689,10 @@ ds_mgmt_check_enabled(void)
 {
 	return true;
 }
+
+int
+ds_mgmt_get_group_status(uint32_t group_version, d_rank_t **dead_ranks_out,
+			 size_t *n_dead_ranks_out)
+{
+	return 0;
+}
