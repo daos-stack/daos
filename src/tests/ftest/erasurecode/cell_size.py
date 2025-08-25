@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -30,8 +31,21 @@ class EcodCellSize(IorTestBase):
         :avocado: tags=ec,ec_ior,ior
         :avocado: tags=EcodCellSize,ec_cell_size,test_ec_cell_size
         """
-        obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
+        pool_cell_sizes = self.params.get("cell_sizes", '/run/pool/*')
+        dfs_oclass_list = self.params.get("dfs_oclass", '/run/ior/*')
+        transfersize_blocksize = self.params.get("transfersize_blocksize", '/run/ior/*')
 
-        for oclass in obj_class:
-            self.ior_cmd.dfs_oclass.update(oclass)
-            self.run_ior_with_pool()
+        for cell_size in pool_cell_sizes:
+            self.pool = self.get_pool(properties=f"ec_cell_sz:{cell_size}")
+            for dfs_oclass in dfs_oclass_list:
+                self.ior_cmd.dfs_oclass.update(dfs_oclass)
+                for transfer_size, block_size in transfersize_blocksize:
+                    self.ior_cmd.transfer_size.update(transfer_size)
+                    self.ior_cmd.block_size.update(block_size)
+                    self.log_step(
+                        f"Running IOR with cell size: {cell_size}, "
+                        f"object class: {dfs_oclass}, "
+                        f"transfer size: {transfer_size}, "
+                        f"block size: {block_size}")
+                    self.run_ior_with_pool()
+            self.pool.destroy()
