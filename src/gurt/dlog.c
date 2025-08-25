@@ -644,9 +644,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (mst.oflags & DLOG_FLV_YEAR)
 		hlen = snprintf(b, sizeof(b), "%04d/", tm->tm_year + 1900);
 
-	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%02d/%02d-%02d:%02d:%02d.%6ld %s ",
+	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%02d/%02d-%02d:%02d:%02d.%2ld %s ",
 			 tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
-			 (long int)tv.tv_usec, mst.uts.nodename);
+			 (long int)tv.tv_usec / 10000, mst.uts.nodename);
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
