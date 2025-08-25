@@ -23,8 +23,13 @@ export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
 export DAOS_DEPS_RELVAL="${3}"
 rm -f ./*.rpm
-utils/rpms/build_packages.sh
-mkdir -p /home/daos/rpms
 rm -rf /home/daos/rpms/*
-cp ./*.rpm /home/daos/rpms
+utils/rpms/build_packages.sh deps
+if ls -1 ./*.rpm; then
+  mkdir -p /home/daos/rpms/deps
+  cp ./*.rpm /home/daos/rpms/deps
+fi
+utils/rpms/build_packages.sh daos
+mkdir -p /home/daos/rpms/daos
+cp ./*.rpm /home/daos/rpms/daos
 popd || exit 1

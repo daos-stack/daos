@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@jvolivie/upload_fix') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -155,7 +155,7 @@ void fixup_rpmlintrc() {
 
 
 void uploadNewRPMs(String target, String stage) {
-    buildRpmPost target: target, condition: stage, rpmlint: false
+    buildRpmPost target: target, condition: stage, rpmlint: false, new_rpm: true
 }
 
 String vm9_label(String distro) {
