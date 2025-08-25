@@ -684,9 +684,6 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 						IV_CONT_AGG_EPOCH_BOUNDRY) {
 			rc = cont_iv_ent_agg_eph_refresh(entry, key, src);
 			if (rc) {
-				/* container non-exist possibly due to in reintegrate the container
-				 * discarded ahead. Ignore such err.
-				 */
 				if (rc == -DER_NONEXIST) {
 					DL_INFO(
 					    rc, DF_CONT " cont_iv_ent_agg_eph_refresh ignore",
@@ -1156,8 +1153,7 @@ cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
 int
 cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
 {
-	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
-						  0, CRT_IV_SYNC_LAZY,
+	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph, 0, CRT_IV_SYNC_EAGER,
 						  IV_CONT_AGG_EPOCH_BOUNDRY);
 }
 
