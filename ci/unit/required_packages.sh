@@ -9,7 +9,7 @@ set -eu
 OPENMPI_VER=""
 PY_MINOR_VER=""
 
-DISTRO="el8" # should also work for el9
+export DISTRO="el8" # should also work for el9
 pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
       boost-python3$PY_MINOR_VER-devel                               \
       capstone                                                       \
