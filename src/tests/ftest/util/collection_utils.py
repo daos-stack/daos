@@ -193,7 +193,7 @@ def check_server_storage(logger, test, test_result, stage):
         result = run_remote(
             logger, test.host_info.servers.hosts, command.format('|'.join(test.yaml_info[key])))
         if not result.passed:
-            message = f"Failure detected attempting to verify {key} storage for \'{test}\'"
+            message = f"Failure detected attempting to verify {key} storage for '{test}'"
             test_result.fail_test(logger, stage, message)
             status = False
             continue
@@ -207,7 +207,7 @@ def check_server_storage(logger, test, test_result, stage):
             match = bool(item_set & result_set == item_set)
             if not match:
                 logger.debug(f" - {key} mismatch: expected={item_set}, detected={result_set}")
-                message = f"Mismatch detected verifying {key} storage for \'{test}\'"
+                message = f"Mismatch detected verifying {key} storage for '{test}'"
                 test_result.fail_test(logger, stage, message)
                 status = False
     return status
