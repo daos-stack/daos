@@ -1351,7 +1351,7 @@ dss_srv_fini(bool force)
 static int
 dss_sys_db_init()
 {
-	return vos_init(dss_nvme_conf, dss_storage_path);
+	return vos_sys_db_init(dss_nvme_conf, dss_storage_path);
 }
 
 int

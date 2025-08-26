@@ -108,6 +108,10 @@ dlck_xstream_free(struct dlck_xstream *xs)
 {
 	int rc;
 
+	if (xs->xstream == ABT_XSTREAM_NULL) {
+		return DER_SUCCESS;
+	}
+
 	rc = ABT_xstream_free(&xs->xstream);
 	if (rc != ABT_SUCCESS) {
 		return dss_abterr2der(rc);

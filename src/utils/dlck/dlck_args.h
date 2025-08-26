@@ -174,4 +174,16 @@ dlck_args_free(struct dlck_control *ctrl);
 void
 dlck_args_files_free(struct dlck_args_files *args);
 
+/**
+ * \brief Final check of the files arguments.
+ *
+ * Adjusts the \p args list to enforce the rule: 'If no TARGET is provided, all targets are used.'
+ * Has to be invoked separately from the validation conducted internally by the parser.
+ *
+ * \param[in,out]	args	Arguments produced by the files-related parser.
+ * \param[in]		targets	Total number of targets requested.
+ */
+void
+args_files_check(struct dlck_args_files *args, unsigned targets);
+
 #endif /** __DLCK_ARGS__ */

@@ -689,7 +689,7 @@ vos_pool_hash_del(struct vos_pool *pool)
 }
 
 /**
- * Register btree class for container table, it is called within vos_init()
+ * Register btree class for container table.
  *
  * \return		0 on success and negative on
  *			failure
@@ -698,8 +698,7 @@ int
 vos_cont_tab_register();
 
 /**
- * VOS object index class register for btree
- * Called with vos_init()
+ * VOS object index class register for btree.
  *
  * \return		0 on success and negative on
  *			failure
@@ -720,7 +719,7 @@ int
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 
 /**
- * Register dbtree class for DTX table, it is called within vos_init().
+ * Register dbtree class for DTX table.
  *
  * \return		0 on success and negative on failure
  */

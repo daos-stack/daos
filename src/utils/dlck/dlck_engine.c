@@ -112,7 +112,7 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT, 0);
 	} else {
 		tag   = DAOS_SERVER_TAG;
-		xs_id = DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, DSS_SYS_XS_NR_DEFAULT);
+		xs_id = DSS_MAIN_XS_ID_WITH_HELPER_POOL(tgt_id, DSS_SYS_XS_NR_DEFAULT);
 
 		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT, tgt_id);
 	}
@@ -264,7 +264,7 @@ xstream_start_all(struct dlck_engine *engine)
 	/** wait for the daos_sys_0 initialization to conclude */
 	rc = ABT_thread_join(daos_sys_init.thread);
 	if (rc != ABT_SUCCESS) {
-		/** ULT has not joined - cannot safely free the daos_sys_0 XS */
+		D_ERROR("ULT has not joined - cannot safely free the daos_sys_0 XS\n");
 		return dss_abterr2der(rc);
 	}
 
@@ -341,7 +341,7 @@ xstream_stop_all(struct dlck_engine *engine)
 		/** wait for the daos_sys_0 finalization to conclude */
 		rc = ABT_thread_join(daos_sys_fini.thread);
 		if (rc != ABT_SUCCESS) {
-			/** ULT has not joined - cannot safely free the daos_sys_0 XS */
+			D_ERROR("ULT has not joined - cannot safely free the daos_sys_0 XS\n");
 			return dss_abterr2der(rc);
 		}
 
@@ -353,9 +353,8 @@ xstream_stop_all(struct dlck_engine *engine)
 		D_ASSERT(rc == ABT_SUCCESS);
 
 		if (xs->ult_rc != DER_SUCCESS) {
-			/**
-			 * the daos_sys_0 finalization failed - cannot safely free the daos_sys_0 XS
-			 */
+			D_ERROR("the daos_sys_0 finalization failed - cannot safely free the "
+				"daos_sys_0 XS\n");
 			return xs->ult_rc;
 		}
 	}
@@ -366,11 +365,11 @@ xstream_stop_all(struct dlck_engine *engine)
 		/** make sure the XS is idle */
 		rc = ABT_pool_is_empty(xs->pool, &is_empty);
 		if (rc != ABT_SUCCESS) {
-			/** can't tell whether the XS can be freed or not */
+			D_ERROR("can't tell whether XS[%d] can be freed or not\n", i);
 			return dss_abterr2der(rc);
 		} else {
 			if (is_empty != ABT_TRUE) {
-				/** cannot free the XS - it is busy */
+				D_ERROR("cannot free XS[%d] - it is busy\n", i);
 				return -DER_BUSY;
 			} else {
 				rc = dlck_xstream_free(xs);
@@ -432,7 +431,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 		goto fail_tls_key_delete;
 	}
 
-	rc = vos_init(args->nvme_conf, args->storage_path);
+	rc = vos_sys_db_init(args->nvme_conf, args->storage_path);
 	if (rc != DER_SUCCESS) {
 		goto fail_vos_tls_fini;
 	}

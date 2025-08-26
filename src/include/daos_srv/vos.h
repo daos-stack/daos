@@ -358,7 +358,7 @@ vos_self_fini(void);
  * \retval -DER_*	Other errors.
  */
 int
-vos_init(const char *nvme_conf, const char *storage_path);
+vos_sys_db_init(const char *nvme_conf, const char *storage_path);
 
 /**
  * Versioning Object Storage Pool (VOSP)

@@ -15,8 +15,12 @@
 
 static struct argp_option args_files_options[] = {
     {"file", KEY_FILES, "UUID,TARGET", 0,
-     "Pool UUID and set of targets. Can be used more than once.", GROUP_OPTIONS},
+     "Pool UUID and a set of targets. If no TARGET is provided, all targets are used. This option "
+     "can be specified multiple times.",
+     GROUP_OPTIONS},
     {0}};
+
+#define ALL_TARGETS_BITMAP(targets) ((1 << (targets)) - 1)
 
 static void
 args_files_init(struct dlck_args_files *args)
@@ -26,13 +30,32 @@ args_files_init(struct dlck_args_files *args)
 	D_INIT_LIST_HEAD(&args->list);
 }
 
+/**
+ * \brief Basic file arguments check.
+ *
+ * It does NOT enforce the rule: 'If no TARGET is provided, all targets are used.' That rule is
+ * enforced separately.
+ */
 static int
-args_files_check(struct argp_state *state, struct dlck_args_files *args)
+args_files_check_basic(struct argp_state *state, struct dlck_args_files *args)
 {
 	if (d_list_empty(&args->list)) {
 		RETURN_FAIL(state, EINVAL, "No file chosen");
 	}
 	return 0;
+}
+
+void
+args_files_check(struct dlck_args_files *args, unsigned targets)
+{
+	struct dlck_file *file;
+
+	d_list_for_each_entry(file, &args->list, link) {
+		if (file->targets_bitmap == 0) {
+			/** If no TARGET is provided, all targets are used. */
+			file->targets_bitmap = ALL_TARGETS_BITMAP(targets);
+		}
+	}
 }
 
 static error_t
@@ -48,7 +71,7 @@ args_files_parser(int key, char *arg, struct argp_state *state)
 		args_files_init(args);
 		return 0;
 	case ARGP_KEY_END:
-		return args_files_check(state, args);
+		return args_files_check_basic(state, args);
 	case ARGP_KEY_SUCCESS:
 	case ARGP_KEY_FINI:
 		return 0;

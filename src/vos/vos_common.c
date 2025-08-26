@@ -1128,7 +1128,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 }
 
 int
-vos_init(const char *nvme_conf, const char *storage_path)
+vos_sys_db_init(const char *nvme_conf, const char *storage_path)
 {
 	int   rc;
 	char *sys_db_path    = NULL;

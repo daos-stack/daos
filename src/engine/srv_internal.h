@@ -328,11 +328,11 @@ void ds_iv_fini(void);
 	(DAOS_TGT0_OFFSET + dss_tgt_nr +                                                           \
 	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr : dss_tgt_offload_xs_nr))
 /** main XS id of (vos) tgt_id when no helper pool is present */
-#define DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, sys_xs_nr) ((tgt_id) + (sys_xs_nr))
+#define DSS_MAIN_XS_ID_WITH_HELPER_POOL(tgt_id, sys_xs_nr) ((tgt_id) + (sys_xs_nr))
 /** main XS id of (vos) tgt_id */
 #define DSS_MAIN_XS_ID(tgt_id)                                                                     \
 	(dss_helper_pool                                                                           \
-	     ? (DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, dss_sys_xs_nr))                              \
+	     ? (DSS_MAIN_XS_ID_WITH_HELPER_POOL(tgt_id, dss_sys_xs_nr))                            \
 	     : ((tgt_id) * ((dss_tgt_offload_xs_nr / dss_tgt_nr) + 1) + dss_sys_xs_nr))
 
 #define DSS_SYS_XS_NAME_FMT     "daos_sys_%d"

@@ -363,7 +363,10 @@ parser(int key, char *arg, struct argp_state *state)
 	case ARGP_KEY_INIT:
 		state->child_inputs[0] = &args->files;
 		state->child_inputs[1] = &args->engine;
-		break;
+		return 0;
+	case ARGP_KEY_FINI:
+		args_files_check(&args->files, args->engine.targets);
+		return 0;
 	}
 
 	return ARGP_ERR_UNKNOWN;
