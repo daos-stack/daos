@@ -92,6 +92,12 @@ def add_command_line_options():
               help='Ignore the versions/branches/patches specified in build.config and \
                     use the specified relative sub-directory containing all \
                     dependencies as git submodules instead')
+    # generate code coverage
+    AddOption('--code-coverage',
+              action='store_true',
+              dest='code_coverage',
+              default=False,
+              help='enable code coverage analyze with gcov')
 
 
 def parse_and_save_conf(env, opts_file):

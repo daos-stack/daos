@@ -18,7 +18,8 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-@Library(value='pipeline-lib@jvolivie/upload_fix') _
+// @Library(value='pipeline-lib@jvolivie/upload_fix') _
+@Library(value='pipeline-lib@hendersp/gcov_rpm_test') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -184,8 +185,21 @@ Map update_default_commit_pragmas() {
     }
 }
 
+Boolean is_code_coverage() {
+    if (startedByTimer()) {
+        return true
+    }
+    return paramsValue('CI_CODE_COVERAGE', false)
+}
+
 pipeline {
     agent { label 'lightweight' }
+
+    triggers {
+        // Generate a code coverage report each Sunday
+        /* groovylint-disable-next-line AddEmptyString */
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 6 * * 0' : '')
+    }
 
     environment {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
@@ -288,6 +302,9 @@ pipeline {
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on Leap 15')
+        booleanParam(name: 'CI_CODE_COVERAGE',
+                     defaultValue: false,
+                     description: 'Run with code coverage analysis')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -536,8 +553,8 @@ pipeline {
                                         build_deps: 'no',
                                         stash_opt: true,
                                         scons_args: sconsArgs() +
-                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       code_coverage: is_code_coverage()))                            sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el8 "' +
 				        env.DAOS_RELVAL + '"'
                         }
@@ -590,7 +607,8 @@ pipeline {
                                            build_deps: 'no',
                                            stash_opt: true,
                                            scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                           code_coverage: is_code_coverage()))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' +
 				        env.DAOS_RELVAL + '"'
@@ -639,9 +657,10 @@ pipeline {
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
-                                scons_args: sconsFaultsArgs() +
-                                ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                build_deps: 'yes'))
+                                           scons_args: sconsFaultsArgs() +
+                                                       ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                           build_deps: 'yes',
+                                           code_coverage: is_code_coverage()))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh suse.lp155 "' +
 				        env.DAOS_RELVAL + '"'
@@ -741,7 +760,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: prRepos(),
                                      inst_rpms: unitPackages()))
@@ -803,7 +822,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 160,
+                            unitTest(timeout_time: 250,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -811,8 +830,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/**/*.log'],
+                            unitTestPost artifacts: ['unit_test_memcheck_logs/'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
@@ -828,7 +846,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 180,
+                            unitTest(timeout_time: 450,
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: prRepos(),
@@ -836,8 +854,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
-                                                     'unit_test_memcheck_bdev_logs/**/*.log'],
+                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs/'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
                             job_status_update()
                         }
@@ -850,7 +867,7 @@ pipeline {
                 beforeAgent true
                 //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && !is_code_coverage() }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -1117,7 +1134,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false) && !skipStage() && !is_code_coverage() }
             }
             steps {
                 script {
@@ -1226,6 +1243,45 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
+        stage('Test Summary') {
+            when {
+                beforeAgent true
+                expression { true }
+            }
+            parallel {
+                stage('Code Coverage Report') {
+                    when {
+                        beforeAgent true
+                        expression { params.CI_CODE_COVERAGE }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.test_summary'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(add_repos: false)
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            codeCoverageReport(
+                                stashes: ['code_coverage_Unit_Test_on_EL_8.8',
+                                          'code_coverage_Unit_Test_bdev_on_EL_8.8',
+                                          'code_coverage_NLT_on_EL_8.8',
+                                          'code_coverage_Unit_Test_with_memcheck_on_EL_8.8',
+                                          'code_coverage_Unit_Test_bdev_with_memcheck_on_EL_8.8'],
+                                script: 'ci/code_coverage_report.sh',
+                                label: 'Code Coverage Report'))
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'code_coverage_report/*',
+                                             allowEmptyArchive: false
+                            job_status_update()
+                        }
+                    }
+                } // stage('Code Coverage Report')
+            } // parallel
+        } // stage('Test Summary')
     } // stages
     post {
         always {

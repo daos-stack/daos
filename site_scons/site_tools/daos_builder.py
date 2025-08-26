@@ -121,6 +121,10 @@ def _add_lib(libtype, libname, target):
 
 def _run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
+    if GetOption("code_coverage"):
+        if 'gcov' not in daos_libs:
+            daos_libs += ['gcov']
+        env.AppendENVPath('CGO_LDFLAGS', '-lgcov', sep=' ')
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
     return result
@@ -128,6 +132,7 @@ def _run_command(env, target, sources, daos_libs, command):
 
 def _static_library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
+    kwargs = _add_code_coverage(env, **kwargs)
     libname = _get_libname(*args, **kwargs)
     if 'hide_syms' in kwargs:
         # Allow for auto-hiding of symbols, used for the Interception library.  There are multiple
@@ -153,6 +158,7 @@ def _static_library(env, *args, **kwargs):
 def _library(env, *args, **kwargs):
     """Build SharedLibrary with relative RPATH"""
     denv = env.Clone()
+    kwargs = _add_code_coverage(denv, **kwargs)
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     lib = denv.SharedLibrary(*args, **kwargs)
@@ -167,6 +173,7 @@ def _library(env, *args, **kwargs):
 def _program(env, *args, **kwargs):
     """Build Program with relative RPATH"""
     denv = env.Clone()
+    kwargs = _add_code_coverage(denv, **kwargs)
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
@@ -180,6 +187,7 @@ def _program(env, *args, **kwargs):
 def _test_program(env, *args, **kwargs):
     """Build Program with fixed RPATH"""
     denv = env.Clone()
+    kwargs = _add_code_coverage(denv, **kwargs)
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get("install_off", None), False, True)
@@ -246,6 +254,19 @@ def _configure_mpi(self):
         _print(f'No {mpi} installed and/or loaded')
     _print("No MPI installed")
     return None
+
+
+def _add_code_coverage(env, **kwargs):
+    """Add library for code coverage"""
+    if GetOption("code_coverage"):
+        if 'LIBS' in kwargs:
+            if isinstance(kwargs['LIBS'], str):
+                kwargs['LIBS'] = [kwargs['LIBS']]
+            if 'gcov' not in kwargs['LIBS']:
+                kwargs['LIBS'].append('gcov')
+        else:
+            env.AppendUnique(LIBS=['gcov'])
+    return kwargs
 
 
 def generate(env):
