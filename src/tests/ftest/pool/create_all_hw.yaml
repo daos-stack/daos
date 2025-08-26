@@ -38,33 +38,30 @@ test_two_pools_hw:
       scm: 2147483648   # 2GiB
       nvme: 0
 
-engine_common: &engine_params
-  targets_mux: !mux
-    one_target:
-      targets: 1
-    two_targets:
-      targets: 2
-    three_targets:
-      targets: 3
-    five_targets:
-      targets: 5
-  nr_xs_helpers: 1
-
 server_config:
   name: daos_server
   engines_per_host: 2
   engines:
     0:
-      <<: *engine_params
       pinned_numa_node: 0
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
     1:
-      <<: *engine_params
       pinned_numa_node: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+  engine_common:
+    targets_mux: !mux
+      one_target:
+        targets: 1
+      two_targets:
+        targets: 2
+      three_targets:
+        targets: 3
+      five_targets:
+        targets: 5
+    nr_xs_helpers: 1

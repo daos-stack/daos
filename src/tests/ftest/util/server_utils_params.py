@@ -477,11 +477,12 @@ class EngineYamlParameters(YamlParameters):
                 Defaults to MAX_STORAGE_TIERS.
         """
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
+        common_ns = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines_common", "*"]
         self._base_namespace = base_namespace
         self._index = index
         self._provider = provider or os.environ.get("D_PROVIDER", "ofi+tcp")
         self._max_storage_tiers = max_storage_tiers
-        super().__init__(os.path.join(*namespace))
+        super().__init__([os.path.join(*namespace), os.path.join(*common_ns)])
 
         # Use environment variables to get default parameters
         default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")

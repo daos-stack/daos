@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -152,21 +153,24 @@ class BasicParameter():
         """
         return (self.position or 0)
 
-    def get_yaml_value(self, name, test, path):
+    def get_yaml_value(self, name, test, paths):
         """Get the value for the parameter from the test case's yaml file.
 
         Args:
             name (str): name of the value in the yaml file
             test (Test): avocado Test object to use to read the yaml file
-            path (str): yaml path where the name is to be found
+            paths (list, str): yaml path(s) where the name is to be found
         """
         if self._yaml_key is not None:
             # Use the yaml key name instead of the variable name
             name = self._yaml_key
-        if hasattr(test, "config") and test.config is not None:
-            self.value = test.config.get(name, path, self._default)
-        else:
-            self.value = test.params.get(name, path, self._default)
+        for path in [paths] if isinstance(paths, str) else paths:
+            if hasattr(test, "config") and test.config is not None:
+                self.value = test.config.get(name, path, self._default)
+            else:
+                self.value = test.params.get(name, path, self._default)
+            if self.value != self._default:
+                break
 
     def update(self, value, name=None, append=False):
         """Update the value of the parameter.
@@ -326,15 +330,15 @@ class LogParameter(FormattedParameter):
                 "Warning: '%s' not added to '%s' due to incompatible type: %s",
                 self._directory, self.value, type(self.value))
 
-    def get_yaml_value(self, name, test, path):
+    def get_yaml_value(self, name, test, paths):
         """Get the value for the parameter from the test case's yaml file.
 
         Args:
             name (str): name of the value in the yaml file
             test (Test): avocado Test object to use to read the yaml file
-            path (str): yaml path where the name is to be found
+            paths (list, str): yaml path(s) where the name is to be found
         """
-        super().get_yaml_value(name, test, path)
+        super().get_yaml_value(name, test, paths)
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
 
