@@ -1,6 +1,5 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -548,7 +547,7 @@ int
 d_log_init(void)
 {
 	char	*log_file;
-	int      flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG | DLOG_FLV_YEAR;
+	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 	int	 rc;
 
 	d_agetenv_str(&log_file, D_LOG_FILE_ENV);
