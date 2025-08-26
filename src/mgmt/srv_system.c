@@ -442,17 +442,12 @@ ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t
 	char                    *saveptr;
 	int                      rc;
 
-	/* TODO: Integrate with the control plane changes. */
-	if (true) {
-		*policy = DS_MGMT_SELF_HEAL_ALL;
-		return 0;
-	}
-
 	req.sys    = daos_sysname;
 	req.keys   = &key;
 	req.n_keys = 1;
 
 retry:
+	D_DEBUG(DB_MGMT, "getting property %s\n", key);
 	rc = ds_mgmt_get_props(&req, &resp);
 	/* TODO: The retry case may need integration and revision. */
 	if (rc == -DER_TIMEDOUT) {
