@@ -54,7 +54,7 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
-  engine_common:
+  engines_common:
     targets_mux: !mux
       one_target:
         targets: 1
