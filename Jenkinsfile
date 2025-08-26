@@ -34,18 +34,6 @@ void get_rpm_relval() {
                               echo ".$(git rev-list HEAD --count).g$(git rev-parse --short=8 HEAD)"
                           fi''',
                 returnStdout: true).trim()
-    // If head is a TAG, keep it the same but otherwise, use the commit where deps changed
-    env.DAOS_DEPS_RELVAL = sh(label: 'get deps git tag',
-               script: '''if [ -n "$GIT_CHECKOUT_DIR" ] && [ -d "$GIT_CHECKOUT_DIR" ]; then
-                              cd "$GIT_CHECKOUT_DIR"
-                          fi
-                          if git diff-index --name-only HEAD^ | grep -q TAG; then
-                              echo ""
-                          else
-			      # Just add commit hash so shallow clone has no effect
-                              echo ".g$(git rev-parse --short=8 $commit)"
-                          fi''',
-                returnStdout: true).trim()
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
@@ -539,8 +527,7 @@ pipeline {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh el8 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -552,8 +539,7 @@ pipeline {
                                                     ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el8 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -595,8 +581,7 @@ pipeline {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh el9 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -608,8 +593,7 @@ pipeline {
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -650,8 +634,7 @@ pipeline {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh suse.lp155 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -661,8 +644,7 @@ pipeline {
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh suse.lp155 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
