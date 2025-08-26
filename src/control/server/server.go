@@ -154,6 +154,7 @@ type server struct {
 	ctlSvc       *ControlService
 	mgmtSvc      *mgmtSvc
 	grpcServer   *grpc.Server
+	client       *control.Client
 
 	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
@@ -237,6 +238,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
+	srv.client = rpcClient
 
 	// Create event distribution primitives.
 	srv.pubSub = events.NewPubSub(ctx, srv.log)
@@ -503,12 +505,14 @@ func (srv *server) start(ctx context.Context) error {
 		build.DaosVersion, os.Getpid(), srv.ctlAddr)
 
 	drpcSetupReq := &drpcServerSetupReq{
-		log:     srv.log,
-		sockDir: srv.cfg.SocketDir,
-		engines: srv.harness.Instances(),
-		tc:      srv.cfg.TransportConfig,
-		sysdb:   srv.sysdb,
-		events:  srv.pubSub,
+		log:        srv.log,
+		sockDir:    srv.cfg.SocketDir,
+		engines:    srv.harness.Instances(),
+		tc:         srv.cfg.TransportConfig,
+		sysdb:      srv.sysdb,
+		events:     srv.pubSub,
+		client:     srv.client,
+		msReplicas: srv.cfg.MgmtSvcReplicas,
 	}
 	// Single daos_server dRPC server to handle all engine requests
 	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
