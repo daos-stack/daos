@@ -2001,7 +2001,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_eph < ec_agg->ea_rdb_eph)
 			min_eph = ec_agg->ea_rdb_eph;
 
-		if (min_eph == ec_agg->ea_current_eph && !pool->sp_rebuilding)
+		if (min_eph == ec_agg->ea_current_eph)
 			continue;
 
 		/**
