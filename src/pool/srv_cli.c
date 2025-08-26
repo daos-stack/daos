@@ -239,8 +239,8 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 			break;
 		}
 
-		rc = pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, uuid, no_uuid, &req_time,
-				     &rpc);
+		rc = ds_pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, uuid, no_uuid, &req_time,
+					&rpc);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_PRE ": create RPC", DP_PRE(uuid, cbs));
 			break;
@@ -1223,4 +1223,91 @@ dsc_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline)
 {
 	D_DEBUG(DB_MGMT, DF_UUID ": Upgrading pool prop\n", DP_UUID(pool_uuid));
 	return dsc_pool_svc_call(pool_uuid, ranks, &pool_upgrade_cbs, NULL /* arg */, deadline);
+}
+
+struct pool_rebuild_stop_arg {
+	uint32_t rstpa_force;
+};
+
+static int
+pool_rebuild_stop_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_rebuild_stop_arg *arg = varg;
+	struct pool_rebuild_stop_in  *in;
+
+	in              = crt_req_get(rpc);
+	in->rstpi_force = arg->rstpa_force;
+	return 0;
+}
+
+static int
+pool_rebuild_stop_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_rebuild_stop_out *out = crt_reply_get(rpc);
+	int                           rc  = out->rstpo_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": failed to stop rebuild", DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_rebuild_stop_cbs = {.pscc_op   = POOL_REBUILD_STOP,
+							     .pscc_init = pool_rebuild_stop_init,
+							     .pscc_consume =
+								 pool_rebuild_stop_consume,
+							     .pscc_fini = NULL};
+
+/**
+ * Request pool stop a running rebuild.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		force			boolean. force a rebuild in op:Fail_reclaim to stop.
+ * \param[in]		ps_ranks		Ranks of pool svc replicas.
+ * \param[in]		deadline		Unix time deadline in milliseconds
+ *
+ * \return	0		Success
+ *		Negative value	Error
+ */
+
+int
+dsc_pool_svc_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *ps_ranks,
+			  uint64_t deadline)
+{
+	struct pool_rebuild_stop_arg arg = {.rstpa_force = force};
+
+	return dsc_pool_svc_call(pool_uuid, ps_ranks, &pool_rebuild_stop_cbs, &arg, deadline);
+}
+
+static int
+pool_rebuild_start_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_rebuild_start_out *out = crt_reply_get(rpc);
+	int                            rc  = out->rstao_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": failed to start/resume rebuild", DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_rebuild_start_cbs = {.pscc_op   = POOL_REBUILD_START,
+							      .pscc_init = NULL,
+							      .pscc_consume =
+								  pool_rebuild_start_consume,
+							      .pscc_fini = NULL};
+
+/**
+ * Request pool start/resume rebuilding.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		ps_ranks		Ranks of pool svc replicas.
+ * \param[in]		deadline		Unix time deadline in milliseconds
+ *
+ * \return	0		Success
+ *		Negative value	Error
+ */
+int
+dsc_pool_svc_rebuild_start(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline)
+{
+	return dsc_pool_svc_call(pool_uuid, ps_ranks, &pool_rebuild_start_cbs, NULL /* varg */,
+				 deadline);
 }
