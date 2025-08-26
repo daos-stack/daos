@@ -946,12 +946,14 @@ init_tests(void **state)
 {
 	int rc;
 
+	rc = d_log_init();
+	assert_true(rc == 0);
 	rc = shm_init();
 	assert_true(rc == 0);
 	assert_true(shm_inited() == true);
 	rc = shm_thread_data_init();
 	assert_true(rc == 0);
-	return d_log_init();
+	return rc;
 }
 
 static int
