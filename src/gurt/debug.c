@@ -548,7 +548,7 @@ int
 d_log_init(void)
 {
 	char	*log_file;
-	int      flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
+	int      flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG | DLOG_FLV_YEAR;
 	int	 rc;
 
 	d_agetenv_str(&log_file, D_LOG_FILE_ENV);
