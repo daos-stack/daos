@@ -15,10 +15,12 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -71,22 +73,26 @@ type poolDatabase interface {
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_engine (src/engine).
 type srvModule struct {
-	log       logging.Logger
-	poolDB    poolDatabase
-	checkerDB checker.FindingStore
-	engines   []Engine
-	events    *events.PubSub
+	log        logging.Logger
+	poolDB     poolDatabase
+	checkerDB  checker.FindingStore
+	engines    []Engine
+	events     *events.PubSub
+	client     *control.Client
+	msReplicas []string
 }
 
 // newSrvModule creates a new srv module references to the system database,
 // resident EngineInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, pdb poolDatabase, cdb checker.FindingStore, engines []Engine, events *events.PubSub) *srvModule {
+func newSrvModule(log logging.Logger, pdb poolDatabase, cdb checker.FindingStore, engines []Engine, events *events.PubSub, client *control.Client, msReplicas []string) *srvModule {
 	return &srvModule{
-		log:       log,
-		poolDB:    pdb,
-		checkerDB: cdb,
-		engines:   engines,
-		events:    events,
+		log:        log,
+		poolDB:     pdb,
+		checkerDB:  cdb,
+		engines:    engines,
+		events:     events,
+		client:     client,
+		msReplicas: msReplicas,
 	}
 }
 
@@ -101,7 +107,8 @@ func (mod *srvModule) GetMethod(id int32) (drpc.Method, error) {
 		daos.MethodCheckerRegisterPool.ID(),
 		daos.MethodCheckerDeregisterPool.ID(),
 		daos.MethodCheckerReport.ID(),
-		daos.MethodListPools.ID():
+		daos.MethodListPools.ID(),
+		daos.MethodGetProps.ID():
 		return daos.SrvMethod(id), nil
 	default:
 		return nil, fmt.Errorf("invalid method %d for module %s", id, mod.String())
@@ -141,6 +148,8 @@ func (mod *srvModule) HandleCall(ctx context.Context, session *drpc.Session, met
 		return mod.handleCheckerReport(ctx, req)
 	case daos.MethodListPools:
 		return mod.handleListPools(req)
+	case daos.MethodGetProps:
+		return mod.handleGetProps(req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
@@ -260,6 +269,42 @@ func (mod *srvModule) handleListPools(reqb []byte) ([]byte, error) {
 		}
 	}
 	mod.log.Tracef("%T %+v", resp, resp)
+
+	return proto.Marshal(resp)
+}
+
+func (mod *srvModule) handleGetProps(reqb []byte) ([]byte, error) {
+	req := new(mgmtpb.SystemGetPropReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	mod.log.Tracef("%T: %+v", req, req)
+
+	ms_req := &control.SystemGetPropReq{
+		Keys: make([]daos.SystemPropertyKey, 0, len(req.Keys)),
+	}
+	for _, k := range req.Keys {
+		var t daos.SystemPropertyKey
+		err := t.FromString(k)
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid system property key %q", k)
+		}
+		ms_req.Keys = append(ms_req.Keys, t)
+	}
+	ms_req.SetHostList(mod.msReplicas)
+
+	ms_resp, err := control.SystemGetProp(context.TODO(), mod.client, ms_req)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get system properties from MS")
+	}
+
+	resp := &mgmtpb.SystemGetPropResp{
+		Properties: make(map[string]string, len(ms_resp.Properties)),
+	}
+	for _, p := range ms_resp.Properties {
+		resp.Properties[p.Key.String()] = p.Value.String()
+	}
 
 	return proto.Marshal(resp)
 }

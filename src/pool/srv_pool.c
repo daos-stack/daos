@@ -7690,6 +7690,12 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
 				 DP_UUID(svc->ps_uuid));
+			/*
+			 * Another PS replica might be able reach the MS. If I'm
+			 * not the PS leader of the specified term, this
+			 * rdb_resign call does nothing.
+			 */
+			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
 			goto out;
 		}
 		if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE)) {

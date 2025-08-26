@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system/raft"
@@ -66,12 +67,14 @@ func checkSocketDir(sockDir string) error {
 }
 
 type drpcServerSetupReq struct {
-	log     logging.Logger
-	sockDir string
-	engines []Engine
-	tc      *security.TransportConfig
-	sysdb   *raft.Database
-	events  *events.PubSub
+	log        logging.Logger
+	sockDir    string
+	engines    []Engine
+	tc         *security.TransportConfig
+	sysdb      *raft.Database
+	events     *events.PubSub
+	client     *control.Client
+	msReplicas []string
 }
 
 // drpcServerSetup specifies socket path and starts drpc server.
@@ -93,7 +96,7 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	// Create and add our modules
 	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.tc))
 	drpcServer.RegisterRPCModule(newMgmtModule())
-	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.sysdb, req.engines, req.events))
+	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.sysdb, req.engines, req.events, req.client, req.msReplicas))
 
 	if err := drpcServer.Start(ctx); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)

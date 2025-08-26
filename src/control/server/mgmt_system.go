@@ -49,6 +49,11 @@ const (
 	domainLabelsSep      = "=" // invalid in a label name
 )
 
+// selfHealPause is the duration at the beginning of an MS leader's term when
+// self-healing is blocked. This is to allow time for changing system property
+// self_heal, if necessary.
+const selfHealPause = time.Minute
+
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
 //
@@ -1680,8 +1685,13 @@ func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemPrope
 
 // SystemGetProp gets user-visible system properties.
 func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetPropReq) (*mgmtpb.SystemGetPropResp, error) {
-	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
+	}
+
+	if svc.lastBecameLeader.IsZero() || time.Since(svc.lastBecameLeader) < selfHealPause {
+		svc.log.Debugf("in self-heal leadership vacuum (%f s left)", time.Until(svc.lastBecameLeader.Add(selfHealPause)).Seconds())
+		return nil, daos.TryAgain
 	}
 
 	props, err := system.GetUserProperties(svc.sysdb, svc.systemProps, req.GetKeys())
