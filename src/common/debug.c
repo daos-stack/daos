@@ -155,7 +155,7 @@ daos_debug_set_id_cb(d_log_id_cb_t cb)
 int
 daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 {
-	int     flags = DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG;
+	int     flags = DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG | DLOG_FLV_YEAR;
 	int	rc;
 
 	D_MUTEX_LOCK(&dd_lock);
