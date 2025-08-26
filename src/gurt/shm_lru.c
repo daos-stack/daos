@@ -335,7 +335,7 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 	node_new->off_next = cache_list[idx_subcache].off_head;
 	if (cache_list[idx_subcache].off_head) {
 		node_head           = (shm_lru_node_t *)((long int)cache +
-						(long int)cache_list[idx_subcache].off_head);
+                                               (long int)cache_list[idx_subcache].off_head);
 		node_head->off_prev = (long int)node_new - (long int)cache;
 	}
 	cache_list[idx_subcache].off_head = (long int)node_new - (long int)cache;
