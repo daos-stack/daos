@@ -19,6 +19,7 @@
 #include <daos_fs.h>
 
 #include <daos/common.h>
+#include <daos/event.h>
 #include <gurt/debug.h>
 #include <gurt/common.h>
 #include <gurt/hash.h>
