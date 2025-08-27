@@ -1165,10 +1165,10 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 					D_ERROR("svc rank list unset\n");
 					D_GOTO(out, rc = -DER_INVAL);
 				}
-				resp_props[j]->strval = d_rank_list_to_str(
-					(d_rank_list_t *)entry->dpe_val_ptr);
-				if (resp_props[j]->strval == NULL)
-					D_GOTO(out, rc = -DER_NOMEM);
+				rc = d_rank_list_to_str((d_rank_list_t *)entry->dpe_val_ptr,
+							&resp_props[j]->strval);
+				if (rc != 0)
+					D_GOTO(out, rc);
 				resp_props[j]->value_case =
 					MGMT__POOL_PROPERTY__VALUE_STRVAL;
 				break;
@@ -1744,14 +1744,10 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	daos_pool_info_t	pool_info = {0};
 	d_rank_list_t		*svc_ranks;
-	d_rank_list_t           *ranks             = NULL;
-	d_rank_range_list_t     *range_list        = NULL;
-	d_rank_range_list_t     *range_list1       = NULL;
+	d_rank_list_t           *ranks          = NULL;
 	d_rank_list_t           *dead_ranks     = NULL;
 	char			*range_list_str = NULL;
 	char                    *dead_ranks_str = NULL;
-	bool			truncated;
-	bool                     truncated1;
 	size_t			len;
 	uint8_t			*body;
 
@@ -1790,25 +1786,27 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	/* Calculate and stringify rank ranges to return to control plane for display */
-	range_list = d_rank_range_list_create_from_ranks(ranks);
-	if (range_list == NULL)
-		D_GOTO(out_ranks, rc = -DER_NOMEM);
-	range_list_str = d_rank_range_list_str(range_list, &truncated);
-	if (range_list_str == NULL)
-		D_GOTO(out_ranges, rc = -DER_NOMEM);
-	range_list1 = d_rank_range_list_create_from_ranks(dead_ranks);
-	if (range_list1 == NULL)
-		D_GOTO(out_suspect, rc = -DER_NOMEM);
-	dead_ranks_str = d_rank_range_list_str(range_list1, &truncated1);
-	if (dead_ranks_str == NULL) {
-		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of suspect ranks",
+	rc = d_rank_list_to_str(ranks, &range_list_str);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of enabled ranks",
 			 DP_UUID(uuid));
-		D_GOTO(out_suspect, rc = -DER_NOMEM);
+		D_GOTO(out_ranks, rc);
+	} else if (range_list_str == NULL) {
+		D_STRNDUP(range_list_str, "[]", strlen("[]"));
 	}
-	D_DEBUG(DB_MGMT, DF_UUID ": %s ranks: %s%s, dead_ranks: %s%s\n", DP_UUID(uuid),
+
+	rc = d_rank_list_to_str(dead_ranks, &dead_ranks_str);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of disabled ranks",
+			 DP_UUID(uuid));
+		D_GOTO(out_dead_ranks, rc);
+	} else if (dead_ranks_str == NULL) {
+		D_STRNDUP(dead_ranks_str, "[]", strlen("[]"));
+	}
+
+	D_DEBUG(DB_MGMT, DF_UUID ": %s ranks: %s, dead_ranks: %s\n", DP_UUID(uuid),
 		pool_info.pi_bits & DPI_ENGINES_ENABLED ? "ENABLED" : "DISABLED", range_list_str,
-		truncated ? " ...(TRUNCATED)" : "", dead_ranks_str,
-		truncated1 ? "...(TRUNCATED)" : "");
+		dead_ranks_str);
 
 	/* Populate the response */
 	resp.query_mask       = pool_info.pi_bits;
@@ -1823,12 +1821,11 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks    = (req->query_mask & DPI_ENGINES_ENABLED) ? range_list_str : "";
 	resp.disabled_ranks   = (req->query_mask & DPI_ENGINES_DISABLED) ? range_list_str : "";
-	if (dead_ranks_str != NULL)
-		resp.dead_ranks = dead_ranks_str;
+	resp.dead_ranks       = dead_ranks_str;
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL)
-		D_GOTO(out_suspect, rc = -DER_NOMEM);
+		D_GOTO(out_dead_ranks, rc = -DER_NOMEM);
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);
@@ -1843,11 +1840,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
-out_suspect:
-	d_rank_range_list_free(range_list1);
+out_dead_ranks:
 	d_rank_list_free(dead_ranks);
-out_ranges:
-	d_rank_range_list_free(range_list);
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc_ranks:
