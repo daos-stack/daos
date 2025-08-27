@@ -11,10 +11,11 @@ def scons():
     have_hdf5 = True
 
     # If hdf5 installed build DAOS serialization library
-    conf = Configure(denv)
-    if not conf.CheckLibWithHeader('hdf5', 'hdf5.h', 'c'):
-        have_hdf5 = False
-    conf.Finish()
+    # conf = Configure(denv)
+    # if not conf.CheckLibWithHeader('hdf5', 'hdf5.h', 'c'):
+    #     have_hdf5 = False
+    # conf.Finish()
+    Import('have_hdf5')
 
     libraries = ['daos', 'hdf5']
 
