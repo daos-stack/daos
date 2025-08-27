@@ -721,7 +721,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -743,7 +743,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -764,7 +764,7 @@ pipeline {
                     steps {
                         job_step_update(
                             unitTest(timeout_time: 60,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
@@ -806,7 +806,7 @@ pipeline {
                             unitTest(timeout_time: 160,
                                      unstash_opt: true,
                                      ignore_failure: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -831,7 +831,7 @@ pipeline {
                             unitTest(timeout_time: 180,
                                      unstash_opt: true,
                                      ignore_failure: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
