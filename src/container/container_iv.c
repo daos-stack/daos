@@ -653,8 +653,18 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		} else if (entry->iv_class->iv_class_id ==
 						IV_CONT_AGG_EPOCH_BOUNDRY) {
 			rc = cont_iv_ent_agg_eph_refresh(entry, key, src);
-			if (rc)
+			if (rc) {
+				/* container non-exist possibly due to in reintegrate the container
+				 * discarded ahead. Ignore such err.
+				 */
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(
+					    rc, DF_CONT " cont_iv_ent_agg_eph_refresh ignore",
+					    DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
+					rc = 0;
+				}
 				D_GOTO(out, rc);
+			}
 		}
 	}
 

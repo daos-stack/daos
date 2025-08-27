@@ -1823,109 +1823,131 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	return rc;
 }
 
-#define EC_AGG_EPH_INTV	 (10ULL * 1000)	/* seconds interval to check*/
+static void
+cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
+{
+	d_rank_list_t       fail_ranks = {0};
+	struct cont_ec_agg *ec_agg;
+	struct cont_ec_agg *tmp;
+	daos_epoch_t        cur_eph, new_eph;
+	daos_epoch_t        min_eph;
+	d_rank_t            rank;
+	int                 i;
+	int                 rc;
+
+	/* on 2.6 branch no incremental reintegration, the UP status target will discard all
+	 * containers so it cannot report its EC aggregation boundary, so should skip
+	 * DOWN/DOWNOUT/UP ranks.
+	 */
+	rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN | PO_COMP_ST_UP,
+			    &fail_ranks);
+	if (rc) {
+		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
+		return;
+	}
+
+	d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list) {
+		if (ec_agg->ea_deleted) {
+			d_list_del(&ec_agg->ea_list);
+			D_FREE(ec_agg->ea_server_ephs);
+			D_FREE(ec_agg);
+			continue;
+		}
+
+		min_eph = DAOS_EPOCH_MAX;
+		for (i = 0; i < ec_agg->ea_servers_num; i++) {
+			rank = ec_agg->ea_server_ephs[i].rank;
+
+			if (d_rank_in_rank_list(&fail_ranks, rank)) {
+				D_DEBUG(DB_MD, DF_CONT " skip %u\n",
+					DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), rank);
+				continue;
+			}
+
+			if (ec_agg->ea_server_ephs[i].eph < min_eph)
+				min_eph = ec_agg->ea_server_ephs[i].eph;
+		}
+
+		if (min_eph == ec_agg->ea_current_eph)
+			continue;
+
+		/**
+		 * NB: during extending or reintegration, the new
+		 * server might cause the minimum epoch is less than
+		 * ea_current_eph.
+		 */
+		D_DEBUG(DB_MD, DF_CONT " minimum " DF_U64 " current " DF_X64 "\n",
+			DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), min_eph,
+			ec_agg->ea_current_eph);
+
+		cur_eph = d_hlc2sec(ec_agg->ea_current_eph);
+		new_eph = d_hlc2sec(min_eph);
+		if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
+				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
+			       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), cur_eph, new_eph,
+			       new_eph - cur_eph);
+
+		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph);
+		if (rc) {
+			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
+				  DF_CONT ": refresh failed",
+				  DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
+
+			/* If there are network error or pool map inconsistency,
+			 * let's skip the following eph sync, which will fail
+			 * anyway.
+			 */
+			if (daos_crt_network_error(rc) || rc == -DER_GRPVER) {
+				D_INFO(DF_UUID ": skip refresh due to: " DF_RC "\n",
+				       DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+				break;
+			}
+
+			continue;
+		}
+		ec_agg->ea_current_eph = min_eph;
+	}
+
+	map_ranks_fini(&fail_ranks);
+}
+
+int
+ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid)
+{
+	struct cont_svc *svc;
+	int              rc;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint */);
+	if (rc != 0)
+		return rc;
+
+	cont_agg_eph_sync(svc->cs_pool, svc);
+
+	cont_svc_put_leader(svc);
+	return 0;
+}
+
+#define EC_AGG_EPH_INTV (10ULL * 1000) /* seconds interval to check*/
 static void
 cont_agg_eph_leader_ult(void *arg)
 {
-	struct cont_svc		*svc = arg;
-	struct ds_pool		*pool = svc->cs_pool;
-	struct cont_ec_agg	*ec_agg;
-	struct cont_ec_agg	*tmp;
-	uint64_t		cur_eph, new_eph;
-	int			rc = 0;
+	struct cont_svc    *svc  = arg;
+	struct ds_pool     *pool = svc->cs_pool;
+	struct cont_ec_agg *ec_agg;
+	struct cont_ec_agg *tmp;
+	int                 rc = 0;
 
 	if (svc->cs_ec_leader_ephs_req == NULL)
 		goto out;
 
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
-		d_rank_list_t		fail_ranks = { 0 };
-
 		if (pool->sp_rebuilding) {
-			D_DEBUG(DB_MD, DF_UUID "skip during rebuilding.\n",
-				DP_UUID(pool->sp_uuid));
+			D_DEBUG(DB_MD, DF_UUID "skip during rebuilding.\n", DP_UUID(pool->sp_uuid));
 			goto yield;
 		}
 
-		rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN,
-				    &fail_ranks);
-		if (rc) {
-			D_ERROR(DF_UUID": ranks init failed: %d\n",
-				DP_UUID(pool->sp_uuid), rc);
-			goto yield;
-		}
-
-		d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list) {
-			daos_epoch_t min_eph = DAOS_EPOCH_MAX;
-			int	     i;
-
-			if (ec_agg->ea_deleted) {
-				d_list_del(&ec_agg->ea_list);
-				D_FREE(ec_agg->ea_server_ephs);
-				D_FREE(ec_agg);
-				continue;
-			}
-
-			for (i = 0; i < ec_agg->ea_servers_num; i++) {
-				d_rank_t rank = ec_agg->ea_server_ephs[i].rank;
-
-				if (d_rank_in_rank_list(&fail_ranks, rank)) {
-					D_DEBUG(DB_MD, DF_CONT" skip %u\n",
-						DP_CONT(svc->cs_pool_uuid,
-							ec_agg->ea_cont_uuid),
-						rank);
-					continue;
-				}
-
-				if (ec_agg->ea_server_ephs[i].eph < min_eph)
-					min_eph = ec_agg->ea_server_ephs[i].eph;
-			}
-
-			if (min_eph == ec_agg->ea_current_eph)
-				continue;
-
-			/**
-			 * NB: during extending or reintegration, the new
-			 * server might cause the minimum epoch is less than
-			 * ea_current_eph.
-			 */
-			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "DF_X64"\n",
-				DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
-				min_eph, ec_agg->ea_current_eph);
-
-			cur_eph = d_hlc2sec(ec_agg->ea_current_eph);
-			new_eph = d_hlc2sec(min_eph);
-			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
-				D_WARN(DF_CONT": Sluggish EC boundary reporting. "
-				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
-				       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
-				       cur_eph, new_eph, new_eph - cur_eph);
-
-			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
-							ec_agg->ea_cont_uuid,
-							min_eph);
-			if (rc) {
-				DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
-					  DF_CONT ": refresh failed",
-					  DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
-
-				/* If there are network error or pool map inconsistency,
-				 * let's skip the following eph sync, which will fail
-				 * anyway.
-				 */
-				if (daos_crt_network_error(rc) || rc == -DER_GRPVER) {
-					D_INFO(DF_UUID": skip refresh due to: "DF_RC"\n",
-					       DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
-					break;
-				}
-
-				continue;
-			}
-			ec_agg->ea_current_eph = min_eph;
-			if (pool->sp_rebuilding)
-				break;
-		}
-
-		map_ranks_fini(&fail_ranks);
+		cont_agg_eph_sync(pool, svc);
 
 		if (dss_ult_exiting(svc->cs_ec_leader_ephs_req))
 			break;
