@@ -63,27 +63,12 @@ struct open_handle {
 		}                                                                                  \
 	} while (0)
 
-/** Global event queue */
-static daos_handle_t eq;
+static daos_handle_t glob_eq;
+static bool          use_glob_eq;
 
 /**
  * Implementations of baseline shim functions
  */
-
-static void
-child_handler(void)
-{
-	int rc;
-
-	rc = daos_reinit();
-	if (rc)
-		D_WARN("daos_reinit() failed in child process %d", rc);
-
-	eq = DAOS_HDL_INVAL;
-	rc = daos_eq_create(&eq);
-	if (rc)
-		DL_ERROR(rc, "Failed to re-create global eq");
-}
 
 static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
@@ -91,20 +76,17 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 	int rc;
 
 	rc = daos_init();
-	if (rc)
-		return PyLong_FromLong(rc);
+	if ((rc == 0) && (use_glob_eq == 0)) {
+		d_getenv_bool("PYDAOS_GLOB_EQ", &use_glob_eq);
+		if (use_glob_eq) {
+			int ret;
 
-	rc = daos_eq_create(&eq);
-	if (rc) {
-		DL_ERROR(rc, "Failed to create global eq");
-		daos_fini();
-		return PyLong_FromLong(rc);
-	}
-
-	rc = pthread_atfork(NULL, NULL, &child_handler);
-	if (rc) {
-		DL_ERROR(rc, "Failed to set atfork handler");
-		return PyLong_FromLong(rc);
+			ret = daos_eq_create(&glob_eq);
+			if (ret) {
+				DL_ERROR(ret, "Failed to create global eq");
+				use_glob_eq = false;
+			}
+		}
 	}
 
 	return PyLong_FromLong(rc);
@@ -115,9 +97,12 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 {
 	int rc;
 
-	rc = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
-	if (rc)
-		D_ERROR("Failed to destroy global eq, " DF_RC "\n", DP_RC(rc));
+	if (use_glob_eq) {
+		rc =  daos_eq_destroy(glob_eq, DAOS_EQ_DESTROY_FORCE);
+		if (rc)
+			D_ERROR("Failed to destroy global eq, "DF_RC"\n", DP_RC(rc));
+		use_glob_eq = false;
+	}
 
 	rc = daos_fini();
 
@@ -929,7 +914,8 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	PyObject	*daos_dict;
 	daos_handle_t	 oh;
 	PyObject	*key;
-	Py_ssize_t       pos      = 0;
+	Py_ssize_t	 pos = 0;
+	daos_handle_t	 eq;
 	struct kv_op	*kv_array = NULL;
 	struct kv_op	*op;
 	daos_event_t	*evp;
@@ -941,6 +927,14 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!l", &oh.cookie, &PyDict_Type,
 				       &daos_dict, &v_size);
+
+	if (!use_glob_eq) {
+		rc = daos_eq_create(&eq);
+		if (rc)
+			return PyLong_FromLong(rc);
+	} else {
+		eq = glob_eq;
+	}
 
 	D_ALLOC_ARRAY(kv_array, MAX_INFLIGHT);
 	if (kv_array == NULL) {
@@ -1085,10 +1079,19 @@ rewait:
 out:
 	D_FREE(kv_array);
 
+	/** destroy event queue */
+	if (!use_glob_eq) {
+		ret = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
+		if (rc == DER_SUCCESS && ret < 0)
+			rc = ret;
+	}
+
 	/* Populate return list */
 	return PyLong_FromLong(rc);
 
 err:
+	if (!use_glob_eq)
+		daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
 	D_FREE(kv_array);
 
 	return NULL;
@@ -1101,7 +1104,8 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	daos_handle_t	 oh;
 	PyObject	*key;
 	PyObject	*value;
-	Py_ssize_t       pos = 0;
+	Py_ssize_t	 pos = 0;
+	daos_handle_t	 eq;
 	daos_event_t	 ev_array[MAX_INFLIGHT];
 	daos_event_t	*evp;
 	int		 i = 0;
@@ -1111,6 +1115,14 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!", &oh.cookie,
 				       &PyDict_Type, &daos_dict);
+
+	if (!use_glob_eq) {
+		rc = daos_eq_create(&eq);
+		if (rc)
+			return PyLong_FromLong(rc);
+	} else {
+		eq = glob_eq;
+	}
 
 	while (PyDict_Next(daos_dict, &pos, &key, &value)) {
 		char		*buf;
@@ -1191,8 +1203,17 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	if (rc == DER_SUCCESS && ret < 0)
 		rc = ret;
 
+	/** destroy event queue */
+	if (!use_glob_eq) {
+		ret = daos_eq_destroy(eq, 0);
+		if (rc == DER_SUCCESS && ret < 0)
+			rc = ret;
+	}
+
 	return PyLong_FromLong(rc);
 err:
+	if (!use_glob_eq)
+		daos_eq_destroy(eq, 0);
 	return NULL;
 }
 
