@@ -1,5 +1,7 @@
 /*
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -124,8 +126,8 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_gauge(val, &stats, name, D_TM_STANDARD,
-					 units, options, stdout);
+			d_tm_print_gauge(val, &stats, NULL, name, D_TM_STANDARD, units, options,
+					 stdout);
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",
