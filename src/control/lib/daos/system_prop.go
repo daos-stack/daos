@@ -303,6 +303,7 @@ func (sp SystemPropertyKey) String() string {
 		SystemPropertyDaosSystem:      "daos_system",
 		SystemPropertyPoolScrubMode:   "pool_scrub_mode",
 		SystemPropertyPoolScrubThresh: "pool_scrub_thresh",
+		SystemPropertySelfHeal:        "self_heal",
 	}[sp]; found {
 		return str
 	}
@@ -342,6 +343,8 @@ const (
 	SystemPropertyPoolScrubMode
 	// SystemPropertyPoolScrubThresh sets or retrieves the scrubbing error threshold for each pool in the system.
 	SystemPropertyPoolScrubThresh
+	// SystemPropertySelfHeal stores the self-heal policy for the system.
+	SystemPropertySelfHeal
 	// NB: This must be the last entry.
 	systemPropertyMax
 )
@@ -504,5 +507,43 @@ func SystemProperties() SystemPropertyMap {
 		},
 		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub_thresh"], "0"),
 		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"], "off"),
+		SystemPropertySelfHeal: SystemProperty{
+			Key:         SystemPropertySelfHeal,
+			Value:       NewStringPropVal("exclude;pool_exclude;pool_rebuild", enumSubsets([]string{"exclude", "pool_exclude", "pool_rebuild"}, ";", "none")...),
+			Description: "Self-heal policy for the system",
+		},
 	}
+}
+
+// SystemPropertySelfHealHasFlag returns true if the given self-heal property
+// value contains the specified flag.
+func SystemPropertySelfHealHasFlag(value string, flag string) bool {
+	flags := strings.Split(value, ";")
+	for _, f := range flags {
+		if f == flag {
+			return true
+		}
+	}
+	return false
+}
+
+// enumSubsets returns a slice of all subsets of strings, including the empty
+// set.
+func enumSubsets(strings []string, sep string, empty string) []string {
+	if len(strings) == 0 {
+		return []string{empty}
+	}
+
+	subsets := enumSubsets(strings[1:], sep, empty)
+	n := len(subsets)
+	result := make([]string, n*2)
+	copy(result, subsets)
+	for i := 0; i < n; i++ {
+		if subsets[i] == empty {
+			result[n+i] = strings[0]
+		} else {
+			result[n+i] = strings[0] + sep + subsets[i]
+		}
+	}
+	return result
 }
