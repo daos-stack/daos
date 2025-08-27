@@ -25,7 +25,7 @@
 #define KEY_FILES                       'f'
 /** the options below follow the daos_engine options */
 #define KEY_ENGINE_NUMA_NODE            'p'
-#define KEY_ENGINE_MEM_SIZE             'r'
+#define KEY_ENGINE_MAX_DMA_BUF_SIZE     'r'
 #define KEY_ENGINE_HUGEPAGE_SIZE        'H'
 #define KEY_ENGINE_TARGETS              't'
 #define KEY_ENGINE_STORAGE              's'
@@ -33,7 +33,7 @@
 
 /** defaults */
 
-#define DLCK_DEFAULT_NVME_MEM_SIZE      5120
+#define DLCK_DEFAULT_MAX_DMA_BUF_SIZE   5120
 #define DLCK_DEFAULT_NVME_HUGEPAGE_SIZE 2
 #define DLCK_DEFAULT_TARGETS            4
 
@@ -56,7 +56,7 @@ struct dlck_file {
  */
 struct dlck_args_engine {
 	unsigned numa_node;
-	unsigned nvme_mem_size;
+	unsigned max_dma_buf_size;
 	unsigned nvme_hugepage_size;
 	unsigned targets;
 	char    *storage_path;

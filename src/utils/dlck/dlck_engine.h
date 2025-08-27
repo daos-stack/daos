@@ -167,7 +167,7 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn);
 
 /**
- * Open a pool but lock the \p mtx mutex first and unlock it after.
+ * Open a pool but lock the \p mtx mutex first and unlock it after. Thread-safe.
  *
  * \param[in]	mtx		Mutex.
  * \param[in]	storage_path	Storage path.
@@ -184,11 +184,11 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
  * \retval -DER_*		Possibly other errors.
  */
 int
-dlck_abt_pool_open(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
-		   daos_handle_t *poh);
+dlck_pool_open_safe(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
+		    daos_handle_t *poh);
 
 /**
- * Close a pool but lock the \p mtx mutex first and unlock it after.
+ * Close a pool but lock the \p mtx mutex first and unlock it after. Thread-safe.
  *
  * \param[in]	mtx		Mutex.
  * \param[in]	poh		Pool handle.
@@ -197,6 +197,6 @@ dlck_abt_pool_open(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int 
  * \retval -DER_INVAL		Issues with \p mtx.
  */
 int
-dlck_abt_pool_close(ABT_mutex mtx, daos_handle_t poh);
+dlck_pool_close_safe(ABT_mutex mtx, daos_handle_t poh);
 
 #endif /** __DLCK_ENGINE__ */

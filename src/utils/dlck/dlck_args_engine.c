@@ -13,8 +13,8 @@
 static struct argp_option args_engine_options[] = {
     {"pinned_numa_node", KEY_ENGINE_NUMA_NODE, 0, 0,
      "Bind to cores within the specified NUMA node.", GROUP_OPTIONS},
-    {"mem_size", KEY_ENGINE_MEM_SIZE, "N", 0,
-     "Allocates mem_size MB for SPDK. Default: " STRINGIFY(DLCK_DEFAULT_NVME_MEM_SIZE) "."},
+    {"mem_size", KEY_ENGINE_MAX_DMA_BUF_SIZE, "N", 0,
+     "Maximum DMA buffer size. Default: " STRINGIFY(DLCK_DEFAULT_MAX_DMA_BUF_SIZE) "."},
     {"hugepage_size", KEY_ENGINE_HUGEPAGE_SIZE, "N", 0,
      "Passes the configured hugepage size(2MB or 1GB). Default: " STRINGIFY(
 	 DLCK_DEFAULT_NVME_HUGEPAGE_SIZE) "."},
@@ -29,7 +29,7 @@ args_engine_init(struct dlck_args_engine *args)
 {
 	memset(args, 0, sizeof(*args));
 	/** set defaults */
-	args->nvme_mem_size      = DLCK_DEFAULT_NVME_MEM_SIZE;
+	args->max_dma_buf_size   = DLCK_DEFAULT_MAX_DMA_BUF_SIZE;
 	args->nvme_hugepage_size = DLCK_DEFAULT_NVME_HUGEPAGE_SIZE;
 	args->targets            = DLCK_DEFAULT_TARGETS;
 }
@@ -63,8 +63,8 @@ args_engine_parser(int key, char *arg, struct argp_state *state)
 	case KEY_ENGINE_NUMA_NODE:
 		rc = parse_unsigned(arg, &args->numa_node, state);
 		break;
-	case KEY_ENGINE_MEM_SIZE:
-		rc = parse_unsigned(arg, &args->nvme_mem_size, state);
+	case KEY_ENGINE_MAX_DMA_BUF_SIZE:
+		rc = parse_unsigned(arg, &args->max_dma_buf_size, state);
 		break;
 	case KEY_ENGINE_HUGEPAGE_SIZE:
 		rc = parse_unsigned(arg, &args->nvme_hugepage_size, state);

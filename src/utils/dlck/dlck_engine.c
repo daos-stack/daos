@@ -406,7 +406,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 		goto fail_engine_free;
 	}
 
-	rc = bio_nvme_init(args->nvme_conf, args->numa_node, args->nvme_mem_size,
+	rc = bio_nvme_init(args->nvme_conf, args->numa_node, args->max_dma_buf_size,
 			   args->nvme_hugepage_size, args->targets, bypass_health_chk);
 	if (rc != DER_SUCCESS) {
 		goto fail_abt_fini;
@@ -581,8 +581,8 @@ fail_join_and_free:
 }
 
 int
-dlck_abt_pool_open(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
-		   daos_handle_t *poh)
+dlck_pool_open_safe(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
+		    daos_handle_t *poh)
 {
 	int rc;
 	int rc_abt;
@@ -611,7 +611,7 @@ dlck_abt_pool_open(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int 
 }
 
 int
-dlck_abt_pool_close(ABT_mutex mtx, daos_handle_t poh)
+dlck_pool_close_safe(ABT_mutex mtx, daos_handle_t poh)
 {
 	int rc;
 	int rc_abt;

@@ -22,7 +22,7 @@ static struct argp_option args_files_options[] = {
 
 #define ALL_TARGETS_BITMAP(targets) ((1 << (targets)) - 1)
 
-static void
+static inline void
 args_files_init(struct dlck_args_files *args)
 {
 	memset(args, 0, sizeof(*args));
