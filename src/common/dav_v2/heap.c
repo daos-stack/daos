@@ -797,42 +797,6 @@ heap_mbrt_mb_reclaim_garbage(struct palloc_heap *heap, uint32_t zid)
 	return 0;
 }
 
-static int
-heap_detach_and_try_discard_run(struct palloc_heap *heap, struct bucket *b);
-
-static int
-heap_mbrt_recycle_runs(struct palloc_heap *heap, struct mbrt *mb, int exclude_cid)
-{
-	int                           i;
-	int                           cnt = 0;
-	struct bucket                *b;
-	struct recycler_element       e;
-	struct run_bitmap             bmap;
-	struct memory_block          *m;
-	struct memory_block_reserved *msrv;
-
-	if (mb->mb_id == 0)
-		return 0;
-
-	for (i = 0; i < MAX_ALLOCATION_CLASSES; i++) {
-		if ((mb->buckets[i] == NULL) || (i == exclude_cid))
-			continue;
-		b = bucket_acquire(mb->buckets[i]);
-		if ((msrv = bucket_active_block(b)) == NULL)
-			goto next;
-		m = &msrv->m;
-		if (m == NULL)
-			goto next;
-		e = recycler_element_new(heap, m);
-		m->m_ops->get_bitmap(m, &bmap);
-		if (e.free_space == bmap.nbits)
-			cnt += !heap_detach_and_try_discard_run(heap, b);
-next:
-		mbrt_bucket_release(b);
-	}
-	return cnt;
-}
-
 void
 heap_soemb_active_iter_init(struct palloc_heap *heap)
 {
@@ -1706,7 +1670,6 @@ heap_ensure_run_bucket_filled(struct palloc_heap *heap, struct bucket *b,
 	struct mbrt        *mb     = bucket_get_mbrt(b);
 	struct memory_block m;
 	struct bucket      *defb;
-	int                 count = mb->mb_id ? 0 : 1;
 
 	D_ASSERT(mb != NULL);
 	ASSERTeq(aclass->type, CLASS_RUN);
@@ -1720,7 +1683,6 @@ heap_ensure_run_bucket_filled(struct palloc_heap *heap, struct bucket *b,
 	if (heap_reuse_from_recycler(heap, b, units, 0) == 0)
 		goto out;
 
-retry:
 	m = MEMORY_BLOCK_NONE;
 
 	m.size_idx = aclass->rdsc.size_idx;
@@ -1741,9 +1703,6 @@ retry:
 
 	if (heap_reuse_from_recycler(heap, b, units, 1) == 0)
 		goto out;
-
-	if (!count++ && heap_mbrt_recycle_runs(heap, mb, aclass->id))
-		goto retry;
 
 	mbrt_set_laf(mb, aclass->id);
 	ret = ENOMEM;
