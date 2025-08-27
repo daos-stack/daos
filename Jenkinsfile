@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@jvolivie/upload_fix') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -32,18 +32,6 @@ void get_rpm_relval() {
                               echo ""
                           else
                               echo ".$(git rev-list HEAD --count).g$(git rev-parse --short=8 HEAD)"
-                          fi''',
-                returnStdout: true).trim()
-    // If head is a TAG, keep it the same but otherwise, use the commit where deps changed
-    env.DAOS_DEPS_RELVAL = sh(label: 'get deps git tag',
-               script: '''if [ -n "$GIT_CHECKOUT_DIR" ] && [ -d "$GIT_CHECKOUT_DIR" ]; then
-                              cd "$GIT_CHECKOUT_DIR"
-                          fi
-                          if git diff-index --name-only HEAD^ | grep -q TAG; then
-                              echo ""
-                          else
-			      export commit=$(git log -1 --pretty=format:"%h" deps utils/build.config)
-                              echo ".$(git rev-list $commit --count).g$(git rev-parse --short=8 $commit)"
                           fi''',
                 returnStdout: true).trim()
 }
@@ -155,7 +143,7 @@ void fixup_rpmlintrc() {
 
 
 void uploadNewRPMs(String target, String stage) {
-    buildRpmPost target: target, condition: stage, rpmlint: false
+    buildRpmPost target: target, condition: stage, rpmlint: false, new_rpm: true
 }
 
 String vm9_label(String distro) {
@@ -531,6 +519,7 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
+						' --build-arg DAOS_KEEP_SRC=yes ' +
 						' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -538,8 +527,7 @@ pipeline {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh el8 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -551,8 +539,7 @@ pipeline {
                                                     ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el8 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -586,6 +573,7 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
+						' --build-arg DAOS_KEEP_SRC=yes ' +
 						' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -593,8 +581,7 @@ pipeline {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh el9 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -606,8 +593,7 @@ pipeline {
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -640,6 +626,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: false) +
 						' --build-arg DAOS_PACKAGES_BUILD=no ' +
+						' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc"
                         }
                     }
@@ -647,8 +634,7 @@ pipeline {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh suse.lp155 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -658,8 +644,7 @@ pipeline {
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh suse.lp155 "' +
-				        env.DAOS_RELVAL + '" "' +
-				        env.DAOS_DEPS_RELVAL + '"'
+				        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -736,7 +721,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -758,7 +743,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -779,7 +764,7 @@ pipeline {
                     steps {
                         job_step_update(
                             unitTest(timeout_time: 60,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
@@ -821,7 +806,7 @@ pipeline {
                             unitTest(timeout_time: 160,
                                      unstash_opt: true,
                                      ignore_failure: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -846,7 +831,7 @@ pipeline {
                             unitTest(timeout_time: 180,
                                      unstash_opt: true,
                                      ignore_failure: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
