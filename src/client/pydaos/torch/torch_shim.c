@@ -116,10 +116,11 @@ static d_hash_table_ops_t dir_cache_hash_ops = {
 static void
 atfork_handler(void)
 {
-	int rc = daos_reinit();
+	int rc = daos_eq_lib_reset_after_fork()();
 	if (rc) {
-		D_ERROR("daos_reinit() failed in child process %s (rc=%d)", d_errstr(rc), rc);
+		D_ERROR("daos_eq_lib_reset_after_fork() failed in child process %s (rc=%d)", d_errstr(rc), rc);
 	}
+	daos_dti_reset();
 }
 
 static PyObject *
