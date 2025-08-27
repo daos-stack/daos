@@ -475,6 +475,13 @@ def scons():
     # This will add a final 'DEPS' value to opts but it will not be persistent.
     prereqs.run_build(opts)
 
+    # DH++
+    have_hdf5 = True
+    if prereqs.check_component('hdf5'):
+        have_hdf5 = False
+    Export('have_hdf5')
+    # DH--
+
     if GetOption('build_deps') == 'only':
         prereqs.save_build_info()
         print('Exiting because --build-deps=only was set')
