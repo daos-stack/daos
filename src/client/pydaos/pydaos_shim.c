@@ -17,6 +17,7 @@
 #include <gurt/common.h>
 #include <daos_kv.h>
 #include <daos_uns.h>
+#include <daos/common.h>
 
 #define PY_SHIM_MAGIC_NUMBER 0x7A8A
 #define MAX_OID_HI ((1UL << 32) - 1)
