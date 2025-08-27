@@ -48,4 +48,5 @@ class EcodCellSize(IorTestBase):
                         f"transfer size: {transfer_size}, "
                         f"block size: {block_size}")
                     self.run_ior_with_pool()
+                    self.container.destroy()
             self.pool.destroy()

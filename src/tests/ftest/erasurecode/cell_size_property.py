@@ -52,7 +52,7 @@ class EcodCellSizeProperty(IorTestBase):
         :avocado: tags=EcodCellSizeProperty,ec_cell_property,test_ec_pool_property
         """
         pool_cell_sizes = self.params.get("cell_sizes", "/run/pool/*")
-        cont_cell_sizes = self.params.get("cell_sizes", "/run/cont/*")
+        cont_cell_sizes = self.params.get("cell_sizes", "/run/container/*")
         ior_transfer_sizes = self.params.get("transfer_sizes", "/run/ior/*")
 
         for pool_cell_size in pool_cell_sizes:
