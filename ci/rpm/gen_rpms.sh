@@ -27,6 +27,7 @@ utils/rpms/build_packages.sh deps
 if ls -1 ./*.rpm; then
   mkdir -p /home/daos/rpms/deps
   cp ./*.rpm /home/daos/rpms/deps
+  rm -f ./*.rpm
 fi
 utils/rpms/build_packages.sh daos
 mkdir -p /home/daos/rpms/daos
