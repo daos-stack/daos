@@ -17,6 +17,8 @@
 #include <gurt/common.h>
 #include <daos_kv.h>
 #include <daos_uns.h>
+#include <daos/common.h>
+#include <daos/event.h>
 
 #define PY_SHIM_MAGIC_NUMBER 0x7A8A
 #define MAX_OID_HI ((1UL << 32) - 1)
@@ -70,22 +72,21 @@ static daos_handle_t eq;
  * Implementations of baseline shim functions
  */
 
-#if 0
 static void
 child_handler(void)
 {
 	int rc;
 
-	rc = daos_reinit();
+	rc = daos_eq_lib_reset_after_fork();
 	if (rc)
-		D_WARN("daos_reinit() failed in child process %d", rc);
+		D_WARN("daos_eq_lib_reset_after_fork() failed in child process %d", rc);
+	daos_dti_reset();
 
 	eq = DAOS_HDL_INVAL;
 	rc = daos_eq_create(&eq);
 	if (rc)
 		DL_ERROR(rc, "Failed to re-create global eq");
 }
-#endif
 
 static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
@@ -103,14 +104,11 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 		return PyLong_FromLong(rc);
 	}
 
-#if 0
-	/** disabled due to DAOS-16637 */
 	rc = pthread_atfork(NULL, NULL, &child_handler);
 	if (rc) {
 		DL_ERROR(rc, "Failed to set atfork handler");
 		return PyLong_FromLong(rc);
 	}
-#endif
 
 	return PyLong_FromLong(rc);
 }
