@@ -476,9 +476,9 @@ def scons():
     prereqs.run_build(opts)
 
     # DH++
-    have_hdf5 = True
+    have_hdf5 = False
     if prereqs.check_component('hdf5'):
-        have_hdf5 = False
+        have_hdf5 = True
     Export('have_hdf5')
     # DH--
 

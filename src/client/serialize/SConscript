@@ -4,7 +4,7 @@
 def scons():
     """Execute build"""
 
-    Import('env')
+    Import('env', 'have_hdf5')
 
     denv = env.Clone()
 
@@ -15,7 +15,6 @@ def scons():
     # if not conf.CheckLibWithHeader('hdf5', 'hdf5.h', 'c'):
     #     have_hdf5 = False
     # conf.Finish()
-    Import('have_hdf5')
 
     libraries = ['daos', 'hdf5']
 
