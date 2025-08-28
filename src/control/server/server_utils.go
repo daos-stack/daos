@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -26,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -745,6 +747,9 @@ func registerLeaderSubscriptions(srv *server) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
+				if ok := checkSysPropSelfHeal(*srv.mgmtSvc, "exclude"); !ok {
+					return
+				}
 				ts, err := evt.GetTimestamp()
 				if err != nil {
 					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
@@ -772,6 +777,24 @@ func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {
 		return strconv.FormatUint(uint64(ev.Rank), 10) + ":" + strconv.FormatUint(ev.Incarnation, 10)
 	})
+}
+
+// checkSysPropSelfHeal sees if system property "self_heal" has flag.
+func checkSysPropSelfHeal(svc mgmtSvc, flag string) bool {
+	if svc.lastBecameLeader.IsZero() || time.Since(svc.lastBecameLeader) < time.Minute {
+		return false
+	}
+
+	selfHeal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, daos.SystemPropertySelfHeal.String())
+	if system.IsErrSystemAttrNotFound(err) {
+		// Assume all flags are set.
+		return true
+	} else if err != nil {
+		svc.log.Errorf("unable to get system property 'self_heal': %s", err)
+		return false
+	}
+
+	return daos.SystemPropertySelfHealHasFlag(selfHeal, flag)
 }
 
 // getGrpcOpts generates a set of gRPC options for the server based on the supplied configuration.

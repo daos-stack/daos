@@ -449,6 +449,7 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
+			srv.mgmtSvc.lastBecameLeader = time.Now()
 
 			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
 				srv.log.Errorf(err.Error())
@@ -484,6 +485,7 @@ func (srv *server) registerEvents() {
 		},
 	)
 	srv.sysdb.OnLeadershipLost(func() error {
+		srv.mgmtSvc.lastBecameLeader = time.Time{}
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
 		registerFollowerSubscriptions(srv)
 		return nil
