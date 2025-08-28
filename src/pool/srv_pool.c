@@ -7494,7 +7494,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
-	if (!ds_pool_rebuild_enabled(svc->ps_pool)) {
+	if (!is_pool_rebuild_allowed(svc->ps_pool, true)) {
 		D_DEBUG(DB_MD, DF_UUID ": self healing is disabled\n",
 			DP_UUID(svc->ps_pool->sp_uuid));
 		D_GOTO(out, rc);

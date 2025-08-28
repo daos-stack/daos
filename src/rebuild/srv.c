@@ -2489,9 +2489,8 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	D_ASSERT(entry != NULL);
 	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD) &&
 	    !pool->sp_disable_rebuild) {
-		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN,
-					     pool->sp_self_heal & DAOS_SELF_HEAL_DELAY_REBUILD ? -1
-											       : 0);
+		rc = regenerate_task_of_type(
+		    pool, PO_COMP_ST_DOWN, entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : 0);
 		if (rc != 0)
 			return rc;
 
