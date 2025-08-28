@@ -240,7 +240,7 @@ def define_common(reqs):
 
     reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
 
-    # reqs.define('hdf5', headers=['hdf5.h'], package='hdf5-devel')
+    reqs.define('hdf5', headers=['hdf5.h'], package='hdf5-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
