@@ -13,6 +13,9 @@ def scons():
         # Build ddb
         SConscript('ddb/SConscript')
 
+        # Build dlck
+        SConscript('dlck/SConscript')
+
     if not prereqs.client_requested():
         return
 
