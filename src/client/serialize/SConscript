@@ -4,17 +4,17 @@
 def scons():
     """Execute build"""
 
-    Import('env', 'have_hdf5')
+    Import('env')
 
     denv = env.Clone()
 
     have_hdf5 = True
 
     # If hdf5 installed build DAOS serialization library
-    # conf = Configure(denv)
-    # if not conf.CheckLibWithHeader('hdf5', 'hdf5.h', 'c'):
-    #     have_hdf5 = False
-    # conf.Finish()
+    conf = Configure(denv)
+    if not conf.CheckLibWithHeader('hdf5', 'hdf5.h', 'c'):
+        have_hdf5 = False
+    conf.Finish()
 
     libraries = ['daos', 'hdf5']
 
