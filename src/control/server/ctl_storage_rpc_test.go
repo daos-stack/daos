@@ -1414,6 +1414,15 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			},
 		},
 		"scm module discovery failure": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmDeviceList("/dev/pmem0"),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr, test.MockPCIAddr(2)),
+			},
 			bdevScanRes: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
 					ctrlrPB,
@@ -1437,7 +1446,68 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
+		"scm module discovery failure; no pmem in cfg": {
+			bdevScanRes: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					ctrlrPB,
+				},
+				State: new(ctlpb.ResponseState),
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesErr: errors.New("scm discover failed"),
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{ctrlrPB},
+					State:  new(ctlpb.ResponseState),
+				},
+				// SCM discovery failure ignored as no PMem specified in config.
+				Scm: &ctlpb.ScanScmResp{
+					State: new(ctlpb.ResponseState),
+				},
+				SysMemInfo: control.MockPBSysMemInfo(),
+			},
+		},
+		"scm module discovery failure; ram class scm in cfg": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassRam.String()).
+					WithScmMountPoint("/mnt/daos0"),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr, test.MockPCIAddr(2)),
+			},
+			bdevScanRes: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					ctrlrPB,
+				},
+				State: new(ctlpb.ResponseState),
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesErr: errors.New("scm discover failed"),
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{ctrlrPB},
+					State:  new(ctlpb.ResponseState),
+				},
+				// SCM discovery failure ignored as no PMem specified in config.
+				Scm: &ctlpb.ScanScmResp{
+					State: new(ctlpb.ResponseState),
+				},
+				SysMemInfo: control.MockPBSysMemInfo(),
+			},
+		},
 		"all discover fail": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmDeviceList("/dev/pmem0"),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr, test.MockPCIAddr(2)),
+			},
 			bdevScanRes: &ctlpb.ScanNvmeResp{
 				State: &ctlpb.ResponseState{
 					Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
