@@ -81,17 +81,31 @@ fi
 rm -rf "$test_log_dir"
 
 # Use default python as that's where storage_estimator is installed.
-python3 -m venv venv
+python3.11 -m venv venv
+
+# Workaround until we have a setup.py script for the storage estimator and we're able to do this:
+# pip install /opt/daos/lib64/python3.6/site-packages/storage_estimator
+cp -r /opt/daos/lib64/python3.6/site-packages/storage_estimator venv/lib64/python3.11/site-packages/
+mkdir venv/lib64/daos_srv
+cp -r /opt/daos/lib64/daos_srv/libvos_size.so venv/lib64/daos_srv/
+cp /opt/daos/lib64/libdfs.so venv/lib64/
+
 # shellcheck disable=SC1091
 source venv/bin/activate
-# touch venv/pip.conf
-# pip config set global.progress_bar off
-# pip config set global.no_color true
-
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip config set global.no_color true
 pip install --upgrade pip
 pip install --requirement requirements-utest.txt
-
 pip install /opt/daos/lib/daos/python/
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
+
+# Generate code coverage report if at least one gcda file was generated
+if [[ -n $(find build -name "*.gcda") ]]; then
+    pip install --requirement requirements-code-coverage.txt
+
+    mkdir -p "${test_log_dir}/code_coverage"
+    gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors
+fi
