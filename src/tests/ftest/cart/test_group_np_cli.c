@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +17,7 @@
 #include <ctype.h>
 
 #include "crt_utils.h"
-#include "test_group_rpc.h"
+// #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 #include "test_group_np_common_cli.h"
 

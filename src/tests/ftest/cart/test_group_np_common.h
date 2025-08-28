@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +18,14 @@
 #define MAX_NUM_RANKS		1024
 #define MAX_SWIM_STATUSES	1024
 #define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
+
+/* Set array indices into my_proto_fmt_test_group arrays */
+#define TEST_OPC_CHECKIN                                 CRT_PROTO_OPC(0x010000000, 0, 0)
+#define TEST_OPC_PING_DELAY                              CRT_PROTO_OPC(0x010000000, 0, 3)
+#define TEST_OPC_SWIM_STATUS                             CRT_PROTO_OPC(0x010000000, 0, 2)
+#define TEST_OPC_SHUTDOWN                                CRT_PROTO_OPC(0x010000000, 0, 1)
+#define TEST_OPC_DISABLE_SWIM                            CRT_PROTO_OPC(0x010000000, 0, 4)
+#define TEST_OPC_FWD_BULK                                CRT_PROTO_OPC(0x010000000, 0, 5)
 
 #include <regex.h>
 #include <ctype.h>
@@ -126,6 +135,146 @@ CRT_RPC_DECLARE(test_shutdown,
 		CRT_ISEQ_TEST_SHUTDOWN, CRT_OSEQ_TEST_SHUTDOWN)
 CRT_RPC_DEFINE(test_shutdown,
 	       CRT_ISEQ_TEST_SHUTDOWN, CRT_OSEQ_TEST_SHUTDOWN)
+
+/* input fields */
+#define CRT_ISEQ_TEST_PING_DELAY                                                                   \
+	((int32_t)(age)CRT_VAR)((int32_t)(days)CRT_VAR)((d_string_t)(name)CRT_VAR)(                \
+	    (uint32_t)(delay)CRT_VAR)
+
+/* output fields */
+#define CRT_OSEQ_TEST_PING_DELAY ((int32_t)(ret)CRT_VAR)((uint32_t)(room_no)CRT_VAR)
+
+CRT_RPC_DECLARE(crt_test_ping_delay, CRT_ISEQ_TEST_PING_DELAY, CRT_OSEQ_TEST_PING_DELAY)
+CRT_RPC_DEFINE(crt_test_ping_delay, CRT_ISEQ_TEST_PING_DELAY, CRT_OSEQ_TEST_PING_DELAY)
+
+/* input fields */
+#define CRT_ISEQ_TEST_BULK_FWD                                                                     \
+	((d_rank_t)(fwd_rank)CRT_VAR)((uint32_t)(bulk_size)CRT_VAR)(                               \
+	    (crt_bulk_t)(bulk_hdl)CRT_VAR)((uint32_t)(do_put)CRT_VAR)
+
+/* output fields */
+#define CRT_OSEQ_TEST_BULK_FWD ((uint32_t)(rc)CRT_VAR)
+
+CRT_RPC_DECLARE(test_bulk_fwd, CRT_ISEQ_TEST_BULK_FWD, CRT_OSEQ_TEST_BULK_FWD)
+CRT_RPC_DEFINE(test_bulk_fwd, CRT_ISEQ_TEST_BULK_FWD, CRT_OSEQ_TEST_BULK_FWD)
+
+static int
+bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
+{
+	int                       rc;
+	void                     *buff;
+	struct test_bulk_fwd_out *output;
+
+	if (info->bci_rc != 0) {
+		D_ERROR("Bulk transfer failed with rc=%d\n", info->bci_rc);
+		D_ASSERT(0);
+	}
+
+	buff   = info->bci_arg;
+	output = crt_reply_get(info->bci_bulk_desc->bd_rpc);
+
+	/* TODO: Verify data on get */
+	output->rc = 0;
+
+	rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
+	D_ASSERT(rc == 0);
+
+	crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
+	D_FREE(buff); /* free data buffer */
+	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
+	return 0;
+}
+
+static void
+rpc_handle_fwd_bulk_reply(const struct crt_cb_info *info)
+{
+	crt_rpc_t                *orig_rpc;
+	struct test_bulk_fwd_out *output;
+	int                       rc;
+
+	orig_rpc = (crt_rpc_t *)info->cci_arg;
+
+	D_ASSERT(orig_rpc != NULL);
+
+	output     = crt_reply_get(orig_rpc);
+	output->rc = info->cci_rc;
+
+	rc = crt_reply_send(orig_rpc);
+	D_ASSERT(rc == 0);
+
+	RPC_PUB_DECREF(orig_rpc);
+}
+
+static void
+test_forward_bulk_handler(crt_rpc_t *rpc)
+{
+	struct test_bulk_fwd_in  *input;
+	struct test_bulk_fwd_out *output;
+	char                     *data;
+	int                       rc;
+	crt_bulk_t                local_bulk;
+	d_sg_list_t               sgl;
+	struct crt_bulk_desc      bulk_desc;
+	d_rank_t                  my_rank;
+
+	input  = crt_req_get(rpc);
+	output = crt_reply_get(rpc);
+
+	output->rc = 0;
+
+	crt_group_rank(NULL, &my_rank);
+
+	if (my_rank == input->fwd_rank) {
+		DBG_PRINT("Performing bulk transfer of size %d\n", input->bulk_size);
+
+		D_ALLOC_ARRAY(data, input->bulk_size);
+		D_ASSERT(data != NULL);
+
+		rc = d_sgl_init(&sgl, 1);
+		D_ASSERT(rc == 0);
+
+		sgl.sg_iovs[0].iov_buf     = data;
+		sgl.sg_iovs[0].iov_buf_len = input->bulk_size;
+		sgl.sg_iovs[0].iov_len     = input->bulk_size;
+
+		rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &local_bulk);
+		D_ASSERT(rc == 0);
+
+		RPC_PUB_ADDREF(rpc);
+		bulk_desc.bd_rpc        = rpc;
+		bulk_desc.bd_bulk_op    = input->do_put ? CRT_BULK_PUT : CRT_BULK_GET;
+		bulk_desc.bd_remote_hdl = input->bulk_hdl;
+		bulk_desc.bd_remote_off = 0;
+		bulk_desc.bd_local_hdl  = local_bulk;
+		bulk_desc.bd_local_off  = 0;
+		bulk_desc.bd_len        = input->bulk_size;
+
+		rc = crt_bulk_bind_transfer(&bulk_desc, bulk_transfer_done_cb, data, NULL);
+		D_ASSERT(rc == 0);
+
+	} else {
+		crt_rpc_t               *fwd_rpc;
+		crt_endpoint_t           fwd_ep;
+		struct test_bulk_fwd_in *fwd_input;
+
+		DBG_PRINT("Forwarding RPC to rank %d\n", input->fwd_rank);
+
+		fwd_ep.ep_rank = input->fwd_rank;
+		fwd_ep.ep_tag  = 0;
+		fwd_ep.ep_grp  = NULL;
+
+		rc = crt_req_create(rpc->cr_ctx, &fwd_ep, TEST_OPC_FWD_BULK, &fwd_rpc);
+		D_ASSERT(rc == 0);
+
+		fwd_input            = crt_req_get(fwd_rpc);
+		fwd_input->bulk_size = input->bulk_size;
+		fwd_input->bulk_hdl  = input->bulk_hdl;
+		fwd_input->fwd_rank  = input->fwd_rank;
+
+		RPC_PUB_ADDREF(rpc);
+		crt_req_send(fwd_rpc, rpc_handle_fwd_bulk_reply, rpc);
+	}
+}
 
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
@@ -259,8 +408,8 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 test_server recv'd ping delay, opc: %#x.\n",
 		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 delayed ping input - age: %d, name: %s, days: %d, "
-			"delay: %u.\n", p_req->age, p_req->name, p_req->days,
-			 p_req->delay);
+		  "delay: %u.\n",
+		  p_req->age, p_req->name, p_req->days, p_req->delay);
 
 	p_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
@@ -296,14 +445,30 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct crt_test_ping_delay_in	*ping_delay_rpc_req_input;
 	struct crt_test_ping_delay_out	*ping_delay_rpc_req_output;
 
+	struct test_bulk_fwd_in         *bulk_fwd_input;
+	struct test_bulk_fwd_out        *bulk_fwd_output;
+
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
 		/* avoid checkpatch warning */
-		*(int *) cb_info->cci_arg = 1;
+		*(int *)cb_info->cci_arg = 1; // TODO: Huh what is this for?
 	}
 
 	switch (cb_info->cci_rpc->cr_opc) {
+	case TEST_OPC_FWD_BULK:
+		bulk_fwd_input  = crt_req_get(rpc_req);
+		bulk_fwd_output = crt_reply_get(rpc_req);
+
+		DBG_PRINT("BULK fwd to %d , size: %d, result :%d\n", bulk_fwd_input->fwd_rank,
+			  bulk_fwd_input->bulk_size, bulk_fwd_output->rc);
+		sem_post(&test_g.t_token_to_proceed);
+
+		// TODO: Free bulk
+		crt_bulk_free(bulk_fwd_input->bulk_hdl);
+		// D_FREE(buff);
+		break;
+
 	case TEST_OPC_CHECKIN:
 
 		test_ping_rpc_req_input = crt_req_get(rpc_req);
@@ -485,32 +650,42 @@ test_disable_swim_handler(crt_rpc_t *rpc_req)
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
-	{
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_test_ping_check,
-		.prf_hdlr	= test_checkin_handler,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
-		.prf_req_fmt	= &CQF_test_shutdown,
-		.prf_hdlr	= test_shutdown_handler,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_test_swim_status,
-		.prf_hdlr	= test_swim_status_handler,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
-		.prf_req_fmt	= &CQF_crt_test_ping_delay,
-		.prf_hdlr	= test_ping_delay_handler,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
-		.prf_req_fmt	= &CQF_test_disable_swim,
-		.prf_hdlr	= test_disable_swim_handler,
-		.prf_co_ops	= NULL,
-	}
+    {
+	.prf_flags   = 0,
+	.prf_req_fmt = &CQF_test_ping_check,
+	.prf_hdlr    = test_checkin_handler,
+	.prf_co_ops  = NULL,
+    },
+    {
+	.prf_flags   = CRT_RPC_FEAT_NO_TIMEOUT,
+	.prf_req_fmt = &CQF_test_shutdown,
+	.prf_hdlr    = test_shutdown_handler,
+	.prf_co_ops  = NULL,
+    },
+    {
+	.prf_flags   = 0,
+	.prf_req_fmt = &CQF_test_swim_status,
+	.prf_hdlr    = test_swim_status_handler,
+	.prf_co_ops  = NULL,
+    },
+    {
+	.prf_flags   = CRT_RPC_FEAT_NO_TIMEOUT,
+	.prf_req_fmt = &CQF_crt_test_ping_delay,
+	.prf_hdlr    = test_ping_delay_handler,
+	.prf_co_ops  = NULL,
+    },
+    {
+	.prf_flags   = CRT_RPC_FEAT_NO_TIMEOUT,
+	.prf_req_fmt = &CQF_test_disable_swim,
+	.prf_hdlr    = test_disable_swim_handler,
+	.prf_co_ops  = NULL,
+    },
+    {
+	.prf_flags   = 0,
+	.prf_req_fmt = &CQF_test_bulk_fwd,
+	.prf_hdlr    = test_forward_bulk_handler,
+	.prf_co_ops  = NULL,
+    },
 };
 
 struct crt_proto_format my_proto_fmt_test_group1 = {
