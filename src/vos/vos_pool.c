@@ -574,6 +574,8 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 		 */
 		if (rc != -DER_NVME_IO) {
 			D_ERROR("WAL commit hit fatal error, kill engine...\n");
+			/* Dump stacktrace for debugging */
+			D_ASSERT(0);
 			rc = kill(getpid(), SIGKILL);
 			if (rc != 0)
 				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
