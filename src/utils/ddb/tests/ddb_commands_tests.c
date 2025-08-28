@@ -4,7 +4,15 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <uuid/uuid.h>
+
+#include "gurt/common.h"
 #include <gurt/debug.h>
+#include "daos/common.h"
 #include <daos/tests_lib.h>
 #include <ddb_common.h>
 #include <ddb.h>
@@ -397,6 +405,27 @@ feature_cmd_tests(void **state)
 	assert_success(ddb_run_feature(&g_ctx, &opt));
 }
 
+static void
+dtx_stat_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct ddb_ctx          ctx  = {0};
+	struct dtx_stat_options opt  = {0};
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+	opt.path                       = "[0]";
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt));
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
+}
+
 /*
  * --------------------------------------------------------------
  * End test functions
@@ -447,6 +476,7 @@ ddb_commands_tests_run()
 	    TEST(dump_ilog_cmd_tests),
 	    TEST(dump_superblock_cmd_tests),
 	    TEST(dump_dtx_cmd_tests),
+	    TEST(dtx_stat_tests),
 	    TEST(rm_cmd_tests),
 	    TEST(load_cmd_tests),
 	    TEST(rm_ilog_cmd_tests),
