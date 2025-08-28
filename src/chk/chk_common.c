@@ -416,9 +416,8 @@ chk_pool_restart_svc(struct chk_pool_rec *cpr)
 static void
 chk_pool_wait(struct chk_pool_rec *cpr)
 {
-	struct chk_instance	*ins = cpr->cpr_ins;
-	struct chk_pending_rec	*pending;
-	struct chk_pending_rec	*tmp;
+	struct chk_instance    *ins = cpr->cpr_ins;
+	struct chk_pending_rec *pending;
 
 	D_ASSERT(cpr->cpr_refs > 0);
 	/*
@@ -435,7 +434,8 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 
 		/* Cleanup all pending records belong to this pool. */
 		ABT_rwlock_wrlock(ins->ci_abt_lock);
-		d_list_for_each_entry_safe(pending, tmp, &cpr->cpr_pending_list, cpr_pool_link)
+		while ((pending = d_list_pop_entry(&cpr->cpr_pending_list, struct chk_pending_rec,
+						   cpr_pool_link)) != NULL)
 			chk_pending_wakeup(ins, pending);
 		ABT_rwlock_unlock(ins->ci_abt_lock);
 
@@ -500,7 +500,7 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, uint32
 		chk_pool_put(cpr);
 	}
 
-	if (ret != NULL)
+	if (ret != NULL && *ret == 0)
 		*ret = rc;
 }
 
@@ -518,8 +518,7 @@ chk_pool_stop_all(struct chk_instance *ins, uint32_t status, int *ret)
 		chk_pool_get(cpr);
 
 	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
-		if (ret == NULL || *ret == 0)
-			chk_pool_stop_one(ins, cpr->cpr_uuid, status, CHK_INVAL_PHASE, ret);
+		chk_pool_stop_one(ins, cpr->cpr_uuid, status, CHK_INVAL_PHASE, ret);
 		chk_pool_put(cpr);
 	}
 }
@@ -955,7 +954,7 @@ chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_he
 }
 
 int
-chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked, struct chk_pending_rec **cpr)
+chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr)
 {
 	d_iov_t		kiov;
 	d_iov_t		riov;
@@ -964,12 +963,9 @@ chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked, struct chk_
 	d_iov_set(&riov, NULL, 0);
 	d_iov_set(&kiov, &seq, sizeof(seq));
 
-	if (!locked)
-		ABT_rwlock_wrlock(ins->ci_abt_lock);
+	ABT_rwlock_wrlock(ins->ci_abt_lock);
 	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
-	if (!locked)
-		ABT_rwlock_unlock(ins->ci_abt_lock);
-
+	ABT_rwlock_unlock(ins->ci_abt_lock);
 	if (rc == 0)
 		*cpr = (struct chk_pending_rec *)riov.iov_buf;
 	else
