@@ -5,12 +5,13 @@
 """
 import time
 
+from apricot import TestWithServers
 from general_utils import check_file_exists
-from recovery_test_base import RecoveryTestBase
+from recovery_utils import query_detect
 from run_utils import command_as_user, run_remote
 
 
-class DMGCheckStartOptionsTest(RecoveryTestBase):
+class DMGCheckStartOptionsTest(TestWithServers):
     """Test dmg check start options.
 
     Options list. (Not all options are tested here.)
@@ -68,7 +69,7 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
 
         # 4. Verify that the orphan pool is detected.
         self.log_step("Verify that the orphan pool is detected.")
-        self.query_detect(fault="orphan pool")
+        query_detect(dmg_command, "orphan pool")
 
         # 5. Stop the checker.
         self.log_step("Stop the checker.")
@@ -76,8 +77,7 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
 
         # 6. Remove the pool directory from the mount point.
         self.log_step("Remove the pool directory from the mount point.")
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        pool_path = f"{scm_mount}/{pool.uuid.lower()}"
+        pool_path = self.server_managers[0].get_vos_path(pool)
         pool_out = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_path, sudo=True)
         if not pool_out[0]:
@@ -186,12 +186,11 @@ class DMGCheckStartOptionsTest(RecoveryTestBase):
 
         # 5. Query and check that it detected the orphan pool.
         self.log_step("Query and check that it detected the orphan pool.")
-        query_reports = self.query_detect(fault="orphan pool")
+        query_reports = query_detect(dmg_command, "orphan pool")
 
         # 6. Remove the pool directory from the mount point.
         self.log_step("Remove the pool directory from the mount point.")
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        pool_path = f"{scm_mount}/{pool.uuid.lower()}"
+        pool_path = self.server_managers[0].get_vos_path(pool)
         pool_out = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_path, sudo=True)
         if not pool_out[0]:

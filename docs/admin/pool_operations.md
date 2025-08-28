@@ -1478,9 +1478,10 @@ Administrator can set the default pool redundancy factor by environment variable
 "DAOS_POOL_RF" in the server yaml file. If SWIM detects and reports an engine is
 dead and the number of failed fault domain exceeds or is going to exceed the pool
 redundancy factor, it will not change pool map immediately. Instead, it will give
-critical log message:
+log messages:
 ```
-intolerable unavailability: engine rank x
+log_unavailable_targets() 76fc8a41: unavailable ranks/targets:
+log_unavailable_targets() 76fc8a41:  rank 1
 ```
 To recover, see [Servers or engines become unavailable](troubleshooting.md#engines-become-unavailable).
 

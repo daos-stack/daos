@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,8 +31,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos/rpc.h.
+ * Please increment DAOS_CHK_VERSION whenever the protocol is changed.
  */
-#define DAOS_CHK_VERSION	1
 
 #define CHK_PROTO_SRV_RPC_LIST									\
 	X(CHK_START,										\
@@ -1229,5 +1230,29 @@ chk_report_seq_gen(struct chk_instance *ins)
 
 	return ins->ci_seq;
 }
+
+static inline void
+chk_uuid_unparse(struct chk_instance *ins, const uuid_t uuid, char *uuid_str)
+{
+	if (ins->ci_is_leader == 1)
+		uuid_unparse_upper(uuid, uuid_str);
+	else
+		uuid_unparse_lower(uuid, uuid_str);
+}
+
+static inline bool
+chk_is_valid_uuid_string(struct chk_instance *ins, const char *uuid_str)
+{
+	if (ins->ci_is_leader == 1 && daos_is_valid_uuid_string(uuid_str, UUID_SST_UPPER))
+		return true;
+
+	if (ins->ci_is_leader == 0 && daos_is_valid_uuid_string(uuid_str, UUID_SST_LOWER))
+		return true;
+
+	return false;
+}
+
+int
+chk_rpc_protocol(uint8_t *obj_ver);
 
 #endif /* __CHK_INTERNAL_H__ */

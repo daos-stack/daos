@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -297,7 +298,7 @@ chk_leader_post_repair(struct chk_instance *ins, struct chk_pool_rec *cpr,
 			cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_IMPLICATED;
 		}
 		cbk->cb_time.ct_stop_time = time(NULL);
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0)
 			D_WARN("Failed to update pool (" DF_UUID ") bookmark after repair: %d\n",
@@ -356,9 +357,6 @@ chk_leader_cpr2ranklist(struct chk_pool_rec *cpr, bool svc)
 			ranks->rl_ranks[i++] = cps->cps_rank;
 		}
 
-		/* There is at least one valid rank. */
-		D_ASSERT(i > 0);
-
 		/* Reset the rl_nr according to the valid ranks. */
 		ranks->rl_nr = i;
 	}
@@ -388,9 +386,12 @@ chk_leader_destroy_pool(struct chk_pool_rec *cpr, uint64_t seq, bool dereg)
 	if (ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_tgt_pool_destroy_ranks(cpr->cpr_uuid, ranks);
-	if (rc == -DER_NONEXIST)
-		rc = 0;
+	if (likely(ranks->rl_nr > 0)) {
+		rc = ds_mgmt_tgt_pool_destroy_ranks(cpr->cpr_uuid, ranks);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+	}
+
 	if (rc == 0)
 		cpr->cpr_destroyed = 1;
 	d_rank_list_free(ranks);
@@ -1380,6 +1381,12 @@ chk_leader_start_pool_svc(struct chk_pool_rec *cpr)
 		ranks = chk_leader_cpr2ranklist(cpr, true);
 		if (ranks == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
+
+		/* Some engine(s) maybe dead during the checking, as to there is no valid engine for
+		 * the pool service.
+		 */
+		if (unlikely(ranks->rl_nr == 0))
+			D_GOTO(out, rc = -DER_EXCLUDED);
 	} else {
 		/*
 		 * We cannot start the pool service via regular quorum, but we can start it under
@@ -1904,6 +1911,14 @@ chk_leader_pool_mbs_one(struct chk_pool_rec *cpr)
 	if (ps_ranks == NULL)
 		D_GOTO(out_post, rc = -DER_NOMEM);
 
+	/* Some engine(s) maybe dead during the checking, as to there is no valid engine for the
+	 * pool service.
+	 */
+	if (unlikely(ps_ranks->rl_nr == 0)) {
+		d_rank_list_free(ps_ranks);
+		D_GOTO(out_post, rc = -DER_EXCLUDED);
+	}
+
 	/*
 	 * The PS leader election needs some time, we do not need to retry chk_pool_mbs_remote()
 	 * too frequently. Here, for each PS leader candidate, we will try once per second. Then
@@ -1968,7 +1983,7 @@ chk_leader_pool_ult(void *arg)
 
 	D_INFO(DF_LEADER" pool ult enter for "DF_UUIDF"\n", DP_LEADER(ins), DP_UUID(cpr->cpr_uuid));
 
-	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+	chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 	if (chk_leader_pool_need_stop(cpr, &rc))
 		goto out;
 
@@ -2026,6 +2041,15 @@ start:
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	/* Some engine(s) maybe dead during the checking, as to there is no valid engine for the
+	 * pool service.
+	 */
+	if (unlikely(ranks->rl_nr == 0)) {
+		cpr->cpr_skip = 1;
+		d_rank_list_free(ranks);
+		D_GOTO(out, rc = -DER_EXCLUDED);
+	}
+
 	if (cpr->cpr_for_orphan)
 		flags |= CPSF_FOR_ORPHAN;
 	if (cpr->cpr_not_export_ps)
@@ -2070,10 +2094,17 @@ start:
 out:
 	/* For stop case, the pool status will be updated via chk_pool_stop_one() by the sponsor. */
 	if ((rc < 0 || cpr->cpr_skip) && !cpr->cpr_notified_exit && !cpr->cpr_stop) {
+		if (rc < 0) {
+			cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
+			chk_bk_update_pool(cbk, uuid_str);
+			iv.ci_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
+		} else {
+			iv.ci_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
+		}
+
 		iv.ci_gen = cbk->cb_gen;
 		uuid_copy(iv.ci_uuid, cpr->cpr_uuid);
 		iv.ci_phase = cbk->cb_phase;
-		iv.ci_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
 
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
 				   CRT_IV_SYNC_EAGER, true);
@@ -2096,10 +2127,13 @@ exit:
 static void
 chk_leader_mark_rank_dead(struct chk_instance *ins, struct chk_dead_rank *cdr)
 {
-	struct chk_property	*prop = &ins->ci_prop;
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	uint32_t		 version = cbk->cb_gen - prop->cp_rank_nr - 1;
-	int			 rc = 0;
+	struct chk_pool_rec   *cpr;
+	struct chk_pool_shard *cps;
+	struct chk_pool_shard *tmp;
+	struct chk_property   *prop    = &ins->ci_prop;
+	struct chk_bookmark   *cbk     = &ins->ci_bk;
+	uint32_t               version = cbk->cb_gen - prop->cp_rank_nr - 1;
+	int                    rc      = 0;
 
 	if (!chk_remove_rank_from_list(ins->ci_ranks, cdr->cdr_rank))
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
@@ -2117,6 +2151,23 @@ chk_leader_mark_rank_dead(struct chk_instance *ins, struct chk_dead_rank *cdr)
 	rc = chk_rank_del(ins, cdr->cdr_rank);
 	if (rc != 0)
 		goto out;
+
+	/* Remove record for the dead rank from the check list. */
+	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+		d_list_for_each_entry_safe(cps, tmp, &cpr->cpr_shard_list, cps_link) {
+			if (cps->cps_rank == cdr->cdr_rank) {
+				d_list_del(&cps->cps_link);
+				if (cps->cps_data != NULL) {
+					if (cps->cps_free_cb != NULL)
+						cps->cps_free_cb(cps->cps_data);
+					else
+						D_FREE(cps->cps_data);
+				}
+				D_FREE(cps);
+				break;
+			}
+		}
+	}
 
 	/*
 	 * NOTE: Some thought about removing related shards from the ins->ci_pool_list,
@@ -2414,6 +2465,13 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 	uint32_t			 cbk_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	int				 rc = 0;
 	int				 i;
+	uint8_t                          chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc) {
+		D_ERROR("chk_leader_start_prep fail to get rpc protocol\n");
+		D_GOTO(out, rc);
+	}
 
 	if (rank_nr == 0) {
 		D_ERROR("Rank list cannot be NULL for check start\n");
@@ -2431,7 +2489,10 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 	}
 
 	/* New generation for each instance. */
-	gen = d_hlc_get();
+	gen             = d_hlc_get();
+	ctpa.ctpa_gen   = gen;
+	ctpa.ctpa_ins   = ins;
+	ctpa.ctpa_phase = cbk_phase;
 
 	rc = chk_leader_ranks_prepare(ins, rank_nr, ranks, &rank_list);
 	if (rc > 0)
@@ -2455,9 +2516,6 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 		if (flags & CHK__CHECK_FLAG__CF_RESET)
 			goto reset;
 
-		ctpa.ctpa_ins = ins;
-		ctpa.ctpa_gen = gen;
-		ctpa.ctpa_phase = cbk_phase;
 		rc = chk_traverse_pools(chk_pools_load_from_db, &ctpa);
 		if (rc != 0)
 			goto out;
@@ -2475,13 +2533,13 @@ reset:
 	if (pool_nr <= 0)
 		ins->ci_start_flags |= CSF_ORPHAN_POOL;
 
-	rc = chk_traverse_pools(chk_pools_cleanup_cb, NULL);
+	rc = chk_traverse_pools(chk_pools_cleanup_cb, &ctpa);
 	if (rc != 0)
 		goto out;
 
 	memset(cbk, 0, sizeof(*cbk));
 	cbk->cb_magic = CHK_BK_MAGIC_LEADER;
-	cbk->cb_version = DAOS_CHK_VERSION;
+	cbk->cb_version = chk_ver;
 
 init:
 	rc = chk_prop_prepare(leader, flags, phase, policy_nr, policies, rank_list, prop);
@@ -2552,6 +2610,11 @@ chk_leader_start_post(struct chk_instance *ins)
 	uint32_t		 ins_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	uint32_t		 pool_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	int			 rc = 0;
+	uint8_t                  chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
 		pool_cbk = &cpr->cpr_bk;
@@ -2560,7 +2623,7 @@ chk_leader_start_post(struct chk_instance *ins)
 			memset(pool_cbk, 0, sizeof(*pool_cbk));
 			pool_cbk->cb_magic = CHK_BK_MAGIC_POOL;
 			pool_cbk->cb_gen = ins_cbk->cb_gen;
-			pool_cbk->cb_version = DAOS_CHK_VERSION;
+			pool_cbk->cb_version = chk_ver;
 		}
 
 		/*
@@ -2604,7 +2667,7 @@ chk_leader_start_post(struct chk_instance *ins)
 			cpr->cpr_done = 1;
 		}
 
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(pool_cbk, uuid_str);
 		if (rc != 0)
 			break;
@@ -3238,22 +3301,23 @@ int
 chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		 chk_query_pool_cb_t pool_cb, void *buf)
 {
-	struct chk_instance		*ins = chk_leader;
-	struct chk_bookmark		*cbk = &ins->ci_bk;
-	struct chk_query_args		*cqa = NULL;
-	struct chk_pool_rec		*cpr;
-	struct chk_pool_rec		*tmp;
-	struct chk_pool_shard		*cps;
-	struct chk_query_pool_shard	*shard;
-	d_iov_t				 kiov;
-	d_iov_t				 riov;
-	uint64_t			 gen = cbk->cb_gen;
-	uint32_t			 status;
-	uint32_t			 phase;
-	uint32_t			 idx = 0;
-	int				 rc;
-	int				 i;
-	bool				 skip;
+	struct chk_instance         *ins = chk_leader;
+	struct chk_bookmark         *cbk = &ins->ci_bk;
+	struct chk_query_args       *cqa = NULL;
+	struct chk_pool_rec         *cpr;
+	struct chk_pool_shard       *cps;
+	struct chk_query_pool_shard *shard;
+	struct chk_bookmark          tmp;
+	d_iov_t                      kiov;
+	d_iov_t                      riov;
+	char                         uuid_str[DAOS_UUID_STR_SIZE];
+	uint64_t                     gen = cbk->cb_gen;
+	uint32_t                     idx = 0;
+	uint32_t                     status;
+	uint32_t                     phase;
+	int                          rc;
+	int                          i;
+	bool                         skip;
 
 	/*
 	 * NOTE: Similar as stop case, we need the ability to query check information from
@@ -3346,10 +3410,20 @@ again:
 		d_iov_set(&riov, NULL, 0);
 		d_iov_set(&kiov, cpr->cpr_uuid, sizeof(uuid_t));
 		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
-		if (likely(rc == 0))
-			tmp = (struct chk_pool_rec *)riov.iov_buf;
-		else
-			tmp = NULL;
+		if (likely(rc == 0)) {
+			status = ((struct chk_pool_rec *)riov.iov_buf)->cpr_bk.cb_pool_status;
+			phase  = ((struct chk_pool_rec *)riov.iov_buf)->cpr_bk.cb_phase;
+		} else {
+			chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
+			rc = chk_bk_fetch_pool(&tmp, uuid_str);
+			if (rc == 0) {
+				status = tmp.cb_pool_status;
+				phase  = tmp.cb_phase;
+			} else {
+				status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
+				phase  = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
+			}
+		}
 
 		d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
 			shard = cps->cps_data;
@@ -3361,11 +3435,11 @@ again:
 			 *	 result to avoid confusing. It is just temporary solution, and will
 			 *	 be moved to control plane in the future - DAOS-13989.
 			 */
-			if (cps->cps_rank != CHK_LEADER_RANK && tmp != NULL) {
-				shard->cqps_status = chk_pool_merge_status(shard->cqps_status,
-									tmp->cpr_bk.cb_pool_status);
-				if (shard->cqps_phase < tmp->cpr_bk.cb_phase)
-					shard->cqps_phase = tmp->cpr_bk.cb_phase;
+			if (cps->cps_rank != CHK_LEADER_RANK) {
+				shard->cqps_status =
+				    chk_pool_merge_status(shard->cqps_status, status);
+				if (shard->cqps_phase < phase)
+					shard->cqps_phase = phase;
 			}
 
 			rc = pool_cb(shard, idx++, buf);
@@ -3889,7 +3963,8 @@ chk_leader_init(void)
 		}
 
 		ctpa.ctpa_gen = cbk->cb_gen;
-		rc = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
+		ctpa.ctpa_ins = chk_leader;
+		rc            = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
 		/*
 		 * Failed to reset pool status will not affect next check start, so it is not fatal,
 		 * but related check query result may be confused for user.

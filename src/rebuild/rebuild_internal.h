@@ -406,4 +406,7 @@ rebuild_leader_abort(const uuid_t pool_uuid, unsigned int version, uint32_t rebu
 		     uint64_t term);
 int
 rebuild_obj_tree_destroy(daos_handle_t btr_hdl);
+
+int
+rebuild_rpc_protocol(uint8_t *protocol);
 #endif /* __REBUILD_INTERNAL_H_ */

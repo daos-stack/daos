@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +13,6 @@ import re
 import sys
 from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from collections import OrderedDict
-from tempfile import TemporaryDirectory
 
 from ClusterShell.NodeSet import NodeSet
 from process_core_files import get_core_file_pattern
@@ -289,21 +289,19 @@ class Launch():
 
         # Define the directory in which to create modified test yaml files
         if args.yaml_directory is None:
-            # Create a temporary directory that will exist only during the execution launch.
-            # pylint: disable=consider-using-with
-            temp_dir = TemporaryDirectory()
-            yaml_dir = temp_dir.name
+            # By default place generated yaml files in a launch job results subdirectory.
+            _yaml_dir = os.path.join(self.logdir, "test_yaml_files")
         else:
             # Use the user-specified directory, which will exist after launch completes.
-            yaml_dir = args.yaml_directory
-            if not os.path.exists(yaml_dir):
-                os.mkdir(yaml_dir)
-        logger.info("Modified test yaml files being created in: %s", yaml_dir)
+            _yaml_dir = args.yaml_directory
+        if not os.path.exists(_yaml_dir):
+            os.makedirs(_yaml_dir)
+        logger.info("Modified test yaml files being created in: %s", _yaml_dir)
 
         # Define the test configs specified by the arguments
         group = TestGroup(
             self.avocado, test_env, args.test_servers, args.test_clients, args.slurm_control_node,
-            args.tags, args.nvme, yaml_dir, args.yaml_extension)
+            args.tags, args.nvme, _yaml_dir, args.yaml_extension)
         try:
             group.list_tests(logger, args.verbose)
         except RunException:
@@ -359,7 +357,7 @@ class Launch():
                 logger, args.scm_size, args.scm_mount, args.extra_yaml,
                 args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
         except (RunException, YamlException) as e:
-            message = "Error modifying the test yaml files: {}".format(e)
+            message = f"Error modifying the test yaml files: {e}"
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
         except StorageException:
             message = "Error detecting storage information for test yaml files"

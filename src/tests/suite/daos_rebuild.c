@@ -38,10 +38,14 @@ rebuild_pool_destroy(test_arg_t *arg)
 static void
 rebuild_drop_scan(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	int		tgt = DEFAULT_FAIL_TGT;
-	int		i;
+	test_arg_t      *arg = *state;
+	daos_obj_id_t    oids[OBJ_NR];
+	int              tgt = DEFAULT_FAIL_TGT;
+	d_rank_t         leader_rank;
+	d_rank_t         drop_scan_rank;
+	daos_pool_info_t pinfo;
+	int              rc;
+	int              i;
 
 	if (!test_runable(arg, 6))
 		return;
@@ -55,9 +59,16 @@ rebuild_drop_scan(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
-	/* Set drop scan fail_loc on server 0 */
+	/* Set drop scan fail_loc on non-leader engine (leader initiates scan bcast and won't get
+	 * rc=-DER_TIMEODUT if it is the engine configured by test to not reply to that bcast).
+	 */
+	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	leader_rank    = pinfo.pi_leader;
+	drop_scan_rank = (leader_rank + 1) % pinfo.pi_nnodes;
 	if (arg->myrank == 0)
-		test_set_engine_fail_loc(arg, 0, DAOS_REBUILD_DROP_SCAN | DAOS_FAIL_ONCE);
+		test_set_engine_fail_loc(arg, drop_scan_rank,
+					 DAOS_REBUILD_DROP_SCAN | DAOS_FAIL_ONCE);
 
 	par_barrier(PAR_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
