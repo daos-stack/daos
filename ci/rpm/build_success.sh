@@ -19,7 +19,10 @@ rm -rf "$artdir"
 mkdir -p "$artdir"
 mkdir -p "$artdir/daos"
 
+<<<<<<< HEAD
 # ubuntu isn't complete since we don't have ubuntu stages
+=======
+>>>>>>> jvolivie/reintroduce_rpms
 if [ -d /home/daos/pkgs/ ]; then
     cp /home/daos/pkgs/*.deb "${artdir}"
     pushd "$artdir"
@@ -43,11 +46,15 @@ elif [ -d /var/cache/pbuilder/ ]; then
 fi
 
 if [ -d /home/daos/rpms/ ]; then
+<<<<<<< HEAD
   if [ -d /home/daos/rpms/deps ]; then
     mkdir -p "$artdir/deps"
     cp /home/daos/rpms/deps/*.rpm "${artdir}/deps"
   fi
   cp /home/daos/rpms/daos/*.rpm "${artdir}/daos"
+=======
+  cp /home/daos/rpms/*.rpm "${artdir}"
+>>>>>>> jvolivie/reintroduce_rpms
 else
   mockroot="/var/lib/mock/${CHROOT_NAME}"
   cat "$mockroot"/result/{root,build}.log 2>/dev/null || true

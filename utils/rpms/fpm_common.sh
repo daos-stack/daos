@@ -24,8 +24,37 @@ export sysconfdir="${SYSCONFDIR:-/etc}"
 export sysctldir="${SYSCTLDIR:-/etc/sysctl.d}"
 export unitdir="${UNITDIR:-/usr/lib/systemd/system}"
 export mandir="${MANDIR:-/usr/share/man}"
+<<<<<<< HEAD
 
 source utils/rpms/package_info.sh
+=======
+daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
+export daos_version
+daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
+  sed 's/^Release: *//' | sed 's/%.*//')${DAOS_RELVAL:-}"
+export daos_release
+
+export libfabric_version="1.22.0"
+export libfabric_release="3${DAOS_DEPS_RELVAL:-}"
+export libfabric_full="${libfabric_version}-${libfabric_release}"
+export mercury_version="2.4.0"
+export mercury_release="2${DAOS_DEPS_RELVAL:-}"
+export mercury_full="${mercury_version}-${mercury_release}"
+export argobots_version="1.2"
+export argobots_release="2${DAOS_DEPS_RELVAL:-}"
+export argobots_full="${argobots_version}-${argobots_release}"
+export pmdk_version="2.1.0"
+export pmdk_release="4${DAOS_DEPS_RELVAL:-}"
+export pmdk_full="${pmdk_version}-${pmdk_release}"
+export isal_version="2.31.1"
+export isal_release="1${DAOS_DEPS_RELVAL:-}"
+export isal_full="${isal_version}-${isal_release}"
+export isal_crypto_version="2.24.0"
+export isal_crypto_release="2${DAOS_DEPS_RELVAL:-}"
+export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
+
+source utils/rpms/package_names.sh
+>>>>>>> jvolivie/reintroduce_rpms
 
 filter_file() {
   for filter in "${FILTER_LIST[@]}"; do

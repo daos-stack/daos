@@ -21,6 +21,7 @@ env
 pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
+<<<<<<< HEAD
 rm -f ./*.rpm
 rm -rf /home/daos/rpms/*
 utils/rpms/build_packages.sh deps
@@ -31,4 +32,12 @@ fi
 utils/rpms/build_packages.sh daos
 mkdir -p /home/daos/rpms/daos
 cp ./*.rpm /home/daos/rpms/daos
+=======
+export DAOS_DEPS_RELVAL="${3}"
+rm -f ./*.rpm
+utils/rpms/build_packages.sh
+mkdir -p /home/daos/rpms
+rm -rf /home/daos/rpms/*
+cp ./*.rpm /home/daos/rpms
+>>>>>>> jvolivie/reintroduce_rpms
 popd || exit 1
