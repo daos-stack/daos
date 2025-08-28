@@ -2762,7 +2762,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 out:
 	if (dth != NULL)
 		rc = dtx_end(dth, ioc.ioc_coc, rc);
-	obj_rw_reply(rpc, rc, 0, true, &ioc);
+	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
