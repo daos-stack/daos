@@ -16,8 +16,9 @@ if [ "$FVERSION" != "latest" ]; then
 fi
 
 set +e
-nslookup "$(echo "$REPO_FILE_URL" | awk -F[/:] '{print $4}')"
+ping -c 3 "$(echo "$REPO_FILE_URL" | awk -F[/:] '{print $4}')"
 set -e
+date
 cat /etc/hosts
 
 # shellcheck disable=SC2120
