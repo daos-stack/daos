@@ -535,20 +535,20 @@ pipeline {
                                                                 deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
-						' --build-arg DAOS_PACKAGES_BUILD=no ' +
-						' --build-arg DAOS_KEEP_SRC=yes ' +
-						' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh el8 "' +
-				        env.DAOS_RELVAL + '"'
+                                        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
+                                job_step_update(
+                                        sconsBuild(parallel_build: true,
                                         stash_files: 'ci/test_files_to_stash.txt',
                                         build_deps: 'no',
                                         stash_opt: true,
@@ -557,7 +557,7 @@ pipeline {
                                         code_coverage: is_code_coverage()))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el8 "' +
-				        env.DAOS_RELVAL + '"'
+                                        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -590,16 +590,16 @@ pipeline {
                                                                 deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-						' --build-arg DAOS_PACKAGES_BUILD=no ' +
-						' --build-arg DAOS_KEEP_SRC=yes ' +
-						' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh el9 "' +
-				        env.DAOS_RELVAL + '"'
+                                        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -612,7 +612,7 @@ pipeline {
                                             code_coverage: is_code_coverage()))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' +
-				        env.DAOS_RELVAL + '"'
+                                        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -644,8 +644,8 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: false) +
-						' --build-arg DAOS_PACKAGES_BUILD=no ' +
-						' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc"
                         }
                     }
@@ -653,18 +653,18 @@ pipeline {
                         script {
                             sh label: 'Install RPMs',
                                 script: './ci/rpm/install_deps.sh suse.lp155 "' +
-				        env.DAOS_RELVAL + '"'
+                                        env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                 scons_args: sconsFaultsArgs() +
-                                ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                            ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes',
                                 code_coverage: is_code_coverage()))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh suse.lp155 "' +
-				        env.DAOS_RELVAL + '"'
+                                        env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -697,7 +697,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-						' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg COMPILER=icc'
                         }
                     }
@@ -706,7 +706,8 @@ pipeline {
                             sconsBuild(parallel_build: true,
                                        scons_args: sconsFaultsArgs() +
                                                    ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
+                                       build_deps: 'no',
+                                       code_coverage: is_code_coverage()))
                     }
                     post {
                         unsuccessful {
@@ -739,7 +740,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 120,
+                            unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
@@ -761,7 +762,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
@@ -831,8 +832,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/**/*.log'],
+                            unitTestPost artifacts: ['unit_test_memcheck_logs/'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
@@ -1136,7 +1136,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() && !is_code_coverage() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false) && !skipStage() && !is_code_coverage() }
             }
             steps {
                 script {
