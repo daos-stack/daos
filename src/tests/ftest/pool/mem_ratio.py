@@ -7,6 +7,7 @@ import json
 
 from apricot import TestWithServers
 from general_utils import report_errors
+from test_utils_pool import add_pools
 
 
 class MemRatioTest(TestWithServers):
@@ -34,20 +35,22 @@ class MemRatioTest(TestWithServers):
         :avocado: tags=MemRatioTest,test_mem_ratio
         """
         dmg = self.get_dmg_command()
-        kwargs_list = [{}]
+        kwargs_list = [{"test": self, "dmg": dmg.copy()}]
         if self.server_managers[0].manager.job.using_control_metadata:
             # Additional pools for MD on SSD
-            kwargs_list = [{"mem_ratio": 100}]
-            kwargs_list.append({"mem_ratio": self.random.randint(76, 99)})
-            kwargs_list.append({"mem_ratio": self.random.randint(51, 75)})
-            kwargs_list.append({"mem_ratio": self.random.randint(26, 50)})
-            kwargs_list.append({"mem_ratio": self.random.randint(1, 25)})
+            kwargs_list[0]["mem_ratio"] = 100
+            kwargs_list.append(
+                {"test": self, "dmg": dmg.copy(), "mem_ratio": self.random.randint(76, 99)})
+            kwargs_list.append(
+                {"test": self, "dmg": dmg.copy(), "mem_ratio": self.random.randint(51, 75)})
+            kwargs_list.append(
+                {"test": self, "dmg": dmg.copy(), "mem_ratio": self.random.randint(26, 50)})
+            kwargs_list.append(
+                {"test": self, "dmg": dmg.copy(), "mem_ratio": self.random.randint(1, 25)})
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
-        pools = []
-        for kwargs in kwargs_list:
-            pools.append(self.get_pool(dmg=dmg.copy(), **kwargs))
+        pools = add_pools(kwargs_list)
 
         # Verify pool create output
         self.log_step(f"Verifying {len(pools)} pool create responses")
@@ -64,7 +67,7 @@ class MemRatioTest(TestWithServers):
                 _memfile = result["response"]["mem_file_bytes"]
             except (KeyError, IndexError) as error:
                 self.log.debug(_format, str(pool), mem_ratio, _metadata, _memfile, error)
-                errors.append(f"{str(pool)} - Invalid dmg pool create response")
+                errors.append(f"{str(pool)} - Invalid dmg pool create response: {result}")
                 continue
             actual = round(int(_memfile) / int(_metadata) * 100)
             self.log.debug(_format, str(pool), mem_ratio, _metadata, _memfile, actual)
@@ -90,8 +93,9 @@ class MemRatioTest(TestWithServers):
                 _memfile = pool_query["response"]["mem_file_bytes"]
                 _metadata = pool_query["response"]["tier_stats"][0]["total"]
             except (KeyError, IndexError) as error:
-                self.log.debug(_format, str(pool), _engines, _memfile, _metadata, error)
-                errors.append(f"{str(pools[index])} - Invalid dmg pool query response")
+                self.log.debug(_format, str(pools[index]), _engines, _memfile, _metadata, error)
+                errors.append(
+                    f"{str(pools[index])} - Invalid dmg pool query response: {pool_query}")
                 continue
             actual = round(int(_memfile) / int(_metadata) * 100)
             self.log.debug(_format, str(pools[index]), _engines, _memfile, _metadata, actual)
