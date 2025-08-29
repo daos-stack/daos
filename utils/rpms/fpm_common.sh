@@ -24,20 +24,8 @@ export sysconfdir="${SYSCONFDIR:-/etc}"
 export sysctldir="${SYSCTLDIR:-/etc/sysctl.d}"
 export unitdir="${UNITDIR:-/usr/lib/systemd/system}"
 export mandir="${MANDIR:-/usr/share/man}"
-daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
-export daos_version
-daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
-  sed 's/^Release: *//' | sed 's/%.*//')"
-export daos_release
 
-export libfabric_version="1.22.0"
-export mercury_version="2.4.0"
-export argobots_version="1.2"
-export pmdk_version="2.1.0"
-export isal_version="2.30.0"
-export isal_crypto_version="2.24.0"
-
-source utils/rpms/package_names.sh
+source utils/rpms/package_info.sh
 
 filter_file() {
   for filter in "${FILTER_LIST[@]}"; do
@@ -162,10 +150,12 @@ create_depends() {
 
 build_package() {
   name="$1"; shift
+  if [ "${1-}" != "noautoreq" ]; then
+    EXTRA_OPTS+=("--rpm-autoreq")
+  fi
 
   output_type="${OUTPUT_TYPE:-rpm}"
   EXTRA_OPTS+=("--rpm-autoprov")
-  EXTRA_OPTS+=("--rpm-autoreq")
 
   depends=()
   create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
@@ -188,11 +178,11 @@ build_package() {
   export EXTRA_OPTS=()
   install_list=()
 
+  DEPENDS=()
+  EXTERNAL_DEPENDS=()
   if [[ ! "${name}" =~ debuginfo ]]; then
     build_debug_package "${name}"
   fi
-  DEPENDS=()
-  EXTERNAL_DEPENDS=()
 }
 
 build_debug_package() {
