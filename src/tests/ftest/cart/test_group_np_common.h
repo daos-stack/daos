@@ -72,6 +72,10 @@ struct test_t {
 	crt_group_t		*t_remote_group;
 	uint32_t		t_remote_group_size;
 	d_rank_t		t_my_rank;
+	int                                    t_do_bulk_fwd;
+	d_rank_t                               t_fwd_rank;
+	int                                    t_repetitions;
+	uint32_t                               t_bulk_size;
 };
 
 struct test_t test_g = { .t_hold_time = 0,
@@ -226,7 +230,14 @@ test_forward_bulk_handler(crt_rpc_t *rpc)
 	crt_group_rank(NULL, &my_rank);
 
 	if (my_rank == input->fwd_rank) {
-		DBG_PRINT("Performing bulk transfer of size %d\n", input->bulk_size);
+		if (input->bulk_size == 0) {
+			DBG_PRINT("My rank: %d Skipping bulk transfer\n", my_rank);
+			crt_reply_send(rpc);
+			return;
+		}
+
+		DBG_PRINT("My rank: %d Performing bulk transfer of size %d\n", my_rank,
+			  input->bulk_size);
 
 		D_ALLOC_ARRAY(data, input->bulk_size);
 		D_ASSERT(data != NULL);
@@ -258,7 +269,7 @@ test_forward_bulk_handler(crt_rpc_t *rpc)
 		crt_endpoint_t           fwd_ep;
 		struct test_bulk_fwd_in *fwd_input;
 
-		DBG_PRINT("Forwarding RPC to rank %d\n", input->fwd_rank);
+		DBG_PRINT("My rank: %d Forwarding RPC to rank %d\n", my_rank, input->fwd_rank);
 
 		fwd_ep.ep_rank = input->fwd_rank;
 		fwd_ep.ep_tag  = 0;
@@ -400,7 +411,6 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
 
 	DBG_PRINT("test_server recv'd ping delay, opc: %#x.\n", rpc_req->cr_opc);
-	DBG_PRINT("delayed ping input - age: %d, name: %s, days: %d, "
 
 	p_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed\n");
@@ -454,9 +464,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			  bulk_fwd_input->bulk_size, bulk_fwd_output->rc);
 		sem_post(&test_g.t_token_to_proceed);
 
-		// TODO: Free bulk
-		crt_bulk_free(bulk_fwd_input->bulk_hdl);
-		// D_FREE(buff);
+		/* Note -- bulk and buffer freed by the client after wait */
 		break;
 
 	case TEST_OPC_CHECKIN:
@@ -904,34 +912,52 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 	*num_ranks = num_ranks_l;
 }
 
+static struct option long_options[] = {
+    {"name", required_argument, 0, 'n'},
+    {"attach_to", required_argument, 0, 'a'},
+    {"holdtime", required_argument, 0, 'h'},
+    {"hold", no_argument, &test_g.t_hold, 1},
+    {"srv_ctx_num", required_argument, 0, 'c'},
+    {"shut_only", no_argument, &test_g.t_shut_only, 1},
+    {"init_only", no_argument, &test_g.t_init_only, 1},
+    {"skip_init", no_argument, &test_g.t_skip_init, 1},
+    {"skip_wait", no_argument, &test_g.t_skip_wait, 1},
+    {"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
+    {"skip_check_in", no_argument, &test_g.t_skip_check_in, 1},
+    {"bulk_forward", required_argument, 0, 'b'},
+    {"bulk_size", required_argument, 0, 'x'},
+    {"repetitions", required_argument, 0, 'y'},
+    {"rank", required_argument, 0, 'r'},
+    {"cfg_path", required_argument, 0, 's'},
+    {"use_cfg", required_argument, 0, 'u'},
+    {"register_swim_callback", required_argument, 0, 'w'},
+    {"verify_swim_status", required_argument, 0, 'v'},
+    {"disable_swim", no_argument, &test_g.t_disable_swim, 1},
+    {"get_swim_status", no_argument, 0, 'g'},
+    {"shutdown_delay", required_argument, 0, 'd'},
+    {"write_completion_file", no_argument, &test_g.t_write_completion_file, 1},
+    {0, 0, 0, 0}};
+
+static void
+dump_options(void)
+{
+	struct option *tmp;
+
+	DBG_PRINT("Available options\n");
+	tmp = long_options;
+	while (tmp->name) {
+		DBG_PRINT("--%s\n", tmp->name);
+		tmp++;
+	}
+}
+
 int
 test_parse_args(int argc, char **argv)
 {
+	struct t_swim_status            vss;
 	int				option_index = 0;
 	int				rc = 0;
-	int				ss;
-	struct option                   long_options[] = {
-            {"name", required_argument, 0, 'n'},
-            {"attach_to", required_argument, 0, 'a'},
-            {"holdtime", required_argument, 0, 'h'},
-            {"hold", no_argument, &test_g.t_hold, 1},
-            {"srv_ctx_num", required_argument, 0, 'c'},
-            {"shut_only", no_argument, &test_g.t_shut_only, 1},
-            {"init_only", no_argument, &test_g.t_init_only, 1},
-            {"skip_init", no_argument, &test_g.t_skip_init, 1},
-            {"skip_wait", no_argument, &test_g.t_skip_wait, 1},
-            {"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
-            {"skip_check_in", no_argument, &test_g.t_skip_check_in, 1},
-            {"rank", required_argument, 0, 'r'},
-            {"cfg_path", required_argument, 0, 's'},
-            {"use_cfg", required_argument, 0, 'u'},
-            {"register_swim_callback", required_argument, 0, 'w'},
-            {"verify_swim_status", required_argument, 0, 'v'},
-            {"disable_swim", no_argument, &test_g.t_disable_swim, 1},
-            {"get_swim_status", no_argument, 0, 'g'},
-            {"shutdown_delay", required_argument, 0, 'd'},
-            {"write_completion_file", no_argument, &test_g.t_write_completion_file, 1},
-            {0, 0, 0, 0}};
+	int                             ss;
 
 	test_g.cg_num_ranks = 0;
 	test_g.t_use_cfg = true;
@@ -945,11 +971,11 @@ test_parse_args(int argc, char **argv)
 	/* Default value: non-existent rank with status "alive" */
 	test_g.t_verify_swim_status = (struct t_swim_status){ -1, 0 };
 
-	struct t_swim_status vss;
+	test_g.t_repetitions = 1;
+	test_g.t_bulk_size   = 1024;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:u:r:ml", long_options,
-				 &option_index);
+		rc = getopt_long(argc, argv, "n:a:b:c:h:u:r:x:y:ml", long_options, &option_index);
 
 		if (rc == -1)
 			break;
@@ -962,6 +988,10 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'a':
 			test_g.t_remote_group_name = optarg;
+			break;
+		case 'b':
+			test_g.t_fwd_rank    = atoi(optarg);
+			test_g.t_do_bulk_fwd = true;
 			break;
 		case 'c': {
 			unsigned int	nr;
@@ -1011,16 +1041,27 @@ test_parse_args(int argc, char **argv)
 			parse_rank_string(optarg, test_g.cg_ranks,
 					  &test_g.cg_num_ranks);
 			break;
+
+		case 'x':
+			test_g.t_bulk_size = atoi(optarg);
+			break;
+
+		case 'y':
+			test_g.t_repetitions = atoi(optarg);
+			break;
 		case '?':
+			dump_options();
 			return 1;
 
 		default:
+			dump_options();
 			return 1;
 		}
 	}
 
 	if (optind < argc) {
 		fprintf(stderr, "non-option argv elements encountered");
+		dump_options();
 		return 1;
 	}
 
