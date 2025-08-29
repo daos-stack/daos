@@ -7,8 +7,14 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <sys/syscall.h>
+#include <linux/futex.h>
 
+#include <gurt/shm_utils.h>
 #include "shm_internal.h"
+
+/* thread id of current thread */
+__thread pid_t             d_tid;
 
 /* the attribute set for mutex located inside shared memory */
 extern pthread_mutexattr_t d_shm_mutex_attr;
@@ -17,19 +23,16 @@ int
 shm_mutex_init(d_shm_mutex_t *mutex)
 {
 	if ((uint64_t)mutex & (SHM_MEM_ALIGN - 1)) {
-		DS_ERROR(EINVAL, "address of mutex is not %d bytes aligned", SHM_MEM_ALIGN);
+		DS_ERROR(EINVAL, "address of mutex is not %ld bytes aligned", SHM_MEM_ALIGN);
 		return EINVAL;
 	}
 	return pthread_mutex_init((pthread_mutex_t *)mutex, &d_shm_mutex_attr);
 }
 
 int
-shm_mutex_lock(d_shm_mutex_t *mutex, bool *pre_owner_dead)
+shm_mutex_lock(d_shm_mutex_t *mutex)
 {
 	int rc;
-
-	if (pre_owner_dead)
-		*pre_owner_dead = false;
 
 	rc = pthread_mutex_lock((pthread_mutex_t *)mutex);
 
@@ -39,11 +42,11 @@ shm_mutex_lock(d_shm_mutex_t *mutex, bool *pre_owner_dead)
 	if (rc != EOWNERDEAD)
 		return rc;
 
-	/* error EOWNERDEAD. */
-	if (pre_owner_dead)
-		*pre_owner_dead = true;
-	/* update lock owner with tid of current thread */
-	return pthread_mutex_consistent((pthread_mutex_t *)mutex);
+	/* error EOWNERDEAD, update lock owner with tid of current thread */
+	rc = pthread_mutex_consistent((pthread_mutex_t *)mutex);
+	D_ASSERT(rc == 0);
+
+	return rc;
 }
 
 int

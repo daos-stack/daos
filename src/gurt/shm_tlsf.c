@@ -831,7 +831,7 @@ tlsf_malloc(tlsf_t tlsf, size_t size)
 	block_header_t *block;
 	const size_t    adjust = adjust_request_size(size, ALIGN_SIZE);
 
-	shm_mutex_lock(&control->lock, NULL);
+	shm_mutex_lock(&control->lock);
 	block = block_locate_free(control, adjust);
 	buf   = block_prepare_used(control, block, adjust);
 	shm_mutex_unlock(&control->lock);
@@ -875,7 +875,7 @@ tlsf_memalign(tlsf_t tlsf, size_t align, size_t size)
 	void           *ptr, *aligned;
 	size_t          gap;
 
-	shm_mutex_lock(&control->lock, NULL);
+	shm_mutex_lock(&control->lock);
 	block = block_locate_free(control, aligned_size);
 	if (block == NULL) {
 		shm_mutex_unlock(&control->lock);
@@ -930,7 +930,7 @@ tlsf_free(tlsf_t tlsf, void *ptr)
 	if (ptr) {
 		control_t *control = tlsf_cast(control_t *, tlsf);
 
-		shm_mutex_lock(&control->lock, NULL);
+		shm_mutex_lock(&control->lock);
 		tlsf_free_nolock(tlsf, ptr);
 		shm_mutex_unlock(&control->lock);
 	}
@@ -968,7 +968,7 @@ tlsf_realloc(tlsf_t tlsf, void *ptr, size_t size)
 		return p;
 	}
 
-	shm_mutex_lock(&control->lock, NULL);
+	shm_mutex_lock(&control->lock);
 
 	next     = block_next(block);
 	cursize  = block_size(block);
