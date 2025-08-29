@@ -41,5 +41,16 @@ pip install /opt/daos/lib/daos/python/
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
+cwd="$(pwd)"
+export GCOV_PREFIX="${cwd}"
+export GCOV_PREFIX_STRIP="7"
+
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py --max-log-size 1950MiB \
     --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
+
+# Generate code coverage report if at least one gcda file was generated
+if [[ -n $(find build -name "*.gcda") ]]; then
+    pip install --requirement requirements-code-coverage.txt
+    mkdir -p /tmp/code_coverage
+    gcovr --json /tmp/code_coverage/code_coverage.json --gcov-ignore-parse-errors
+fi
