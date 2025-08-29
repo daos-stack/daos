@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,7 +60,8 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * access protection.
 	 */
 	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* data_sz */, 0 /* meta_sz */,
-			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, vos_df_version, &pool);
+			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
+			     vos_df_version, &pool);
 	if (rc != 0)
 		goto out;
 	ABT_thread_yield();
@@ -386,7 +388,8 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 	 * and VOS_POF_EXCL for concurrent access protection.
 	 */
 	rc = vos_pool_open(path, (unsigned char *)uuid,
-			   VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, &pool);
+			   VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
+			   &pool);
 	if (rc == -DER_ID_MISMATCH) {
 		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
 				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,

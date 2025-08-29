@@ -1,10 +1,12 @@
 hosts:
-  test_servers: 2
+  test_servers: 4
   test_clients: 1
+
 timeout: 80
+
 server_config:
   name: other_dserver  # Use a non-default name
-  engines_per_host: 1
+  engines_per_host: 2
   engines:
     0:
       targets: 4
@@ -18,4 +20,17 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos0
+    1:
+      targets: 4
+      nr_xs_helpers: 0
+      fabric_iface_port: 31516
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos1
+
   system_ram_reserved: 1
