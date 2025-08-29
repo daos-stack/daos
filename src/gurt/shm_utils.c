@@ -43,10 +43,7 @@ shm_mutex_lock(d_shm_mutex_t *mutex)
 		return rc;
 
 	/* error EOWNERDEAD, update lock owner with tid of current thread */
-	rc = pthread_mutex_consistent((pthread_mutex_t *)mutex);
-	D_ASSERT(rc == 0);
-
-	return rc;
+	return pthread_mutex_consistent((pthread_mutex_t *)mutex);
 }
 
 int
