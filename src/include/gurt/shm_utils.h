@@ -26,7 +26,7 @@
 #define INIT_KEY_VALUE_MUTEX "INIT_MUTEX"
 
 /* the struct of robust mutex based on shared memory */
-typedef pthread_mutex_t  d_shm_mutex_t;
+typedef pthread_mutex_t d_shm_mutex_t;
 
 /* error code for hash table related functions */
 enum SHM_HT_ERROR {
