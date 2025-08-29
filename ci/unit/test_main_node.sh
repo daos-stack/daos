@@ -103,6 +103,8 @@ utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$te
                    $SUDO_ARG
 
 # Generate code coverage report if at least one gcda file was generated
+find build -name '*.gcno' | sort -n
+find build -name '*.gcda' | sort -n
 if [[ -n $(find build -name "*.gcda") ]]; then
     pip install --requirement requirements-code-coverage.txt
     
