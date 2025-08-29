@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,15 +59,16 @@ func EngineStateInfoToProto(rsi *EngineStateInfo) (*sharedpb.RASEvent_EngineStat
 }
 
 // NewEngineDiedEvent creates a specific EngineDied event from given inputs.
-func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus, exPid int) *RASEvent {
+func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, incarnation uint64, exitErr common.ExitStatus, exPid int) *RASEvent {
 	return fill(&RASEvent{
-		Msg:      fmt.Sprintf("DAOS engine %d exited unexpectedly: %s", instanceIdx, exitErr),
-		ID:       RASEngineDied,
-		Hostname: hostname,
-		Rank:     rank,
-		Type:     RASTypeStateChange,
-		Severity: RASSeverityError,
-		ProcID:   exPid, // pid of exited engine
+		Msg:         fmt.Sprintf("DAOS engine %d exited unexpectedly: %s", instanceIdx, exitErr),
+		ID:          RASEngineDied,
+		Hostname:    hostname,
+		Rank:        rank,
+		Incarnation: incarnation,
+		Type:        RASTypeStateChange,
+		Severity:    RASSeverityError,
+		ProcID:      exPid, // pid of exited engine
 		ExtendedInfo: &EngineStateInfo{
 			InstanceIdx: instanceIdx,
 			ExitErr:     exitErr,
@@ -89,12 +91,13 @@ func NewEngineFormatRequiredEvent(hostname string, instanceIdx uint32, formatTyp
 }
 
 // NewEngineJoinFailedEvent creates an EngineJoinFailed event from the given inputs.
-func NewEngineJoinFailedEvent(hostname string, instanceIdx uint32, rank uint32, reason string) *RASEvent {
+func NewEngineJoinFailedEvent(hostname string, instanceIdx uint32, rank uint32, incarnation uint64, reason string) *RASEvent {
 	return fill(&RASEvent{
 		Msg:          fmt.Sprintf("DAOS engine %d (rank %d) was not allowed to join the system", instanceIdx, rank),
 		ID:           RASEngineJoinFailed,
 		Hostname:     hostname,
 		Rank:         rank,
+		Incarnation:  incarnation,
 		Type:         RASTypeInfoOnly,
 		Severity:     RASSeverityError,
 		ExtendedInfo: NewStrInfo(reason),

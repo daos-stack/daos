@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +34,7 @@ struct test_t {
 	int			 t_shut_only;
 	int			 t_init_only;
 	int			 t_skip_init;
+	int                                    t_skip_wait;
 	int			 t_skip_shutdown;
 	int			 t_skip_check_in;
 	bool			 t_save_cfg;
@@ -189,6 +191,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	int				rank;
 	int				rc_dead;
 	int				rc_alive;
+	bool                             result_ok = false;
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
@@ -198,51 +201,43 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 
 	/* compile and run regex's */
 	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
-	rc_dead = regexec(&regex_dead,
-			      swim_seq_by_rank[rank],
-			      0, NULL, 0);
+	rc_dead = regexec(&regex_dead, swim_seq_by_rank[rank], 0, NULL, 0);
+
 	regcomp(&regex_alive, alive_regex, REG_EXTENDED);
-	rc_alive = regexec(&regex_alive,
-			       swim_seq_by_rank[rank],
-			       0, NULL, 0);
+	rc_alive = regexec(&regex_alive, swim_seq_by_rank[rank], 0, NULL, 0);
 
 	regfree(&regex_alive);
 	regfree(&regex_dead);
 
-	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
-		  rpc_req->cr_opc);
-	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
-		  rank, e_req->exp_status);
-
-	if (e_req->exp_status == CRT_EVT_ALIVE)
-		D_ASSERTF(rc_alive == 0,
-			  "Swim status alive sequence (%s) "
-			  "does not match '%s' for rank %d.\n",
-			  swim_seq_by_rank[rank], alive_regex, rank);
-	else if (e_req->exp_status == CRT_EVT_DEAD)
-		D_ASSERTF(rc_dead == 0,
-			  "Swim status dead sequence (%s) "
-			  "does not match '%s' for rank %d..\n",
-			  swim_seq_by_rank[rank], dead_regex, rank);
-
-	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
-		  "status [%d] is as expected.\n",
-		  rank, swim_seq_by_rank[rank],
-		  e_req->exp_status);
+	if (e_req->exp_status == CRT_EVT_ALIVE) {
+		if (rc_alive != 0) {
+			D_ERROR("Swim status alive sequence (%s) "
+				"does not match '%s' for rank %d.\n",
+				swim_seq_by_rank[rank], alive_regex, rank);
+			result_ok = false;
+		} else {
+			result_ok = true;
+		}
+	} else if (e_req->exp_status == CRT_EVT_DEAD) {
+		if (rc_dead != 0) {
+			D_ERROR("Swim status dead sequence (%s) "
+				"does not match '%s' for rank %d..\n",
+				swim_seq_by_rank[rank], dead_regex, rank);
+			result_ok = false;
+		} else {
+			result_ok = true;
+		}
+	}
 
 	e_reply = crt_reply_get(rpc_req);
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed");
+	e_reply->bool_val = result_ok;
 
-	/* If we got past the previous assert, then we've succeeded */
-	e_reply->bool_val = true;
-	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
-		  e_reply);
+	DBG_PRINT("rank:%d exp_status: %d matches_expected: %d\n", rank, e_req->exp_status,
+		  result_ok);
 
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
-
-	DBG_PRINT("tier1 test_srver sent swim_status reply,"
-		  "e_reply->bool_val: %d.\n",
-		  e_reply->bool_val);
 }
 
 static void
@@ -256,15 +251,13 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	p_req = crt_req_get(rpc_req);
 	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
 
-	DBG_PRINT("tier1 test_server recv'd ping delay, opc: %#x.\n",
-		  rpc_req->cr_opc);
-	DBG_PRINT("tier1 delayed ping input - age: %d, name: %s, days: %d, "
-			"delay: %u.\n", p_req->age, p_req->name, p_req->days,
-			 p_req->delay);
+	DBG_PRINT("test_server recv'd ping delay, opc: %#x.\n", rpc_req->cr_opc);
+	DBG_PRINT("delayed ping input - age: %d, name: %s, days: %d, "
+		  "delay: %u.\n",
+		  p_req->age, p_req->name, p_req->days, p_req->delay);
 
 	p_reply = crt_reply_get(rpc_req);
-	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
-		  p_reply);
+	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed\n");
 	p_reply->ret = 0;
 	p_reply->room_no = test_g.t_roomno++;
 
@@ -745,29 +738,28 @@ test_parse_args(int argc, char **argv)
 	int				option_index = 0;
 	int				rc = 0;
 	int				ss;
-	struct option			long_options[] = {
-		{"name", required_argument, 0, 'n'},
-		{"attach_to", required_argument, 0, 'a'},
-		{"holdtime", required_argument, 0, 'h'},
-		{"hold", no_argument, &test_g.t_hold, 1},
-		{"srv_ctx_num", required_argument, 0, 'c'},
-		{"shut_only", no_argument, &test_g.t_shut_only, 1},
-		{"init_only", no_argument, &test_g.t_init_only, 1},
-		{"skip_init", no_argument, &test_g.t_skip_init, 1},
-		{"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
-		{"skip_check_in", no_argument, &test_g.t_skip_check_in, 1},
-		{"rank", required_argument, 0, 'r'},
-		{"cfg_path", required_argument, 0, 's'},
-		{"use_cfg", required_argument, 0, 'u'},
-		{"register_swim_callback", required_argument, 0, 'w'},
-		{"verify_swim_status", required_argument, 0, 'v'},
-		{"disable_swim", no_argument, &test_g.t_disable_swim, 1},
-		{"get_swim_status", no_argument, 0, 'g'},
-		{"shutdown_delay", required_argument, 0, 'd'},
-		{"write_completion_file", no_argument,
-		 &test_g.t_write_completion_file, 1},
-		{0, 0, 0, 0}
-	};
+	struct option                   long_options[] = {
+            {"name", required_argument, 0, 'n'},
+            {"attach_to", required_argument, 0, 'a'},
+            {"holdtime", required_argument, 0, 'h'},
+            {"hold", no_argument, &test_g.t_hold, 1},
+            {"srv_ctx_num", required_argument, 0, 'c'},
+            {"shut_only", no_argument, &test_g.t_shut_only, 1},
+            {"init_only", no_argument, &test_g.t_init_only, 1},
+            {"skip_init", no_argument, &test_g.t_skip_init, 1},
+            {"skip_wait", no_argument, &test_g.t_skip_wait, 1},
+            {"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
+            {"skip_check_in", no_argument, &test_g.t_skip_check_in, 1},
+            {"rank", required_argument, 0, 'r'},
+            {"cfg_path", required_argument, 0, 's'},
+            {"use_cfg", required_argument, 0, 'u'},
+            {"register_swim_callback", required_argument, 0, 'w'},
+            {"verify_swim_status", required_argument, 0, 'v'},
+            {"disable_swim", no_argument, &test_g.t_disable_swim, 1},
+            {"get_swim_status", no_argument, 0, 'g'},
+            {"shutdown_delay", required_argument, 0, 'd'},
+            {"write_completion_file", no_argument, &test_g.t_write_completion_file, 1},
+            {0, 0, 0, 0}};
 
 	test_g.cg_num_ranks = 0;
 	test_g.t_use_cfg = true;

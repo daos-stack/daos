@@ -259,6 +259,7 @@ extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
 
+/* clang-format off */
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
@@ -267,6 +268,8 @@ int start_dtx_reindex_ult(struct ds_cont_child *cont);
 void dtx_merge_check_result(int *tgt, int src);
 int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
 		   daos_unit_oid_t *oid, uint32_t version, struct pool_target **p_tgt);
+int dtx_cleanup_internal(struct ds_cont_child *cont, struct sched_request *sr, uint32_t thd,
+			 bool for_orphan);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
@@ -289,7 +292,8 @@ int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 int dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch);
 int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
-			 d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, bool for_io);
+			 d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list,
+			 uint32_t intent);
 int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_unit_oid_t oid,
 			  uint64_t dkey_hash, daos_epoch_t epoch, int *tgt_array, int *err);
 
@@ -300,6 +304,7 @@ int dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid,
 		  uint32_t pm_ver, bool for_check, bool need_hint, struct dtx_coll_entry **p_dce);
 int dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
 			uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap, int **p_results);
+/* clang-format on */
 
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,
@@ -310,8 +315,15 @@ enum dtx_status_handle_result {
 };
 
 enum dtx_rpc_flags {
-	DRF_INITIAL_LEADER	= (1 << 0),
-	DRF_SYNC_COMMIT		= (1 << 1),
+	DRF_INITIAL_LEADER = (1 << 0),
+	DRF_SYNC_COMMIT    = (1 << 1),
+	DRF_FOR_ORPHAN     = (1 << 2),
+};
+
+enum dtx_refresh_intent {
+	DRI_IO     = 1,
+	DRI_STALE  = 2,
+	DRI_ORPHAN = 3,
 };
 
 enum dtx_cos_flags {
