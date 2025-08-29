@@ -14,7 +14,7 @@ package spdk
 
 /*
 #cgo CFLAGS: -I .
-#cgo LDFLAGS: -L . -lnvme_control
+#cgo LDFLAGS: -L . -lnvme_control -lssl
 #cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lspdk_util
 #cgo LDFLAGS: -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
 
