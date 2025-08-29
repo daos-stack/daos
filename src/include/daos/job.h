@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,6 +38,12 @@ extern char *dc_jobid;
  */
 #define DEFAULT_JOBID_ENV "DAOS_JOBID"
 
+/**
+ * Set a custom default jobid. Will not override a jobid set in the environment.
+ * NB: Should be called before dc_job_init()
+ */
+int
+dc_set_default_jobid(const char *default_jobid);
 
 /*
  * The answer of what the max length of envvar name is very tricky. Arguments
