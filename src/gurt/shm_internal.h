@@ -61,6 +61,12 @@ struct d_shm_hdr {
 	uint64_t         size;
 	/* size of each shared memory allocator's pool */
 	uint64_t         shm_pool_size;
+	/* fault injection counter for testing */
+	_Atomic uint64_t fi_counter;
+	/* index of the first fi point */
+	_Atomic int      fi_point1;
+	/* index of the second fi point */
+	_Atomic int      fi_point2;
 	/* reserved for future usage */
 	char             reserved[256];
 };
