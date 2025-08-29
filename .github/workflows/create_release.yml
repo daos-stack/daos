@@ -15,6 +15,8 @@ jobs:
     name: Create Release
     if: github.repository == 'daos-stack/daos'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:

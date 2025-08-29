@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2979,7 +2980,7 @@ static int
 agg_tst_teardown(void **state)
 {
 	daos_fail_loc_set(0);
-	test_args_reset((struct io_test_args *) *state, VPOOL_SIZE);
+	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	return 0;
 }
 
