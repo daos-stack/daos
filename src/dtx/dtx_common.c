@@ -38,7 +38,7 @@ struct dtx_batched_pool_args {
 };
 
 struct dtx_batched_cont_args {
-	/* Link to dss_module_info::dmi_dtx_batched_cont_{open,close}_list. */
+	/* Link to dss_module_info::dmi_dtx_batched_cont_open_list when opened. */
 	d_list_t			 dbca_sys_link;
 	/* Link to dtx_batched_pool_args::dbpa_cont_list. */
 	d_list_t			 dbca_pool_link;
@@ -67,7 +67,11 @@ struct dtx_cleanup_cb_args {
 	d_list_t		dcca_pc_list;
 	int			dcca_st_count;
 	int			dcca_pc_count;
-	uint32_t		dcca_cleanup_thd;
+	union {
+		uint32_t dcca_cleanup_thd;
+		uint32_t dcca_version;
+	};
+	bool dcca_for_orphan;
 };
 
 static inline void
@@ -147,6 +151,9 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	if (dbca->dbca_agg_req != NULL)
 		sched_req_put(dbca->dbca_agg_req);
 
+	D_ASSERTF(d_list_empty(&dbca->dbca_sys_link), "dbca (%p) for " DF_UUID " is still linked\n",
+		  dbca, DP_UUID(dbca->dbca_cont->sc_uuid));
+
 	D_FREE(dbca);
 	cont->sc_dtx_registered = 0;
 	ds_cont_child_put(cont);
@@ -203,9 +210,13 @@ dtx_cleanup_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_tgt_cnt == 0)
 		return 0;
 
-	/* Stop the iteration if current DTX is not too old. */
-	if (dtx_sec2age(ent->ie_dtx_start_time) <= dcca->dcca_cleanup_thd)
+	if (dcca->dcca_for_orphan) {
+		if (ent->ie_dtx_ver >= dcca->dcca_version)
+			return 0;
+	} else if (dtx_sec2age(ent->ie_dtx_start_time) <= dcca->dcca_cleanup_thd) {
+		/* Stop the iteration if current DTX is not too old. */
 		return 1;
+	}
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 
@@ -287,12 +298,11 @@ dtx_dpci_free(struct dtx_partial_cmt_item *dpci)
 	D_FREE(dpci);
 }
 
-static void
-dtx_cleanup(void *arg)
+int
+dtx_cleanup_internal(struct ds_cont_child *cont, struct sched_request *sr, uint32_t thd,
+		     bool for_orphan)
 {
-	struct dss_module_info		*dmi = dss_get_module_info();
-	struct dtx_batched_cont_args	*dbca = arg;
-	struct ds_cont_child		*cont = dbca->dbca_cont;
+	struct dss_module_info          *dmi = dss_get_module_info();
 	struct dtx_share_peer		*dsp;
 	struct dtx_partial_cmt_item	*dpci;
 	struct dtx_entry		*dte;
@@ -303,26 +313,26 @@ dtx_cleanup(void *arg)
 	d_list_t			 act_list;
 	int				 count;
 	int				 rc;
-
-	if (dbca->dbca_cleanup_req == NULL)
-		goto out;
+	int                              rc1 = 0;
 
 	D_INIT_LIST_HEAD(&cmt_list);
 	D_INIT_LIST_HEAD(&abt_list);
 	D_INIT_LIST_HEAD(&act_list);
 	D_INIT_LIST_HEAD(&dcca.dcca_st_list);
 	D_INIT_LIST_HEAD(&dcca.dcca_pc_list);
-	dcca.dcca_st_count = 0;
-	dcca.dcca_pc_count = 0;
-	/* Cleanup stale DTX entries within about 10 seconds windows each time. */
-	dcca.dcca_cleanup_thd = dbca->dbca_cleanup_thd - 10;
+	dcca.dcca_st_count    = 0;
+	dcca.dcca_pc_count    = 0;
+	dcca.dcca_cleanup_thd = thd;
+	dcca.dcca_for_orphan  = for_orphan;
 	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
 			  dtx_cleanup_iter_cb, &dcca, VOS_ITER_DTX, 0);
-	if (rc < 0)
-		D_WARN("Failed to scan DTX entry for cleanup "
-		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
+	if (rc < 0) {
+		D_ERROR("Failed to iter DTX for cleanup %s on " DF_UUID ", ver %u: " DF_RC "\n",
+			for_orphan ? "orphan" : "stale", DP_UUID(cont->sc_uuid), thd, DP_RC(rc));
+		goto out;
+	}
 
-	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_st_list)) {
+	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_st_list)) {
 		if (dcca.dcca_st_count > DTX_REFRESH_MAX) {
 			count = DTX_REFRESH_MAX;
 			dcca.dcca_st_count -= DTX_REFRESH_MAX;
@@ -337,8 +347,11 @@ dtx_cleanup(void *arg)
 		 * that all the DTX entries in the check list will be handled
 		 * even if some former ones hit failure.
 		 */
-		rc = dtx_refresh_internal(cont, &count, &dcca.dcca_st_list,
-					  &cmt_list, &abt_list, &act_list, false);
+		rc = dtx_refresh_internal(cont, &count, &dcca.dcca_st_list, &cmt_list, &abt_list,
+					  &act_list, for_orphan ? DRI_ORPHAN : DRI_STALE);
+		if (rc != 0 && rc1 == 0)
+			rc1 = rc;
+
 		D_ASSERTF(count == 0, "%d entries are not handled: "DF_RC"\n",
 			  count, DP_RC(rc));
 	}
@@ -347,7 +360,7 @@ dtx_cleanup(void *arg)
 	D_ASSERT(d_list_empty(&abt_list));
 	D_ASSERT(d_list_empty(&act_list));
 
-	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_pc_list)) {
+	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_st_list)) {
 		dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item, dpci_link);
 		dcca.dcca_pc_count--;
 
@@ -377,6 +390,7 @@ dtx_cleanup(void *arg)
 		dtx_dpci_free(dpci);
 	}
 
+out:
 	while ((dsp = d_list_pop_entry(&dcca.dcca_st_list, struct dtx_share_peer,
 				       dsp_link)) != NULL)
 		dtx_dsp_free(dsp);
@@ -385,9 +399,21 @@ dtx_cleanup(void *arg)
 					dpci_link)) != NULL)
 		dtx_dpci_free(dpci);
 
-	dbca->dbca_cleanup_done = 1;
+	return rc != 0 ? rc : rc1;
+}
 
-out:
+static void
+dtx_cleanup(void *arg)
+{
+	struct dtx_batched_cont_args *dbca = arg;
+
+	if (dbca->dbca_cleanup_req != NULL) {
+		/* Cleanup stale DTX entries within about 10 seconds windows each time. */
+		dtx_cleanup_internal(dbca->dbca_cont, dbca->dbca_cleanup_req,
+				     dbca->dbca_cleanup_thd - 10, false);
+		dbca->dbca_cleanup_done = 1;
+	}
+
 	dtx_put_dbca(dbca);
 }
 
@@ -620,12 +646,9 @@ dtx_batched_commit_one(void *arg)
 					    DAOS_EPOCH_MAX, false, &dtes, NULL, &dce);
 		if (cnt == 0) {
 			if (dbca->dbca_flush_pending) {
-				D_ASSERT(!dtx_cont_opened(cont));
-
 				dbca->dbca_flush_pending = 0;
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_close_list);
+				if (likely(dbca->dbca_deregister == 0))
+					d_list_del_init(&dbca->dbca_sys_link);
 			}
 			break;
 		}
@@ -713,8 +736,7 @@ dtx_batched_commit(void *arg)
 
 		dtx_get_dbca(dbca);
 		cont = dbca->dbca_cont;
-		d_list_move_tail(&dbca->dbca_sys_link,
-				 &dmi->dmi_dtx_batched_cont_open_list);
+		d_list_move_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
 		dtx_stat(cont, &stat);
 
 		if (dbca->dbca_commit_req != NULL && dbca->dbca_commit_done) {
@@ -1653,13 +1675,10 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 
 out:
 	if (rc < 0) {
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
-		if (likely(!dtx_cont_opened(cont))) {
-			d_list_del(&dbca->dbca_sys_link);
-			/* Give it to the batched commit for further handling asynchronously. */
+		D_ERROR(DF_UUID ": Fail to flush CoS cache: rc = %d\n", DP_UUID(cont->sc_uuid), rc);
+		if (likely(d_list_empty(&dbca->dbca_sys_link) && dbca->dbca_deregister == 0))
+			/* Add it to the batched commit for further handling asynchronously. */
 			d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
-		}
 	} else {
 		dbca->dbca_flush_pending = 0;
 	}
@@ -1831,7 +1850,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 	dbca->dbca_cont = cont;
 	dbca->dbca_pool = dbpa;
 	dbca->dbca_agg_gen = tls->dt_agg_gen;
-	d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_close_list);
+	D_INIT_LIST_HEAD(&dbca->dbca_sys_link);
 	d_list_add_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 	if (new_pool)
 		d_list_add_tail(&dbpa->dbpa_sys_link, &dmi->dmi_dtx_batched_pool_list);
@@ -1895,10 +1914,14 @@ dtx_cont_open(struct ds_cont_child *cont)
 				if (rc != 0)
 					return rc;
 
-				dbca->dbca_flush_pending = 0;
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_open_list);
+				if (unlikely(dbca->dbca_deregister == 1))
+					return -DER_SHUTDOWN;
+
+				if (dbca->dbca_flush_pending)
+					dbca->dbca_flush_pending = 0;
+				else
+					d_list_add_tail(&dbca->dbca_sys_link,
+							&dmi->dmi_dtx_batched_cont_open_list);
 				return 0;
 			}
 		}
@@ -1930,14 +1953,13 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 				stop_dtx_reindex_ult(cont, force);
 
 				/* To handle potentially re-open by race. */
-				if (unlikely(dtx_cont_opened(cont))) {
-					dtx_put_dbca(dbca);
-					return;
-				}
+				if (unlikely(dtx_cont_opened(cont)))
+					goto put;
 
-				d_list_del(&dbca->dbca_sys_link);
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_close_list);
+				if (unlikely(dbca->dbca_deregister == 1))
+					goto put;
+
+				d_list_del_init(&dbca->dbca_sys_link);
 
 				dtx_flush_on_close(dmi, dbca);
 
@@ -1951,6 +1973,7 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 				if (likely(!dtx_cont_opened(cont) && cont->sc_dtx_delay_reset == 0))
 					vos_dtx_cache_reset(cont->sc_hdl, false);
 
+put:
 				dtx_put_dbca(dbca);
 				return;
 			}

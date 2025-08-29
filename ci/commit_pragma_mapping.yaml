@@ -1,4 +1,5 @@
 #  (C) Copyright 2024 Intel Corporation.
+#  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -12,25 +13,32 @@
 
 # Special handling for ftest, defaulting to pr
 src/tests/ftest*:
-  handler: FtestTagMap
-  stop_on_match: True
-  tags: pr
+  test-tag:
+    handler: FtestTagMap
+    stop_on_match: True
+    tags: pr
 
 # Individual code areas
-src/client/dfs/: dfs
+src/client/dfs/:
+  test-tag: dfs
 
 # Everything runs pr unless a previous entry was matched with stop_on_match
-.*: pr
+.*:
+  test-tag: pr
 
 
 # Examples for reference only. Each code area needs to be carefully evaluated.
 # Any files touch under "src/cart/" should run "cart" tests
-# src/cart/: cart
+# src/cart/:
+#  test-tag: cart
 
 # Run "control" for files under "src/control/"
 # Run "control" and "security" for files under "src/control/security"
-# src/control/: control
-# src/control/security/: security
+# src/control/:
+#  test-tag: control
+# src/control/security/:
+#  test-tag: security
 
 # Use ".*" for wildcard match
-# src/tests/suite/daos.*: daos_test
+# src/tests/suite/daos.*:
+#  test-tag: daos_test

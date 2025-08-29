@@ -1000,6 +1000,11 @@ rebuild_scanner(void *data)
 	if (tls == NULL)
 		return 0;
 
+	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
+	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_RB " skip scan\n", DP_RB_RPT(rpt));
 		D_GOTO(out, rc = 0);
@@ -1108,7 +1113,7 @@ rebuild_scan_leader(void *data)
 		D_GOTO(out, rc);
 
 	if (wait)
-		D_INFO(DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+		D_INFO(DF_RB " rebuild scan collective done\n", DP_RB_RPT(rpt));
 	else
 		D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
 
@@ -1166,14 +1171,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 				/* If this is the old leader, then also stop the rebuild
 				 * tracking ULT.
 				 */
-				rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-						    -1, rpt->rt_leader_term);
+				rebuild_leader_abort(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, -1,
+						     rpt->rt_leader_term);
 			}
 		}
 	}
 
 	/* check if the rebuild with different leader is already started */
-	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1);
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1 /* gen */);
 	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
 		if (rpt->rt_global_done) {
 			D_WARN("previous not cleaned up yet " DF_RBF "\n", DP_RBF_RPT(rpt));
@@ -1221,8 +1226,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			rpt->rt_leader_rank = rsi->rsi_master_rank;
 
 			/* If this is the old leader, then also stop the rebuild tracking ULT. */
-			rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-					    -1, rpt->rt_leader_term);
+			rebuild_leader_abort(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, -1,
+					     rpt->rt_leader_term);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;
