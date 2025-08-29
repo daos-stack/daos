@@ -4,7 +4,15 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <uuid/uuid.h>
+
+#include "gurt/common.h"
 #include <gurt/debug.h>
+#include "daos/common.h"
 #include <daos/tests_lib.h>
 #include <ddb_common.h>
 #include <ddb.h>
@@ -397,6 +405,221 @@ feature_cmd_tests(void **state)
 	assert_success(ddb_run_feature(&g_ctx, &opt));
 }
 
+static void
+dtx_stat_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct ddb_ctx          ctx  = {0};
+	struct dtx_stat_options opt  = {0};
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+	opt.path                       = "[0]";
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt));
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
+}
+
+static uint64_t
+get_epoch(const char *buf)
+{
+	size_t   buf_len;
+	int      idx;
+	uint64_t exp;
+	uint64_t epoch;
+
+	buf_len = strlen(buf);
+	idx     = buf_len - 1;
+	while (idx > 0 && (buf[idx] < '0' || buf[idx] > '9'))
+		--idx;
+	assert_true(idx > 0);
+
+	exp   = 1;
+	epoch = 0;
+	while (idx > 0 && buf[idx] >= '0' && buf[idx] <= '9') {
+		epoch += (buf[idx] - '0') * exp;
+		exp *= 10;
+		--idx;
+	}
+	assert_true(idx > 0);
+	assert_true(buf[idx] == ' ');
+
+	return epoch;
+}
+
+static void
+print_regerror(int rc, regex_t *preg, const char *regex_str)
+{
+	char  *buf;
+	size_t buf_size;
+
+	buf_size = regerror(rc, preg, NULL, 0);
+	D_ALLOC_ARRAY(buf, buf_size);
+	assert_non_null(buf);
+	regerror(rc, preg, buf, buf_size);
+	/* XXX Needs of testing buf to avoid false positive error from gcc : '%s' directive argument
+	 * is null [-Werror=format-overflow=] */
+	if (buf)
+		print_error("ERROR: invalid regex '%s': %s\n", regex_str, buf);
+	D_FREE(buf);
+	regfree(preg);
+}
+
+struct ddb_epochs {
+	size_t   de_size;
+	uint64_t de_epochs[0];
+};
+
+static int
+cmp_epoch(const void *ep1, const void *ep2)
+{
+	return *(uint64_t *)ep1 - *(uint64_t *)ep2;
+}
+
+static struct ddb_epochs *
+get_committed_epochs(char *buf)
+{
+	const char        *regex_str = "^[[:blank:]]+Epoch: [[:digit:]]+$";
+	char              *token;
+	regex_t            preg;
+	struct ddb_epochs *epochs;
+	int                rc;
+
+	D_ALLOC_PTR(epochs);
+	assert_non_null(epochs);
+	memset(epochs, 0, sizeof(*epochs));
+
+	rc = regcomp(&preg, regex_str, REG_NOSUB | REG_EXTENDED);
+	if (rc != 0) {
+		print_regerror(rc, &preg, regex_str);
+		fail();
+	}
+	token = strtok(buf, "\n");
+	while (token != NULL) {
+		struct ddb_epochs *epochs_prev;
+		size_t             epochs_size;
+
+		rc = regexec(&preg, token, 0, NULL, 0);
+		if (rc == REG_NOMATCH) {
+			token = strtok(NULL, "\n");
+			continue;
+		}
+		if (rc != 0) {
+			print_regerror(rc, &preg, regex_str);
+			fail();
+		}
+
+		++epochs->de_size;
+		epochs_prev = epochs;
+		epochs_size = sizeof(*epochs) + sizeof(epochs->de_epochs[0]) * epochs->de_size;
+		D_REALLOC_NZ(epochs, epochs_prev, epochs_size);
+		epochs->de_epochs[epochs->de_size - 1] = get_epoch(token);
+
+		token = strtok(NULL, "\n");
+	}
+	regfree(&preg);
+
+	qsort(&epochs->de_epochs[0], epochs->de_size, sizeof(epochs->de_epochs[0]), cmp_epoch);
+
+	return epochs;
+}
+
+static void
+dtx_aggr_tests(void **state)
+{
+	uuid_t                 *p_uuid   = &g_uuids[3];
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct ddb_ctx          ctx      = {0};
+	struct dtx_dump_options opt_dump = {0};
+	struct dtx_stat_options opt_stat = {0};
+	struct dtx_aggr_options opt_aggr = {0};
+	daos_handle_t           coh;
+	char                    buf[256];
+	uint64_t                epoch_last;
+	struct ddb_epochs      *epochs;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = true;
+
+	buf[0] = '/';
+	uuid_unparse(*p_uuid, &buf[1]);
+
+	assert_success(vos_cont_open(tctx->dvt_poh, *p_uuid, &coh));
+	dvt_vos_insert_dtx_records(coh, 10, 8);
+	assert_success(vos_cont_close(coh));
+
+	opt_stat.path = buf;
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+8$");
+	assert_int_equal(get_epoch(dvt_fake_print_buffer), 0);
+
+	opt_aggr.path   = buf;
+	opt_aggr.format = DDB_DTX_AGGR_NOW;
+	assert_success(ddb_run_dtx_aggr(&ctx, &opt_aggr));
+
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+0$");
+	epoch_last = get_epoch(dvt_fake_print_buffer);
+	assert_true(epoch_last > 0);
+
+	assert_success(vos_cont_open(tctx->dvt_poh, *p_uuid, &coh));
+	dvt_vos_insert_dtx_records(coh, 10, 10);
+	assert_success(vos_cont_close(coh));
+
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+10$");
+	assert_int_equal(get_epoch(dvt_fake_print_buffer), epoch_last);
+
+	opt_dump.path      = buf;
+	opt_dump.active    = false;
+	opt_dump.committed = true;
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_dump(&ctx, &opt_dump));
+	epochs = get_committed_epochs(dvt_fake_print_buffer);
+	assert_int_equal(epochs->de_size, 10);
+
+	opt_aggr.format = DDB_DTX_AGGR_EPOCH;
+	opt_aggr.epoch  = epochs->de_epochs[6];
+	assert_success(ddb_run_dtx_aggr(&ctx, &opt_aggr));
+
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+3$");
+	assert_int_equal(get_epoch(dvt_fake_print_buffer), epochs->de_epochs[6]);
+	assert_true(get_epoch(dvt_fake_print_buffer) > epoch_last);
+
+	opt_aggr.format = DDB_DTX_AGGR_NOW;
+	assert_success(ddb_run_dtx_aggr(&ctx, &opt_aggr));
+
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+0$");
+	assert_int_equal(get_epoch(dvt_fake_print_buffer), epochs->de_epochs[9]);
+
+	D_FREE(epochs);
+}
+
 /*
  * --------------------------------------------------------------
  * End test functions
@@ -447,6 +670,7 @@ ddb_commands_tests_run()
 	    TEST(dump_ilog_cmd_tests),
 	    TEST(dump_superblock_cmd_tests),
 	    TEST(dump_dtx_cmd_tests),
+	    TEST(dtx_stat_tests),
 	    TEST(rm_cmd_tests),
 	    TEST(load_cmd_tests),
 	    TEST(rm_ilog_cmd_tests),
@@ -455,6 +679,7 @@ ddb_commands_tests_run()
 	    TEST(dtx_commit_entry_tests),
 	    TEST(dtx_act_discard_invalid_tests),
 	    TEST(dtx_abort_entry_tests),
+	    TEST(dtx_aggr_tests),
 	    TEST(feature_cmd_tests),
 	};
 

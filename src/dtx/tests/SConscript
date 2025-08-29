@@ -41,11 +41,15 @@ def scons():
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_irec_is_valid'])
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=evt_desc_is_valid'])
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_lookup'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_tls_get'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=lrua_array_aggregate'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_delete'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_tm_dec_gauge'])
 
     vos_src = Glob('../../vos/*.c')
 
     test_src = ['dtx_ut.c', 'dts_discard_invalid.c', 'dts_structs.c',
-                'srv_mock.c', 'sched_mock.c']
+                'srv_mock.c', 'sched_mock.c', 'dts_aggregate.c']
     dtx_ut = tenv.d_program('dtx_ut', test_src + vos_src, LIBS=libraries)
 
     # install both
