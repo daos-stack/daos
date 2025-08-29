@@ -480,7 +480,7 @@ shm_ht_rec_delete(d_shm_ht_loc_t shm_ht_loc, const char *key, const int ksize)
 
 	ht_head    = shm_ht_loc->ht_head;
 	idx        = (unsigned int)(d_hash_murmur64((const unsigned char *)key, ksize, 0) &
-				    (ht_head->n_bucket - 1));
+                             (ht_head->n_bucket - 1));
 	idx_lock   = idx % ht_head->n_lock;
 	p_ht_lock  = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);
@@ -620,7 +620,7 @@ shm_ht_rec_find(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len_key,
 
 	ht_head    = shm_ht_loc->ht_head;
 	idx        = (unsigned int)(d_hash_murmur64((const unsigned char *)key, len_key, 0) &
-				    (ht_head->n_bucket - 1));
+                             (ht_head->n_bucket - 1));
 	idx_lock   = idx % ht_head->n_lock;
 	p_ht_lock  = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);
@@ -688,7 +688,7 @@ shm_ht_rec_find_insert(d_shm_ht_loc_t shm_ht_loc, const char *key, const int len
 
 	ht_head    = shm_ht_loc->ht_head;
 	idx        = (unsigned int)(d_hash_murmur64((const unsigned char *)key, len_key, 0) &
-				    (ht_head->n_bucket - 1));
+                             (ht_head->n_bucket - 1));
 	idx_lock   = idx % ht_head->n_lock;
 	p_ht_lock  = (d_shm_mutex_t *)((char *)ht_head + sizeof(struct d_shm_ht_head));
 	p_off_list = (long int *)((char *)p_ht_lock + sizeof(d_shm_mutex_t) * ht_head->n_lock);

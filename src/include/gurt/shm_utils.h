@@ -14,21 +14,19 @@
 #include <pthread.h>
 
 /* default value for invalid offset pointer */
-#define INVALID_OFFSET          (-1L)
-
-#define INVALID_FI_POINT        0x7FFFFFFF
+#define INVALID_OFFSET       (-1L)
 
 /* memory block alignment in shared memory */
-#define SHM_MEM_ALIGN           4UL
-
-/* the struct of robust mutex based on shared memory */
-typedef pthread_mutex_t d_shm_mutex_t;
+#define SHM_MEM_ALIGN        4UL
 
 /* the max length allowed for a hash table name */
-#define MAX_HT_NAME_LEN       16
+#define MAX_HT_NAME_LEN      16
 
 /* reserved string for d_shm_mutex_t as ht record value */
-#define INIT_KEY_VALUE_MUTEX  "INIT_MUTEX"
+#define INIT_KEY_VALUE_MUTEX "INIT_MUTEX"
+
+/* the struct of robust mutex based on shared memory */
+typedef pthread_mutex_t  d_shm_mutex_t;
 
 /* error code for hash table related functions */
 enum SHM_HT_ERROR {
