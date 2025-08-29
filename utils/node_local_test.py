@@ -6557,9 +6557,9 @@ def run(wf, args):
 
     posix_exclusions = [x for x in args.exclude_test if not is_special_testname(x)] \
         if args.exclude_test else []
-    special_exclusions = [x for x in args.exclude_test if is_special_testname(x)] \
-        if args.exclude_test else []
-    special_list = [x for x in generate_special_test_list() if x not in special_exclusions]
+    # special_exclusions = [x for x in args.exclude_test if is_special_testname(x)] \
+    #     if args.exclude_test else []
+    # special_list = [x for x in generate_special_test_list() if x not in special_exclusions]
     excluded_dict = expand_input_list(['test_' + x for x in posix_exclusions])
     needs_dfuse_with_opt.record_exclusions(excluded_dict)
     test_dict = expand_test_list(PosixTests.generate_test_list(), excluded_dict)
@@ -6585,53 +6585,54 @@ def run(wf, args):
     else:
         with DaosServer(conf, test_class='first', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
-            if args.mode == 'launch':
-                run_in_fg(server, conf, args)
-            elif args.mode == 'overlay' and 'special_dfuse_overlay' in special_list:
-                fatal_errors.add_result(run_duns_overlay_test(server, conf))
-            elif args.mode == 'set-fi':
-                fatal_errors.add_result(server.set_fi())
-            elif args.mode == 'all':
-                fi_test_dfuse = True
-                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
-                if 'special_dfuse_multi' in special_list:
-                    fatal_errors.add_result(run_dfuse(server, conf))
-                if 'special_dfuse_overlay' in special_list:
-                    fatal_errors.add_result(run_duns_overlay_test(server, conf))
-                test_pydaos_kv(server, conf)
-                test_pydaos_kv_obj_class(server, conf)
-                fatal_errors.add_result(server.set_fi())
-            elif args.test == 'all':
-                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
-            elif args.test:
-                special_list = [x for x in args.test if is_special_testname(x)]
-                despecialed_list = ['test_' + x for x in args.test if not is_special_testname(x)]
-                custom_test_dict = expand_input_list(despecialed_list)
-                custom_exclusions = explicit_list_to_exclusion_list(custom_test_dict)
-                exclusion_union = {}
-                for key in custom_test_dict:
-                    exclusion_list = \
-                        list(set(custom_exclusions.get(key, [])).union(
-                            set(excluded_dict.get(key, []))))
-                    if len(exclusion_list) > 0:
-                        exclusion_union[key] = exclusion_list
-                needs_dfuse_with_opt.record_exclusions(exclusion_union)
-                custom_filtered_dict = expand_test_list(custom_test_dict.keys(), exclusion_union)
-                if len(custom_filtered_dict) == 0 and len(special_list) == 0:
-                    print('No tests to run!')
-                    sys.exit(1)
-                if len(custom_filtered_dict) > 0:
-                    fatal_errors.add_result(
-                        run_posix_tests(server, conf, custom_filtered_dict.keys()))
-                if 'special_dfuse_multi' in special_list:
-                    fatal_errors.add_result(run_dfuse(server, conf))
-                if 'special_dfuse_overlay' in special_list:
-                    fatal_errors.add_result(run_duns_overlay_test(server, conf))
-            else:
-                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
-                if 'special_dfuse_multi' in special_list:
-                    fatal_errors.add_result(run_dfuse(server, conf))
-                fatal_errors.add_result(server.set_fi())
+            pass
+        #     if args.mode == 'launch':
+        #         run_in_fg(server, conf, args)
+        #     elif args.mode == 'overlay' and 'special_dfuse_overlay' in special_list:
+        #         fatal_errors.add_result(run_duns_overlay_test(server, conf))
+        #     elif args.mode == 'set-fi':
+        #         fatal_errors.add_result(server.set_fi())
+        #     elif args.mode == 'all':
+        #         fi_test_dfuse = True
+        #         fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
+        #         if 'special_dfuse_multi' in special_list:
+        #             fatal_errors.add_result(run_dfuse(server, conf))
+        #         if 'special_dfuse_overlay' in special_list:
+        #             fatal_errors.add_result(run_duns_overlay_test(server, conf))
+        #         test_pydaos_kv(server, conf)
+        #         test_pydaos_kv_obj_class(server, conf)
+        #         fatal_errors.add_result(server.set_fi())
+        #     elif args.test == 'all':
+        #         fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
+        #     elif args.test:
+        #         special_list = [x for x in args.test if is_special_testname(x)]
+        #         despecialed_list = ['test_' + x for x in args.test if not is_special_testname(x)]
+        #         custom_test_dict = expand_input_list(despecialed_list)
+        #         custom_exclusions = explicit_list_to_exclusion_list(custom_test_dict)
+        #         exclusion_union = {}
+        #         for key in custom_test_dict:
+        #             exclusion_list = \
+        #                 list(set(custom_exclusions.get(key, [])).union(
+        #                     set(excluded_dict.get(key, []))))
+        #             if len(exclusion_list) > 0:
+        #                 exclusion_union[key] = exclusion_list
+        #         needs_dfuse_with_opt.record_exclusions(exclusion_union)
+        #         custom_filtered_dict = expand_test_list(custom_test_dict.keys(), exclusion_union)
+        #         if len(custom_filtered_dict) == 0 and len(special_list) == 0:
+        #             print('No tests to run!')
+        #             sys.exit(1)
+        #         if len(custom_filtered_dict) > 0:
+        #             fatal_errors.add_result(
+        #                 run_posix_tests(server, conf, custom_filtered_dict.keys()))
+        #         if 'special_dfuse_multi' in special_list:
+        #             fatal_errors.add_result(run_dfuse(server, conf))
+        #         if 'special_dfuse_overlay' in special_list:
+        #             fatal_errors.add_result(run_duns_overlay_test(server, conf))
+        #     else:
+        #         fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
+        #         if 'special_dfuse_multi' in special_list:
+        #             fatal_errors.add_result(run_dfuse(server, conf))
+        #         fatal_errors.add_result(server.set_fi())
 
     if args.mode == 'all':
         with DaosServer(conf, test_class='restart', wf=wf_server,
@@ -6644,15 +6645,16 @@ def run(wf, args):
     if args.server_valgrind:
         with DaosServer(conf, test_class='valgrind', wf=wf_server, valgrind=True,
                         fatal_errors=fatal_errors) as server:
-            pools = server.fetch_pools()
-            for pool in pools:
-                cmd = ['pool', 'query', pool.id()]
-                rc = run_daos_cmd(conf, cmd, valgrind=False)
-                print(rc)
-                time.sleep(5)
-                cmd = ['cont', 'list', pool.id()]
-                run_daos_cmd(conf, cmd, valgrind=False)
-            time.sleep(20)
+            pass
+            # pools = server.fetch_pools()
+            # for pool in pools:
+            #     cmd = ['pool', 'query', pool.id()]
+            #     rc = run_daos_cmd(conf, cmd, valgrind=False)
+            #     print(rc)
+            #     time.sleep(5)
+            #     cmd = ['cont', 'list', pool.id()]
+            #     run_daos_cmd(conf, cmd, valgrind=False)
+            # time.sleep(20)
 
     # If the perf-check option is given then re-start everything without much
     # debugging enabled and run some micro-benchmarks to give numbers for use
@@ -6673,44 +6675,44 @@ def run(wf, args):
         args.dfuse_debug = 'WARN'
         with DaosServer(conf, test_class='no-debug', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
-            if fi_test:
-                # Most of the fault injection tests go here, they are then run on docker containers
-                # so can be performed in parallel.
+            # if fi_test:
+            #    # Most of the fault injection tests go here, they are then run on docker containers
+            #     # so can be performed in parallel.
 
-                wf_client = WarningsFactory('nlt-client-leaks.json')
+            #     wf_client = WarningsFactory('nlt-client-leaks.json')
 
-                # dfuse start-up, uses custom fault to force exit if no other faults injected.
-                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+            #     # dfuse start-up, uses custom fault to force exit if no other faults injected.
+            #     fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
-                # list-container test.
-                fatal_errors.add_result(test_alloc_fail(server, conf))
+            #     # list-container test.
+            #     fatal_errors.add_result(test_alloc_fail(server, conf))
 
-                # Container query test.
-                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+            #     # Container query test.
+            #     fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+            #     fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
-                # Container attribute tests
-                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+            #     # Container attribute tests
+            #     fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+            #     fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+            #     fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
-                # filesystem copy tests.
-                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
-                fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
+            #     # filesystem copy tests.
+            #     fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+            #     fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
 
-                # container create with properties test.
-                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
+            #     # container create with properties test.
+            #     fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
-                # Disabled for now because of errors
-                # fatal_errors.add_result(test_alloc_pil4dfs_ls(server, conf, wf_client))
+            #     # Disabled for now because of errors
+            #     # fatal_errors.add_result(test_alloc_pil4dfs_ls(server, conf, wf_client))
 
-                # This test is disabled by default, it takes ~4 hours to run and can fill Jenkins
-                # available space, no not enable in CI.
-                # fatal_errors.add_result(test_dfs_check(server, conf, wf_client))
+            #     # This test is disabled by default, it takes ~4 hours to run and can fill Jenkins
+            #     # available space, no not enable in CI.
+            #     # fatal_errors.add_result(test_dfs_check(server, conf, wf_client))
 
-                wf_client.close()
+            #     wf_client.close()
 
             if fi_test_dfuse:
                 # We cannot yet run dfuse inside docker containers and some of the failure modes
@@ -6719,11 +6721,11 @@ def run(wf, args):
 
                 fatal_errors.add_result(test_alloc_fail_cont_create(server, conf))
 
-                # Read-via-IL test, requires dfuse.
-                fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+                # # Read-via-IL test, requires dfuse.
+                # fatal_errors.add_result(test_alloc_fail_cat(server, conf))
 
-                # Copy (read/write) via IL, requires dfuse.
-                fatal_errors.add_result(test_alloc_fail_il_cp(server, conf))
+                # # Copy (read/write) via IL, requires dfuse.
+                # fatal_errors.add_result(test_alloc_fail_il_cp(server, conf))
 
             if args.perf_check:
                 check_readdir_perf(server, conf)

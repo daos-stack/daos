@@ -15,6 +15,12 @@ if [ "$FVERSION" != "latest" ]; then
     archive="-archive"
 fi
 
+set +e
+ping -c 3 "$(echo "$REPO_FILE_URL" | awk -F[/:] '{print $4}')"
+set -e
+date
+cat /etc/hosts
+
 # shellcheck disable=SC2120
 disable_repos () {
     local repos_dir="$1"
