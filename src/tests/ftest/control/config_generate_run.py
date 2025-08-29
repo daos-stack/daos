@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -39,6 +40,7 @@ class ConfigGenerateRun(TestWithServers):
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateRun,test_config_generate_run
         """
+        self.log_step(f"self.test_env.log_dir =  {self.test_env.log_dir}")
         num_engines = self.params.get("num_engines", "/run/config_generate_params/*/")
         scm_only = self.params.get("scm_only", "/run/config_generate_params/*/")
         net_class = self.params.get("net_class", "/run/config_generate_params/*/")
@@ -63,6 +65,14 @@ class ConfigGenerateRun(TestWithServers):
             generated_yaml = yaml.safe_load(result.stdout)
         except yaml.YAMLError as error:
             self.fail(f"Error loading dmg generated config! {error}")
+
+        # Iterate & update the log file path for each engine.
+        engines = generated_yaml["engines"]
+        for engine in engines:
+            engine["log_file"] = os.path.join(
+                self.test_env.log_dir, os.path.basename(engine["log_file"]))
+
+        self.log_step(f"Modified log_file in generated config {engines}")
 
         # Stop and restart daos_server. self.start_server_managers() has the
         # server start-up check built into it, so if there's something wrong,
