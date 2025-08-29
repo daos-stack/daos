@@ -538,7 +538,7 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=no ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
-                        } # L539 was yes
+                        }
                     }
                     steps {
                         script {
