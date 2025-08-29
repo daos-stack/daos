@@ -419,14 +419,37 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	return out, nil
 }
 
+func (sb *spdkBackend) cleanLockfiles(devAddrs *hardware.PCIAddressSet) {
+	msg := fmt.Sprintf("spdk backend clean-locks (bindings discover call): for %v",
+		devAddrs.Strings())
+	addrCheckFn := createSpdkLockfileAddrCheckFunc(devAddrs)
+
+	removed, err := sb.binding.Clean(sb.log, addrCheckFn)
+	if err != nil {
+		sb.log.Errorf("%s: %s", msg, err.Error())
+		return
+	}
+	sb.log.Debugf("%s: removed %v", msg, removed)
+}
+
 // Scan discovers NVMe controllers accessible by SPDK.
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+	needDevs := req.DeviceList.PCIAddressSetPtr()
+
+	// Remove SPDK lockfiles for requested addresses before and after scan, requested addresses
+	// should not be in use by other processes and SPDK will refuse access if they are.
+	if needDevs.IsEmpty() {
+		sb.log.Debug("clean spdk lockfiles skipped, zero devices selected")
+	} else {
+		sb.cleanLockfiles(needDevs)
+		defer sb.cleanLockfiles(needDevs)
+	}
+
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
 	// Only filter devices if all have a PCI address, avoid validating the presence of emulated
 	// NVMe devices as they may not exist yet e.g. for SPDK AIO-file the devices are created on
 	// format.
-	needDevs := req.DeviceList.PCIAddressSetPtr()
 	spdkOpts := &spdk.EnvOptions{
 		PCIAllowList: needDevs,
 		EnableVMD:    req.VMDEnabled,

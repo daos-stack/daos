@@ -733,25 +733,8 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 	}
 }
 
-func (cs *ControlService) cleanSpdkResources() error {
-	bdevCfgs := cs.srvCfg.GetBdevConfigs()
-	pciAddrs := bdevCfgs.NVMeBdevs().Devices()
-
-	// For the moment assume that both lockfile and hugepage cleanup should be skipped if
-	// hugepages have been disabled in the server config.
-	if !cs.srvCfg.DisableHugepages {
-		err := cleanSpdkResources(cs.log, cs.NvmePrepare, pciAddrs)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // StorageScan discovers non-volatile storage hardware on node.
 func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
-
 	if req == nil {
 		return nil, errNilReq
 	}
@@ -772,10 +755,6 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 			State: new(ctlpb.ResponseState),
 		}
 	} else {
-		if err := cs.cleanSpdkResources(); err != nil {
-			return nil, errors.Wrap(err, "clean spdk resources")
-		}
-
 		respNvme, err := scanBdevs(ctx, cs, req.Nvme, respScm.Namespaces)
 		if err != nil {
 			return nil, err
@@ -1076,10 +1055,6 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		cs.log.Debug("skipping bdev format as use of hugepages disabled in config")
 		hugepagesDisabled = true
 	} else {
-		if err := cs.cleanSpdkResources(); err != nil {
-			return nil, errors.Wrap(err, "clean spdk resources")
-		}
-
 		fnr := formatNvmeReq{
 			log:         cs.log,
 			instances:   instances,
