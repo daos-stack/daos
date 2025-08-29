@@ -536,7 +536,7 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
