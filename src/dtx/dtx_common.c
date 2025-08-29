@@ -147,6 +147,9 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	if (dbca->dbca_agg_req != NULL)
 		sched_req_put(dbca->dbca_agg_req);
 
+	D_ASSERTF(d_list_empty(&dbca->dbca_sys_link), "dbca (%p) for " DF_UUID " is still linked\n",
+		  dbca, DP_UUID(dbca->dbca_cont->sc_uuid));
+
 	D_FREE(dbca);
 	cont->sc_dtx_registered = 0;
 	ds_cont_child_put(cont);
@@ -620,8 +623,6 @@ dtx_batched_commit_one(void *arg)
 					    DAOS_EPOCH_MAX, false, &dtes, NULL, &dce);
 		if (cnt == 0) {
 			if (dbca->dbca_flush_pending) {
-				D_ASSERT(!dtx_cont_opened(cont));
-
 				dbca->dbca_flush_pending = 0;
 				if (likely(dbca->dbca_deregister == 0))
 					d_list_del_init(&dbca->dbca_sys_link);
@@ -712,8 +713,7 @@ dtx_batched_commit(void *arg)
 
 		dtx_get_dbca(dbca);
 		cont = dbca->dbca_cont;
-		d_list_move_tail(&dbca->dbca_sys_link,
-				 &dmi->dmi_dtx_batched_cont_open_list);
+		d_list_move_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
 		dtx_stat(cont, &stat);
 
 		if (dbca->dbca_commit_req != NULL && dbca->dbca_commit_done) {
@@ -1652,7 +1652,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 out:
 	if (rc < 0) {
 		D_ERROR(DF_UUID ": Fail to flush CoS cache: rc = %d\n", DP_UUID(cont->sc_uuid), rc);
-		if (likely(!dtx_cont_opened(cont) && dbca->dbca_deregister == 0))
+		if (likely(d_list_empty(&dbca->dbca_sys_link) && dbca->dbca_deregister == 0))
 			/* Add it to the batched commit for further handling asynchronously. */
 			d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_open_list);
 	} else {
@@ -1890,12 +1890,14 @@ dtx_cont_open(struct ds_cont_child *cont)
 				if (rc != 0)
 					return rc;
 
-				dbca->dbca_flush_pending = 0;
 				if (unlikely(dbca->dbca_deregister == 1))
 					return -DER_SHUTDOWN;
 
-				d_list_add_tail(&dbca->dbca_sys_link,
-						&dmi->dmi_dtx_batched_cont_open_list);
+				if (dbca->dbca_flush_pending)
+					dbca->dbca_flush_pending = 0;
+				else
+					d_list_add_tail(&dbca->dbca_sys_link,
+							&dmi->dmi_dtx_batched_cont_open_list);
 				return 0;
 			}
 		}
@@ -1927,10 +1929,8 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 				stop_dtx_reindex_ult(cont, force);
 
 				/* To handle potentially re-open by race. */
-				if (unlikely(dtx_cont_opened(cont))) {
-					dtx_put_dbca(dbca);
-					return;
-				}
+				if (unlikely(dtx_cont_opened(cont)))
+					goto put;
 
 				if (unlikely(dbca->dbca_deregister == 1))
 					goto put;
