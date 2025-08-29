@@ -53,7 +53,7 @@ class NvmeIoVerification(IorTestBase):
         # Loop for every pool size
         for index in range(num_pools):
             # Create and connect to a pool with namespace
-            self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
+            self.add_pool(namespace=f"/run/pool_{index}/*")
 
             # get pool info
             self.pool.get_info()
