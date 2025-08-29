@@ -29,9 +29,150 @@
 #include <linux/limits.h>
 
 #include <gurt/debug.h>
-#include <gurt/shm_alloc.h>
-#include <gurt/shm_dict.h>
 #include <gurt/shm_utils.h>
+
+#define MAX_THREAD 32
+
+pthread_t thread_list[MAX_THREAD];
+
+void
+test_lrucache(void **state)
+{
+	int              i;
+	int              rc;
+	int              key;
+	int              val;
+	int             *addr_val;
+	int              key_size;
+	char             key_long[16] = "aaaaaaaaaaaaaaa";
+	char             key_var[16];
+	char             data_long[16] = "bbbbbbbbbbbbbbbb";
+	shm_lru_node_t  *node_found;
+	int              capacity;
+	shm_lru_cache_t *cache;
+
+	/* test keys with various size */
+	/* key_size is zero, so key could have various length */
+	rc = shm_lru_create_cache(1, 16, 0, sizeof(int), &cache);
+	assert_true(rc == 0);
+
+	for (key_size = 1; key_size <= 15; key_size++) {
+		memcpy(key_var, key_long, key_size);
+		val = key_size;
+		shm_lru_put(cache, key_var, key_size, &val, sizeof(int));
+	}
+
+	for (key_size = 1; key_size <= 15; key_size++) {
+		memcpy(key_var, key_long, key_size);
+		rc = shm_lru_get(cache, key_var, key_size, &node_found, (void **)&addr_val);
+		assert(rc == 0);
+		assert(*addr_val == key_size);
+		shm_lru_node_dec_ref(node_found);
+	}
+
+	shm_lru_destroy_cache(cache);
+
+	/* test various key size and data size */
+	rc = shm_lru_create_cache(1, 16, 0, 0, &cache);
+	assert_true(rc == 0);
+
+	for (i = 1; i <= 16; i++) {
+		shm_lru_put(cache, key_long, i, data_long, i);
+	}
+
+	for (i = 1; i <= 16; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, key_long, i, &node_found, (void **)&addr_val);
+		assert(rc == 0);
+		assert_true(memcmp(addr_val, data_long, i) == 0);
+		shm_lru_node_dec_ref(node_found);
+	}
+
+	shm_lru_destroy_cache(cache);
+
+	/* test updating existing key */
+	rc = shm_lru_create_cache(1, 2, sizeof(int), sizeof(int), &cache);
+	assert_true(rc == 0);
+
+	key = 1;
+	val = 1;
+	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+	key = 2;
+	val = 2;
+	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+
+	key = 1;
+	val = 10;
+	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+
+	key = 1;
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	assert(rc == 0);
+	assert(*addr_val == 10);
+	shm_lru_node_dec_ref(node_found);
+
+	key = 3;
+	val = 3;
+	shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+
+	key = 2;
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	assert(rc == ENOENT);
+
+	key = 1;
+	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+	assert(rc == 0);
+	assert(*addr_val == 10);
+	shm_lru_node_dec_ref(node_found);
+
+	shm_lru_destroy_cache(cache);
+
+	/* large number of operations */
+	capacity = 100;
+	rc       = shm_lru_create_cache(1, capacity, sizeof(int), sizeof(int), &cache);
+	assert_true(rc == 0);
+
+	/* make cache full */
+	for (i = 0; i < capacity; i++) {
+		key = i;
+		val = i;
+		shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+	}
+
+	/* verify all items exist */
+	for (i = 0; i < capacity; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		assert(rc == 0);
+		assert(*addr_val == i);
+		shm_lru_node_dec_ref(node_found);
+	}
+
+	/* add more items to force eviction */
+	for (i = capacity; i < capacity + 50; i++) {
+		key = i;
+		val = i;
+		shm_lru_put(cache, &key, sizeof(int), &val, sizeof(int));
+	}
+
+	/* verify first 50 items are evicted */
+	for (i = 0; i < 50; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		assert(rc == ENOENT);
+	}
+
+	/* verify remaining items do exist */
+	for (i = 50; i < capacity + 50; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		assert(rc == 0);
+		assert(*addr_val == i);
+		shm_lru_node_dec_ref(node_found);
+	}
+
+	shm_lru_destroy_cache(cache);
+}
 
 #define N_LOOP_MEM (8)
 
@@ -172,6 +313,7 @@ thread_ht_op(void *arg)
 	char                    *value;
 	char                    *key_name;
 	char                    *key_set = NULL;
+	bool                     created;
 	struct d_shm_ht_rec_loc *rec_loc_set;
 
 	thread_id = *(int *)arg;
@@ -189,8 +331,9 @@ thread_ht_op(void *arg)
 		len      = snprintf(key_name, MAX_KEY_LEN, "key_%d_%d", thread_id, i);
 		assert_true(len < (MAX_KEY_LEN - 1));
 		value = shm_ht_rec_find_insert(&ht_loc, key_name, len, VAL_1, sizeof(VAL_1),
-					       &rec_loc_set[i], &err);
+					       &rec_loc_set[i], &created, &err);
 		assert_non_null(value);
+		assert_true(created);
 		assert_true(value == shm_ht_rec_data(&rec_loc_set[i], &err));
 
 		rc = shm_ht_rec_decref(&rec_loc_set[i]);
@@ -245,7 +388,7 @@ test_hash(void **state)
 	char                   *exe_path;
 	pid_t                   pid;
 	int                     id_list[N_THREAD];
-	pthread_t               thread_list[N_THREAD];
+	bool                    created;
 
 	/* create shared memory, create a hash table, insert three keys */
 	rc = shm_ht_create(HT_NAME, 8, 16, &ht_loc);
@@ -262,8 +405,9 @@ test_hash(void **state)
 	assert_true(shm_ht_num_ref(&ht_loc) == 1);
 
 	value = shm_ht_rec_find_insert(&ht_loc, KEY_1, strlen(KEY_1), VAL_1, sizeof(VAL_1),
-				       &rec_loc, &err);
+				       &rec_loc, &created, &err);
 	assert_non_null(value);
+	assert_true(created);
 	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	/* verify ht record reference count */
@@ -285,16 +429,18 @@ test_hash(void **state)
 	assert_true(rc == 0);
 
 	value = shm_ht_rec_find_insert(&ht_loc, KEY_2, strlen(KEY_2), VAL_2, sizeof(VAL_2),
-				       &rec_loc, &err);
+				       &rec_loc, &created, &err);
 	assert_non_null(value);
+	assert_true(created);
 	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
 
 	value = shm_ht_rec_find_insert(&ht_loc, KEY_3, strlen(KEY_3), VAL_3, sizeof(VAL_3),
-				       &rec_loc, &err);
+				       &rec_loc, &created, &err);
 	assert_non_null(value);
+	assert_true(created);
 	assert_true(value == shm_ht_rec_data(&rec_loc, &err));
 
 	rc = shm_ht_rec_decref(&rec_loc);
@@ -380,7 +526,7 @@ do_lock_mutex_child(bool lock_only)
 	rc = shm_ht_rec_decref(&rec_loc);
 	assert_true(rc == 0);
 
-	shm_mutex_lock(mutex, NULL);
+	shm_mutex_lock(mutex);
 	sleep(TIME_SLEEP);
 	if (!lock_only) {
 		shm_mutex_unlock(mutex);
@@ -399,6 +545,7 @@ do_lock_mutex_child(bool lock_only)
 void
 test_lock(void **state)
 {
+	int                     i;
 	int                     rc;
 	int                     err;
 	int                     status;
@@ -414,7 +561,7 @@ test_lock(void **state)
 	char                   *argv2[3] = {"test_shm", "--lockonly", NULL};
 	char                   *exe_path;
 	pid_t                   pid;
-	bool                    owner_dead;
+	bool                    created;
 
 	/**
 	 * create shared memory, create a hash table, insert a key whose value is a struct of
@@ -423,8 +570,9 @@ test_lock(void **state)
 	rc = shm_ht_create(ht_name, 8, 16, &ht_loc);
 	assert_true(rc == 0);
 
-	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(
-	    &ht_loc, key, strlen(key), INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t), &rec_loc, &err);
+	mutex = (d_shm_mutex_t *)shm_ht_rec_find_insert(&ht_loc, key, strlen(key),
+							INIT_KEY_VALUE_MUTEX, sizeof(d_shm_mutex_t),
+							&rec_loc, &created, &err);
 	assert_true(mutex != NULL);
 	assert_true(mutex == shm_ht_rec_data(&rec_loc, &err));
 
@@ -441,17 +589,23 @@ test_lock(void **state)
 	pid = fork();
 	if (pid == 0)
 		execvp(exe_path, argv);
-	else
-		/* take a short nap to allow the child process to lock the mutex first */
-		usleep(18000);
+	else {
+		/* take a few short naps until the child process locks the mutex */
+		for (i = 0; i < 100; i++) {
+			usleep(20000);
+			if (*((int *)mutex) != 0)
+				/* the mutex is locked now */
+				break;
+		}
+	}
 
 	gettimeofday(&tm1, NULL);
-	shm_mutex_lock(mutex, &owner_dead);
+	shm_mutex_lock(mutex);
 	gettimeofday(&tm2, NULL);
 	dt = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
-	assert_true(fabs(dt - TIME_SLEEP) < 0.25);
+	printf("Time diff = %4.2lf\n", fabs(dt - TIME_SLEEP));
+	assert_true(fabs(dt - TIME_SLEEP) < 0.15);
 	shm_mutex_unlock(mutex);
-	assert_true(owner_dead == false);
 
 	waitpid(pid, &status, 0);
 	if (WIFEXITED(status))
@@ -470,9 +624,8 @@ test_lock(void **state)
 	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 
-	shm_mutex_lock(mutex, &owner_dead);
+	shm_mutex_lock(mutex);
 	shm_mutex_unlock(mutex);
-	assert_true(owner_dead);
 	free(exe_path);
 	shm_ht_decref(&ht_loc);
 }
@@ -501,16 +654,20 @@ int
 main(int argc, char **argv)
 {
 	int                     opt = 0, index = 0, rc;
-	const struct CMUnitTest tests[] = {cmocka_unit_test(test_hash), cmocka_unit_test(test_lock),
-					   cmocka_unit_test(test_mem)};
+	const struct CMUnitTest tests[] = {
+	    cmocka_unit_test(test_hash), cmocka_unit_test(test_lock), cmocka_unit_test(test_mem),
+	    cmocka_unit_test(test_lrucache)};
+
 	// clang-format off
 	static struct option    long_options[] = {
 	    {"all", no_argument, NULL, 'a'},      {"hash", no_argument, NULL, 'h'},
 	    {"lock", no_argument, NULL, 'l'},     {"lockmutex", no_argument, NULL, 'k'},
 	    {"memory", no_argument, NULL, 'm'},   {"lockonly", no_argument, NULL, 'o'},
-	    {"verifykv", no_argument, NULL, 'v'}, {NULL, 0, NULL, 0}};
+	    {"verifykv", no_argument, NULL, 'v'}, {"lrucache", no_argument, NULL, 'c'},
+	    {NULL, 0, NULL, 0}};
 	// clang-format on
-	while ((opt = getopt_long(argc, argv, ":ahlkmov", long_options, &index)) != -1) {
+
+	while ((opt = getopt_long(argc, argv, ":ahlkmovc", long_options, &index)) != -1) {
 		switch (opt) {
 		case 'a':
 			break;
