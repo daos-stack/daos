@@ -108,5 +108,6 @@ find build -name '*.gcda' | sort -n
 if [[ -n $(find build -name "*.gcda") ]]; then
     pip install --requirement requirements-code-coverage.txt
     mkdir -p "${test_log_dir}/code_coverage"
-    gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors
+    gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors \
+        --gcov-ignore-errors=no_working_dir_found
 fi
