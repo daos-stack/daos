@@ -16,6 +16,8 @@
 #include <daos.h>
 #include <daos_fs.h>
 
+#include <gurt/shm_utils.h>
+
 #include "metrics.h"
 
 /** D-key name of SB metadata */
@@ -227,6 +229,8 @@ struct dfs {
 	struct dfs_metrics  *metrics;
 	/** optional dentry and stat cache */
 	dfs_dcache_t        *dcache;
+	/** optional data cache */
+	shm_lru_cache_t     *datacache;
 	/** Root object info */
 	dfs_obj_t            root;
 };
