@@ -5,8 +5,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#ifndef __DAOS_MGMT_WIP_H__
-#define __DAOS_MGMT_WIP_H__
+#ifndef __MGMT_TGT_COMMON_H__
+#define __MGMT_TGT_COMMON_H__
 
 #include <uuid/uuid.h>
 
@@ -90,4 +90,4 @@ int
 ds_mgmt_tgt_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
 				   const char *newborns_path);
 
-#endif /* __DAOS_MGMT_WIP_H__ */
+#endif /* __MGMT_TGT_COMMON_H__ */

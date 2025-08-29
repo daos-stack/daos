@@ -18,7 +18,7 @@
 #include <daos_types.h>
 #include <daos/debug.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/daos_mgmt_srv_file.h>
+#include <daos_srv/mgmt_tgt_common.h>
 #include <daos_srv/smd.h>
 
 int

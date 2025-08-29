@@ -30,10 +30,10 @@ def scons():
     # Management server module
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     srcs = [
+        'mgmt_common.c',
         'srv_chk.c',
         'srv_container.c',
         'srv_drpc.c',
-        'srv_file.c',
         'srv_layout.c',
         'srv_pool.c',
         'srv_query.c',

@@ -16,7 +16,7 @@
 
 #include <uuid/uuid.h>
 
-#include <daos_srv/daos_mgmt_srv_file.h>
+#include <daos_srv/mgmt_tgt_common.h>
 
 int
 ds_mgmt_tgt_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg);
