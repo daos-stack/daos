@@ -359,7 +359,7 @@ xstream_stop_all(struct dlck_engine *engine)
 	xs = &engine->xss[engine->targets];
 
 	/** Stop the NVMe polling ULT if present. */
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+	if (dlck_engine_xstream_has_nvme(xs->tgt_id)) {
 		rc = dlck_ult_create(xs->pool, dlck_engine_xstream_fini_ult, xs, &daos_sys_fini);
 		if (rc != DER_SUCCESS) {
 			/** ULT has not been created - the daos_sys_0 XS can be safely freed */
