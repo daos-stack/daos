@@ -94,6 +94,34 @@ nvme_polling(void *arg)
 	} while (is_ready == ABT_FALSE);
 }
 
+static inline bool
+dlck_engine_xstream_is_sys(int tgt_id)
+{
+	return (tgt_id < 0);
+}
+
+/**
+ * This function ought to strictly follow it counterpart in daos_engine (dss_xstream_has_nvme).
+ */
+static inline bool
+dlck_engine_xstream_has_nvme(int tgt_id)
+{
+	/**
+	 * Since there are no helper execution streams (XS) right now. All non-sys XSes are main
+	 * XSes as defined for daos_engine.
+	 */
+	if (!dlck_engine_xstream_is_sys(tgt_id)) {
+		return true;
+	}
+
+	/** DLCK employs only one sys XS and this is the one which talks to NVMe as necessary. */
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		return true;
+	}
+
+	return false;
+}
+
 int
 dlck_engine_xstream_init(struct dlck_xstream *xs)
 {
@@ -105,7 +133,7 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 	struct dss_module_info *dmi;
 	int                     rc;
 
-	if (tgt_id < 0) {
+	if (dlck_engine_xstream_is_sys(tgt_id)) {
 		tag   = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 		xs_id = 0;
 
@@ -133,7 +161,7 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 		return -DER_NOMEM;
 	}
 
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+	if (dlck_engine_xstream_has_nvme(tgt_id)) {
 		dmi = dss_get_module_info();
 		D_ASSERT(dmi != NULL);
 
@@ -183,7 +211,7 @@ dlck_engine_xstream_fini(struct dlck_xstream *xs)
 
 	D_ASSERT(tls != NULL);
 
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+	if (dlck_engine_xstream_has_nvme(xs->tgt_id)) {
 		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
 		rc = dss_abterr2der(rc);
 		if (rc != DER_SUCCESS) {
