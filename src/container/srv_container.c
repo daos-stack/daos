@@ -1803,6 +1803,7 @@ cont_refresh_vos_agg_eph_one(void *data)
 	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
 		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
 
+	cont_child->sc_ec_agg_eph_valid = 1;
 	ds_cont_child_put(cont_child);
 	return rc;
 }
@@ -1812,6 +1813,8 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 			    daos_epoch_t eph)
 {
 	struct refresh_vos_agg_eph_arg	arg;
+	static uint64_t                 cnt;
+	static uint64_t                 gap = 1;
 	int				rc;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
@@ -1821,8 +1824,20 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				     PO_COMP_ST_DOWNOUT, cont_refresh_vos_agg_eph_one,
 				     &arg, DSS_ULT_FL_PERIODIC);
-	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, rc, DF_CONT ": refresh ec_agg_eph " DF_X64,
-		  DP_CONT(pool_uuid, cont_uuid), eph);
+	if (rc) {
+		DL_ERROR(rc, DF_CONT ": refresh ec_agg_eph " DF_X64 " failed.",
+			 DP_CONT(pool_uuid, cont_uuid), eph);
+	} else {
+		if (cnt++ % gap == 0) {
+			D_INFO(DF_CONT ": refresh ec_agg_eph " DF_X64,
+			       DP_CONT(pool_uuid, cont_uuid), eph);
+			if (gap <= 256)
+				gap <<= 1;
+		} else {
+			D_DEBUG(DB_MD, DF_CONT ": refresh ec_agg_eph " DF_X64,
+				DP_CONT(pool_uuid, cont_uuid), eph);
+		}
+	}
 	return rc;
 }
 
