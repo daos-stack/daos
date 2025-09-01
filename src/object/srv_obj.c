@@ -1503,8 +1503,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 					  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
 		}
 		if ((ec_deg_fetch || (ec_recov && get_parity_list)) &&
-		    ioc->ioc_coc->sc_ec_agg_eph_boundary == 0 &&
-		    ioc->ioc_coc->sc_pool->spc_pool->sp_reclaim != DAOS_RECLAIM_DISABLED) {
+		    ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
 			struct ec_agg_boundary_arg arg;
 
 			arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
@@ -1517,7 +1516,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 					 DP_UOID(orw->orw_oid));
 				goto out;
 			}
-			if (ioc->ioc_coc->sc_ec_agg_eph_boundary == 0) {
+			if (ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
 				rc = -DER_FETCH_AGAIN;
 				DL_INFO(rc, DF_CONT ", " DF_UOID " zero ec_agg_boundary.",
 					DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
