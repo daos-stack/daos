@@ -24,6 +24,7 @@ uint32_t dtx_agg_thd_cnt_lo;
 uint32_t dtx_agg_thd_age_up;
 uint32_t dtx_agg_thd_age_lo;
 uint32_t dtx_batched_ult_max;
+uint32_t dtx_batched_degree;
 
 struct dtx_batched_pool_args {
 	/* Link to dss_module_info::dmi_dtx_batched_pool_list. */
@@ -619,7 +620,7 @@ dtx_batched_commit_one(void *arg)
 		int			  cnt;
 		int			  rc;
 
-		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
+		cnt = dtx_fetch_committable(cont, dtx_batched_degree, NULL,
 					    DAOS_EPOCH_MAX, false, &dtes, NULL, &dce);
 		if (cnt == 0) {
 			if (dbca->dbca_flush_pending) {
@@ -1619,7 +1620,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_coll_entry	 *dce = NULL;
 
-		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
+		cnt = dtx_fetch_committable(cont, dtx_batched_degree,
 					    NULL, DAOS_EPOCH_MAX, true, &dtes,
 					    dbca->dbca_commit_req != NULL ? &dcks : NULL, &dce);
 		if (cnt <= 0)
@@ -2401,7 +2402,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_coll_entry	 *dce = NULL;
 
-		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, oid,
+		cnt = dtx_fetch_committable(cont, dtx_batched_degree, oid,
 					    epoch, true, &dtes, &dcks, &dce);
 		if (cnt <= 0) {
 			rc = cnt;

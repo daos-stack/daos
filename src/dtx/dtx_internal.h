@@ -176,6 +176,11 @@ extern uint32_t dtx_agg_thd_age_lo;
  */
 extern uint32_t dtx_batched_ult_max;
 
+#define DTX_BATCHED_DEGREE_MAX	DTX_THRESHOLD_COUNT
+#define DTX_BATCHED_DEGREE_MIN	16
+
+extern uint32_t dtx_batched_degree;
+
 /*
  * If the size of dtx_memberships exceeds DTX_INLINE_MBS_SIZE, then load it (DTX mbs)
  * dynamically when use it to avoid holding a lot of DRAM resource for long time that

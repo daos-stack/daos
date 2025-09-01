@@ -539,6 +539,16 @@ dtx_init(void)
 	d_getenv_uint32_t("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);
 	D_INFO("Set the max count of DTX batched commit ULTs as %d\n", dtx_batched_ult_max);
 
+	dtx_batched_degree = DTX_THRESHOLD_COUNT;
+	d_getenv_uint32_t("DAOS_DTX_BATCHED_DEGREE", &dtx_batched_degree);
+	if (dtx_batched_degree < DTX_BATCHED_DEGREE_MIN || dtx_batched_degree > DTX_BATCHED_DEGREE_MAX) {
+		D_WARN("Invalid DTX batched degree %u, the valid range is [%u, %u], "
+		       "use the default value %u\n", dtx_batched_degree, DTX_BATCHED_DEGREE_MIN,
+		       DTX_BATCHED_DEGREE_MAX, DTX_THRESHOLD_COUNT);
+		dtx_batched_degree = DTX_THRESHOLD_COUNT;
+	}
+	D_INFO("Set DTX batched commit degree as %u\n", dtx_batched_degree);
+
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 				   &dbtree_dtx_cf_ops);
