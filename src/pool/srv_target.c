@@ -38,6 +38,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/srv_csum.h>
+#include <daos_srv/security.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -343,6 +344,7 @@ pool_child_create(uuid_t pool_uuid, struct ds_pool *pool, uint32_t pool_map_ver)
 	child->spc_pool = pool;
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
+	D_INIT_LIST_HEAD(&child->spc_hdl_list);
 
 	D_ASSERT(info->dmi_tgt_id < dss_tgt_nr);
 	child->spc_state = &pool->sp_states[info->dmi_tgt_id];
@@ -686,6 +688,7 @@ pool_child_stop(struct ds_pool_child *child)
 	/* First stop all the ULTs who might need to hold ds_pool_child (or ds_cont_child) */
 	ds_cont_child_stop_all(child);
 	D_ASSERT(d_list_empty(&child->spc_cont_list));
+	ds_cont_srv_close(child);
 	ds_stop_scrubbing_ult(child);
 
 wait:
@@ -899,10 +902,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_mutex, rc = dss_abterr2der(rc));
 
-	rc = ABT_cond_create(&pool->sp_fetch_hdls_done_cond);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(err_cond, rc = dss_abterr2der(rc));
-
 	D_INIT_LIST_HEAD(&pool->sp_ec_ephs_list);
 	uuid_copy(pool->sp_uuid, key);
 	D_INIT_LIST_HEAD(&pool->sp_hdls);
@@ -915,7 +914,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
 			DP_UUID(key), rc);
-		goto err_done_cond;
+		goto err_cond;
 	}
 
 	uuid_unparse_lower(key, group_id);
@@ -945,8 +944,6 @@ err_group:
 			DP_UUID(pool->sp_uuid), DP_RC(rc_tmp));
 err_metrics:
 	ds_pool_metrics_stop(pool);
-err_done_cond:
-	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 err_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 err_mutex:
@@ -990,7 +987,6 @@ pool_free_ref(struct daos_llink *llink)
 	if (pool->sp_map_bc != NULL)
 		ds_pool_put_map_bc(pool->sp_map_bc);
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
-	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_free(&pool->sp_mutex);
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool->sp_states);
@@ -1094,14 +1090,58 @@ ds_pool_put(struct ds_pool *pool)
 	daos_lru_ref_release(pool_cache, &pool->sp_entry);
 }
 
-void
-pool_fetch_hdls_ult(void *data)
+struct cont_srv_open_arg {
+	uuid_t   pool_uuid;
+	uuid_t   cont_hdl_uuid;
+	uint64_t flags;
+	uint64_t sec_capas;
+};
+
+static inline int
+cont_srv_open_one(void *vin)
+{
+	struct cont_srv_open_arg *arg = vin;
+
+	return ds_cont_srv_open(arg->pool_uuid, arg->cont_hdl_uuid, arg->flags, arg->sec_capas);
+}
+
+int
+ds_pool_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid)
+{
+	struct cont_srv_open_arg arg = {0};
+
+	D_ASSERT(!uuid_is_null(cont_hdl_uuid));
+	uuid_copy(arg.pool_uuid, pool_uuid);
+	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
+	arg.flags     = 0;
+	arg.sec_capas = ds_sec_get_rebuild_cont_capabilities();
+
+	return ds_pool_task_collective(pool_uuid,
+				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				       cont_srv_open_one, &arg, 0);
+}
+
+static inline bool
+eph_report_exiting(struct ds_pool *pool)
+{
+	return pool->sp_stopping || dss_ult_exiting(pool->sp_ec_ephs_req);
+}
+
+#define EPH_REPORT_INTVL       5000 /* 5 seconds */
+#define EPH_REPORT_RETRY_INTVL 2000 /* 2 seconds */
+
+static void
+eph_report_ult(void *data)
 {
 	struct ds_pool	*pool = data;
-	int		rc = 0;
+	int              rc, sleep_intvl;
+	bool             conn_hdl_fetched = false, srv_hdl_fetched = false;
 
-	D_INFO(DF_UUID": begin: fetch_hdls=%u stopping=%u\n", DP_UUID(pool->sp_uuid),
-	       pool->sp_fetch_hdls, pool->sp_stopping);
+	D_DEBUG(DB_MD, DF_UUID " Enter eph report.\n", DP_UUID(pool->sp_uuid));
+	D_ASSERT(pool->sp_ec_ephs_req != NULL);
+
+	if (pool->sp_stopping)
+		goto out;
 
 	/* sp_map == NULL means the IV ns is not setup yet, i.e.
 	 * the pool leader does not broadcast the pool map to the
@@ -1109,56 +1149,90 @@ pool_fetch_hdls_ult(void *data)
 	 */
 	ABT_mutex_lock(pool->sp_mutex);
 	if (pool->sp_map == NULL) {
-		D_INFO(DF_UUID": waiting for map\n", DP_UUID(pool->sp_uuid));
+		D_INFO(DF_UUID ": Wait for pool map.\n", DP_UUID(pool->sp_uuid));
 		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
+		D_INFO(DF_UUID ": Wait for pool map done.\n", DP_UUID(pool->sp_uuid));
 	}
 	ABT_mutex_unlock(pool->sp_mutex);
 
-	if (pool->sp_stopping) {
-		D_DEBUG(DB_MD, DF_UUID": skip fetching hdl due to stop\n",
-			DP_UUID(pool->sp_uuid));
-		D_GOTO(out, rc);
-	}
-	D_INFO(DF_UUID": fetching handles\n", DP_UUID(pool->sp_uuid));
-	rc = ds_pool_iv_conn_hdl_fetch(pool);
-	if (rc) {
-		D_INFO(DF_UUID" iv conn fetch %d\n", DP_UUID(pool->sp_uuid), rc);
-		D_GOTO(out, rc);
-	}
+	while (!eph_report_exiting(pool)) {
+		sleep_intvl = EPH_REPORT_INTVL;
 
+		/* Fetch pool connection handles */
+		if (!conn_hdl_fetched) {
+			D_INFO(DF_UUID ": Fetching connection handles.\n", DP_UUID(pool->sp_uuid));
+			rc = ds_pool_iv_conn_hdl_fetch(pool);
+			if (rc) {
+				D_INFO(DF_UUID ": Failed to fetch connection handles. " DF_RC "",
+				       DP_UUID(pool->sp_uuid), DP_RC(rc));
+				sleep_intvl = EPH_REPORT_RETRY_INTVL;
+			} else {
+				conn_hdl_fetched = true;
+			}
+		}
+
+		if (eph_report_exiting(pool))
+			break;
+
+		/* Fetch server pool/cont open handles */
+		if (!srv_hdl_fetched) {
+			D_INFO(DF_UUID ": Fetching srv open handles.\n", DP_UUID(pool->sp_uuid));
+			rc = ds_pool_iv_srv_hdl_fetch(pool, &pool->sp_srv_pool_hdl,
+						      &pool->sp_srv_cont_hdl);
+			if (rc) {
+				DL_ERROR(rc, DF_UUID ": Failed to fetch srv open handles.",
+					 DP_UUID(pool->sp_uuid));
+				sleep_intvl = EPH_REPORT_RETRY_INTVL;
+			} else if (uuid_is_null(pool->sp_srv_pool_hdl) ||
+				   uuid_is_null(pool->sp_srv_cont_hdl)) {
+				/* Feteched NULL server handle ?! */
+				D_INFO(DF_UUID ": Got NULL handle, ph=" DF_UUID ", coh=" DF_UUID
+					       "\n",
+				       DP_UUID(pool->sp_uuid), DP_UUID(pool->sp_srv_pool_hdl),
+				       DP_UUID(pool->sp_srv_cont_hdl));
+				sleep_intvl = EPH_REPORT_RETRY_INTVL;
+			} else {
+				rc = ds_pool_srv_open(pool->sp_uuid, pool->sp_srv_cont_hdl);
+				if (rc) {
+					DL_ERROR(rc, DF_UUID ": Failed to open srv cont hdl.",
+						 DP_UUID(pool->sp_uuid));
+				} else {
+					srv_hdl_fetched = true;
+				}
+			}
+		}
+
+		if (eph_report_exiting(pool))
+			break;
+
+		/* Report EC agg epoch boundary */
+		rc = ds_cont_eph_report(pool);
+		if (rc) {
+			DL_ERROR(rc, "Failed to report EC agg epoch.");
+			sleep_intvl = EPH_REPORT_RETRY_INTVL;
+		}
+
+		if (eph_report_exiting(pool))
+			break;
+
+		sched_req_sleep(pool->sp_ec_ephs_req, sleep_intvl);
+	}
 out:
-	D_INFO(DF_UUID": signaling done\n", DP_UUID(pool->sp_uuid));
-	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_done_cond);
-	ABT_mutex_unlock(pool->sp_mutex);
-
-	pool->sp_fetch_hdls = 0;
-	D_INFO(DF_UUID": end\n", DP_UUID(pool->sp_uuid));
-}
-
-static void
-tgt_track_eph_query_ult(void *data)
-{
-	ds_cont_track_eph_query_ult(data);
+	D_DEBUG(DB_MD, DF_UUID " Exit eph report ULT.\n", DP_UUID(pool->sp_uuid));
 }
 
 static int
-ds_pool_start_track_eph_query_ult(struct ds_pool *pool)
+start_eph_report_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
 	uuid_t			anonym_uuid;
 
-	if (unlikely(ec_agg_disabled))
-		return 0;
-
 	D_ASSERT(pool->sp_ec_ephs_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_track_eph_query_ult, pool,
-						DSS_DEEP_STACK_SZ);
+	pool->sp_ec_ephs_req = sched_create_ult(&attr, eph_report_ult, pool, DSS_DEEP_STACK_SZ);
 	if (pool->sp_ec_ephs_req == NULL) {
-		D_ERROR(DF_UUID": failed create ec eph equery ult.\n",
-			DP_UUID(pool->sp_uuid));
+		D_ERROR(DF_UUID ": Failed to create eph report ULT.\n", DP_UUID(pool->sp_uuid));
 		return -DER_NOMEM;
 	}
 
@@ -1166,41 +1240,21 @@ ds_pool_start_track_eph_query_ult(struct ds_pool *pool)
 }
 
 static void
-ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
+stop_eph_report_ult(struct ds_pool *pool)
 {
 	if (pool->sp_ec_ephs_req == NULL)
-		return;
+		goto out;
 
-	D_DEBUG(DB_MD, DF_UUID": Stopping EC query ULT\n",
-		DP_UUID(pool->sp_uuid));
+	D_INFO(DF_UUID ": Stopping eph report ULT.\n", DP_UUID(pool->sp_uuid));
+	ABT_mutex_lock(pool->sp_mutex);
+	ABT_cond_signal(pool->sp_fetch_hdls_cond);
+	ABT_mutex_unlock(pool->sp_mutex);
 
 	sched_req_wait(pool->sp_ec_ephs_req, true);
 	sched_req_put(pool->sp_ec_ephs_req);
 	pool->sp_ec_ephs_req = NULL;
-	D_INFO(DF_UUID": EC query ULT stopped\n", DP_UUID(pool->sp_uuid));
-}
-
-static void
-pool_fetch_hdls_ult_abort(struct ds_pool *pool)
-{
-	D_INFO(DF_UUID": begin: fetch_hdls=%u stopping=%u\n", DP_UUID(pool->sp_uuid),
-	       pool->sp_fetch_hdls, pool->sp_stopping);
-
-	if (!pool->sp_fetch_hdls) {
-		D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
-		return;
-	}
-
-	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_cond);
-	ABT_mutex_unlock(pool->sp_mutex);
-	D_INFO(DF_UUID": signaled\n", DP_UUID(pool->sp_uuid));
-
-	ABT_mutex_lock(pool->sp_mutex);
-	D_INFO(DF_UUID": waiting for ULT\n", DP_UUID(pool->sp_uuid));
-	ABT_cond_wait(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
-	ABT_mutex_unlock(pool->sp_mutex);
-	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
+out:
+	D_INFO(DF_UUID ": eph report ULT stopped.\n", DP_UUID(pool->sp_uuid));
 }
 
 /*
@@ -1274,24 +1328,11 @@ ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable)
 	if (rc != 0)
 		goto failure_pool;
 
-	if (!ds_pool_skip_for_check(pool)) {
-		rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS, 0,
-				    DSS_DEEP_STACK_SZ, NULL);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to create fetch ult: "DF_RC"\n",
-				DP_UUID(uuid), DP_RC(rc));
-			goto failure_children;
-		}
-
-		pool->sp_fetch_hdls = 1;
-	}
-
 	if (!ds_pool_restricted(pool, false)) {
-		rc = ds_pool_start_track_eph_query_ult(pool);
+		rc = start_eph_report_ult(pool);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
-				DP_UUID(uuid), DP_RC(rc));
-			D_GOTO(failure_ult, rc);
+			DL_ERROR(rc, DF_UUID ": Failed to start eph report ULT.", DP_UUID(uuid));
+			D_GOTO(failure_children, rc);
 		}
 	}
 
@@ -1304,8 +1345,6 @@ ds_pool_start(uuid_t uuid, bool aft_chk, bool immutable)
 
 	return 0;
 
-failure_ult:
-	pool_fetch_hdls_ult_abort(pool);
 failure_children:
 	pool_child_delete_all(pool);
 failure_pool:
@@ -1368,8 +1407,7 @@ ds_pool_stop(uuid_t uuid)
 	pool_tgt_disconnect_all(pool);
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
-	ds_pool_tgt_ec_eph_query_abort(pool);
-	pool_fetch_hdls_ult_abort(pool);
+	stop_eph_report_ult(pool);
 
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1, -1);

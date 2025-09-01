@@ -502,13 +502,7 @@ again:
 					struct daos_prop_entry	*prop_entry;
 					struct daos_co_status	stat = { 0 };
 
-					if (uuid_is_null(chdl.ch_cont)) {
-						/* Skip for container server handler */
-						iv_entry.iv_capa.sec_capas =
-							ds_sec_get_rebuild_cont_capabilities();
-						iv_entry.iv_capa.flags = 0;
-						D_GOTO(out, rc = 0);
-					}
+					D_ASSERT(!uuid_is_null(chdl.ch_cont));
 					rc = ds_cont_get_prop(entry->ns->iv_pool_uuid,
 							      chdl.ch_cont, &prop);
 					if (rc) {
@@ -980,6 +974,11 @@ cont_iv_capa_refresh_ult(void *data)
 		D_GOTO(out, rc);
 
 	D_ASSERT(pool != NULL);
+	/* Trying to fetch server handle through IV_CONT_CAPA indicates a BUG */
+	D_ASSERTF(uuid_compare(pool->sp_srv_cont_hdl, arg->cont_hdl_uuid) != 0,
+		  "srv_hdl:" DF_UUID ", hdl:" DF_UUID "", DP_UUID(pool->sp_srv_cont_hdl),
+		  DP_UUID(arg->cont_hdl_uuid));
+
 	if (arg->invalidate_current) {
 		rc = cont_iv_capability_invalidate(pool->sp_iv_ns,
 						   arg->cont_hdl_uuid,
@@ -1665,6 +1664,31 @@ ds_cont_fetch_prop(uuid_t po_uuid, uuid_t co_uuid, daos_prop_t *cont_prop)
 int
 ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 {
+	struct ds_pool_child *pool_child;
+	struct ds_cont_hdl   *hdl;
+
+	pool_child = ds_pool_child_lookup(po_uuid);
+	if (pool_child == NULL) {
+		D_ERROR(DF_UUID ": Failed to find pool child.", DP_UUID(po_uuid));
+		return -DER_NO_HDL;
+	}
+
+	/* Return a retry-able error when the srv handle not propagated */
+	if (d_list_empty(&pool_child->spc_hdl_list)) {
+		ds_pool_child_put(pool_child);
+		D_INFO(DF_UUID ": Server handle isn't propagated yet.\n", DP_UUID(po_uuid));
+		return -DER_STALE;
+	}
+
+	hdl = d_list_entry(pool_child->spc_hdl_list.next, struct ds_cont_hdl, sch_link);
+	D_ASSERT(!uuid_is_null(hdl->sch_uuid));
+
+	ds_pool_child_put(pool_child);
+	if (uuid_compare(hdl->sch_uuid, coh_uuid) == 0) {
+		*coh_p = hdl;
+		return 0;
+	}
+
 	/* NB: it can be called from any xstream */
 	return cont_iv_hdl_fetch(coh_uuid, po_uuid, coh_p);
 }

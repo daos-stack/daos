@@ -6000,14 +6000,14 @@ ds_cont_hdl_rdb_lookup(uuid_t pool_uuid, uuid_t cont_hdl_uuid, struct container_
 
 	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": find leader: %d\n",
-			DP_CONT(pool_uuid, cont_hdl_uuid), rc);
+		D_ERROR(DF_UUID ": find leader: %d\n", DP_UUID(pool_uuid), rc);
 		return rc;
 	}
 
-	/* check if it is server container hdl */
-	if (uuid_compare(cont_hdl_uuid, svc->cs_pool->sp_srv_cont_hdl) == 0)
-		D_GOTO(put, rc);
+	/* Lookup server handle in container open handle DB indicates a BUG */
+	D_ASSERTF(uuid_compare(cont_hdl_uuid, svc->cs_pool->sp_srv_cont_hdl) != 0,
+		  "srv hdl:" DF_UUID ", hdl:" DF_UUID "\n", DP_UUID(svc->cs_pool->sp_srv_cont_hdl),
+		  DP_UUID(cont_hdl_uuid));
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)

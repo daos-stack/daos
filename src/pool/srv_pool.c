@@ -2409,9 +2409,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	}
 
 	if (svc->ps_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_SRV_HDLS) {
-		/* See the is_pool_from_srv comment in the "else" branch. */
 		if (uuid_is_null(svc->ps_pool->sp_srv_pool_hdl))
 			uuid_copy(svc->ps_pool->sp_srv_pool_hdl, srv_pool_hdl);
+		if (uuid_is_null(svc->ps_pool->sp_srv_cont_hdl))
+			uuid_copy(svc->ps_pool->sp_srv_cont_hdl, srv_cont_hdl);
 	} else {
 		if (!uuid_is_null(svc->ps_pool->sp_srv_cont_hdl)) {
 			uuid_copy(srv_pool_hdl, svc->ps_pool->sp_srv_pool_hdl);
@@ -2419,11 +2420,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		} else {
 			uuid_generate(srv_pool_hdl);
 			uuid_generate(srv_cont_hdl);
-			/* Only copy server handle to make is_pool_from_srv() check correctly, and
-			 * container server handle will not be copied here, otherwise
-			 * ds_pool_iv_refresh_hdl will not open the server container handle.
-			 */
 			uuid_copy(svc->ps_pool->sp_srv_pool_hdl, srv_pool_hdl);
+			uuid_copy(svc->ps_pool->sp_srv_cont_hdl, srv_cont_hdl);
 		}
 	}
 
