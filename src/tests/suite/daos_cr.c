@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -380,78 +381,6 @@ cr_locate_dcri(struct daos_check_info *dci, struct daos_check_report_info *base,
 	D_ASSERTF(found, "Cannot found inconsistency report for "DF_UUIDF"\n", DP_UUID(uuid));
 
 	return dcri;
-}
-
-static int
-cr_pool_fail_result(struct daos_check_info *dci, uuid_t uuid, uint32_t cla, uint32_t act, int *ret)
-{
-	struct daos_check_pool_info	*dcpi;
-	struct daos_check_report_info	*dcri;
-	int				 i;
-
-	if (dci->dci_pool_nr != 1) {
-		print_message("CR pool count %d (pool " DF_UUID ") is not 1\n",
-			      dci->dci_pool_nr, DP_UUID(uuid));
-		return -DER_INVAL;
-	}
-
-	dcpi = &dci->dci_pools[0];
-	D_ASSERTF(uuid_compare(dcpi->dcpi_uuid, uuid) == 0,
-		  "Unmatched pool UUID (1): " DF_UUID " vs " DF_UUID "\n",
-		  DP_UUID(dcpi->dcpi_uuid), DP_UUID(uuid));
-
-	if (!cr_pool_status_failed(dcpi->dcpi_status)) {
-		print_message("CR pool " DF_UUID " status %s is not failed\n",
-			      DP_UUID(uuid), dcpi->dcpi_status);
-		return -DER_INVAL;
-	}
-
-	if (cr_pool_phase_is_done(dcpi->dcpi_phase)) {
-		print_message("CR pool " DF_UUID " phase should not be done\n",
-			      DP_UUID(uuid));
-		return -DER_INVAL;
-	}
-
-#ifdef CR_ACCURATE_QUERY_RESULT
-	if (dci->dci_report_nr != 1) {
-		print_message("CR (failed) pool " DF_UUID " has unexpected reports: %d\n",
-			      DP_UUID(uuid), dci->dci_report_nr);
-		return -DER_INVAL;
-	}
-#endif
-
-	for (i = 0; i < dci->dci_report_nr; i++) {
-		dcri = &dci->dci_reports[i];
-		if (uuid_compare(dcri->dcri_uuid, uuid) != 0) {
-#ifdef CR_ACCURATE_QUERY_RESULT
-			print_message("Detect unrelated inconsistency report: "
-				      DF_UUID " vs " DF_UUID "\n",
-				      DP_UUID(dcpi->dcpi_uuid), DP_UUID(uuid));
-			return -DER_INVAL;
-#else
-			continue;
-#endif
-		}
-
-		if (dcri->dcri_class != cla) {
-			print_message("CR (failed) pool " DF_UUID " reports unexpected "
-				      "inconsistency at %d: %u vs %u\n",
-				      DP_UUID(uuid), i, dcri->dcri_class, cla);
-			return -DER_INVAL;
-		}
-
-		if (dcri->dcri_act != act) {
-			print_message("CR (failed) pool " DF_UUID " reports unexpected "
-				      "solution at %d: %u vs %u\n",
-				      DP_UUID(uuid), i, dcri->dcri_act, act);
-			return -DER_INVAL;
-		}
-
-		*ret = dcri->dcri_result;
-		return 0;
-	}
-
-	return -DER_INVAL;
 }
 
 static void
@@ -2260,8 +2189,8 @@ cr_engine_resume(void **state)
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) != 0,
-			  "Pool (" DF_UUID ") label should not be repaired: %s\n",
-			  DP_UUID(pool.pool_uuid), label);
+		  "Pool (" DF_UUID ") label should not be repaired: %s\n", DP_UUID(pool.pool_uuid),
+		  label);
 
 	D_FREE(label);
 	cr_dci_fini(&dci);
@@ -2472,8 +2401,8 @@ cr_failout(void **state)
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) != 0,
-			  "Pool (" DF_UUID ") label should not be repaired: %s\n",
-			  DP_UUID(pool.pool_uuid), label);
+		  "Pool (" DF_UUID ") label should not be repaired: %s\n", DP_UUID(pool.pool_uuid),
+		  label);
 
 	D_FREE(label);
 	cr_dci_fini(&dci);
@@ -2872,9 +2801,9 @@ cr_engine_death(void **state)
 	rc = dmg_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
 	assert_rc_equal(rc, 0);
 
-	D_ASSERTF(strcmp(label, pool.label) != 0,
-			  "Pool (" DF_UUID ") label should not be repaired: %s\n",
-			  DP_UUID(pool.pool_uuid), label);
+	D_ASSERTF(strcmp(label, pool.label) == 0,
+		  "Pool (" DF_UUID ") label is not repaired: %s vs %s\n", DP_UUID(pool.pool_uuid),
+		  label, pool.label);
 
 	D_FREE(label);
 	cr_dci_fini(&dci);
@@ -3003,9 +2932,9 @@ cleanup:
  * 3. Start checker with option "-p POOL_NONEXIST_ON_MS:CIA_INTERACT".
  * 4. Query checker, it should show the interaction.
  * 5. Stop some rank in the system.
- * 6. Check repair with destroying the orphan pool, that should fail since we lost some pool shards
- *    during the check.
- * 7. Query checker, the instance should be completed, the pool should be failed.
+ * 6. Check repair with destroying the orphan pool, that should succeed even if some pool shards
+ *    is dead during the check.
+ * 7. Query checker, the instance should be completed, the pool should has been checked.
  * 8. Start the rank that is stopped just now - rejoin failed since the former checker instance has
  *    already completed.
  * 9. Restart checker with option "--reset" and
@@ -3022,8 +2951,7 @@ cr_engine_rejoin_fail(void **state)
 	struct daos_check_report_info	*dcri;
 	uint32_t			 class = TCC_POOL_NONEXIST_ON_MS;
 	uint32_t			 action;
-	int				 rank = -1;
-	int				 result = 0;
+	int                              rank = -1;
 	int				 rc;
 	int				 i;
 
@@ -3076,12 +3004,8 @@ cr_engine_rejoin_fail(void **state)
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_pool_fail_result(&dci, pool.pool_uuid, class, action, &result);
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
-
-	/* The check on the pool will fail because of -DER_HG or -DER_TIMEDOUT or -DER_OOG. */
-	D_ASSERTF(result == -DER_HG || result == -DER_TIMEDOUT || result == -DER_OOG,
-		  "Unexpected pool " DF_UUID " fail result: %d\n", DP_UUID(pool.pool_uuid), result);
 
 	/* Reint the rank, rejoin will fail but not affect the rank start. */
 	rc = cr_rank_reint(rank, true);
