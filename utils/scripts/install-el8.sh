@@ -62,7 +62,6 @@ dnf --nodocs install ${dnf_install_args} \
     ndctl-devel \
     numactl \
     numactl-devel \
-    openmpi-devel \
     openssl-devel \
     pandoc \
     patch \
@@ -80,6 +79,11 @@ dnf --nodocs install ${dnf_install_args} \
     valgrind-devel \
     which \
     yasm
+
+if [[ -z #${NO_DEVEL+set}" ]] then
+    dnf --nodocs install ${dnf_install_args} \
+    	openmpi-devel 
+fi
 
 ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
 # shellcheck disable=SC2086
