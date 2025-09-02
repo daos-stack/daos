@@ -1664,7 +1664,7 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	uint32_t	i;
 	int		rc;
 
-	if (reasb_req->orr_usgls == NULL) /* punch case */
+	if (reasb_req->orr_processed_sgls == NULL) /* punch case */
 		return 0;
 
 	codec = codec_get(reasb_req, reasb_req->orr_oid);
@@ -1675,11 +1675,9 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	}
 
 	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
-		rc = obj_ec_recx_encode(codec,
-					reasb_req->orr_oca,
-					&reasb_req->orr_uiods[i],
-					&reasb_req->orr_usgls[i],
-					&reasb_req->orr_recxs[i]);
+		rc =
+		    obj_ec_recx_encode(codec, reasb_req->orr_oca, &reasb_req->orr_uiods[i],
+				       &reasb_req->orr_processed_sgls[i], &reasb_req->orr_recxs[i]);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
 				DP_OID(reasb_req->orr_oid), rc);
@@ -1702,7 +1700,7 @@ obj_ec_req_reasb(struct dc_object *obj, daos_iod_t *iods, uint64_t dkey_hash, d_
 	reasb_req->orr_iod_nr = iod_nr;
 	if (!reasb_req->orr_size_fetch) {
 		reasb_req->orr_uiods = iods;
-		reasb_req->orr_usgls = sgls;
+		reasb_req->orr_processed_sgls = sgls;
 	}
 
 	/* If any array iod with unknown rec_size, firstly send a size_fetch
@@ -1879,7 +1877,7 @@ obj_ec_fetch_set_sgl(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);
 	uiods = reasb_req->orr_uiods;
-	usgls = reasb_req->orr_usgls;
+	usgls         = reasb_req->orr_processed_sgls;
 	riods = reasb_req->orr_iods;
 	for (i = 0; i < iod_nr; i++) {
 		uiod = &uiods[i];
@@ -2438,7 +2436,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods, uint32
 		}
 
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
-			buf_sz = daos_sgl_buf_size(&reasb_req->orr_usgls[i]);
+			buf_sz = daos_sgl_buf_size(&reasb_req->orr_processed_sgls[i]);
 			buf_sz = max(iod->iod_size, buf_sz);
 			buf_sz = obj_ec_singv_cell_bytes(buf_sz, oca) *
 				 obj_ec_tgt_nr(oca);
@@ -2482,7 +2480,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods, uint32
 			continue;
 		iod = &iods[i];
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
-			buf_sz = daos_sgl_buf_size(&reasb_req->orr_usgls[i]);
+			buf_sz = daos_sgl_buf_size(&reasb_req->orr_processed_sgls[i]);
 			buf_sz = max(iod->iod_size, buf_sz);
 			buf_sz = obj_ec_singv_cell_bytes(buf_sz, oca) *
 				 obj_ec_tgt_nr(oca);
@@ -2782,7 +2780,7 @@ void
 obj_ec_recov_data(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 {
 	daos_iod_t			*iods = reasb_req->orr_uiods;
-	d_sg_list_t			*sgls = reasb_req->orr_usgls;
+	d_sg_list_t                     *sgls      = reasb_req->orr_processed_sgls;
 	struct obj_ec_fail_info		*fail_info = reasb_req->orr_fail;
 	struct obj_ec_recov_codec	*codec = fail_info->efi_recov_codec;
 	struct daos_oclass_attr		*oca = reasb_req->orr_oca;

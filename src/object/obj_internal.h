@@ -46,7 +46,7 @@ extern unsigned int	srv_io_mode;
 extern unsigned int	obj_coll_thd;
 extern btr_ops_t	dbtree_coll_ops;
 
-/** See comments in obj_sgls_dup(), tune iov merge conditions */
+/** See comments in obj_processed_sgls(), tune iov merge conditions */
 extern unsigned int     iov_frag_count;
 extern unsigned int     iov_frag_size;
 
@@ -158,9 +158,10 @@ struct obj_reasb_req {
 	struct dtx_epoch		 orr_epoch;
 	/* original obj IO API args */
 	daos_obj_rw_t			*orr_args;
-	/* original user input iods/sgls */
+	/* original user input iods */
 	daos_iod_t			*orr_uiods;
-	d_sg_list_t			*orr_usgls;
+	/* original processed sgls */
+	d_sg_list_t                     *orr_processed_sgls;
 	/* reassembled iods/sgls */
 	daos_iod_t			*orr_iods;
 	d_sg_list_t			*orr_sgls;
@@ -277,7 +278,7 @@ struct shard_auxi_args {
 };
 
 struct sgl_merge_ctx {
-	d_sg_list_t *sgls_dup;
+	d_sg_list_t *processed_sgls;
 	d_sg_list_t *sgls_orig;
 	uint64_t   **merged_bitmaps;
 	uint64_t   **alloc_bitmaps;
@@ -501,7 +502,7 @@ struct obj_auxi_args {
 	/* Last timestamp (in second) when report retry warning message. */
 	uint32_t                         retry_warn_ts;
 	struct obj_req_tgts		 req_tgts;
-	d_sg_list_t			*sgls_dup;
+	d_sg_list_t                     *processed_sgls;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
 	uint32_t			 initial_shard;
