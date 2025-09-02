@@ -74,7 +74,7 @@ class LogLine():
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
-    # Match a pointer, with optional ')', '.' or ',' suffix.
+    # Match a pointer, with optional ')', '.', or ',' suffix.
     re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.|\,)?)")
     # Match a pid marker
     re_pid = re.compile(r"pid=(\d+)")
@@ -96,27 +96,28 @@ class LogLine():
         # The date, time, hostname, pid, fac and level fields
         # are all variable width.
         idx = 0
-        idx += (len(fields[0]) if len(fields[0]) > 4 else 4) + 1
         for i in range(4):
-            idx += len(fields[i + 1]) + 1
+            idx += len(fields[i]) + 1
         # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 664
-        # snprintf(..., "%-6s ", facstr)
-        idx += (len(fields[5]) if len(fields[5]) > 6 else 6)
+        # snprintf(..., "%-4s ", facstr)
+        idx += (len(fields[4]) if len(fields[4]) > 4 else 4) + 1
+        idx += len(fields[5]) if len(fields[5]) > 4 else 4
         # assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c: 651
         # assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c: 652
-        pidtid = fields[4][5:-1]
+        pidtid = fields[3][5:-1]
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
+        self.fac = fields[4]
         # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 664
-        self.fac = fields[5]
+        # snprintf(..., "%-4s ", facstr)
         try:
-            self.level = LOG_LEVELS[fields[0]]
+            self.level = LOG_LEVELS[fields[5]]
         except KeyError as error:
-            raise InvalidLogFile(fields[0]) from error
+            raise InvalidLogFile(fields[5]) from error
 
-        self.time_stamp = fields[1] + ' ' + fields[2]
-        self.hostname = fields[3]
+        self.time_stamp = fields[0] + ' ' + fields[1]
+        self.hostname = fields[2]
         self._fields = fields[6:]
         try:
             if self._fields[1][-2:] == '()':
@@ -146,8 +147,8 @@ class LogLine():
 
     def to_str(self, mark=False):
         """Convert the object to a string"""
-        pre = self._preamble.split(' ', 5)
-        preamble = ' '.join([pre[1], pre[2], pre[5]])
+        pre = self._preamble.split(' ', 4)
+        preamble = ' '.join([pre[0], pre[1], pre[4]])
         if mark:
             return '{} ** {}'.format(preamble, self._msg)
         return '{}    {}'.format(preamble, self._msg)
@@ -576,7 +577,7 @@ class LogIter():
             ):
                 position += len(line)
                 continue
-            pidtid = fields[4][5:-1]
+            pidtid = fields[3][5:-1]
             pid = pidtid.split("/")
             l_pid = int(pid[0])
             if l_pid in pids:

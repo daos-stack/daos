@@ -641,10 +641,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * ok, first, put the header into b[]
 	 */
 	hlen = 0;
-	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ", clog_pristr(lvl));
-
 	if (mst.oflags & DLOG_FLV_YEAR)
-		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%04d/", tm->tm_year + 1900);
+		hlen = snprintf(b, sizeof(b), "%04d/", tm->tm_year + 1900);
 
 	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%02d/%02d %02d:%02d:%02d.%06ld %s ",
 			 tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
@@ -665,6 +663,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (hlen < sizeof(b)) {
 		if (mst.oflags & DLOG_FLV_FAC)
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%-6s ", facstr);
+
+		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
+				 clog_pristr(lvl));
 	}
 	/*
 	 * we expect there is still room (i.e. at least one byte) for a
