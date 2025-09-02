@@ -73,7 +73,16 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
 		if (rc != 0) {
 			goto fail;
 		}
+		if (target > DLCK_TARGET_MAX) {
+			FAIL(state, rc, EINVAL, "Chosen target is too big: %" PRIu32 ">%" PRIu32,
+			     target, DLCK_TARGET_MAX);
+		}
 		file->targets_bitmap |= (1 << target);
+	}
+
+	/** No target means all targets. */
+	if (file->targets_bitmap == 0) {
+		file->targets_bitmap = -1;
 	}
 
 	D_FREE(arg_copy);

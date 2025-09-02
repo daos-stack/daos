@@ -8,6 +8,7 @@
 #define __DLCK_ARGS__
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <argp.h>
 #include <uuid/uuid.h>
 #include <gurt/list.h>
@@ -32,10 +33,11 @@
 #define KEY_ENGINE_NVME                 'n'
 
 /** defaults */
-
 #define DLCK_DEFAULT_MAX_DMA_BUF_SIZE   5120
 #define DLCK_DEFAULT_NVME_HUGEPAGE_SIZE 2
 #define DLCK_DEFAULT_TARGETS            4
+
+#define DLCK_TARGET_MAX                 31
 
 /**
  * @struct dlck_file
@@ -45,7 +47,7 @@
 struct dlck_file {
 	d_list_t    link;
 	uuid_t      po_uuid;        /** Pool UUID. */
-	int         targets_bitmap; /** Bitmap of targets involved. */
+	uint32_t    targets_bitmap; /** Bitmap of targets involved. */
 	const char *desc;           /** Argument provided by the user. */
 };
 
@@ -173,17 +175,5 @@ dlck_args_free(struct dlck_control *ctrl);
  */
 void
 dlck_args_files_free(struct dlck_args_files *args);
-
-/**
- * \brief Final check of the files arguments.
- *
- * Adjusts the \p args list to enforce the rule: 'If no TARGET is provided, all targets are used.'
- * Has to be invoked separately from the validation conducted internally by the parser.
- *
- * \param[in,out]	args	Arguments produced by the files-related parser.
- * \param[in]		targets	Total number of targets requested.
- */
-void
-args_files_check(struct dlck_args_files *args, unsigned targets);
 
 #endif /** __DLCK_ARGS__ */
