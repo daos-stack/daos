@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -73,10 +74,11 @@ const (
 	MetricTypeDirectory  MetricType = C.D_TM_DIRECTORY
 	MetricTypeLink       MetricType = C.D_TM_LINK
 
-	ClientJobRootID         = C.DC_TM_JOB_ROOT_ID
-	ClientJobMax            = 1024
-	ClientMetricsEnabledEnv = C.DAOS_CLIENT_METRICS_ENABLE
-	ClientMetricsRetainEnv  = C.DAOS_CLIENT_METRICS_RETAIN
+	ClientJobRootID          = C.DC_TM_JOB_ROOT_ID
+	ClientJobMax             = 1024
+	ClientMetricsEnabledEnv  = C.DAOS_CLIENT_METRICS_ENABLE
+	ClientMetricsRetainEnv   = C.DAOS_CLIENT_METRICS_RETAIN
+	ClientMetricsRegisterEnv = C.DAOS_CLIENT_METRICS_REGISTER
 
 	BadUintVal  = ^uint64(0)
 	BadFloatVal = float64(BadUintVal)

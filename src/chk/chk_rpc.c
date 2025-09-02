@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -467,24 +468,36 @@ static inline int
 chk_co_rpc_prepare(d_rank_list_t *rank_list, crt_opcode_t opc, crt_rpc_t **req, bool failout)
 {
 	uint32_t	flags = CRT_RPC_FLAG_FILTER_INVERT;
+	uint8_t         chk_ver;
+	int             rc;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	if (failout)
 		flags |= CRT_RPC_FLAG_CO_FAILOUT;
 
 	return crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, rank_list,
-				    DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, DAOS_CHK_VERSION),
-				    NULL, NULL, flags, crt_tree_topo(CRT_TREE_KNOMIAL, 32), req);
+				    DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, chk_ver), NULL, NULL,
+				    flags, crt_tree_topo(CRT_TREE_KNOMIAL, 32), req);
 }
 
 static inline int
 chk_sg_rpc_prepare(d_rank_t rank, crt_opcode_t opc, crt_rpc_t **req)
 {
 	crt_endpoint_t	tgt_ep;
+	uint8_t         chk_ver;
+	int             rc;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = rank;
 	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_CHK, 0);
-	opc = DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, DAOS_CHK_VERSION);
+	opc            = DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, chk_ver);
 
 	return crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, req);
 }
@@ -776,9 +789,14 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 	struct chk_cont_list_in		*ccli = NULL;
 	struct chk_cont_list_out	*cclo = NULL;
 	int				 rc;
+	uint8_t                          chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx, pool, DAOS_CHK_MODULE,
-				  CHK_CONT_LIST, DAOS_CHK_VERSION, &req, NULL, NULL, NULL);
+				  CHK_CONT_LIST, chk_ver, &req, NULL, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to create RPC for check cont list for "DF_UUIDF": "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));

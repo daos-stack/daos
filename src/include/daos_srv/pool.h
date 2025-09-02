@@ -73,6 +73,7 @@ struct ds_pool {
 	crt_group_t	       *sp_group;
 	/* Size threshold to store data on backend bdev */
 	uint32_t		sp_data_thresh;
+	uint64_t                 sp_self_heal;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
@@ -329,6 +330,11 @@ int dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
 int dsc_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline);
+int
+dsc_pool_svc_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *ps_ranks,
+			  uint64_t deadline);
+int
+     dsc_pool_svc_rebuild_start(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline);
 int ds_pool_failed_add(uuid_t uuid, int rc);
 void ds_pool_failed_remove(uuid_t uuid);
 int ds_pool_failed_lookup(uuid_t uuid);
@@ -404,6 +410,10 @@ struct ds_pool *ds_pool_svc2pool(struct ds_pool_svc *ds_svc);
 struct cont_svc *ds_pool_ps2cs(struct ds_pool_svc *ds_svc);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
+int
+ds_pool_rebuild_start(uuid_t pool_uuid, struct rsvc_hint *hint);
+int
+	    ds_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, struct rsvc_hint *hint);
 
 extern bool ec_agg_disabled;
 
@@ -482,7 +492,8 @@ enum ds_pool_dir {
 enum ds_pool_tgt_status {
 	DS_POOL_TGT_NONEXIST,
 	DS_POOL_TGT_EMPTY,
-	DS_POOL_TGT_NORMAL
+	DS_POOL_TGT_NORMAL,
+	DS_POOL_TGT_ORPHAN
 };
 
 int
@@ -542,5 +553,16 @@ int ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out);
 int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct rsvc_hint *hint);
 
 void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
+
+static inline bool
+ds_pool_rebuild_enabled(struct ds_pool *pool)
+{
+	if (pool->sp_disable_rebuild)
+		return false;
+	if (!(pool->sp_self_heal & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)))
+		return false;
+
+	return true;
+}
 
 #endif /* __DAOS_SRV_POOL_H__ */

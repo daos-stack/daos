@@ -441,6 +441,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD:  true,
 				},
 			},
+			// Allocation change logged.
+			expNotice: true,
 		},
 		"no bdevs configured; nr_hugepages unset": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -455,6 +457,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD:  true,
 				},
 			},
+			// Allocation change logged.
+			expNotice: true,
 		},
 		"no bdevs configured; nr_hugepages set": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -469,6 +473,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD:  true,
 				},
 			},
+			// Allocation change logged.
+			expNotice: true,
 		},
 		"2 engines both numa 0; hugepage alloc only on numa 0; insufficient existing pages": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -725,6 +731,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			// (8192 hugepages-per-engine calculated) * 2mib size
 			expMemSize:      16384,
 			expHugepageSize: 2,
+			// Allocations increased for both NUMA, logged to  to  to Notice.
+			expNotice: true,
 		},
 		"2 engines; hugepage alloc across numa 0,1; sufficient existing pages": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -808,12 +816,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				NumaNodes: []common.MemInfo{
 					{
 						NumaNodeIndex:  0,
-						HugepagesTotal: 8393,
+						HugepagesTotal: 8393, // Allocation maintained.
 						HugepagesFree:  8393,
 					},
 					{
 						NumaNodeIndex:  1,
-						HugepagesTotal: 8192,
+						HugepagesTotal: 8192, // Allocation increased.
 						HugepagesFree:  8192,
 					},
 				},
@@ -821,6 +829,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			// (8192 hugepages-per-engine calculated) * 2mib size
 			expMemSize:      16384,
 			expHugepageSize: 2,
+			// Notice logged as allocation has been increased on NUMA-1.
+			expNotice: true,
 		},
 		"2 engines; hugepage alloc across numa 0,1; missing per-numa info": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -895,6 +905,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					HugeNodes:  "nodes_hp[0]=128",
 				},
 			},
+			// Allocation change logged.
+			expNotice: true,
 		},
 		"0 engines; nr_hugepages unset": {
 			hugepagesTotal: 128,
@@ -1071,17 +1083,28 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				tc.memInfo1.HugepageSizeKiB = 2048
 				tc.memInfo1.HugepagesFree = tc.hugepagesFree
 				tc.memInfo1.HugepagesTotal = tc.hugepagesTotal
-				if len(cfg.Engines) > 0 {
+				switch len(cfg.Engines) {
+				case 0:
+				case 1:
 					tc.memInfo1.NumaNodes = []common.MemInfo{
 						{
 							NumaNodeIndex:  0,
-							HugepagesTotal: tc.hugepagesTotal / len(cfg.Engines),
-							HugepagesFree:  tc.hugepagesFree / len(cfg.Engines),
+							HugepagesTotal: tc.hugepagesTotal,
+							HugepagesFree:  tc.hugepagesFree,
+						},
+					}
+				default:
+					// Assume 2-socket / NUMA system.
+					tc.memInfo1.NumaNodes = []common.MemInfo{
+						{
+							NumaNodeIndex:  0,
+							HugepagesTotal: tc.hugepagesTotal / 2,
+							HugepagesFree:  tc.hugepagesFree / 2,
 						},
 						{
 							NumaNodeIndex:  1,
-							HugepagesTotal: tc.hugepagesTotal / len(cfg.Engines),
-							HugepagesFree:  tc.hugepagesFree / len(cfg.Engines),
+							HugepagesTotal: tc.hugepagesTotal / 2,
+							HugepagesFree:  tc.hugepagesFree / 2,
 						},
 					}
 				}
@@ -1163,12 +1186,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				"unexpected memory size")
 			test.AssertEqual(t, tc.expHugepageSize, ei.runner.GetConfig().HugepageSz,
 				"unexpected huge page size")
+
 			txtMod := ""
 			if !tc.expNotice {
-				txtMod = "not "
+				txtMod = "no "
 			}
-			msg := fmt.Sprintf("expected NOTICE level message to %shave been logged",
-				txtMod)
+			msg := fmt.Sprintf("expected %sNOTICE level message", txtMod)
 			test.AssertEqual(t, tc.expNotice, strings.Contains(buf.String(), "NOTICE"),
 				msg)
 		})

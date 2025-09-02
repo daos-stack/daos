@@ -28,6 +28,8 @@ If `DataLoader` is configured to have 8 readers then 8 event queues are going to
 Implementation of `torch.utils.data.IterableDataset` requires to implement `__iter__()` protocol, which can be fully implemented on python side,
 based on the building blocks from map style dataset.
 
+Since Dataset (and Checkpoint implementation) establishes a connection to the container, it's necessary to free resources when the dataset is no longer required.
+This can be done either by calling the `close()` method manually or by using a `with` statement, as Dataset implements the context manager protocol.
 
 ### Requirements
 
@@ -47,20 +49,19 @@ from io import BytesIO
 def transform(data):
     return np.load(BytesIO(data), allow_pickle=True)['x']
 
-ds = DaosDataset(pool="torch", cont="my-dataset", transform_fn=transform)
+with DaosDataset(pool="torch", cont="my-dataset", transform_fn=transform) as ds:
+    print(f"Loaded dataset of {len(ds)} items")
 
-print(f"Loaded dataset of {len(ds)} items")
-
-figure = plt.figure(figsize=(8, 8))
-cols, rows = 3, 3
-for i in range(1, cols * rows + 1):
-    idx = t.randint(len(ds), size=(1,)).item()
-    img = ds[idx]
-    figure.add_subplot(rows, cols, i)
-    plt.title('sample #{}'.format(idx))
-    plt.axis("off")
-    plt.imshow(img.squeeze(), cmap="gray")
-plt.show()
+    figure = plt.figure(figsize=(8, 8))
+    cols, rows = 3, 3
+    for i in range(1, cols * rows + 1):
+        idx = t.randint(len(ds), size=(1,)).item()
+        img = ds[idx]
+        figure.add_subplot(rows, cols, i)
+        plt.title('sample #{}'.format(idx))
+        plt.axis("off")
+        plt.imshow(img.squeeze(), cmap="gray")
+    plt.show()
 ```
 
 
@@ -75,8 +76,28 @@ Implementation of the loader is pretty straightforward - it reads the data from 
 
 For convenience, the `pydoas.torch.Checkpoint` class is provided that manages the DAOS connections and provides `reader` and `writer` methods.
 
+```python
+import torch as sys_torch
+from pydaos.torch import Dataset as DaosDataset
+from pydaos.torch import Checkpoint as DaosCheckpoint
+from io import BytesIO
 
-Example of using the checkpointing interface in DLIO benchmark:
+
+data = { "ones": sys_torch.ones(1048576), }
+name = "/checkpoint-1.pt"
+
+with DaosCheckpoint(pool="pool", cont="container") as ckpt:
+    with ckpt.writer(name) as f:
+        sys_torch.save(data, f)
+        print(f"Torch checkpoint saved")
+
+    stream = ckpt.reader(name)
+    loaded_data = sys_torch.load(stream, weights_only=True)
+    print(f"Torch checkpoint loaded")
+...
+```
+
+#### Example of using the checkpointing interface in DLIO benchmark:
 
 ```python
 import logging

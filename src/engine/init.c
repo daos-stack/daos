@@ -100,6 +100,25 @@ static bool dss_abt_init;
 /** Start daos_engine under check mode. */
 static bool dss_check_mode;
 
+/**
+ * DAOS Engine Runtime Version Initialization
+ * This version identifier is exclusively used during
+ * engine initialization when joining the system cluster.
+ */
+static daos_version_t   dss_join_version;
+
+void
+dss_set_join_version(daos_version_t version)
+{
+	dss_join_version = version;
+}
+
+daos_version_t
+dss_get_join_version(void)
+{
+	return dss_join_version;
+}
+
 bool
 engine_in_check(void)
 {
@@ -158,6 +177,27 @@ hlc_recovery_end(uint64_t bound)
 		       tv.tv_sec, tv.tv_nsec);
 		nanosleep(&tv, NULL);
 	}
+}
+
+static int
+init_tls_support(void)
+{
+	int rc;
+
+	rc = ds_tls_key_create();
+	if (rc != 0)
+		return daos_errno2der(rc);
+
+	dss_register_key(&daos_srv_modkey);
+
+	return 0;
+}
+
+static void
+fini_tls_support(void)
+{
+	dss_unregister_key(&daos_srv_modkey);
+	ds_tls_key_delete();
 }
 
 /*
@@ -699,10 +739,15 @@ server_init(int argc, char *argv[])
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
+	/* Must initialize TLS support before using server_id_cb. */
+	rc = init_tls_support();
+	if (rc != 0)
+		return rc;
+
 	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_INFO);
 	if (rc != 0)
-		return rc;
+		goto exit_tls_support;
 
 	/** initialize server topology data - this is needed to set up the number of targets */
 	rc = dss_topo_init();
@@ -875,6 +920,8 @@ exit_metrics_init:
 	/* dss_topo_fini cleans itself if it fails */
 exit_debug_init:
 	daos_debug_fini();
+exit_tls_support:
+	fini_tls_support();
 	return rc;
 }
 
@@ -935,6 +982,8 @@ server_fini(bool force)
 	D_INFO("dss_top_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
+	fini_tls_support();
+	D_INFO("fini_tls_support() done\n");
 }
 
 static void
