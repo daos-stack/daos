@@ -6079,7 +6079,7 @@ static int
 pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 				 bool *scheduled_layout_upgrade)
 {
-	daos_epoch_t	upgrade_eph = d_hlc_get();
+	daos_epoch_t    upgrade_eph = ds_rebuild_get_upbound_eph();
 	d_iov_t		value;
 	uint32_t	current_layout_ver = 0;
 	int		rc = 0;
@@ -7339,7 +7339,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
-	daos_epoch_t			rebuild_eph = d_hlc_get();
+	daos_epoch_t                     rebuild_eph = ds_rebuild_get_upbound_eph();
 	uint64_t			delay = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
