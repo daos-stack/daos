@@ -128,6 +128,7 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_query);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_prop);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_act);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_set_policy);
 }
 
 static daos_prop_t *

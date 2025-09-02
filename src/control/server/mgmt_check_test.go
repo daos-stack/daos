@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -521,7 +522,10 @@ func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
 func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 	uuids := testPoolUUIDs(4)
 	interactReq := &mgmtpb.CheckSetPolicyReq{
-		Sys:      "daos_server",
+		Sys: "daos_server",
+		// 'check set-policy' only changes policy, not flags, then reuse 'Flags' to indicate
+		// something internally, such as no dRPC call for test purpose.
+		Flags:    1,
 		Policies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_INTERACT),
 	}
 
@@ -571,7 +575,8 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 		},
 		"no policies in request": {
 			req: &mgmtpb.CheckSetPolicyReq{
-				Sys: "daos_server",
+				Sys:   "daos_server",
+				Flags: 1,
 			},
 			expResp:     &mgmtpb.DaosResp{},
 			expPolicies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_DEFAULT),
@@ -583,7 +588,8 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 		},
 		"set single policy": {
 			req: &mgmtpb.CheckSetPolicyReq{
-				Sys: "daos_server",
+				Sys:   "daos_server",
+				Flags: 1,
 				Policies: []*mgmtpb.CheckInconsistPolicy{
 					{
 						InconsistCas: chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
