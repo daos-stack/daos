@@ -543,11 +543,13 @@ class LogIter():
             fields = line.split(None, 9)
             index += 1
             # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
             if (
                 len(fields) < 7
                 or len(fields[0]) != 10 or fields[0][4] != '/'
                 or len(fields[1]) != 15 or (fields[1][2] != ':' and fields[1][8] != '.')
             ):
+                # pylint: enable=too-many-boolean-expressions
                 self._data.append(LogRaw(line))
             else:
                 l_obj = LogLine(line)
@@ -570,11 +572,13 @@ class LogIter():
             fields = line.split(None, 9)
             index += 1
             # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
             if (
                 len(fields) < 7
                 or len(fields[0]) != 10 or fields[0][4] != '/'
                 or len(fields[1]) != 15 or (fields[1][2] != ':' and fields[1][8] != '.')
             ):
+                # pylint: enable=too-many-boolean-expressions
                 position += len(line)
                 continue
             pidtid = fields[3][5:-1]
@@ -646,11 +650,13 @@ class LogIter():
                 raise StopIteration
             fields = line.split(None, 9)
             # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
             if (
                 len(fields) < 7
                 or len(fields[0]) != 10 or fields[0][4] != '/'
                 or len(fields[1]) != 15 or (fields[1][2] != ':' and fields[1][8] != '.')
             ):
+                # pylint: enable=too-many-boolean-expressions
                 return LogRaw(line)
             return LogLine(line)
 
