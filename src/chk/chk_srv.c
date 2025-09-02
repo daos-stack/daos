@@ -145,7 +145,7 @@ ds_chk_act_hdlr(crt_rpc_t *rpc)
 	struct chk_act_out	*cao = crt_reply_get(rpc);
 	int			 rc;
 
-	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_cla, cai->cai_act, cai->cai_flags);
+	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_act);
 
 	cao->cao_status = rc;
 	rc = crt_reply_send(rpc);
