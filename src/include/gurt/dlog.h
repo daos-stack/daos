@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -452,6 +453,18 @@ void d_log_sync(void);
  */
 void
 d_log_disable_logging(void);
+
+struct d_parser;
+typedef struct d_parser d_parser_t;
+
+/** Register log handling parser
+ *
+ * \param[in] parser Parser handle
+ *
+ * \return 0 on success, error otherwise
+ */
+int
+d_log_register_parser(d_parser_t *parser);
 
 #if defined(__cplusplus)
 }

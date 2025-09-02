@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +23,23 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 	d_slab_release(ev->de_eqt->de_write_slab, ev);
 }
 
+static int
+dfuse_log_config_copy(char *dest, int len, void *config)
+{
+	int                 rc;
+	struct fuse_bufvec *bufv = config;
+	struct fuse_bufvec  ibuf = FUSE_BUFVEC_INIT(len);
+
+	ibuf.buf[0].mem = dest;
+	rc              = fuse_buf_copy(&ibuf, bufv, 0);
+	if (rc != len) {
+		DL_ERROR(rc, "Error copying input data from fuse buffer");
+		return -DER_IO;
+	}
+
+	return 0;
+}
+
 void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t position,
 	       struct fuse_file_info *fi)
@@ -35,6 +53,23 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	struct dfuse_event   *ev;
 	uint64_t              eqt_idx;
 	bool                  wb_cache = false;
+
+	if (ino == DFUSE_CTRL_INO) {
+		struct dfuse_cont *ctrl_dfs;
+
+		D_SPIN_LOCK(&dfuse_info->di_lock);
+		ctrl_dfs = dfuse_info->di_ctrl_dfs;
+		D_SPIN_UNLOCK(&dfuse_info->di_lock);
+		rc =
+		    d_parser_run(dfuse_info->di_parser, bufv, len, dfuse_log_config_copy, ctrl_dfs);
+		if (rc != 0) {
+			DL_ERROR(rc, "Could not parse log ctrl config");
+			fuse_reply_err(req, daos_der2errno(rc));
+		} else {
+			fuse_reply_write(req, len);
+		}
+		return;
+	}
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_WRITE);
 

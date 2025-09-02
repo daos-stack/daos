@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -13,10 +14,12 @@
 #include <fused/fuse.h>
 #include <fused/fuse_lowlevel.h>
 
+#include <daos/debug.h>
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
 #include <gurt/slab.h>
+#include <gurt/parser.h>
 
 #include <daos.h>
 #include <daos_fs.h>
@@ -36,6 +39,7 @@ struct dfuse_info {
 	bool                 di_wb_cache;
 	bool                 di_read_only;
 	bool                 di_local_flock;
+	d_parser_t          *di_parser;
 
 	/* Per process spinlock
 	 * This is used to lock readdir against closedir where they share a readdir handle,
@@ -55,6 +59,9 @@ struct dfuse_info {
 	struct d_hash_table  di_pool_table;
 
 	d_list_t             di_pool_historic;
+
+	/** Set in lookup to save active container */
+	struct dfuse_cont   *di_ctrl_dfs;
 
 	/** Next available inode number */
 	ATOMIC uint64_t      di_ino_next;
@@ -1345,5 +1352,7 @@ dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 void
 dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
+
+#define DFUSE_CTRL_MODE (S_IFREG | 0666)
 
 #endif /* __DFUSE_H__ */
