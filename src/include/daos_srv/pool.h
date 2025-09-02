@@ -558,11 +558,16 @@ int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct 
 void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
 
 static inline bool
-ds_pool_rebuild_enabled(struct ds_pool *pool)
+is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)
 {
+	uint64_t flags = DAOS_SELF_HEAL_AUTO_REBUILD;
+
+	if (check_delayed_rebuild)
+		flags |= DAOS_SELF_HEAL_DELAY_REBUILD;
+
 	if (pool->sp_disable_rebuild)
 		return false;
-	if (!(pool->sp_self_heal & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)))
+	if (!(pool->sp_self_heal & flags))
 		return false;
 
 	return true;

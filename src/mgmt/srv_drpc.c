@@ -3014,7 +3014,7 @@ ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to set action for check\n");
 
-	rc = ds_mgmt_check_act(req->seq, req->act, req->for_all);
+	rc = ds_mgmt_check_act(req->seq, req->act);
 	if (rc != 0)
 		D_ERROR("Failed to set action for check: "DF_RC"\n", DP_RC(rc));
 
