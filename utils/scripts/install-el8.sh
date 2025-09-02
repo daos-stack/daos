@@ -62,6 +62,7 @@ dnf --nodocs install ${dnf_install_args} \
     ndctl-devel \
     numactl \
     numactl-devel \
+    openmpi-devel \
     openssl-devel \
     pandoc \
     patch \
