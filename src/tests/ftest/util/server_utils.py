@@ -24,7 +24,7 @@ from server_utils_params import DaosServerTransportCredentials, DaosServerYamlPa
 from user_utils import get_chown_command
 
 
-def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None, version=None):
     """Get the daos_server command object to manage.
 
     Args:
@@ -36,6 +36,8 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
             configuration file locally and then copy it to all the hosts using
             the config_file specification. Defaults to None, which creates and
             utilizes the file specified by config_file.
+        version (Version, optional): daos_server version for compatibility changes.
+            Default is None, which does not handle compatibility
 
     Returns:
         DaosServerCommand: the daos_server command object
@@ -43,7 +45,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     """
     transport_config = DaosServerTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
-    config = DaosServerYamlParameters(config_file, common_config)
+    config = DaosServerYamlParameters(config_file, common_config, version)
     command = DaosServerCommand(bin_dir, config, None)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
@@ -70,7 +72,7 @@ class DaosServerManager(SubprocessManager):
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
-                 namespace="/run/server_manager/*", mgmt_svc_replicas_suffix=None):
+                 namespace="/run/server_manager/*", mgmt_svc_replicas_suffix=None, version=None):
         # pylint: disable=too-many-arguments
         """Initialize a DaosServerManager object.
 
@@ -93,10 +95,12 @@ class DaosServerManager(SubprocessManager):
             namespace (str): yaml namespace (path to parameters)
             mgmt_svc_replicas_suffix (str, optional): Suffix to append to each MS replica name.
                 Defaults to None.
+            version (Version, optional): daos_server version for compatibility changes.
+                Default is None, which does not handle compatibility
         """
         self.group = group
         server_command = get_server_command(
-            group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
+            group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp, version)
         super().__init__(server_command, manager, namespace)
         self.manager.job.sub_command_override = "start"
 
@@ -209,7 +213,8 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), get_local_host())
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), self.dmg.temporary_file_hosts or get_local_host())
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
@@ -1139,8 +1144,8 @@ class DaosServerManager(SubprocessManager):
         """Get daos_metrics for the server.
 
         Args:
-            verbose (bool, optional): pass verbose to run_pcmd. Defaults to False.
-            timeout (int, optional): pass timeout to each execution ofrun_pcmd. Defaults to 60.
+            verbose (bool, optional): pass verbose to run_remote. Defaults to False.
+            timeout (int, optional): pass timeout to each execution of run_remote. Defaults to 60.
 
         Returns:
             list: list of CommandResult results for each host. See run_utils.run_remote for details.
