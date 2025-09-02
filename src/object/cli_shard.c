@@ -921,16 +921,18 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						 orwo->orw_rels.ca_arrays,
 						 orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR(DF_UOID " obj_ec_parity_check failed, " DF_RC "\n",
-					DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_ERROR(rc, DF_CONT ", " DF_UOID " obj_ec_parity_check failed",
+					 DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+					 DP_UOID(orw->orw_oid));
 				goto out;
 			}
 		}
 
 		rc = dc_shard_update_size(rw_args, 0);
 		if (rc) {
-			D_ERROR(DF_UOID " dc_shard_update_size failed, " DF_RC "\n",
-				DP_UOID(orw->orw_oid), DP_RC(rc));
+			DL_ERROR(rc, DF_CONT ", " DF_UOID " dc_shard_update_size failed",
+				 DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+				 DP_UOID(orw->orw_oid));
 			goto out;
 		}
 
