@@ -95,30 +95,28 @@ class LogLine():
         # Work out the end of the fixed-width portion, and the beginning of the
         # message. The hostname, pid, fac and level fields are all variable width.
         idx = 0
+        idx += max(len(fields[0]), 4) + 1
         for i in range(4):
-            idx += len(fields[i]) + 1
+            idx += len(fields[i + 1]) + 1
         # pylint: disable=wrong-spelling-in-comment
         # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c - d_vlog()
         # snprintf(..., "%-4s ", facstr)
-        idx += max(len(fields[4]), 4) + 1
         idx += max(len(fields[5]), 4)
         # assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c - d_vlog()
         # assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c - d_vlog()
-        pidtid = fields[3][5:-1]
+        # pylint: enable=wrong-spelling-in-comment
+        pidtid = fields[4][5:-1]
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
-        self.fac = fields[4]
-        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c
-        # snprintf(..., "%-4s ", facstr)
-        # pylint: enable=wrong-spelling-in-comment
+        self.fac = fields[5]
         try:
-            self.level = LOG_LEVELS[fields[5]]
+            self.level = LOG_LEVELS[fields[0]]
         except KeyError as error:
-            raise InvalidLogFile(fields[5]) from error
+            raise InvalidLogFile(fields[0]) from error
 
-        self.time_stamp = fields[0] + ' ' + fields[1]
-        self.hostname = fields[2]
+        self.time_stamp = fields[1] + ' ' + fields[2]
+        self.hostname = fields[3]
         self._fields = fields[6:]
         try:
             if self._fields[1][-2:] == '()':
@@ -148,8 +146,8 @@ class LogLine():
 
     def to_str(self, mark=False):
         """Convert the object to a string"""
-        pre = self._preamble.split(' ', 4)
-        preamble = ' '.join([pre[0], pre[1], pre[4]])
+        pre = self._preamble.split(' ', 5)
+        preamble = ' '.join([pre[1], pre[2], pre[5]])
         if mark:
             return '{} ** {}'.format(preamble, self._msg)
         return '{}    {}'.format(preamble, self._msg)
@@ -538,16 +536,17 @@ class LogIter():
     def _load_data(self):
         """Load all data into memory"""
         pids = OrderedDict()
-
         index = 0
         for line in self._fd:
-            fields = line.split(None, 8)
+            fields = line.split(None, 9)
             index += 1
+            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
             if (
                 # pylint: disable=too-many-boolean-expressions
                 len(fields) < 7
-                or len(fields[0]) != 10 or fields[0][4] != '/' or fields[0][7] != '/'
-                or len(fields[1]) != 15 or fields[1][2] != ':' and fields[1][8] != '.'
+                or len(fields[1]) != 10 or fields[1][4] != '/' or fields[1][7] != '/'
+                or len(fields[2]) != 15 or fields[2][2] != ':' and fields[2][8] != '.'
                 # pylint: enable=too-many-boolean-expressions
             ):
                 self._data.append(LogRaw(line))
@@ -569,18 +568,20 @@ class LogIter():
         index = 0
         position = 0
         for line in self._fd:
-            fields = line.split(None, 8)
+            fields = line.split(None, 9)
             index += 1
+            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
             if (
                 # pylint: disable=too-many-boolean-expressions
                 len(fields) < 7
-                or len(fields[0]) != 10 or fields[0][4] != '/' or fields[0][7] != '/'
-                or len(fields[1]) != 15 or fields[1][2] != ':' and fields[1][8] != '.'
+                or len(fields[1]) != 10 or fields[1][4] != '/' or fields[1][7] != '/'
+                or len(fields[2]) != 15 or fields[2][2] != ':' and fields[2][8] != '.'
                 # pylint: enable=too-many-boolean-expressions
             ):
                 position += len(line)
                 continue
-            pidtid = fields[3][5:-1]
+            pidtid = fields[4][5:-1]
             pid = pidtid.split("/")
             l_pid = int(pid[0])
             if l_pid in pids:
@@ -647,12 +648,14 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split(None, 8)
+            fields = line.split(None, 9)
+            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
             if (
                 # pylint: disable=too-many-boolean-expressions
                 len(fields) < 7
-                or len(fields[0]) != 10 or fields[0][4] != '/' or fields[0][7] != '/'
-                or len(fields[1]) != 15 or fields[1][2] != ':' and fields[1][8] != '.'
+                or len(fields[1]) != 10 or fields[1][4] != '/' or fields[1][7] != '/'
+                or len(fields[2]) != 15 or fields[2][2] != ':' and fields[2][8] != '.'
                 # pylint: enable=too-many-boolean-expressions
             ):
                 return LogRaw(line)
