@@ -4465,7 +4465,7 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 	}
 
 	obj_auxi->reasb_req.orr_size_fetched = 1;
-	usgls = obj_auxi->reasb_req.orr_usgls;
+	usgls                                = obj_auxi->reasb_req.orr_processed_sgls;
 	if (usgls == NULL)
 		return;
 
@@ -4571,24 +4571,24 @@ merge_tiny_iovs(struct sgl_merge_ctx *ctx, d_sg_list_t *sg, uint32_t i, uint32_t
 }
 
 static void
-sgls_dup_free(struct sgl_merge_ctx *ctx, uint32_t nr)
+processed_sgls_free(struct sgl_merge_ctx *ctx, uint32_t nr)
 {
 	uint32_t     i, j;
-	d_sg_list_t *sgls_dup = ctx->sgls_dup;
+	d_sg_list_t *processed_sgls = ctx->processed_sgls;
 
-	if (sgls_dup) {
+	if (processed_sgls) {
 		for (i = 0; i < nr; i++) {
-			if (sgls_dup[i].sg_iovs) {
-				for (j = 0; j < sgls_dup[i].sg_nr; j++) {
+			if (processed_sgls[i].sg_iovs) {
+				for (j = 0; j < processed_sgls[i].sg_nr; j++) {
 					if (ctx->alloc_bitmaps && ctx->alloc_bitmaps[i] &&
 					    isset_range((uint8_t *)ctx->alloc_bitmaps[i], j, j))
-						D_FREE(sgls_dup[i].sg_iovs[j].iov_buf);
+						D_FREE(processed_sgls[i].sg_iovs[j].iov_buf);
 				}
-				d_sgl_fini(&sgls_dup[i], false);
+				d_sgl_fini(&processed_sgls[i], false);
 			}
 		}
-		D_FREE(sgls_dup);
-		ctx->sgls_dup = NULL;
+		D_FREE(processed_sgls);
+		ctx->processed_sgls = NULL;
 	}
 	if (ctx->merged_bitmaps) {
 		for (i = 0; i < nr; i++)
@@ -4635,7 +4635,7 @@ sgls_set_merged_bitmap(struct sgl_merge_ctx *ctx, d_sg_list_t *sg, uint32_t frag
 }
 
 /**
- * obj_sgls_dup - Normalize and optimize scatter-gather lists (SGLs)
+ * obj_processed_sgls - Normalize and optimize scatter-gather lists (SGLs)
  * @obj_auxi: Auxiliary object context
  * @args: DAOS object operation arguments
  * @update: Flag indicating update operation constraints
@@ -4671,22 +4671,23 @@ sgls_set_merged_bitmap(struct sgl_merge_ctx *ctx, d_sg_list_t *sg, uint32_t frag
  * Return: 0 on success, negative error code on failure
  */
 static int
-obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool update)
+obj_processed_sgls(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool update)
 {
 	daos_iod_t          *iod;
-	d_sg_list_t         *sgls_dup = NULL, *sgls;
-	d_sg_list_t         *sg, *sg_dup;
+	d_sg_list_t         *processed_sgls = NULL, *sgls;
+	d_sg_list_t         *sg, *sg_processed;
 	d_iov_t             *iov, *iov_dup;
 	bool                 dup = false;
 	uint32_t             i, j, k, sgl_idx, count = 0, bitmap_sz;
 	int                  rc  = 0;
 	struct sgl_merge_ctx ctx = {0};
-	bool                 merge_iov =
-            iov_frag_size == 0 ? false : obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
+	bool                 merge_iov;
 
 	sgls = args->sgls;
 	if (obj_auxi->req_dup_sgl || sgls == NULL)
 		return 0;
+	merge_iov =
+	    iov_frag_size == 0 ? false : obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
 
 	obj_auxi->req_dup_sgl = 1;
 	/* First pass: Analyze SGL structure and mark merge candidates */
@@ -4771,8 +4772,8 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 		goto cleanup;
 	}
 
-	D_ALLOC_ARRAY(sgls_dup, args->nr);
-	if (!sgls_dup) {
+	D_ALLOC_ARRAY(processed_sgls, args->nr);
+	if (!processed_sgls) {
 		rc = -DER_NOMEM;
 		goto cleanup;
 	}
@@ -4783,11 +4784,11 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 		sg        = &sgls[i];
 		bitmap_sz = (sg->sg_nr + 63) / 64;
 
-		rc = d_sgl_init(&sgls_dup[i], sg->sg_nr);
+		rc = d_sgl_init(&processed_sgls[i], sg->sg_nr);
 		if (rc)
 			goto cleanup;
 
-		sg_dup  = &sgls_dup[i];
+		sg_processed = &processed_sgls[i];
 		sgl_idx = 0;
 		/* Process each IOV with merge logic */
 		for (j = 0; j < sg->sg_nr;) {
@@ -4807,7 +4808,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			/* Copy unmerged IOV directly */
 			if (!ctx.merged_bitmaps || !ctx.merged_bitmaps[i] ||
 			    !isset_range((uint8_t *)ctx.merged_bitmaps[i], j, j)) {
-				iov_dup  = &sg_dup->sg_iovs[sgl_idx++];
+				iov_dup  = &sg_processed->sg_iovs[sgl_idx++];
 				iov      = &sg->sg_iovs[j++];
 				*iov_dup = *iov;
 				if (update)
@@ -4857,13 +4858,13 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			}
 
 			/* Create merged IOV entry */
-			merged_iov = &sgls_dup[i].sg_iovs[sgl_idx++];
+			merged_iov = &processed_sgls[i].sg_iovs[sgl_idx++];
 			d_iov_set(merged_iov, merged_buf, merged_buf_size);
 			merged_iov->iov_len = merged_size;
 			if (update)
 				merged_iov->iov_buf_len = merged_iov->iov_len;
 		}
-		sg_dup->sg_nr = sgl_idx;
+		sg_processed->sg_nr = sgl_idx;
 	}
 
 	D_ALLOC_PTR(obj_auxi->rw_args.merge_ctx);
@@ -4871,21 +4872,21 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 		rc = -DER_NOMEM;
 		goto cleanup;
 	}
-	ctx.sgls_dup                  = sgls_dup;
-	ctx.sgls_orig                 = sgls;
-	*obj_auxi->rw_args.merge_ctx  = ctx;
-	obj_auxi->reasb_req.orr_usgls = sgls;
-	args->sgls = sgls_dup;
+	ctx.processed_sgls                     = processed_sgls;
+	ctx.sgls_orig                          = sgls;
+	*obj_auxi->rw_args.merge_ctx           = ctx;
+	obj_auxi->reasb_req.orr_processed_sgls = sgls;
+	args->sgls                             = processed_sgls;
 	return 0;
 
 cleanup:
-	ctx.sgls_dup = sgls_dup;
-	sgls_dup_free(&ctx, args->nr);
+	ctx.processed_sgls = processed_sgls;
+	processed_sgls_free(&ctx, args->nr);
 	return rc;
 }
 
 static void
-obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
+obj_processed_sgls_free(struct obj_auxi_args *obj_auxi)
 {
 	int                   i, j;
 	struct sgl_merge_ctx *ctx = obj_auxi->rw_args.merge_ctx;
@@ -4903,7 +4904,7 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 	/* Handle fetch operation: copy data from duplicate buffer back to original buffer */
 	if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
 		for (i = 0; i < obj_auxi->iod_nr; i++) {
-			d_sg_list_t *sg_dup       = &ctx->sgls_dup[i];
+			d_sg_list_t *sg_processed = &ctx->processed_sgls[i];
 			d_sg_list_t *sg_orig      = &ctx->sgls_orig[i];
 			uint32_t     dup_sg_idx   = 0;
 			uint32_t     dup_buf_size = 0;
@@ -4914,9 +4915,9 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 				continue;
 
 			D_ASSERT(ctx->merged_bitmaps[i] != NULL);
-			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out;) {
+			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_processed->sg_nr_out;) {
 				iov     = &sg_orig->sg_iovs[j];
-				iov_dup = &sg_dup->sg_iovs[dup_sg_idx];
+				iov_dup = &sg_processed->sg_iovs[dup_sg_idx];
 
 				if (skip_sgl_iov(false, iov)) {
 					j++;
@@ -4953,12 +4954,12 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 		}
 	}
 
-	sgls_dup_free(ctx, obj_auxi->iod_nr);
-	D_FREE(ctx);
+	processed_sgls_free(ctx, obj_auxi->iod_nr);
 	obj_auxi->rw_args.merge_ctx = NULL;
 	api_args                    = dc_task_get_args(obj_auxi->obj_task);
 	api_args                    = dc_task_get_args(obj_auxi->obj_task);
-	api_args->sgls              = obj_auxi->reasb_req.orr_usgls;
+	api_args->sgls              = ctx->sgls_orig;
+	D_FREE(ctx);
 }
 
 static void
@@ -4970,11 +4971,12 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 	if (retry && obj_auxi->reasb_req.orr_args != NULL) {
 		D_ASSERT(obj_auxi->reasb_req.orr_uiods != NULL);
 		obj_auxi->reasb_req.orr_args->iods = obj_auxi->reasb_req.orr_uiods;
-		obj_auxi->reasb_req.orr_args->sgls = obj_auxi->reasb_req.orr_usgls;
+		obj_auxi->reasb_req.orr_args->sgls = obj_auxi->reasb_req.orr_processed_sgls;
 	}
 	obj_bulk_fini(obj_auxi);
 	obj_auxi_free_failed_tgt_list(obj_auxi);
-	obj_dup_sgls_free(obj_auxi);
+	if (!retry)
+		obj_processed_sgls_free(obj_auxi);
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 	obj_auxi->req_reasbed = false;
 
@@ -5065,7 +5067,7 @@ obj_ec_comp_cb(struct obj_auxi_args *obj_auxi)
 		daos_obj_fetch_t *args = dc_task_get_args(task);
 
 		obj_ec_update_iod_size(&obj_auxi->reasb_req, args->nr);
-		if ((obj_auxi->bulks != NULL && obj_auxi->reasb_req.orr_usgls != NULL) ||
+		if ((obj_auxi->bulks != NULL && obj_auxi->reasb_req.orr_processed_sgls != NULL) ||
 		    data_recov)
 			obj_ec_fetch_set_sgl(obj, &obj_auxi->reasb_req,
 					     obj_auxi->dkey_hash, args->nr);
@@ -5213,7 +5215,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		    !obj_ec_req_sent2_all_data_tgts(obj_auxi)) {
 			/* retry the original task to check existence */
 			args->iods = obj_auxi->reasb_req.orr_uiods;
-			args->sgls = obj_auxi->reasb_req.orr_usgls;
+			args->sgls = obj_auxi->reasb_req.orr_processed_sgls;
 			obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 			obj_auxi->req_reasbed = 0;
 			memset(&obj_auxi->rw_args, 0, sizeof(obj_auxi->rw_args));
@@ -5965,9 +5967,9 @@ dc_obj_fetch_task(tse_task_t *task)
 		D_GOTO(out_task, rc);
 	}
 
-	rc = obj_sgls_dup(obj_auxi, args, false);
+	rc = obj_processed_sgls(obj_auxi, args, false);
 	if (rc) {
-		D_ERROR(DF_OID" obj_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_ERROR(DF_OID " obj_processed_sgls failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
 		D_GOTO(out_task, rc);
 	}
 
@@ -6172,16 +6174,16 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		D_GOTO(out_task, rc);
 	}
 
-	rc = obj_sgls_dup(obj_auxi, args, true);
+	rc = obj_processed_sgls(obj_auxi, args, true);
 	if (rc) {
-		D_ERROR(DF_OID" obj_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_ERROR(DF_OID " obj_processed_sgls failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
 		D_GOTO(out_task, rc);
 	}
 
 	if (obj_auxi->tx_convert) {
 		if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed) {
 			args->iods = obj_auxi->reasb_req.orr_uiods;
-			args->sgls = obj_auxi->reasb_req.orr_usgls;
+			args->sgls = obj_auxi->reasb_req.orr_processed_sgls;
 		}
 
 		obj_auxi->tx_convert = 0;
@@ -6239,7 +6241,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed && obj_auxi->reasb_req.orr_single_tgt)
-		args->sgls = obj_auxi->reasb_req.orr_usgls;
+		args->sgls = obj_auxi->reasb_req.orr_processed_sgls;
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;

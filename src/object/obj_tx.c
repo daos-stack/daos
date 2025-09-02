@@ -421,7 +421,7 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 			if (reasb_req->orr_uiods != NULL) {
 				dcu->dcu_iod_array.oia_iods =
 							reasb_req->orr_uiods;
-				dcsr->dcsr_sgls = reasb_req->orr_usgls;
+				dcsr->dcsr_sgls = reasb_req->orr_processed_sgls;
 			}
 
 			obj_reasb_req_fini(reasb_req, dcsr->dcsr_nr);
@@ -1211,7 +1211,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		singv_los = reasb_req->orr_singv_los;
 
 		D_ASSERT(dcu->dcu_iod_array.oia_iods == reasb_req->orr_uiods);
-		D_ASSERT(dcsr->dcsr_sgls == reasb_req->orr_usgls);
+		D_ASSERT(dcsr->dcsr_sgls == reasb_req->orr_processed_sgls);
 
 		/* Overwrite the dcu->dcu_iod_array.oia_iods */
 		if (reasb_req->orr_iods != NULL)
