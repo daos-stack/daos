@@ -81,7 +81,7 @@ dnf --nodocs install ${dnf_install_args} \
     yasm
 
 if [[ -z "${NO_DEVEL+set}" ]]; then
-    dnf --nodocs install "${dnf_install_args}" \
+    dnf --nodocs install ${dnf_install_args} \
     	openmpi-devel 
 fi
 
