@@ -71,6 +71,7 @@ CRT_RPC_DECLARE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)
 	((uint32_t)		(roi_shards)		CRT_ARRAY)
 
 #define DAOS_OSEQ_REBUILD	/* output fields */		 \
+	((uint64_t)		(roo_reserved)		CRT_VAR) \
 	((int32_t)		(roo_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(rebuild, DAOS_ISEQ_REBUILD, DAOS_OSEQ_REBUILD)
