@@ -662,7 +662,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	hlen_pt1 = hlen;	/* save part 1 length */
 	if (hlen < sizeof(b)) {
 		if (mst.oflags & DLOG_FLV_FAC)
-			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%-6s ", facstr);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen,
+					 "%-4s ", facstr);
 
 		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
 				 clog_pristr(lvl));
