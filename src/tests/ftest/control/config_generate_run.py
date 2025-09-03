@@ -76,7 +76,7 @@ class ConfigGenerateRun(TestWithServers):
             engine["log_file"] = os.path.join(
                 self.test_env.log_dir, os.path.basename(engine["log_file"]))
 
-        self.log_step(f"Modified log_file in generated config {engines}")
+        self.log.debug("Modified log_file in generated config %s", engines)
 
         # Stop and restart daos_server. self.start_server_managers() has the
         # server start-up check built into it, so if there's something wrong,
