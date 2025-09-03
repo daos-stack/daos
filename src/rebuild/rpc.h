@@ -57,6 +57,7 @@ extern struct crt_proto_format rebuild_proto_fmt;
 	((uint32_t)		(rsi_layout_ver)	CRT_VAR)
 
 #define DAOS_OSEQ_REBUILD_SCAN	/* output fields */		 \
+	((uint64_t)		(rso_reserved)		CRT_VAR) \
 	((int32_t)		(rso_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)
