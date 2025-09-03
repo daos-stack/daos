@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -188,7 +189,6 @@ message CheckActReq {
 	uint64 seq = 2;
 	// The decision from RASEvent::extended_info::check_info::chk_opts.
 	chk.CheckInconsistAction act = 3;
-	bool for_all = 4; // The same action is applicable to the same type of inconsistency.
 }
 
 // CheckActResp returns the result of executing admin's decision.
