@@ -252,6 +252,8 @@ test_forward_bulk_handler(crt_rpc_t *rpc)
 		rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &local_bulk);
 		D_ASSERT(rc == 0);
 
+		d_sgl_fini(&sgl, false);
+
 		RPC_PUB_ADDREF(rpc);
 		bulk_desc.bd_rpc        = rpc;
 		bulk_desc.bd_bulk_op    = input->do_put ? CRT_BULK_PUT : CRT_BULK_GET;

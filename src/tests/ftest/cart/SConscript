@@ -42,6 +42,13 @@ def scons():
     tenv.AppendUnique(CPPPATH=[Dir('../../../cart/utils').srcnode()])
     tenv.require('crypto', 'mercury', 'protobufc')
 
+  #  tenv.Replace(CCFLAGS=['-O0','-g'])
+    tenv.AppendUnique(CCFLAGS=['-fsanitize=address',
+                               '-fsanitize-address-use-after-scope',
+                               '-fno-omit-frame-pointer', 
+                               '-fno-optimize-sibling-calls'])
+    tenv.AppendUnique(LINKFLAGS=['-fsanitize=address'])
+
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:
