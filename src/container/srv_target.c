@@ -1472,27 +1472,20 @@ ds_cont_child_put(struct ds_cont_child *cont)
 	cont_child_put(tls->dt_cont_cache, cont);
 }
 
-struct ds_dtx_resync_args {
-	struct ds_pool_child	*pool;
-	uuid_t			 co_uuid;
-};
-
 static void
 ds_dtx_resync(void *arg)
 {
-	struct ds_dtx_resync_args	*ddra = arg;
-	int				 rc;
+	struct ds_cont_child *cont = arg;
+	int                   rc;
 
-	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
-			ddra->co_uuid, ddra->pool->spc_map_version, false);
+	rc = dtx_resync(cont->sc_pool->spc_hdl, cont, cont->sc_pool->spc_map_version, false);
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont " DF_UUID "/" DF_UUID
 		       " that may affect subsequent "
 		       "operations: rc = " DF_RC "\n",
-		       DP_UUID(ddra->pool->spc_uuid), DP_UUID(ddra->co_uuid), DP_RC(rc));
+		       DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), DP_RC(rc));
 
-	ds_pool_child_put(ddra->pool);
-	D_FREE(ddra);
+	ds_cont_child_put(cont);
 }
 
 int
@@ -1602,8 +1595,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	 *    Both cases are not expected.
 	 */
 	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
-		struct ds_dtx_resync_args	*ddra = NULL;
-
 		/*
 		 * NB: When cont_uuid == NULL, it's not a real container open
 		 *     but for creating rebuild global container handle.
@@ -1633,25 +1624,11 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_cont, rc);
 		}
 
-		D_ALLOC_PTR(ddra);
-		if (ddra == NULL) {
-			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
-			D_GOTO(err_dtx, rc = -DER_NOMEM);
-		}
-
-		ddra->pool = ds_pool_child_lookup(hdl->sch_cont->sc_pool->spc_uuid);
-		if (ddra->pool == NULL) {
-			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
-			D_FREE(ddra);
-			D_GOTO(err_dtx, rc = -DER_NO_HDL);
-		}
-		uuid_copy(ddra->co_uuid, cont_uuid);
-		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
-				    0, 0, NULL);
+		ds_cont_child_get(hdl->sch_cont);
+		rc = dss_ult_create(ds_dtx_resync, hdl->sch_cont, DSS_XS_SELF, 0, 0, NULL);
 		if (rc != 0) {
 			ABT_mutex_unlock(hdl->sch_cont->sc_mutex);
 			ds_pool_child_put(hdl->sch_cont->sc_pool);
-			D_FREE(ddra);
 			D_GOTO(err_dtx, rc);
 		}
 

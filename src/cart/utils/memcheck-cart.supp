@@ -623,15 +623,24 @@
    fun:racecall
 }
 {
-   go 1.22.3 race
+   tsan::MemoryAccessRange
    Memcheck:Value8
    fun:_ZN6__tsan18MemoryAccessRangeTILb0EEEvPNS_11ThreadStateEmmm
+   ...
    fun:racecall
 }
 {
-   go 1.22.3 race
+   tsan::MemoryAccessRange
+   Memcheck:Value8
+   fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
+   ...
+   fun:racecall
+}
+{
+   tsan::TraceRestartMemoryAccess
    Memcheck:Value8
    fun:_ZN6__tsan24TraceRestartMemoryAccessEPNS_11ThreadStateEmmmm
+   ...
    fun:racecall
 }
 {
