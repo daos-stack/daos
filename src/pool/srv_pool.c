@@ -376,7 +376,7 @@ pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 	D_ASPRINTF(name, RDB_FILE"pool%s", suffix);
 	if (name == NULL)
 		return NULL;
-	rc = ds_mgmt_tgt_file(pool_uuid, name, NULL /* idx */, &path);
+	rc = ds_mgmt_file(dss_storage_path, pool_uuid, name, NULL /* idx */, &path);
 	D_FREE(name);
 	if (rc != 0)
 		return NULL;
