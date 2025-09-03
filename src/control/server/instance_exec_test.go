@@ -124,7 +124,10 @@ func TestServer_EngineInstance_initIncarnationFromSuperblock(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t, log)
 
 			ei := newTestEngine(logging.FromContext(ctx), false, nil)
 			ei.incarnation = tc.startIncarnation

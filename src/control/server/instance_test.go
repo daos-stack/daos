@@ -210,7 +210,10 @@ func TestServer_EngineInstance_updateIncarnation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t, log)
 
 			testEngineIdx := 0
 			baseDir, cleanup := test.CreateTestDir(t)
@@ -236,7 +239,10 @@ func TestServer_EngineInstance_updateIncarnation(t *testing.T) {
 
 			test.CmpErr(t, tc.expErr, err)
 			test.AssertEqual(t, tc.expIncarnation, ei.incarnation, "")
-			test.CmpAny(t, "superblock", tc.expSuperblock, ei.getSuperblock())
+
+			if diff := cmp.Diff(tc.expSuperblock, ei.getSuperblock()); diff != "" {
+				t.Fatalf("want-, got+: %s", diff)
+			}
 
 			sbBytes, err := os.ReadFile(filepath.Join(mdDir, "superblock"))
 			if tc.expWritten {
@@ -249,7 +255,9 @@ func TestServer_EngineInstance_updateIncarnation(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				test.CmpAny(t, "written superblock", tc.expSuperblock, writtenSb)
+				if diff := cmp.Diff(tc.expSuperblock, writtenSb); diff != "" {
+					t.Fatalf("want-, got+: %s", diff)
+				}
 			} else {
 				if err == nil {
 					t.Fatal("expected superblock NOT to be written")
