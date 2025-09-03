@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       13%{?relval}%{?dist}
+Release:       14%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -658,6 +658,9 @@ fi
 %endif
 
 %changelog
+* Wed Aug 20 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14
+  Update to spdk 24
+
 * Mon Aug 11 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-13
 - Switch to fpm build for RPMs
 
