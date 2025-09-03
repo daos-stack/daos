@@ -232,7 +232,7 @@ func spdkLockfileAddrCheckAllowAll(_ string) (bool, error) {
 // Skip addresses in block list if present then supply address check function that can detect VMD
 // backing device addresses during clean operation. If CleanSpdkLockfilesAny set, all lockfiles
 // should be removed.
-func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) error {
+func (sb *spdkBackend) cleanLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) error {
 	var lfAddrCheckFn spdk.LockfileAddrCheckFn
 
 	if req.CleanSpdkLockfilesAny {
@@ -303,7 +303,7 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 			}
 		}
 		if req.CleanSpdkLockfiles {
-			if err := sb.removeSpdkLockfiles(req, resp); err != nil {
+			if err := sb.cleanLockfiles(req, resp); err != nil {
 				return resp, errors.Wrapf(err, "clean spdk lockfiles")
 			}
 		}
@@ -419,7 +419,7 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	return out, nil
 }
 
-func (sb *spdkBackend) cleanLockfiles(devAddrs *hardware.PCIAddressSet) {
+func (sb *spdkBackend) cleanLockfilesQuiet(devAddrs *hardware.PCIAddressSet) {
 	msg := fmt.Sprintf("spdk backend clean-locks (bindings discover call): for %v",
 		devAddrs.Strings())
 	addrCheckFn := createSpdkLockfileAddrCheckFunc(devAddrs)
@@ -441,8 +441,8 @@ func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 	if needDevs.IsEmpty() {
 		sb.log.Debug("clean spdk lockfiles skipped, zero devices selected")
 	} else {
-		sb.cleanLockfiles(needDevs)
-		defer sb.cleanLockfiles(needDevs)
+		sb.cleanLockfilesQuiet(needDevs)
+		defer sb.cleanLockfilesQuiet(needDevs)
 	}
 
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)

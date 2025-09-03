@@ -385,14 +385,9 @@ func prepBdevStorage(srv *server, iommuEnabled bool, smi *common.SysMemInfo) err
 	}
 
 	// Clean leftover SPDK hugepages and lockfiles for configured NVMe SSDs before prepare.
-	// For the moment assume that both lockfile and hugepage cleanup should be skipped if
-	// hugepages have been disabled in the server config.
 	pciAddrs := bdevCfgs.NVMeBdevs().Devices()
-	if !srv.cfg.DisableHugepages {
-		err := cleanSpdkResources(srv.log, srv.ctlSvc.NvmePrepare, pciAddrs)
-		if err != nil {
-			srv.log.Error(errors.Wrap(err, "prepBdevStorage").Error())
-		}
+	if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+		srv.log.Error(errors.Wrap(err, "prepBdevStorage").Error())
 	}
 
 	// When requesting to prepare NVMe drives during service start-up, use all addresses
@@ -502,11 +497,15 @@ func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) {
 	ei.setHugepageSz(pageSizeMiB)
 }
 
-type nvmePrepFnSig func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
-
 // Clean SPDK resources, both lockfiles and orphaned hugepages. Orphaned hugepages will be cleaned
 // whether or not device PCI addresses are supplied.
-func cleanSpdkResources(log logging.Logger, prepFn nvmePrepFnSig, pciAddrs []string) error {
+func cleanSpdkResources(srv *server, pciAddrs []string) error {
+	// For the moment assume that both lockfile and hugepage cleanup should be skipped if
+	// hugepages have been disabled in the server config.
+	if srv.cfg.DisableHugepages {
+		return nil
+	}
+
 	req := storage.BdevPrepareRequest{
 		CleanSpdkHugepages: true,
 		CleanSpdkLockfiles: true,
@@ -515,13 +514,13 @@ func cleanSpdkResources(log logging.Logger, prepFn nvmePrepFnSig, pciAddrs []str
 
 	msg := "cleanup spdk resources"
 
-	resp, err := prepFn(req)
+	resp, err := srv.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		return errors.Wrap(err, msg)
 	}
 
-	log.Debugf("%s: %d hugepages and lockfiles %v removed", msg, resp.NrHugepagesRemoved,
-		resp.LockfilesRemoved)
+	srv.log.Debugf("%s: %d hugepages and lockfiles %v removed", msg,
+		resp.NrHugepagesRemoved, resp.LockfilesRemoved)
 
 	return nil
 }
@@ -616,14 +615,9 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		storageCfg := engine.runner.GetConfig().Storage
 		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
 
-		// For the moment assume that both lockfile and hugepage cleanup should be skipped if
-		// hugepages have been disabled in the server config.
-		if !srv.cfg.DisableHugepages {
-			err := cleanSpdkResources(srv.log, srv.ctlSvc.NvmePrepare, pciAddrs)
-			if err != nil {
-				srv.log.Error(errors.Wrapf(err, "engine instance %d",
-					engine.Index()).Error())
-			}
+		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+			srv.log.Error(
+				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
 		}
 
 		return nil
@@ -649,12 +643,9 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		storageCfg := engine.runner.GetConfig().Storage
 		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
 
-		if !srv.cfg.DisableHugepages {
-			err := cleanSpdkResources(srv.log, srv.ctlSvc.NvmePrepare, pciAddrs)
-			if err != nil {
-				srv.log.Error(errors.Wrapf(err, "engine instance %d",
-					engine.Index()).Error())
-			}
+		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
+			srv.log.Error(
+				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
 		}
 
 		// Retrieve up-to-date meminfo to check resource availability.
