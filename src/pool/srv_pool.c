@@ -2269,6 +2269,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
 	d_rank_t                rank               = dss_self_rank();
+	uint64_t                age_sec, delay;
 	int			rc;
 
 	D_ASSERTF(svc->ps_error == 0, "ps_error: " DF_RC "\n", DP_RC(svc->ps_error));
@@ -2367,7 +2368,9 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, 0);
+	age_sec = d_hlc_age2sec(dss_get_start_epoch());
+	delay   = age_sec < 200 ? (200 - age_sec) : 0;
+	rc      = ds_rebuild_regenerate_task(svc->ps_pool, prop, delay);
 	if (rc != 0)
 		goto out;
 
