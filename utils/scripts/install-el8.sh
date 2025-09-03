@@ -81,6 +81,7 @@ dnf --nodocs install ${dnf_install_args} \
     yasm
 
 if [[ -z "${NO_DEVEL+set}" ]]; then
+    # shellcheck disable=SC2086
     dnf --nodocs install ${dnf_install_args} \
     	openmpi-devel 
 fi
