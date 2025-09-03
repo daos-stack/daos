@@ -79,7 +79,8 @@
 	X(POOL_UPGRADE, 0, &CQF_pool_upgrade, ds_pool_upgrade_handler, NULL)                       \
 	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)           \
 	X(POOL_REBUILD_STOP, 0, &CQF_pool_rebuild_stop, ds_pool_rebuild_stop_handler, NULL)        \
-	X(POOL_REBUILD_START, 0, &CQF_pool_rebuild_start, ds_pool_rebuild_start_handler, NULL)
+	X(POOL_REBUILD_START, 0, &CQF_pool_rebuild_start, ds_pool_rebuild_start_handler, NULL)     \
+	X(POOL_RECOV_CONT, 0, &CQF_pool_recov_cont, ds_pool_recov_cont_handler, NULL)
 
 #define POOL_PROTO_RPC_LIST                                                                        \
 	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)                                                 \
@@ -154,8 +155,13 @@ enum map_update_opc {
 	MAP_REVERT_REBUILD,
 };
 
-enum pool_target_update_flags {
+enum pool_map_update_flags {
 	POOL_TGT_UPDATE_SKIP_RF_CHECK = (1 << 0),
+	POOL_RESET_RECOV_CONT         = (1 << 1),
+};
+
+enum pool_recov_cont_flags {
+	PRCF_BIND_BULK = (1 << 0),
 };
 
 static inline uint32_t
@@ -921,6 +927,17 @@ CRT_RPC_DECLARE(pool_rebuild_stop, DAOS_ISEQ_POOL_REBUILD_STOP, DAOS_OSEQ_POOL_R
 
 CRT_RPC_DECLARE(pool_rebuild_start, DAOS_ISEQ_POOL_REBUILD_START, DAOS_OSEQ_POOL_REBUILD_START)
 
+#define DAOS_ISEQ_POOL_RECOV_CONT	/* input fields */		 \
+	((uuid_t)			(prci_uuid)		CRT_VAR) \
+	((uint32_t)			(prci_flags)		CRT_VAR) \
+	((uint32_t)			(prci_cont_nr)		CRT_VAR) \
+	((crt_bulk_t)			(prci_cont_bulk)	CRT_VAR) \
+	((struct pool_target_addr)	(prci_addrs)		CRT_ARRAY)
+
+#define DAOS_OSEQ_POOL_RECOV_CONT	/* output fields */		 \
+	((int32_t)			(prco_ret)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_recov_cont, DAOS_ISEQ_POOL_RECOV_CONT, DAOS_OSEQ_POOL_RECOV_CONT)
 /* clang-format on */
 
 static inline int

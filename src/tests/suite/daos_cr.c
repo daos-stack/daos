@@ -31,11 +31,6 @@
 /* 256MB for CR pool size. */
 #define CR_POOL_SIZE	(1 << 28)
 
-struct test_cont {
-	uuid_t	uuid;
-	char	label[DAOS_PROP_LABEL_MAX_LEN];
-};
-
 /* Instance Status */
 
 static inline bool
@@ -173,7 +168,19 @@ cr_dump_pools(uint32_t pool_nr, uuid_t uuids[])
 /* dmg command */
 
 static inline int
-cr_debug_set_params_internal(test_arg_t *arg, uint64_t fail_loc, bool nowait)
+cr_debug_set_fail_val(test_arg_t *arg, uint64_t fail_val)
+{
+	int rc;
+
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, fail_val, 0, NULL);
+
+	print_message("CR: set fail_val as " DF_X64 ": " DF_RC "\n", fail_val, DP_RC(rc));
+
+	return rc;
+}
+
+static inline int
+cr_debug_set_fail_loc(test_arg_t *arg, uint64_t fail_loc, bool nowait)
 {
 	int	rc;
 	int	i = 0;
@@ -198,13 +205,13 @@ cr_debug_set_params_internal(test_arg_t *arg, uint64_t fail_loc, bool nowait)
 static inline int
 cr_debug_set_params(test_arg_t *arg, uint64_t fail_loc)
 {
-	return cr_debug_set_params_internal(arg, fail_loc, false);
+	return cr_debug_set_fail_loc(arg, fail_loc, false);
 }
 
 static inline int
 cr_debug_set_params_nowait(test_arg_t *arg, uint64_t fail_loc)
 {
-	return cr_debug_set_params_internal(arg, fail_loc, true);
+	return cr_debug_set_fail_loc(arg, fail_loc, true);
 }
 
 static inline int
@@ -979,6 +986,50 @@ cr_cont_get_label(void **state, struct test_pool *pool, struct test_cont *cont, 
 	 */
 
 	return rc;
+}
+
+void
+test_verify_cont(test_arg_t *arg, struct test_pool *pool)
+{
+	struct daos_check_info dci = {0};
+	int                    rc;
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_params(arg, DAOS_CHK_VERIFY_CONT_SHARDS | DAOS_FAIL_ALWAYS);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_fail_val(arg, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_RESET, 1, &pool->pool_uuid, "CONT_NONEXIST_ON_PS:CIA_IGNORE");
+	assert_rc_equal(rc, 0);
+
+	cr_pool_wait(1, &pool->pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool->pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_params_nowait(arg, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_fail_val(arg, pool->pool_info.pi_nnodes);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
 }
 
 /* Test Cases. */
