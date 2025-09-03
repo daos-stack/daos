@@ -376,7 +376,7 @@ pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 	D_ASPRINTF(name, RDB_FILE"pool%s", suffix);
 	if (name == NULL)
 		return NULL;
-	rc = ds_mgmt_tgt_file(pool_uuid, name, NULL /* idx */, &path);
+	rc = ds_mgmt_file(dss_storage_path, pool_uuid, name, NULL /* idx */, &path);
 	D_FREE(name);
 	if (rc != 0)
 		return NULL;
@@ -3903,10 +3903,12 @@ out_tx:
 		 */
 		D_DEBUG(DB_MD, DF_UUID": trying to finish stepping up\n",
 			DP_UUID(in->pri_op.pi_uuid));
+		ABT_mutex_unlock(svc->ps_rsvc.s_mutex);
 		if (DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_STEP_UP))
 			rc = -DER_GRPVER;
 		else
 			rc = pool_svc_step_up_cb(&svc->ps_rsvc);
+		ABT_mutex_lock(svc->ps_rsvc.s_mutex);
 		if (rc != 0) {
 			D_ASSERT(rc != DER_UNINIT);
 			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
@@ -6864,7 +6866,7 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*fun
 	 * and has already called sched_cancel_and_wait.
 	 */
 	state = ds_rsvc_get_state(&svc->ps_rsvc);
-	if (state == DS_RSVC_DRAINING) {
+	if (state == DS_RSVC_STEPPING_DOWN) {
 		D_DEBUG(DB_MD, DF_UUID": end: service %s\n", DP_UUID(svc->ps_uuid),
 			ds_rsvc_state_str(state));
 		return -DER_OP_CANCELED;
@@ -7186,7 +7188,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 */
 	map_version_before = pool_map_get_version(map);
 	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver,
-				     false /* print_changes */);
+				     true /* print_changes */);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -7492,7 +7494,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
-	if (!ds_pool_rebuild_enabled(svc->ps_pool)) {
+	if (!is_pool_rebuild_allowed(svc->ps_pool, true)) {
 		D_DEBUG(DB_MD, DF_UUID ": self healing is disabled\n",
 			DP_UUID(svc->ps_pool->sp_uuid));
 		D_GOTO(out, rc);
