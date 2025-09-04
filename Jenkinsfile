@@ -1328,7 +1328,7 @@ pipeline {
                     parallel(
                         'Functional Test Summary': getSummaryStage(
                             name: 'Functional Test Summary',
-                            docker_filename: 'utils/docker/Dockerfile.el.8'
+                            docker_filename: 'utils/docker/Dockerfile.el.8',
                             script_stashes: ['functional_el8_details',
                                              'functional_el9_details',
                                              'functional_leap15_details',
