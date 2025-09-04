@@ -1323,33 +1323,32 @@ pipeline {
             }
         } // stage('Test Hardware')
         stage('Test Summary') {
-            parallel {
-                stage('Functional Test Summary') {
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            runScriptWithStashes(
-                                stashes: ['functional_test_summary'],
-                                script: 'ci/functional_test_summary.sh',
-                                label: 'Generate Functional Test Summary'
-                            )
+            steps {
+                script {
+                    parallel(
+                        'Functional Test Summary': getSummaryStage(
+                            name: 'Functional Test Summary',
+                            docker_filename: 'utils/docker/Dockerfile.el.8'
+                            script_stashes: ['functional_el8_details',
+                                             'functional_el9_details',
+                                             'functional_leap15_details',
+                                             'functional_ubuntu_details',
+                                             'functional_medium_details',
+                                             'functional_medium_md_on_ssd_details',
+                                             'functional_medium_vmd_details',
+                                             'functional_medium_verbs_details',
+                                             'functional_medium_verbs_md_on_ssd_details',
+                                             'functional_medium_ucx_details',
+                                             'functional_large_details',
+                                             'functional_large_md_on_ssd_details'],
+                            script_name: 'ci/functional_test_summary.sh',
+                            script_label: 'Generate Functional Test Summary',
+                            artifacts: 'functional_test_summary/*',
+                            job_status: job_status_internal
                         )
-                    }
-                    post {
-                        always {
-                            archiveArtifacts artifacts: 'functional_test_summary/*',
-                                             allowEmptyArchive: false
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional Test Summary')
-            } // parallel
+                    )
+                }
+            }
         } // stage('Test Summary')
     } // stages
     post {
