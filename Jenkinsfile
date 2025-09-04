@@ -1323,10 +1323,6 @@ pipeline {
             }
         } // stage('Test Hardware')
         stage('Test Summary') {
-            when {
-                beforeAgent true
-                expression { true }
-            }
             parallel {
                 stage('Functional Test Summary') {
                     agent {
