@@ -98,6 +98,8 @@ class LogLine():
 
     def __init__(self, line):
         fields = line.split()
+        if len(fields) < 6:
+            raise ValueError(f"Log line too short to parse expected fields: {line!r}")
         # Work out the beginning of the message.
         # The date, time, hostname, pid, fac and level fields
         # are all variable width.
@@ -112,7 +114,16 @@ class LogLine():
         # assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c: 652
         pidtid = fields[4][5:-1]
         pid = pidtid.split("/")
-        self.pid = int(pid[0])
+        if not pid or not pid[0].isdigit():
+            raise ValueError(f"Invalid pid format in line: {line!r}")
+        try:
+            self.pid = int(pid[0])
+        except ValueError as e:
+            raise ValueError(
+                f"Failed to convert pid[0] to int in line: {line!r}."
+                f"Original error: {e}"
+            ) from e
+        # self.pid = int(pid[0])
         self._preamble = line[:idx]
         self.fac = fields[5]
         try:
