@@ -1218,7 +1218,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		orw->orw_sgls.ca_arrays = NULL;
 		orw->orw_bulks.ca_count = nr;
 		orw->orw_bulks.ca_arrays = args->bulks;
-		if (fw_shard_tgts != NULL)
+		if (opc != DAOS_OBJ_RPC_FETCH)
 			orw->orw_flags |= ORF_BULK_BIND;
 	} else {
 		if ((args->reasb_req && args->reasb_req->orr_size_fetch) ||

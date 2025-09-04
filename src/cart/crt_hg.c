@@ -129,6 +129,11 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 	hg_return_t		 hg_ret = HG_SUCCESS;
 	int			 rc = 0;
 
+	{
+		D_INFO("Bypass HG pool for test purpose\n");
+		return 0;
+	}
+
 	if (hg_ctx == NULL || max_num <= 0 || prepost_num < 0 ||
 	    prepost_num > max_num) {
 		D_ERROR("Invalid parameter of crt_hg_pool_enable, hg_ctx %p, "

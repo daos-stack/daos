@@ -2049,8 +2049,9 @@ obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 					     bulk_perm, &bulks[i]);
 			if (rc < 0)
 				D_GOTO(out, rc);
-			if (!bulk_bind)
+			if (bulk_perm != CRT_BULK_RO)
 				continue;
+
 			rc = crt_bulk_bind(bulks[i], daos_task2ctx(task));
 			if (rc != 0)
 				D_GOTO(out, rc);
