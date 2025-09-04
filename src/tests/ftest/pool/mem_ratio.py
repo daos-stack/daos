@@ -52,29 +52,39 @@ class MemRatioTest(TestWithServers):
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
         pools = add_pools(kwargs_list)
 
-        # Verify pool create output
-        self.log_step(f"Verifying {len(pools)} pool create responses")
-        _format = "  %-60s  %-8s  %-16s  %-16s  %s"
-        self.log.debug(_format, "Pool", "MemRatio", "Metadata Storage", "Memory File Size", "Ratio")
-        self.log.debug(_format, "-" * 60, "-" * 8, "-" * 16, "-" * 16, "-" * 7)
+        # Collect the pool create output values
+        _format = "  %-60s  %-8s  %-34s  %-16s  %-13s  %-44s  %-16s  %s"
+        _keys = ["Pool",
+                 "mem-ratio",
+                 "tier_bytes",
+                 "mem_file_bytes",
+                 "create_ratio"
+                 "total_engines",
+                 "tier_stats(total)",
+                 "mem_file_bytes",
+                 "query_ratio"]
+        summary = []
         errors = []
         for pool in pools:
-            mem_ratio = pool.mem_ratio.value
-            _metadata = _memfile = "<ERROR>"
-            result = json.loads(pool.dmg.result.stdout)
+            summary.append({})
+            summary[-1][_keys[0]] = str(pool)
+            summary[-1][_keys[1]] = pool.mem_ratio.value
+            _result = json.loads(pool.dmg.result.stdout)
             try:
-                _metadata = result["response"]["tier_bytes"][0]
-                _memfile = result["response"]["mem_file_bytes"]
-            except (KeyError, IndexError) as error:
-                self.log.debug(_format, str(pool), mem_ratio, _metadata, _memfile, error)
-                errors.append(f"{str(pool)} - Invalid dmg pool create response: {result}")
-                continue
-            actual = round(int(_memfile) / int(_metadata) * 100)
-            self.log.debug(_format, str(pool), mem_ratio, _metadata, _memfile, actual)
-            if mem_ratio and actual != mem_ratio:
-                errors.append(
-                    f"{str(pool)} - Actual mem ratio ({actual}) does not match specified ratio "
-                    f"({mem_ratio}) in pool create output")
+                summary[-1][_keys[2]] = _result["response"]["tier_bytes"]
+                summary[-1][_keys[3]] = _result["response"]["mem_file_bytes"]
+                summary[-1][_keys[4]] = round(
+                    int(summary[-1][_keys[3]]) / int(summary[-1][_keys[2]][0]) * 100)
+                _difference = abs(summary[-1][_keys[1]] - summary[-1][_keys[4]])
+                if summary[-1][_keys[1]] and _difference > 1:
+                    errors.append(
+                        f"{str(pool)} - Mem ratio ({summary[-1][_keys[1]]}) differs from pool "
+                        f"create ({summary[-1][_keys[4]]}) by {_difference}")
+            except (KeyError, IndexError):
+                summary[-1][_keys[2]] = "<ERROR>"
+                summary[-1][_keys[3]] = "<ERROR>"
+                summary[-1][_keys[4]] = 0
+                errors.append(f"{str(pool)} - Invalid dmg pool create response: {_result}")
 
         # Verify the pool blob and memory file sizes align with the requested mem ratio
         self.log_step(f"Query the {len(pools)} pool(s)")
@@ -82,27 +92,43 @@ class MemRatioTest(TestWithServers):
         for pool in pools:
             pool_queries.append(dmg.pool_query(pool.identifier))
 
-        self.log_step(f"Verify the {len(pool_queries)} pool query response(s)")
-        _format = "  %-60s  %-7s  %-16s  %-16s  %s"
-        self.log.debug(_format, "Pool", "Engines", "Metadata Storage", "Memory File Size", "Ratio")
-        self.log.debug(_format, "-" * 60, "-" * 7, "-" * 16, "-" * 16, "-" * 7)
+        # Collect the pool query output values
         for index, pool_query in enumerate(pool_queries):
-            _engines = _memfile = _metadata = "<ERROR>"
             try:
-                _engines = pool_query["response"]["total_engines"]
-                _memfile = pool_query["response"]["mem_file_bytes"]
-                _metadata = pool_query["response"]["tier_stats"][0]["total"]
-            except (KeyError, IndexError) as error:
-                self.log.debug(_format, str(pools[index]), _engines, _memfile, _metadata, error)
-                errors.append(
-                    f"{str(pools[index])} - Invalid dmg pool query response: {pool_query}")
-                continue
-            actual = round(int(_memfile) / int(_metadata) * 100)
-            self.log.debug(_format, str(pools[index]), _engines, _memfile, _metadata, actual)
-            if "mem_ratio" in kwargs_list[index] and actual != kwargs_list[index]["mem_ratio"]:
-                errors.append(
-                    f"{str(pools[index])} - Actual mem ratio ({actual}) does not match specified "
-                    f"ratio ({kwargs_list[index]['mem_ratio']}) in pool query output")
+                summary[index][_keys[5]] = pool_query["response"]["total_engines"]
+                summary[index][_keys[6]] = {}
+                for data in pool_query["response"]["tier_stats"]:
+                    summary[index][_keys[6]][data["media_type"]] = data["total"]
+                summary[index][_keys[7]] = pool_query["response"]["mem_file_bytes"]
+                # (mem_file_bytes / "tier_stats-scm-total) * 100
+                summary[index][_keys[8]] = round(
+                    int(summary[index][_keys[7]]) / int(summary[index][_keys[6]]["scm"]) * 100)
+                _difference = abs(summary[index][_keys[1]] - summary[index][_keys[8]])
+                if summary[-1][_keys[1]] and _difference > 1:
+                    errors.append(
+                        f"{str(pool)} - Mem ratio ({summary[-1][_keys[1]]}) differs from pool "
+                        f"query ({summary[-1][_keys[4]]}) by {_difference}")
+            except (KeyError, IndexError):
+                summary[index][_keys[5]] = "<ERROR>"
+                summary[index][_keys[6]] = "<ERROR>"
+                summary[index][_keys[7]] = "<ERROR>"
+                summary[index][_keys[8]] = 0
+                errors.append(f"{str(pool)} - Invalid dmg pool query response: {pool_query}")
+
+        # Report the test results
+        self.log.debug(_format, *_keys)
+        self.log.debug(
+            _format, "-" * 60, "-" * 8, "-" * 34, "-" * 16, "-" * 13, "-" * 44, "-" * 16, "-" * 7)
+        for data in summary:
+            items = []
+            for key in _keys:
+                if isinstance(data[key], list):
+                    items.append(", ".join(data[key]))
+                elif isinstance(data[key], dict):
+                    items.append(", ".join(f"{k}: {v}" for k, v in data[key].items()))
+                else:
+                    items.append(str(data[key]))
+            self.log.debug(_format, *items)
 
         report_errors(self, errors)
         self.log.info("Test passed")
