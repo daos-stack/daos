@@ -26,7 +26,7 @@ def build_dlck_test_helper(henv):
         '../../../dtx/tests/pl_map_mock.c',
         '../../../dtx/tests/sched_mock.c',
         '../../../engine/util.c',
-        '../../../mgmt/srv_util_file.c',
+        '../../../mgmt/mgmt_common.c',
     ]
     henv.d_test_program('dlck_test_helper', srcs, LIBS=libs)
 

@@ -8,14 +8,11 @@
 #include <sys/types.h>
 #include <gurt/common.h>
 #include <daos/common.h>
-#include <daos_srv/daos_mgmt_srv.h>
+#include <daos_srv/mgmt_tgt_common.h>
 #include <daos_srv/smd.h>
 #include <daos_srv/vos.h>
 
 #include "dlck_pool.h"
-
-int
-mgmt_file_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
 
 int
 dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid)
@@ -41,17 +38,17 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid)
 }
 
 static int
-dlck_file_preallocate(const char *path, uuid_t uuid)
+dlck_file_preallocate(const char *storage_path, uuid_t po_uuid, int tgt_id)
 {
 	struct smd_pool_info *pool_info = NULL;
 	int                   rc;
 
-	rc = smd_pool_get_info(uuid, &pool_info);
+	rc = smd_pool_get_info(po_uuid, &pool_info);
 	if (rc != 0) {
 		return rc;
 	}
 
-	rc = mgmt_file_preallocate(path, uuid, pool_info->spi_scm_sz);
+	rc = ds_mgmt_tgt_preallocate(po_uuid, pool_info->spi_scm_sz, tgt_id, storage_path);
 
 	smd_pool_free_info(pool_info);
 
@@ -75,7 +72,7 @@ dlck_pool_open(const char *storage_path, uuid_t po_uuid, int tgt_id, daos_handle
 
 	/** no MD-on-SSD mode means no file preallocation is necessary */
 	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = dlck_file_preallocate(path, po_uuid);
+		rc = dlck_file_preallocate(storage_path, po_uuid, tgt_id);
 		if (rc != 0) {
 			goto fail;
 		}

@@ -421,7 +421,7 @@ pool_child_recreate(struct ds_pool_child *child)
 		return rc;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_file(dss_storage_path, child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
 		return rc;
 
@@ -472,12 +472,51 @@ out:
 
 }
 
+struct ds_pool_flags_arg {
+	struct ds_pool *pool;
+	uint32_t        disable_rebuild : 1, disable_dtx_resync : 1, immutable : 1;
+};
+
+static void
+apply_pool_flags(void *arg)
+{
+	struct ds_pool_flags_arg *set_arg = arg;
+
+	if (set_arg->disable_rebuild)
+		set_arg->pool->sp_disable_rebuild = 1;
+	if (set_arg->disable_dtx_resync)
+		set_arg->pool->sp_disable_dtx_resync = 1;
+	if (set_arg->immutable)
+		set_arg->pool->sp_immutable = 1;
+}
+
+int
+ds_pool_apply_flags(struct ds_pool_flags_arg *args)
+{
+	ABT_thread thread;
+	int        rc;
+
+	if (!args->disable_rebuild && !args->disable_dtx_resync && !args->immutable)
+		return 0;
+
+	rc = dss_ult_create(apply_pool_flags, args, DSS_XS_SYS, 0 /* tgt_idx */, 0 /* stack_size */,
+			    &thread);
+	if (rc != 0) {
+		D_ERROR("failed to create apply_pool_flags ULT: " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+	return 0;
+}
+
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
 {
 	struct dss_module_info	*info = dss_get_module_info();
 	char			*path;
 	int			 rc;
+	struct ds_pool_flags_arg set_args = {0};
 
 	D_ASSERTF(*child->spc_state == POOL_CHILD_NEW, "state:%u", *child->spc_state);
 	D_ASSERT(!d_list_empty(&child->spc_list));
@@ -490,12 +529,13 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 			goto out;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_file(dss_storage_path, child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
 		goto out;
 
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
-	rc = vos_pool_open_metrics(path, child->spc_uuid, VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH,
+	rc = vos_pool_open_metrics(path, child->spc_uuid,
+				   VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_EXTERNAL_CHKPT,
 				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
 	D_FREE(path);
@@ -524,8 +564,9 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto out_close;
 	}
 
+	set_args.pool = child->spc_pool;
 	if (vos_pool_feature_immutable(child->spc_hdl))
-		child->spc_pool->sp_immutable = 1;
+		set_args.immutable = 1;
 
 	/*
 	 * Rebuild depends on DTX resync, if DTX resync is skipped,
@@ -533,10 +574,14 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	 */
 	if (vos_pool_feature_skip_rebuild(child->spc_hdl) ||
 	    vos_pool_feature_skip_dtx_resync(child->spc_hdl))
-		child->spc_pool->sp_disable_rebuild = 1;
+		set_args.disable_rebuild = 1;
 
 	if (vos_pool_feature_skip_dtx_resync(child->spc_hdl))
-		child->spc_pool->sp_disable_dtx_resync = 1;
+		set_args.disable_dtx_resync = 1;
+
+	rc = ds_pool_apply_flags(&set_args);
+	if (rc != 0)
+		goto out_close;
 
 	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = start_gc_ult(child);
@@ -2220,13 +2265,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
 	pool->sp_data_thresh = iv_prop->pip_data_thresh;
-
-	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
-	    iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
-		pool->sp_disable_rebuild = 0;
-	else
-		pool->sp_disable_rebuild = 1;
-
+	pool->sp_self_heal      = iv_prop->pip_self_heal;
 	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_INCREMENTAL)
 		pool->sp_incr_reint = 1;
 
