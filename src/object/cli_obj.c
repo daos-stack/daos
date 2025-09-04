@@ -4843,19 +4843,17 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			setbits64(ctx.alloc_bitmaps[i], sgl_idx, 1);
 
 			/* Copy data from original IOVs to merged buffer */
-			if (update) {
-				offset = 0;
-				for (k = merge_start; k < j; k++) {
-					uint64_t merge_len;
+			offset = 0;
+			for (k = merge_start; k < j; k++) {
+				uint64_t merge_len;
 
-					iov = &sg->sg_iovs[k];
-					if (skip_sgl_iov(update, iov))
-						continue;
-					D_ASSERT(offset < merged_buf_size);
-					merge_len = update ? iov->iov_len : iov->iov_buf_len;
-					memcpy(merged_buf + offset, iov->iov_buf, merge_len);
-					offset += merge_len;
-				}
+				iov = &sg->sg_iovs[k];
+				if (skip_sgl_iov(update, iov))
+					continue;
+				D_ASSERT(offset < merged_buf_size);
+				merge_len = update ? iov->iov_len : iov->iov_buf_len;
+				memcpy(merged_buf + offset, iov->iov_buf, merge_len);
+				offset += merge_len;
 			}
 
 			/* Create merged IOV entry */
