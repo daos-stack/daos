@@ -38,6 +38,8 @@ test_two_pools_hw:
       scm: 2147483648   # 2GiB
       nvme: 0
 
+check_server_storage: "no"
+
 server_config:
   name: daos_server
   engines_per_host: 2
