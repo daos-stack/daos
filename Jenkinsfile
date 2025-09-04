@@ -18,7 +18,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
-@Library(value='pipeline-lib@hendersp/DAOS-17960') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -949,8 +948,7 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2',
-                                details_stash: 'functional_el8_valgrind_details'))
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -972,8 +970,7 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2',
-                                details_stash: 'functional_el8_details'))
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -995,8 +992,7 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2',
-                                details_stash: 'functional_el9_details'))
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -1019,7 +1015,6 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2',
-                                details_stash: 'functional_leap15_details',
                                 image_version: 'leap15.6'))
                     }
                     post {
@@ -1042,8 +1037,7 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2',
-                                details_stash: 'functional_ubuntu_details'))
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -1220,8 +1214,7 @@ pipeline {
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal,
-                            details_stash: 'functional_medium_details'
+                            job_status: job_status_internal
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
@@ -1233,8 +1226,7 @@ pipeline {
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal,
-                            details_stash: 'functional_medium_md_on_ssd_details'
+                            job_status: job_status_internal
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
@@ -1247,8 +1239,7 @@ pipeline {
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal,
-                            details_stash: 'functional_medium_vmd_details'
+                            job_status: job_status_internal
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
@@ -1261,8 +1252,7 @@ pipeline {
                             provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal,
-                            details_stash: 'functional_medium_verbs_details'
+                            job_status: job_status_internal
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
@@ -1275,8 +1265,7 @@ pipeline {
                             provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal,
-                            details_stash: 'functional_medium_verbs_md_on_ssd_details'
+                            job_status: job_status_internal
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
@@ -1289,8 +1278,7 @@ pipeline {
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal,
-                            details_stash: 'functional_medium_ucx_details'
+                            job_status: job_status_internal
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
@@ -1302,8 +1290,7 @@ pipeline {
                             default_nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal,
-                            details_stash: 'functional_large_details'
+                            job_status: job_status_internal
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
@@ -1315,41 +1302,12 @@ pipeline {
                             default_nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal,
-                            details_stash: 'functional_large_md_on_ssd_details'
+                            job_status: job_status_internal
                         ),
                     )
                 }
             }
         } // stage('Test Hardware')
-        stage('Test Summary') {
-            steps {
-                script {
-                    parallel(
-                        'Functional Test Summary': getSummaryStage(
-                            name: 'Functional Test Summary',
-                            docker_filename: 'utils/docker/Dockerfile.el.8',
-                            script_stashes: ['functional_el8_details',
-                                             'functional_el9_details',
-                                             'functional_leap15_details',
-                                             'functional_ubuntu_details',
-                                             'functional_medium_details',
-                                             'functional_medium_md_on_ssd_details',
-                                             'functional_medium_vmd_details',
-                                             'functional_medium_verbs_details',
-                                             'functional_medium_verbs_md_on_ssd_details',
-                                             'functional_medium_ucx_details',
-                                             'functional_large_details',
-                                             'functional_large_md_on_ssd_details'],
-                            script_name: 'ci/functional_test_summary.sh',
-                            script_label: 'Generate Functional Test Summary',
-                            artifacts: 'functional_test_summary/*',
-                            job_status: job_status_internal
-                        )
-                    )
-                }
-            }
-        } // stage('Test Summary')
     } // stages
     post {
         always {
