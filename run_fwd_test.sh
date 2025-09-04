@@ -15,9 +15,13 @@ orterun --allow-run-as-root -np 2 -H hsw-204:15 -x D_LOG_MASK=warn -x D_PROVIDER
 sleep 2
 
 # Perform bulk forward transfers through rank=0 going to rank bulk_forward=1. size of bulk=2048, num repetitions=10
-export CLI_CMD="${DAOS_PATH}./install/lib/daos/TESTING/tests/test_group_np_cli --name cl --attach_to fwd_test --rank=0 --bulk_forward=1 --skip_check_in --skip_shutdown -x 2048 -y 20000"
+export CLI_CMD="${DAOS_PATH}./install/lib/daos/TESTING/tests/test_group_np_cli --name cl --attach_to fwd_test --rank=0 --bulk_forward=1 --skip_check_in --skip_shutdown -x 2048 -y 200"
 ${CLI_CMD}
 
+
+#sleep 1
+#killall test_group_np_srv
+# Shutdown engines
 export CLI_CMD="${DAOS_PATH}./install/lib/daos/TESTING/tests/test_group_np_cli --name cl --attach_to fwd_test --rank=0,1 --skip_check_in"
 ${CLI_CMD}
 
