@@ -263,8 +263,8 @@ tgt_preallocate_thrd_func(void *arg)
 
 	if (tvpa->tvpa_bind_cpu_fn)
 		tvpa->tvpa_bind_cpu_fn(tvpa->tvpa_tgt_id);
-	return (void *)(uintptr_t)ds_mgmt_tgt_preallocate(tvpa->tvpa_uuid, tvpa->tvpa_scm_size,
-						  tvpa->tvpa_tgt_id, tvpa->tvpa_newborns_path);
+	return (void *)(uintptr_t)ds_mgmt_tgt_preallocate(
+	    tvpa->tvpa_uuid, tvpa->tvpa_scm_size, tvpa->tvpa_tgt_id, tvpa->tvpa_newborns_path);
 }
 
 static void

@@ -92,12 +92,12 @@ ds_mgmt_tgt_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr
 
 /**
  * Recreate a single VOS file.
- * 
+ *
  * \param[in] uuid		Pool uuid
  * \param[in] scm_size		Vos file size
  * \param[in] tgt_id		Vos file identifier
  * \param[in] newborns_path	Base path for store the vos file
- * 
+ *
  * \retval -DER_NOMEM	Out of memory
  * \retval -DER_IO	IO error
  * \retval -DER_NOSPACE	There is not enough space left on the device
