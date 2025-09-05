@@ -261,7 +261,7 @@ int
 shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, uint32_t data_size)
 {
 	int                  rc;
-	uint64_t             hash         = d_hash_murmur64(key, key_size, 12345);
+	uint64_t             hash         = d_hash_murmur64(key, key_size, 0);
 	uint32_t             idx_subcache = (uint32_t)((hash >> 32) % cache->n_subcache);
 	uint32_t             index        = (uint32_t)(hash % cache->capacity);
 	shm_lru_cache_var_t *cache_list =
