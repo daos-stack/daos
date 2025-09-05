@@ -878,7 +878,7 @@ static uuid_t test_stop_start_puuid;
 
 /* administrator (via dmg command) asks to stop the currently-running rebuild for pool */
 int
-ds_rebuild_admin_stop(struct ds_pool *pool)
+ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 {
 	struct rebuild_global_pool_tracker *rgt;
 
@@ -891,12 +891,14 @@ ds_rebuild_admin_stop(struct ds_pool *pool)
 		return 0;
 	}
 
-	/* admin stop command does not terminate reclaim/fail_reclaim jobs */
-	if ((rgt->rgt_opc == RB_OP_REBUILD) || (rgt->rgt_opc == RB_OP_UPGRADE)) {
-		D_INFO(DF_RB ": stopping rebuild opc %u(%s)\n", DP_RB_RGT(rgt), rgt->rgt_opc,
-		       RB_OP_STR(rgt->rgt_opc));
-		rgt->rgt_abort      = 1;
-		rgt->rgt_stop_admin = 1;
+	/* admin stop command does not terminate reclaim/fail_reclaim jobs (unless forced) */
+	if (((rgt->rgt_opc == RB_OP_REBUILD) || (rgt->rgt_opc == RB_OP_UPGRADE)) ||
+	    ((rgt->rgt_opc == RB_OP_FAIL_RECLAIM) && force)) {
+		D_INFO(DF_RB ": stopping rebuild force=%u opc %u(%s)\n", DP_RB_RGT(rgt), force,
+		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
+		rgt->rgt_abort           = 1;
+		rgt->rgt_stop_admin      = 1;
+		rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 	} else {
 		D_INFO(DF_RB ": NOT stopping rebuild during opc %u(%s)\n", DP_RB_RGT(rgt),
 		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
@@ -954,7 +956,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 
 			/* What the real RPC handler will call. We will exit below due to rgt_abort
 			 */
-			ds_pool_rebuild_stop(test_stop_start_puuid, NULL /* hint */);
+			ds_pool_rebuild_stop(test_stop_start_puuid, 0 /* force */, NULL /* hint */);
 		}
 
 		ABT_rwlock_rdlock(pool->sp_lock);
@@ -1832,12 +1834,6 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 complete:
 	/* Update the rebuild complete status for pool query */
 	if (task->dst_rebuild_op != RB_OP_FAIL_RECLAIM) {
-		/* During and after an admin stop, pool query should show an indication.
-		 * Query rs_state from original Rebuild = IN_PROGRESS until Fail_reclaim finishes
-		 * later.
-		 */
-		if (rgt->rgt_stop_admin && rgt->rgt_abort)
-			rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 		rc1 = rebuild_status_completed_update(task->dst_pool_uuid, &rgt->rgt_status);
 		DL_CDEBUG(rc1, DLOG_ERR, DLOG_INFO, rc1, DF_RB ": updated, state %d errno " DF_RC,
 			  DP_RB_RGT(rgt), rgt->rgt_status.rs_state,
@@ -1977,14 +1973,10 @@ done:
 			DP_RC(rgt->rgt_status.rs_errno));
 
 		if (rgt->rgt_abort && rgt->rgt_stop_admin) {
-			/* Administrator asked to stop rebuild (more than a leader abort - stop on
-			 * all engines). Notify all engines to stop with
+			/* Administrator asked to stop rebuild. Notify engines with
 			 * rebuild_leader_status_notify().
 			 */
-			D_INFO(DF_RB ": stop rebuild due to admin command, change rc %d -> " DF_RC
-				     "\n",
-			       DP_RB_RGT(rgt), rgt->rgt_status.rs_errno, DP_RC(-DER_OP_CANCELED));
-			rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
+			D_INFO(DF_RB ": stop rebuild due to admin command\n", DP_RB_RGT(rgt));
 		} else if (rgt->rgt_abort && rgt->rgt_status.rs_errno == 0) {
 			/* If the leader rebuild is aborted due to a leader change, then do not
 			 * abort the real rebuild(scan/pull ults), because the new leader will
@@ -2493,10 +2485,12 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
+
 	D_ASSERT(entry != NULL);
-	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) {
-		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN,
-					    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : 0);
+	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD) &&
+	    !pool->sp_disable_rebuild) {
+		rc = regenerate_task_of_type(
+		    pool, PO_COMP_ST_DOWN, entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : 0);
 		if (rc != 0)
 			return rc;
 
