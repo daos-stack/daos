@@ -3112,6 +3112,30 @@ out:
 	return rc;
 }
 
+int
+chk_engine_set_policy(uint64_t gen, uint32_t policy_nr, struct chk_policy *policies)
+{
+	struct chk_instance *ins  = chk_engine;
+	struct chk_bookmark *cbk  = &ins->ci_bk;
+	struct chk_property *prop = &ins->ci_prop;
+	int                  rc   = 0;
+
+	/* Do nothing if no (engine) check instance is running. */
+	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE || cbk->cb_gen != gen ||
+	    cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
+		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
+
+	rc = chk_policy_refresh(policy_nr, policies, prop);
+	if (rc > 0)
+		rc = chk_prop_update(prop, NULL);
+
+out:
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, DF_ENGINE " set policy: " DF_RC "\n", DP_ENGINE(ins),
+		 DP_RC(rc));
+
+	return rc == -DER_NOTAPPLICABLE ? 0 : rc;
+}
+
 /*
  * \return	Positive value if interaction is interrupted, such as check stop.
  *		Zero on success.
@@ -3146,7 +3170,8 @@ new_seq:
 		pool = (struct chk_pool_rec *)riov.iov_buf;
 
 		rc = chk_pending_add(ins, &pool->cpr_pending_list, NULL, *cru->cru_pool, *seq,
-				     cru->cru_rank, cru->cru_cla, &cpr);
+				     cru->cru_rank, cru->cru_cla, cru->cru_option_nr,
+				     cru->cru_options, &cpr);
 		if (unlikely(rc == -DER_AGAIN))
 			goto new_seq;
 
