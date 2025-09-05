@@ -770,6 +770,10 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_OBJ_VERSION);
 	if (entry_def)
 		entry_def->dpe_val = pool_hdl->sph_obj_ver;
+	/* disallow old version for container creation */
+	if (entry_def->dpe_val < DS_POOL_OBJ_VERSION_2)
+		entry_def->dpe_val = DS_POOL_OBJ_VERSION_2;
+
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);
