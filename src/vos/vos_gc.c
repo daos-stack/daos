@@ -211,10 +211,9 @@ gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 
 	D_ASSERT(krec->kr_bmap & KREC_BF_DKEY);
 	if (krec->kr_bmap & KREC_BF_NO_AKEY)
-		gc_add_item(pool, coh, GC_AKEY, item->it_addr, &item->it_bkt_ids[0]);
+		return gc_add_item(pool, coh, GC_AKEY, item->it_addr, &item->it_bkt_ids[0]);
 	else
-		umem_free(&pool->vp_umm, item->it_addr);
-	return 0;
+		return umem_free(&pool->vp_umm, item->it_addr);
 }
 
 /**
