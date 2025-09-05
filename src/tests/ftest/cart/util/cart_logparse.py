@@ -690,7 +690,12 @@ class LogIter():
             self._iter_index += 1
 
             if self._pid is not None and self._iter_index > self._iter_last_index:
-                assert self._iter_count == self._iter_pid['line_count']  # nosec
+                if self._iter_count != self._iter_pid['line_count']:
+                    raise InvalidLogFile(
+                        f"In file: {self.fname!r} "
+                        f"the assert \"self._iter_count == self._iter_pid['line_count'] \" failed "
+                        f" with values {self._iter_count!r} != {self._iter_pid['line_count']!r}"
+                    )
                 raise StopIteration
 
             line = self.__lnext()
