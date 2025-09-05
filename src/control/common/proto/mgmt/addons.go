@@ -161,6 +161,26 @@ func (r *PoolQueryTargetReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
 
+// SetUUID sets the request's ID to a UUID.
+func (r *PoolRebuildStartReq) SetUUID(id uuid.UUID) {
+	r.Id = id.String()
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolRebuildStartReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetUUID sets the request's ID to a UUID.
+func (r *PoolRebuildStopReq) SetUUID(id uuid.UUID) {
+	r.Id = id.String()
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolRebuildStopReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
 // SetSvcRanks sets the request's Pool Service Ranks.
 func (r *GetACLReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
