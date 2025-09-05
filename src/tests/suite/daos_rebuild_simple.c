@@ -1475,9 +1475,11 @@ rebuild_wait_reset_fail_cb(void *data)
 {
 	test_arg_t	*arg = data;
 
-	print_message("wait 300 seconds for rebuild/reclaim/retry....");
+	print_message("wait 60 seconds for rebuild/reclaim%s\n",
+		      arg->interactive_rebuild ? "" : "/retry");
 	sleep(60);
 
+	print_message("clearing fault injection on all engines\n");
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
@@ -1496,11 +1498,6 @@ rebuild_many_objects_with_failure(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	if (arg->interactive_rebuild) {
-		print_message("SKIP due to interactive_rebuild enabled, but not tested here\n");
-		skip();
-	}
-
 	D_ALLOC_ARRAY(oids, 8000);
 	for (i = 0; i < 8000; i++) {
 		char buffer[256];
@@ -1517,15 +1514,48 @@ rebuild_many_objects_with_failure(void **state)
 		ioreq_fini(&req);
 	}
 
+	/* Inject faults on engines. Special handling for interactive_rebuild case */
 	if (arg->myrank == 0) {
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 50,
-				      0, NULL);
+		if (!arg->interactive_rebuild) {
+			/* All engines DAOS_REBUILD_OBJ_FAIL */
+			print_message("inject fault DAOS_REBUILD_OBJ_FAIL on all engines\n");
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 50, 0, NULL);
+		} else {
+			d_rank_t leader;
+
+			/* interactive_rebiuld: DAOS_REBUILD_OBJ fail on all engines except PS
+			 * leader; DAOS_REBUILD_ADMIN_STOP_RECLAIM on the PS leader engine
+			 */
+
+			rc = test_get_leader(arg, &leader);
+			if (rc != 0) {
+				print_message("get pool " DF_UUIDF " leader failed: %d\n",
+					      DP_UUID(arg->pool.pool_uuid), rc);
+				assert_rc_equal(rc, 0);
+			}
+
+			for (i = 0; i < arg->srv_nnodes; i++) {
+				if (i == leader)
+					fi_rebuild_stop_reclaim(arg);
+				else {
+					print_message("inject DAOS_REBUILD_OBJ_FAIL on non-leader "
+						      "engine %u\n",
+						      i);
+					daos_debug_set_params(
+					    arg->group, i, DMG_KEY_FAIL_LOC,
+					    DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+					daos_debug_set_params(arg->group, i, DMG_KEY_FAIL_VALUE, 50,
+							      0, NULL);
+				}
+			}
+		}
 	}
 
 	arg->rebuild_cb = rebuild_wait_reset_fail_cb;
-
+	if (arg->interactive_rebuild)
+		arg->rebuild_post_cb = fi_rebuild_resume_wait;
 	rebuild_single_pool_target(arg, 3, -1, false);
 
 	for (i = 0; i < 8000; i++) {
