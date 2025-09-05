@@ -814,24 +814,26 @@ pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 int
 ds_pool_iv_refresh_hdl(struct ds_pool *pool, struct pool_iv_hdl *pih)
 {
-	int rc;
+	int rc = 0;
 
-	if (!uuid_is_null(pool->sp_srv_cont_hdl)) {
-		if (uuid_compare(pool->sp_srv_cont_hdl,
-				 pih->pih_cont_hdl) == 0)
-			return 0;
-		ds_cont_tgt_close(pool->sp_uuid, pool->sp_srv_cont_hdl);
-		D_DEBUG(DB_MD, "delete hdl "DF_UUID"n", DP_UUID(pool->sp_srv_cont_hdl));
-		uuid_clear(pool->sp_srv_cont_hdl);
-		uuid_clear(pool->sp_srv_pool_hdl);
+	if (!uuid_is_null(pool->sp_srv_cont_hdl) &&
+	    uuid_compare(pool->sp_srv_cont_hdl, pih->pih_cont_hdl) != 0) {
+		/*
+		 * The potential handle change can only happen on the old pool (before 2.8),
+		 * following open call could be removed once 2.6 pool support is dropped
+		 */
+		D_WARN(DF_UUID ": Server cont hdl changed from " DF_UUID " to " DF_UUID "\n",
+		       DP_UUID(pool->sp_uuid), DP_UUID(pool->sp_srv_cont_hdl),
+		       DP_UUID(pih->pih_cont_hdl));
+
+		if (!uuid_is_null(pih->pih_cont_hdl))
+			rc = ds_pool_srv_open(pool->sp_uuid, pih->pih_cont_hdl);
 	}
 
-	rc = ds_cont_tgt_open(pool->sp_uuid, pih->pih_cont_hdl, NULL, 0,
-			      ds_sec_get_rebuild_cont_capabilities(), 0);
-	if (rc == 0) {
+	if (!uuid_is_null(pih->pih_cont_hdl))
 		uuid_copy(pool->sp_srv_cont_hdl, pih->pih_cont_hdl);
+	if (!uuid_is_null(pih->pih_pool_hdl))
 		uuid_copy(pool->sp_srv_pool_hdl, pih->pih_pool_hdl);
-	}
 
 	return rc;
 }
@@ -957,8 +959,6 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 					rc = 0;
 				return rc;
 			}
-			ds_cont_tgt_close(entry->ns->iv_pool_uuid,
-					  iv_entry->piv_hdl.pih_cont_hdl);
 			uuid_clear(pool->sp_srv_cont_hdl);
 			uuid_clear(pool->sp_srv_pool_hdl);
 			uuid_clear(iv_entry->piv_hdl.pih_cont_hdl);

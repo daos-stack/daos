@@ -235,6 +235,8 @@ ds_pool_lookup_map_bc(struct ds_pool *pool, crt_context_t ctx, struct ds_pool_ma
 		      uint32_t *map_version_out);
 void
      ds_pool_put_map_bc(struct ds_pool_map_bc *map_bc);
+int
+     ds_pool_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid);
 
 /*
  * srv_util.c
