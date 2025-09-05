@@ -652,9 +652,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%s%d/%d/"DF_U64"] ", d_log_xst.tag,
-					 pid, tid, uid);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s%u/%u/" DF_U64 "] ",
+					 d_log_xst.tag, pid, tid, uid);
 		} else {
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
 					 d_log_xst.tag);
