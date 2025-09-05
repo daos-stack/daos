@@ -75,24 +75,22 @@ void dss_set_start_epoch(void);
 bool dss_has_enough_helper(void);
 
 struct dss_module_info {
-	crt_context_t		dmi_ctx;
-	struct bio_xs_context  *dmi_nvme_ctxt;
-	struct dss_xstream     *dmi_xstream;
+	crt_context_t          dmi_ctx;
+	struct bio_xs_context *dmi_nvme_ctxt;
+	struct dss_xstream    *dmi_xstream;
 	/* the xstream id */
-	int			dmi_xs_id;
+	int                    dmi_xs_id;
 	/* the VOS target id */
-	int			dmi_tgt_id;
+	int                    dmi_tgt_id;
 	/* the cart context id */
-	int			dmi_ctx_id;
-	uint32_t		dmi_dtx_batched_started:1,
-				dmi_srv_shutting_down:1;
-	d_list_t		dmi_dtx_batched_cont_open_list;
-	d_list_t		dmi_dtx_batched_cont_close_list;
-	d_list_t		dmi_dtx_batched_pool_list;
+	int                    dmi_ctx_id;
+	uint32_t               dmi_dtx_batched_started : 1, dmi_srv_shutting_down : 1;
+	d_list_t               dmi_dtx_batched_cont_open_list;
+	d_list_t               dmi_dtx_batched_pool_list;
 	/* the profile information */
-	struct daos_profile	*dmi_dp;
-	struct sched_request	*dmi_dtx_cmt_req;
-	struct sched_request	*dmi_dtx_agg_req;
+	struct daos_profile   *dmi_dp;
+	struct sched_request  *dmi_dtx_cmt_req;
+	struct sched_request  *dmi_dtx_agg_req;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
