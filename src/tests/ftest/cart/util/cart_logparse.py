@@ -86,7 +86,7 @@ class LogLine():
     re_time = re.compile(r"^([01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{6}$")
 
     # Match a TAG.
-    re_tag = re.compile(r"^[A-Z]+\[(\d+)/\d+/\d+\]$")
+    re_tag = re.compile(r".+?\[(-?\d+)\/-?\d+\/\d+\]$")
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")

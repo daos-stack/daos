@@ -569,8 +569,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
 	static __thread char b[DLOG_TBSIZ];
-	static __thread uint32_t tid = -1;
-	static __thread uint32_t pid = -1;
+	static __thread pid_t tid = -1;
+	static __thread pid_t pid = -1;
 	static uint64_t	last_flush;
 
 	uint64_t uid = 0;
@@ -608,14 +608,14 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	if ((mst.oflags & DLOG_FLV_TAG) && (mst.oflags & DLOG_FLV_LOGPID)) {
 		/* Init static members in ahead of lock */
-		if (pid == (uint32_t)(-1))
-			pid = (uint32_t)getpid();
+		if (pid == -1)
+			pid = getpid();
 
-		if (tid == (uint32_t)(-1)) {
+		if (tid == -1) {
 			if (mst.log_id_cb)
 				mst.log_id_cb(&tid, NULL);
 			else
-				tid = (uint32_t)syscall(SYS_gettid);
+				tid = syscall(SYS_gettid);
 		}
 
 		if (mst.log_id_cb)
@@ -655,9 +655,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%s%d/%d/"DF_U64"] ", d_log_xst.tag,
-					 pid, tid, uid);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s%d/%d/" DF_U64 "] ",
+					 d_log_xst.tag, pid, tid, uid);
 		} else {
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
 					 d_log_xst.tag);
