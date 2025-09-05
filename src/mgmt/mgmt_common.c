@@ -186,8 +186,8 @@ out:
 	return rc;
 }
 
-static int
-tgt_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id, const char *newborns_path)
+int
+ds_mgmt_tgt_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id, const char *newborns_path)
 {
 	char *path = NULL;
 	int   fd   = -1, rc;
@@ -263,8 +263,8 @@ tgt_preallocate_thrd_func(void *arg)
 
 	if (tvpa->tvpa_bind_cpu_fn)
 		tvpa->tvpa_bind_cpu_fn(tvpa->tvpa_tgt_id);
-	return (void *)(uintptr_t)tgt_preallocate(tvpa->tvpa_uuid, tvpa->tvpa_scm_size,
-						  tvpa->tvpa_tgt_id, tvpa->tvpa_newborns_path);
+	return (void *)(uintptr_t)ds_mgmt_tgt_preallocate(
+	    tvpa->tvpa_uuid, tvpa->tvpa_scm_size, tvpa->tvpa_tgt_id, tvpa->tvpa_newborns_path);
 }
 
 static void
@@ -297,7 +297,7 @@ ds_mgmt_tgt_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr
 	int i, rc = 0;
 
 	for (i = 0; i < tgt_nr; i++) {
-		rc = tgt_preallocate(uuid, scm_size, i, newborns_path);
+		rc = ds_mgmt_tgt_preallocate(uuid, scm_size, i, newborns_path);
 		if (rc)
 			break;
 	}

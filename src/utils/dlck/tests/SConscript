@@ -1,0 +1,42 @@
+"""Build versioned object store tests"""
+
+
+def build_dlck_test_helper(henv):
+    """Build dlck_test_helper"""
+    henv.Append(OBJPREFIX="dlck_ut_helper_")
+    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
+    henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    henv.require('argobots', 'cmocka')
+
+    libs = [
+        'vos_srv', 'gurt', 'daos_common_pmem', 'bio', 'cmocka', 'uuid', 'dtx', 'abt', 'pthread'
+    ]
+
+    srcs = [
+        'dlck_test_helper.c',
+        '../dlck_abt.c',
+        '../dlck_args_engine.c',
+        '../dlck_args_files.c',
+        '../dlck_args_parse.c',
+        '../dlck_engine.c',
+        '../dlck_pool.c',
+        '../dlck_tls.c',
+        '../../../dtx/tests/srv_mock.c',
+        '../../../dtx/tests/ult_mock.c',
+        '../../../dtx/tests/pl_map_mock.c',
+        '../../../dtx/tests/sched_mock.c',
+        '../../../engine/util.c',
+        '../../../mgmt/mgmt_common.c',
+    ]
+    henv.d_test_program('dlck_test_helper', srcs, LIBS=libs)
+
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    build_dlck_test_helper(env.Clone())
+
+
+if __name__ == "SCons.Script":
+    scons()
