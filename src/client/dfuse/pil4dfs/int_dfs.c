@@ -946,7 +946,6 @@ child_hdlr(void)
 	rc = daos_eq_lib_reset_after_fork();
 	if (rc)
 		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
-	daos_dti_reset();
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
 	context_reset = true;
 	d_eq_count    = 0;
@@ -6074,6 +6073,9 @@ ioctl(int fd, unsigned long request, ...)
 	fd_directed = d_get_fd_redirected(fd);
 	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)))
 		return next_ioctl(fd, request, param);
+
+	if (request == FIOCLEX)
+		return 0;
 
 	errno = ENOTSUP;
 	return (-1);

@@ -22,8 +22,8 @@
 %endif
 
 Name:          daos
-Version:       2.6.3
-Release:       8%{?relval}%{?dist}
+Version:       2.6.4
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -634,6 +634,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Aug 05 2025 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-2
+- Second release candidate for 2.6.4
+
+* Tue Jun 17 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.4-1
+- First release candidate for 2.6.4
+
 * Mon May 12 2025  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.3-8
 - Bump lua-lmod version to >=8.7.36
 - Bump lmod version to >=8.7.36

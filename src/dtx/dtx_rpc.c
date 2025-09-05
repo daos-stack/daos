@@ -277,6 +277,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		if (dra->dra_opc == DTX_REFRESH) {
 			if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
 				rc = crt_req_set_timeout(req, 3);
+			else if (drr->drr_flags != NULL && drr->drr_flags[0] & DRF_FOR_ORPHAN)
+				/* DRF_FOR_ORPHAN case may need longer timeout. */
+				rc = crt_req_set_timeout(req, 60);
 			else
 				/*
 				 * If related DTX is committable, then it will be committed
@@ -983,7 +986,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 
 int
 dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
-		     d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, bool for_io)
+		     d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, uint32_t intent)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct pool_target	*target;
@@ -1001,6 +1004,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 	int			 count;
 	int			 i;
 	bool			 drop;
+	bool                     for_io = (intent == DRI_IO);
 
 	D_INIT_LIST_HEAD(&head);
 	D_INIT_LIST_HEAD(&self);
@@ -1013,7 +1017,8 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 		if (dsp->dsp_mbs == NULL) {
 			rc = vos_dtx_load_mbs(cont->sc_hdl, &dsp->dsp_xid, NULL, &dsp->dsp_mbs);
 			if (rc != 0) {
-				if (rc < 0 && rc != -DER_NONEXIST && for_io) {
+				if (rc < 0 && rc != -DER_NONEXIST &&
+				    (intent == DRI_IO || intent == DRI_ORPHAN)) {
 					D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n",
 						DP_DTI(&dsp->dsp_xid), DP_RC(rc));
 					goto out;
@@ -1035,7 +1040,7 @@ again:
 			 */
 			D_WARN("Failed to find DTX leader for "DF_DTI", ver %d: "DF_RC"\n",
 			       DP_DTI(&dsp->dsp_xid), pool->sp_map_version, DP_RC(rc));
-			if (for_io)
+			if (intent == DRI_IO || intent == DRI_ORPHAN)
 				goto out;
 
 			drop = true;
@@ -1046,14 +1051,21 @@ again:
 		 *
 		 * 1. In DTX resync, the status may be resolved sometime later.
 		 * 2. The DTX resync is done, but failed to handle related DTX.
+		 * 3. For orphan cleanup, that is almost impossible unless another
+		 *    pool map changes between DTX resync and DTX orphan cleanup.
+		 *    Under such case, another DTX resync will be triggered. For
+		 *    current DTX orphan cleanup, just ignore such case.
 		 */
 		if (myrank == target->ta_comp.co_rank &&
 		    dss_get_module_info()->dmi_tgt_id == target->ta_comp.co_index) {
 			d_list_del(&dsp->dsp_link);
-			if (for_io)
+			if (for_io) {
 				d_list_add_tail(&dsp->dsp_link, &self);
-			else
+			} else {
+				D_WARN("Hit self leader for DTX " DF_DTI " when cleanup\n",
+				       DP_DTI(&dsp->dsp_xid));
 				dtx_dsp_free(dsp);
+			}
 			if (--(*check_count) == 0)
 				break;
 			continue;
@@ -1079,6 +1091,9 @@ again:
 			flags = DRF_INITIAL_LEADER;
 		else
 			flags = 0;
+
+		if (intent == DRI_ORPHAN)
+			flags |= DRF_FOR_ORPHAN;
 
 		d_list_for_each_entry(drr, &head, drr_link) {
 			if (drr->drr_rank == target->ta_comp.co_rank &&
@@ -1363,59 +1378,16 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		return -DER_IO;
 
-	rc = dtx_refresh_internal(cont, &dth->dth_share_tbd_count,
-				  &dth->dth_share_tbd_list,
-				  &dth->dth_share_cmt_list,
-				  &dth->dth_share_abt_list,
-				  &dth->dth_share_act_list, true);
-
-	/* If we can resolve the DTX status, then return -DER_AGAIN
-	 * to the caller that will retry related operation locally.
-	 */
+	rc = dtx_refresh_internal(cont, &dth->dth_share_tbd_count, &dth->dth_share_tbd_list,
+				  &dth->dth_share_cmt_list, &dth->dth_share_abt_list,
+				  &dth->dth_share_act_list, DRI_IO);
 	if (rc == 0) {
 		D_ASSERT(dth->dth_share_tbd_count == 0);
 
-		if (dth->dth_need_validation) {
-			rc = vos_dtx_validation(dth);
-			switch (rc) {
-			case DTX_ST_INITED:
-				if (!dth->dth_aborted)
-					break;
-				/* Fall through */
-			case DTX_ST_PREPARED:
-			case DTX_ST_PREPARING:
-				/* The DTX has been ever aborted and related resent RPC
-				 * is in processing. Return -DER_AGAIN to make this ULT
-				 * to retry sometime later without dtx_abort().
-				 */
-				rc = -DER_AGAIN;
-				break;
-			case DTX_ST_ABORTED:
-				D_ASSERT(dth->dth_ent == NULL);
-				/* Aborted, return -DER_INPROGRESS for client retry.
-				 *
-				 * Fall through.
-				 */
-			case DTX_ST_ABORTING:
-				rc = -DER_INPROGRESS;
-				break;
-			case DTX_ST_COMMITTED:
-			case DTX_ST_COMMITTING:
-			case DTX_ST_COMMITTABLE:
-				/* Aborted then prepared/committed by race.
-				 * Return -DER_ALREADY to avoid repeated modification.
-				 */
-				dth->dth_already = 1;
-				rc = -DER_ALREADY;
-				break;
-			default:
-				D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n",
-					  DP_DTI(&dth->dth_xid), rc);
-			}
-		} else {
+		rc = vos_dtx_validation(dth);
+		if (rc == 0) {
 			vos_dtx_cleanup(dth, false);
-			dtx_handle_reinit(dth);
-			rc = -DER_AGAIN;
+			rc = dtx_handle_reinit(dth);
 		}
 	}
 
