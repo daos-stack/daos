@@ -164,6 +164,23 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
 		 struct dtx_memberships **mbs);
 
 /**
+ * Refresh participants information and pool map version for the given DTX.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param mbs		[IN]	Pointer to the DTX participants information.
+ * \param pm_ver	[IN]	Pool map version for the new DTX participants information.
+ * \param leader	[IN]	Is DTX leader or not.
+ *
+ * \return		Zero on success.
+ *			Positive if changed nothing.
+ *			Negative value if error.
+ */
+int
+vos_dtx_refresh_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships *mbs,
+		    uint32_t pm_ver, bool leader);
+
+/**
  * Commit the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
@@ -336,7 +353,7 @@ int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
 int
-vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool init_spdk);
 
 /**
  * Finalize the environment for a VOS instance
@@ -1286,12 +1303,13 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
- * Iterate VOS objects and subtrees when recursive mode is specified. When it's
- * called against md-on-ssd phase2 pool, it iterates objects in bucket ID order
- * instead of OID order to minimize bucket eviction/load.
+ * Recursively iterate VOS objects and subtrees. When it's called against md-on-ssd
+ * phase2 pool, it iterates objects in bucket ID order instead of OID order to
+ * minimize the bucket eviction/loading.
+ *
+ * Note: Don't use this interface when caller requires iterating in OID order.
  *
  * \param[in]		param		iteration parameters
- * \param[in]		recursive	iterate in lower level recursively
  * \param[in]		anchors		array of anchors, one for each
  *					iteration level
  * \param[in]		pre_cb		pre subtree iteration callback
@@ -1304,8 +1322,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \retval		-DER_*	error (but never -DER_NONEXIST)
  */
 int
-vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
-		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+vos_iterate_obj(vos_iter_param_t *param, struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+		vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
  * Skip the object not located on specified bucket (for md-on-ssd phase2).

@@ -8,12 +8,6 @@
 
 #include "bio_wal.h"
 
-#define BIO_META_MAGIC		(0xbc202210)
-#define BIO_META_VERSION	1
-
-#define BIO_WAL_MAGIC		(0xaf202209)
-#define BIO_WAL_VERSION		1
-
 #define WAL_HDR_MAGIC		(0xc01d2019)
 
 #define WAL_ID_BITS		64			/* Never change this */
@@ -31,6 +25,7 @@ D_CASSERT(sizeof(struct wal_trans_tail) == WAL_CSUM_LEN);
 
 #define WAL_MIN_CAPACITY	(8192 * WAL_BLK_SZ)	/* Minimal WAL capacity, in bytes */
 #define WAL_MAX_TRANS_BLKS	4096			/* Maximal blocks used by a transaction */
+#define WAL_MAX_REPLAY_BLKS     (WAL_MAX_TRANS_BLKS * 2)
 #define WAL_HDR_BLKS		1			/* Ensure atomic header write */
 
 #define META_BLK_SZ		WAL_BLK_SZ
@@ -909,6 +904,109 @@ wait_tx_committed(struct wal_tx_desc *wal_tx)
 	D_ASSERT(d_list_empty(&wal_tx->td_link));
 }
 
+static inline char *
+act_op2str(unsigned int act_op)
+{
+	switch (act_op) {
+	case UMEM_ACT_COPY:
+		return "copy";
+	case UMEM_ACT_COPY_PTR:
+		return "copy_ptr";
+	case UMEM_ACT_ASSIGN:
+		return "assign";
+	case UMEM_ACT_MOVE:
+		return "move";
+	case UMEM_ACT_SET:
+		return "set";
+	case UMEM_ACT_SET_BITS:
+		return "set_bits";
+	case UMEM_ACT_CLR_BITS:
+		return "clr_bits";
+	case UMEM_ACT_CSUM:
+		return "data_csum";
+	default:
+		D_ASSERTF(0, "Invalid opc %u\n", act_op);
+		return "unknown";
+	}
+}
+
+static void
+dump_tx_entries(struct umem_wal_tx *tx, struct data_csum_array *dc_arr)
+{
+	struct umem_action *act;
+	unsigned int        act_cnt[UMEM_ACT_MAX];
+	unsigned int        payload_sz[UMEM_ACT_MAX];
+	unsigned int        i, dc_idx = 0;
+
+	act = umem_tx_act_first(tx);
+	D_ASSERT(act != NULL);
+
+	for (i = UMEM_ACT_NOOP; i < UMEM_ACT_MAX; i++) {
+		act_cnt[i]    = 0;
+		payload_sz[i] = 0;
+	}
+
+	while (act != NULL) {
+		switch (act->ac_opc) {
+		case UMEM_ACT_COPY:
+			act_cnt[UMEM_ACT_COPY] += 1;
+			payload_sz[UMEM_ACT_COPY] += act->ac_copy.size;
+			payload_sz[UMEM_ACT_NOOP] += act->ac_copy.size;
+			break;
+		case UMEM_ACT_COPY_PTR:
+			act_cnt[UMEM_ACT_COPY_PTR] += 1;
+			payload_sz[UMEM_ACT_COPY_PTR] += act->ac_copy.size;
+			payload_sz[UMEM_ACT_NOOP] += act->ac_copy.size;
+			break;
+		case UMEM_ACT_ASSIGN:
+			act_cnt[UMEM_ACT_ASSIGN] += 1;
+			break;
+		case UMEM_ACT_MOVE:
+			act_cnt[UMEM_ACT_MOVE] += 1;
+			payload_sz[UMEM_ACT_MOVE] += sizeof(uint64_t);
+			payload_sz[UMEM_ACT_NOOP] += sizeof(uint64_t);
+			break;
+		case UMEM_ACT_SET:
+			act_cnt[UMEM_ACT_SET] += 1;
+			break;
+		case UMEM_ACT_SET_BITS:
+			act_cnt[UMEM_ACT_SET_BITS] += 1;
+			break;
+		case UMEM_ACT_CLR_BITS:
+			act_cnt[UMEM_ACT_CLR_BITS] += 1;
+			break;
+		case UMEM_ACT_CSUM:
+			act_cnt[UMEM_ACT_CSUM] += 1;
+			break;
+		default:
+			D_ASSERTF(0, "Invalid opc %u\n", act->ac_opc);
+			break;
+		}
+		act_cnt[UMEM_ACT_NOOP] += 1;
+
+		if (dc_idx == 0) {
+			act = umem_tx_act_next(tx);
+			if (act != NULL)
+				continue;
+		}
+
+		/* Put data csum actions after other actions */
+		if (dc_idx < dc_arr->dca_nr) {
+			act = &dc_arr->dca_acts[dc_idx];
+			dc_idx++;
+		} else {
+			act = NULL;
+		}
+	}
+
+	D_ERROR("Total tx entry:%u, payload:%u\n", act_cnt[UMEM_ACT_NOOP],
+		payload_sz[UMEM_ACT_NOOP]);
+
+	for (i = UMEM_ACT_COPY; i < UMEM_ACT_MAX; i++)
+		D_ERROR("action: %s, count: %u, payload: %u\n", act_op2str(i), act_cnt[i],
+			payload_sz[i]);
+}
+
 int
 bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data,
 	       struct bio_wal_stats *stats)
@@ -948,9 +1046,15 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 
 	D_ASSERT(blk_desc.bd_blks > 0);
 	if (blk_desc.bd_blks > WAL_MAX_TRANS_BLKS) {
-		D_ERROR("Too large transaction (%u blocks)\n", blk_desc.bd_blks);
-		rc = -DER_INVAL;
-		goto out;
+		D_ERROR("Too large transaction, blks:%u, payload_idx:%u, payload_off:%u)\n",
+			blk_desc.bd_blks, blk_desc.bd_payload_idx, blk_desc.bd_payload_off);
+		dump_tx_entries(tx, &dc_arr);
+		/* Tolerate large transaction when there is sufficient WAL free space */
+		if (blk_desc.bd_blks > wal_free_blks(si) ||
+		    blk_desc.bd_blks > WAL_MAX_REPLAY_BLKS) {
+			rc = -DER_INVAL;
+			goto out;
+		}
 	}
 
 	biod = bio_iod_alloc(mc->mc_wal, NULL, 1, BIO_IOD_TYPE_UPDATE);
@@ -1051,7 +1155,7 @@ load_wal_header(struct bio_meta_context *mc)
 	bio_addr_t		 addr = { 0 };
 	d_iov_t			 iov;
 	uint32_t		 csum;
-	int			 rc, csum_len;
+	int                      rc, csum_len, hdr_sz;
 
 	bio_addr_set(&addr, DAOS_MEDIA_NVME, 0);
 	d_iov_set(&iov, hdr, sizeof(*hdr));
@@ -1067,13 +1171,15 @@ load_wal_header(struct bio_meta_context *mc)
 		return -DER_UNINIT;
 	}
 
-	if (hdr->wh_version != BIO_WAL_VERSION) {
+	if (hdr->wh_version != BIO_WAL_VERSION && hdr->wh_version != 1) {
 		D_ERROR("Invalid WAL version. %u\n", hdr->wh_version);
 		return -DER_DF_INCOMPT;
 	}
 
 	csum_len = meta_csum_len(mc);
-	rc = meta_csum_calc(mc, hdr, sizeof(*hdr) - csum_len, &csum, csum_len);
+	hdr_sz   = hdr->wh_version == 1 ? sizeof(struct wal_header_v1) : sizeof(*hdr);
+	hdr_sz -= csum_len;
+	rc = meta_csum_calc(mc, hdr, hdr_sz, &csum, csum_len);
 	if (rc) {
 		D_ERROR("Calculate WAL headr csum failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -1671,7 +1777,7 @@ bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	struct wal_blks_desc	 blk_desc = { 0 };
 	char			*buf, *dbuf = NULL;
 	struct umem_action	*act;
-	unsigned int		 max_blks = WAL_MAX_TRANS_BLKS, blk_off;
+	unsigned int             max_blks    = WAL_MAX_REPLAY_BLKS, blk_off;
 	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
 	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
 	int			 rc;
@@ -1932,6 +2038,22 @@ wal_open(struct bio_meta_context *mc)
 	if (rc)
 		return rc;
 
+	/* Auto upgrade WAL header from version 1 to 2 */
+	if (hdr->wh_version == 1) {
+		struct wal_header_v1 *v1 = (struct wal_header_v1 *)hdr;
+
+		v1->wh_csum     = 0;
+		hdr->wh_version = BIO_WAL_VERSION;
+		uuid_copy(hdr->wh_pool_id, mc->mc_wal->bic_pool_id);
+		hdr->wh_vos_id = mc->mc_meta_hdr.mh_vos_id;
+
+		rc = write_header(mc, mc->mc_wal, hdr, sizeof(*hdr), &hdr->wh_csum);
+		if (rc) {
+			DL_ERROR(rc, "Failed to upgrade WAL header (1 -> 2)");
+			return rc;
+		}
+	}
+
 	rc = ABT_mutex_create(&si->si_mutex);
 	if (rc != ABT_SUCCESS)
 		return -DER_NOMEM;
@@ -1969,7 +2091,7 @@ load_meta_header(struct bio_meta_context *mc)
 	bio_addr_t		 addr = { 0 };
 	d_iov_t			 iov;
 	uint32_t		 csum;
-	int			 rc, csum_len;
+	int                      rc, csum_len, hdr_sz;
 
 	bio_addr_set(&addr, DAOS_MEDIA_NVME, 0);
 	d_iov_set(&iov, hdr, sizeof(*hdr));
@@ -1985,13 +2107,15 @@ load_meta_header(struct bio_meta_context *mc)
 		return -DER_UNINIT;
 	}
 
-	if (hdr->mh_version != BIO_META_VERSION) {
+	if (hdr->mh_version != BIO_META_VERSION && hdr->mh_version != 1) {
 		D_ERROR("Invalid meta version. %u\n", hdr->mh_version);
 		return -DER_DF_INCOMPT;
 	}
 
 	csum_len = meta_csum_len(mc);
-	rc = meta_csum_calc(mc, hdr, sizeof(*hdr) - csum_len, &csum, csum_len);
+	hdr_sz   = hdr->mh_version == 1 ? sizeof(struct meta_header_v1) : sizeof(*hdr);
+	hdr_sz -= csum_len;
+	rc = meta_csum_calc(mc, hdr, hdr_sz, &csum, csum_len);
 	if (rc) {
 		D_ERROR("Calculate meta headr csum failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -2014,15 +2138,35 @@ meta_close(struct bio_meta_context *mc)
 int
 meta_open(struct bio_meta_context *mc)
 {
-	int	rc;
+	struct meta_header *hdr = &mc->mc_meta_hdr;
+	int                 rc;
 
 	rc = meta_csum_init(mc, HASH_TYPE_CRC32);
 	if (rc)
 		return rc;
 
 	rc = load_meta_header(mc);
-	if (rc)
+	if (rc) {
 		meta_csum_fini(mc);
+		return rc;
+	}
+
+	/* Auto upgrade meta header from version 1 to 2 */
+	if (hdr->mh_version == 1) {
+		struct meta_header_v1 *v1 = (struct meta_header_v1 *)hdr;
+
+		v1->mh_csum     = 0;
+		hdr->mh_version = BIO_META_VERSION;
+		uuid_copy(hdr->mh_pool_id, mc->mc_meta->bic_pool_id);
+
+		rc = write_header(mc, mc->mc_meta, hdr, sizeof(*hdr), &hdr->mh_csum);
+		if (rc) {
+			DL_ERROR(rc, "Failed to upgrade meta header (1 -> 2)");
+			meta_csum_fini(mc);
+			return rc;
+		}
+	}
+
 	return rc;
 }
 
@@ -2094,6 +2238,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, uint32_t flag
 	meta_hdr->mh_vos_id = fi->fi_vos_id;
 	meta_hdr->mh_flags = (flags | META_HDR_FL_EMPTY);
 	meta_hdr->mh_backend_type = fi->fi_backend_type;
+	uuid_copy(meta_hdr->mh_pool_id, fi->fi_pool_id);
 
 	rc = write_header(mc, mc->mc_meta, meta_hdr, sizeof(*meta_hdr), &meta_hdr->mh_csum);
 	if (rc) {
@@ -2108,6 +2253,8 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, uint32_t flag
 	wal_hdr->wh_blk_bytes = WAL_BLK_SZ;
 	wal_hdr->wh_flags = 0;	/* Don't skip csum tail by default */
 	wal_hdr->wh_tot_blks = (fi->fi_wal_size / WAL_BLK_SZ) - WAL_HDR_BLKS;
+	uuid_copy(wal_hdr->wh_pool_id, fi->fi_pool_id);
+	wal_hdr->wh_vos_id = fi->fi_vos_id;
 
 	rc = write_header(mc, mc->mc_wal, wal_hdr, sizeof(*wal_hdr), &wal_hdr->wh_csum);
 	if (rc) {

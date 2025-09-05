@@ -421,7 +421,7 @@ pool_child_recreate(struct ds_pool_child *child)
 		return rc;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_file(dss_storage_path, child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
 		return rc;
 
@@ -529,12 +529,13 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 			goto out;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_file(dss_storage_path, child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
 		goto out;
 
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
-	rc = vos_pool_open_metrics(path, child->spc_uuid, VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH,
+	rc = vos_pool_open_metrics(path, child->spc_uuid,
+				   VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_EXTERNAL_CHKPT,
 				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
 	D_FREE(path);
