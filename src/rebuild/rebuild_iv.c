@@ -201,12 +201,10 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			dst_iv->riv_global_scan_done, dst_iv->riv_global_done,
 			dst_iv->riv_stable_epoch, dst_iv->riv_global_dtx_resyc_version);
 
-		if (rpt->rt_stable_epoch == 0)
-			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
-		else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch)
-			D_WARN("leader change stable epoch from "DF_U64" to "
-			       DF_U64 "\n", rpt->rt_stable_epoch,
-			       dst_iv->riv_stable_epoch);
+		D_ASSERT(rpt->rt_upbound_eph != 0);
+		if (rpt->rt_upbound_eph != dst_iv->riv_stable_epoch)
+			D_WARN("leader change stable epoch from " DF_U64 " to " DF_U64 "\n",
+			       rpt->rt_upbound_eph, dst_iv->riv_stable_epoch);
 		rpt->rt_global_done = dst_iv->riv_global_done;
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
 		old_ver = rpt->rt_global_dtx_resync_version;
