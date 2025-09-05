@@ -2309,3 +2309,37 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_HasPMem(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg        *Server
+		expHasPMem bool
+	}{
+		"has pmem": {
+			cfg: DefaultServer().WithEngines(
+				engine.MockConfig().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass(storage.ClassDcpm.String()).
+							WithScmMountPoint("bb").
+							WithScmDeviceList("a"),
+					),
+			),
+			expHasPMem: true,
+		},
+		"no pmem": {
+			cfg: DefaultServer().WithEngines(
+				engine.MockConfig().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass(storage.ClassRam.String()).
+							WithScmMountPoint("bb"),
+					),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expHasPMem, tc.cfg.HasPMem(), "unexpected")
+		})
+	}
+}
