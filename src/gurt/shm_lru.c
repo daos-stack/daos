@@ -219,13 +219,13 @@ int
 shm_lru_get(shm_lru_cache_t *cache, void *key, uint32_t key_size, shm_lru_node_t **node_found,
 	    void **val)
 {
-	uint32_t             hash         = d_hash_murmur64(key, key_size, 12345);
-	uint32_t             idx_subcache = (hash >> 16) % cache->n_subcache;
+	uint64_t             hash         = d_hash_murmur64(key, key_size, 0);
+	uint32_t             idx_subcache = (uint32_t)((hash >> 32) % cache->n_subcache);
 	shm_lru_cache_var_t *cache_list =
 	    (shm_lru_cache_var_t *)((long int)cache + cache->off_cache_list);
 	int *off_hash =
 	    (int *)((long int)cache + (long int)cache_list[idx_subcache].off_hashbuckets);
-	uint32_t        index  = hash % cache->capacity;
+	uint32_t        index  = (uint32_t)(hash % cache->capacity);
 	int             offset = off_hash[index];
 	shm_lru_node_t *node;
 
@@ -261,9 +261,9 @@ int
 shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, uint32_t data_size)
 {
 	int                  rc;
-	uint32_t             hash         = d_hash_murmur64(key, key_size, 12345);
-	uint32_t             idx_subcache = (hash >> 16) % cache->n_subcache;
-	uint32_t             index        = hash % cache->capacity;
+	uint64_t             hash         = d_hash_murmur64(key, key_size, 12345);
+	uint32_t             idx_subcache = (uint32_t)((hash >> 32) % cache->n_subcache);
+	uint32_t             index        = (uint32_t)(hash % cache->capacity);
 	shm_lru_cache_var_t *cache_list =
 	    (shm_lru_cache_var_t *)((long int)cache + cache->off_cache_list);
 	int *off_hash =
