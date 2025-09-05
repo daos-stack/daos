@@ -132,7 +132,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
             f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
-            'sudo -E NO_DEVEL=1 /tmp/install.sh -y',
+            'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
             'python3 -m pip install pip --upgrade',
             f'python3 -m pip install -r {build_dir}/requirements-build.txt',
             f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
