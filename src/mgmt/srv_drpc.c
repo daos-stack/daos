@@ -170,13 +170,8 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0)
 		D_ERROR("Failed to set self rank %u: "DF_RC"\n", req->rank,
 			DP_RC(rc));
-	if (rc == 0) {
-		/* FIXME: get and set from req->daos_version */
-		daos_version_t version;
-
-		daos_version_pack(&version);
-		dss_set_join_version(version);
-	}
+	if (rc == 0)
+		dss_set_join_version(daos_version_from_uint32(req->daos_version));
 
 	resp.status = rc;
 	pack_daos_response(&resp, drpc_resp);
