@@ -581,8 +581,19 @@ class LogIter():
         pids = OrderedDict()
         index = 0
         for line in self._fd:
+            fields = line.split(None, 9)
             index += 1
-            try:
+            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
+            if (
+                len(fields) < 7
+                or len(fields[1]) != 10 or fields[1][4] != '/'
+                or len(fields[2]) != 15 or fields[2][2] != ':' or fields[2][8] != '.'
+                or len(fields[0]) > 4 or ".go:" in fields[3]
+            ):
+                # pylint: enable=too-many-boolean-expressions
+                self._data.append(LogRaw(line))
+            else:
                 l_obj = LogLine(line)
                 l_pid = l_obj.pid
                 self._data.append(l_obj)
@@ -591,8 +602,6 @@ class LogIter():
                 else:
                     pids[l_pid] = {'line_count': 1, 'first_index': index}
                 pids[l_pid]['last_index'] = index
-            except InvalidLogLine:
-                self._data.append(LogRaw(line))
         self._pids = pids
 
     def _load_pids(self):
@@ -602,18 +611,28 @@ class LogIter():
         index = 0
         position = 0
         for line in self._fd:
+            fields = line.split(None, 9)
             index += 1
-            position += len(line)
-            try:
-                l_obj = LogLine(line, pid_only=True)
-                l_pid = l_obj.pid
-                if l_pid in pids:
-                    pids[l_pid]['line_count'] += 1
-                else:
-                    pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
-                pids[l_pid]['last_index'] = index
-            except InvalidLogLine:
+            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
+            if (
+                len(fields) < 7
+                or len(fields[1]) != 10 or fields[1][4] != '/'
+                or len(fields[2]) != 15 or fields[2][2] != ':' or fields[2][8] != '.'
+                or len(fields[0]) > 4 or ".go:" in fields[3]
+            ):
+                # pylint: enable=too-many-boolean-expressions
+                position += len(line)
                 continue
+            pidtid = fields[4][5:-1]
+            pid = pidtid.split("/")
+            l_pid = int(pid[0])
+            if l_pid in pids:
+                pids[l_pid]['line_count'] += 1
+            else:
+                pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
+            pids[l_pid]['last_index'] = index
+            position += len(line)
         self._pids = pids
 
     def new_iter(self, pid=None, stateful=False, trace_only=False, raw=False):
@@ -672,11 +691,19 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            try:
-                logLine = LogLine(line)
-            except InvalidLogLine:
-                logLine = LogRaw(line)
-            return logLine
+            fields = line.split(None, 9)
+            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
+            # pylint: disable=too-many-boolean-expressions
+            if (
+                len(fields) < 7
+                or len(fields[1]) != 10 or fields[1][4] != '/'
+                or len(fields[2]) != 15 or fields[2][2] != ':' or fields[2][8] != '.'
+                or len(fields[0]) > 4 or ".go:" in fields[3]
+            ):
+                # pylint: enable=too-many-boolean-expressions
+                return LogRaw(line)
+            return LogLine(line)
+
         try:
             line = self._data[self._offset]
         except IndexError as error:
