@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -96,18 +97,10 @@ func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.Sc
 // Usage is only retrieved for active mountpoints being used by online DAOS I/O
 // Server instances.
 func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.ScmScanResponse, error) {
-	if ssr == nil {
-		return nil, errors.New("input scm scan response is nil")
-	}
-
 	instances := cs.harness.Instances()
 
 	nss := make(storage.ScmNamespaces, 0, len(instances))
 	for _, engine := range instances {
-		if !engine.IsReady() {
-			continue // skip if not running
-		}
-
 		cfg, err := engine.GetStorage().GetScmConfig()
 		if err != nil {
 			return nil, err
@@ -121,12 +114,17 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 		var ns *storage.ScmNamespace
 		switch mount.Class {
 		case storage.ClassRam: // generate fake namespace for emulated ramdisk mounts
+			cs.log.Tracef("ram ns for engine %d, cfg %+v, mount %+v", engine.Index(), cfg,
+				mount)
 			ns = &storage.ScmNamespace{
 				Mount:       mount,
 				BlockDevice: "ramdisk",
 				Size:        uint64(humanize.GiByte * cfg.Scm.RamdiskSize),
 			}
 		case storage.ClassDcpm: // update namespace mount info for online storage
+			if ssr == nil {
+				return nil, errors.New("input scm scan response is nil when dcpm configured")
+			}
 			if ssr.Namespaces == nil {
 				return nil, errors.Errorf("instance %d: input scm scan response missing namespaces",
 					engine.Index())
@@ -139,17 +137,30 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 			ns.Mount = mount
 		}
 
-		if ns.Mount != nil {
+		if ns.Mount == nil {
+			cs.log.Debugf("engine %d: getScmUsage(): nil ns.Mount, skipping rank fetch",
+				engine.Index())
+		} else if !engine.IsReady() {
+			cs.log.Debugf("engine %d: getScmUsage(): not started, skipping rank fetch",
+				engine.Index())
+			ns.Mount.Rank = ranklist.NilRank
+			ns.Mount.TotalBytes = 0
+			ns.Mount.AvailBytes = 0
+			ns.Mount.UsableBytes = 0
+			ns.Size = 0
+		} else {
 			rank, err := engine.GetRank()
 			if err != nil {
 				return nil, errors.Wrapf(err, "instance %d: no rank associated for mount %s",
 					engine.Index(), mount.Path)
 			}
+			cs.log.Tracef("engine %d: getScmUsage(): assigning rank %d to ns.Mount",
+				engine.Index(), rank)
 			ns.Mount.Rank = rank
 		}
 
-		cs.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v", ns.BlockDevice,
-			mount.Path, ns.Mount)
+		cs.log.Debugf("engine %d: updated scm fs usage on device %s mounted at %s: %+v",
+			engine.Index(), ns.BlockDevice, mount.Path, ns.Mount)
 		nss = append(nss, ns)
 	}
 

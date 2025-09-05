@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -450,9 +451,6 @@ func bdevScanEngineAssigned(ctx context.Context, engine Engine, req *ctlpb.ScanN
 	*isStarted = engine.IsStarted()
 	if !*isStarted {
 		engine.Debugf("scanning engine-%d bdevs while engine is down", engine.Index())
-		if req.Meta {
-			return nil, errors.New("meta smd usage info unavailable as engine stopped")
-		}
 
 		return bdevScanToProtoResp(engine.GetStorage().ScanBdevs, bdevCfgs)
 	}
