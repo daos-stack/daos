@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -63,6 +64,16 @@ class ConfigGenerateRun(TestWithServers):
             generated_yaml = yaml.safe_load(result.stdout)
         except yaml.YAMLError as error:
             self.fail(f"Error loading dmg generated config! {error}")
+
+        # Update the control log file
+        generated_yaml["control_log_file"] = os.path.join(
+            self.test_env.log_dir, os.path.basename(generated_yaml["control_log_file"]))
+
+        # Iterate & update the log file path for each engine.
+        engines = generated_yaml["engines"]
+        for engine in engines:
+            engine["log_file"] = os.path.join(
+                self.test_env.log_dir, os.path.basename(engine["log_file"]))
 
         # Stop and restart daos_server. self.start_server_managers() has the
         # server start-up check built into it, so if there's something wrong,
