@@ -39,6 +39,11 @@ struct sched_stats {
 	void			*ss_last_unit;		/* Last executed unit */
 };
 
+struct sched_hist_seq {
+	uint64_t sm_last_seq; /* Last sched sequence */
+	uint64_t sm_last_ts;  /* Timestamp of the last sched sequence */
+};
+
 struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
 	uint64_t		 si_cur_seq;	/* Current schedule sequence */
@@ -52,6 +57,7 @@ struct sched_info {
 	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
 	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
 	struct d_binheap	 si_heap;	/* All retried RPC */
+	struct sched_hist_seq   *si_hist_seqs;  /* Historical sequence for SYS & VOS xstreams */
 	/* Total inuse request count */
 	uint32_t		 si_total_req_cnt;
 	/* Request count for each type of inuse request */
@@ -190,9 +196,14 @@ int dss_srv_init(void);
 int dss_srv_fini(bool force);
 void dss_srv_set_shutting_down(void);
 void dss_dump_ABT_state(FILE *fp);
-void dss_xstreams_open_barrier(void);
+void
+		    dss_xstreams_open_barrier(bool stopping);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
+bool
+dss_sched_monitor_enter(void);
+void
+     dss_sched_monitor_exit(void);
 void dss_mem_total_alloc_track(void *arg, daos_size_t bytes);
 void dss_mem_total_free_track(void *arg, daos_size_t bytes);
 
@@ -245,6 +256,8 @@ extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
 extern unsigned int sched_unit_runtime_max;
 extern bool sched_watchdog_all;
+extern unsigned int sched_inactive_max;
+extern bool         sched_monitor_kill;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
