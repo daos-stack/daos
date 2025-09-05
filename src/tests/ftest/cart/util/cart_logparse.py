@@ -139,8 +139,10 @@ class LogLine():
             raise InvalidLogLine(f"Log line too short to parse expected fields: {line!r}")
         try:
             self.level = LOG_LEVELS[fields[0]]
-        except KeyError:
-            raise InvalidLogLine(f"Unrecognized log level \"{fields[0]!r}\" in the line: {line!r}")
+        except KeyError as error:
+            raise InvalidLogLine(
+                f"Unrecognized log level \"{fields[0]!r}\" in the line: {line!r}"
+            ) from error
         if self.re_date.fullmatch(fields[1]) is None:
             raise InvalidLogLine(f"Invalid date \"{fields[1]!r}\" in the log line: {line!r}")
         if self.re_time.fullmatch(fields[2]) is None:
