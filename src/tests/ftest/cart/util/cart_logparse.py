@@ -145,13 +145,10 @@ class LogLine():
             ) from error
         if self.re_date.fullmatch(fields[1]) is None:
             raise InvalidLogLine(f"Invalid date \"{fields[1]!r}\" in the log line: {line!r}")
-        idx += len(fields[1]) + 1
         if self.re_time.fullmatch(fields[2]) is None:
             raise InvalidLogLine(f"Invalid time \"{fields[2]!r}\" in the log line: {line!r}")
-        idx += len(fields[2]) + 1
         self.time_stamp = fields[1] + ' ' + fields[2]
         self.hostname = fields[3]
-        idx += len(fields[3]) + 1
         # Assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c: 651
         # Assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c: 652
         match = self.re_tag.search(fields[4])
@@ -162,11 +159,9 @@ class LogLine():
         self.pid = int(match.group(1))
         if pid_only:
             return
-        idx += len(fields[4]) + 1
         # Assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 664
         self.fac = fields[5]
-        idx += (len(fields[5]) if len(fields[5]) > 6 else 6)
-        self._preamble = line[:idx]
+        self._preamble = self.time_stamp + ' ' + self.fac
         self._fields = fields[6:]
         try:
             if self._fields[1][-2:] == '()':
@@ -196,11 +191,9 @@ class LogLine():
 
     def to_str(self, mark=False):
         """Convert the object to a string"""
-        pre = self._preamble.split(' ', 5)
-        preamble = ' '.join([pre[1], pre[2], pre[5]])
         if mark:
-            return '{} ** {}'.format(preamble, self._msg)
-        return '{}    {}'.format(preamble, self._msg)
+            return '{} ** {}'.format(self._preamble, self._msg)
+        return '{}    {}'.format(self._preamble, self._msg)
 
     def __getattr__(self, attr):
         if attr == 'parent':
