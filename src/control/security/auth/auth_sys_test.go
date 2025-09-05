@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -130,7 +131,7 @@ func testGroupFn(expErr error, groupName string) getGroupFn {
 }
 
 func testGroupIdsFn(expErr error, groupNames ...string) getGroupIdsFn {
-	return func(*CredentialRequest) ([]string, error) {
+	return func(*CredentialRequestUnix) ([]string, error) {
 		if expErr != nil {
 			return nil, expErr
 		}
@@ -139,7 +140,7 @@ func testGroupIdsFn(expErr error, groupNames ...string) getGroupIdsFn {
 }
 
 func testGroupNamesFn(expErr error, groupNames ...string) getGroupNamesFn {
-	return func(*CredentialRequest) ([]string, error) {
+	return func(*CredentialRequestUnix) ([]string, error) {
 		if expErr != nil {
 			return nil, expErr
 		}
@@ -207,7 +208,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		req    *CredentialRequest
+		req    *CredentialRequestUnix
 		expErr error
 	}{
 		"nil request": {
@@ -215,11 +216,11 @@ func TestAuth_GetSignedCred(t *testing.T) {
 			expErr: errors.New("is nil"),
 		},
 		"nil DomainInfo": {
-			req:    &CredentialRequest{},
+			req:    &CredentialRequestUnix{GetSignedCredentialInternal: GetSignedCredentialInternalImpl},
 			expErr: errors.New("No domain info supplied"),
 		},
 		"bad hostname": {
-			req: func() *CredentialRequest {
+			req: func() *CredentialRequestUnix {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
 				req.getHostname = testHostnameFn(errors.New("bad hostname"), "")
 				return req
@@ -227,7 +228,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 			expErr: errors.New("bad hostname"),
 		},
 		"bad uid": {
-			req: func() *CredentialRequest {
+			req: func() *CredentialRequestUnix {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
 				req.getUser = testUserFn(errors.New("bad uid"), "")
 				return req
@@ -235,7 +236,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 			expErr: errors.New("bad uid"),
 		},
 		"bad gid": {
-			req: func() *CredentialRequest {
+			req: func() *CredentialRequestUnix {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
 				req.getGroup = testGroupFn(errors.New("bad gid"), "")
 				return req
@@ -243,7 +244,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 			expErr: errors.New("bad gid"),
 		},
 		"bad group IDs": {
-			req: func() *CredentialRequest {
+			req: func() *CredentialRequestUnix {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
 				req.getGroupIds = testGroupIdsFn(errors.New("bad group IDs"))
 				return req
@@ -251,7 +252,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 			expErr: errors.New("bad group IDs"),
 		},
 		"bad group names": {
-			req: func() *CredentialRequest {
+			req: func() *CredentialRequestUnix {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
 				req.getGroupNames = testGroupNamesFn(errors.New("bad group names"))
 				return req
@@ -259,7 +260,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 			expErr: errors.New("bad group names"),
 		},
 		"valid": {
-			req: func() *CredentialRequest {
+			req: func() *CredentialRequestUnix {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
 				req.getHostname = testHostnameFn(nil, testHostname)
 				req.getUser = testUserFn(nil, testUsername)
@@ -270,7 +271,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cred, gotErr := GetSignedCredential(test.Context(t), tc.req)
+			cred, gotErr := tc.req.GetSignedCredential(logging.FromContext(test.Context(t)), test.Context(t))
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -286,7 +287,7 @@ func TestAuth_CredentialRequestOverrides(t *testing.T) {
 	req.getHostname = testHostnameFn(nil, "test-host")
 	req.WithUserAndGroup("test-user", "test-group", "test-secondary")
 
-	cred, err := GetSignedCredential(test.Context(t), req)
+	cred, err := req.GetSignedCredential(logging.FromContext(test.Context(t)), test.Context(t))
 	if err != nil {
 		t.Fatalf("Failed to get credential: %s", err)
 	}
