@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,36 +24,40 @@ class RbldDeleteObjects(RebuildTestBase):
         self.punched_qty = 0
         self.punch_type = None
 
-    def execute_during_rebuild(self):
-        """Delete half of the objects from the container during rebuild."""
-        self.container.set_prop(prop="status", value="healthy")
+    def execute_during_rebuild(self, container):
+        """Delete half of the objects from the container during rebuild.
+
+        Args:
+            container (TestContainer): container to punch data from
+        """
+        container.set_prop(prop="status", value="healthy")
 
         if self.punch_type == "object":
             # Punch half of the objects
             self.punched_indices = [
-                index for index in range(self.container.object_qty.value)
+                index for index in range(container.object_qty.value)
                 if index % 2]
-            self.punched_qty = self.container.punch_objects(self.punched_indices)
+            self.punched_qty = container.punch_objects(self.punched_indices)
 
         elif self.punch_type == "record":
             # Punch half of the records in each object
             self.punched_indices = [
-                index for index in range(self.container.record_qty.value)
+                index for index in range(container.record_qty.value)
                 if index % 2]
-            self.punched_qty = self.container.punch_records(self.punched_indices)
-            # self.punched_qty /= self.container.object_qty.value
+            self.punched_qty = container.punch_records(self.punched_indices)
 
-    def verify_container_data(self, txn=0):
+    def verify_container_data(self, container, txn=0):
         """Verify the container data.
 
         Args:
+            container (TestContainer): container to verify
             txn (int, optional): transaction timestamp to read. Defaults to 0.
         """
         # Verify the expected number of objects/records were punched
         if self.punch_type == "object":
             expected_qty = len(self.punched_indices)
         elif self.punch_type == "record":
-            expected_qty = len(self.punched_indices) * self.container.object_qty.value
+            expected_qty = len(self.punched_indices) * container.object_qty.value
         else:
             expected_qty = 0
         self.assertEqual(
@@ -61,7 +66,7 @@ class RbldDeleteObjects(RebuildTestBase):
                 self.punch_type, self.punched_qty, expected_qty))
 
         # Read objects from the last transaction
-        super().verify_container_data(txn)
+        super().verify_container_data(container, txn)
 
     def test_rebuild_delete_objects(self):
         """JIRA ID: DAOS-2572.
