@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,11 +11,13 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdarg.h>
+#include <setjmp.h>
+#include <cmocka.h>
 #include <uuid/uuid.h>
 #include <daos_types.h>
 #include <daos/object.h>
-
-#include "vts_io.h"
+#include <daos_srv/dtx_srv.h>
 
 #define SET_STRUCT_COMMON(a, c)          memset((void *)(&(a)), c, sizeof(a))
 
@@ -127,7 +130,7 @@ static const struct CMUnitTest structs_tests_all[] = {
 };
 
 int
-run_structs_tests(const char *cfg)
+run_structs_tests(void)
 {
 	const char *test_name = "DTX structs checks";
 
