@@ -25,10 +25,17 @@ class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed."""
 
 
+class InvalidLogLine(Exception):
+    """Exception to be raised when CaRT log line cannot be parsed.
+    It is either corrupted or comes from another source such as
+    the DAOS server or the DAOS agent."""
+
+
+# Based on priorities defined in src/gurt/dlog.c: 118
 LOG_LEVELS = {
     'EMIT': 1,
-    'FATAL': 2,
-    'EMRG': 3,
+    'EMRG': 2,
+    'ALRT': 3,
     'CRIT': 4,
     'ERR': 5,
     'WARN': 6,
@@ -72,6 +79,15 @@ class LogLine():
 
     # pylint: disable=too-many-public-methods
 
+    # Match a date.
+    re_date = re.compile(r"^(?:\d{4}/)?(0[1-9]|1[0-2])/(0[1-9]|[12]\d|3[01])$")
+
+    # Match a time.
+    re_time = re.compile(r"^([01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{6}$")
+
+    # Match a TAG.
+    re_tag = re.compile(r"^[A-Z]+\[(\d+)/\d+/\d+\]$")
+
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
     # Match a pointer, with optional ')', '.' or ',' suffix.
@@ -90,44 +106,67 @@ class LogLine():
     # Match DF_CONT
     re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
-    def __init__(self, line):
+    def __init__(self, line, pid_only=False):
+        """
+        Parse a CART log line and extract structured components such as log level, timestamp,
+        hostname, PID, TID, UID, facility, function name, etc.
+
+        This constructor validates the format of the log line and raises an exception if it
+        does not conform to the expected structure. If `pid_only` is set to True, only the PID
+        is extracted and the rest of the parsing is skipped.
+
+        Expected log line format:
+        <LEVEL> YYYY/MM/DD HH:MM:SS.ffffff <NODE NAME> <TAG>[<PID>/<TID>/<UID>] <FAC> <message>
+        <message>:= <filename>:<line_no> <function_name()> <detail info>
+        Optional part handled by the parser:
+            - YYYY/
+        Optional parts not handled by the parser (cause line parsing to stop):
+            - [<PID>/<TID>/<UID>]
+            - <FAC>
+
+        Parameters:
+            line (str): The raw log line to be parsed.
+            pidOnly (bool, optional): If True, only extract the PID and skip full parsing.
+                                      Defaults to False.
+        """
         fields = line.split()
-        if len(fields) < 6:
-            raise ValueError(f"Log line too short to parse expected fields: {line!r}")
-        # Work out the end of the fixed-width portion, and the beginning of the
-        # message. The hostname, pid, fac and level fields are all variable width.
-        idx = 0
-        idx += max(len(fields[0]), 4) + 1
-        for i in range(4):
-            idx += len(fields[i + 1]) + 1
-        # pylint: disable=wrong-spelling-in-comment
-        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c - d_vlog()
-        # snprintf(..., "%-4s ", facstr)
-        idx += max(len(fields[5]), 4)
-        # assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c - d_vlog()
-        # assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c - d_vlog()
-        # pylint: enable=wrong-spelling-in-comment
-        pidtid = fields[4][5:-1]
-        pid = pidtid.split("/")
-        if not pid or not pid[0].isdigit():
-            raise ValueError(f"Invalid pid format in line: {line!r}")
-        try:
-            self.pid = int(pid[0])
-        except ValueError as e:
-            raise ValueError(
-                f"Failed to convert pid[0] to int in line: {line!r}."
-                f"Original error: {e}"
-            ) from e
-        # self.pid = int(pid[0])
-        self._preamble = line[:idx]
-        self.fac = fields[5]
+        # Check the line header and work out the beginning of the message.
+        # The level, date, time, hostname, pid and fac fields are all variable width.
+        # 6 header fields and at least 3 message fields (file info, function name, detail info)
+        # Shorter line may be either invalid or not CART log line
+        # e.g. origin from DAOS server or DAOS agent).
+        if len(fields) < 9:
+            raise InvalidLogLine(f"Log line too short to parse expected fields: {line!r}")
         try:
             self.level = LOG_LEVELS[fields[0]]
         except KeyError as error:
-            raise InvalidLogFile(fields[0]) from error
-
+            raise InvalidLogLine(
+                f"Unrecognized log level \"{fields[0]!r}\" in the line: {line!r}"
+            ) from error
+        if self.re_date.fullmatch(fields[1]) is None:
+            raise InvalidLogLine(f"Invalid date \"{fields[1]!r}\" in the log line: {line!r}")
+        idx += len(fields[1]) + 1
+        if self.re_time.fullmatch(fields[2]) is None:
+            raise InvalidLogLine(f"Invalid time \"{fields[2]!r}\" in the log line: {line!r}")
+        idx += len(fields[2]) + 1
         self.time_stamp = fields[1] + ' ' + fields[2]
         self.hostname = fields[3]
+        idx += len(fields[3]) + 1
+        # Assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c: 651
+        # Assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c: 652
+        match = self.re_tag.search(fields[4])
+        if match is None:
+            raise InvalidLogLine(
+                f"Invalid TAG (PID/TID/UID) \"{fields[4]!r}\" in the log line: {line!r}"
+            )
+        self.pid = int(match.group(1))
+        if pid_only:
+            return
+        idx += len(fields[4]) + 1
+        # Assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 664
+        self.fac = fields[5]
+        idx += (len(fields[5]) if len(fields[5]) > 6 else 6)
+        self._preamble = line[:idx]
         self._fields = fields[6:]
         try:
             if self._fields[1][-2:] == '()':
@@ -549,19 +588,8 @@ class LogIter():
         pids = OrderedDict()
         index = 0
         for line in self._fd:
-            fields = line.split(None, 9)
             index += 1
-            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                # pylint: disable=too-many-boolean-expressions
-                len(fields) < 7
-                or len(fields[1]) != 10 or fields[1][4] != '/' or fields[1][7] != '/'
-                or len(fields[2]) != 15 or fields[2][2] != ':' and fields[2][8] != '.'
-                # pylint: enable=too-many-boolean-expressions
-            ):
-                self._data.append(LogRaw(line))
-            else:
+            try:
                 l_obj = LogLine(line)
                 l_pid = l_obj.pid
                 self._data.append(l_obj)
@@ -570,6 +598,8 @@ class LogIter():
                 else:
                     pids[l_pid] = {'line_count': 1, 'first_index': index}
                 pids[l_pid]['last_index'] = index
+            except InvalidLogLine:
+                self._data.append(LogRaw(line))
         self._pids = pids
 
     def _load_pids(self):
@@ -579,28 +609,18 @@ class LogIter():
         index = 0
         position = 0
         for line in self._fd:
-            fields = line.split(None, 9)
             index += 1
-            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                # pylint: disable=too-many-boolean-expressions
-                len(fields) < 7
-                or len(fields[1]) != 10 or fields[1][4] != '/' or fields[1][7] != '/'
-                or len(fields[2]) != 15 or fields[2][2] != ':' and fields[2][8] != '.'
-                # pylint: enable=too-many-boolean-expressions
-            ):
-                position += len(line)
-                continue
-            pidtid = fields[4][5:-1]
-            pid = pidtid.split("/")
-            l_pid = int(pid[0])
-            if l_pid in pids:
-                pids[l_pid]['line_count'] += 1
-            else:
-                pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
-            pids[l_pid]['last_index'] = index
             position += len(line)
+            try:
+                l_obj = LogLine(line, pid_only=True)
+                l_pid = l_obj.pid
+                if l_pid in pids:
+                    pids[l_pid]['line_count'] += 1
+                else:
+                    pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
+                pids[l_pid]['last_index'] = index
+            except InvalidLogLine:
+                continue
         self._pids = pids
 
     def new_iter(self, pid=None, stateful=False, trace_only=False, raw=False):
@@ -659,19 +679,11 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split(None, 9)
-            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                # pylint: disable=too-many-boolean-expressions
-                len(fields) < 7
-                or len(fields[1]) != 10 or fields[1][4] != '/' or fields[1][7] != '/'
-                or len(fields[2]) != 15 or fields[2][2] != ':' and fields[2][8] != '.'
-                # pylint: enable=too-many-boolean-expressions
-            ):
-                return LogRaw(line)
-            return LogLine(line)
-
+            try:
+                logLine = LogLine(line)
+            except InvalidLogLine:
+                logLine = LogRaw(line)
+            return logLine
         try:
             line = self._data[self._offset]
         except IndexError as error:
