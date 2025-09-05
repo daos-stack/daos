@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -257,10 +258,8 @@ agg_del_sv(daos_handle_t ih, struct vos_agg_param *agg_param,
 		return rc;
 
 	rc = vos_iter_process(ih, VOS_ITER_PROC_OP_DELETE, NULL);
-	if (rc != 0)
-		rc = umem_tx_abort(umm, rc);
-	else
-		rc = umem_tx_commit(umm);
+
+	rc = umem_tx_end(umm, rc);
 
 	if (rc) {
 		D_ERROR("Failed to delete entry: "DF_RC"\n", DP_RC(rc));
@@ -1422,6 +1421,30 @@ unmark_removals(struct agg_merge_window *mw, const struct agg_phy_ent *phy_ent)
 	}
 }
 
+static inline void
+dump_mw_info(struct agg_merge_window *mw)
+{
+	struct agg_io_context *io = &mw->mw_io_ctxt;
+	struct vea_resrvd_ext *rsrvd;
+	unsigned int           rsrv_bitmap = 0, rsrv_ext = 0, new_bitmap = 0;
+
+	d_list_for_each_entry(rsrvd, &io->ic_nvme_exts, vre_link) {
+		if (rsrvd->vre_private)
+			rsrv_bitmap++;
+		else
+			rsrv_ext++;
+
+		if (rsrvd->vre_new_bitmap_chunk)
+			new_bitmap++;
+	}
+
+	D_DEBUG(DB_TRACE,
+		"[MW] size:" DF_U64 ", phy_cnt:%u, lgc_cnt:%u, rm_cnt:%u, io_seg_cnt:%u, "
+		"rsrv_scm:%u, rsrv_bitmap:%u, rsrv_ext:%u, new_bitmap:%u\n",
+		mw->mw_rsize, mw->mw_phy_cnt, mw->mw_lgc_cnt, mw->mw_rmv_cnt, io->ic_seg_cnt,
+		umem_rsrvd_act_cnt(io->ic_rsrvd_scm), rsrv_bitmap, rsrv_ext, new_bitmap);
+}
+
 static int
 insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsigned int *acts)
 {
@@ -1437,6 +1460,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 	int			 rc;
 
 	D_AGG_ASSERT(mw, obj != NULL);
+	dump_mw_info(mw);
+
 	rc = umem_tx_begin(vos_obj2umm(obj), NULL);
 	if (rc)
 		return rc;
@@ -1482,7 +1507,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 			phy_ent->pe_csum_info = ent_in->ei_csum;
 			D_ALLOC(phy_ent->pe_csum_info.cs_csum, phy_ent->pe_csum_info.cs_buf_len);
 			if (phy_ent->pe_csum_info.cs_csum == NULL)
-				return -DER_NOMEM;
+				D_GOTO(abort, rc = -DER_NOMEM);
 			phy_ent->pe_csum_free = true;
 			memcpy(phy_ent->pe_csum_info.cs_csum, ent_in->ei_csum.cs_csum,
 			       phy_ent->pe_csum_info.cs_buf_len);
@@ -1578,10 +1603,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 		goto abort;
 	}
 abort:
-	if (rc)
-		rc = umem_tx_abort(vos_obj2umm(obj), rc);
-	else
-		rc = umem_tx_commit(vos_obj2umm(obj));
+	rc = umem_tx_end(vos_obj2umm(obj), rc);
 
 	return rc;
 }
@@ -1810,6 +1832,12 @@ out:
 	return rc;
 }
 
+/*
+ * This number is derived from real test result, merging this number of recx roughly
+ * consume < 2MB WAL space in md-on-ssd mode.
+ */
+#define MW_MAX_MERGE_CNT 25000
+
 static bool
 trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
 {
@@ -1832,6 +1860,10 @@ trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
 
 	/* Window is large enough */
 	if (merge_window_size(mw) >= mw->mw_flush_thresh)
+		return true;
+
+	/* To avoid too large local tx, we merge at most MW_MAX_MERGE_CNT in a single tx */
+	if (mw->mw_lgc_cnt > MW_MAX_MERGE_CNT)
 		return true;
 
 	/* Trigger flush when entry is disjoint with window */
