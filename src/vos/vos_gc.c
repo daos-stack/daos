@@ -591,7 +591,10 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	 * safe because we never overwrite valid items
 	 */
 	it = &bag->bag_items[bag->bag_item_last];
-	umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
+	rc = umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
 	memcpy(it, item, sizeof(*it));
 
 	last = bag->bag_item_last + 1;
