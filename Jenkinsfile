@@ -18,6 +18,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-17203') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -558,7 +559,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.5') {
+                stage('Build RPM on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -571,8 +572,7 @@ pipeline {
                                  ' --cap-add=SYS_ADMIN' +
                                  ' --privileged=true'   +
                                  ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs() +
-                                '--build-arg FVERSION=37'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
@@ -712,10 +712,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5') {
+                stage('Build on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -724,15 +724,18 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         job_step_update(
                             sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'yes'))
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
+                                       scons_args: sconsArgs() +
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
                         unsuccessful {
@@ -747,10 +750,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.6 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -759,16 +762,19 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-intelc" +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg COMPILER=icc'
                         }
                     }
                     steps {
                         job_step_update(
                             sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
+                                       scons_args: sconsArgs() +
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
                         unsuccessful {
