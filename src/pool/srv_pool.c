@@ -376,7 +376,7 @@ pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 	D_ASPRINTF(name, RDB_FILE"pool%s", suffix);
 	if (name == NULL)
 		return NULL;
-	rc = ds_mgmt_tgt_file(pool_uuid, name, NULL /* idx */, &path);
+	rc = ds_mgmt_file(dss_storage_path, pool_uuid, name, NULL /* idx */, &path);
 	D_FREE(name);
 	if (rc != 0)
 		return NULL;
@@ -1560,7 +1560,7 @@ handle_event(struct pool_svc *svc, struct pool_svc_event_set *event_set)
 	if (!pool_disable_exclude) {
 		rc = pool_svc_exclude_ranks(svc, event_set);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_UUID ": failed to exclude ranks", DP_UUID(svc->ps_uuid));
+			DL_INFO(rc, DF_UUID ": exclude ranks", DP_UUID(svc->ps_uuid));
 			return rc;
 		}
 	}
@@ -5603,6 +5603,15 @@ out_lock:
 				"%d.\n", DP_UUID(in->psi_op.pi_uuid), rc);
 		daos_prop_free(prop);
 	}
+	/* If self_heal.exclude is set, resume event handling. */
+	if (rc == 0 && !dup_op) {
+		struct daos_prop_entry *entry;
+
+		entry = daos_prop_entry_get(prop_in, DAOS_PROP_PO_SELF_HEAL);
+		if (entry != NULL && daos_prop_is_set(entry) &&
+		    entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)
+			resume_event_handling(svc);
+	}
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -7124,6 +7133,29 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 		goto out;
 	ABT_rwlock_wrlock(svc->ps_lock);
 
+	if (opc == MAP_EXCLUDE && src == MUS_SWIM) {
+		daos_prop_t            *prop;
+		struct daos_prop_entry *entry;
+
+		/* Check if self_heal.exclude is enabled. */
+		rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_SELF_HEAL, &prop);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to read self_heal property",
+				 DP_UUID(svc->ps_uuid));
+			goto out_lock;
+		}
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
+		D_ASSERT(entry != NULL);
+		if (!daos_prop_is_set(entry) || !(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
+			D_INFO(DF_UUID ": not excluding for SWIM: self_heal.exclude not enabled\n",
+			       DP_UUID(svc->ps_uuid));
+			rc = -DER_NO_PERM;
+			daos_prop_free(prop);
+			goto out_lock;
+		}
+		daos_prop_free(prop);
+	}
+
 	/* Create a temporary pool map based on the last committed version. */
 	rc = read_map(&tx, &svc->ps_root, &map);
 	if (rc != 0)
@@ -7188,7 +7220,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 */
 	map_version_before = pool_map_get_version(map);
 	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver,
-				     false /* print_changes */);
+				     true /* print_changes */);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);

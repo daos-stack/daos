@@ -16,7 +16,6 @@ server_config:
       targets: 4
       nr_xs_helpers: 0
       storage: auto
-  system_ram_reserved: 3
 
 pool:
   size: 20G
