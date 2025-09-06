@@ -925,6 +925,63 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck on EL 8')
+                                stage('Fault injection testing on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true)
+                            args '--tmpfs /mnt/daos_0'
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
+                                       build_deps: 'no'))
+                        job_step_update(nlt_test())
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
+                        //                skipPublishingChecks: true,
+                        //                id: 'fir', name: 'Fault Injection Report')
+                    }
+                    post {
+                        always {
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                                                      scm: 'daos-stack/daos',
+                                                      requiredResult: hudson.model.Result.UNSTABLE
+                            recordIssues enabledForFailure: true,
+                                         /* ignore warning/errors from PMDK logging system */
+                                         filters: [excludeFile('pmdk/.+')],
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
+                                                        [threshold: 1, type: 'TOTAL_HIGH'],
+                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
+                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
+                                         tools: [issues(pattern: 'nlt-errors.json',
+                                                        name: 'Fault injection issues',
+                                                        id: 'Fault_Injection'),
+                                                 issues(pattern: 'nlt-client-leaks.json',
+                                                        name: 'Fault injection leaks',
+                                                        id: 'NLT_client')],
+                                         scm: 'daos-stack/daos'
+                            junit testResults: 'nlt-junit.xml'
+                            stash name: 'fault-inject-valgrind',
+                                  includes: '*.memcheck.xml',
+                                  allowEmpty: true
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                                             allowEmptyArchive: true
+                            job_status_update()
+                        }
+                    }
+                } // stage('Fault injection testing on EL 8.8')
+
             }
         }
         stage('Test') {
@@ -1046,62 +1103,6 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true)
-                            args '--tmpfs /mnt/daos_0'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                       build_deps: 'no'))
-                        job_step_update(nlt_test())
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                        //                skipPublishingChecks: true,
-                        //                id: 'fir', name: 'Fault Injection Report')
-                    }
-                    post {
-                        always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
-                            recordIssues enabledForFailure: true,
-                                         /* ignore warning/errors from PMDK logging system */
-                                         filters: [excludeFile('pmdk/.+')],
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
-                                                        [threshold: 1, type: 'TOTAL_HIGH'],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
-                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
-                                         tools: [issues(pattern: 'nlt-errors.json',
-                                                        name: 'Fault injection issues',
-                                                        id: 'Fault_Injection'),
-                                                 issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'Fault injection leaks',
-                                                        id: 'NLT_client')],
-                                         scm: 'daos-stack/daos'
-                            junit testResults: 'nlt-junit.xml'
-                            stash name: 'fault-inject-valgrind',
-                                  includes: '*.memcheck.xml',
-                                  allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
-                                             allowEmptyArchive: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Fault injection testing on EL 8.8')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
