@@ -163,6 +163,11 @@ class LogLine():
         self.fac = fields[5]
         self._preamble = self.time_stamp + ' ' + self.fac
         self._fields = fields[6:]
+        # Ignore server log lines (messages from Go source code - *.go).
+        if ".go:" in self._fields[0]:
+            raise InvalidLogLine(
+                f"DAOS server's (not CaRT)  log line: {line!r}"
+            )
         try:
             if self._fields[1][-2:] == '()':
                 self.trace = False
