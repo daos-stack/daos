@@ -607,28 +607,18 @@ class LogIter():
         index = 0
         position = 0
         for line in self._fd:
-            fields = line.split(None, 9)
             index += 1
-            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                len(fields) < 7
-                or len(fields[1]) != 10 or fields[1][4] != '/'
-                or len(fields[2]) != 15 or fields[2][2] != ':' or fields[2][8] != '.'
-                or len(fields[0]) > 4 or ".go:" in fields[3]
-            ):
-                # pylint: enable=too-many-boolean-expressions
-                position += len(line)
-                continue
-            pidtid = fields[4][5:-1]
-            pid = pidtid.split("/")
-            l_pid = int(pid[0])
-            if l_pid in pids:
-                pids[l_pid]['line_count'] += 1
-            else:
-                pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
-            pids[l_pid]['last_index'] = index
             position += len(line)
+            try:
+                l_obj = LogLine(line)
+                l_pid = l_obj.pid
+                if l_pid in pids:
+                    pids[l_pid]['line_count'] += 1
+                else:
+                    pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
+                pids[l_pid]['last_index'] = index
+            except InvalidLogLine:
+                continue
         self._pids = pids
 
     def new_iter(self, pid=None, stateful=False, trace_only=False, raw=False):
