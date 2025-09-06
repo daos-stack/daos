@@ -34,8 +34,8 @@ class InvalidLogLine(Exception):
 # Based on priorities defined in src/gurt/dlog.c: 118
 LOG_LEVELS = {
     'EMIT': 1,
-    'EMRG': 2,
-    'ALRT': 3,
+    'FATAL': 2,
+    'EMRG': 3,
     'CRIT': 4,
     'ERR': 5,
     'WARN': 6,
