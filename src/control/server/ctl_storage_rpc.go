@@ -352,25 +352,19 @@ func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*
 		return nil, errors.New("nil scm request")
 	}
 
-	var err error
-	var ssr *storage.ScmScanResponse
-
-	if cs.srvCfg.HasPMem() {
-		msg := "config has pmem, scanning scm"
-		ssr, err = cs.ScmScan(storage.ScmScanRequest{})
-		if err != nil || !req.GetUsage() {
-			if err != nil {
-				cs.log.Errorf("%s: %s", msg, err.Error())
-			}
-			return newScanScmResp(ssr, err)
-		}
-		cs.log.Tracef("%s: resp %+v", msg, ssr)
-	} else if !req.GetUsage() {
-		cs.log.Trace("config has no pmem and usage not requested, returning from scm scan")
-		return &ctlpb.ScanScmResp{
-			State: new(ctlpb.ResponseState),
-		}, nil
+	reqInner := storage.ScmScanRequest{
+		PMemInConfig: cs.srvCfg.HasPMem(),
 	}
+
+	msg := fmt.Sprintf("pmem scan, req %+v", reqInner)
+
+	ssr, err := cs.ScmScan(reqInner)
+	if err != nil || !req.GetUsage() {
+		resp, err := newScanScmResp(ssr, err)
+		cs.log.Tracef("%s, resp %+v", msg, resp)
+		return resp, err
+	}
+	cs.log.Tracef("%s, resp %+v", msg, ssr)
 
 	ssr, err = cs.getScmUsage(ssr)
 	if err != nil {
