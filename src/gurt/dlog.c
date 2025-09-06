@@ -641,20 +641,19 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * ok, first, put the header into b[]
 	 */
 	hlen = 0;
-	if (mst.oflags & DLOG_FLV_YEAR)
-		hlen = snprintf(b, sizeof(b), "%04d/", tm->tm_year + 1900);
+	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ", clog_pristr(lvl));
 
-	hlen += snprintf(b + hlen, sizeof(b) - hlen,
-			 "%02d/%02d-%02d:%02d:%02d.%02ld %s ",
-			 tm->tm_mon + 1, tm->tm_mday,
-			 tm->tm_hour, tm->tm_min, tm->tm_sec,
-			 (long int)tv.tv_usec / 10000, mst.uts.nodename);
+	if (mst.oflags & DLOG_FLV_YEAR)
+		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%04d/", tm->tm_year + 1900);
+
+	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%02d/%02d %02d:%02d:%02d.%06ld %s ",
+			 tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
+			 (long int)tv.tv_usec, mst.uts.nodename);
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%s%d/%d/"DF_U64"] ", d_log_xst.tag,
-					 pid, tid, uid);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s%u/%u/" DF_U64 "] ",
+					 d_log_xst.tag, pid, tid, uid);
 		} else {
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
 					 d_log_xst.tag);
@@ -664,11 +663,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	hlen_pt1 = hlen;	/* save part 1 length */
 	if (hlen < sizeof(b)) {
 		if (mst.oflags & DLOG_FLV_FAC)
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%-4s ", facstr);
-
-		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
-				 clog_pristr(lvl));
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%-6s ", facstr);
 	}
 	/*
 	 * we expect there is still room (i.e. at least one byte) for a
