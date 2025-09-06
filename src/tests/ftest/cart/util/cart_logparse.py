@@ -222,7 +222,7 @@ class LogLine():
                 return int(lineno)
             except (IndexError, ValueError):
                 pass
-        raise AttributeError
+        raise AttributeError(f"{self._preamble!r}")
 
     def get_msg(self):
         """Return the message part of a line, stripping up to and including the filename"""

@@ -342,7 +342,10 @@ class WarningsFactory():
         Add it to the pending array, for later clarification
         """
         entry = {}
-        entry['fileName'] = line.filename
+        if line is not None:
+            entry['fileName'] = line.filename
+        else:
+            raise FileNotFoundError(f"Expected a line-like object, got {line!r}")
         if mtype:
             entry['type'] = mtype
         else:
