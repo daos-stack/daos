@@ -22,6 +22,47 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
+def add_pools(add_pool_kwargs):
+    """Add multiple TestPool objects to the test.
+
+    Args:
+        add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
+            pool. Must at least include the 'test' kwarg. See add_pool() for other options.
+
+    Returns:
+        list: a list of new pool objects
+    """
+    _create = []
+    pools = []
+
+    # Add the pools but do not create them yet
+    for kwargs in add_pool_kwargs:
+        _create.append(bool("create" not in kwargs or kwargs["create"]))
+        kwargs["create"] = False
+        pools.append(add_pool(**kwargs))
+
+    if pools and any(_create):
+        # Set the DEBUG log mask before the first pool create
+        pools[0].dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
+    # Create all the pools that have been requested, but only set/reset the DEBUG log mask once
+    _saved_result = None
+    for index, pool in enumerate(pools):
+        if not _create[index]:
+            continue
+        pool.create(False)
+        if index == 0:
+            _saved_result = pool.dmg.result
+
+    if pools and any(_create):
+        # Reset the log mask after the last pool create
+        pools[0].dmg.server_set_logmasks(raise_exception=False)
+        if _saved_result:
+            pools[0].dmg.result = _saved_result
+
+    return pools
+
+
 def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
     """Add a new TestPool object to the test.
 
@@ -371,7 +412,7 @@ class TestPool(TestDaosApiBase):
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     @fail_on(DmgJsonCommandFailure)
-    def create(self):
+    def create(self, use_set_logmasks=True):
         """Create a pool with dmg.
 
         To use dmg, the test needs to set dmg_command through the constructor.
@@ -390,6 +431,11 @@ class TestPool(TestDaosApiBase):
         CommandFailure. Thus, we need to make more than one line modification
         to the test only for this purpose.
         Currently, pool_svc is the only test that needs this change.
+
+        Args:
+            use_set_logmasks (bool, optional): Allow using the TestPool.set_logmasks.value to
+                determine if the log mask should be set to DEBUG and reset before and after creating
+                the pool. Defaults to True.
         """
         self.destroy()
         if self.target_list.value is not None:
@@ -420,13 +466,13 @@ class TestPool(TestDaosApiBase):
         # Create a pool with the dmg command and store its CmdResult
         # Elevate engine log_mask to DEBUG before, then restore after pool create
         self._log_method("dmg.pool_create", kwargs)
-        if self.set_logmasks.value is True:
+        if use_set_logmasks and self.set_logmasks.value is True:
             self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
         finally:
-            if self.set_logmasks.value is True:
+            if use_set_logmasks and self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
 
         # make sure dmg exit status is that of the pool create, not the set-logmasks
