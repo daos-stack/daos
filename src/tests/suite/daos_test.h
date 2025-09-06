@@ -468,11 +468,6 @@ int rebuild_sub_3nodes_rf0_setup(void **state);
 int rebuild_sub_6nodes_rf1_setup(void **state);
 int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
 
-int
-fi_rebuild_stop(void *data);
-int
-     fi_rebuild_resume_wait(void *data);
-
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,
 		 char *key_name, char *log_file);

@@ -791,7 +791,30 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **eng
 }
 
 static bool
-rebuild_pool_wait(test_arg_t *arg)
+rebuild_pool_started(test_arg_t *arg)
+{
+	daos_pool_info_t            pinfo = {0};
+	struct daos_rebuild_status *rst;
+	int                         rc;
+
+	pinfo.pi_bits = DPI_REBUILD_STATUS;
+	rc            = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
+	rst           = &pinfo.pi_rebuild_st;
+
+	if (rc != 0) {
+		print_message("pool query for rebuild status failed, rc=%d, pool " DF_UUIDF "\n",
+			      rc, DP_UUID(arg->pool.pool_uuid));
+		return false;
+	} else {
+		bool started = (rst->rs_state == DRS_IN_PROGRESS);
+		print_message("rebuild for pool " DF_UUIDF "has %sstarted\n",
+			      DP_UUID(arg->pool.pool_uuid), started ? "" : "not yet ");
+		return started;
+	}
+}
+
+static bool
+rebuild_pool_done(test_arg_t *arg)
 {
 	daos_pool_info_t	   pinfo = {0};
 	struct daos_rebuild_status *rst;
@@ -863,6 +886,31 @@ test_get_last_svr_rank(test_arg_t *arg)
 }
 
 bool
+test_rebuild_started(test_arg_t **args, int args_cnt)
+{
+	bool all_started = true;
+	int  i;
+
+	for (i = 0; i < args_cnt; i++) {
+		bool started = true;
+
+		if (!args[i]->pool.destroyed)
+			started = rebuild_pool_started(args[i]);
+
+		if (!started)
+			all_started = false;
+	}
+	return all_started;
+}
+
+void
+test_rebuild_wait_to_start(test_arg_t **args, int args_cnt)
+{
+	while (!test_rebuild_started(args, args_cnt))
+		sleep(2);
+}
+
+bool
 test_rebuild_query(test_arg_t **args, int args_cnt)
 {
 	bool all_done = true;
@@ -872,7 +920,7 @@ test_rebuild_query(test_arg_t **args, int args_cnt)
 		bool done = true;
 
 		if (!args[i]->pool.destroyed)
-			done = rebuild_pool_wait(args[i]);
+			done = rebuild_pool_done(args[i]);
 
 		if (!done)
 			all_done = false;
