@@ -586,19 +586,8 @@ class LogIter():
         pids = OrderedDict()
         index = 0
         for line in self._fd:
-            fields = line.split(None, 9)
             index += 1
-            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                len(fields) < 7
-                or len(fields[1]) != 10 or fields[1][4] != '/'
-                or len(fields[2]) != 15 or fields[2][2] != ':' or fields[2][8] != '.'
-                or len(fields[0]) > 4 or ".go:" in fields[3]
-            ):
-                # pylint: enable=too-many-boolean-expressions
-                self._data.append(LogRaw(line))
-            else:
+            try:
                 l_obj = LogLine(line)
                 l_pid = l_obj.pid
                 self._data.append(l_obj)
@@ -607,6 +596,8 @@ class LogIter():
                 else:
                     pids[l_pid] = {'line_count': 1, 'first_index': index}
                 pids[l_pid]['last_index'] = index
+            except InvalidLogLine:
+                self._data.append(LogRaw(line))
         self._pids = pids
 
     def _load_pids(self):
