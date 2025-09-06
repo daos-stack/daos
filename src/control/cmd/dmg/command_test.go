@@ -182,9 +182,9 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.PoolRebuildReq:
 		if req.Op == control.PoolRebuildOpCodeStart {
-			resp = control.MockMSResponse("", nil, &mgmtpb.PoolRebuildStartResp{})
+			resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 		} else if req.Op == control.PoolRebuildOpCodeStop {
-			resp = control.MockMSResponse("", nil, &mgmtpb.PoolRebuildStopResp{})
+			resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 		}
 	case *control.SystemCheckEnableReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})

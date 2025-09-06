@@ -50,10 +50,8 @@ typedef struct _Mgmt__PoolQueryTargetReq Mgmt__PoolQueryTargetReq;
 typedef struct _Mgmt__StorageTargetUsage Mgmt__StorageTargetUsage;
 typedef struct _Mgmt__PoolQueryTargetInfo Mgmt__PoolQueryTargetInfo;
 typedef struct _Mgmt__PoolQueryTargetResp Mgmt__PoolQueryTargetResp;
-typedef struct _Mgmt__PoolRebuildStartReq  Mgmt__PoolRebuildStartReq;
-typedef struct _Mgmt__PoolRebuildStartResp Mgmt__PoolRebuildStartResp;
-typedef struct _Mgmt__PoolRebuildStopReq   Mgmt__PoolRebuildStopReq;
-typedef struct _Mgmt__PoolRebuildStopResp  Mgmt__PoolRebuildStopResp;
+typedef struct _Mgmt__PoolRebuildStartReq Mgmt__PoolRebuildStartReq;
+typedef struct _Mgmt__PoolRebuildStopReq  Mgmt__PoolRebuildStopReq;
 
 /* --- enums --- */
 
@@ -1196,19 +1194,6 @@ struct _Mgmt__PoolRebuildStartReq {
 	 (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL}
 
 /*
- * PoolRebuildStartResp returns state which indicates whether request was accepted successfully.
- */
-struct _Mgmt__PoolRebuildStartResp {
-	ProtobufCMessage base;
-	/*
-	 * DAOS error code
-	 */
-	int32_t          status;
-};
-#define MGMT__POOL_REBUILD_START_RESP__INIT                                                        \
-	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_rebuild_start_resp__descriptor), 0}
-
-/*
  * PoolRebuildStopReq contains information about a request to stop an interactive rebuild on a
  * given pool.
  */
@@ -1239,19 +1224,6 @@ struct _Mgmt__PoolRebuildStopReq {
 	 0,                                                                                        \
 	 0,                                                                                        \
 	 NULL}
-
-/*
- * PoolRebuildStopResp returns state which indicates whether request was accepted successfully.
- */
-struct _Mgmt__PoolRebuildStopResp {
-	ProtobufCMessage base;
-	/*
-	 * DAOS error code
-	 */
-	int32_t          status;
-};
-#define MGMT__POOL_REBUILD_STOP_RESP__INIT                                                         \
-	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_rebuild_stop_resp__descriptor), 0}
 
 /* Mgmt__PoolCreateReq methods */
 void   mgmt__pool_create_req__init
@@ -1902,22 +1874,6 @@ mgmt__pool_rebuild_start_req__unpack(ProtobufCAllocator *allocator, size_t len,
 void
 mgmt__pool_rebuild_start_req__free_unpacked(Mgmt__PoolRebuildStartReq *message,
 					    ProtobufCAllocator        *allocator);
-/* Mgmt__PoolRebuildStartResp methods */
-void
-mgmt__pool_rebuild_start_resp__init(Mgmt__PoolRebuildStartResp *message);
-size_t
-mgmt__pool_rebuild_start_resp__get_packed_size(const Mgmt__PoolRebuildStartResp *message);
-size_t
-mgmt__pool_rebuild_start_resp__pack(const Mgmt__PoolRebuildStartResp *message, uint8_t *out);
-size_t
-mgmt__pool_rebuild_start_resp__pack_to_buffer(const Mgmt__PoolRebuildStartResp *message,
-					      ProtobufCBuffer                  *buffer);
-Mgmt__PoolRebuildStartResp *
-mgmt__pool_rebuild_start_resp__unpack(ProtobufCAllocator *allocator, size_t len,
-				      const uint8_t *data);
-void
-mgmt__pool_rebuild_start_resp__free_unpacked(Mgmt__PoolRebuildStartResp *message,
-					     ProtobufCAllocator         *allocator);
 /* Mgmt__PoolRebuildStopReq methods */
 void
 mgmt__pool_rebuild_stop_req__init(Mgmt__PoolRebuildStopReq *message);
@@ -1933,22 +1889,6 @@ mgmt__pool_rebuild_stop_req__unpack(ProtobufCAllocator *allocator, size_t len, c
 void
 mgmt__pool_rebuild_stop_req__free_unpacked(Mgmt__PoolRebuildStopReq *message,
 					   ProtobufCAllocator       *allocator);
-/* Mgmt__PoolRebuildStopResp methods */
-void
-mgmt__pool_rebuild_stop_resp__init(Mgmt__PoolRebuildStopResp *message);
-size_t
-mgmt__pool_rebuild_stop_resp__get_packed_size(const Mgmt__PoolRebuildStopResp *message);
-size_t
-mgmt__pool_rebuild_stop_resp__pack(const Mgmt__PoolRebuildStopResp *message, uint8_t *out);
-size_t
-mgmt__pool_rebuild_stop_resp__pack_to_buffer(const Mgmt__PoolRebuildStopResp *message,
-					     ProtobufCBuffer                 *buffer);
-Mgmt__PoolRebuildStopResp *
-mgmt__pool_rebuild_stop_resp__unpack(ProtobufCAllocator *allocator, size_t len,
-				     const uint8_t *data);
-void
-mgmt__pool_rebuild_stop_resp__free_unpacked(Mgmt__PoolRebuildStopResp *message,
-					    ProtobufCAllocator        *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__PoolCreateReq_Closure)
@@ -2058,12 +1998,8 @@ typedef void (*Mgmt__PoolQueryTargetResp_Closure)
                   void *closure_data);
 typedef void (*Mgmt__PoolRebuildStartReq_Closure)(const Mgmt__PoolRebuildStartReq *message,
 						  void                            *closure_data);
-typedef void (*Mgmt__PoolRebuildStartResp_Closure)(const Mgmt__PoolRebuildStartResp *message,
-						   void                             *closure_data);
 typedef void (*Mgmt__PoolRebuildStopReq_Closure)(const Mgmt__PoolRebuildStopReq *message,
 						 void                           *closure_data);
-typedef void (*Mgmt__PoolRebuildStopResp_Closure)(const Mgmt__PoolRebuildStopResp *message,
-						  void                            *closure_data);
 
 /* --- services --- */
 
@@ -2111,9 +2047,7 @@ extern const ProtobufCEnumDescriptor    mgmt__pool_query_target_info__target_typ
 extern const ProtobufCEnumDescriptor    mgmt__pool_query_target_info__target_state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_query_target_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_start_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_start_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_stop_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_stop_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

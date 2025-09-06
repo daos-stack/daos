@@ -2027,7 +2027,7 @@ ds_mgmt_drpc_pool_rebuild_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc          alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolRebuildStartReq *req   = NULL;
-	Mgmt__PoolRebuildStartResp resp  = MGMT__POOL_REBUILD_START_RESP__INIT;
+	Mgmt__DaosResp             resp  = MGMT__DAOS_RESP__INIT;
 	uuid_t                     uuid;
 	d_rank_list_t             *svc_ranks = NULL;
 	uint8_t                   *body;
@@ -2044,7 +2044,7 @@ ds_mgmt_drpc_pool_rebuild_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to start interactive rebuild on pool %s\n", req->id);
+	D_INFO("Received request to interactively start/resume rebuild on pool %s\n", req->id);
 
 	if (uuid_parse(req->id, uuid) != 0) {
 		rc = -DER_INVAL;
@@ -2062,12 +2062,12 @@ ds_mgmt_drpc_pool_rebuild_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
-	len         = mgmt__pool_rebuild_start_resp__get_packed_size(&resp);
+	len         = mgmt__daos_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_rebuild_start_resp__pack(&resp, body);
+		mgmt__daos_resp__pack(&resp, body);
 		drpc_resp->body.len  = len;
 		drpc_resp->body.data = body;
 	}
@@ -2080,7 +2080,7 @@ ds_mgmt_drpc_pool_rebuild_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc         alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolRebuildStopReq *req   = NULL;
-	Mgmt__PoolRebuildStopResp resp  = MGMT__POOL_REBUILD_STOP_RESP__INIT;
+	Mgmt__DaosResp            resp  = MGMT__DAOS_RESP__INIT;
 	uuid_t                    uuid;
 	d_rank_list_t            *svc_ranks = NULL;
 	uint8_t                  *body;
@@ -2097,7 +2097,8 @@ ds_mgmt_drpc_pool_rebuild_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to stop interactive rebuild on pool %s\n", req->id);
+	D_INFO("Received request to interactively %sstop rebuild on pool %s\n",
+	       req->force ? "force-" : "", req->id);
 
 	if (uuid_parse(req->id, uuid) != 0) {
 		rc = -DER_INVAL;
@@ -2115,12 +2116,12 @@ ds_mgmt_drpc_pool_rebuild_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
-	len         = mgmt__pool_rebuild_stop_resp__get_packed_size(&resp);
+	len         = mgmt__daos_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_rebuild_stop_resp__pack(&resp, body);
+		mgmt__daos_resp__pack(&resp, body);
 		drpc_resp->body.len  = len;
 		drpc_resp->body.data = body;
 	}

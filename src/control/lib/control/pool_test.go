@@ -3641,7 +3641,7 @@ func TestControl_PoolRebuild(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
-					MockMSResponse("host1", nil, &mgmtpb.PoolRebuildStartResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
 				},
 			},
 		},
@@ -3653,7 +3653,7 @@ func TestControl_PoolRebuild(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TryAgain, nil),
-					MockMSResponse("host1", nil, &mgmtpb.PoolRebuildStopResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
 				},
 			},
 		},
@@ -3664,7 +3664,7 @@ func TestControl_PoolRebuild(t *testing.T) {
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolRebuildStartResp{},
+					&mgmtpb.DaosResp{},
 				),
 			},
 		},
@@ -3684,7 +3684,7 @@ func TestControl_PoolRebuild(t *testing.T) {
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolRebuildStopResp{},
+					&mgmtpb.DaosResp{},
 				),
 			},
 		},

@@ -1323,7 +1323,7 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 	return metaBytes, nvmeBytes, nil
 }
 
-// PoolRebuildOpcode indicates the type of interactive rebuild operation to be triggererd.
+// PoolRebuildOpcode indicates the type of interactive rebuild operation to be triggered.
 type PoolRebuildOpCode int32
 
 // PoolRebuildOpCode definitions for supported interactive rebuild operations.

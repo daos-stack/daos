@@ -2863,54 +2863,6 @@ func (x *PoolRebuildStartReq) GetSvcRanks() []uint32 {
 	return nil
 }
 
-// PoolRebuildStartResp returns state which indicates whether request was accepted successfully.
-type PoolRebuildStartResp struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Status int32 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"` // DAOS error code
-}
-
-func (x *PoolRebuildStartResp) Reset() {
-	*x = PoolRebuildStartResp{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_pool_proto_msgTypes[34]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *PoolRebuildStartResp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolRebuildStartResp) ProtoMessage() {}
-
-func (x *PoolRebuildStartResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[34]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolRebuildStartResp.ProtoReflect.Descriptor instead.
-func (*PoolRebuildStartResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{34}
-}
-
-func (x *PoolRebuildStartResp) GetStatus() int32 {
-	if x != nil {
-		return x.Status
-	}
-	return 0
-}
-
 // PoolRebuildStopReq contains information about a request to stop an interactive rebuild on a
 // given pool.
 type PoolRebuildStopReq struct {
@@ -2927,7 +2879,7 @@ type PoolRebuildStopReq struct {
 func (x *PoolRebuildStopReq) Reset() {
 	*x = PoolRebuildStopReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_pool_proto_msgTypes[35]
+		mi := &file_mgmt_pool_proto_msgTypes[34]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2940,7 +2892,7 @@ func (x *PoolRebuildStopReq) String() string {
 func (*PoolRebuildStopReq) ProtoMessage() {}
 
 func (x *PoolRebuildStopReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[35]
+	mi := &file_mgmt_pool_proto_msgTypes[34]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2953,7 +2905,7 @@ func (x *PoolRebuildStopReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRebuildStopReq.ProtoReflect.Descriptor instead.
 func (*PoolRebuildStopReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{35}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *PoolRebuildStopReq) GetSys() string {
@@ -2984,54 +2936,6 @@ func (x *PoolRebuildStopReq) GetSvcRanks() []uint32 {
 	return nil
 }
 
-// PoolRebuildStopResp returns state which indicates whether request was accepted successfully.
-type PoolRebuildStopResp struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Status int32 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"` // DAOS error code
-}
-
-func (x *PoolRebuildStopResp) Reset() {
-	*x = PoolRebuildStopResp{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_pool_proto_msgTypes[36]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *PoolRebuildStopResp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolRebuildStopResp) ProtoMessage() {}
-
-func (x *PoolRebuildStopResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[36]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolRebuildStopResp.ProtoReflect.Descriptor instead.
-func (*PoolRebuildStopResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{36}
-}
-
-func (x *PoolRebuildStopResp) GetStatus() int32 {
-	if x != nil {
-		return x.Status
-	}
-	return 0
-}
-
 type ListPoolsResp_Pool struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -3047,7 +2951,7 @@ type ListPoolsResp_Pool struct {
 func (x *ListPoolsResp_Pool) Reset() {
 	*x = ListPoolsResp_Pool{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_pool_proto_msgTypes[37]
+		mi := &file_mgmt_pool_proto_msgTypes[35]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3060,7 +2964,7 @@ func (x *ListPoolsResp_Pool) String() string {
 func (*ListPoolsResp_Pool) ProtoMessage() {}
 
 func (x *ListPoolsResp_Pool) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[37]
+	mi := &file_mgmt_pool_proto_msgTypes[35]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3122,7 +3026,7 @@ type ListContResp_Cont struct {
 func (x *ListContResp_Cont) Reset() {
 	*x = ListContResp_Cont{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_pool_proto_msgTypes[38]
+		mi := &file_mgmt_pool_proto_msgTypes[36]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3135,7 +3039,7 @@ func (x *ListContResp_Cont) String() string {
 func (*ListContResp_Cont) ProtoMessage() {}
 
 func (x *ListContResp_Cont) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[38]
+	mi := &file_mgmt_pool_proto_msgTypes[36]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3490,32 +3394,26 @@ var file_mgmt_pool_proto_rawDesc = []byte{
 	0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x0e, 0x0a, 0x02,
 	0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x1b, 0x0a, 0x09,
 	0x73, 0x76, 0x63, 0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0d, 0x52,
-	0x08, 0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x22, 0x2e, 0x0a, 0x14, 0x50, 0x6f, 0x6f,
-	0x6c, 0x52, 0x65, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x73,
-	0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28,
-	0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x69, 0x0a, 0x12, 0x50, 0x6f, 0x6f,
+	0x08, 0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x22, 0x69, 0x0a, 0x12, 0x50, 0x6f, 0x6f,
 	0x6c, 0x52, 0x65, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x71, 0x12,
 	0x10, 0x0a, 0x03, 0x73, 0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79,
 	0x73, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69,
 	0x64, 0x12, 0x14, 0x0a, 0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08,
 	0x52, 0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x12, 0x1b, 0x0a, 0x09, 0x73, 0x76, 0x63, 0x5f, 0x72,
 	0x61, 0x6e, 0x6b, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0d, 0x52, 0x08, 0x73, 0x76, 0x63, 0x52,
-	0x61, 0x6e, 0x6b, 0x73, 0x22, 0x2d, 0x0a, 0x13, 0x50, 0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x62, 0x75,
-	0x69, 0x6c, 0x64, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73,
-	0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61,
-	0x74, 0x75, 0x73, 0x2a, 0x25, 0x0a, 0x10, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x4d, 0x65,
-	0x64, 0x69, 0x61, 0x54, 0x79, 0x70, 0x65, 0x12, 0x07, 0x0a, 0x03, 0x53, 0x43, 0x4d, 0x10, 0x00,
-	0x12, 0x08, 0x0a, 0x04, 0x4e, 0x56, 0x4d, 0x45, 0x10, 0x01, 0x2a, 0x5d, 0x0a, 0x10, 0x50, 0x6f,
-	0x6f, 0x6c, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0c,
-	0x0a, 0x08, 0x43, 0x72, 0x65, 0x61, 0x74, 0x69, 0x6e, 0x67, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05,
-	0x52, 0x65, 0x61, 0x64, 0x79, 0x10, 0x01, 0x12, 0x0e, 0x0a, 0x0a, 0x44, 0x65, 0x73, 0x74, 0x72,
-	0x6f, 0x79, 0x69, 0x6e, 0x67, 0x10, 0x02, 0x12, 0x13, 0x0a, 0x0f, 0x54, 0x61, 0x72, 0x67, 0x65,
-	0x74, 0x73, 0x45, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x64, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07,
-	0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10, 0x04, 0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69, 0x74,
-	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74, 0x61,
-	0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73, 0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e, 0x74,
-	0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x61, 0x6e, 0x6b, 0x73, 0x2a, 0x25, 0x0a, 0x10, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x4d,
+	0x65, 0x64, 0x69, 0x61, 0x54, 0x79, 0x70, 0x65, 0x12, 0x07, 0x0a, 0x03, 0x53, 0x43, 0x4d, 0x10,
+	0x00, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x56, 0x4d, 0x45, 0x10, 0x01, 0x2a, 0x5d, 0x0a, 0x10, 0x50,
+	0x6f, 0x6f, 0x6c, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12,
+	0x0c, 0x0a, 0x08, 0x43, 0x72, 0x65, 0x61, 0x74, 0x69, 0x6e, 0x67, 0x10, 0x00, 0x12, 0x09, 0x0a,
+	0x05, 0x52, 0x65, 0x61, 0x64, 0x79, 0x10, 0x01, 0x12, 0x0e, 0x0a, 0x0a, 0x44, 0x65, 0x73, 0x74,
+	0x72, 0x6f, 0x79, 0x69, 0x6e, 0x67, 0x10, 0x02, 0x12, 0x13, 0x0a, 0x0f, 0x54, 0x61, 0x72, 0x67,
+	0x65, 0x74, 0x73, 0x45, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x64, 0x10, 0x03, 0x12, 0x0b, 0x0a,
+	0x07, 0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10, 0x04, 0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69,
+	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74,
+	0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73, 0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e,
+	0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -3531,7 +3429,7 @@ func file_mgmt_pool_proto_rawDescGZIP() []byte {
 }
 
 var file_mgmt_pool_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_mgmt_pool_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_mgmt_pool_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_mgmt_pool_proto_goTypes = []interface{}{
 	(StorageMediaType)(0),                // 0: mgmt.StorageMediaType
 	(PoolServiceState)(0),                // 1: mgmt.PoolServiceState
@@ -3572,16 +3470,14 @@ var file_mgmt_pool_proto_goTypes = []interface{}{
 	(*PoolQueryTargetInfo)(nil),          // 36: mgmt.PoolQueryTargetInfo
 	(*PoolQueryTargetResp)(nil),          // 37: mgmt.PoolQueryTargetResp
 	(*PoolRebuildStartReq)(nil),          // 38: mgmt.PoolRebuildStartReq
-	(*PoolRebuildStartResp)(nil),         // 39: mgmt.PoolRebuildStartResp
-	(*PoolRebuildStopReq)(nil),           // 40: mgmt.PoolRebuildStopReq
-	(*PoolRebuildStopResp)(nil),          // 41: mgmt.PoolRebuildStopResp
-	(*ListPoolsResp_Pool)(nil),           // 42: mgmt.ListPoolsResp.Pool
-	(*ListContResp_Cont)(nil),            // 43: mgmt.ListContResp.Cont
+	(*PoolRebuildStopReq)(nil),           // 39: mgmt.PoolRebuildStopReq
+	(*ListPoolsResp_Pool)(nil),           // 40: mgmt.ListPoolsResp.Pool
+	(*ListContResp_Cont)(nil),            // 41: mgmt.ListContResp.Cont
 }
 var file_mgmt_pool_proto_depIdxs = []int32{
 	27, // 0: mgmt.PoolCreateReq.properties:type_name -> mgmt.PoolProperty
-	42, // 1: mgmt.ListPoolsResp.pools:type_name -> mgmt.ListPoolsResp.Pool
-	43, // 2: mgmt.ListContResp.containers:type_name -> mgmt.ListContResp.Cont
+	40, // 1: mgmt.ListPoolsResp.pools:type_name -> mgmt.ListPoolsResp.Pool
+	41, // 2: mgmt.ListContResp.containers:type_name -> mgmt.ListContResp.Cont
 	0,  // 3: mgmt.StorageUsageStats.media_type:type_name -> mgmt.StorageMediaType
 	2,  // 4: mgmt.PoolRebuildStatus.state:type_name -> mgmt.PoolRebuildStatus.State
 	25, // 5: mgmt.PoolQueryResp.rebuild:type_name -> mgmt.PoolRebuildStatus
@@ -4017,18 +3913,6 @@ func file_mgmt_pool_proto_init() {
 			}
 		}
 		file_mgmt_pool_proto_msgTypes[34].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PoolRebuildStartResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_mgmt_pool_proto_msgTypes[35].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PoolRebuildStopReq); i {
 			case 0:
 				return &v.state
@@ -4040,19 +3924,7 @@ func file_mgmt_pool_proto_init() {
 				return nil
 			}
 		}
-		file_mgmt_pool_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PoolRebuildStopResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_mgmt_pool_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
+		file_mgmt_pool_proto_msgTypes[35].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ListPoolsResp_Pool); i {
 			case 0:
 				return &v.state
@@ -4064,7 +3936,7 @@ func file_mgmt_pool_proto_init() {
 				return nil
 			}
 		}
-		file_mgmt_pool_proto_msgTypes[38].Exporter = func(v interface{}, i int) interface{} {
+		file_mgmt_pool_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ListContResp_Cont); i {
 			case 0:
 				return &v.state
@@ -4087,7 +3959,7 @@ func file_mgmt_pool_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_mgmt_pool_proto_rawDesc,
 			NumEnums:      5,
-			NumMessages:   39,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -355,11 +355,7 @@ message PoolRebuildStartReq
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
-// PoolRebuildStartResp returns state which indicates whether request was accepted successfully.
-message PoolRebuildStartResp
-{
-	int32 status = 1; // DAOS error code
-}
+// PoolRebuildStart uses DaosResp
 
 // PoolRebuildStopReq contains information about a request to stop an interactive rebuild on a
 // given pool.
@@ -371,8 +367,4 @@ message PoolRebuildStopReq
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }
 
-// PoolRebuildStopResp returns state which indicates whether request was accepted successfully.
-message PoolRebuildStopResp
-{
-	int32 status = 1; // DAOS error code
-}
+// PoolRebuildStop uses DaosResp

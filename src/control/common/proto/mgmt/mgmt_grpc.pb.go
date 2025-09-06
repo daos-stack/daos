@@ -128,9 +128,9 @@ type MgmtSvcClient interface {
 	// PoolUpgrade upgrades a DAOS pool.
 	PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*PoolUpgradeResp, error)
 	// PoolRebuildStart starts an interactive rebuild on a DAOS pool.
-	PoolRebuildStart(ctx context.Context, in *PoolRebuildStartReq, opts ...grpc.CallOption) (*PoolRebuildStartResp, error)
+	PoolRebuildStart(ctx context.Context, in *PoolRebuildStartReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
-	PoolRebuildStop(ctx context.Context, in *PoolRebuildStopReq, opts ...grpc.CallOption) (*PoolRebuildStopResp, error)
+	PoolRebuildStop(ctx context.Context, in *PoolRebuildStopReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(ctx context.Context, in *GetAttachInfoReq, opts ...grpc.CallOption) (*GetAttachInfoResp, error)
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
@@ -383,9 +383,9 @@ func (c *mgmtSvcClient) PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opt
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolRebuildStart(ctx context.Context, in *PoolRebuildStartReq, opts ...grpc.CallOption) (*PoolRebuildStartResp, error) {
+func (c *mgmtSvcClient) PoolRebuildStart(ctx context.Context, in *PoolRebuildStartReq, opts ...grpc.CallOption) (*DaosResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PoolRebuildStartResp)
+	out := new(DaosResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolRebuildStart_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -393,9 +393,9 @@ func (c *mgmtSvcClient) PoolRebuildStart(ctx context.Context, in *PoolRebuildSta
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolRebuildStop(ctx context.Context, in *PoolRebuildStopReq, opts ...grpc.CallOption) (*PoolRebuildStopResp, error) {
+func (c *mgmtSvcClient) PoolRebuildStop(ctx context.Context, in *PoolRebuildStopReq, opts ...grpc.CallOption) (*DaosResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PoolRebuildStopResp)
+	out := new(DaosResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolRebuildStop_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -714,9 +714,9 @@ type MgmtSvcServer interface {
 	// PoolUpgrade upgrades a DAOS pool.
 	PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error)
 	// PoolRebuildStart starts an interactive rebuild on a DAOS pool.
-	PoolRebuildStart(context.Context, *PoolRebuildStartReq) (*PoolRebuildStartResp, error)
+	PoolRebuildStart(context.Context, *PoolRebuildStartReq) (*DaosResp, error)
 	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
-	PoolRebuildStop(context.Context, *PoolRebuildStopReq) (*PoolRebuildStopResp, error)
+	PoolRebuildStop(context.Context, *PoolRebuildStopReq) (*DaosResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error)
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
@@ -836,10 +836,10 @@ func (UnimplementedMgmtSvcServer) PoolDeleteACL(context.Context, *DeleteACLReq) 
 func (UnimplementedMgmtSvcServer) PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolUpgrade not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolRebuildStart(context.Context, *PoolRebuildStartReq) (*PoolRebuildStartResp, error) {
+func (UnimplementedMgmtSvcServer) PoolRebuildStart(context.Context, *PoolRebuildStartReq) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolRebuildStart not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolRebuildStop(context.Context, *PoolRebuildStopReq) (*PoolRebuildStopResp, error) {
+func (UnimplementedMgmtSvcServer) PoolRebuildStop(context.Context, *PoolRebuildStopReq) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolRebuildStop not implemented")
 }
 func (UnimplementedMgmtSvcServer) GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error) {

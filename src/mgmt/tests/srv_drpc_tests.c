@@ -2690,16 +2690,16 @@ setup_rebuild_start_drpc_call(Drpc__Call *call, char *uuid, char *sys_name)
 static void
 expect_drpc_rebuild_start_resp_with_status(Drpc__Response *resp, int exp_status)
 {
-	Mgmt__PoolRebuildStartResp *pc_resp = NULL;
+	Mgmt__DaosResp *pc_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__pool_rebuild_start_resp__unpack(NULL, resp->body.len, resp->body.data);
+	pc_resp = mgmt__daos_resp__unpack(NULL, resp->body.len, resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_status);
 
-	mgmt__pool_rebuild_start_resp__free_unpacked(pc_resp, NULL);
+	mgmt__daos_resp__free_unpacked(pc_resp, NULL);
 }
 
 static void
@@ -2782,16 +2782,16 @@ setup_rebuild_stop_drpc_call(Drpc__Call *call, char *uuid, char *sys_name, uint3
 static void
 expect_drpc_rebuild_stop_resp_with_status(Drpc__Response *resp, int exp_status)
 {
-	Mgmt__PoolRebuildStopResp *pc_resp = NULL;
+	Mgmt__DaosResp *pc_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__pool_rebuild_stop_resp__unpack(NULL, resp->body.len, resp->body.data);
+	pc_resp = mgmt__daos_resp__unpack(NULL, resp->body.len, resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_status);
 
-	mgmt__pool_rebuild_stop_resp__free_unpacked(pc_resp, NULL);
+	mgmt__daos_resp__free_unpacked(pc_resp, NULL);
 }
 
 static void

@@ -49,7 +49,7 @@ type PoolCmd struct {
 	SetProp      poolSetPropCmd      `command:"set-prop" description:"Set pool property"`
 	GetProp      poolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
 	Upgrade      poolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
-	Rebuild      poolRebuildCmd      `command:"rebuild" description:"Interactive rebuild commands"`
+	Rebuild      poolRebuildCmd      `command:"rebuild" description:"Manage interactive rebuild process for pools"`
 }
 
 var (
@@ -1099,7 +1099,7 @@ func (cmd *poolRebuildStartCmd) Execute(_ []string) error {
 
 type poolRebuildStopCmd struct {
 	poolRebuildOpCmd
-	Force bool `short:"f" long:"force" description:"Forcibly stop interactive rebuild"`
+	Force bool `short:"f" long:"force" description:"Forcibly stop rebuild"`
 }
 
 func (cmd *poolRebuildStopCmd) Execute(_ []string) error {
