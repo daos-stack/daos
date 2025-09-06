@@ -677,19 +677,10 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split(None, 9)
-            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                len(fields) < 7
-                or len(fields[1]) != 10 or fields[1][4] != '/'
-                or len(fields[2]) != 15 or fields[2][2] != ':' or fields[2][8] != '.'
-                or len(fields[0]) > 4 or ".go:" in fields[3]
-            ):
-                # pylint: enable=too-many-boolean-expressions
+            try:
+                return LogLine(line)
+            except InvalidLogLine:
                 return LogRaw(line)
-            return LogLine(line)
-
         try:
             line = self._data[self._offset]
         except IndexError as error:
