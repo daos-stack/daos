@@ -6,7 +6,7 @@
 import json
 
 from apricot import TestWithServers
-from general_utils import report_errors
+from general_utils import dict_to_str, list_to_str, report_errors
 from test_utils_pool import add_pools
 
 
@@ -126,9 +126,9 @@ class MemRatioTest(TestWithServers):
             items = [name]
             for key in _keys[1:]:
                 if isinstance(info[key], list):
-                    items.append(", ".join(info[key]))
+                    items.append(list_to_str(info[key], ", "))
                 elif isinstance(info[key], dict):
-                    items.append(", ".join(f"{k}: {v}" for k, v in info[key].items()))
+                    items.append(dict_to_str(info[key], ", ", ": "))
                 else:
                     items.append(str(info[key]))
             self.log.debug(_format, *items)
