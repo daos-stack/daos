@@ -397,6 +397,8 @@ int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t *
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
+void
+    test_rebuild_wait_to_start(test_arg_t **args, int args_cnt);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 
@@ -456,7 +458,6 @@ void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 int rebuild_pool_disconnect_internal(void *data);
 int rebuild_pool_connect_internal(void *data);
 
-
 int rebuild_sub_setup(void **state);
 int rebuild_sub_rf1_setup(void **state);
 int rebuild_sub_rf0_setup(void **state);
@@ -467,11 +468,14 @@ int rebuild_small_sub_rf0_setup(void **state);
 int rebuild_sub_3nodes_rf0_setup(void **state);
 int rebuild_sub_6nodes_rf1_setup(void **state);
 int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
-
 int
-fi_rebuild_stop(void *data);
+rebuild_stop_with_dmg(void *data);
 int
-     fi_rebuild_resume_wait(void *data);
+rebuild_force_stop_with_dmg(void *data);
+int
+rebuild_start_with_dmg(void *data);
+int
+     rebuild_resume_wait(void *data);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,
