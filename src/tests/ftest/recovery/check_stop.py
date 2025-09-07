@@ -195,7 +195,7 @@ class DMGCheckStopTest(TestWithServers):
                 break
             time.sleep(5)
         if not status_paused and not status_done:
-            self.fail("Check status didn't become DONE or PAUSED after reenable!")
+            self.fail("Check status didn't become DONE or PAUSED after re-enable!")
 
         # 6. If status is PAUSED, start the checker. Query and verify that status is
         # COMPLETED.
