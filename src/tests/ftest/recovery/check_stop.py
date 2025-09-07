@@ -213,7 +213,7 @@ class DMGCheckStopTest(TestWithServers):
                     break
                 time.sleep(5)
             if not status_completed:
-                self.fail("Checker didn't fix after reenable!")
+                self.fail("Checker didn't fix after re-enable!")
 
         # 7. Verify that the fault is actually fixed.
         self.log_step("Verify that the fault is actually fixed.")
