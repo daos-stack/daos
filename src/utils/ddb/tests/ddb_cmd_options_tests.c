@@ -310,6 +310,10 @@ dtx_stat_parsing(void **state)
 	/* test all arguments */
 	test_run_cmd(&info, "dtx_stat", "path");
 	assert_non_null(options->path);
+
+	/* test all arguments */
+	test_run_cmd(&info, "dtx_stat");
+	assert_null(options->path);
 }
 
 /*

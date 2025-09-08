@@ -11,6 +11,7 @@
 #include <time.h>
 
 #include "daos_errno.h"
+#include "daos_srv/vos_types.h"
 #include "daos_types.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
@@ -1333,24 +1334,20 @@ dtx_print_time_stat(struct ddb_ctx *ctx, char *stat_name, uint64_t epoch, char *
 	return -DER_SUCCESS;
 }
 
-int
-ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
+struct dtx_stat_args {
+	struct ddb_ctx          *ctx;
+	struct dtx_stat_options *opt;
+	uint32_t                 cont_seen;
+};
+
+static int
+dtx_stat(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp)
 {
-	struct dv_indexed_tree_path itp = {0};
-	daos_handle_t               coh = {0};
-	struct dtx_stat             stat;
-	int                         rc;
+	struct dtx_stat stat;
+	daos_handle_t   coh = {0};
+	int             rc;
 
-	rc = init_path(ctx, opt->path, &itp);
-	if (!SUCCESS(rc))
-		goto done;
-
-	if (!itp_has_cont(&itp)) {
-		rc = -DER_INVAL;
-		goto done;
-	}
-
-	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &coh);
 	if (!SUCCESS(rc))
 		goto done;
 
@@ -1362,7 +1359,7 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 	vos_dtx_stat(coh, &stat, 0);
 
 	ddb_print(ctx, "DTX entries statistics of ");
-	itp_print_full(ctx, &itp);
+	itp_print_full(ctx, itp);
 	ddb_print(ctx, "\n");
 	ddb_printf(ctx, "\t- Number of committed DTX of the container:\t%" PRIu32 "\n",
 		   stat.dtx_cont_cmt_count);
@@ -1372,10 +1369,76 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 	    dtx_print_time_stat(ctx, "DTX newest aggregated", stat.dtx_newest_aggregated, "\t\t\t");
 	if (!SUCCESS(rc))
 		goto done;
-
 done:
-	itp_free(&itp);
 	dv_cont_close(&coh);
+
+	return rc;
+}
+
+static int
+dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct ddb_ctx             *ctx;
+	struct dv_indexed_tree_path itp = {0};
+	struct dtx_stat_args       *args;
+	int                         rc;
+
+	if (type != VOS_ITER_COUUID)
+		return 0;
+
+	args = (struct dtx_stat_args *)cb_arg;
+	ctx  = args->ctx;
+
+	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
+	++args->cont_seen;
+
+	rc = dtx_stat(ctx, &itp);
+	itp_free(&itp);
+
+	return rc;
+}
+
+int
+ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
+{
+	vos_iter_param_t     param = {0};
+	struct dtx_stat_args args  = {0};
+	int                  rc;
+
+	if (daos_handle_is_inval(ctx->dc_poh)) {
+		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
+		return -DER_NONEXIST;
+	}
+
+	if (opt->path != NULL && opt->path[0] != '\0') {
+		struct dv_indexed_tree_path itp = {0};
+
+		rc = init_path(ctx, opt->path, &itp);
+		if (!SUCCESS(rc))
+			goto done;
+
+		if (!itp_has_cont(&itp)) {
+			rc = -DER_INVAL;
+			goto done;
+		}
+
+		rc = dtx_stat(ctx, &itp);
+done:
+		itp_free(&itp);
+		return rc;
+	}
+
+	args.ctx            = ctx;
+	args.opt            = opt;
+	param.ip_hdl        = ctx->dc_poh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	do {
+		struct vos_iter_anchors anchors = {0};
+
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cb, &args,
+				 NULL);
+	} while (rc > 0);
 
 	return rc;
 }

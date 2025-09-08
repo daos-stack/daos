@@ -424,6 +424,15 @@ dtx_stat_tests(void **state)
 	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
 	assert_regex_match(dvt_fake_print_buffer,
 			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
+
+	opt.path = "";
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt));
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
 }
 
 /*

@@ -389,7 +389,7 @@ the path must include the extent, otherwise, it must not.`,
 		LongHelp:  "Print statistic on the DTX entries",
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
-			a.String("path", "VOS tree path to query.")
+			a.String("path", "Optional, VOS tree path to query.", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxStat(ctx, c.Args.String("path"))

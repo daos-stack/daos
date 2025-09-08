@@ -839,12 +839,10 @@ dtx_stat_option_parse(struct ddb_ctx *ctx, struct dtx_stat_options *cmd_args, ui
 	}
 
 	index = optind;
-	if (argc - index > 0) {
+	cmd_args->path = NULL;
+	if (argc - index > 0 && *argv[index] != '\0') {
 		cmd_args->path = argv[index];
 		index++;
-	} else {
-		ddb_print(ctx, "Expected argument 'path'\n");
-		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
@@ -1394,10 +1392,10 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\n");
 
 	/* Command: dtx_stat */
-	ddb_print(ctx, "dtx_stat <path>\n");
+	ddb_print(ctx, "dtx_stat [path]\n");
 	ddb_print(ctx, "\tPrint statistic on the DTX entries.\n");
-	ddb_print(ctx, "    <path>\n");
-	ddb_print(ctx, "\tVOS tree path to query.\n");
+	ddb_print(ctx, "    [path]\n");
+	ddb_print(ctx, "\tOptional, VOS tree path to query.\n");
 	ddb_print(ctx, "\n");
 }
 
