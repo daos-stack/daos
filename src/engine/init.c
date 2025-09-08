@@ -1,6 +1,8 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,6 +100,25 @@ static bool dss_abt_init;
 /** Start daos_engine under check mode. */
 static bool dss_check_mode;
 
+/**
+ * DAOS Engine Runtime Version Initialization
+ * This version identifier is exclusively used during
+ * engine initialization when joining the system cluster.
+ */
+static daos_version_t   dss_join_version;
+
+void
+dss_set_join_version(daos_version_t version)
+{
+	dss_join_version = version;
+}
+
+daos_version_t
+dss_get_join_version(void)
+{
+	return dss_join_version;
+}
+
 bool
 engine_in_check(void)
 {
@@ -156,6 +177,27 @@ hlc_recovery_end(uint64_t bound)
 		       tv.tv_sec, tv.tv_nsec);
 		nanosleep(&tv, NULL);
 	}
+}
+
+static int
+init_tls_support(void)
+{
+	int rc;
+
+	rc = ds_tls_key_create();
+	if (rc != 0)
+		return daos_errno2der(rc);
+
+	dss_register_key(&daos_srv_modkey);
+
+	return 0;
+}
+
+static void
+fini_tls_support(void)
+{
+	dss_unregister_key(&daos_srv_modkey);
+	ds_tls_key_delete();
 }
 
 /*
@@ -646,10 +688,6 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
-
-	if (server_init_state != DSS_INIT_STATE_SET_UP)
-		return;
-
 	if (uid != NULL && dss_abt_init) {
 		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
 		int rc;
@@ -701,10 +739,15 @@ server_init(int argc, char *argv[])
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
+	/* Must initialize TLS support before using server_id_cb. */
+	rc = init_tls_support();
+	if (rc != 0)
+		return rc;
+
 	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_INFO);
 	if (rc != 0)
-		return rc;
+		goto exit_tls_support;
 
 	/** initialize server topology data - this is needed to set up the number of targets */
 	rc = dss_topo_init();
@@ -877,6 +920,8 @@ exit_metrics_init:
 	/* dss_topo_fini cleans itself if it fails */
 exit_debug_init:
 	daos_debug_fini();
+exit_tls_support:
+	fini_tls_support();
 	return rc;
 }
 
@@ -937,6 +982,8 @@ server_fini(bool force)
 	D_INFO("dss_top_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
+	fini_tls_support();
+	D_INFO("fini_tls_support() done\n");
 }
 
 static void
@@ -972,17 +1019,17 @@ Options:\n\
   --bypass_health_chk, -b\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
-      Allocates mem_size MB for SPDK when using primary process mode\n\
+      Allocates mem_size MiB for SPDK when using primary process mode\n\
   --hugepage_size=hugepage_size, -H hugepage_size\n\
-      Passes the configured hugepage size(2MB or 1GB)\n\
+      Passes the configured hugepage size(2MiB or 1GiB)\n\
   --storage_tiers=ntiers, -T ntiers\n\
       Number of storage tiers\n\
   --check, -C\n\
       Start engine with check mode, global consistency check\n\
   --help, -h\n\
       Print this description\n",
-		prog, prog, modules, daos_sysname, dss_storage_path,
-		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
+		prog, prog, modules, daos_sysname, dss_storage_path, dss_socket_dir, dss_nvme_conf,
+		dss_instance_idx);
 }
 
 static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
@@ -998,7 +1045,7 @@ static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
 	return 0;
 }
 
-static int
+static void
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
@@ -1088,9 +1135,6 @@ parse(int argc, char **argv)
 			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size,
 					 "\"-H\"");
 			break;
-		case 'h':
-			usage(argv[0], stdout);
-			break;
 		case 'I':
 			rc = arg_strtoul(optarg, &dss_instance_idx, "\"-I\"");
 			break;
@@ -1112,15 +1156,16 @@ parse(int argc, char **argv)
 			}
 			snprintf(modules, sizeof(modules), "%s", MODS_LIST_CHK);
 			break;
+		case 'h':
+			usage(argv[0], stdout);
+			exit(EXIT_SUCCESS);
 		default:
 			usage(argv[0], stderr);
 			rc = -DER_INVAL;
 		}
-		if (rc < 0)
-			return rc;
+		if (rc)
+			exit(EXIT_FAILURE);
 	}
-
-	return 0;
 }
 
 struct abt_dump_arg {
@@ -1154,9 +1199,7 @@ main(int argc, char **argv)
 	int		rc;
 
 	/** parse command line arguments */
-	rc = parse(argc, argv);
-	if (rc)
-		exit(EXIT_FAILURE);
+	parse(argc, argv);
 
 	/** block all possible signals but faults */
 	sigfillset(&set);

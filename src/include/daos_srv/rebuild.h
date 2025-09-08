@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,10 +83,10 @@ typedef enum {
 	DP_UUID((mro)->mo_pool_uuid), (mro)->mo_pool_tls_version, (mro)->mo_generation,            \
 	    RB_OP_STR((mro)->mo_opc)
 
-int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
-			daos_epoch_t stable_eph, uint32_t layout_version,
-			struct pool_target_id_list *tgts,
-			daos_rebuild_opc_t rebuild_op, uint64_t delay_sec);
+int
+     ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t stable_eph,
+			 uint32_t layout_version, struct pool_target_id_list *tgts,
+			 daos_rebuild_opc_t rebuild_op, bool stop_admin, uint64_t delay_sec);
 void ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank);
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
@@ -95,4 +96,8 @@ int ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop);
 void ds_rebuild_leader_stop_all(void);
 void ds_rebuild_abort(uuid_t pool_uuid, unsigned int version, uint32_t rebuild_gen,
 		      uint64_t term);
+int
+ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force);
+int
+ds_rebuild_admin_start(struct ds_pool *pool);
 #endif

@@ -13,8 +13,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <daos/common.h>
-#include <gurt/shm_alloc.h>
-#include <gurt/shm_dict.h>
 #include <gurt/shm_utils.h>
 #include <daos.h>
 #include <daos_fs.h>

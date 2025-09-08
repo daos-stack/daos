@@ -407,6 +407,7 @@ dcache_add_root(dfs_dcache_t *dcache)
 	void       *val;
 	daos_size_t val_size;
 	int         rc;
+	bool        created;
 
 	/** for local cache, just duplicate the entry and store the pointer */
 	if (dcache->dd_type == DFS_CACHE_DRAM) {
@@ -446,7 +447,7 @@ dcache_add_root(dfs_dcache_t *dcache)
 
 	shm_ht_rec_find_insert(&dcache->shm.dd_ht, &dcache->dd_key_root_prefix[0],
 			       DCACHE_KEY_PREF_SIZE - 1, val, val_size,
-			       &dcache->dd_dfs->root.shm.rec_loc, &rc);
+			       &dcache->dd_dfs->root.shm.rec_loc, &created, &rc);
 	/* val was copied into shm hash table record, so it is not needed any more. */
 	D_FREE(val);
 	return daos_der2errno(rc);
@@ -580,6 +581,7 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 	dfs_obj_t *obj = NULL;
 	d_list_t  *rlink;
 	int        rc;
+	bool       created;
 
 	D_DEBUG(DB_TRACE, "DCACHE add: parent %s name %s key %s\n", parent->name, name, key);
 	rc = lookup_rel_int(dcache->dd_dfs, parent, name, len, O_RDWR | O_NOFOLLOW, &obj, mode,
@@ -621,7 +623,7 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 		}
 
 		shm_ht_rec_find_insert(&dcache->shm.dd_ht, key,	key_len, val, val_size,
-				       &obj->shm.rec_loc, &rc);
+				       &obj->shm.rec_loc, &created, &rc);
 		/* val was copied into shm hash table record, so it is not needed any more. */
 		D_FREE(val);
 		if (rc)
