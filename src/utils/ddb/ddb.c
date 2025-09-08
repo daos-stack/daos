@@ -838,7 +838,7 @@ dtx_stat_option_parse(struct ddb_ctx *ctx, struct dtx_stat_options *cmd_args, ui
 		return -DER_INVAL;
 	}
 
-	index = optind;
+	index          = optind;
 	cmd_args->path = NULL;
 	if (argc - index > 0 && *argv[index] != '\0') {
 		cmd_args->path = argv[index];
