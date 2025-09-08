@@ -653,6 +653,11 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 			 tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
 			 (long int)tv.tv_usec, mst.uts.nodename);
 
+	/*
+	 * Both DLOG_FLV_TAG and DLOG_FLV_LOGPID must be set to True.
+	 * Otherwise log lines will be not properly interpret by
+	 * the src/tests/ftest/cart/util/cart_logparser.py script.
+	 */
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s%d/%d/" DF_U64 "] ",
@@ -665,6 +670,11 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	hlen_pt1 = hlen;	/* save part 1 length */
 	if (hlen < sizeof(b)) {
+		/*
+		 * DLOG_LOG_FAC must be set to True.
+		 * Otherwise log lines will be not properly interpret by
+		 * the src/tests/ftest/cart/util/cart_logparser.py script.
+		 */
 		if (mst.oflags & DLOG_FLV_FAC)
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%-6s ", facstr);
 	}

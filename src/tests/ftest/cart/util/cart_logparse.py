@@ -85,6 +85,9 @@ class LogLine():
     # Match a time.
     re_time = re.compile(r"^([01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{6}$")
 
+    # Match a Go file name with a line no
+    re_go_file_name = re.compile(r"^\S+.go:\d+:")
+
     # Match a TAG.
     re_tag = re.compile(r".+?\[(-?\d+)\/-?\d+\/\d+\]$")
 
@@ -116,18 +119,25 @@ class LogLine():
         is extracted and the rest of the parsing is skipped.
 
         Expected log line format:
-        <LEVEL> YYYY/MM/DD HH:MM:SS.ffffff <NODE NAME> <TAG>[<PID>/<TID>/<UID>] <FAC> <message>
-        <message>:= <filename>:<line_no> <function_name()> <detail info>
-        Optional part handled by the parser:
-            - YYYY/
-        Optional parts not handled by the parser (cause line parsing to stop):
-            - [<PID>/<TID>/<UID>]
-            - <FAC>
+        <level> <date> HH:MM:SS.ffffff <node_name> <TAG>[<PID>/<TID>/<UID>] <FAC> <message>
+        where:
+        level - see LOG_LEVEL
+        date = [YYYY/]MM/DD
+        node_name - any string that can represent host name.
+        NOTE: It is assumed that node_name cannot contain ":" to distinguish the CaRT log line.
+        from the DAOS server log line with filename.go:line_no: in this field.
+
+        NOTE:
+        LogLine does not correctly interpret CaRT line without optional [<PID>/<TID>/<UID>] and
+        without <FAC> field. That means all flags DLOG_FLV_TAG, DLOG_FLV_LOGPID and DLOG_FLV_FAC
+        must be used in the CaRT log configuration.
+
+        message:= <filename>:<line_no>: <function_name>() <detail info>
 
         Parameters:
             line (str): The raw log line to be parsed.
-            pidOnly (bool, optional): If True, only extract the PID and skip full parsing.
-                                      Defaults to False.
+            pid_only (bool, optional): If True, only extract the PID and skip full parsing.
+                                       Defaults to False.
         """
         fields = line.split()
         # Check the line header and work out the beginning of the message.
@@ -148,9 +158,17 @@ class LogLine():
         if self.re_time.fullmatch(fields[2]) is None:
             raise InvalidLogLine(f"Invalid time \"{fields[2]!r}\" in the log line: {line!r}")
         self.time_stamp = fields[1] + ' ' + fields[2]
+        # Reject DAOS server log lines that include .go file references
+        # Server log line contains the following fields:
+        # <LEVEL> YYYY/MM/DD HH:MM:SS.ffffff <file name>.go:<line no>: <message>
+        if self.re_go_file_name.fullmatch(fields[3]):
+            raise InvalidLogLine(
+                f"Invalid host name: \"{fields[3]!r}\" "
+                f"- probably it is a DAOS server's (not CaRT) log line: {line!r}"
+            )
         self.hostname = fields[3]
-        # Assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c: 651
-        # Assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c: 652
+        # Assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c: 658
+        # Assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c: 659
         match = self.re_tag.search(fields[4])
         if match is None:
             raise InvalidLogLine(
@@ -159,15 +177,10 @@ class LogLine():
         self.pid = int(match.group(1))
         if pid_only:
             return
-        # Assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 664
+        # Assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 675
         self.fac = fields[5]
         self._preamble = self.time_stamp + ' ' + self.fac
         self._fields = fields[6:]
-        # Ignore server log lines (messages from Go source code - *.go).
-        if ".go:" in self._fields[0]:
-            raise InvalidLogLine(
-                f"DAOS server's (not CaRT)  log line: {line!r}"
-            )
         try:
             if self._fields[1][-2:] == '()':
                 self.trace = False
