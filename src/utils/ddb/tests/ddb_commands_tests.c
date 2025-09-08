@@ -433,6 +433,8 @@ dtx_stat_tests(void **state)
 	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
 	assert_regex_match(dvt_fake_print_buffer,
 			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^Number of committed DTX of the pool:[[:blank:]]+1$");
 }
 
 /*

@@ -1338,37 +1338,34 @@ struct dtx_stat_args {
 	struct ddb_ctx          *ctx;
 	struct dtx_stat_options *opt;
 	uint32_t                 cont_seen;
+	uint32_t                 cmt_cnt;
 };
 
 static int
-dtx_stat(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp)
+dtx_stat(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint32_t *cnt)
 {
 	struct dtx_stat stat;
 	daos_handle_t   coh = {0};
+	uint32_t        cnt_tmp;
 	int             rc;
 
 	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &coh);
 	if (!SUCCESS(rc))
 		goto done;
 
-	rc = vos_dtx_cmt_reindex(coh);
-	if (rc < 0) {
-		ddb_errorf(ctx, "DTX entries Statistic refresh failed: " DF_RC, DP_RC(rc));
-		goto done;
-	}
+	cnt_tmp = vos_dtx_get_cmt_cnt(coh);
 	vos_dtx_stat(coh, &stat, 0);
 
 	ddb_print(ctx, "DTX entries statistics of ");
 	itp_print_full(ctx, itp);
 	ddb_print(ctx, "\n");
-	ddb_printf(ctx, "\t- Number of committed DTX of the container:\t%" PRIu32 "\n",
-		   stat.dtx_cont_cmt_count);
-	ddb_printf(ctx, "\t- Number of committed DTX of the pool:\t\t%" PRIu32 "\n",
-		   stat.dtx_pool_cmt_count);
+	ddb_printf(ctx, "\t- Number of committed DTX of the container:\t%" PRIu32 "\n", cnt_tmp);
 	rc =
 	    dtx_print_time_stat(ctx, "DTX newest aggregated", stat.dtx_newest_aggregated, "\t\t\t");
 	if (!SUCCESS(rc))
 		goto done;
+	if (cnt != NULL)
+		*cnt = cnt_tmp;
 done:
 	dv_cont_close(&coh);
 
@@ -1382,10 +1379,13 @@ dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	struct ddb_ctx             *ctx;
 	struct dv_indexed_tree_path itp = {0};
 	struct dtx_stat_args       *args;
+	uint32_t                    cnt;
 	int                         rc;
 
-	if (type != VOS_ITER_COUUID)
-		return 0;
+	if (type != VOS_ITER_COUUID) {
+		rc = -DER_SUCCESS;
+		goto done;
+	}
 
 	args = (struct dtx_stat_args *)cb_arg;
 	ctx  = args->ctx;
@@ -1393,7 +1393,12 @@ dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
 	++args->cont_seen;
 
-	rc = dtx_stat(ctx, &itp);
+	rc = dtx_stat(ctx, &itp, &cnt);
+	if (!SUCCESS(rc))
+		goto done;
+	args->cmt_cnt += cnt;
+
+done:
 	itp_free(&itp);
 
 	return rc;
@@ -1423,7 +1428,7 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 			goto done;
 		}
 
-		rc = dtx_stat(ctx, &itp);
+		rc = dtx_stat(ctx, &itp, NULL);
 done:
 		itp_free(&itp);
 		return rc;
@@ -1439,6 +1444,9 @@ done:
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cb, &args,
 				 NULL);
 	} while (rc > 0);
+	if (rc == 0)
+		ddb_printf(ctx, "Number of committed DTX of the pool:\t\t\t%" PRIu32 "\n",
+			   args.cmt_cnt);
 
 	return rc;
 }
