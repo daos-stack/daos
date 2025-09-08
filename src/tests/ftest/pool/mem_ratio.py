@@ -114,7 +114,7 @@ class MemRatioTest(TestWithServers):
                  "mem-ratio",
                  "tier_bytes",
                  "mem_file_bytes",
-                 "create_ratio"
+                 "create_ratio",
                  "total_engines",
                  "tier_stats(total)",
                  "mem_file_bytes",
