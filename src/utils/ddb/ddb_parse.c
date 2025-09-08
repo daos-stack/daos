@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,6 +8,7 @@
 #include <wordexp.h>
 #include <getopt.h>
 #include <gurt/common.h>
+#include "daos_errno.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
 
@@ -476,4 +478,25 @@ ddb_parse_key(const char *input, daos_key_t *key)
 	return input[0] == '{' ?
 	       key_parse_typed(input, key) :
 	       key_parse_str(input, key);
+}
+
+int
+ddb_date2epoch(const char *date, uint64_t *epoch)
+{
+	struct tm       date_tm    = {0};
+	struct timespec date_tspec = {0};
+	char           *endptr;
+
+	if (date == NULL || epoch == NULL)
+		return -DER_INVAL;
+
+	endptr = strptime(date, "%Y-%m-%d %H:%M:%S", &date_tm);
+	if (endptr == NULL || *endptr != '\0')
+		return -DER_INVAL;
+
+	date_tspec.tv_sec = mktime(&date_tm);
+	if (date_tspec.tv_sec == (time_t)-1)
+		return daos_errno2der(errno);
+
+	return d_timespec2hlc(date_tspec, epoch);
 }
