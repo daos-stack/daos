@@ -82,13 +82,12 @@
 		int     _rc = regcomp(&_preg, regex, REG_NOSUB | REG_EXTENDED);                    \
 		if (_rc != 0) {                                                                    \
 			char  *_buf;                                                               \
-			size_t _buf_size = regerror(_rc, &_preg, NULL, 0);                         \
+			size_t _buf_size = regerror(_rc, NULL, NULL, 0);                           \
 			D_ALLOC_ARRAY(_buf, _buf_size);                                            \
 			assert_non_null(_buf);                                                     \
-			regerror(_rc, &_preg, _buf, _buf_size);                                    \
+			regerror(_rc, NULL, _buf, _buf_size);                                      \
 			print_error("ERROR: invalid regex '%s': %s\n", regex, _buf);               \
 			D_FREE(_buf);                                                              \
-			regfree(&_preg);                                                           \
 			fail();                                                                    \
 		}                                                                                  \
 		D_STRNDUP(_str_dup, str, strlen(str));                                             \
