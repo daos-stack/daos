@@ -90,4 +90,22 @@ int
 ds_mgmt_tgt_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
 				   const char *newborns_path);
 
+/**
+ * Recreate a single VOS file.
+ *
+ * \param[in] uuid		Pool uuid
+ * \param[in] scm_size		Vos file size
+ * \param[in] tgt_id		Vos file identifier
+ * \param[in] newborns_path	Base path for store the vos file
+ *
+ * \retval -DER_NOMEM	Out of memory
+ * \retval -DER_IO	IO error
+ * \retval -DER_NOSPACE	There is not enough space left on the device
+ * \retval -DER_NO_PERM	Permission denied
+ * \retval -DER_MISC	open(3) or fallocate(2) failed with an obscure error
+ * \retval DER_SUCCESS	Success.
+ */
+int
+ds_mgmt_tgt_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id, const char *newborns_path);
+
 #endif /* __MGMT_TGT_COMMON_H__ */
