@@ -1043,7 +1043,7 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 	}
 
 	rc = swim_progress(ctx, timeout_us);
-	if (rc == -DER_TIMEDOUT || rc == -DER_DEADLINE_EXPIRED || rc == -DER_CANCELED) {
+	if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
 		uint64_t now = swim_now_ms();
 
 		/*

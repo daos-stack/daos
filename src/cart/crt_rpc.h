@@ -88,7 +88,7 @@ crt_deadline_to_timeout(uint32_t deadline_sec)
 {
 	struct timespec now;
 
-	clock_gettime(CLOCK_REALTIME, &now);
+	clock_gettime(CLOCK_REALTIME_COARSE, &now);
 	return deadline_sec - now.tv_sec - 1;
 }
 
@@ -97,7 +97,7 @@ crt_timeout_to_deadline(int timeout_sec)
 {
 	struct timespec now;
 
-	clock_gettime(CLOCK_REALTIME, &now);
+	clock_gettime(CLOCK_REALTIME_COARSE, &now);
 
 	/* Deadline is the next second after timeout */
 	return now.tv_sec + timeout_sec + 1;
@@ -214,7 +214,9 @@ struct crt_rpc_priv {
 	    /* RPC originated from a primary provider */
 	    crp_src_is_primary      : 1,
 	    /* release input buffer early */
-	    crp_release_input_early : 1;
+	    crp_release_input_early : 1,
+	    /* rpc expired */
+	    crp_expired             : 1;
 
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
@@ -689,7 +691,7 @@ crt_rpc_cb_customized(struct crt_context *crt_ctx,
 int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		       bool forward);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
-int
+void
      crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag);
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,

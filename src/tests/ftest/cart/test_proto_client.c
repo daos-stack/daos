@@ -125,7 +125,7 @@ test_run()
 	do {
 		rc = crt_proto_query(&server_ep, OPC_MY_PROTO, my_ver_array, 7, timeout++, query_cb,
 				     &s_high_ver);
-	} while (rc == -DER_TIMEDOUT || rc == -DER_DEADLINE_EXPIRED);
+	} while (rc == -DER_TIMEDOUT);
 	D_ASSERT(rc == 0);
 
 	while (s_high_ver == 0xFFFFFFFF)

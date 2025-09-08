@@ -575,25 +575,52 @@ out:
 	return rc;
 }
 
-/* Copy the RPC header from one descriptor to another */
-void
-crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
+/* Process header */
+int
+crt_hg_process_header(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 {
-	out->crp_hg_addr = in->crp_hg_addr;
-	out->crp_hg_hdl = in->crp_hg_hdl;
-	out->crp_pub.cr_ctx = in->crp_pub.cr_ctx;
-	out->crp_flags = in->crp_flags;
+	int src_val;
+	int timeout;
+	int rc = 0;
 
-	out->crp_req_hdr = in->crp_req_hdr;
+	out->crp_hg_addr           = in->crp_hg_addr;
+	out->crp_hg_hdl            = in->crp_hg_hdl;
+	out->crp_pub.cr_ctx        = in->crp_pub.cr_ctx;
+	out->crp_flags             = in->crp_flags;
+	out->crp_req_hdr           = in->crp_req_hdr;
 	out->crp_reply_hdr.cch_hlc = in->crp_reply_hdr.cch_hlc;
 
-	/* Populate rpc_priv fields correctly based on the input header */
-	out->crp_deadline_sec = in->crp_req_hdr.cch_src_deadline_sec;
+	src_val = in->crp_req_hdr.cch_src_deadline_sec;
+
+	/* Treat header value as a deadline or a timeout depending on the feat flag */
+	if (in->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
+		out->crp_deadline_sec = src_val;
+
+		timeout = crt_deadline_to_timeout(src_val);
+		/*
+		 * TODO: need a better way in future to handle an edge case where a client
+		 * can be running ahead of the server, but within hlc_epsilon allowed. Also
+		 * need to account for 1 second granularity of deadlines.
+		 */
+		if (timeout == 0)
+			timeout = 1;
+
+		if (timeout > 0)
+			out->crp_timeout_sec = timeout;
+		else
+			D_GOTO(exit, rc = -DER_TIMEDOUT);
+	} else {
+		out->crp_deadline_sec = crt_timeout_to_deadline(src_val);
+		out->crp_timeout_sec  = src_val;
+	}
 
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
-		return;
+		return 0;
 
 	out->crp_coreq_hdr = in->crp_coreq_hdr;
+
+exit:
+	return rc;
 }
 
 void

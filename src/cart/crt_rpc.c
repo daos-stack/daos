@@ -645,9 +645,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 		rpc_priv->crp_grp_priv = grp_priv;
 	}
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 
 	*req = &rpc_priv->crp_pub;
 out:
@@ -1683,13 +1681,11 @@ crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
 }
 
-int
+void
 crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag)
 {
 	crt_opcode_t        opc = rpc_priv->crp_opc_info->coi_opc;
 	struct crt_context *ctx = crt_ctx;
-	int                 timeout;
-	int                 rc = 0;
 
 	D_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
 	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link_submit);
@@ -1724,42 +1720,11 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	if (srv_flag) {
-		if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
-			timeout =
-			    crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
-
-			RPC_TRACE(DB_NET, rpc_priv, "Converted deadline %d to timeout %d\n",
-				  rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
-
-			/*
-			 * TODO: need a better way in future to handle an edge case where a client
-			 * can be running ahead of the server, but within hlc_epsilon allowed. Also
-			 * need to account for 1 second granularity of deadlines.
-			 */
-			if (timeout == 0)
-				timeout = 1;
-
-			if (timeout < 0) {
-				struct timespec now;
-
-				clock_gettime(CLOCK_REALTIME, &now);
-				RPC_TRACE(
-				    DB_NET, rpc_priv,
-				    "Incoming rpc deadline expired. Deadline = %d, now = %ld\n",
-				    rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
-				D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
-			}
-
-			rpc_priv->crp_timeout_sec = timeout;
-		}
-	} else {
+	/* server timeout set based on header unpack info. see crt_hg_process_header() */
+	if (!srv_flag) {
 		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 					     ctx->cc_timeout_sec);
 	}
-
-out:
-	return rc;
 }
 
 void
@@ -1998,8 +1963,7 @@ out:
 int
 crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 {
-	struct crt_rpc_priv	*rpc_priv;
-	int                      delta;
+	struct crt_rpc_priv    *rpc_priv;
 	int			rc = 0;
 
 	if (rpc == NULL || timeout == NULL) {
@@ -2008,14 +1972,7 @@ crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 	}
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	delta    = crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
-
-	if (delta < 0) {
-		RPC_WARN(rpc_priv, "Deadline expired, delta was %d\n", delta);
-		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
-	}
-
-	*timeout = delta;
+	*timeout = rpc_priv->crp_timeout_sec;
 out:
 	return rc;
 }

@@ -247,13 +247,13 @@ crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 	struct timespec      now;
 	struct crt_rpc_priv *rpc_priv;
 
-	clock_gettime(CLOCK_REALTIME, &now);
+	clock_gettime(CLOCK_REALTIME_COARSE, &now);
 	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
 
 	/* Deadline expired */
-	if (now.tv_sec > rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
+	if (now.tv_sec > rpc_priv->crp_deadline_sec) {
 		RPC_TRACE(DB_NET, rpc_priv, "Deadline expired for bulk. Deadline=%d, now=%ld\n",
-			  rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
+			  rpc_priv->crp_deadline_sec, now.tv_sec);
 		return true;
 	}
 
@@ -271,7 +271,7 @@ verify_complete_cb(const struct crt_bulk_cb_info *cb_info)
 	/* If successful transfer, check for expired deadline */
 	if (cb_info->bci_rc == 0) {
 		if (crt_bulk_desc_expired(cb_info->bci_bulk_desc))
-			actual_info.bci_rc = -DER_DEADLINE_EXPIRED;
+			actual_info.bci_rc = -DER_TIMEDOUT;
 	}
 
 	complete_cb = (crt_bulk_cb_t)cb_info->bci_complete_cb;
@@ -292,7 +292,7 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	}
 
 	if (crt_bulk_desc_expired(bulk_desc))
-		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
+		D_GOTO(out, rc = -DER_TIMEDOUT);
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, false);
 	if (rc != 0)
@@ -313,7 +313,7 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_c
 	}
 
 	if (crt_bulk_desc_expired(bulk_desc))
-		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
+		D_GOTO(out, rc = -DER_TIMEDOUT);
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, true);
 	if (rc != 0)

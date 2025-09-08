@@ -1221,7 +1221,15 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
 
-	crt_hg_header_copy(&rpc_tmp, rpc_priv);
+	rc = crt_hg_process_header(&rpc_tmp, rpc_priv);
+	if (unlikely(rc != 0)) {
+		RPC_WARN(rpc_priv, "RPC expired. Deadline was %d\n", rpc_priv->crp_deadline_sec);
+
+		crt_hg_reply_error_send(&rpc_tmp, -DER_TIMEDOUT);
+		crt_hg_unpack_cleanup(proc);
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		D_GOTO(out, hg_ret = HG_SUCCESS);
+	}
 
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		is_coll_req = true;
@@ -1237,12 +1245,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
-	/* will fail if rpc deadline expired */
-	if (unlikely(rc != 0)) {
-		crt_hg_reply_error_send(rpc_priv, rc);
-		D_GOTO(decref, hg_ret = HG_SUCCESS);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
 
 	D_ASSERT(rpc_priv->crp_srv != 0);
 	if (rpc_pub->cr_input_size > 0) {
