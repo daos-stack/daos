@@ -174,6 +174,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_CHK_ACT:
 		ds_mgmt_drpc_check_act(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_CHK_SET_POLICY:
+		ds_mgmt_drpc_check_set_policy(drpc_req, drpc_resp);
+		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
 		D_ERROR("Unknown method\n");

@@ -3030,3 +3030,48 @@ ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	mgmt__check_act_req__free_unpacked(req, &alloc.alloc);
 }
+
+void
+ds_mgmt_drpc_check_set_policy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	uint8_t                 *body;
+	Mgmt__CheckSetPolicyReq *req   = NULL;
+	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__DaosResp           resp  = MGMT__DAOS_RESP__INIT;
+	int                      rc    = 0;
+	size_t                   len;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_set_policy_req__unpack(&alloc.alloc, drpc_req->body.len,
+						 drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (set policy for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to set policy for check\n");
+
+	rc = ds_mgmt_check_set_policy(req->n_policies, req->policies);
+	if (rc != 0)
+		D_ERROR("Failed to set policy for check: " DF_RC "\n", DP_RC(rc));
+
+	resp.status = rc;
+	len         = mgmt__daos_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (set policy for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__daos_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__check_set_policy_req__free_unpacked(req, &alloc.alloc);
+}
