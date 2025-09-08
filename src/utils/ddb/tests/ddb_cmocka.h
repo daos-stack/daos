@@ -86,8 +86,7 @@
 			D_ALLOC_ARRAY(_buf, _buf_size);                                            \
 			assert_non_null(_buf);                                                     \
 			regerror(_rc, &_preg, _buf, _buf_size);                                    \
-			if (_buf)                                                                  \
-				print_error("ERROR: invalid regex '%s': %s\n", regex, _buf);       \
+			print_error("ERROR: invalid regex '%s': %s\n", regex, _buf);               \
 			D_FREE(_buf);                                                              \
 			regfree(&_preg);                                                           \
 			fail();                                                                    \
@@ -105,9 +104,7 @@
 				D_ALLOC_ARRAY(_buf, _buf_size);                                    \
 				assert_non_null(_buf);                                             \
 				regerror(_rc, &_preg, _buf, _buf_size);                            \
-				if (_buf)                                                          \
-					print_error("ERROR: invalid regex '%s': %s\n", regex,      \
-						    _buf);                                         \
+				print_error("ERROR: invalid regex '%s': %s\n", regex, _buf);       \
 				D_FREE(_buf);                                                      \
 				regfree(&_preg);                                                   \
 				D_FREE(_str_dup);                                                  \

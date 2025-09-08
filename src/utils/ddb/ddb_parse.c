@@ -483,19 +483,17 @@ ddb_parse_key(const char *input, daos_key_t *key)
 int
 ddb_date2epoch(const char *date, uint64_t *epoch)
 {
-	struct tm       date_tm;
-	struct timespec date_tspec;
+	struct tm       date_tm    = {0};
+	struct timespec date_tspec = {0};
 	char           *endptr;
 
 	if (date == NULL || epoch == NULL)
 		return -DER_INVAL;
 
-	memset(&date_tm, 0, sizeof(struct tm));
 	endptr = strptime(date, "%Y-%m-%d %H:%M:%S", &date_tm);
 	if (endptr == NULL || *endptr != '\0')
 		return -DER_INVAL;
 
-	memset(&date_tspec, 0, sizeof(struct timespec));
 	date_tspec.tv_sec = mktime(&date_tm);
 	if (date_tspec.tv_sec == (time_t)-1)
 		return daos_errno2der(errno);
