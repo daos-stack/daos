@@ -1435,24 +1435,6 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	rpc_priv->crp_complete_cb = complete_cb;
 	rpc_priv->crp_arg = arg;
 
-	/*
-	 * For collective RPCs root of the corpc computes the deadline from the timeout
-	 * specified by the user, however each corpc child will inherit this timeout.
-	 * see crt_corpc_req_hdlr()
-	 */
-	if (rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
-		if (rpc_priv->crp_coll && rpc_priv->crp_deadline_sec != 0) {
-			/* Keep the existing deadline for the collective rpc if set already */
-			RPC_TRACE(DB_TRACE, rpc_priv, "Using deadline=%d\n",
-				  rpc_priv->crp_deadline_sec);
-		} else {
-			rpc_priv->crp_deadline_sec =
-			    crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
-			RPC_TRACE(DB_TRACE, rpc_priv, "Setting deadline=%d\n",
-				  rpc_priv->crp_deadline_sec);
-		}
-	}
-
 	if (rpc_priv->crp_coll) {
 		rc = crt_corpc_req_hdlr(rpc_priv);
 		if (rc != 0)
