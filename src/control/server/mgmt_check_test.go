@@ -522,15 +522,13 @@ func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
 func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 	uuids := testPoolUUIDs(4)
 	interactReq := &mgmtpb.CheckSetPolicyReq{
-		Sys: "daos_server",
-		// 'check set-policy' only changes policy, not flags, then reuse 'Flags' to indicate
-		// something internally, such as no dRPC call for test purpose.
-		Flags:    1,
+		Sys:      "daos_server",
 		Policies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_INTERACT),
 	}
 
 	for name, tc := range map[string]struct {
 		createMS    func(*testing.T, logging.Logger) *mgmtSvc
+		getMockDrpc func() *mockDrpcClient
 		req         *mgmtpb.CheckSetPolicyReq
 		expResp     *mgmtpb.DaosResp
 		expErr      error
@@ -575,8 +573,7 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 		},
 		"no policies in request": {
 			req: &mgmtpb.CheckSetPolicyReq{
-				Sys:   "daos_server",
-				Flags: 1,
+				Sys: "daos_server",
 			},
 			expResp:     &mgmtpb.DaosResp{},
 			expPolicies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_DEFAULT),
@@ -588,8 +585,7 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 		},
 		"set single policy": {
 			req: &mgmtpb.CheckSetPolicyReq{
-				Sys:   "daos_server",
-				Flags: 1,
+				Sys: "daos_server",
 				Policies: []*mgmtpb.CheckInconsistPolicy{
 					{
 						InconsistCas: chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
@@ -606,6 +602,27 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 					},
 				}),
 		},
+		"dRPC fails": {
+			req: interactReq,
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClient(nil, errors.New("mock dRPC"))
+			},
+			expErr: errors.New("mock dRPC"),
+		},
+		"bad dRPC resp": {
+			req: interactReq,
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClientBytes([]byte("garbage"), nil)
+			},
+			expErr: errors.New("unmarshal CheckRepair response"),
+		},
+		"bad dRPC status": {
+			req: interactReq,
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClient(&mgmtpb.DaosResp{Status: daos.IOError.Int32()}, nil)
+			},
+			expErr: daos.IOError,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -617,6 +634,14 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 				}
 			}
 			svc := tc.createMS(t, log)
+
+			if tc.getMockDrpc == nil {
+				tc.getMockDrpc = func() *mockDrpcClient {
+					return getMockDrpcClient(&mgmtpb.CheckStartResp{}, nil)
+				}
+			}
+			mockDrpc := tc.getMockDrpc()
+			setupSvcDrpcClient(svc, 0, mockDrpc)
 
 			resp, err := svc.SystemCheckSetPolicy(test.Context(t), tc.req)
 
