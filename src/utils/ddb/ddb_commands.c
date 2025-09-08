@@ -1296,11 +1296,9 @@ timespec2str(struct timespec *tspec, char *buf, size_t buf_size)
 	if (localtime_r(&(tspec->tv_sec), &date) == NULL)
 		return d_errno2der(errno);
 
-	if (strftime(buf, buf_size, "%F %T", &date) == 0)
+	buf_len = strftime(buf, buf_size, "%F %T", &date);
+	if (buf_len == 0)
 		return -DER_INVAL;
-
-	buf_len = strnlen(buf, buf_size);
-	D_ASSERT(buf_len < buf_size);
 
 	rc = snprintf(&buf[buf_len], buf_size - buf_len, ".%09ld", tspec->tv_nsec);
 	if (rc < 0)
