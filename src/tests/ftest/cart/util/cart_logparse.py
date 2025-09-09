@@ -97,19 +97,21 @@ class LogLine():
         idx = 0
         for i in range(4):
             idx += len(fields[i]) + 1
-        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 664
+        # pylint: disable=wrong-spelling-in-comment
+        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c - d_vlog()
         # snprintf(..., "%-4s ", facstr)
-        idx += (len(fields[4]) if len(fields[4]) > 4 else 4) + 1
-        idx += len(fields[5]) if len(fields[5]) > 4 else 4
-        # assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c: 651
-        # assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c: 652
+        idx += max(len(fields[4]), 4) + 1
+        idx += max(len(fields[5]), 4)
+        # assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c - d_vlog()
+        # assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c - d_vlog()
         pidtid = fields[3][5:-1]
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
         self.fac = fields[4]
-        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 664
+        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c
         # snprintf(..., "%-4s ", facstr)
+        # pylint: enable=wrong-spelling-in-comment
         try:
             self.level = LOG_LEVELS[fields[5]]
         except KeyError as error:
