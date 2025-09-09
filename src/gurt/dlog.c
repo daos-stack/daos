@@ -561,6 +561,9 @@ d_log_disable_logging(void)
  * @param flags returned by d_log_check
  * @param fmt the printf(3) format to use
  * @param ap the stdargs va_list to use for the printf format
+ *
+ * NOTE: Any changes to this function must be reflected in the CaRT log parser
+ * (src/tests/ftest/cart/util/cart_logparser.py).
  */
 void d_vlog(int flags, const char *fmt, va_list ap)
 {
