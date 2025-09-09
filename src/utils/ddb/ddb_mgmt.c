@@ -17,7 +17,8 @@
 #include <gurt/debug.h>
 #include <daos_srv/control.h>
 #include <daos_srv/smd.h>
-#include <daos_srv/vos.h>
+#include <daos_srv/mgmt_tgt_common.h>
+#include <daos_srv/bio.h>
 
 #include "ddb_mgmt.h"
 
@@ -221,9 +222,9 @@ ddb_recreate_pooltgts(const char *scm_mount)
 		D_INFO("Recreating files for the pool " DF_UUID "\n", DP_UUID(pool_info->spi_id));
 		D_ASSERT(pool_info->spi_scm_sz > 0);
 		/* specify rdb_blob_sz zero to ignore rdb file create */
-		rc = vos_pool_recreate_tgt(pool_info->spi_id, pool_info->spi_scm_sz,
-					   pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], 0, scm_mount,
-					   NULL);
+		rc = ds_mgmt_tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
+					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], 0, scm_mount,
+					  NULL);
 		if (rc) {
 			break;
 		}
@@ -245,8 +246,8 @@ ddb_dirs_prepare(const char *scm_mount)
 	char   newborns_path[DDB_PROV_MEM_BUF_MAX] = {0};
 	char   zombies_path[DDB_PROV_MEM_BUF_MAX]  = {0};
 	/* create the path string */
-	snprintf(newborns_path, sizeof(newborns_path), "%s/" VOS_DIR_NEWBORNS "", scm_mount);
-	snprintf(zombies_path, sizeof(zombies_path), "%s/" VOS_DIR_ZOMBIES "", scm_mount);
+	snprintf(newborns_path, sizeof(newborns_path), "%s/" DIR_NEWBORNS "", scm_mount);
+	snprintf(zombies_path, sizeof(zombies_path), "%s/" DIR_ZOMBIES "", scm_mount);
 
 	stored_mode = umask(0);
 	/* create NEWBORNS directory if it does not exist already */
