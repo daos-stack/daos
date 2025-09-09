@@ -2299,11 +2299,6 @@ struct tgt_discard_arg {
 	struct pool_target_addr_list tgt_list;
 };
 
-struct child_discard_arg {
-	struct tgt_discard_arg	*tgt_discard;
-	uuid_t			cont_uuid;
-};
-
 static struct tgt_discard_arg*
 tgt_discard_arg_alloc(struct pool_target_addr_list *tgt_list)
 {
@@ -2336,119 +2331,36 @@ tgt_discard_arg_free(struct tgt_discard_arg *arg)
 	D_FREE(arg);
 }
 
-static int
-obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
-	       vos_iter_type_t type, vos_iter_param_t *param,
-	       void *data, unsigned *acts)
-{
-	struct child_discard_arg	*arg = data;
-	struct d_backoff_seq		backoff_seq;
-	daos_epoch_range_t		epr;
-	int				rc;
+struct discard_cont_tgt {
+	d_list_t dct_link;
+	uuid_t   dct_uuid;
+};
 
-	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
-				1 << 10 /* max (ms) */);
-	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
-
-	epr.epr_hi = arg->tgt_discard->epoch;
-	epr.epr_lo = 0;
-	do {
-		/* Inform the iterator and delete the object */
-		*acts |= VOS_ITER_CB_DELETE;
-		rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
-		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
-			break;
-
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
-			DP_RC(rc), DP_UOID(ent->ie_oid));
-		dss_sleep(d_backoff_seq_next(&backoff_seq));
-	} while (1);
-
-	d_backoff_seq_fini(&backoff_seq);
-
-	if (rc != 0)
-		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
-			DP_UUID(arg->tgt_discard->pool_uuid), DP_UOID(ent->ie_oid),
-			DP_RC(rc));
-	return rc;
-}
-
-/** vos_iter_cb_t */
 static int
 cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		vos_iter_type_t type, vos_iter_param_t *iter_param,
 		void *cb_arg, unsigned int *acts)
 {
-	struct child_discard_arg *arg = cb_arg;
-	struct ds_cont_child	*cont = NULL;
-	vos_iter_param_t	param = { 0 };
-	struct vos_iter_anchors	anchor = { 0 };
-	daos_handle_t		coh;
-	struct d_backoff_seq	backoff_seq;
-	int			rc;
+	struct discard_cont_tgt *dct;
+	d_list_t                *head = cb_arg;
 
-	D_ASSERT(type == VOS_ITER_COUUID);
-	if (uuid_compare(arg->cont_uuid, entry->ie_couuid) == 0) {
-		D_DEBUG(DB_REBUILD, DF_UUID" already discard\n",
-			DP_UUID(arg->cont_uuid));
-		return 0;
-	}
+	D_ALLOC_PTR(dct);
+	if (dct == NULL)
+		return -DER_NOMEM;
 
-	rc = ds_cont_child_lookup(arg->tgt_discard->pool_uuid, entry->ie_couuid,
-				  &cont);
-	if (rc != DER_SUCCESS) {
-		D_ERROR("Lookup container '"DF_UUIDF"' failed: "DF_RC"\n",
-			DP_UUID(entry->ie_couuid), DP_RC(rc));
-		return rc;
-	}
+	uuid_copy(dct->dct_uuid, entry->ie_couuid);
+	d_list_add_tail(&dct->dct_link, head);
 
-	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
-	if (rc != 0) {
-		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
-			DP_UUID(entry->ie_couuid), DP_RC(rc));
-		D_GOTO(put, rc);
-	}
-
-	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
-				1 << 10 /* max (ms) */);
-	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
-
-	param.ip_hdl = coh;
-	param.ip_epr.epr_lo = 0;
-	param.ip_epr.epr_hi = arg->tgt_discard->epoch;
-	uuid_copy(arg->cont_uuid, entry->ie_couuid);
-	do {
-		/* Inform the iterator and delete the object */
-		*acts |= VOS_ITER_CB_DELETE;
-		rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
-				 arg, NULL);
-		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
-			break;
-
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
-			DP_RC(rc), DP_UUID(entry->ie_couuid));
-		dss_sleep(d_backoff_seq_next(&backoff_seq));
-	} while (1);
-
-	d_backoff_seq_fini(&backoff_seq);
-	vos_cont_close(coh);
-	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
-		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
-		DP_RC(rc));
-
-put:
-	ds_cont_child_put(cont);
-	if (rc == 0)
-		rc = ds_cont_child_destroy(arg->tgt_discard->pool_uuid, entry->ie_couuid);
-	return rc;
+	return 0;
 }
 
 static int
 pool_child_discard(void *data)
 {
-	struct tgt_discard_arg	*arg = data;
-	struct child_discard_arg cont_arg;
-	struct ds_pool_child	*child;
+	struct tgt_discard_arg  *arg = data;
+	struct discard_cont_tgt *dct;
+	struct ds_pool_child    *child;
+	d_list_t                 head;
 	vos_iter_param_t	param = { 0 };
 	struct vos_iter_anchors	anchor = { 0 };
 	struct pool_target_addr addr;
@@ -2485,29 +2397,32 @@ pool_child_discard(void *data)
 	if (child == NULL)
 		return -DER_AGAIN;
 
+	D_INIT_LIST_HEAD(&head);
 	param.ip_hdl = child->spc_hdl;
+
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor, cont_discard_cb, NULL, &head,
+			 NULL);
+	if (rc != 0)
+		goto out;
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
 				1 << 10 /* max (ms) */);
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
 
-	cont_arg.tgt_discard = arg;
 	child->spc_discard_done = 0;
-	do {
-		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-				 cont_discard_cb, NULL, &cont_arg, NULL);
-		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
-			break;
+	while ((dct = d_list_pop_entry(&head, struct discard_cont_tgt, dct_link)) != NULL) {
+		if (rc == 0) {
+			rc = ds_cont_child_destroy(arg->pool_uuid, dct->dct_uuid);
+			dss_sleep(d_backoff_seq_next(&backoff_seq));
+		}
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
-			DP_RC(rc), DP_UUID(arg->pool_uuid));
-		dss_sleep(d_backoff_seq_next(&backoff_seq));
-	} while (1);
-
+		D_FREE(dct);
+	}
 	child->spc_discard_done = 1;
 
 	d_backoff_seq_fini(&backoff_seq);
 
+out:
 	ds_pool_child_put(child);
 
 	return rc;
