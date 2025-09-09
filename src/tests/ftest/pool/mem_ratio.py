@@ -16,6 +16,21 @@ class MemRatioTest(TestWithServers):
     :avocado: recursive
     """
 
+    def check_insufficient_scm_size(self, error):
+        """Check for an insufficient SCM size error during pool creation.
+
+        Args:
+            error (Exception): the error raised during pool creation
+        """
+        pattern = "Insufficient scm size"
+        self.log.debug("Verifying Pool creation failure: %s", error)
+        result = self.server_managers[0].search_engine_logs(pattern)
+        if not result.passed or len(result.output) < 1:
+            raise error
+        for line in result.output:
+            self.log.debug("  %s", line)
+        self.log.debug("Pool failure expected due to: '%s'", pattern)
+
     def test_mem_ratio(self):
         """Create multiple pools using different --mem_ratio arguments to define which fraction
         of meta blob size is used for the memory file size in each pool.
@@ -50,7 +65,7 @@ class MemRatioTest(TestWithServers):
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
-        pools = add_pools(kwargs_list)
+        pools = add_pools(kwargs_list, error_handler=self.check_insufficient_scm_size)
 
         # Collect the pool create output values
         data = {}
@@ -93,35 +108,37 @@ class MemRatioTest(TestWithServers):
                 data[name]["tier_stats"] = {}
                 for item in query["response"]["tier_stats"]:
                     data[name]["tier_stats"][item["media_type"]] = item["total"]
-                data[name]["mem_file_bytes"] = query["response"]["mem_file_bytes"]
-                data[name]["query_ratio"] = round(
-                    int(data[name]["mem_file_bytes"]) / int(data[name]["tier_stats"]["scm"]) * 100)
+                data[name]["mem_file_bytes(total)"] = query["response"]["mem_file_bytes"]
+                _ratio = (
+                    int(data[name]["mem_file_bytes(total)"]) / int(data[name]["tier_stats"]["scm"]))
+                data[name]["query_ratio"] = round(_ratio * 100)
                 _difference = abs(data[name]["mem-ratio"] - data[name]["query_ratio"])
                 if data[name]["mem-ratio"] and _difference > 1:
                     errors.append(
                         f"{name} - Mem ratio ({data[name]['mem-ratio']}) differs from pool "
                         f"query ({data[name]['query_ratio']}) by {_difference}")
-            except (KeyError, IndexError):
+            except (KeyError, IndexError, ValueError):
                 data[name]["total_engines"] = "<ERROR>"
                 data[name]["tier_stats"] = "<ERROR>"
-                data[name]["mem_file_bytes"] = "<ERROR>"
+                data[name]["mem_file_bytes(total)"] = "<ERROR>"
                 data[name]["query_ratio"] = 0
                 errors.append(f"{name} - Invalid dmg pool query response: {query}")
 
         # Report the test results
-        _format = "  %-60s  %-8s  %-34s  %-16s  %-13s  %-44s  %-16s  %s"
+        _format = "%-60s  %-9s  %-34s  %-16s  %-12s  %-13s  %-44s  %-21s  %s"
         _keys = ["Pool",
                  "mem-ratio",
                  "tier_bytes",
                  "mem_file_bytes",
                  "create_ratio",
                  "total_engines",
-                 "tier_stats(total)",
-                 "mem_file_bytes",
+                 "tier_stats",
+                 "mem_file_bytes(total)",
                  "query_ratio"]
         self.log.debug(_format, *_keys)
         self.log.debug(
-            _format, "-" * 60, "-" * 8, "-" * 34, "-" * 16, "-" * 13, "-" * 44, "-" * 16, "-" * 7)
+            _format, "-" * 60, "-" * 9, "-" * 34, "-" * 16, "-" * 12, "-" * 13, "-" * 44, "-" * 21,
+            "-" * 11)
         for name, info in data.items():
             items = [name]
             for key in _keys[1:]:

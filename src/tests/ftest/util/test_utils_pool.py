@@ -22,12 +22,13 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pools(add_pool_kwargs):
+def add_pools(add_pool_kwargs, error_handler=None):
     """Add multiple TestPool objects to the test.
 
     Args:
         add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
             pool. Must at least include the 'test' kwarg. See add_pool() for other options.
+        error_handler (method, None): optional method to call when a pool create fails
 
     Returns:
         list: a list of new pool objects
@@ -50,7 +51,13 @@ def add_pools(add_pool_kwargs):
     for index, pool in enumerate(pools):
         if not _create[index]:
             continue
-        pool.create(False)
+        try:
+            pool.create(False)
+        except TestFail as error:
+            if not error_handler:
+                raise
+            error_handler(error)
+
         if index == 0:
             _saved_result = pool.dmg.result
 
