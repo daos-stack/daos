@@ -122,6 +122,7 @@ test_d_errstr(void **state)
 	/* Check the boundary at the end of the GURT error numbers, this will need updating if
 	 * additional error numbers are added.
 	 */
+	value = d_errstr(-DER_QUOTA_LIMIT);
 	assert_string_equal(value, "DER_QUOTA_LIMIT");
 	value = d_errstr(-1046);
 	assert_string_equal(value, "DER_QUOTA_LIMIT");
