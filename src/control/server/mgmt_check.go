@@ -511,22 +511,18 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 		return nil, err
 	}
 
-	// 'check set-policy' only changes policy, not flags, then reuse 'Flags' to indicate
-	// something internally, such as no dRPC call for test purpose.
-	if req.Flags == 0 {
-		dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerSetPolicy, req)
-		if err != nil {
-			return nil, err
-		}
+	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerSetPolicy, req)
+	if err != nil {
+		return nil, err
+	}
 
-		resp := new(mgmtpb.DaosResp)
-		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal CheckRepair response")
-		}
+	resp := new(mgmtpb.DaosResp)
+	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
+	}
 
-		if resp.Status != 0 {
-			return nil, errors.Errorf("CHK_SET_POLICY dRPC got failure %d", resp.Status)
-		}
+	if resp.Status != 0 {
+		return nil, errors.Wrap(daos.ErrorFromRC(int(resp.Status)), "checker set-policy failed")
 	}
 
 	policies, err := svc.mergePoliciesWithCurrent(req.Policies)

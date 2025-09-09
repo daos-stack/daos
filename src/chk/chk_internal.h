@@ -329,6 +329,8 @@ CRT_RPC_DECLARE(chk_set_policy, DAOS_ISEQ_CHK_SET_POLICY, DAOS_OSEQ_CHK_SET_POLI
 
 #define CHK_MSG_BUFLEN		320
 
+#define CHK_INTERACT_OPTION_MAX 3
+
 /*
  * NOTE: Please be careful when change CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
  *	 to avoid hole is the struct chk_property.
@@ -653,7 +655,7 @@ struct chk_pending_rec {
 	uint32_t  cpr_busy : 1, cpr_exiting : 1, cpr_on_leader : 1;
 	uint32_t  cpr_option_nr;
 	/* Currently, support at most three options, can be extended if necessary in future. */
-	uint32_t  cpr_options[3];
+	uint32_t  cpr_options[CHK_INTERACT_OPTION_MAX];
 	ABT_mutex cpr_mutex;
 	ABT_cond  cpr_cond;
 };

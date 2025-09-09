@@ -237,7 +237,8 @@ chk_pending_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	cpr->cpr_class = cpb->cpb_class;
 	cpr->cpr_action = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
-	D_ASSERTF(cpb->cpb_option_nr <= 3, "Too many options %u > 3\n", cpb->cpb_option_nr);
+	D_ASSERTF(cpb->cpb_option_nr <= CHK_INTERACT_OPTION_MAX, "Too many options: %u > %u(max)\n",
+		  cpb->cpb_option_nr, CHK_INTERACT_OPTION_MAX);
 	cpr->cpr_option_nr = cpb->cpb_option_nr;
 
 	for (i = 0; i < cpb->cpb_option_nr; i++)
