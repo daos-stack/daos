@@ -10,6 +10,8 @@
 
 #include <uuid/uuid.h>
 
+#include <daos_types.h>
+
 /**
  * Common file names used by each layer to store persistent data.
  */
