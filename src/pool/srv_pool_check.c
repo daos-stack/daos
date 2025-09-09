@@ -17,7 +17,6 @@
 #include <sys/stat.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include <daos_srv/vos.h>
 #include <daos_srv/rdb.h>
 #include "srv_internal.h"
 #include "srv_layout.h"

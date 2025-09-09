@@ -6,6 +6,7 @@ def scons():
     Import('env', 'prereqs')
 
     denv = env.Clone()
+    denv.Append(OBJPREFIX="ddb_")
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'cart']
     # spdk libraries
@@ -30,6 +31,7 @@ def scons():
         'ddb_printer.c',
         'ddb_vos.c',
         'ddb_spdk.c',
+        '../../mgmt/mgmt_common.c',
     ]
 
     # Add runtime paths for daos libraries
