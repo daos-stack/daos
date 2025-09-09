@@ -27,7 +27,7 @@ def add_pools(add_pool_kwargs, error_handler=None):
 
     Args:
         add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
-            pool. Must at least include the 'test' kwarg. See add_pool() for other options.
+            pool. Must at least include the 'test' kwargs. See add_pool() for other options.
         error_handler (method, None): optional method to call when a pool create fails
 
     Returns:
