@@ -127,8 +127,11 @@ struct dfs_dcache {
 
 		/** Shmem version */
 		struct {
-			/** shm hash table */
-			struct d_shm_ht_loc dd_ht;
+			/** shm lru cache */
+			shm_lru_cache_t *d_shm_lru_dentry;
+
+			/* the hash value of pool uuid & cont uuid */
+			uint64_t         dd_pool_cont_hash;
 		} shm;
 	};
 };
@@ -144,7 +147,7 @@ time_cmp(struct timespec *t0, struct timespec *t1)
 static inline dfs_obj_t *
 gc_pop_rec(dfs_dcache_t *dcache)
 {
-	return d_list_pop_entry(&dcache->dh.dd_head_gc, dfs_obj_t, dh.dc_entry_gc);
+	return d_list_pop_entry(&dcache->dh.dd_head_gc, dfs_obj_t, dc_entry_gc);
 }
 
 static inline int
@@ -155,13 +158,13 @@ gc_init_rec(dfs_dcache_t *dcache, dfs_obj_t *rec)
 	if (dcache->dh.dd_period_gc == 0)
 		return -DER_SUCCESS;
 
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &rec->dh.dc_expire_gc);
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &rec->dc_expire_gc);
 	if (unlikely(rc != 0))
 		return d_errno2der(errno);
-	rec->dh.dc_expire_gc.tv_sec += dcache->dh.dd_timeout_rec;
+	rec->dc_expire_gc.tv_sec += dcache->dh.dd_timeout_rec;
 
-	atomic_flag_clear(&rec->dh.dc_deleted);
-	D_INIT_LIST_HEAD(&rec->dh.dc_entry_gc);
+	atomic_flag_clear(&rec->dc_deleted);
+	D_INIT_LIST_HEAD(&rec->dc_entry_gc);
 
 	return -DER_SUCCESS;
 }
@@ -177,15 +180,15 @@ gc_add_rec(dfs_dcache_t *dcache, dfs_obj_t *rec)
 	rc = D_MUTEX_LOCK(&dcache->dh.dd_mutex_gc);
 	D_ASSERT(rc == 0);
 
-	if (rec->dh.dc_deleted_gc)
+	if (rec->dc_deleted_gc)
 		/* NOTE Eventually happen if an entry is added and then removed before the entry has
 		 * been added to the GC list*/
 		D_GOTO(unlock, rc);
 
-	d_list_add_tail(&rec->dh.dc_entry_gc, &dcache->dh.dd_head_gc);
+	d_list_add_tail(&rec->dc_entry_gc, &dcache->dh.dd_head_gc);
 	++dcache->dh.dd_count_gc;
 	D_DEBUG(DB_TRACE, "add record " DF_DK " to GC: count_gc=%" PRIu64 "\n",
-		DP_DK(rec->dh.dc_key), dcache->dh.dd_count_gc);
+		DP_DK(rec->dc_key), dcache->dh.dd_count_gc);
 
 unlock:
 	rc = D_MUTEX_UNLOCK(&dcache->dh.dd_mutex_gc);
@@ -203,24 +206,24 @@ gc_del_rec(dfs_dcache_t *dcache, dfs_obj_t *rec)
 	rc = D_MUTEX_LOCK(&dcache->dh.dd_mutex_gc);
 	D_ASSERT(rc == 0);
 
-	if (rec->dh.dc_deleted_gc)
+	if (rec->dc_deleted_gc)
 		/* NOTE Eventually happen if an entry is reclaimed and then removed before it has
 		 * been removed from the hash table */
 		D_GOTO(unlock, rc);
 
-	if (d_list_empty(&rec->dh.dc_entry_gc)) {
+	if (d_list_empty(&rec->dc_entry_gc)) {
 		/* NOTE Eventually happen if an entry is added and then removed before the entry has
 		 * been added to the GC list*/
-		rec->dh.dc_deleted_gc = true;
+		rec->dc_deleted_gc = true;
 		D_GOTO(unlock, rc);
 	}
 
 	D_ASSERT(dcache->dh.dd_count_gc > 0);
-	d_list_del(&rec->dh.dc_entry_gc);
+	d_list_del(&rec->dc_entry_gc);
 	--dcache->dh.dd_count_gc;
-	rec->dh.dc_deleted_gc = true;
+	rec->dc_deleted_gc = true;
 	D_DEBUG(DB_TRACE, "remove deleted record " DF_DK " from GC: count_gc=%" PRIu64 "\n",
-		DP_DK(rec->dh.dc_key), dcache->dh.dd_count_gc);
+		DP_DK(rec->dc_key), dcache->dh.dd_count_gc);
 
 unlock:
 	rc = D_MUTEX_UNLOCK(&dcache->dh.dd_mutex_gc);
@@ -263,8 +266,8 @@ gc_reclaim(dfs_dcache_t *dcache)
 			break;
 		}
 
-		if (time_cmp(&rec->dh.dc_expire_gc, &now) > 0) {
-			d_list_add(&rec->dh.dc_entry_gc, &dcache->dh.dd_head_gc);
+		if (time_cmp(&rec->dc_expire_gc, &now) > 0) {
+			d_list_add(&rec->dc_entry_gc, &dcache->dh.dd_head_gc);
 			rc = D_MUTEX_UNLOCK(&dcache->dh.dd_mutex_gc);
 			D_ASSERT(rc == 0);
 			break;
@@ -272,16 +275,16 @@ gc_reclaim(dfs_dcache_t *dcache)
 
 		D_ASSERT(dcache->dh.dd_count_gc > 0);
 		--dcache->dh.dd_count_gc;
-		rec->dh.dc_deleted_gc = true;
+		rec->dc_deleted_gc = true;
 
 		rc = D_MUTEX_UNLOCK(&dcache->dh.dd_mutex_gc);
 		D_ASSERT(rc == 0);
 
 		D_DEBUG(DB_TRACE, "remove expired record " DF_DK " from GC: expire=" DF_TS "\n",
-			DP_DK(rec->dh.dc_key), DP_TS(rec->dh.dc_expire_gc));
+			DP_DK(rec->dc_key), DP_TS(rec->dc_expire_gc));
 
-		if (!atomic_flag_test_and_set(&rec->dh.dc_deleted))
-			d_hash_rec_delete_at(&dcache->dh.dd_dir_hash, &rec->dh.dc_entry);
+		if (!atomic_flag_test_and_set(&rec->dc_deleted))
+			d_hash_rec_delete_at(&dcache->dh.dd_dir_hash, &rec->dc_entry);
 
 		++reclaim_count;
 	}
@@ -310,7 +313,7 @@ out:
 static inline dfs_obj_t *
 dlist2drec(d_list_t *rlink)
 {
-	return d_list_entry(rlink, dfs_obj_t, dh.dc_entry);
+	return d_list_entry(rlink, dfs_obj_t, dc_entry);
 }
 
 static bool
@@ -319,12 +322,12 @@ dcache_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, un
 	dfs_obj_t *rec;
 
 	rec = dlist2drec(rlink);
-	if (rec->dh.dc_key_len != key_len)
+	if (rec->dc_key_len != key_len)
 		return false;
-	D_ASSERT(rec->dh.dc_key[key_len] == '\0');
+	D_ASSERT(rec->dc_key[key_len] == '\0');
 	D_ASSERT(((char *)key)[key_len] == '\0');
 
-	return strncmp(rec->dh.dc_key, (const char *)key, key_len) == 0;
+	return strncmp(rec->dc_key, (const char *)key, key_len) == 0;
 }
 
 static void
@@ -334,8 +337,8 @@ dcache_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	dfs_obj_t    *rec;
 
 	rec = dlist2drec(rlink);
-	D_DEBUG(DB_TRACE, "delete record " DF_DK " (ref=%u)", DP_DK(rec->dh.dc_key),
-		atomic_load(&rec->dh.dc_ref));
+	D_DEBUG(DB_TRACE, "delete record " DF_DK " (ref=%u)", DP_DK(rec->dc_key),
+		atomic_load(&rec->dc_ref));
 	rc = release_int(rec);
 	if (rc)
 		DS_ERROR(rc, "release_int() failed");
@@ -348,9 +351,9 @@ dcache_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 	uint32_t      oldref;
 
 	rec    = dlist2drec(rlink);
-	oldref = atomic_fetch_add(&rec->dh.dc_ref, 1);
+	oldref = atomic_fetch_add(&rec->dc_ref, 1);
 	D_DEBUG(DB_TRACE, "increment ref counter of record " DF_DK " from %u to %u",
-		DP_DK(rec->dh.dc_key), oldref, oldref + 1);
+		DP_DK(rec->dc_key), oldref, oldref + 1);
 }
 
 static bool
@@ -360,9 +363,9 @@ dcache_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 	uint32_t      oldref;
 
 	rec    = dlist2drec(rlink);
-	oldref = atomic_fetch_sub(&rec->dh.dc_ref, 1);
+	oldref = atomic_fetch_sub(&rec->dc_ref, 1);
 	D_DEBUG(DB_TRACE, "decrement ref counter of record " DF_DK " from %u to %u",
-		DP_DK(rec->dh.dc_key), oldref, oldref - 1);
+		DP_DK(rec->dc_key), oldref, oldref - 1);
 	D_ASSERT(oldref >= 1);
 	return oldref == 1;
 }
@@ -373,7 +376,7 @@ dcache_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 	dfs_obj_t *rec;
 
 	rec = dlist2drec(rlink);
-	return d_hash_string_u32(rec->dh.dc_key, rec->dh.dc_key_len);
+	return d_hash_string_u32(rec->dc_key, rec->dc_key_len);
 }
 
 static d_hash_table_ops_t dcache_hash_ops = {
@@ -407,7 +410,8 @@ dcache_add_root(dfs_dcache_t *dcache)
 	void       *val;
 	daos_size_t val_size;
 	int         rc;
-	bool        created;
+	char        key[SHM_DCACHE_KEY_PREF_SIZE];
+	uint64_t   *ptr_key = (uint64_t *)key;
 
 	/** for local cache, just duplicate the entry and store the pointer */
 	if (dcache->dd_type == DFS_CACHE_DRAM) {
@@ -418,15 +422,15 @@ dcache_add_root(dfs_dcache_t *dcache)
 		if (rc)
 			return rc;
 		rec->dc = dcache;
-		atomic_init(&rec->dh.dc_ref, 0);
-		atomic_flag_clear(&rec->dh.dc_deleted);
-		memcpy(&rec->dh.dc_key_child_prefix[0], &dcache->dd_key_root_prefix[0],
+		atomic_init(&rec->dc_ref, 0);
+		atomic_flag_clear(&rec->dc_deleted);
+		memcpy(&rec->dc_key_child_prefix[0], &dcache->dd_key_root_prefix[0],
 		       DCACHE_KEY_PREF_SIZE);
-		memcpy(&rec->dh.dc_key[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
-		rec->dh.dc_key_len = DCACHE_KEY_PREF_SIZE - 1;
+		memcpy(&rec->dc_key[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
+		rec->dc_key_len = DCACHE_KEY_PREF_SIZE - 1;
 
-		rc = d_hash_rec_insert(&dcache->dh.dd_dir_hash, rec->dh.dc_key, rec->dh.dc_key_len,
-				       &rec->dh.dc_entry, true);
+		rc = d_hash_rec_insert(&dcache->dh.dd_dir_hash, rec->dc_key, rec->dc_key_len,
+				       &rec->dc_entry, true);
 		if (rc)
 			release_int(rec);
 		return rc;
@@ -443,14 +447,18 @@ dcache_add_root(dfs_dcache_t *dcache)
 
 	rc = dfs_obj_serialize(&dcache->dd_dfs->root, val, &val_size);
 	if (rc)
-		return rc;
+		goto out;
 
-	shm_ht_rec_find_insert(&dcache->shm.dd_ht, &dcache->dd_key_root_prefix[0],
-			       DCACHE_KEY_PREF_SIZE - 1, val, val_size,
-			       &dcache->dd_dfs->root.shm.rec_loc, &created, &rc);
-	/* val was copied into shm hash table record, so it is not needed any more. */
+	ptr_key[0] = dcache->shm.dd_pool_cont_hash;
+	ptr_key[1] = dcache->dd_dfs->root.oid.lo;
+	ptr_key[2] = dcache->dd_dfs->root.oid.hi;
+	rc = shm_lru_put(dcache->shm.d_shm_lru_dentry, (void *)key, SHM_DCACHE_KEY_PREF_SIZE, val,
+			 val_size);
+	/* val was copied into shm LRU record, so it is not needed any more. */
+
+out:
 	D_FREE(val);
-	return daos_der2errno(rc);
+	return rc;
 }
 
 static int
@@ -533,9 +541,9 @@ dcache_destroy_act(dfs_dcache_t *dcache)
 
 		rec = dlist2drec(rlink);
 		/* '/' is never in the GC list */
-		if (!dcache->dh.dd_disable_gc && rec->dh.dc_key_len != DCACHE_KEY_PREF_SIZE - 1)
+		if (!dcache->dh.dd_disable_gc && rec->dc_key_len != DCACHE_KEY_PREF_SIZE - 1)
 			gc_del_rec(dcache, rec);
-		D_ASSERT(atomic_load(&rec->dh.dc_ref) == 1);
+		D_ASSERT(atomic_load(&rec->dc_ref) == 1);
 		deleted = d_hash_rec_delete_at(&dcache->dh.dd_dir_hash, rlink);
 		D_ASSERT(deleted);
 	}
@@ -581,7 +589,6 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 	dfs_obj_t *obj = NULL;
 	d_list_t  *rlink;
 	int        rc;
-	bool       created;
 
 	D_DEBUG(DB_TRACE, "DCACHE add: parent %s name %s key %s\n", parent->name, name, key);
 	rc = lookup_rel_int(dcache->dd_dfs, parent, name, len, O_RDWR | O_NOFOLLOW, &obj, mode,
@@ -595,13 +602,6 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 	}
 
 	obj->dc = dcache;
-	atomic_init(&obj->dh.dc_ref, 1);
-	atomic_flag_clear(&obj->dh.dc_deleted);
-	rc = snprintf(&obj->dh.dc_key_child_prefix[0], DCACHE_KEY_PREF_SIZE,
-		      "%016" PRIx64 "-%016" PRIx64 ":", obj->oid.hi, obj->oid.lo);
-	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
-	obj->dh.dc_key_len = key_len;
-	memcpy(obj->dh.dc_key, key, key_len + 1);
 
 	/** for shmem cache, serialize the object and insert the serialized form */
 	if (dcache->dd_type == DFS_CACHE_SHM) {
@@ -622,8 +622,7 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 			goto err;
 		}
 
-		shm_ht_rec_find_insert(&dcache->shm.dd_ht, key,	key_len, val, val_size,
-				       &obj->shm.rec_loc, &created, &rc);
+		rc = shm_lru_put(dcache->shm.d_shm_lru_dentry, (void *)key, key_len, val, val_size);
 		/* val was copied into shm hash table record, so it is not needed any more. */
 		D_FREE(val);
 		if (rc)
@@ -631,6 +630,14 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 		*rec = obj;
 		return rc;
 	}
+
+	atomic_init(&obj->dc_ref, 1);
+	atomic_flag_clear(&obj->dc_deleted);
+	rc = snprintf(&obj->dc_key_child_prefix[0], DCACHE_KEY_PREF_SIZE,
+		      "%016" PRIx64 "-%016" PRIx64 ":", obj->oid.hi, obj->oid.lo);
+	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
+	obj->dc_key_len = key_len;
+	memcpy(obj->dc_key, key, key_len + 1);
 
 	if (!dcache->dh.dd_disable_gc) {
 		rc = gc_init_rec(dcache, obj);
@@ -640,15 +647,15 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 		}
 	}
 
-	rlink = d_hash_rec_find_insert(&dcache->dh.dd_dir_hash, obj->dh.dc_key, key_len,
-				       &obj->dh.dc_entry);
-	if (rlink == &obj->dh.dc_entry) {
-		D_DEBUG(DB_TRACE, "add record " DF_DK " with ref counter %u", DP_DK(obj->dh.dc_key),
-			obj->dh.dc_ref);
+	rlink = d_hash_rec_find_insert(&dcache->dh.dd_dir_hash, obj->dc_key, key_len,
+				       &obj->dc_entry);
+	if (rlink == &obj->dc_entry) {
+		D_DEBUG(DB_TRACE, "add record " DF_DK " with ref counter %u", DP_DK(obj->dc_key),
+			obj->dc_ref);
 		if (!dcache->dh.dd_disable_gc)
 			gc_add_rec(dcache, obj);
 	} else {
-		dcache_rec_free(&dcache->dh.dd_dir_hash, &obj->dh.dc_entry);
+		dcache_rec_free(&dcache->dh.dd_dir_hash, &obj->dc_entry);
 		obj = dlist2drec(rlink);
 	}
 
@@ -663,7 +670,7 @@ static int
 dcache_find_insert_rel_act(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len,
 			   int flags, dfs_obj_t **_rec, mode_t *mode, struct stat *stbuf)
 {
-	const size_t key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
+	size_t       key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
 	dfs_obj_t   *rec;
 	char        *key;
 	char        *key_prefix;
@@ -674,7 +681,7 @@ dcache_find_insert_rel_act(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *
 	if (key == NULL)
 		return -DER_NOMEM;
 
-	key_prefix = dcache->dd_key_root_prefix;
+	key_prefix = parent->dc_key_child_prefix;
 	memcpy(key, key_prefix, key_prefix_len);
 	memcpy(key + key_prefix_len, name, len);
 	key_len      = key_prefix_len + len;
@@ -736,15 +743,15 @@ static int
 dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int flags,
 		       dfs_obj_t **_rec, mode_t *mode, struct stat *stbuf)
 {
-	const size_t  key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
-	dfs_obj_t    *rec;
-	dfs_obj_t    *parent;
-	char         *key;
-	char         *key_prefix;
-	char         *name;
-	size_t        name_len;
-	bool          skip_stat = false;
-	int           rc;
+	size_t     key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
+	dfs_obj_t *rec;
+	dfs_obj_t *parent;
+	char      *key;
+	char      *key_prefix;
+	char      *name;
+	size_t     name_len;
+	bool       skip_stat = false;
+	int        rc;
 
 	D_ASSERT(path_len > 0);
 
@@ -761,6 +768,7 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int fl
 		size_t key_len;
 
 		memcpy(key, key_prefix, key_prefix_len);
+
 		memcpy(key + key_prefix_len, name, name_len);
 		key_len      = key_prefix_len + name_len;
 		key[key_len] = '\0';
@@ -818,7 +826,7 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int fl
 			break;
 		}
 
-		key_prefix = &rec->dh.dc_key_child_prefix[0];
+		key_prefix = &rec->dc_key_child_prefix[0];
 		parent     = rec;
 	}
 
@@ -854,13 +862,13 @@ out:
 static void
 drec_incref_act(dfs_dcache_t *dcache, dfs_obj_t *rec)
 {
-	d_hash_rec_addref(&dcache->dh.dd_dir_hash, &rec->dh.dc_entry);
+	d_hash_rec_addref(&dcache->dh.dd_dir_hash, &rec->dc_entry);
 }
 
 static void
 drec_decref_act(dfs_dcache_t *dcache, dfs_obj_t *rec)
 {
-	d_hash_rec_decref(&dcache->dh.dd_dir_hash, &rec->dh.dc_entry);
+	d_hash_rec_decref(&dcache->dh.dd_dir_hash, &rec->dc_entry);
 }
 
 static void
@@ -868,9 +876,9 @@ drec_del_at_act(dfs_dcache_t *dcache, dfs_obj_t *rec)
 {
 	if (!dcache->dh.dd_disable_gc)
 		gc_del_rec(dcache, rec);
-	d_hash_rec_decref(&dcache->dh.dd_dir_hash, &rec->dh.dc_entry);
-	if (!atomic_flag_test_and_set(&rec->dh.dc_deleted))
-		d_hash_rec_delete_at(&dcache->dh.dd_dir_hash, &rec->dh.dc_entry);
+	d_hash_rec_decref(&dcache->dh.dd_dir_hash, &rec->dc_entry);
+	if (!atomic_flag_test_and_set(&rec->dc_deleted))
+		d_hash_rec_delete_at(&dcache->dh.dd_dir_hash, &rec->dc_entry);
 }
 
 static int
@@ -901,7 +909,7 @@ drec_del_act(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent)
 	D_ALLOC(key, key_len + 1);
 	if (key == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	memcpy(key, parent->dh.dc_key_child_prefix, key_prefix_len);
+	memcpy(key, parent->dc_key_child_prefix, key_prefix_len);
 	memcpy(key + key_prefix_len, bname, bname_len);
 	key[key_len] = '\0';
 
@@ -990,9 +998,8 @@ dcache_create_shm(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_p
 		  uint32_t gc_reclaim_max)
 {
 	dfs_dcache_t *dcache_tmp;
-	uuid_t        pool_uuid;
-	uuid_t        cont_uuid;
-	char          ht_name[DAOS_UUID_STR_SIZE * 2 + 1];
+	/* pool_cont_uuid will hold pool uuid and cont uuid */
+	uuid_t        pool_cont_uuid[2];
 	int           rc;
 
 	rc = shm_init();
@@ -1006,36 +1013,28 @@ dcache_create_shm(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_p
 	dcache_tmp->dd_dfs  = dfs;
 	dcache_tmp->dd_type = DFS_CACHE_SHM;
 
-	/** create / open a hash table with the pool.cont name */
-	rc = dc_pool_hdl2uuid(dfs->poh, NULL, &pool_uuid);
+	/** calculate a hash with the pool and cont uuid */
+	rc = dc_pool_hdl2uuid(dfs->poh, NULL, &pool_cont_uuid[0]);
 	if (rc)
 		D_GOTO(err_dcache, rc = daos_der2errno(rc));
 
-	rc = dc_cont_hdl2uuid(dfs->coh, NULL, &cont_uuid);
+	rc = dc_cont_hdl2uuid(dfs->coh, NULL, &pool_cont_uuid[1]);
 	if (rc)
 		D_GOTO(err_dcache, rc = daos_der2errno(rc));
 
-	uuid_unparse(pool_uuid, ht_name);
-	ht_name[36] = '.';
-	uuid_unparse(cont_uuid, ht_name + DAOS_UUID_STR_SIZE);
-
-	rc = shm_ht_create(ht_name, bits, 4, &dcache_tmp->shm.dd_ht);
-	if (rc != 0)
-		D_GOTO(err_dcache, rc = daos_der2errno(rc));
-
-	rc = snprintf(&dcache_tmp->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE,
-		      "%016" PRIx64 "-%016" PRIx64 ":", dfs->root.oid.hi, dfs->root.oid.lo);
-	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
+	/* acquire the pointer of the existing shm LRU cache for dentry */
+	dcache_tmp->shm.d_shm_lru_dentry = shm_lru_get_cache(CACHE_DENTRY);
+	D_ASSERT(dcache_tmp->shm.d_shm_lru_dentry != NULL);
+	dcache_tmp->shm.dd_pool_cont_hash = d_hash_murmur64((const unsigned char *)pool_cont_uuid,
+							    sizeof(uuid_t) * 2, 0);
 
 	rc = dcache_add_root(dcache_tmp);
 	if (rc != 0)
-		D_GOTO(err_ht, rc = daos_der2errno(rc));
+		D_GOTO(err_dcache, rc = daos_der2errno(rc));
 
 	dfs->dcache = dcache_tmp;
 	return 0;
 
-err_ht:
-	shm_ht_decref(&dcache_tmp->shm.dd_ht);
 err_dcache:
 	D_FREE(dcache_tmp);
 err_shm:
@@ -1052,8 +1051,11 @@ dcache_create(dfs_t *dfs, int type, uint32_t bits, uint32_t rec_timeout, uint32_
 		return dcache_create_dact(dfs);
 	if (type == DFS_CACHE_DRAM)
 		return dcache_create_act(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
-	else
-		return dcache_create_shm(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
+	else {
+		shm_init();
+		dcache_create_shm(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
+		return 0;
+	}
 }
 
 int
@@ -1061,20 +1063,11 @@ dcache_destroy(dfs_t *dfs)
 {
 	D_ASSERT(dfs->dcache != NULL);
 	if (dfs->dcache->dd_type == DFS_CACHE_SHM) {
-		int rc;
-
-		/* decrease the ht record reference of root */
-		rc = shm_ht_rec_decref(&dfs->dcache->dd_dfs->root.shm.rec_loc);
-		if (rc)
-			D_ERROR("shm_ht_rec_decref() failed: " DF_RC "\n", DP_RC(rc));
-
-		rc = shm_ht_decref(&dfs->dcache->shm.dd_ht);
-		if (rc)
-			D_ERROR("shm_ht_rec_decref() failed: " DF_RC "\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_FREE(dfs->dcache);
+		return 0;
 	}
-
 	D_ASSERT(dfs->dcache->dh.destroy_fn != NULL);
+
 	return dfs->dcache->dh.destroy_fn(dfs->dcache);
 }
 
@@ -1082,15 +1075,18 @@ int
 dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t **_rec,
 		   mode_t *mode, struct stat *stbuf)
 {
-	const size_t key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
-	dfs_obj_t   *rec;
-	dfs_obj_t   *parent;
-	char        *key;
-	char        *key_prefix;
-	char        *name;
-	size_t       name_len;
-	bool         skip_stat = false;
-	int          rc;
+	dfs_obj_t      *rec;
+	dfs_obj_t      *parent;
+	char            key[SHM_DCACHE_KEY_PREF_SIZE + DFS_MAX_NAME];
+	char           *name;
+	size_t          name_len;
+	bool            skip_stat = false;
+	int             rc;
+	uint64_t       *ptr_key = (uint64_t *)key;
+	size_t          key_len;
+	shm_lru_node_t *node_found = NULL;
+	char           *value;
+	size_t          val_size;
 
 	D_ASSERT(_rec != NULL);
 	D_ASSERT(dfs->dcache != NULL);
@@ -1102,32 +1098,27 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 						      mode, stbuf);
 	}
 
-	D_ALLOC(key, key_prefix_len + path_len + 1);
-	if (key == NULL)
-		return -DER_NOMEM;
-
 	name       = path;
 	name_len   = 0;
-	key_prefix = dfs->dcache->dd_key_root_prefix;
 	parent     = NULL;
+	ptr_key[0] = dfs->dcache->shm.dd_pool_cont_hash;
+	ptr_key[1] = dfs->root.oid.lo;
+	ptr_key[2] = dfs->root.oid.hi;
 
 	for (;;) {
-		size_t                  key_len;
-		struct d_shm_ht_rec_loc rec_loc;
-		char                   *value;
+		if (node_found) {
+			shm_lru_node_dec_ref(node_found);
+			node_found = NULL;
+		}
 
-		memcpy(key, key_prefix, key_prefix_len);
-		memcpy(key + key_prefix_len, name, name_len);
-		key_len      = key_prefix_len + name_len;
-		key[key_len] = '\0';
-
-		value =
-		    (char *)shm_ht_rec_find(&dfs->dcache->shm.dd_ht, key, key_len, &rec_loc, &rc);
-		D_DEBUG(DB_TRACE, "dcache %s: path=" DF_PATH ", key=" DF_DK "\n",
-			(value == NULL) ? "miss" : "hit", DP_PATH(path), DP_DK(key));
-		if (rc)
-			D_GOTO(out, rc = daos_der2errno(rc));
-		if (value == NULL) {
+		memcpy(key + SHM_DCACHE_KEY_PREF_SIZE, name, name_len);
+		key_len = SHM_DCACHE_KEY_PREF_SIZE + name_len;
+		rc      = shm_lru_get(dfs->dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
+				      (void **)&value);
+		D_DEBUG(DB_TRACE, "dentry cache %s: path=" DF_PATH ", key=" DF_DK "\n",
+			(rc != 0) ? "miss" : "hit", DP_PATH(path), DP_DK(key));
+		if (rc == ENOENT) {
+			/* record is not found in cache */
 			char tmp;
 
 			D_ASSERT(name_len > 0);
@@ -1147,23 +1138,20 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 						&rec, NULL, NULL);
 			}
 			name[name_len] = tmp;
-			if (rc) {
-				drec_decref(dfs->dcache, parent);
+			if (rc)
 				D_GOTO(out, rc);
-			}
 		} else {
 			D_ALLOC_PTR(rec);
 			if (rec == NULL)
 				D_GOTO(out, rc = ENOMEM);
 
 			rc = dfs_obj_deserialize(dfs, flags, value, rec);
-			if (rc)
+			if (rc) {
+				D_FREE(rec);
 				D_GOTO(out, rc);
+			}
 		}
 		D_ASSERT(rec != NULL);
-
-		if (parent != NULL)
-			drec_decref(dfs->dcache, parent);
 
 		// NOTE skip '/' character
 		name += name_len + 1;
@@ -1177,7 +1165,6 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 
 				rc = lookup_rel_path(dfs->dcache->dd_dfs, parent, rec->value, flags,
 						     &sym, mode, stbuf, 0);
-				drec_decref(dfs->dcache, rec);
 				if (rc)
 					D_GOTO(out, rc);
 				rec = sym;
@@ -1186,8 +1173,9 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 			break;
 		}
 
-		key_prefix = &rec->dh.dc_key_child_prefix[0];
 		parent     = rec;
+		ptr_key[1] = parent->oid.lo;
+		ptr_key[2] = parent->oid.hi;
 	}
 
 	if (stbuf && !skip_stat) {
@@ -1200,6 +1188,12 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 				D_GOTO(out, rc);
 			memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
 			rec->dc_stated = true;
+			/* stat and dc_stated are updated, need to update the record in cache too */
+			/* the data buffer size is stored as an integer at the very beginning of data */
+			val_size = *((size_t *)value) & 0xFFFFFFFF;
+			rc = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
+			if (rc != 0)
+				D_GOTO(out, rc);
 		}
 	}
 	if (mode && !skip_stat)
@@ -1208,7 +1202,8 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 done:
 	*_rec = rec;
 out:
-	D_FREE(key);
+	if (node_found)
+		shm_lru_node_dec_ref(node_found);
 	return rc;
 }
 
@@ -1216,15 +1211,14 @@ int
 dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int flags,
 		       dfs_obj_t **_rec, mode_t *mode, struct stat *stbuf)
 {
-	const size_t            key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
-	dfs_obj_t              *rec;
-	char                    key[DCACHE_KEY_PREF_SIZE + DFS_MAX_NAME];
-	char                   *key_prefix;
-	size_t                  key_len;
-	char                   *value;
-	struct d_shm_ht_rec_loc rec_loc;
-	int                     rc;
-	size_t                  val_size;
+	dfs_obj_t      *rec;
+	char            key[DCACHE_KEY_PREF_SIZE + DFS_MAX_NAME];
+	size_t          key_len;
+	char           *value;
+	shm_lru_node_t *node_found = NULL;
+	int             rc;
+	size_t          val_size;
+	uint64_t       *ptr_key;
 
 	D_ASSERT(dfs->dcache != NULL);
 	D_ASSERT(name != NULL);
@@ -1235,18 +1229,24 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 							  _rec, mode, stbuf);
 	}
 
-	key_prefix = dfs->dcache->dd_key_root_prefix;
-	memcpy(key, key_prefix, key_prefix_len);
-	memcpy(key + key_prefix_len, name, len);
-	key_len      = key_prefix_len + len;
-	key[key_len] = '\0';
-
-	value = (char *)shm_ht_rec_find(&dfs->dcache->shm.dd_ht, key, key_len, &rec_loc, &rc);
-	D_DEBUG(DB_TRACE, "dcache %s: name=" DF_PATH ", key=" DF_DK "\n",
-		(value == NULL) ? "miss" : "hit", DP_PATH(name), DP_DK(key));
-	if (rc)
-		D_GOTO(out, rc = daos_der2errno(rc));
-	if (value == NULL) {
+	ptr_key = (uint64_t *)key;
+	ptr_key[0] = dfs->dcache->shm.dd_pool_cont_hash;
+	if (parent) {
+		ptr_key[1] = parent->oid.lo;
+		ptr_key[2] = parent->oid.hi;
+	} else {
+		/* item under root dir */
+		ptr_key[1] = dfs->root.oid.lo;
+		ptr_key[2] = dfs->root.oid.hi;
+	}
+	memcpy(key + SHM_DCACHE_KEY_PREF_SIZE, name, len);
+	key_len = SHM_DCACHE_KEY_PREF_SIZE + len;
+	rc = shm_lru_get(dfs->dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
+			 (void **)&value);
+	D_DEBUG(DB_TRACE, "dentry cache %s: name=" DF_PATH ", key=" DF_DK "\n",
+		(rc != 0) ? "miss" : "hit", DP_PATH(name), DP_DK(key));
+	if (rc == ENOENT) {
+		/* record is not found */
 		rc = dcache_add(dfs->dcache, parent, name, len, key, key_len, &rec, mode, stbuf);
 		if (rc)
 			D_GOTO(out, rc);
@@ -1256,16 +1256,16 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 			D_GOTO(out, rc = ENOMEM);
 
 		rc = dfs_obj_deserialize(dfs, flags, value, rec);
-		if (rc)
+		if (rc) {
+			D_FREE(rec);
 			D_GOTO(out, rc);
-		memcpy(&rec->shm.rec_loc, &rec_loc, sizeof(rec_loc));
+		}
 
 		/** handle following symlinks outside of the dcache */
 		if (S_ISLNK(rec->mode) && !(flags & O_NOFOLLOW)) {
 			dfs_obj_t *sym;
 
 			rc = lookup_rel_path(dfs, parent, rec->value, flags, &sym, mode, stbuf, 0);
-			drec_decref(dfs->dcache, rec);
 			if (rc)
 				D_GOTO(out, rc);
 			rec = sym;
@@ -1281,8 +1281,8 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 					D_GOTO(out, rc);
 				memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
 				rec->dc_stated = true;
-				/* stat and dc_stated are updated, need to update ht record too */
-				/* the data buffer size is stored in front of data */
+				/* stat and dc_stated are updated, need to update the record in cache too */
+				/* the data buffer size is stored as an integer at the very beginning of data */
 				val_size = *((size_t *)value) & 0xFFFFFFFF;
 				rc = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
 				if (rc != 0)
@@ -1292,13 +1292,15 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 		if (mode)
 			*mode = rec->mode;
 		rec->dc = dfs->dcache;
-		rc = 0;
+		rc      = 0;
 	}
 
 done:
 	D_ASSERT(rec != NULL);
 	*_rec = rec;
 out:
+	if (node_found)
+		shm_lru_node_dec_ref(node_found);
 	return rc;
 }
 
@@ -1308,10 +1310,6 @@ drec_incref(dfs_dcache_t *dcache, dfs_obj_t *rec)
 	if (rec == NULL)
 		return;
 	D_ASSERT(dcache != NULL);
-
-	if (dcache->dd_type == DFS_CACHE_SHM)
-		D_ASSERT(0);
-
 	if (dcache->dh.drec_incref_fn == NULL)
 		return;
 	dcache->dh.drec_incref_fn(dcache, rec);
@@ -1323,13 +1321,10 @@ drec_decref(dfs_dcache_t *dcache, dfs_obj_t *rec)
 	if (rec == NULL)
 		return;
 	D_ASSERT(dcache != NULL);
-
-	if (dcache->dd_type == DFS_CACHE_SHM) {
-		shm_ht_rec_decref(&rec->shm.rec_loc);
-	} else {
-		D_ASSERT(dcache->dh.drec_decref_fn != NULL);
-		dcache->dh.drec_decref_fn(dcache, rec);
-	}
+	if (dcache->dd_type == DFS_CACHE_SHM)
+		return;
+	D_ASSERT(dcache->dh.drec_decref_fn != NULL);
+	dcache->dh.drec_decref_fn(dcache, rec);
 }
 
 void

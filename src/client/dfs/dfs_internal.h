@@ -109,6 +109,9 @@
 #define DCACHE_KEY_PREF_SIZE  35
 #define DCACHE_KEY_MAX        (DCACHE_KEY_PREF_SIZE - 1 + PATH_MAX)
 
+/** Size of the hash key prefix for shm dentry cache. 64-bit pool_cont_hash + obj_id */
+#define SHM_DCACHE_KEY_PREF_SIZE  (sizeof(uint64_t) + sizeof(daos_obj_id_t))
+
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
 typedef uint16_t dfs_layout_ver_t;
@@ -147,34 +150,26 @@ struct dfs_obj {
 	struct stat      dc_stbuf;
 	/** indicates if we need to retrieve the file size for the stbuf cache */
 	bool             dc_stated;
-	union {
-		/** SHM cache */
-		struct {
-			struct d_shm_ht_rec_loc rec_loc;
-		} shm;
 
-		/** Dram cache */
-		struct {
-			/** Entry in the hash table of the DFS cache */
-			d_list_t         dc_entry;
-			/** Reference counter used to manage memory deallocation */
-			_Atomic uint32_t dc_ref;
-			/** True iff this record was deleted from the hash table */
-			atomic_flag      dc_deleted;
-			/** Entry in the garbage collector list */
-			d_list_t         dc_entry_gc;
-			/** True iff this record is not in the garbage collector list */
-			bool             dc_deleted_gc;
-			/** Expiration date of the record */
-			struct timespec  dc_expire_gc;
-			/** Key prefix used by its child directory */
-			char             dc_key_child_prefix[DCACHE_KEY_PREF_SIZE];
-			/** Length of the hash key used to compute the hash index */
-			size_t           dc_key_len;
-			/** the hash key used to compute the hash index */
-			char             dc_key[];
-		} dh;
-	};
+	/** Dram cache */
+	/** Entry in the hash table of the DFS cache */
+	d_list_t         dc_entry;
+	/** Reference counter used to manage memory deallocation */
+	_Atomic uint32_t dc_ref;
+	/** True iff this record was deleted from the hash table */
+	atomic_flag      dc_deleted;
+	/** Entry in the garbage collector list */
+	d_list_t         dc_entry_gc;
+	/** True iff this record is not in the garbage collector list */
+	bool             dc_deleted_gc;
+	/** Expiration date of the record */
+	struct timespec  dc_expire_gc;
+	/** Key prefix used by its child directory */
+	char             dc_key_child_prefix[DCACHE_KEY_PREF_SIZE];
+	/** Length of the hash key used to compute the hash index */
+	size_t           dc_key_len;
+	/** the hash key used to compute the hash index */
+	char             dc_key[];
 };
 
 enum {

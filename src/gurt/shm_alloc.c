@@ -50,11 +50,13 @@ extern __thread pid_t d_tid;
 static int
 create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 {
-	int   i;
-	int   shm_ht_fd;
-	int   shmopen_perm = 0600;
-	void *shm_addr;
-	char  daos_shm_name_buf[64];
+	int              i;
+	int              rc;
+	int              shm_ht_fd;
+	int              shmopen_perm = 0600;
+	void            *shm_addr;
+	char             daos_shm_name_buf[64];
+	shm_lru_cache_t *lru_cache_dentry;
 
 	/* the shared memory only accessible for individual user for now */
 	sprintf(daos_shm_name_buf, "%s_%d", daos_shm_name, getuid());
@@ -117,6 +119,14 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	d_shm_head->magic = DSM_MAGIC;
 	/* initialization is finished now. */
 	close(shm_ht_fd);
+
+	rc = shm_lru_create_cache(NUM_SUB_CACHE, DEFAULT_CACHE_DENTRY_CAPACITY,
+				  0, 0, &lru_cache_dentry);
+	if (rc) {
+		D_ERROR("Failed to create dentry cache: %d (%s)\n", rc, strerror(rc));
+		goto err_unmap;
+	}
+	d_shm_head->off_lru_cache_dentry = (long int)lru_cache_dentry - (long int)d_shm_head;
 
 	return 0;
 
