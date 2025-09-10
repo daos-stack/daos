@@ -18,6 +18,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-17960') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -600,189 +601,189 @@ pipeline {
                 }
                 /* This stage is commented out until it can be replaced
                 with code for building the current Ubuntu release. */
-                stage('Build DEB on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        // expression { !skipStage() }
-                        expression { false }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.ubuntu'
-                            label 'docker_runner'
-                            args '--cap-add=SYS_ADMIN'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_el8_NOBUILD && !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_el9_NOBUILD && !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el9-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el9-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'yes'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg COMPILER=icc'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-intelc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
+                // stage('Build DEB on Ubuntu 20.04') {
+                //     when {
+                //         beforeAgent true
+                //         // expression { !skipStage() }
+                //         expression { false }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/rpms/packaging/Dockerfile.ubuntu'
+                //             label 'docker_runner'
+                //             args '--cap-add=SYS_ADMIN'
+                //             additionalBuildArgs dockerBuildArgs()
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(buildRpm())
+                //     }
+                //     post {
+                //         success {
+                //             buildRpmPost condition: 'success'
+                //         }
+                //         unstable {
+                //             buildRpmPost condition: 'unstable'
+                //         }
+                //         failure {
+                //             buildRpmPost condition: 'failure'
+                //         }
+                //         unsuccessful {
+                //             buildRpmPost condition: 'unsuccessful'
+                //         }
+                //         cleanup {
+                //             buildRpmPost condition: 'cleanup'
+                //             job_status_update()
+                //         }
+                //     }
+                // }
+                // stage('Build on EL 8.8') {
+                //     when {
+                //         beforeAgent true
+                //         expression { !params.CI_el8_NOBUILD && !skipStage() }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/docker/Dockerfile.el.8'
+                //             label 'docker_runner'
+                //             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                //                                                 deps_build: true,
+                //                                                 parallel_build: true) +
+                //                                 " -t ${sanitized_JOB_NAME()}-el8 " +
+                //                                 ' --build-arg REPOS="' + prRepos() + '"'
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(
+                //             sconsBuild(parallel_build: true,
+                //                        stash_files: 'ci/test_files_to_stash.txt',
+                //                        build_deps: 'no',
+                //                        stash_opt: true,
+                //                        scons_args: sconsArgs() +
+                //                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                //     }
+                //     post {
+                //         unsuccessful {
+                //             sh '''if [ -f config.log ]; then
+                //                       mv config.log config.log-el8-gcc
+                //                   fi'''
+                //             archiveArtifacts artifacts: 'config.log-el8-gcc',
+                //                              allowEmptyArchive: true
+                //         }
+                //         cleanup {
+                //             job_status_update()
+                //         }
+                //     }
+                // }
+                // stage('Build on EL 9') {
+                //     when {
+                //         beforeAgent true
+                //         expression { !params.CI_el9_NOBUILD && !skipStage() }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/docker/Dockerfile.el.9'
+                //             label 'docker_runner'
+                //             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                //                                                 deps_build: true,
+                //                                                 parallel_build: true) +
+                //                                 " -t ${sanitized_JOB_NAME()}-el9 " +
+                //                                 ' --build-arg REPOS="' + prRepos() + '"'
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(
+                //             sconsBuild(parallel_build: true,
+                //                        stash_files: 'ci/test_files_to_stash.txt',
+                //                        build_deps: 'no',
+                //                        stash_opt: true,
+                //                        scons_args: sconsArgs() +
+                //                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                //     }
+                //     post {
+                //         unsuccessful {
+                //             sh '''if [ -f config.log ]; then
+                //                       mv config.log config.log-el9-gcc
+                //                   fi'''
+                //             archiveArtifacts artifacts: 'config.log-el9-gcc',
+                //                              allowEmptyArchive: true
+                //         }
+                //         cleanup {
+                //             job_status_update()
+                //         }
+                //     }
+                // }
+                // stage('Build on Leap 15.5') {
+                //     when {
+                //         beforeAgent true
+                //         expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/docker/Dockerfile.leap.15'
+                //             label 'docker_runner'
+                //             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                //                                                 parallel_build: true,
+                //                                                 deps_build: true) +
+                //                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(
+                //             sconsBuild(parallel_build: true,
+                //                        scons_args: sconsFaultsArgs() +
+                //                                    ' PREFIX=/opt/daos TARGET_TYPE=release',
+                //                        build_deps: 'yes'))
+                //     }
+                //     post {
+                //         unsuccessful {
+                //             sh '''if [ -f config.log ]; then
+                //                       mv config.log config.log-leap15-gcc
+                //                   fi'''
+                //             archiveArtifacts artifacts: 'config.log-leap15-gcc',
+                //                              allowEmptyArchive: true
+                //         }
+                //         cleanup {
+                //             job_status_update()
+                //         }
+                //     }
+                // }
+                // stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
+                //     when {
+                //         beforeAgent true
+                //         expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/docker/Dockerfile.leap.15'
+                //             label 'docker_runner'
+                //             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                //                                                 parallel_build: true,
+                //                                                 deps_build: true) +
+                //                                 " -t ${sanitized_JOB_NAME()}-leap15" +
+                //                                 ' --build-arg COMPILER=icc'
+                //         }
+                //     }
+                //     steps {
+                //         job_step_update(
+                //             sconsBuild(parallel_build: true,
+                //                        scons_args: sconsFaultsArgs() +
+                //                                    ' PREFIX=/opt/daos TARGET_TYPE=release',
+                //                        build_deps: 'no'))
+                //     }
+                //     post {
+                //         unsuccessful {
+                //             sh '''if [ -f config.log ]; then
+                //                       mv config.log config.log-leap15-intelc
+                //                   fi'''
+                //             archiveArtifacts artifacts: 'config.log-leap15-intelc',
+                //                              allowEmptyArchive: true
+                //         }
+                //         cleanup {
+                //             job_status_update()
+                //         }
+                //     }
+                // }
             }
         }
         stage('Unit Tests') {
@@ -948,7 +949,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                details_stash: 'functional_el8_valgrind_details'))
                     }
                     post {
                         always {
@@ -969,8 +971,9 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                test_function: 'runTestFunctionalV2',
+                                details_stash: 'functional_el8_details'))
                     }
                     post {
                         always {
@@ -991,8 +994,9 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                test_function: 'runTestFunctionalV2',
+                                details_stash: 'functional_el9_details'))
                     }
                     post {
                         always {
@@ -1015,6 +1019,7 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2',
+                                details_stash: 'functional_leap15_details',
                                 image_version: 'leap15.6'))
                     }
                     post {
@@ -1037,7 +1042,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                details_stash: 'functional_ubuntu_details'))
                     }
                     post {
                         always {
@@ -1214,7 +1220,8 @@ pipeline {
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            details_stash: 'functional_medium_details'
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
@@ -1226,7 +1233,8 @@ pipeline {
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            details_stash: 'functional_medium_md_on_ssd_details'
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
@@ -1239,7 +1247,8 @@ pipeline {
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            details_stash: 'functional_medium_vmd_details'
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
@@ -1252,7 +1261,8 @@ pipeline {
                             provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            details_stash: 'functional_medium_verbs_details'
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
@@ -1265,7 +1275,8 @@ pipeline {
                             provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            details_stash: 'functional_medium_verbs_md_on_ssd_details'
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
@@ -1278,7 +1289,8 @@ pipeline {
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            details_stash: 'functional_medium_ucx_details'
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
@@ -1290,7 +1302,8 @@ pipeline {
                             default_nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            details_stash: 'functional_large_details'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
@@ -1302,12 +1315,41 @@ pipeline {
                             default_nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            details_stash: 'functional_large_md_on_ssd_details'
                         ),
                     )
                 }
             }
         } // stage('Test Hardware')
+        stage('Test Summary') {
+            steps {
+                script {
+                    parallel(
+                        'Functional Test Summary': getSummaryStage(
+                            name: 'Functional Test Summary',
+                            docker_filename: 'utils/docker/Dockerfile.el.8',
+                            script_stashes: ['functional_el8_details',
+                                             'functional_el9_details',
+                                             'functional_leap15_details',
+                                             'functional_ubuntu_details',
+                                             'functional_medium_details',
+                                             'functional_medium_md_on_ssd_details',
+                                             'functional_medium_vmd_details',
+                                             'functional_medium_verbs_details',
+                                             'functional_medium_verbs_md_on_ssd_details',
+                                             'functional_medium_ucx_details',
+                                             'functional_large_details',
+                                             'functional_large_md_on_ssd_details'],
+                            script_name: 'ci/functional_test_summary.sh',
+                            script_label: 'Generate Functional Test Summary',
+                            artifacts: 'functional_test_summary/*',
+                            job_status: job_status_internal
+                        )
+                    )
+                }
+            }
+        } // stage('Test Summary')
     } // stages
     post {
         always {

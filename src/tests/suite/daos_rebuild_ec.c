@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1422,7 +1423,7 @@ rebuild_ec_combined_ops(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
 	assert_int_equal(rc, 0);
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
