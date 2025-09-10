@@ -22,10 +22,12 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pools(add_pool_kwargs, error_handler=None):
+def add_pools(dmg, add_pool_kwargs, error_handler=None):
     """Add multiple TestPool objects to the test.
 
     Args:
+        dmg (DmgCommand): dmg command used to update the server log mask before creating the first
+            pool and reset it after creating the last pool. Not used if no pools are created.
         add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
             pool. Must at least include the 'test' kwargs. See add_pool() for other options.
         error_handler (method, None): optional method to call when a pool create fails
@@ -33,39 +35,28 @@ def add_pools(add_pool_kwargs, error_handler=None):
     Returns:
         list: a list of new pool objects
     """
-    _create = []
-    pools = []
+    _any_create = any(kwargs.get("create", True) is True for kwargs in add_pool_kwargs)
 
-    # Add the pools but do not create them yet
-    for kwargs in add_pool_kwargs:
-        _create.append(bool("create" not in kwargs or kwargs["create"]))
-        kwargs["create"] = False
-        pools.append(add_pool(**kwargs))
-
-    if pools and any(_create):
+    if _any_create:
         # Set the DEBUG log mask before the first pool create
-        pools[0].dmg.server_set_logmasks("DEBUG", raise_exception=False)
+        dmg.server_set_logmasks("DEBUG", raise_exception=False)
 
-    # Create all the pools that have been requested, but only set/reset the DEBUG log mask once
-    _saved_result = None
-    for index, pool in enumerate(pools):
-        if not _create[index]:
-            continue
+    # Add the requested pools
+    pools = []
+    for kwargs in add_pool_kwargs:
+        _restore = kwargs.get("set_logmasks", True)
+        kwargs["set_logmasks"] = False
         try:
-            pool.create(False)
+            pools.append(add_pool(**kwargs))
+            pools[-1].set_logmasks.value = _restore
         except TestFail as error:
             if not error_handler:
                 raise
             error_handler(error)
 
-        if index == 0:
-            _saved_result = pool.dmg.result
-
-    if pools and any(_create):
+    if _any_create:
         # Reset the log mask after the last pool create
-        pools[0].dmg.server_set_logmasks(raise_exception=False)
-        if _saved_result:
-            pools[0].dmg.result = _saved_result
+        dmg.server_set_logmasks(raise_exception=False)
 
     return pools
 
@@ -419,7 +410,7 @@ class TestPool(TestDaosApiBase):
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     @fail_on(DmgJsonCommandFailure)
-    def create(self, use_set_logmasks=True):
+    def create(self):
         """Create a pool with dmg.
 
         To use dmg, the test needs to set dmg_command through the constructor.
@@ -438,11 +429,6 @@ class TestPool(TestDaosApiBase):
         CommandFailure. Thus, we need to make more than one line modification
         to the test only for this purpose.
         Currently, pool_svc is the only test that needs this change.
-
-        Args:
-            use_set_logmasks (bool, optional): Allow using the TestPool.set_logmasks.value to
-                determine if the log mask should be set to DEBUG and reset before and after creating
-                the pool. Defaults to True.
         """
         self.destroy()
         if self.target_list.value is not None:
@@ -473,13 +459,13 @@ class TestPool(TestDaosApiBase):
         # Create a pool with the dmg command and store its CmdResult
         # Elevate engine log_mask to DEBUG before, then restore after pool create
         self._log_method("dmg.pool_create", kwargs)
-        if use_set_logmasks and self.set_logmasks.value is True:
+        if self.set_logmasks.value is True:
             self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
         finally:
-            if use_set_logmasks and self.set_logmasks.value is True:
+            if self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
 
         # make sure dmg exit status is that of the pool create, not the set-logmasks

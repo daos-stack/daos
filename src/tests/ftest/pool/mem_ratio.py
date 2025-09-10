@@ -25,10 +25,8 @@ class MemRatioTest(TestWithServers):
         pattern = "Insufficient scm size"
         self.log.debug("Verifying Pool creation failure: %s", error)
         result = self.server_managers[0].search_engine_logs(pattern)
-        if not result.passed or len(result.output) < 1:
+        if not result.passed:
             raise error
-        for line in result.output:
-            self.log.debug("  %s", line)
         self.log.debug("Pool failure expected due to: '%s'", pattern)
 
     def test_mem_ratio(self):
@@ -65,7 +63,7 @@ class MemRatioTest(TestWithServers):
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
-        pools = add_pools(kwargs_list, error_handler=self.check_insufficient_scm_size)
+        pools = add_pools(dmg, kwargs_list, error_handler=self.check_insufficient_scm_size)
 
         # Collect the pool create output values
         data = {}
@@ -86,7 +84,8 @@ class MemRatioTest(TestWithServers):
                     errors.append(
                         f"{name} - Mem ratio ({data[name]['mem-ratio']}) differs from pool "
                         f"create ({data[name]['create_ratio']}) by {_difference}")
-            except (KeyError, IndexError):
+            except (IndexError, KeyError, TypeError, ValueError):
+                # Unexpected response from pool create
                 data[name] = {
                     "mem-ratio": pool.mem_ratio.value,
                     "tier_bytes": "<ERROR>",
@@ -117,7 +116,7 @@ class MemRatioTest(TestWithServers):
                     errors.append(
                         f"{name} - Mem ratio ({data[name]['mem-ratio']}) differs from pool "
                         f"query ({data[name]['query_ratio']}) by {_difference}")
-            except (KeyError, IndexError, ValueError):
+            except (IndexError, KeyError, TypeError, ValueError):
                 data[name]["total_engines"] = "<ERROR>"
                 data[name]["tier_stats"] = "<ERROR>"
                 data[name]["mem_file_bytes(total)"] = "<ERROR>"
