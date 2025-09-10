@@ -25,6 +25,7 @@ D_CASSERT(sizeof(struct wal_trans_tail) == WAL_CSUM_LEN);
 
 #define WAL_MIN_CAPACITY	(8192 * WAL_BLK_SZ)	/* Minimal WAL capacity, in bytes */
 #define WAL_MAX_TRANS_BLKS	4096			/* Maximal blocks used by a transaction */
+#define WAL_MAX_REPLAY_BLKS     (WAL_MAX_TRANS_BLKS * 2)
 #define WAL_HDR_BLKS		1			/* Ensure atomic header write */
 
 #define META_BLK_SZ		WAL_BLK_SZ
@@ -903,6 +904,109 @@ wait_tx_committed(struct wal_tx_desc *wal_tx)
 	D_ASSERT(d_list_empty(&wal_tx->td_link));
 }
 
+static inline char *
+act_op2str(unsigned int act_op)
+{
+	switch (act_op) {
+	case UMEM_ACT_COPY:
+		return "copy";
+	case UMEM_ACT_COPY_PTR:
+		return "copy_ptr";
+	case UMEM_ACT_ASSIGN:
+		return "assign";
+	case UMEM_ACT_MOVE:
+		return "move";
+	case UMEM_ACT_SET:
+		return "set";
+	case UMEM_ACT_SET_BITS:
+		return "set_bits";
+	case UMEM_ACT_CLR_BITS:
+		return "clr_bits";
+	case UMEM_ACT_CSUM:
+		return "data_csum";
+	default:
+		D_ASSERTF(0, "Invalid opc %u\n", act_op);
+		return "unknown";
+	}
+}
+
+static void
+dump_tx_entries(struct umem_wal_tx *tx, struct data_csum_array *dc_arr)
+{
+	struct umem_action *act;
+	unsigned int        act_cnt[UMEM_ACT_MAX];
+	unsigned int        payload_sz[UMEM_ACT_MAX];
+	unsigned int        i, dc_idx = 0;
+
+	act = umem_tx_act_first(tx);
+	D_ASSERT(act != NULL);
+
+	for (i = UMEM_ACT_NOOP; i < UMEM_ACT_MAX; i++) {
+		act_cnt[i]    = 0;
+		payload_sz[i] = 0;
+	}
+
+	while (act != NULL) {
+		switch (act->ac_opc) {
+		case UMEM_ACT_COPY:
+			act_cnt[UMEM_ACT_COPY] += 1;
+			payload_sz[UMEM_ACT_COPY] += act->ac_copy.size;
+			payload_sz[UMEM_ACT_NOOP] += act->ac_copy.size;
+			break;
+		case UMEM_ACT_COPY_PTR:
+			act_cnt[UMEM_ACT_COPY_PTR] += 1;
+			payload_sz[UMEM_ACT_COPY_PTR] += act->ac_copy.size;
+			payload_sz[UMEM_ACT_NOOP] += act->ac_copy.size;
+			break;
+		case UMEM_ACT_ASSIGN:
+			act_cnt[UMEM_ACT_ASSIGN] += 1;
+			break;
+		case UMEM_ACT_MOVE:
+			act_cnt[UMEM_ACT_MOVE] += 1;
+			payload_sz[UMEM_ACT_MOVE] += sizeof(uint64_t);
+			payload_sz[UMEM_ACT_NOOP] += sizeof(uint64_t);
+			break;
+		case UMEM_ACT_SET:
+			act_cnt[UMEM_ACT_SET] += 1;
+			break;
+		case UMEM_ACT_SET_BITS:
+			act_cnt[UMEM_ACT_SET_BITS] += 1;
+			break;
+		case UMEM_ACT_CLR_BITS:
+			act_cnt[UMEM_ACT_CLR_BITS] += 1;
+			break;
+		case UMEM_ACT_CSUM:
+			act_cnt[UMEM_ACT_CSUM] += 1;
+			break;
+		default:
+			D_ASSERTF(0, "Invalid opc %u\n", act->ac_opc);
+			break;
+		}
+		act_cnt[UMEM_ACT_NOOP] += 1;
+
+		if (dc_idx == 0) {
+			act = umem_tx_act_next(tx);
+			if (act != NULL)
+				continue;
+		}
+
+		/* Put data csum actions after other actions */
+		if (dc_idx < dc_arr->dca_nr) {
+			act = &dc_arr->dca_acts[dc_idx];
+			dc_idx++;
+		} else {
+			act = NULL;
+		}
+	}
+
+	D_ERROR("Total tx entry:%u, payload:%u\n", act_cnt[UMEM_ACT_NOOP],
+		payload_sz[UMEM_ACT_NOOP]);
+
+	for (i = UMEM_ACT_COPY; i < UMEM_ACT_MAX; i++)
+		D_ERROR("action: %s, count: %u, payload: %u\n", act_op2str(i), act_cnt[i],
+			payload_sz[i]);
+}
+
 int
 bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data,
 	       struct bio_wal_stats *stats)
@@ -942,9 +1046,15 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 
 	D_ASSERT(blk_desc.bd_blks > 0);
 	if (blk_desc.bd_blks > WAL_MAX_TRANS_BLKS) {
-		D_ERROR("Too large transaction (%u blocks)\n", blk_desc.bd_blks);
-		rc = -DER_INVAL;
-		goto out;
+		D_ERROR("Too large transaction, blks:%u, payload_idx:%u, payload_off:%u)\n",
+			blk_desc.bd_blks, blk_desc.bd_payload_idx, blk_desc.bd_payload_off);
+		dump_tx_entries(tx, &dc_arr);
+		/* Tolerate large transaction when there is sufficient WAL free space */
+		if (blk_desc.bd_blks > wal_free_blks(si) ||
+		    blk_desc.bd_blks > WAL_MAX_REPLAY_BLKS) {
+			rc = -DER_INVAL;
+			goto out;
+		}
 	}
 
 	biod = bio_iod_alloc(mc->mc_wal, NULL, 1, BIO_IOD_TYPE_UPDATE);
@@ -1667,7 +1777,7 @@ bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	struct wal_blks_desc	 blk_desc = { 0 };
 	char			*buf, *dbuf = NULL;
 	struct umem_action	*act;
-	unsigned int		 max_blks = WAL_MAX_TRANS_BLKS, blk_off;
+	unsigned int             max_blks    = WAL_MAX_REPLAY_BLKS, blk_off;
 	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
 	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
 	int			 rc;
