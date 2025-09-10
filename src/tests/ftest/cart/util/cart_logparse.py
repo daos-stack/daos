@@ -70,6 +70,18 @@ class LogLine():
     the message only, and != which will match the entire line.
     """
 
+    @staticmethod
+    def is_valid(line):
+        """Return True if a valid CaRT log line is recognized."""
+        fields = line.split(None, 8)
+        return not (
+            # pylint: disable=too-many-boolean-expressions
+            len(fields) < 7
+            or len(fields[0]) != 10 or fields[0][4] != '/' or fields[0][7] != '/'
+            or len(fields[1]) != 15 or fields[1][2] != ':' and fields[1][8] != '.'
+            # pylint: enable=too-many-boolean-expressions
+        )
+
     # pylint: disable=too-many-public-methods
 
     # Match an address range, a region in memory.
@@ -91,27 +103,27 @@ class LogLine():
     re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
     def __init__(self, line):
+        # The format of log lines depends on the flags (DLOG_FLV_*) passed during initialization.
+        # All assumed flag settings are noted alongside the relevant logic that relies on those
+        # assumptions.
+
         fields = line.split()
         # Work out the end of the fixed-width portion, and the beginning of the
         # message. The hostname, pid, fac and level fields are all variable width.
         idx = 0
         for i in range(4):
             idx += len(fields[i]) + 1
-        # pylint: disable=wrong-spelling-in-comment
-        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c - d_vlog()
+        # Assuming DLOG_FLV_FAC is set in src/gurt/dlog.c - d_vlog()
         # snprintf(..., "%-4s ", facstr)
         idx += max(len(fields[4]), 4) + 1
         idx += max(len(fields[5]), 4)
-        # assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c - d_vlog()
-        # assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c - d_vlog()
+        # Assuming DLOG_FLV_TAG and DLOG_FLV_LOGPID are set in src/gurt/dlog.c - d_vlog()
         pidtid = fields[3][5:-1]
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
         self.fac = fields[4]
-        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c
-        # snprintf(..., "%-4s ", facstr)
-        # pylint: enable=wrong-spelling-in-comment
+        # Assuming DLOG_FLV_FAC is set in src/gurt/dlog.c - d_vlog()
         try:
             self.level = LOG_LEVELS[fields[5]]
         except KeyError as error:
@@ -541,15 +553,8 @@ class LogIter():
 
         index = 0
         for line in self._fd:
-            fields = line.split(None, 8)
             index += 1
-            if (
-                # pylint: disable=too-many-boolean-expressions
-                len(fields) < 7
-                or len(fields[0]) != 10 or fields[0][4] != '/' or fields[0][7] != '/'
-                or len(fields[1]) != 15 or fields[1][2] != ':' and fields[1][8] != '.'
-                # pylint: enable=too-many-boolean-expressions
-            ):
+            if not LogLine.is_valid(line):
                 self._data.append(LogRaw(line))
             else:
                 l_obj = LogLine(line)
@@ -571,13 +576,7 @@ class LogIter():
         for line in self._fd:
             fields = line.split(None, 8)
             index += 1
-            if (
-                # pylint: disable=too-many-boolean-expressions
-                len(fields) < 7
-                or len(fields[0]) != 10 or fields[0][4] != '/' or fields[0][7] != '/'
-                or len(fields[1]) != 15 or fields[1][2] != ':' and fields[1][8] != '.'
-                # pylint: enable=too-many-boolean-expressions
-            ):
+            if not LogLine.is_valid(line):
                 position += len(line)
                 continue
             pidtid = fields[3][5:-1]
@@ -647,14 +646,7 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split(None, 8)
-            if (
-                # pylint: disable=too-many-boolean-expressions
-                len(fields) < 7
-                or len(fields[0]) != 10 or fields[0][4] != '/' or fields[0][7] != '/'
-                or len(fields[1]) != 15 or fields[1][2] != ':' and fields[1][8] != '.'
-                # pylint: enable=too-many-boolean-expressions
-            ):
+            if not LogLine.is_valid(line):
                 return LogRaw(line)
             return LogLine(line)
 
