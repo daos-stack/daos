@@ -362,7 +362,10 @@ class WarningsFactory():
         entry['lineStart'] = line.lineno
         # Jenkins no longer seems to display the description.
         entry['description'] = message
-        entry['message'] = f'{line.get_anon_msg()}\n{message}'
+        entry['message'] = (
+            f"{line.get_anon_msg()}\n{message}"
+            f"\n{line.get_log_name()}\n{line.to_str()}"
+        )
         entry['severity'] = sev
         self.issues.append(entry)
         if self.pending and self.pending[0][0].pid != line.pid:

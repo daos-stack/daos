@@ -109,7 +109,7 @@ class LogLine():
     # Match DF_CONT
     re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
-    def __init__(self, line, pid_only=False):
+    def __init__(self, line, log_name: str, pid_only=False):
         """
         Parse a CART log line and extract structured components such as log level, timestamp,
         hostname, PID, TID, UID, facility, function name, etc.
@@ -139,6 +139,7 @@ class LogLine():
             pid_only (bool, optional): If True, only extract the PID and skip full parsing.
                                        Defaults to False.
         """
+        self.log_name = log_name
         fields = line.split()
         # Check the line header and work out the beginning of the message.
         # The level, date, time, hostname, pid and fac fields are all variable width.
@@ -207,6 +208,9 @@ class LogLine():
                 self.descriptor = desc
         self._msg = ' '.join(self._fields)
 
+    def get_log_name(self):
+        return self.log_name
+
     def to_str(self, mark=False):
         """Convert the object to a string"""
         if mark:
@@ -267,7 +271,8 @@ class LogLine():
             if not field:
                 r = self.re_pointer.fullmatch(entry)
                 if r:
-                    field = '0x...{}'.format(r.group(1))
+                    # field = '0x...{}'.format(r.group(1))
+                    field = entry
             if not field:
                 r = self.re_pid.fullmatch(entry)
                 if r:
@@ -601,7 +606,7 @@ class LogIter():
         for line in self._fd:
             index += 1
             try:
-                l_obj = LogLine(line)
+                l_obj = LogLine(line, self.fname)
                 l_pid = l_obj.pid
                 self._data.append(l_obj)
                 if l_pid in pids:
@@ -623,7 +628,7 @@ class LogIter():
             index += 1
             position += len(line)
             try:
-                l_obj = LogLine(line)
+                l_obj = LogLine(line, self.fname)
                 l_pid = l_obj.pid
                 if l_pid in pids:
                     pids[l_pid]['line_count'] += 1
@@ -701,7 +706,7 @@ class LogIter():
             ):
                 # pylint: enable=too-many-boolean-expressions
                 return LogRaw(line)
-            return LogLine(line)
+            return LogLine(line, self.fname)
 
         try:
             line = self._data[self._offset]
