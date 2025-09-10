@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2025 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -421,7 +422,7 @@ pool_child_recreate(struct ds_pool_child *child)
 		return rc;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_file(dss_storage_path, child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
 		return rc;
 
@@ -529,7 +530,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 			goto out;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_file(dss_storage_path, child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
 		goto out;
 
@@ -1772,8 +1773,8 @@ out:
 	if (rc != 0)
 		D_FREE(hdl);
 
-	D_DEBUG(DB_MD, DF_UUID": connect "DF_RC"\n",
-		DP_UUID(pool->sp_uuid), DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": connect " DF_UUID " " DF_RC "\n", DP_UUID(pool->sp_uuid),
+		DP_UUID(pic->pic_hdl), DP_RC(rc));
 	return rc;
 }
 
