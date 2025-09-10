@@ -174,3 +174,12 @@ message ClientTelemetryResp
 	int32 status    = 1; // DAOS status code
 	int32 agent_uid = 2; // UID of agent process
 }
+
+message GetGroupStatusReq {
+	uint32 group_version = 1; // System map version
+}
+
+message GetGroupStatusResp {
+	int32 status = 1; // DAOS status code
+	repeated uint32 dead_ranks = 2; // All dead ranks
+}
