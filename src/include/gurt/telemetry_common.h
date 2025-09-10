@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -160,6 +161,7 @@ enum {
 	D_TM_RETAIN_SHMEM_IF_NON_EMPTY = 0x004,
 	D_TM_OPEN_OR_CREATE            = 0x008,
 	D_TM_MULTIPLE_WRITER_LOCK      = 0x010,
+	D_TM_NO_SHMEM                  = 0x020,
 };
 
 /** Output formats */

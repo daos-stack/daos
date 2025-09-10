@@ -179,6 +179,8 @@ unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 unsigned int	sched_relax_mode;
 unsigned int	sched_unit_runtime_max = 32; /* ms */
 bool		sched_watchdog_all;
+unsigned int    sched_inactive_max = 40000; /* ms */
+bool            sched_monitor_kill = true;
 
 enum {
 	/* All requests for various pools are processed in FIFO */
@@ -206,42 +208,48 @@ struct pressure_ratio {
 };
 
 static struct pressure_ratio pressure_gauge[] = {
-	{	/* free space > 40%, no space pressure */
-		.pr_free	= 40,
-		.pr_gc_ratio	= 10,
-		.pr_delay	= 0,
-		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
-	},
-	{	/* free space > 30% */
-		.pr_free	= 30,
-		.pr_gc_ratio	= 20,
-		.pr_delay	= 4000, /* msecs */
-		.pr_pressure	= 1,
-	},
-	{	/* free space > 20% */
-		.pr_free	= 20,
-		.pr_gc_ratio	= 30,
-		.pr_delay	= 6000, /* msecs */
-		.pr_pressure	= 2,
-	},
-	{	/* free space > 10% */
-		.pr_free	= 10,
-		.pr_gc_ratio	= 40,
-		.pr_delay	= 8000, /* msecs */
-		.pr_pressure	= 3,
-	},
-	{	/* free space > 5% */
-		.pr_free	= 5,
-		.pr_gc_ratio	= 50,
-		.pr_delay	= 10000, /* msecs */
-		.pr_pressure	= 4,
-	},
-	{	/* free space <= 5% */
-		.pr_free	= 0,
-		.pr_gc_ratio	= 60,
-		.pr_delay	= 12000, /* msecs */
-		.pr_pressure	= 5,
-	},
+    {
+	/* free space > 40%, no space pressure */
+	.pr_free     = 40,
+	.pr_gc_ratio = 10,
+	.pr_delay    = 0,
+	.pr_pressure = SCHED_SPACE_PRESS_NONE,
+    },
+    {
+	/* free space > 30% */
+	.pr_free     = 30,
+	.pr_gc_ratio = 30,
+	.pr_delay    = 4000, /* msecs */
+	.pr_pressure = 1,
+    },
+    {
+	/* free space > 20% */
+	.pr_free     = 20,
+	.pr_gc_ratio = 45,
+	.pr_delay    = 6000, /* msecs */
+	.pr_pressure = 2,
+    },
+    {
+	/* free space > 10% */
+	.pr_free     = 10,
+	.pr_gc_ratio = 60,
+	.pr_delay    = 8000, /* msecs */
+	.pr_pressure = 3,
+    },
+    {
+	/* free space > 5% */
+	.pr_free     = 5,
+	.pr_gc_ratio = 75,
+	.pr_delay    = 10000, /* msecs */
+	.pr_pressure = 4,
+    },
+    {
+	/* free space <= 5% */
+	.pr_free     = 0,
+	.pr_gc_ratio = 90,
+	.pr_delay    = 12000, /* msecs */
+	.pr_pressure = 5,
+    },
 };
 
 static inline unsigned int
@@ -453,6 +461,9 @@ sched_info_fini(struct dss_xstream *dx)
 		d_list_del_init(&req->sr_link);
 		D_FREE(req);
 	}
+
+	if (info->si_hist_seqs != NULL)
+		D_FREE(info->si_hist_seqs);
 }
 
 static int
@@ -570,6 +581,12 @@ static struct d_binheap_ops rpc_heap_ops = {
 	.hop_compare	= rpc_heap_node_cmp,
 };
 
+static inline bool
+is_monitor_xs(struct dss_xstream *dx)
+{
+	return dx->dx_xs_id == 1; /* SWIM xstream */
+}
+
 static int
 sched_info_init(struct dss_xstream *dx)
 {
@@ -588,6 +605,7 @@ sched_info_init(struct dss_xstream *dx)
 	info->si_sleep_cnt = 0;
 	info->si_wait_cnt = 0;
 	info->si_stop = 0;
+	info->si_hist_seqs     = NULL;
 	sched_metrics_init(dx);
 
 	rc = d_hash_table_create(D_HASH_FT_NOLOCK, 4,
@@ -608,7 +626,19 @@ sched_info_init(struct dss_xstream *dx)
 	}
 
 	rc = prealloc_requests(info, count);
+	if (rc != 0) {
+		D_ERROR("Failed to preallocate sched requests.\n");
+		goto out;
+	}
 
+	if (is_monitor_xs(dx)) {
+		D_ALLOC_ARRAY(info->si_hist_seqs, dss_xstream_cnt());
+		if (info->si_hist_seqs == NULL) {
+			rc = -DER_NOMEM;
+			D_ERROR("Failed to allocate hist seq array.\n");
+			goto out;
+		}
+	}
 out:
 	if (rc)
 		sched_info_fini(dx);
@@ -1536,15 +1566,21 @@ sched_req_wakeup(struct sched_request *req)
 }
 
 void
+sched_req_abort(struct sched_request *req)
+{
+	req->sr_abort = 1;
+	sched_req_wakeup(req);
+}
+
+void
 sched_req_wait(struct sched_request *req, bool abort)
 {
 	int	rc;
 
 	D_ASSERT(req != NULL);
-	if (abort) {
-		req->sr_abort = 1;
-		sched_req_wakeup(req);
-	}
+	if (abort)
+		sched_req_abort(req);
+
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 	rc = ABT_thread_join(req->sr_ult);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_thread_join: %d\n", rc);
@@ -2065,6 +2101,71 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 	d_tm_inc_counter(info->si_stats.ss_relax_time, sleep_time);
 }
 
+/* Use SWIM xstream to monitor scheduler activities of SYS & VOS xstreams */
+static void
+sched_xs_monitor(struct dss_xstream *cur_dx)
+{
+	struct dss_xstream    *dx;
+	struct sched_info     *info, *cur_info;
+	struct sched_hist_seq *hist;
+	unsigned int           gap;
+	int                    rc, i, inactive_tgt, inactive_id = -1;
+
+	D_ASSERT(is_monitor_xs(cur_dx));
+	/* Monitor isn't enabled */
+	if (sched_inactive_max == 0)
+		return;
+
+	cur_info = &cur_dx->dx_sched_info;
+	/* Check schedule activities every two seconds */
+	hist = &cur_info->si_hist_seqs[cur_dx->dx_xs_id];
+	if ((hist->sm_last_ts + 2000) > cur_info->si_cur_ts)
+		return;
+
+	hist->sm_last_ts = cur_info->si_cur_ts;
+	if (!dss_sched_monitor_enter())
+		return;
+
+	/* Accessing other xstream data without locking */
+	for (i = 0; i < dss_xstream_cnt(); i++) {
+		dx   = dss_get_xstream(i);
+		info = &dx->dx_sched_info;
+
+		/* Monitor SYS & VOS xstreams only */
+		if (dx->dx_xs_id != 0 && !dx->dx_main_xs)
+			continue;
+
+		D_ASSERT(!is_monitor_xs(dx));
+		hist = &cur_info->si_hist_seqs[i];
+		if (hist->sm_last_ts == 0 || hist->sm_last_seq != info->si_cur_seq) {
+			hist->sm_last_ts  = cur_info->si_cur_ts;
+			hist->sm_last_seq = info->si_cur_seq;
+			continue;
+		}
+
+		/* The schedule sequence isn't bumped for too long time */
+		if ((hist->sm_last_ts + sched_inactive_max) < cur_info->si_cur_ts) {
+			inactive_id  = dx->dx_xs_id;
+			inactive_tgt = dx->dx_tgt_id;
+			gap          = cur_info->si_cur_ts - hist->sm_last_ts;
+			break;
+		}
+	}
+
+	dss_sched_monitor_exit();
+
+	if (inactive_id >= 0) {
+		D_WARN("SCHED_MONITOR: xs %d (tgt:%d) is inactive for more than %u ms!\n",
+		       inactive_id, inactive_tgt, gap);
+		if (sched_monitor_kill) {
+			D_ERROR("SCHED_MONITOR: Killing engine...\n");
+			rc = kill(getpid(), SIGKILL);
+			if (rc != 0)
+				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
+		}
+	}
+}
+
 static void
 sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 {
@@ -2091,6 +2192,9 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	}
 	duration = cur_ts - info->si_cur_ts;
 	info->si_cur_ts = cur_ts;
+
+	if (is_monitor_xs(dx))
+		sched_xs_monitor(dx);
 
 	wakeup_all(dx);
 	process_all(dx);

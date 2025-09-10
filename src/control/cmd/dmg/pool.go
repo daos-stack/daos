@@ -226,7 +226,7 @@ func (cmd *poolCreateCmd) setMemRatio(req *control.PoolCreateReq, defVal float32
 
 func (cmd *poolCreateCmd) storageAutoPercentage(ctx context.Context, req *control.PoolCreateReq) error {
 	if cmd.NumRanks > 0 {
-		return errIncompatFlags("size", "nranks")
+		return errIncompatFlags("size=%", "nranks")
 	}
 	if cmd.TierRatio.IsSet() {
 		return errIncompatFlags("size=%", "tier-ratio")
@@ -811,7 +811,7 @@ type poolSetPropCmd struct {
 	poolCmd
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>" required:"1"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val1[;val2...]...]>" required:"1"`
 	} `positional-args:"yes"`
 }
 
@@ -820,9 +820,6 @@ func (cmd *poolSetPropCmd) Execute(_ []string) error {
 	for _, prop := range cmd.Args.Props.ToSet {
 		if prop.Name == "perf_domain" {
 			return errors.New("can't set perf_domain on existing pool.")
-		}
-		if prop.Name == "rd_fac" {
-			return errors.New("can't set redundancy factor on existing pool.")
 		}
 		if prop.Name == "ec_pda" {
 			return errors.New("can't set EC performance domain affinity on existing pool.")

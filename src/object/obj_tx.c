@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,14 +81,10 @@ struct dc_tx {
 	tse_task_t		*tx_orig_task;
 	/** Transaction flags (DAOS_TF_RDONLY, DAOS_TF_ZERO_COPY, etc.) */
 	uint64_t		 tx_flags;
-	uint32_t		 tx_fixed_epoch:1, /** epoch is specified. */
-				 tx_retry:1, /** Retry the commit RPC. */
-				 tx_set_resend:1, /** Set 'resend' flag. */
-				 tx_for_convert:1,
-				 tx_has_cond:1,
-				 tx_renew:1,
-				 tx_closed:1,
-				 tx_reintegrating:1;
+	uint32_t                 tx_fixed_epoch : 1,                      /** epoch is specified. */
+	    tx_retry : 1, /** Retry the commit RPC. */ tx_set_resend : 1, /** Set 'resend' flag. */
+	    tx_for_convert : 1, tx_has_cond : 1, tx_renew : 1, tx_closed : 1, tx_reintegrating : 1,
+	    tx_maybe_starve : 1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
 	/** The rank for the server on which the TX leader resides. */
@@ -106,6 +103,8 @@ struct dc_tx {
 
 	uint16_t		 tx_retry_cnt;
 	uint16_t		 tx_inprogress_cnt;
+	/* Last timestamp (in second) when report retry warning message. */
+	uint32_t                 tx_retry_warn_ts;
 	/** Pool map version when trigger first IO. */
 	uint32_t		 tx_pm_ver;
 	/** Reference the pool. */
@@ -393,6 +392,15 @@ out:
 	return rc;
 }
 
+static inline void
+dc_tx_bulk_free(crt_bulk_t *hdl)
+{
+	if (*hdl != CRT_BULK_NULL) {
+		crt_bulk_free(*hdl);
+		*hdl = CRT_BULK_NULL;
+	}
+}
+
 static void
 dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 {
@@ -407,11 +415,8 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 
 		csummer = tx->tx_co->dc_csummer;
 		if (dcu->dcu_flags & ORF_CPD_BULK) {
-			for (i = 0; i < dcsr->dcsr_nr; i++) {
-				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
-					crt_bulk_free(dcu->dcu_bulks[i]);
-			}
-
+			for (i = 0; i < dcsr->dcsr_nr; i++)
+				dc_tx_bulk_free(&dcu->dcu_bulks[i]);
 			D_FREE(dcu->dcu_bulks);
 		}
 
@@ -522,12 +527,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	/* Keep 'tx_set_resend'. */
 
 	if (tx->tx_reqs.dcs_type == DCST_BULK_REQ) {
-		if (tx->tx_reqs_bulk.dcb_bulk != NULL) {
-			if (tx->tx_reqs_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_reqs_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_reqs_bulk.dcb_bulk);
-		}
-
+		dc_tx_bulk_free(&tx->tx_reqs_bulk.dcb_bulk);
 		D_FREE(tx->tx_reqs_bulk.dcb_iov.iov_buf);
 	}
 
@@ -539,11 +539,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 
 	if (tx->tx_head.dcs_type == DCST_BULK_HEAD) {
-		if (tx->tx_head_bulk.dcb_bulk != NULL) {
-			if (tx->tx_head_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_head_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_head_bulk.dcb_bulk);
-		}
+		dc_tx_bulk_free(&tx->tx_head_bulk.dcb_bulk);
 		/* Free MBS buffer. */
 		D_FREE(tx->tx_head_bulk.dcb_iov.iov_buf);
 	} else {
@@ -556,11 +552,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	tx->tx_head.dcs_buf = NULL;
 
 	if (tx->tx_disp.dcs_type == DCST_BULK_ENT) {
-		if (tx->tx_disp_bulk.dcb_bulk != NULL) {
-			if (tx->tx_disp_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_disp_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_disp_bulk.dcb_bulk);
-		}
+		dc_tx_bulk_free(&tx->tx_disp_bulk.dcb_bulk);
 		dcde = tx->tx_disp_bulk.dcb_iov.iov_buf;
 	} else {
 		dcde = tx->tx_disp.dcs_buf;
@@ -576,11 +568,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 
 	if (tx->tx_tgts.dcs_type == DCST_BULK_TGT) {
-		if (tx->tx_tgts_bulk.dcb_bulk != NULL) {
-			if (tx->tx_tgts_bulk.dcb_bulk[0] != CRT_BULK_NULL)
-				crt_bulk_free(tx->tx_tgts_bulk.dcb_bulk[0]);
-			D_FREE(tx->tx_tgts_bulk.dcb_bulk);
-		}
+		dc_tx_bulk_free(&tx->tx_tgts_bulk.dcb_bulk);
 		D_FREE(tx->tx_tgts_bulk.dcb_iov.iov_buf);
 		tx->tx_tgts.dcs_buf = NULL;
 	} else {
@@ -994,6 +982,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 
 	D_MUTEX_LOCK(&tx->tx_lock);
 
+	tx->tx_maybe_starve = 0;
+
 	if (rc == 0) {
 		uint64_t	*sub_epochs = oco->oco_sub_epochs.ca_arrays;
 
@@ -1091,7 +1081,19 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	locked = false;
 
 	if (rc != -DER_TX_RESTART) {
-		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt, 0);
+		uint32_t now = daos_gettime_coarse();
+
+		delay = dc_obj_retry_delay(task, DAOS_OBJ_RPC_CPD, rc, &tx->tx_retry_cnt,
+					   &tx->tx_inprogress_cnt, 0);
+		if (rc == -DER_INPROGRESS &&
+		    ((tx->tx_retry_warn_ts == 0 && tx->tx_inprogress_cnt >= 10) ||
+		     (tx->tx_retry_warn_ts > 0 && tx->tx_retry_warn_ts + 10 < now))) {
+			tx->tx_retry_warn_ts = now;
+			tx->tx_maybe_starve  = 1;
+			D_WARN("The dist TX task %p has been retried for %u times, maybe starve\n",
+			       task, tx->tx_inprogress_cnt);
+		}
+
 		rc1 = tse_task_reinit_with_delay(task, delay);
 		if (rc1 != 0) {
 			D_ERROR("Failed to reinit task %p: %d, %d\n", task, rc1, rc);
@@ -1767,15 +1769,23 @@ dc_tx_cpd_body_bulk(struct daos_cpd_sg *dcs, struct daos_cpd_bulk *dcb,
 	dcb->dcb_sgl.sg_nr_out = 1;
 	dcb->dcb_sgl.sg_iovs = &dcb->dcb_iov;
 
-	rc = obj_bulk_prep(&dcb->dcb_sgl, 1, true, CRT_BULK_RO, task, &dcb->dcb_bulk);
-	if (rc == 0) {
-		dcs->dcs_type = type;
-		dcs->dcs_nr = nr;
-		dcs->dcs_buf = dcb;
-	} else {
+	rc = crt_bulk_create(daos_task2ctx(task), &dcb->dcb_sgl, CRT_BULK_RO, &dcb->dcb_bulk);
+	if (rc != 0)
+		goto out;
+
+	rc = crt_bulk_bind(dcb->dcb_bulk, daos_task2ctx(task));
+	if (rc != 0)
+		goto out;
+
+	dcs->dcs_type = type;
+	dcs->dcs_buf  = dcb;
+	dcs->dcs_nr   = nr;
+
+out:
+	if (rc != 0) {
+		dc_tx_bulk_free(&dcb->dcb_bulk);
 		dcb->dcb_iov.iov_buf = NULL;
 	}
-
 	return rc;
 }
 
@@ -2279,8 +2289,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	tgt_ep.ep_tag = tx->tx_leader_tag;
 	tgt_ep.ep_rank = tx->tx_leader_rank;
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep,
-			    DAOS_OBJ_RPC_CPD, &req);
+	rc = dc_obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_CPD, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2308,6 +2317,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	oci->oci_flags = ORF_LEADER;
 	if (tx->tx_set_resend && !tx->tx_renew)
 		oci->oci_flags |= ORF_RESEND;
+	if (tx->tx_maybe_starve)
+		oci->oci_flags |= ORF_MAYBE_STARVE;
 	tx->tx_renew = 0;
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;

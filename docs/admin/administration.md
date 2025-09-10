@@ -920,7 +920,7 @@ access_points:
 port: 10001
 transport_config:
   allow_insecure: true
-log_file: /tmp/daos_agent-tmp.log
+log_file: /var/log/daos/daos_agent-tmp.log
 ```
 
 
@@ -1029,6 +1029,24 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
     Then restart DAOS Servers and format.
 
 
+### Storage Format Replace
+
+If storage metadata for a rank is lost, for example after losing PMem contents after NVDIMM failure,
+storage for that rank will need to be formatted and rank metadata regenerated. If other hardware on
+the storage server has not changed the old rank can be "reused" by formatting using the
+`dmg storage format --replace` option.
+
+An examples workflow would be:
+- `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
+- `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
+- After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
+- Storage server is rebooted after running `daos_server scm prepare` and command is run again.
+- Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
+- `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
+- Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
+  rank will be created).
+- Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
+
 ### System Erase
 
 To erase the DAOS sorage configuration, the `dmg system erase`
@@ -1084,6 +1102,28 @@ the system (this can be checked with `dmg system query -v`).
 After extending the system, the cache of the `daos_agent` service of the client
 nodes needs to be refreshed.  For detailed information, please refer to the
 [1][System Deployment documentation].
+
+### Adding or removing Management Service (MS) replicas
+
+The DAOS Management Service (MS) runs on a selected subset of `daos_server` nodes.
+An administrator may add or remove hosts from the MS replica list.
+
+1. Stop I/O and safely shut down all `daos_server` and `daos_agent` processes.
+2. Update the `mgmt_svc_replicas` list in the `daos_server` configuration file.
+3. Update the `access_points` list in the `daos_agent` configuration file.
+4. Update `hostlist` in the `dmg` configuration file, if applicable.
+5. Restart all `daos_server` and `daos_agent` processes.
+
+To verify that the updated MS replicas came up correctly:
+1. Use the `dmg system query` command to check that all expected ranks have come up in the Joined state.
+   The command should not time out.
+2. Use the `dmg system leader-query` to ensure a leader election has completed.
+
+!!! warning
+    When removing or replacing MS replicas, do *not* replace all old replicas with
+    new ones.
+    At least one old replica must remain in the list to act as a data source for
+    the new replicas. 
 
 
 ## Software Upgrade

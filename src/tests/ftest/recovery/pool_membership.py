@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +9,7 @@ import time
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, report_errors
 from ior_test_base import IorTestBase
+from recovery_utils import wait_for_check_complete
 from run_utils import run_remote
 
 
@@ -37,28 +39,6 @@ class PoolMembershipTest(IorTestBase):
                 rank_to_free[rank] = free
 
         return rank_to_free
-
-    def wait_for_check_complete(self):
-        """Repeatedly call dmg check query until status becomes COMPLETED.
-
-        If the status doesn't become COMPLETED, fail the test.
-
-        Returns:
-            list: List of repair reports.
-
-        """
-        repair_reports = None
-        for _ in range(8):
-            check_query_out = self.get_dmg_command().check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                repair_reports = check_query_out["response"]["reports"]
-                break
-            time.sleep(5)
-
-        if not repair_reports:
-            self.fail("Checker didn't detect or repair any inconsistency!")
-
-        return repair_reports
 
     def test_orphan_pool_shard(self):
         """Test orphan pool shard.
@@ -218,11 +198,10 @@ class PoolMembershipTest(IorTestBase):
         # 7. Query the checker and verify that the issue was fixed.
         # i.e., Current status is COMPLETED.
         errors = []
-        repair_reports = self.wait_for_check_complete()
+        repair_reports = wait_for_check_complete(dmg_command)
         query_msg = repair_reports[0]["msg"]
         if "orphan rank" not in query_msg:
-            errors.append(
-                "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
+            errors.append(f"Checker didn't fix orphan pool shard! msg = {query_msg}")
 
         # 8. Disable the checker and start server.
         self.log_step("Disable the checker and start server.")
@@ -272,8 +251,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        vos_0_path = f"{scm_mount}/{pool.uuid.lower()}/vos-0"
+        vos_0_path = f"{self.server_managers[0].get_vos_path(pool)}/vos-0"
         vos_0_result = check_file_exists(hosts=self.hostlist_servers, filename=vos_0_path)
         if not vos_0_result[0]:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
@@ -296,13 +274,12 @@ class PoolMembershipTest(IorTestBase):
         dmg_command.check_start()
 
         self.log_step("Query the checker and verify that the issue was fixed.")
-        repair_reports = self.wait_for_check_complete()
+        repair_reports = wait_for_check_complete(dmg_command)
 
         errors = []
         query_msg = repair_reports[0]["msg"]
         if "dangling target" not in query_msg:
-            errors.append(
-                "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
+            errors.append(f"Checker didn't fix orphan pool shard! msg = {query_msg}")
 
         self.log_step("Disable the checker and start server.")
         dmg_command.check_disable()
@@ -355,8 +332,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        pool_directory = f"{scm_mount}/{self.pool.uuid.lower()}"
+        pool_directory = self.server_managers[0].get_vos_path(self.pool)
         pool_directory_result = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_directory, directory=True)
         if not pool_directory_result[0]:
@@ -382,7 +358,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step(
             "Query the checker until expected number of inconsistencies are repaired.")
-        repair_reports = self.wait_for_check_complete()
+        repair_reports = wait_for_check_complete(dmg_command)
 
         # Verify that the checker repaired target count + 1 faults. (+1 is for rank.
         # Checker marks it as down.)

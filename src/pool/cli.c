@@ -1049,8 +1049,8 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 		D_GOTO(out, rc);
 
 	/** Pool connect RPC by UUID (provided, or looked up by label above) */
-	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, pool->dp_pool,
-			     pool->dp_pool_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, pool->dp_pool,
+				pool->dp_pool_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create rpc");
 		D_GOTO(out, rc);
@@ -1140,7 +1140,7 @@ dc_pool_connect(tse_task_t *task)
 		/** allocate and fill in pool connection */
 		rc = init_pool(label, uuid, args->flags, args->grp, &tpriv->pool);
 		if (rc)
-			goto out_tpriv;
+			goto out_task;
 
 		D_DEBUG(DB_MD, "%s: connecting: hdl=" DF_UUIDF " flags=%x\n",
 			args->pool ?: "<compat>", DP_UUID(tpriv->pool->dp_pool_hdl), args->flags);
@@ -1154,9 +1154,9 @@ dc_pool_connect(tse_task_t *task)
 
 out_pool:
 	dc_pool_put(tpriv->pool);
-out_tpriv:
-	pool_task_destroy_priv(task);
 out_task:
+	if (tpriv)
+		pool_task_destroy_priv(task);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -1290,13 +1290,13 @@ dc_pool_disconnect(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
-		goto out_tpriv;
+		goto out_pool;
 	}
-	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_DISCONNECT, pool->dp_pool,
-			     pool->dp_pool_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_pool_req_create(daos_task2ctx(task), &ep, POOL_DISCONNECT, pool->dp_pool,
+				pool->dp_pool_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create rpc");
-		D_GOTO(out_tpriv, rc);
+		D_GOTO(out_pool, rc);
 	}
 
 	disc_args.pool = pool;
@@ -1314,11 +1314,11 @@ dc_pool_disconnect(tse_task_t *task)
 out_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-out_tpriv:
-	pool_task_destroy_priv(task);
 out_pool:
 	dc_pool_put(pool);
 out_task:
+	if (tpriv)
+		pool_task_destroy_priv(task);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -1720,7 +1720,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 
 		D_ALLOC_PTR(tpriv->state);
 		if (tpriv->state == NULL) {
-			D_GOTO(out_tpriv, rc = -DER_NOMEM);
+			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
 		rc = dc_mgmt_sys_attach(args->grp, &tpriv->state->sys);
@@ -1747,8 +1747,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 		goto out_client;
 	}
 	uuid_clear(null_uuid);
-	rc = pool_req_create(daos_task2ctx(task), &ep, opc, args->uuid, null_uuid, &tpriv->rq_time,
-			     &rpc);
+	rc = dc_pool_req_create(daos_task2ctx(task), &ep, opc, args->uuid, null_uuid,
+				&tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_client, rc);
@@ -1766,8 +1766,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
 	}
 
-	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number,
-				    POOL_TGT_UPDATE_SKIP_RF_CHECK);
+	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number, 0 /* flags */);
 
 	crt_req_addref(rpc);
 
@@ -1788,9 +1787,9 @@ out_group:
 	dc_mgmt_sys_detach(tpriv->state->sys);
 out_state:
 	D_FREE(tpriv->state);
-out_tpriv:
-	pool_task_destroy_priv(task);
 out_task:
+	if (tpriv)
+		pool_task_destroy_priv(task);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -1968,8 +1967,8 @@ dc_pool_query(tse_task_t *task)
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		goto out_pool;
 	}
-	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY, pool->dp_pool, pool->dp_pool_hdl,
-			     NULL /* req_timep */, &rpc);
+	rc = dc_pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY, pool->dp_pool,
+				pool->dp_pool_hdl, NULL /* req_timep */, &rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to create pool query rpc", DP_UUID(pool->dp_pool));
 		D_GOTO(out_pool, rc);
@@ -2129,8 +2128,8 @@ create_map_refresh_rpc(struct dc_pool *pool, unsigned int map_version,
 	ep.ep_rank = rank;
 	ep.ep_tag = 0;
 
-	rc = pool_req_create(ctx, &ep, POOL_TGT_QUERY_MAP, pool->dp_pool, pool->dp_pool_hdl,
-			     NULL /* req_timep */, &c);
+	rc = dc_pool_req_create(ctx, &ep, POOL_TGT_QUERY_MAP, pool->dp_pool, pool->dp_pool_hdl,
+				NULL /* req_timep */, &c);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to create POOL_TGT_QUERY_MAP",
 			 DP_UUID(pool->dp_pool));
@@ -2662,8 +2661,8 @@ dc_pool_list_cont(tse_task_t *task)
 	/* TODO: deprecate POOL_LIST_CONT RPC, and change list containers implementation
 	 * to use POOL_FILTER_CONT RPC and a NULL filter input.
 	 */
-	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, pool->dp_pool,
-			     pool->dp_pool_hdl, NULL /* req_timep */, &rpc);
+	rc = dc_pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, pool->dp_pool,
+				pool->dp_pool_hdl, NULL /* req_timep */, &rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to create pool list cont rpc",
 			 DP_UUID(pool->dp_pool));
@@ -2825,8 +2824,8 @@ dc_pool_filter_cont(tse_task_t *task)
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		goto out_pool;
 	}
-	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_FILTER_CONT, pool->dp_pool,
-			     pool->dp_pool_hdl, NULL /* req_timep */, &rpc);
+	rc = dc_pool_req_create(daos_task2ctx(task), &ep, POOL_FILTER_CONT, pool->dp_pool,
+				pool->dp_pool_hdl, NULL /* req_timep */, &rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to create pool filter cont rpc",
 			 DP_UUID(pool->dp_pool));
@@ -3015,8 +3014,8 @@ dc_pool_query_target(tse_task_t *task)
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		goto out_pool;
 	}
-	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY_INFO, pool->dp_pool,
-			     pool->dp_pool_hdl, NULL /* req_timep */, &rpc);
+	rc = dc_pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY_INFO, pool->dp_pool,
+				pool->dp_pool_hdl, NULL /* req_timep */, &rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to create pool tgt info rpc",
 			 DP_UUID(pool->dp_pool));
@@ -3181,8 +3180,8 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode, crt_context_t *c
 		goto out;
 	}
 
-	rc = pool_req_create(ctx, &ep, opcode, args->pra_pool->dp_pool, args->pra_pool->dp_pool_hdl,
-			     &tpriv->rq_time, &args->pra_rpc);
+	rc = dc_pool_req_create(ctx, &ep, opcode, args->pra_pool->dp_pool,
+				args->pra_pool->dp_pool_hdl, &tpriv->rq_time, &args->pra_rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create rpc");
 		pool_req_cleanup(CLEANUP_TASK_PRIV, task, true /* free_tpriv */, args);
@@ -3692,15 +3691,15 @@ dc_pool_stop_svc(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
-		goto out_tpriv;
+		goto out_pool;
 	}
 
-	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, pool->dp_pool,
-			     pool->dp_pool_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, pool->dp_pool,
+				pool->dp_pool_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to create POOL_SVC_STOP RPC",
 			 DP_UUID(pool->dp_pool));
-		goto out_tpriv;
+		goto out_pool;
 	}
 
 	stop_args.dsa_pool = pool;
@@ -3717,11 +3716,11 @@ dc_pool_stop_svc(tse_task_t *task)
 out_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-out_tpriv:
-	pool_task_destroy_priv(task);
 out_pool:
 	dc_pool_put(pool);
 out_task:
+	if (tpriv != NULL)
+		pool_task_destroy_priv(task);
 	tse_task_complete(task, rc);
 	return rc;
 }

@@ -38,10 +38,14 @@ rebuild_pool_destroy(test_arg_t *arg)
 static void
 rebuild_drop_scan(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	int		tgt = DEFAULT_FAIL_TGT;
-	int		i;
+	test_arg_t      *arg = *state;
+	daos_obj_id_t    oids[OBJ_NR];
+	int              tgt = DEFAULT_FAIL_TGT;
+	d_rank_t         leader_rank;
+	d_rank_t         drop_scan_rank;
+	daos_pool_info_t pinfo;
+	int              rc;
+	int              i;
 
 	if (!test_runable(arg, 6))
 		return;
@@ -55,11 +59,16 @@ rebuild_drop_scan(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
-	/* Set drop scan fail_loc on server 0 */
+	/* Set drop scan fail_loc on non-leader engine (leader initiates scan bcast and won't get
+	 * rc=-DER_TIMEODUT if it is the engine configured by test to not reply to that bcast).
+	 */
+	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	leader_rank    = pinfo.pi_leader;
+	drop_scan_rank = (leader_rank + 1) % pinfo.pi_nnodes;
 	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
-				     0, NULL);
+		test_set_engine_fail_loc(arg, drop_scan_rank,
+					 DAOS_REBUILD_DROP_SCAN | DAOS_FAIL_ONCE);
 
 	par_barrier(PAR_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
@@ -1474,7 +1483,7 @@ rebuild_delay_and_reintegrate(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
@@ -1508,7 +1517,7 @@ rebuild_delay_and_extend(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);

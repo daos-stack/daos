@@ -29,6 +29,7 @@
 #include "check.pb-c.h"
 #include "svc.pb-c.h"
 #include "smd.pb-c.h"
+#include "system.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 
@@ -55,6 +56,8 @@ void
      ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 void dss_bind_to_xstream_cpuset(int tgt_id);
+int
+ds_mgmt_rpc_protocol(uint8_t *ver);
 
 /** srv_system.c */
 /* Management service (used only for map broadcast) */
@@ -141,8 +144,14 @@ int ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 int ds_mgmt_check_stop(int pool_nr, char **pools);
 int ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
 			chk_query_pool_cb_t pool_cb, void *buf);
-int ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
-int ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all);
+int
+ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
+int
+ds_mgmt_check_act(uint64_t seq, uint32_t act);
+int
+ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks);
+int
+     ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
@@ -186,6 +195,13 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_util.c */
 int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
+int
+     ds_mgmt_get_group_status(uint32_t group_version, d_rank_t **dead_ranks_out,
+			      size_t *n_dead_ranks_out);
 void ds_mgmt_kill_rank(bool force);
+int
+ds_mgmt_pbl_create(void);
+void
+ds_mgmt_pbl_destroy(void);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

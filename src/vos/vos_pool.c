@@ -203,7 +203,9 @@ vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_siz
 		}
 
 		if (mlc.mlc_inflights > META_READ_QD_NR) {
+			ABT_mutex_lock(mlc.mlc_lock);
 			ABT_cond_wait(mlc.mlc_cond, mlc.mlc_lock);
+			ABT_mutex_unlock(mlc.mlc_lock);
 			D_ASSERT(mlc.mlc_inflights <= META_READ_QD_NR);
 		}
 
@@ -214,7 +216,9 @@ vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_siz
 
 	mlc.mlc_wait_finished = 1;
 	if (mlc.mlc_inflights > 0) {
+		ABT_mutex_lock(mlc.mlc_lock);
 		ABT_cond_wait(mlc.mlc_cond, mlc.mlc_lock);
+		ABT_mutex_unlock(mlc.mlc_lock);
 		D_ASSERT(mlc.mlc_inflights == 0);
 	}
 	ABT_cond_free(&mlc.mlc_cond);
@@ -484,6 +488,28 @@ store2wal_metrics(struct umem_store *store)
 	return vpm != NULL ? &vpm->vp_wal_metrics : NULL;
 }
 
+/* Inline checkpointing for ddb, vos_perf, VOS unit tests, etc. */
+static inline void
+inline_checkpoint(struct vos_pool *pool)
+{
+	struct vos_chkpt_context *chkpt_ctxt = pool->vp_chkpt_arg;
+	uint64_t                  max_used;
+	int                       rc;
+
+	D_ASSERT(chkpt_ctxt != NULL);
+	max_used = chkpt_ctxt->vcc_total_blks * 80 / 100;
+	if (!max_used)
+		max_used = 1;
+
+	if (chkpt_ctxt->vcc_used_blks > max_used) {
+		rc = vos_pool_checkpoint(vos_pool2hdl(pool));
+		if (rc) {
+			DL_ERROR(rc, "Inline checkpointing failed.");
+			D_ASSERT(0);
+		}
+	}
+}
+
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
@@ -505,6 +531,9 @@ vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 
 	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
+
+	if (!pool->vp_ext_chkpt)
+		inline_checkpoint(pool);
 
 reserve:
 	D_ASSERT(store && store->stor_priv != NULL);
@@ -545,6 +574,8 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 		 */
 		if (rc != -DER_NVME_IO) {
 			D_ERROR("WAL commit hit fatal error, kill engine...\n");
+			/* Dump stacktrace for debugging */
+			D_ASSERT(0);
 			rc = kill(getpid(), SIGKILL);
 			if (rc != 0)
 				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
@@ -656,6 +687,24 @@ vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, i
 
 }
 
+static void
+chkpt_wait_cb(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx)
+{
+	struct vos_chkpt_context *chkpt_ctxt = arg;
+
+	*committed_tx = chkpt_ctxt->vcc_committed_id;
+}
+
+static void
+chkpt_update_cb(void *arg, uint64_t id, uint32_t used_blocks, uint32_t total_blocks)
+{
+	struct vos_chkpt_context *chkpt_ctxt = arg;
+
+	chkpt_ctxt->vcc_committed_id = id;
+	chkpt_ctxt->vcc_total_blks   = total_blocks;
+	chkpt_ctxt->vcc_used_blks    = used_blocks;
+}
+
 void
 vos_pool_checkpoint_init(daos_handle_t poh, vos_chkpt_update_cb_t update_cb,
 			 vos_chkpt_wait_cb_t wait_cb, void *arg, struct umem_store **storep)
@@ -671,12 +720,14 @@ vos_pool_checkpoint_init(daos_handle_t poh, vos_chkpt_update_cb_t update_cb,
 	umm   = vos_pool2umm(pool);
 	store = &umm->umm_pool->up_store;
 
+	D_ASSERT(store->vos_priv == NULL);
 	pool->vp_update_cb = update_cb;
 	pool->vp_wait_cb   = wait_cb;
 	pool->vp_chkpt_arg = arg;
 	store->vos_priv    = pool;
 
-	*storep = store;
+	if (storep)
+		*storep = store;
 
 	bio_wal_query(store->stor_priv, &wal_info);
 
@@ -710,6 +761,9 @@ vos_pool_needs_checkpoint(daos_handle_t poh)
 
 	pool = vos_hdl2pool(poh);
 	D_ASSERT(pool != NULL);
+
+	if (pool->vp_sysdb)
+		return false;
 
 	/** TODO: Revisit. */
 	return bio_nvme_configured(SMD_DEV_TYPE_META);
@@ -828,9 +882,7 @@ vos_pool_store_type(daos_size_t scm_sz, daos_size_t meta_sz)
 	}
 
 	if (scm_sz < meta_sz) {
-		if ((backend == DAOS_MD_BMEM) && umempobj_allow_md_bmem_v2())
-			backend = DAOS_MD_BMEM_V2;
-		else if (backend != DAOS_MD_BMEM_V2) {
+		if (backend != DAOS_MD_BMEM_V2) {
 			D_ERROR("scm_sz %lu is less than meta_sz %lu", scm_sz, meta_sz);
 			return -DER_INVAL;
 		}
@@ -1620,6 +1672,7 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
 	pool->vp_rdb = !!(flags & VOS_POF_RDB);
+	pool->vp_ext_chkpt = !!(flags & VOS_POF_EXTERNAL_CHKPT);
 
 	/*
 	 * Insert the pool into the uuid hash table before full opened, because subsequent
@@ -1646,6 +1699,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	       void *metrics, struct vos_pool *pool, int ret)
 {
 	struct umem_attr	*uma;
+	daos_handle_t            poh;
 	int			 rc;
 
 	if (ret != 0)
@@ -1723,6 +1777,11 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	rc = gc_open_pool(pool);
 	if (rc)
 		goto out;
+
+	poh = vos_pool2hdl(pool);
+	if (!pool->vp_ext_chkpt && vos_pool_needs_checkpoint(poh))
+		vos_pool_checkpoint_init(poh, chkpt_update_cb, chkpt_wait_cb, &pool->vp_chkpt_ctxt,
+					 NULL);
 
 	pool->vp_opened = 1;
 	vos_space_sys_init(pool);

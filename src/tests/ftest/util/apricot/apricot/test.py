@@ -157,16 +157,16 @@ class Test(avocadoTest):
         super().setUp()
 
         # Random generator that could be seeded for reproducibility
-        env_seed = os.environ.get("DAOS_TEST_RANDOM_SEED", None)
-        if env_seed is None:
+        self.rand_seed = os.environ.get("DAOS_TEST_RANDOM_SEED", None)
+        if self.rand_seed is None:
+            self.rand_seed = self.params.get("rand_seed", "/run/setup/*", None)
+        if self.rand_seed is None:
             self.rand_seed = int.from_bytes(os.urandom(8), byteorder='little')
         else:
             try:
-                self.rand_seed = int(env_seed)
+                self.rand_seed = int(self.rand_seed)
             except ValueError:
-                self.fail(
-                    "ERROR: The env variable DAOS_TEST_RANDOM_SEED "
-                    "does not define a valid integer: got='{}'".format(env_seed))
+                self.fail(f"rand_seed is not an integer: {self.rand_seed}")
         self.log.info("Test.random seed = %d", self.rand_seed)
         self.random = random.Random(self.rand_seed)     # nosec
 
@@ -996,7 +996,7 @@ class TestWithServers(TestWithoutServers):
                     self.hostfile_clients_slots,
                     info["mgmt_svc_replicas"])
 
-    def setup_servers(self, server_groups=None):
+    def setup_servers(self, server_groups=None, version=None):
         """Start the daos_server processes.
 
         Args:
@@ -1006,6 +1006,8 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name, all
                 of the server hosts, and the MS replicas from the test's yaml
                 file to define a single server group entry.
+            version (Version, optional): daos_server version for compatibility changes.
+                Default is None, which does not handle compatibility
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error starting the
@@ -1031,7 +1033,7 @@ class TestWithServers(TestWithoutServers):
             for group, info in list(server_groups.items()):
                 self.add_server_manager(
                     group, info["svr_config_file"], info["dmg_config_file"],
-                    info["svr_config_temp"], info["dmg_config_temp"])
+                    info["svr_config_temp"], info["dmg_config_temp"], version)
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
@@ -1102,7 +1104,7 @@ class TestWithServers(TestWithoutServers):
 
     def add_server_manager(self, group=None, svr_config_file=None,
                            dmg_config_file=None, svr_config_temp=None,
-                           dmg_config_temp=None):
+                           dmg_config_temp=None, version=None):
         """Add a new daos server manager object to the server manager list.
 
         Args:
@@ -1117,6 +1119,8 @@ class TestWithServers(TestWithoutServers):
             dmg_config_temp (str, optional): file name and path used to generate
                 the dmg configuration file locally and copy it to all the hosts
                 using the config_file specification. Defaults to None.
+            version (Version, optional): daos_server version for compatibility changes.
+                Default is None, which does not handle compatibility
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error specifying
@@ -1157,7 +1161,8 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class, mgmt_svc_replicas_suffix=self.mgmt_svc_replicas_suffix)
+                self.server_manager_class, mgmt_svc_replicas_suffix=self.mgmt_svc_replicas_suffix,
+                version=version)
         )
         if self.server_config_namespace is not None:
             self.log.debug(

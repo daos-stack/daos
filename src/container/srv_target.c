@@ -471,8 +471,7 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		/*
 		 * Sleep 2 seconds before next round when:
 		 * - Aggregation isn't runnable yet, or;
-		 * - Last round of aggregation failed, or;
-		 * - There is no space pressure;
+		 * - Last round of aggregation failed;
 		 */
 		uint64_t msecs = 2000;
 
@@ -499,8 +498,8 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				  param->ap_vos_agg ? "VOS" : "EC");
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
-			/* Don't sleep too long when there is space pressure */
-			msecs = 2ULL * 100;
+			/* Don't sleep when there is space pressure */
+			msecs = 0;
 		}
 
 		if (param->ap_vos_agg)
@@ -515,10 +514,13 @@ next:
 		/* sleep 18 seconds for EC aggregation ULT if the pool is in rebuilding,
 		 * if no space pressure.
 		 */
-		if (cont->sc_pool->spc_pool->sp_rebuilding && !param->ap_vos_agg && msecs != 200)
+		if (cont->sc_pool->spc_pool->sp_rebuilding && !param->ap_vos_agg && msecs != 0)
 			msecs = 18000;
 
-		sched_req_sleep(req, msecs);
+		if (msecs != 0)
+			sched_req_sleep(req, msecs);
+		else
+			sched_req_yield(req);
 	}
 out:
 	D_DEBUG(DB_EPC, DF_CONT "[%d]: %s Aggregation ULT stopped\n",
@@ -967,9 +969,10 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 	 * 3. Pool service is going to be stopped;
 	 */
 	if (cont_child->sc_stopping || cont_child->sc_destroying) {
-		D_ERROR(DF_CONT"[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
-			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id,
-			cont_child->sc_stopping, cont_child->sc_destroying);
+		D_DEBUG(DB_MD,
+			DF_CONT "[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
+			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
+			cont_child->sc_destroying);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
 		if (!ds_pool_restricted(pool_child->spc_pool, false)) {
@@ -1262,7 +1265,7 @@ cont_child_destroy_one(void *vin)
 	}
 
 	if (cont->sc_destroying) {
-		D_ERROR(DF_CONT ": Container is already being destroyed\n",
+		D_DEBUG(DB_MD, DF_CONT ": Container is already being destroyed\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		cont_child_put(tls->dt_cont_cache, cont);
 		D_GOTO(out_pool, rc = -DER_BUSY);
@@ -1487,7 +1490,6 @@ ds_cont_local_close(uuid_t cont_hdl_uuid)
 	if (hdl == NULL)
 		return 0;
 
-	hdl->sch_closed = 1;
 	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 
 	ds_cont_hdl_put(hdl);
@@ -1508,27 +1510,20 @@ ds_cont_child_put(struct ds_cont_child *cont)
 	cont_child_put(tls->dt_cont_cache, cont);
 }
 
-struct ds_dtx_resync_args {
-	struct ds_pool_child	*pool;
-	uuid_t			 co_uuid;
-};
-
 static void
 ds_dtx_resync(void *arg)
 {
-	struct ds_dtx_resync_args	*ddra = arg;
-	int				 rc;
+	struct ds_cont_child *cont = arg;
+	int                   rc;
 
-	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
-			ddra->co_uuid, ddra->pool->spc_map_version, false);
+	rc = dtx_resync(cont->sc_pool->spc_hdl, cont, cont->sc_pool->spc_map_version, false);
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont " DF_UUID "/" DF_UUID
 		       " that may affect subsequent "
 		       "operations: rc = " DF_RC "\n",
-		       DP_UUID(ddra->pool->spc_uuid), DP_UUID(ddra->co_uuid), DP_RC(rc));
+		       DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), DP_RC(rc));
 
-	ds_pool_child_put(ddra->pool);
-	D_FREE(ddra);
+	ds_cont_child_put(cont);
 }
 
 int
@@ -1604,7 +1599,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
 	hdl->sch_flags = flags;
 	hdl->sch_sec_capas = sec_capas;
-	hdl->sch_closed = 0;
 
 	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
@@ -1639,8 +1633,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	 *    Both cases are not expected.
 	 */
 	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
-		struct ds_dtx_resync_args	*ddra = NULL;
-
 		/*
 		 * NB: When cont_uuid == NULL, it's not a real container open
 		 *     but for creating rebuild global container handle.
@@ -1676,21 +1668,10 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_cont, rc);
 		}
 
-		D_ALLOC_PTR(ddra);
-		if (ddra == NULL)
-			D_GOTO(err_dtx, rc = -DER_NOMEM);
-
-		ddra->pool = ds_pool_child_lookup(hdl->sch_cont->sc_pool->spc_uuid);
-		if (ddra->pool == NULL) {
-			D_FREE(ddra);
-			D_GOTO(err_dtx, rc = -DER_NO_HDL);
-		}
-		uuid_copy(ddra->co_uuid, cont_uuid);
-		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
-				    0, 0, NULL);
+		ds_cont_child_get(hdl->sch_cont);
+		rc = dss_ult_create(ds_dtx_resync, hdl->sch_cont, DSS_XS_SELF, 0, 0, NULL);
 		if (rc != 0) {
-			ds_pool_child_put(hdl->sch_cont->sc_pool);
-			D_FREE(ddra);
+			ds_cont_child_put(hdl->sch_cont);
 			D_GOTO(err_dtx, rc);
 		}
 
@@ -2232,7 +2213,8 @@ ds_cont_tgt_snapshot_notify_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	out_source = crt_reply_get(source);
 	out_result = crt_reply_get(result);
-	out_result->tso_rc += out_source->tso_rc;
+	if (out_result->tso_rc >= 0 && out_source->tso_rc < 0)
+		out_result->tso_rc = out_source->tso_rc;
 	return 0;
 }
 
@@ -2775,9 +2757,9 @@ cont_child_prop_update(void *data)
 	}
 	D_ASSERT(child != NULL);
 	if (child->sc_stopping || child->sc_destroying) {
-		D_ERROR(DF_CONT" is being stopping or destroyed (s=%d, d=%d)\n",
-			DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
-			child->sc_stopping, child->sc_destroying);
+		D_DEBUG(DB_MD, DF_CONT " is being stopping or destroyed (s=%d, d=%d)\n",
+			DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid), child->sc_stopping,
+			child->sc_destroying);
 		rc = -DER_SHUTDOWN;
 		goto out;
 	}

@@ -28,8 +28,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ * Please increment DAOS_POOL_VERSION whenever the protocol is changed.
  */
-#define DAOS_POOL_VERSION              7
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -77,7 +77,10 @@
 	X(POOL_ACL_DELETE, 0, &CQF_pool_acl_delete, ds_pool_acl_delete_handler, NULL)              \
 	X(POOL_RANKS_GET, 0, &CQF_pool_ranks_get, ds_pool_ranks_get_handler, NULL)                 \
 	X(POOL_UPGRADE, 0, &CQF_pool_upgrade, ds_pool_upgrade_handler, NULL)                       \
-	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)
+	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)           \
+	X(POOL_REBUILD_STOP, 0, &CQF_pool_rebuild_stop, ds_pool_rebuild_stop_handler, NULL)        \
+	X(POOL_REBUILD_START, 0, &CQF_pool_rebuild_start, ds_pool_rebuild_start_handler, NULL)     \
+	X(POOL_EVAL_SELF_HEAL, 0, &CQF_pool_eval_self_heal, ds_pool_eval_self_heal_handler, NULL)
 
 #define POOL_PROTO_RPC_LIST                                                                        \
 	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)                                                 \
@@ -902,19 +905,43 @@ CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP, DAOS_OSEQ_POOL
 
 CRT_RPC_DECLARE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_DISCARD)
 
+#define DAOS_ISEQ_POOL_REBUILD_STOP	/* input fields */       \
+	((struct pool_op_in)	(rstpi_op)		CRT_VAR)     \
+	((uint32_t)				(rstpi_force)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_REBUILD_STOP	/* output fields */      \
+	((struct pool_op_out)		(rstpo_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_rebuild_stop, DAOS_ISEQ_POOL_REBUILD_STOP, DAOS_OSEQ_POOL_REBUILD_STOP)
+
+#define DAOS_ISEQ_POOL_REBUILD_START	/* input fields */   \
+	((struct pool_op_in)		(rstai_op)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_REBUILD_START	/* output fields */  \
+	((struct pool_op_out)		(rstao_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_rebuild_start, DAOS_ISEQ_POOL_REBUILD_START, DAOS_OSEQ_POOL_REBUILD_START)
+
+#define DAOS_ISEQ_POOL_EVAL_SELF_HEAL	/* input fields */		 \
+	((struct pool_op_in)		(pesi_op)		CRT_VAR) \
+	((uint64_t)			(pesi_sys_self_heal)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_EVAL_SELF_HEAL	/* output fields */		 \
+	((struct pool_op_out)		(peso_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_eval_self_heal, DAOS_ISEQ_POOL_EVAL_SELF_HEAL, DAOS_OSEQ_POOL_EVAL_SELF_HEAL)
+
 /* clang-format on */
 
 static inline int
-pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
-		const uuid_t pi_uuid, const uuid_t pi_hdl, uint64_t *req_timep, crt_rpc_t **req)
+pool_req_create_common(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		       uint8_t proto_ver, const uuid_t pi_uuid, const uuid_t pi_hdl,
+		       uint64_t *req_timep, crt_rpc_t **req)
 {
 	int                    rc;
 	crt_opcode_t           opcode;
 	static __thread uuid_t cli_id;
-	int                    proto_ver;
 	struct pool_op_in     *in;
-
-	proto_ver = dc_pool_proto_version ? dc_pool_proto_version : DAOS_POOL_VERSION;
 
 	if (uuid_is_null(cli_id))
 		uuid_generate(cli_id);
@@ -936,12 +963,53 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	if (req_timep && (*req_timep == 0))
 		*req_timep = d_hlc_get();
 
-	D_ASSERT(proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
 	if (req_timep) {
 		uuid_copy(in->pi_cli_id, cli_id);
 		in->pi_time = *req_timep;
 	}
 	return 0;
+}
+
+int
+ds_pool_rpc_protocol(uint8_t *obj_ver);
+
+static inline int
+ds_pool_encode_opc(crt_opcode_t *opc)
+{
+	int     rc;
+	uint8_t rpc_ver;
+
+	rc = ds_pool_rpc_protocol(&rpc_ver);
+	if (rc)
+		return rc;
+	*opc = DAOS_RPC_OPCODE(*opc, DAOS_POOL_MODULE, rpc_ver);
+
+	return 0;
+}
+
+static inline int
+dc_pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		   const uuid_t pi_uuid, const uuid_t pi_hdl, uint64_t *req_timep, crt_rpc_t **req)
+{
+	D_ASSERT(dc_pool_proto_version != 0);
+	D_ASSERT(dc_pool_proto_version >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
+	return pool_req_create_common(crt_ctx, tgt_ep, opc, dc_pool_proto_version, pi_uuid, pi_hdl,
+				      req_timep, req);
+}
+
+static inline int
+ds_pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		   const uuid_t pi_uuid, const uuid_t pi_hdl, uint64_t *req_timep, crt_rpc_t **req)
+{
+	int     rc;
+	uint8_t rpc_ver;
+
+	rc = ds_pool_rpc_protocol(&rpc_ver);
+	if (rc)
+		return rc;
+	D_ASSERT(rpc_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
+	return pool_req_create_common(crt_ctx, tgt_ep, opc, rpc_ver, pi_uuid, pi_hdl, req_timep,
+				      req);
 }
 
 uint64_t

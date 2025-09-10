@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math"
 	"os/user"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -548,9 +549,8 @@ func (pqr *PoolQueryResp) UpdateState() error {
 		pqr.State = daos.PoolServiceStateUnknown
 	}
 
-	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
 	if pqr.State == daos.PoolServiceStateReady && pqr.DisabledTargets > 0 {
-		pqr.State = daos.PoolServiceStateDegraded
+		pqr.State = daos.PoolServiceStateTargetsExcluded
 	}
 
 	return nil
@@ -676,14 +676,23 @@ type PoolGetPropReq struct {
 
 // PoolGetProp sends a pool get-prop request to the pool service leader.
 func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*daos.PoolProperty, error) {
-	// Get all by default.
 	if len(req.Properties) == 0 {
+		// Get all by default.
 		allProps := daos.PoolProperties()
 		req.Properties = make([]*daos.PoolProperty, 0, len(allProps))
 		for _, key := range allProps.Keys() {
 			hdlr := allProps[key]
 			req.Properties = append(req.Properties, hdlr.GetProperty(key))
 		}
+	} else {
+		for _, prop := range req.Properties {
+			if prop == nil {
+				return nil, errors.New("nil property")
+			}
+		}
+		slices.SortFunc(req.Properties, func(a, b *daos.PoolProperty) int {
+			return strings.Compare(a.Name, b.Name)
+		})
 	}
 
 	pbReq := &mgmtpb.PoolGetPropReq{
@@ -723,6 +732,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		pbMap[prop.GetNumber()] = prop
 	}
 
+	// We've already sorted req.Properties above.
 	resp := make([]*daos.PoolProperty, 0, len(req.Properties))
 	for _, prop := range req.Properties {
 		pbProp, found := pbMap[prop.Number]

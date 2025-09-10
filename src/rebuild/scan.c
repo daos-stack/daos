@@ -130,6 +130,13 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		    !daos_crt_network_error(rc)))
 			break;
 
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			rc = -DER_SHUTDOWN;
+			DL_INFO(rc, DF_RB ": give up ds_object_migrate_send, shutdown rebuild",
+				DP_RB_RPT(rpt));
+			break;
+		}
+
 		/* otherwise let's retry */
 		D_DEBUG(DB_REBUILD, DF_RB " retry send object to tgt_id %d\n", DP_RB_RPT(rpt),
 			arg->tgt_id);
@@ -392,14 +399,15 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 
 #define LOCAL_ARRAY_SIZE	128
 #define NUM_SHARDS_STEP_INCREASE	64
+
+#define SCAN_YIELD_CNT                  128
 /* The structure for scan per xstream */
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
 	struct cont_props		co_props;
 	int				snapshot_cnt;
-	uint32_t			yield_freq;
-	int32_t				obj_yield_cnt;
+	int32_t                          yield_cnt;
 	struct ds_cont_child		*cont_child;
 };
 
@@ -672,6 +680,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	unsigned int			*shards = NULL;
 	struct daos_oclass_attr		*oc_attr;
 	uint32_t			grp_size;
+	uint32_t                         grp_nr;
 	int				rebuild_nr = 0;
 	d_rank_t			myrank;
 	int				i;
@@ -699,6 +708,9 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	grp_size = daos_oclass_grp_size(oc_attr);
+	grp_nr   = daos_obj_id2grp_nr(oid.id_pub);
+	/* appropriate yield based on shard number */
+	arg->yield_cnt -= roundup(grp_size * grp_nr, 128) / 128;
 
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
@@ -768,7 +780,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		if (rc)
 			D_GOTO(out, rc);
 
-		arg->obj_yield_cnt--;
+		arg->yield_cnt--;
 	}
 
 out:
@@ -781,10 +793,9 @@ out:
 	if (map != NULL)
 		pl_map_decref(map);
 
-	if (--arg->yield_freq == 0 || arg->obj_yield_cnt <= 0) {
+	if (--arg->yield_cnt <= 0) {
 		D_DEBUG(DB_REBUILD, DF_RB " rebuild yield: %d\n", DP_RB_RPT(rpt), rc);
-		arg->yield_freq = SCAN_YIELD_FREQ;
-		arg->obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
+		arg->yield_cnt = SCAN_YIELD_CNT;
 		if (rc == 0)
 			dss_sleep(0);
 		*acts |= VOS_ITER_CB_YIELD;
@@ -861,6 +872,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc) {
 		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_fetch_snaps failed",
 			 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
+		if (rc == -DER_CONT_NONEXIST) {
+			DL_ERROR(rc, DF_CONT " skip orphan container",
+				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+			rc = 0;
+		}
 		D_GOTO(close, rc);
 	}
 
@@ -868,6 +884,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc) {
 		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_get_props failed",
 			 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
+		if (rc == -DER_CONT_NONEXIST) {
+			DL_ERROR(rc, DF_CONT " skip orphan container",
+				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+			rc = 0;
+		}
 		D_GOTO(close, rc);
 	}
 
@@ -979,6 +1000,11 @@ rebuild_scanner(void *data)
 	if (tls == NULL)
 		return 0;
 
+	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
+	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_RB " skip scan\n", DP_RB_RPT(rpt));
 		D_GOTO(out, rc = 0);
@@ -1021,8 +1047,7 @@ rebuild_scanner(void *data)
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	arg.rpt = rpt;
-	arg.yield_freq = SCAN_YIELD_FREQ;
-	arg.obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
+	arg.yield_cnt  = SCAN_YIELD_CNT;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 rebuild_container_scan_cb, NULL, &arg, NULL);
 	if (rc < 0)
@@ -1088,7 +1113,7 @@ rebuild_scan_leader(void *data)
 		D_GOTO(out, rc);
 
 	if (wait)
-		D_INFO(DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+		D_INFO(DF_RB " rebuild scan collective done\n", DP_RB_RPT(rpt));
 	else
 		D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
 
@@ -1146,14 +1171,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 				/* If this is the old leader, then also stop the rebuild
 				 * tracking ULT.
 				 */
-				rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-						    -1, rpt->rt_leader_term);
+				rebuild_leader_abort(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, -1,
+						     rpt->rt_leader_term);
 			}
 		}
 	}
 
 	/* check if the rebuild with different leader is already started */
-	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1);
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1 /* gen */);
 	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
 		if (rpt->rt_global_done) {
 			D_WARN("previous not cleaned up yet " DF_RBF "\n", DP_RBF_RPT(rpt));
@@ -1201,8 +1226,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			rpt->rt_leader_rank = rsi->rsi_master_rank;
 
 			/* If this is the old leader, then also stop the rebuild tracking ULT. */
-			rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-					    -1, rpt->rt_leader_term);
+			rebuild_leader_abort(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, -1,
+					     rpt->rt_leader_term);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;

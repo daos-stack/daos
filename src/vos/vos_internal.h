@@ -145,7 +145,7 @@ enum {
 extern uint32_t vos_agg_gap;
 
 #define VOS_AGG_GAP_MIN		20 /* seconds */
-#define VOS_AGG_GAP_DEF		60
+#define VOS_AGG_GAP_DEF         20
 #define VOS_AGG_GAP_MAX		180
 
 extern unsigned int vos_agg_nvme_thresh;
@@ -281,6 +281,13 @@ struct vos_gc_info {
 	uint32_t	gi_last_pinned;
 };
 
+/* Inline checkpointing context */
+struct vos_chkpt_context {
+	uint64_t vcc_committed_id;
+	uint64_t vcc_total_blks;
+	uint64_t vcc_used_blks;
+};
+
 /**
  * VOS pool (DRAM)
  */
@@ -301,6 +308,8 @@ struct vos_pool {
 	bool			vp_rdb;
 	/** caller specifies pool is small (for sys space reservation) */
 	bool			vp_small;
+	/** caller does checkpointing periodically */
+	bool                     vp_ext_chkpt;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */
@@ -345,6 +354,8 @@ struct vos_pool {
 	unsigned int		 vp_space_rb;
 	/* GC runtime for pool */
 	struct vos_gc_info	 vp_gc_info;
+	/* Inline checkpointing context */
+	struct vos_chkpt_context vp_chkpt_ctxt;
 };
 
 /**
@@ -433,6 +444,8 @@ struct vos_container {
 				vc_cmt_dtx_indexed:1;
 	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
+	/* The latest pool map version that DTX resync has been done. */
+	uint32_t                vc_dtx_resync_ver;
 };
 
 struct vos_dtx_act_ent {
@@ -687,7 +700,7 @@ vos_pool_hash_del(struct vos_pool *pool)
 }
 
 /**
- * Register btree class for container table, it is called within vos_init()
+ * Register btree class for container table.
  *
  * \return		0 on success and negative on
  *			failure
@@ -696,8 +709,7 @@ int
 vos_cont_tab_register();
 
 /**
- * VOS object index class register for btree
- * Called with vos_init()
+ * VOS object index class register for btree.
  *
  * \return		0 on success and negative on
  *			failure
@@ -718,7 +730,7 @@ int
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 
 /**
- * Register dbtree class for DTX table, it is called within vos_init().
+ * Register dbtree class for DTX table.
  *
  * \return		0 on success and negative on failure
  */
@@ -1130,7 +1142,8 @@ struct vos_iterator {
 	 * mutual exclusion between aggregation and object discard.
 	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
-	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1;
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1,
+	    it_for_check : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1414,6 +1427,8 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_for_check)
+		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
 }
 

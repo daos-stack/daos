@@ -196,7 +196,8 @@ dv_dtx_active_entry_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *
 
 /* Sync the smd table with information saved in blobs */
 typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_id,
-				    uint64_t blob_id, daos_size_t blob_size, uuid_t dev_id);
+				    uint64_t blob_id, daos_size_t blob_size, uuid_t dev_id,
+				    enum smd_dev_type st);
 int dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
 		void *cb_args);
 
@@ -209,5 +210,10 @@ int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov);
 void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
 
 int ddb_vtp_verify(daos_handle_t poh, struct dv_tree_path *vtp);
+
+int
+dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt);
+int
+dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid);
 
 #endif /* DAOS_DDB_VOS_H */

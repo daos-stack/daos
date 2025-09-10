@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -206,224 +207,6 @@ def run_task(hosts, command, timeout=None, verbose=False):
     return task
 
 
-def check_task(task, logger=None):
-    """Check the results of the executed task and get the output.
-
-    Args:
-        task (Task): a ClusterShell.Task.Task object for the executed command
-
-    Returns:
-        bool: if the command returned an 0 exit status on every host
-
-    """
-    def check_task_log(message):
-        """Log the provided text if a logger is present.
-
-        Args:
-            message (str): text to display
-        """
-        if logger:
-            logger.info(message)
-
-    # Create a dictionary of hosts for each unique return code
-    results = dict(task.iter_retcodes())
-
-    # Display the command output
-    for code in sorted(results):
-        output_data = list(task.iter_buffers(results[code]))
-        if not output_data:
-            output_data = [["<NONE>", results[code]]]
-        for output, o_hosts in output_data:
-            node_set = NodeSet.fromlist(o_hosts)
-            lines = list(output.splitlines())
-            if len(lines) > 1:
-                # Print the sub-header for multiple lines of output
-                check_task_log("    {}: rc={}, output:".format(node_set, code))
-            for number, line in enumerate(lines):
-                if isinstance(line, bytes):
-                    line = line.decode("utf-8")
-                if len(lines) == 1:
-                    # Print the sub-header and line for one line of output
-                    check_task_log("    {}: rc={}, output: {}".format(node_set, code, line))
-                    continue
-                try:
-                    check_task_log("      {}".format(line))
-                except IOError:
-                    # DAOS-5781 Jenkins doesn't like receiving large amounts of data in a short
-                    # space of time so catch this and retry.
-                    check_task_log(
-                        "*** DAOS-5781: Handling IOError detected while processing line {}/{} with "
-                        "retry ***".format(*number + 1, len(lines)))
-                    time.sleep(5)
-                    check_task_log("      {}".format(line))
-
-    # List any hosts that timed out
-    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
-    if timed_out:
-        check_task_log("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
-
-    # Determine if the command completed successfully across all the hosts
-    return len(results) == 1 and 0 in results
-
-
-def display_task(task):
-    """Display the output for the executed task.
-
-    Args:
-        task (Task): a ClusterShell.Task.Task object for the executed command
-
-    Returns:
-        bool: if the command returned an 0 exit status on every host
-
-    """
-    log = getLogger()
-    return check_task(task, log)
-
-
-def log_task(hosts, command, timeout=None):
-    """Display the output of the command executed on each host in parallel.
-
-    Args:
-        hosts (list): list of hosts
-        command (str): the command to run in parallel
-        timeout (int, optional): command timeout in seconds. Defaults to None.
-
-    Returns:
-        bool: if the command returned an 0 exit status on every host
-
-    """
-    return display_task(run_task(hosts, command, timeout, True))
-
-
-def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
-    """Run a command on each host in parallel and get the results.
-
-    Args:
-        hosts (NodeSet): hosts on which to run the command
-        command (str): the command to run in parallel
-        verbose (bool, optional): display command output. Defaults to True.
-        timeout (int, optional): command timeout in seconds. Defaults to None.
-        expect_rc (int, optional): display output if the command return code
-            does not match this value. Defaults to 0. A value of None will
-            bypass this feature.
-
-    Returns:
-        list: a list of dictionaries with each entry containing output, exit
-            status, and interrupted status common to each group of hosts, e.g.:
-                [
-                    {
-                        "command": "ls my_dir",
-                        "hosts": NodeSet(wolf-[1-3]),
-                        "exit_status": 0,
-                        "interrupted": False,
-                        "stdout": ["file1.txt", "file2.json"],
-                    },
-                    {
-                        "command": "ls my_dir",
-                        "hosts": NodeSet(wolf-[4]),
-                        "exit_status": 1,
-                        "interrupted": False,
-                        "stdout": ["No such file or directory"],
-                    },
-                    {
-                        "command": "ls my_dir",
-                        "hosts": NodeSet(wolf-[5-6]),
-                        "exit_status": 255,
-                        "interrupted": True,
-                        "stdout": [""]
-                    },
-                ]
-
-    """
-    log = getLogger()
-    results = []
-
-    # Run the command on each host in parallel
-    task = run_task(hosts, command, timeout)
-
-    # Get the exit status of each host
-    host_exit_status = {str(host): None for host in hosts}
-    for exit_status, host_list in task.iter_retcodes():
-        for host in host_list:
-            host_exit_status[host] = exit_status
-
-    # Get a list of any interrupted hosts
-    host_interrupted = []
-    if timeout and task.num_timeout() > 0:
-        host_interrupted.extend(list(task.iter_keys_timeout()))
-
-    # Iterate through all the groups of common output
-    output_data = list(task.iter_buffers())
-    if not output_data:
-        output_data = [["", hosts]]
-    for output, host_list in output_data:
-        # Determine the unique exit status for each host with the same output
-        output_exit_status = {}
-        for host in host_list:
-            if host_exit_status[host] not in output_exit_status:
-                output_exit_status[host_exit_status[host]] = NodeSet()
-            output_exit_status[host_exit_status[host]].add(host)
-
-        # Determine the unique interrupted state for each host with the same
-        # output and exit status
-        for exit_status, _hosts in output_exit_status.items():
-            output_interrupted = {}
-            for host in list(_hosts):
-                is_interrupted = host in host_interrupted
-                if is_interrupted not in output_interrupted:
-                    output_interrupted[is_interrupted] = NodeSet()
-                output_interrupted[is_interrupted].add(host)
-
-            # Add a result entry for each group of hosts with the same output,
-            # exit status, and interrupted status
-            for interrupted, _hosts in output_interrupted.items():
-                results.append({
-                    "command": command,
-                    "hosts": _hosts,
-                    "exit_status": exit_status,
-                    "interrupted": interrupted,
-                    "stdout": [
-                        line.decode("utf-8").rstrip(os.linesep)
-                        for line in output],
-                })
-
-    # Display results if requested or there is an unexpected exit status
-    bad_exit_status = [
-        item["exit_status"]
-        for item in results
-        if expect_rc is not None and item["exit_status"] != expect_rc]
-    if verbose or bad_exit_status:
-        log.info(collate_results(command, results))
-
-    return results
-
-
-def collate_results(command, results):
-    """Collate the output of run_pcmd.
-
-    Args:
-        command (str): command used to obtain the data on each server
-        results (list): list: a list of dictionaries with each entry
-                        containing output, exit status, and interrupted
-                        status common to each group of hosts (see run_pcmd()'s
-                        return for details)
-
-    Returns:
-        str: a string collating run_pcmd()'s results
-
-    """
-    res = ""
-    res += "Command: %s\n" % command
-    res += "Results:\n"
-    for result in results:
-        res += "  %s: exit_status=%s, interrupted=%s:" % (
-            result["hosts"], result["exit_status"], result["interrupted"])
-        for line in result["stdout"]:
-            res += "    %s\n" % line
-
-    return res
-
-
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
 
@@ -440,57 +223,18 @@ def get_host_data(hosts, command, text, error, timeout=None):
 
     """
     log = getLogger()
-    host_data = []
     data_error = "[ERROR]"
 
     # Find the data for each specified servers
     log.info("  Obtaining %s data on %s", text, hosts)
-    results = run_pcmd(hosts, command, False, timeout, None)
-    errors = [
-        item["exit_status"]
-        for item in results if item["exit_status"] != 0]
-    if errors:
-        log.info("    %s on the following hosts:", error)
-        for result in results:
-            if result["exit_status"] in errors:
-                log.info(
-                    "      %s: rc=%s, interrupted=%s, command=\"%s\":",
-                    result["hosts"], result["exit_status"],
-                    result["interrupted"], result["command"])
-                for line in result["stdout"]:
-                    log.info("        %s", line)
-        host_data.append({"hosts": hosts, "data": data_error})
-    else:
-        for result in results:
-            host_data.append(
-                {"hosts": result["hosts"], "data": "\n".join(result["stdout"])})
+    result = run_remote(log, hosts, command, verbose=False, timeout=timeout)
+    if result.failed_hosts:
+        log.info(" %s on hosts: %s", error, str(result.failed_hosts))
+        return [{"hosts": result.failed_hosts, "data": data_error}]
 
-    return host_data
-
-
-def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
-    """Run a command on each host in parallel and get the return codes.
-
-    Args:
-        hosts (NodeSet): hosts on which to run the command
-        command (str): the command to run in parallel
-        verbose (bool, optional): display command output. Defaults to True.
-        timeout (int, optional): command timeout in seconds. Defaults to None.
-        expect_rc (int, optional): expected return code. Defaults to 0.
-
-    Returns:
-        dict: a dictionary of return codes keys and accompanying NodeSet
-            values indicating which hosts yielded the return code.
-
-    """
-    # Run the command on each host in parallel
-    results = run_pcmd(hosts, command, verbose, timeout, expect_rc)
-    exit_status = {}
-    for result in results:
-        if result["exit_status"] not in exit_status:
-            exit_status[result["exit_status"]] = NodeSet()
-        exit_status[result["exit_status"]].add(result["hosts"])
-    return exit_status
+    return [
+        {"hosts": NodeSet(_hosts), "data": stdout}
+        for _hosts, stdout in result.all_stdout.items()]
 
 
 def check_file_exists(hosts, filename, user=None, directory=False,
@@ -686,15 +430,17 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
             engines.
 
     Returns:
-        dict: a dictionary of return codes keys and accompanying NodeSet
-            values indicating which hosts yielded the return code.
+        CommandResult: groups of command results from the same hosts with the same return status
             Return code keys:
                 0   No engine matched the criteria / No engine signaled.
                 1   One or more engine matched the criteria and a signal was
                     sent.
+        None: if hosts is None
 
     """
-    result = {}
+    if hosts is None:
+        return None
+
     log = getLogger()
     log.info("Dumping ULT stacks of engines on %s", hosts)
 
@@ -704,22 +450,19 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     else:
         ps_cmd = "/usr/bin/pgrep --list-full daos_engine"
 
-    if hosts is not None:
-        commands = [
-            "rc=0",
-            "if " + ps_cmd,
-            "then rc=1",
-            "sudo pkill --signal USR2 daos_engine",
-            # leave some time for ABT info/stacks dump to complete.
-            # at this time there is no way to know when Argobots ULTs stacks
-            # has completed, see DAOS-1452/DAOS-9942.
-            "sleep 30",
-            "fi",
-            "exit $rc",
-        ]
-        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
-
-    return result
+    command = "; ".join([
+        "rc=0",
+        "if " + ps_cmd,
+        "then rc=1",
+        "sudo pkill --signal USR2 daos_engine",
+        # leave some time for ABT info/stacks dump to complete.
+        # at this time there is no way to know when Argobots ULTs stacks
+        # has completed, see DAOS-1452/DAOS-9942.
+        "sleep 30",
+        "fi",
+        "exit $rc",
+    ])
+    return run_remote(log, hosts, command, verbose=verbose, timeout=timeout)
 
 
 def get_log_file(name):
@@ -788,10 +531,11 @@ def get_remote_file_size(host, file_name):
     return int(result.stdout_text)
 
 
-def get_errors_count(hostlist, file_glob):
+def get_errors_count(log, hostlist, file_glob):
     """Count the number of errors found in log files.
 
     Args:
+        log (logger): logger for the messages produced by this method
         hostlist (list): System list to looks for an error.
         file_glob (str): Glob pattern of the log file to parse.
 
@@ -803,9 +547,9 @@ def get_errors_count(hostlist, file_glob):
     cmd = "cat {} | sed -n -E -e ".format(get_log_file(file_glob))
     cmd += r"'/^.+[[:space:]]ERR[[:space:]].+[[:space:]]DER_[^(]+\([^)]+\).+$/"
     cmd += r"s/^.+[[:space:]]DER_[^(]+\((-[[:digit:]]+)\).+$/\1/p'"
-    results = run_pcmd(hostlist, cmd, False, None, None)
+    result = run_remote(log, hostlist, cmd, verbose=False)
     errors_count = {}
-    for error_str in sum([result["stdout"] for result in results], []):
+    for error_str in sum([data.stdout for data in result.output], []):
         error = int(error_str)
         if error not in errors_count:
             errors_count[error] = 0
@@ -1057,7 +801,7 @@ def get_journalctl(hosts, since, until, journalctl_type):
     """Run the journalctl on the hosts.
 
     Args:
-        hosts (list): List of hosts to run journalctl.
+        hosts (NodeSet): hosts to run journalctl.
         since (str): Start time to search the log.
         until (str): End time to search the log.
         journalctl_type (str): String to search in the log. -t param for journalctl.

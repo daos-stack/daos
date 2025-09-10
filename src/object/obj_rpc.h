@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,8 +31,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
+ * Please increment DAOS_OBJ_VERSION whenever the protocol is changed.
  */
-#define DAOS_OBJ_VERSION 10
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -131,6 +132,7 @@ obj_opc_to_str(crt_opcode_t opc)
 	return "unknown";
 }
 
+/* clang-format off */
 enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),
 	/** It is a resent RPC. */
@@ -167,8 +169,8 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 	/* For data migration. */
 	ORF_FOR_MIGRATION	= (1 << 14),
-	/* Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
-	ORF_DTX_REFRESH		= (1 << 15),
+	/* Retried IO for too many times, maybe starve. */
+	ORF_MAYBE_STARVE	= (1 << 15),
 	/* for EC aggregate (to bypass read perm check related with RF) */
 	ORF_FOR_EC_AGG		= (1 << 16),
 	/* for EC data recovery */
@@ -189,7 +191,10 @@ enum obj_rpc_flags {
 	ORF_EMPTY_SGL		= (1 << 24),
 	/* The CPD RPC only contains read-only transaction. */
 	ORF_CPD_RDONLY		= (1 << 25),
+	/* Use for rebuild fetch epoch selection */
+	ORF_FETCH_EPOCH_EC_AGG_BOUNDARY = (1 << 26),
 };
+/* clang-format on */
 
 /* common for update/fetch */
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
@@ -640,7 +645,7 @@ struct daos_cpd_bulk {
 	struct daos_cpd_sub_head	 dcb_head;
 	uint32_t			 dcb_size;
 	uint32_t			 dcb_padding;
-	crt_bulk_t			*dcb_bulk;
+	crt_bulk_t                       dcb_bulk;
 	/*
 	 * The following are only used to handle the bulk for CPD RPC body temporarily,
 	 * do not pack on-wire.
@@ -793,8 +798,7 @@ CRT_RPC_DECLARE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUN
 CRT_RPC_DECLARE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
 
 static inline int
-obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
-	       crt_rpc_t **req)
+dc_obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, crt_rpc_t **req)
 {
 	crt_opcode_t opcode;
 
@@ -803,6 +807,29 @@ obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE,
 				 dc_obj_proto_version ? dc_obj_proto_version : DAOS_OBJ_VERSION);
+	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_IO, tgt_ep->ep_tag);
+
+	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+}
+
+int
+ds_obj_rpc_protocol(uint8_t *obj_ver);
+
+static inline int
+ds_obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, crt_rpc_t **req)
+{
+	crt_opcode_t opcode;
+	uint8_t      rpc_ver;
+	int          rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_REQ_CREATE_TIMEOUT))
+		return -DER_TIMEDOUT;
+
+	rc = ds_obj_rpc_protocol(&rpc_ver);
+	if (rc)
+		return rc;
+
+	opcode         = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, rpc_ver);
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_IO, tgt_ep->ep_tag);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);

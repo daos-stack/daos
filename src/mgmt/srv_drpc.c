@@ -10,6 +10,8 @@
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
+#include <daos_srv/daos_mgmt_srv.h>
+
 #include <signal.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
@@ -170,6 +172,13 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0)
 		D_ERROR("Failed to set self rank %u: "DF_RC"\n", req->rank,
 			DP_RC(rc));
+	if (rc == 0) {
+		/* FIXME: get and set from req->daos_version */
+		daos_version_t version;
+
+		daos_version_pack(&version);
+		dss_set_join_version(version);
+	}
 
 	resp.status = rc;
 	pack_daos_response(&resp, drpc_resp);
@@ -978,6 +987,10 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
 				      req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, false);
+
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
+		  DF_UUID ": reintegrate: rank=%u n_target_idx=%zu target_idx[0]=%u", req->id,
+		  req->rank, req->n_target_idx, req->n_target_idx > 0 ? req->target_idx[0] : -1);
 
 	d_rank_list_free(svc_ranks);
 
@@ -3001,7 +3014,7 @@ ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to set action for check\n");
 
-	rc = ds_mgmt_check_act(req->seq, req->act, req->for_all);
+	rc = ds_mgmt_check_act(req->seq, req->act);
 	if (rc != 0)
 		D_ERROR("Failed to set action for check: "DF_RC"\n", DP_RC(rc));
 
@@ -3018,4 +3031,47 @@ ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	mgmt__check_act_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+ds_mgmt_drpc_get_group_status(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__GetGroupStatusReq *req;
+	Mgmt__GetGroupStatusResp resp = MGMT__GET_GROUP_STATUS_RESP__INIT;
+	uint8_t                 *body;
+	size_t                   len;
+	int                      rc;
+
+	req = mgmt__get_group_status_req__unpack(&alloc.alloc, drpc_req->body.len,
+						 drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (get group status)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to get group status: group_version=%u\n", req->group_version);
+
+	rc = ds_mgmt_get_group_status(req->group_version, &resp.dead_ranks, &resp.n_dead_ranks);
+	if (rc != 0) {
+		DL_CDEBUG(rc == -DER_GRPVER, DLOG_DBG, DLOG_ERR, rc, "Failed to get group status");
+		resp.dead_ranks   = NULL;
+		resp.n_dead_ranks = 0;
+	}
+	resp.status = rc;
+
+	len = mgmt__get_group_status_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (get group status)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__get_group_status_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__get_group_status_req__free_unpacked(req, &alloc.alloc);
+	D_FREE(resp.dead_ranks);
 }

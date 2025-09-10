@@ -10,6 +10,7 @@
 #include <gurt/debug.h>
 #include <vos_internal.h>
 #include <daos_srv/smd.h>
+#include <bio_wal.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb_vos.h"
@@ -560,8 +561,9 @@ dv_path_verify(daos_handle_t poh, struct dv_indexed_tree_path *itp)
 	args.pva_current_idx = 0;
 	args.pva_itp = itp;
 
-	param.ip_hdl = coh;
+	param.ip_hdl        = coh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors,
 			 verify_path_pre_cb, verify_path_post_cb, &args, NULL);
@@ -667,7 +669,7 @@ void
 dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj)
 {
 	obj->ddbo_oid = oid;
-	obj->ddbo_nr_grps = (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
+	obj->ddbo_nr_grps = daos_obj_id2grp_nr(oid);
 
 	/*
 	 * It would be nice to get the object class name, but currently that is client
@@ -1733,35 +1735,35 @@ struct dv_sync_cb_args {
 	dv_smd_sync_complete	 sync_complete_cb;
 	void			*sync_cb_args;
 	int			 sync_rc;
+	d_list_t                 pool_list;
+	int                      pool_list_cnt;
 };
 
 static void
-sync_cb(struct ddbs_sync_info *info, void *cb_args)
+do_sync_cb(uuid_t pool_id, int tgt_id, uint64_t blob_id, enum smd_dev_type st,
+	   struct smd_pool_info *pool_info, struct ddbs_sync_info *info, void *cb_args)
 {
-	uint8_t			*pool_id = info->dsi_hdr->bbh_pool;
-	struct smd_pool_info	*pool_info = NULL;
+	struct smd_pool_info    *pinfo = NULL;
 	daos_size_t		 blob_size;
-	struct dv_sync_cb_args	*args = cb_args;
-	enum smd_dev_type	 st = SMD_DEV_TYPE_DATA; /* FIXME: support other types? */
+	struct dv_sync_cb_args  *args = cb_args;
 	int			 rc;
 
 	D_ASSERT(args != NULL);
 
-	if (info->dsi_hdr == NULL) {
-		D_ERROR("Got called without the header. Unable to sync.\n");
-		args->sync_rc = -DER_UNKNOWN;
-		return;
-	}
-	rc = smd_dev_add_tgt(info->dsi_dev_id, info->dsi_hdr->bbh_vos_id, st);
+	rc = smd_dev_add_tgt(info->dsi_dev_id, tgt_id, st);
 	smd_dev_set_state(info->dsi_dev_id, SMD_DEV_NORMAL);
 	if (rc == -DER_EXIST)
-		D_INFO("tgt_id(%d) already mapped to dev_id("DF_UUID")",
-		       info->dsi_hdr->bbh_vos_id, info->dsi_dev_id);
+		D_INFO("tgt_id(%d) already mapped to dev_id(" DF_UUID ")", tgt_id,
+		       DP_UUID(info->dsi_dev_id));
 	else if (rc != 0)
-		D_ERROR("Error mapping tgt_id(%d) to dev_id("DF_UUID")",
-			info->dsi_hdr->bbh_vos_id, info->dsi_dev_id);
+		D_ERROR("Error mapping tgt_id(%d) to dev_id(" DF_UUID ")", tgt_id,
+			DP_UUID(info->dsi_dev_id));
 
-	rc = smd_pool_get_info(pool_id, &pool_info);
+	rc = 0;
+	if (pool_info == NULL)
+		rc = smd_pool_get_info(pool_id, &pinfo);
+	else
+		pinfo = pool_info;
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to get smd pool info. Going to continue rebuilding smd_pool "
 			"table with spdk cluster size and cluster count: "DF_RC". \n", DP_RC(rc));
@@ -1771,18 +1773,18 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 		 */
 		blob_size = info->dsi_cluster_nr * info->dsi_cluster_size;
 	} else {
-		blob_size = pool_info->spi_blob_sz[st];
-		smd_pool_free_info(pool_info);
+		blob_size = pinfo->spi_blob_sz[st];
+		if (pool_info == NULL)
+			smd_pool_free_info(pinfo);
 	}
 
 	/* Try to delete the target first */
-	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id, st);
+	rc = smd_pool_del_tgt(pool_id, tgt_id, st);
 	if (!SUCCESS(rc))
 		/* Ignore error for now ... might not exist*/
 		D_WARN("delete target failed: " DF_RC "\n", DP_RC(rc));
 
-	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id, info->dsi_hdr->bbh_blob_id, st,
-			      blob_size, 0, false);
+	rc = smd_pool_add_tgt(pool_id, tgt_id, blob_id, st, blob_size, 0, true);
 	if (!SUCCESS(rc)) {
 		D_ERROR("add target failed: "DF_RC"\n", DP_RC(rc));
 		args->sync_rc = rc;
@@ -1790,10 +1792,76 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 	}
 
 	if (args->sync_complete_cb) {
-		rc = args->sync_complete_cb(args->sync_cb_args, pool_id,
-					    info->dsi_hdr->bbh_vos_id,
-					    info->dsi_hdr->bbh_blob_id,
-					    blob_size, info->dsi_dev_id);
+		rc = args->sync_complete_cb(args->sync_cb_args, pool_id, tgt_id, blob_id, blob_size,
+					    info->dsi_dev_id, st);
+	}
+}
+
+static void
+sync_cb_data(struct ddbs_sync_info *info, void *cb_args)
+{
+	do_sync_cb(info->dsi_hdr->bbh_pool, info->dsi_hdr->bbh_vos_id, info->dsi_hdr->bbh_blob_id,
+		   info->st, NULL, info, cb_args);
+}
+
+static void
+sync_cb_meta(struct ddbs_sync_info *info, void *cb_args)
+{
+	struct dv_sync_cb_args *args = cb_args;
+	struct meta_header     *hdr  = info->dsi_meta_hdr;
+
+	if (hdr->mh_version == 1) {
+		/* For Phase 1, No pool id in meta blob. get from Data Blob */
+		D_ERROR("unsupported old meta header.\n");
+		args->sync_rc = -DER_NOTSUPPORTED;
+		return;
+	}
+
+	D_ASSERT(hdr->mh_meta_blobid == info->dsi_blob_id);
+
+	/* Sync Meta Blob */
+	do_sync_cb(hdr->mh_pool_id, hdr->mh_vos_id, hdr->mh_meta_blobid, SMD_DEV_TYPE_META, NULL,
+		   info, cb_args);
+
+	return;
+}
+
+static void
+sync_cb_wal(struct ddbs_sync_info *info, void *cb_args)
+{
+	struct dv_sync_cb_args *args = cb_args;
+	struct wal_header      *hdr  = info->dsi_wal_hdr;
+
+	if (hdr->wh_version == 1) {
+		/* For Phase 1, No pool id in meta blob. get from Data Blob */
+		D_ERROR("unsupported old wal header.\n");
+		args->sync_rc = -DER_NOTSUPPORTED;
+		return;
+	}
+
+	/* Sync Wal Blob */
+	do_sync_cb(hdr->wh_pool_id, hdr->wh_vos_id, info->dsi_blob_id, SMD_DEV_TYPE_WAL, NULL, info,
+		   cb_args);
+
+	return;
+}
+
+static void
+sync_cb(struct ddbs_sync_info *info, void *cb_args)
+{
+	switch (info->st) {
+	case SMD_DEV_TYPE_DATA:
+		sync_cb_data(info, cb_args);
+		break;
+	case SMD_DEV_TYPE_META:
+		sync_cb_meta(info, cb_args);
+		break;
+	case SMD_DEV_TYPE_WAL:
+		sync_cb_wal(info, cb_args);
+		break;
+	default:
+		D_ERROR("unexpected smd_dev_type %d\n", info->st);
+		break;
 	}
 }
 
@@ -1804,7 +1872,7 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete com
 	struct dv_sync_cb_args	 sync_cb_args = {0};
 	int			 rc;
 
-	/* don't initialize NVMe within VOS. Will happen in ddb_spdk module */
+	/* don't initialize NVMe(spdk) within VOS. Will happen in ddb_spdk module */
 	rc = vos_self_init_ext(db_path, true, 0, false);
 
 	if (!SUCCESS(rc)) {
@@ -1815,6 +1883,7 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete com
 	rc = smd_init(vos_db_get());
 	if (!SUCCESS(rc)) {
 		D_ERROR("SMD failed to initialize: "DF_RC"\n", DP_RC(rc));
+		vos_self_fini();
 		return rc;
 	}
 
@@ -1826,7 +1895,7 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete com
 		rc = sync_cb_args.sync_rc;
 
 	smd_fini();
-	vos_db_fini();
+	vos_self_fini();
 
 	return rc;
 }
@@ -1953,4 +2022,90 @@ dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_
 		*incompat_flags = pff.incompat_flags;
 
 	return 0;
+}
+
+int
+dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt)
+{
+	int rc;
+
+	rc = vos_self_init(db_path, true, 0);
+	if (rc) {
+		DL_ERROR(rc, "Initialize standalone VOS failed.");
+		return rc;
+	}
+
+	D_ASSERT(d_list_empty(dev_list));
+	rc = bio_dev_list(vos_xsctxt_get(), dev_list, dev_cnt);
+	if (rc)
+		DL_ERROR(rc, "Failed to list devices.");
+
+	vos_self_fini();
+	return rc;
+}
+
+static inline struct bio_dev_info *
+find_dev_info(d_list_t *dev_list, uuid_t dev_id)
+{
+	struct bio_dev_info *dev_info;
+
+	d_list_for_each_entry(dev_info, dev_list, bdi_link) {
+		if (uuid_compare(dev_id, dev_info->bdi_dev_id) == 0)
+			return dev_info;
+	}
+
+	return NULL;
+}
+
+int
+dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid)
+{
+	struct bio_dev_info *old_dev_info, *new_dev_info, *dev_info, *tmp;
+	d_list_t             dev_list;
+	int                  rc, dev_cnt = 0;
+
+	rc = vos_self_init(db_path, true, 0);
+	if (rc) {
+		DL_ERROR(rc, "Initialize standalone VOS failed.");
+		return rc;
+	}
+
+	D_INIT_LIST_HEAD(&dev_list);
+	rc = bio_dev_list(vos_xsctxt_get(), &dev_list, &dev_cnt);
+	if (rc) {
+		DL_ERROR(rc, "Failed to list devices.");
+		goto out;
+	}
+
+	rc           = -DER_INVAL;
+	old_dev_info = find_dev_info(&dev_list, old_devid);
+	if (old_dev_info == NULL) {
+		D_ERROR("Old dev " DF_UUID " isn't found\n", DP_UUID(old_devid));
+		goto out;
+	} else if (!(old_dev_info->bdi_flags & NVME_DEV_FL_INUSE)) {
+		D_ERROR("Old dev " DF_UUID " isn't inuse\n", DP_UUID(old_devid));
+		goto out;
+	}
+
+	new_dev_info = find_dev_info(&dev_list, new_devid);
+	if (new_dev_info == NULL) {
+		D_ERROR("New dev " DF_UUID " isn't found\n", DP_UUID(new_devid));
+		goto out;
+	} else if (new_dev_info->bdi_flags & NVME_DEV_FL_INUSE) {
+		D_ERROR("New dev " DF_UUID " is inuse\n", DP_UUID(new_devid));
+		goto out;
+	}
+
+	/* Specify 'roles' as 0 */
+	rc = smd_dev_replace(old_devid, new_devid, 0);
+	if (rc)
+		DL_ERROR(rc, "Failed to replace device in SMD");
+out:
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
+		d_list_del_init(&dev_info->bdi_link);
+		bio_free_dev_info(dev_info);
+	}
+
+	vos_self_fini();
+	return rc;
 }

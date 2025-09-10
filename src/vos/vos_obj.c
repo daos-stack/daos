@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1530,6 +1531,8 @@ recx_get_flags(struct vos_obj_iter *oiter, bool embed)
 		options |= EVT_ITER_FOR_DISCARD;
 	if (oiter->it_flags & VOS_IT_FOR_MIGRATION)
 		options |= EVT_ITER_FOR_MIGRATION;
+	if (oiter->it_flags & VOS_IT_FOR_CHECK)
+		options |= EVT_ITER_FOR_CHECK;
 	return options;
 }
 
@@ -1736,6 +1739,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->it_iter.it_for_agg = 1;
 	if (is_sysdb)
 		oiter->it_iter.it_for_sysdb = 1;
+	if (param->ip_flags & VOS_IT_FOR_CHECK)
+		oiter->it_iter.it_for_check = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
 		/** Prepare the iterator from an already open tree handle.   See
 		 *  vos_iterate_key
@@ -1976,6 +1981,8 @@ nested_prep_common_init(struct vos_container *cont, struct vos_obj_iter **oiterp
 		oiter->it_iter.it_for_migration = 1;
 	if (cont->vc_pool->vp_sysdb)
 		oiter->it_iter.it_for_sysdb = 1;
+	if (info->ii_flags & VOS_IT_FOR_CHECK)
+		oiter->it_iter.it_for_check = 1;
 
 	return 0;
 }

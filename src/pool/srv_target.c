@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2025 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -240,9 +241,9 @@ flush_ult(void *arg)
 		} else if (rc) {	/* This pool doesn't have NVMe partition */
 			sleep_ms = 60000;
 		} else if (sched_req_space_check(child->spc_flush_req) == SCHED_SPACE_PRESS_NONE) {
-			sleep_ms = 5000;
+			sleep_ms = 500;
 		} else {
-			sleep_ms = (nr_flushed < nr_flush) ? 1000 : 0;
+			sleep_ms = (nr_flushed < nr_flush) ? 50 : 0;
 		}
 
 		if (dss_ult_exiting(child->spc_flush_req))
@@ -421,7 +422,7 @@ pool_child_recreate(struct ds_pool_child *child)
 		return rc;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_file(dss_storage_path, child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
 		return rc;
 
@@ -472,6 +473,43 @@ out:
 
 }
 
+struct ds_pool_flags_arg {
+	struct ds_pool *pool;
+	uint32_t        disable_rebuild : 1, disable_dtx_resync : 1, immutable : 1;
+};
+
+static void
+apply_pool_flags(void *arg)
+{
+	struct ds_pool_flags_arg *set_arg = arg;
+
+	if (set_arg->disable_rebuild)
+		set_arg->pool->sp_disable_rebuild = 1;
+	if (set_arg->disable_dtx_resync)
+		set_arg->pool->sp_disable_dtx_resync = 1;
+	if (set_arg->immutable)
+		set_arg->pool->sp_immutable = 1;
+}
+
+int
+ds_pool_apply_flags(struct ds_pool_flags_arg *args)
+{
+	ABT_thread thread;
+	int        rc;
+
+	if (!args->disable_rebuild && !args->disable_dtx_resync && !args->immutable)
+		return 0;
+
+	rc = dss_ult_create(apply_pool_flags, args, DSS_XS_SYS, 0 /* tgt_idx */, 0 /* stack_size */,
+			    &thread);
+	if (rc != 0) {
+		D_ERROR("failed to create apply_pool_flags ULT: " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+	return 0;
+}
 
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
@@ -479,6 +517,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	struct dss_module_info	*info = dss_get_module_info();
 	char			*path;
 	int			 rc;
+	struct ds_pool_flags_arg set_args = {0};
 
 	D_ASSERTF(*child->spc_state == POOL_CHILD_NEW, "state:%u", *child->spc_state);
 	D_ASSERT(!d_list_empty(&child->spc_list));
@@ -491,25 +530,26 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 			goto out;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_file(dss_storage_path, child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
 		goto out;
 
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
-	rc = vos_pool_open_metrics(path, child->spc_uuid, VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH,
+	rc = vos_pool_open_metrics(path, child->spc_uuid,
+				   VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_EXTERNAL_CHKPT,
 				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
 	D_FREE(path);
 
 	if (rc != 0) {
-		if (rc != -DER_NONEXIST) {
+		if (!engine_in_check() || rc != -DER_NONEXIST) {
 			DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
 				  DF_UUID": Open VOS pool failed.", DP_UUID(child->spc_uuid));
 			goto out;
 		}
 
-		D_WARN("Lost pool "DF_UUIDF" shard %u on rank %u.\n",
-		       DP_UUID(child->spc_uuid), info->dmi_tgt_id, dss_self_rank());
+		D_WARN(DF_UUID ": Lost pool shard %u on rank %u.\n", DP_UUID(child->spc_uuid),
+		       info->dmi_tgt_id, dss_self_rank());
 		/*
 		 * Ignore the failure to allow subsequent logic (such as DAOS check)
 		 * to handle the trouble.
@@ -525,8 +565,9 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto out_close;
 	}
 
+	set_args.pool = child->spc_pool;
 	if (vos_pool_feature_immutable(child->spc_hdl))
-		child->spc_pool->sp_immutable = 1;
+		set_args.immutable = 1;
 
 	/*
 	 * Rebuild depends on DTX resync, if DTX resync is skipped,
@@ -534,10 +575,14 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	 */
 	if (vos_pool_feature_skip_rebuild(child->spc_hdl) ||
 	    vos_pool_feature_skip_dtx_resync(child->spc_hdl))
-		child->spc_pool->sp_disable_rebuild = 1;
+		set_args.disable_rebuild = 1;
 
 	if (vos_pool_feature_skip_dtx_resync(child->spc_hdl))
-		child->spc_pool->sp_disable_dtx_resync = 1;
+		set_args.disable_dtx_resync = 1;
+
+	rc = ds_pool_apply_flags(&set_args);
+	if (rc != 0)
+		goto out_close;
 
 	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = start_gc_ult(child);
@@ -1728,8 +1773,8 @@ out:
 	if (rc != 0)
 		D_FREE(hdl);
 
-	D_DEBUG(DB_MD, DF_UUID": connect "DF_RC"\n",
-		DP_UUID(pool->sp_uuid), DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": connect " DF_UUID " " DF_RC "\n", DP_UUID(pool->sp_uuid),
+		DP_UUID(pic->pic_hdl), DP_RC(rc));
 	return rc;
 }
 
@@ -2221,13 +2266,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
 	pool->sp_data_thresh = iv_prop->pip_data_thresh;
-
-	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
-	    iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
-		pool->sp_disable_rebuild = 0;
-	else
-		pool->sp_disable_rebuild = 1;
-
+	pool->sp_self_heal      = iv_prop->pip_self_heal;
 	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_INCREMENTAL)
 		pool->sp_incr_reint = 1;
 
@@ -2676,8 +2715,7 @@ ds_pool_tgt_discard_ult(void *data)
 		D_GOTO(free, rc = 0);
 	}
 
-	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
-		    PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
+	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
 				  DSS_ULT_DEEP_STACK);
 

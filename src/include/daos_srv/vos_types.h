@@ -99,6 +99,8 @@ enum vos_pool_open_flags {
 	VOS_POF_FOR_FEATURE_FLAG = (1 << 7),
 	/** To identify this is a recreate operation. */
 	VOS_POF_FOR_RECREATE = (1 << 8),
+	/** Caller does checkpointing periodically */
+	VOS_POF_EXTERNAL_CHKPT = (1 << 9),
 };
 
 enum vos_oi_attr {
@@ -391,8 +393,10 @@ enum {
 	VOS_IT_UNCOMMITTED = (1 << 8),
 	/** The iterator is for an aggregation operation (EC or VOS) */
 	VOS_IT_FOR_AGG = (1 << 9),
+	/** Checking whether the target is aborted or not. */
+	VOS_IT_FOR_CHECK = (1 << 10),
 	/** Mask for all flags */
-	VOS_IT_MASK = (1 << 10) - 1,
+	VOS_IT_MASK = (1 << 11) - 1,
 };
 
 typedef struct {

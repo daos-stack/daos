@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,7 +18,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -247,10 +247,6 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 
 	var defCoresPerNuma uint32 = 26
 	var defNumaCount uint32 = 2
-	defMemInfo := common.MemInfo{
-		HugepageSizeKiB: 2048,
-		MemTotalKiB:     1, // Avoid failing non-zero check.
-	}
 	defHostFabric := &control.HostFabric{
 		Interfaces: []*control.HostFabricInterface{
 			eth0, eth1, ib0, ib1,
@@ -263,7 +259,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			storage.MockScmNamespace(0),
 			storage.MockScmNamespace(1),
 		},
-		MemInfo: &defMemInfo,
+		SysMemInfo: defSysMemInfo(),
 		NvmeDevices: storage.NvmeControllers{
 			storage.MockNvmeController(1),
 			storage.MockNvmeController(2),
@@ -298,7 +294,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hf: &control.HostFabric{},
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
-				MemInfo:       &defMemInfo,
+				SysMemInfo:    defSysMemInfo(),
 			},
 			expErr: errors.New("zero numa nodes reported"),
 		},
@@ -332,14 +328,14 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				CoresPerNuma: 1,
 			},
 			hs:     &control.HostStorage{},
-			expErr: errors.New("nil HostStorage.MemInfo"),
+			expErr: errors.New("nil HostStorage.SysMemInfo"),
 		},
 		"dual engine; dcpm": {
 			hf: defHostFabric,
 			hs: defHostStorage,
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"MS replicas set": {
 			msReplicas: "moon-111,mars-115,jupiter-119",
@@ -348,7 +344,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
 				WithMgmtSvcReplicas("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"unmet min nr ssds": {
 			hf: defHostFabric,
@@ -357,7 +353,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo:     &defMemInfo,
+				SysMemInfo:  defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{},
 			},
 			expErr: errors.New("insufficient number of ssds"),
@@ -382,7 +378,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &defMemInfo,
+				SysMemInfo: defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -392,7 +388,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"dcpm scm; control_metadata path set": {
 			extMetadataPath: metadataMountPath,
@@ -409,7 +405,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &defMemInfo,
+				SysMemInfo: defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -419,7 +415,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", mdOnSSDEngineCfgs).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log").
+				WithControlLogFile("/var/log/daos/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
 		"tmpfs scm; md-on-ssd; no logging to stdout": {
@@ -431,7 +427,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &defMemInfo,
+				SysMemInfo: defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -448,7 +444,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &defMemInfo,
+				SysMemInfo: defSysMemInfo(),
 				NvmeDevices: storage.NvmeControllers{
 					&storage.NvmeController{PciAddr: "4a0005:01:00.0"},
 					&storage.NvmeController{PciAddr: "4a0005:02:00.0"},
@@ -511,7 +507,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					),
 			}).
 				WithMgmtSvcReplicas("localhost:10001").
-				WithControlLogFile("/tmp/daos_server.log"),
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
