@@ -768,7 +768,6 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int fl
 		size_t key_len;
 
 		memcpy(key, key_prefix, key_prefix_len);
-
 		memcpy(key + key_prefix_len, name, name_len);
 		key_len      = key_prefix_len + name_len;
 		key[key_len] = '\0';
@@ -994,8 +993,7 @@ drec_del_at_dact(dfs_dcache_t *dcache, dfs_obj_t *rec)
 }
 
 static int
-dcache_create_shm(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
-		  uint32_t gc_reclaim_max)
+dcache_create_shm(dfs_t *dfs)
 {
 	dfs_dcache_t *dcache_tmp;
 	/* pool_cont_uuid will hold pool uuid and cont uuid */
@@ -1051,11 +1049,8 @@ dcache_create(dfs_t *dfs, int type, uint32_t bits, uint32_t rec_timeout, uint32_
 		return dcache_create_dact(dfs);
 	if (type == DFS_CACHE_DRAM)
 		return dcache_create_act(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
-	else {
-		shm_init();
-		dcache_create_shm(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
-		return 0;
-	}
+	if (type == DFS_CACHE_SHM)
+		return dcache_create_shm(dfs);
 }
 
 int
@@ -1121,8 +1116,11 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 			/* record is not found in cache */
 			char tmp;
 
-			D_ASSERT(name_len > 0);
-			D_ASSERT(parent != NULL);
+			if (name_len == 0) {
+				/* root is not found in cache, then add root first */
+				dcache_add_root(dfs->dcache);
+				continue;
+			}
 
 			tmp            = name[name_len];
 			name[name_len] = '\0';
