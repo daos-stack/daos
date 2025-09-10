@@ -1049,8 +1049,8 @@ dcache_create(dfs_t *dfs, int type, uint32_t bits, uint32_t rec_timeout, uint32_
 		return dcache_create_dact(dfs);
 	if (type == DFS_CACHE_DRAM)
 		return dcache_create_act(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
-	if (type == DFS_CACHE_SHM)
-		return dcache_create_shm(dfs);
+
+	return dcache_create_shm(dfs);
 }
 
 int
