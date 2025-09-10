@@ -679,7 +679,7 @@ ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf)
 }
 
 int
-ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all)
+ds_mgmt_check_act(uint64_t seq, uint32_t act)
 {
 	return 0;
 }
@@ -688,4 +688,11 @@ bool
 ds_mgmt_check_enabled(void)
 {
 	return true;
+}
+
+int
+ds_mgmt_get_group_status(uint32_t group_version, d_rank_t **dead_ranks_out,
+			 size_t *n_dead_ranks_out)
+{
+	return 0;
 }
