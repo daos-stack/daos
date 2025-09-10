@@ -335,6 +335,9 @@ dsc_pool_svc_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *ps_ra
 			  uint64_t deadline);
 int
      dsc_pool_svc_rebuild_start(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline);
+int
+     dsc_pool_svc_eval_self_heal(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+				 uint64_t sys_self_heal);
 int ds_pool_failed_add(uuid_t uuid, int rc);
 void ds_pool_failed_remove(uuid_t uuid);
 int ds_pool_failed_lookup(uuid_t uuid);
@@ -555,11 +558,16 @@ int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct 
 void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
 
 static inline bool
-ds_pool_rebuild_enabled(struct ds_pool *pool)
+is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)
 {
+	uint64_t flags = DAOS_SELF_HEAL_AUTO_REBUILD;
+
+	if (check_delayed_rebuild)
+		flags |= DAOS_SELF_HEAL_DELAY_REBUILD;
+
 	if (pool->sp_disable_rebuild)
 		return false;
-	if (!(pool->sp_self_heal & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)))
+	if (!(pool->sp_self_heal & flags))
 		return false;
 
 	return true;

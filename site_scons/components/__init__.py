@@ -240,6 +240,8 @@ def define_common(reqs):
 
     reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
 
+    reqs.define('hdf5', headers=['hdf5.h'], package='hdf5-devel')
+
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
     reqs.define('event', libs=['event'], package='libevent-devel')
@@ -356,6 +358,7 @@ def define_components(reqs):
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
+
     if ARM_PLATFORM:
         spdk_arch = 'native'
     elif dist[0] == 'CentOS Linux' and dist[1] == '7':
@@ -366,6 +369,7 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     copy_files = os.path.join(Dir('#').abspath, 'utils/scripts/copy_files.sh')
+    create_pkgconfig = os.path.join(Dir('#').abspath, 'utils/scripts/create_spdk_pkgconfig.sh')
     reqs.define('spdk',
                 retriever=GitRepoRetriever(True),
                 commands=[['./configure',
@@ -397,10 +401,11 @@ def define_components(reqs):
                           ['mv', '$SPDK_PREFIX/bin/spdk_nvme_identify',
                            '$SPDK_PREFIX/bin/daos_spdk_nvme_identify'],
                           ['cp', '$SPDK_PREFIX/bin/spdk_nvme_perf',
-                           '$SPDK_PREFIX/bin/daos_spdk_nvme_perf']],
-                headers=['spdk/nvme.h'],
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_perf'],
+                          [create_pkgconfig, "$SPDK_PREFIX"]],
                 extra_lib_path=['lib64/daos_srv'],
-                extra_include_path=['include/daos_srv'],
+                headers=['spdk/nvme.h'],
+                pkgconfig='daos_spdk',
                 patch_rpath=['lib64/daos_srv', 'bin'])
 
     reqs.define('protobufc',

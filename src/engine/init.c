@@ -200,67 +200,6 @@ fini_tls_support(void)
 	ds_tls_key_delete();
 }
 
-/*
- * Register the dbtree classes used by native server-side modules (e.g.,
- * ds_pool, ds_cont, etc.). Unregistering is currently not supported.
- */
-static int
-register_dbtree_classes(void)
-{
-	int rc;
-
-	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
-				   &dbtree_kv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_KV: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
-				   &dbtree_iv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
-				   &dbtree_ifv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IFV: " DF_RC "\n", DP_RC(rc));
-		return rc;
-	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY,
-				   &dbtree_nv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
-				   &dbtree_uv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_UV: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_EC,
-				   BTR_FEAT_UINT_KEY /* feats */,
-				   &dbtree_ec_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_EC: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	return rc;
-}
-
 static int
 modules_load(void)
 {
@@ -773,7 +712,7 @@ server_init(int argc, char *argv[])
 		goto exit_metrics_init;
 	}
 
-	rc = register_dbtree_classes();
+	rc = dss_register_dbtree_classes();
 	if (rc != 0)
 		D_GOTO(exit_drpc_fini, rc);
 
@@ -876,7 +815,7 @@ server_init(int argc, char *argv[])
 	if (rc)
 		D_GOTO(exit_init_state, rc);
 
-	dss_xstreams_open_barrier();
+	dss_xstreams_open_barrier(false);
 	D_INFO("Service fully up\n");
 
 	/** Report timestamp when engine was open for business */

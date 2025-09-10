@@ -99,18 +99,15 @@ pip install --upgrade pip
 pip install --requirement requirements-utest.txt
 pip install /opt/daos/lib/daos/python/
 
-utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
-                   $SUDO_ARG
+HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
+    --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
 
 # Generate code coverage report if at least one gcda file was generated
 find build -name '*.gcno' | sort -n
 find build -name '*.gcda' | sort -n
 if [[ -n $(find build -name "*.gcda") ]]; then
     pip install --requirement requirements-code-coverage.txt
-    
     mkdir -p "${test_log_dir}/code_coverage"
     gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors \
         --gcov-ignore-errors=no_working_dir_found
 fi
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
-    --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG

@@ -92,6 +92,7 @@ def add_command_line_options():
               help='Ignore the versions/branches/patches specified in build.config and \
                     use the specified relative sub-directory containing all \
                     dependencies as git submodules instead')
+
     # generate code coverage
     AddOption('--code-coverage',
               action='store_true',
@@ -474,6 +475,11 @@ def scons():
 
     # This will add a final 'DEPS' value to opts but it will not be persistent.
     prereqs.run_build(opts)
+
+    have_hdf5 = False
+    if prereqs.check_component('hdf5'):
+        have_hdf5 = True
+    Export('have_hdf5')
 
     if GetOption('build_deps') == 'only':
         prereqs.save_build_info()
