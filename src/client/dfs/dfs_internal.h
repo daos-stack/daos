@@ -110,7 +110,7 @@
 #define DCACHE_KEY_MAX        (DCACHE_KEY_PREF_SIZE - 1 + PATH_MAX)
 
 /** Size of the hash key prefix for shm dentry cache. 64-bit pool_cont_hash + obj_id */
-#define SHM_DCACHE_KEY_PREF_SIZE  (sizeof(uint64_t) + sizeof(daos_obj_id_t))
+#define SHM_DCACHE_KEY_PREF_SIZE (sizeof(uint64_t) + sizeof(daos_obj_id_t))
 
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;

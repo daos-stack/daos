@@ -379,10 +379,7 @@ shm_ht_rec_num_ref(d_shm_ht_rec_loc_t rec_loc);
 /* dynamic allocation if data is larger than this threshold */
 #define LRU_ALLOC_SIZE_THRESHOLD (4096)
 
-enum SHM_LRU_CACHE_TYPE {
-	CACHE_DENTRY = 0,
-	CACHE_DATA
-};
+enum SHM_LRU_CACHE_TYPE { CACHE_DENTRY = 0, CACHE_DATA};
 
 /* Node of entry in LRU cache */
 typedef struct shm_lru_node {

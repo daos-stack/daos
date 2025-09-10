@@ -120,8 +120,8 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	/* initialization is finished now. */
 	close(shm_ht_fd);
 
-	rc = shm_lru_create_cache(NUM_SUB_CACHE, DEFAULT_CACHE_DENTRY_CAPACITY,
-				  0, 0, &lru_cache_dentry);
+	rc = shm_lru_create_cache(NUM_SUB_CACHE, DEFAULT_CACHE_DENTRY_CAPACITY, 0, 0,
+				  &lru_cache_dentry);
 	if (rc) {
 		D_ERROR("Failed to create dentry cache: %d (%s)\n", rc, strerror(rc));
 		goto err_unmap;

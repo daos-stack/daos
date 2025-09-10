@@ -187,8 +187,8 @@ gc_add_rec(dfs_dcache_t *dcache, dfs_obj_t *rec)
 
 	d_list_add_tail(&rec->dc_entry_gc, &dcache->dh.dd_head_gc);
 	++dcache->dh.dd_count_gc;
-	D_DEBUG(DB_TRACE, "add record " DF_DK " to GC: count_gc=%" PRIu64 "\n",
-		DP_DK(rec->dc_key), dcache->dh.dd_count_gc);
+	D_DEBUG(DB_TRACE, "add record " DF_DK " to GC: count_gc=%" PRIu64 "\n", DP_DK(rec->dc_key),
+		dcache->dh.dd_count_gc);
 
 unlock:
 	rc = D_MUTEX_UNLOCK(&dcache->dh.dd_mutex_gc);
@@ -647,8 +647,8 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 		}
 	}
 
-	rlink = d_hash_rec_find_insert(&dcache->dh.dd_dir_hash, obj->dc_key, key_len,
-				       &obj->dc_entry);
+	rlink =
+	    d_hash_rec_find_insert(&dcache->dh.dd_dir_hash, obj->dc_key, key_len, &obj->dc_entry);
 	if (rlink == &obj->dc_entry) {
 		D_DEBUG(DB_TRACE, "add record " DF_DK " with ref counter %u", DP_DK(obj->dc_key),
 			obj->dc_ref);
@@ -1023,8 +1023,8 @@ dcache_create_shm(dfs_t *dfs)
 	/* acquire the pointer of the existing shm LRU cache for dentry */
 	dcache_tmp->shm.d_shm_lru_dentry = shm_lru_get_cache(CACHE_DENTRY);
 	D_ASSERT(dcache_tmp->shm.d_shm_lru_dentry != NULL);
-	dcache_tmp->shm.dd_pool_cont_hash = d_hash_murmur64((const unsigned char *)pool_cont_uuid,
-							    sizeof(uuid_t) * 2, 0);
+	dcache_tmp->shm.dd_pool_cont_hash =
+	    d_hash_murmur64((const unsigned char *)pool_cont_uuid, sizeof(uuid_t) * 2, 0);
 
 	rc = dcache_add_root(dcache_tmp);
 	if (rc != 0)
@@ -1110,8 +1110,8 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 		key_len = SHM_DCACHE_KEY_PREF_SIZE + name_len;
 		rc      = shm_lru_get(dfs->dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
 				      (void **)&value);
-		D_DEBUG(DB_TRACE, "dentry cache %s: path=" DF_PATH ", key=" DF_DK "\n",
-			(rc != 0) ? "miss" : "hit", DP_PATH(path), DP_DK(key));
+		D_DEBUG(DB_TRACE, "dentry cache %s: path=" DF_PATH "\n", (rc != 0) ? "miss" : "hit",
+			DP_PATH(path));
 		if (rc == ENOENT) {
 			/* record is not found in cache */
 			char tmp;
@@ -1186,10 +1186,11 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 				D_GOTO(out, rc);
 			memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
 			rec->dc_stated = true;
-			/* stat and dc_stated are updated, need to update the record in cache too */
-			/* the data buffer size is stored as an integer at the very beginning of data */
+			/* stat and dc_stated are updated, need to update the record in cache too.
+			 * the data buffer size is stored as an integer at the very beginning of data.
+			 */
 			val_size = *((size_t *)value) & 0xFFFFFFFF;
-			rc = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
+			rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -1227,7 +1228,7 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 							  _rec, mode, stbuf);
 	}
 
-	ptr_key = (uint64_t *)key;
+	ptr_key    = (uint64_t *)key;
 	ptr_key[0] = dfs->dcache->shm.dd_pool_cont_hash;
 	if (parent) {
 		ptr_key[1] = parent->oid.lo;
@@ -1239,10 +1240,10 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 	}
 	memcpy(key + SHM_DCACHE_KEY_PREF_SIZE, name, len);
 	key_len = SHM_DCACHE_KEY_PREF_SIZE + len;
-	rc = shm_lru_get(dfs->dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
-			 (void **)&value);
-	D_DEBUG(DB_TRACE, "dentry cache %s: name=" DF_PATH ", key=" DF_DK "\n",
-		(rc != 0) ? "miss" : "hit", DP_PATH(name), DP_DK(key));
+	rc      = shm_lru_get(dfs->dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
+			      (void **)&value);
+	D_DEBUG(DB_TRACE, "dentry cache %s: name=" DF_PATH "\n", (rc != 0) ? "miss" : "hit",
+		DP_PATH(name));
 	if (rc == ENOENT) {
 		/* record is not found */
 		rc = dcache_add(dfs->dcache, parent, name, len, key, key_len, &rec, mode, stbuf);
@@ -1279,10 +1280,11 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 					D_GOTO(out, rc);
 				memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
 				rec->dc_stated = true;
-				/* stat and dc_stated are updated, need to update the record in cache too */
-				/* the data buffer size is stored as an integer at the very beginning of data */
+				/* stat and dc_stated are updated, need to update the record in cache too.
+				 * the data buffer size is stored as an integer at the very beginning of data.
+				 */
 				val_size = *((size_t *)value) & 0xFFFFFFFF;
-				rc = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
+				rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
 				if (rc != 0)
 					D_GOTO(out, rc);
 			}
