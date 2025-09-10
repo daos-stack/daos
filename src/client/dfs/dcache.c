@@ -1187,7 +1187,8 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 			memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
 			rec->dc_stated = true;
 			/* stat and dc_stated are updated, need to update the record in cache too.
-			 * the data buffer size is stored as an integer at the very beginning of data.
+			 * the data buffer size is stored as an integer at the very beginning of
+			 * data.
 			 */
 			val_size = *((size_t *)value) & 0xFFFFFFFF;
 			rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
@@ -1280,8 +1281,9 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 					D_GOTO(out, rc);
 				memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
 				rec->dc_stated = true;
-				/* stat and dc_stated are updated, need to update the record in cache too.
-				 * the data buffer size is stored as an integer at the very beginning of data.
+				/* stat and dc_stated are updated, need to update the record in
+				 * cache too. The data buffer size is stored as an integer at the
+				 * very beginning of data.
 				 */
 				val_size = *((size_t *)value) & 0xFFFFFFFF;
 				rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
