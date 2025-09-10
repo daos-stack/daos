@@ -2059,7 +2059,7 @@ const ProtobufCMessageDescriptor mgmt__check_get_policy_resp__descriptor =
   (ProtobufCMessageInit) mgmt__check_get_policy_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__check_act_req__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__check_act_req__field_descriptors[3] =
 {
   {
     "sys",
@@ -2097,29 +2097,16 @@ static const ProtobufCFieldDescriptor mgmt__check_act_req__field_descriptors[4] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "for_all",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__CheckActReq, for_all),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__check_act_req__field_indices_by_name[] = {
   2,   /* field[2] = act */
-  3,   /* field[3] = for_all */
   1,   /* field[1] = seq */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__check_act_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor mgmt__check_act_req__descriptor =
 {
@@ -2129,7 +2116,7 @@ const ProtobufCMessageDescriptor mgmt__check_act_req__descriptor =
   "Mgmt__CheckActReq",
   "mgmt",
   sizeof(Mgmt__CheckActReq),
-  4,
+  3,
   mgmt__check_act_req__field_descriptors,
   mgmt__check_act_req__field_indices_by_name,
   1,  mgmt__check_act_req__number_ranges,

@@ -250,7 +250,7 @@ chk_engine_post_repair(struct chk_pool_rec *cpr, int *result, bool update)
 	}
 
 	if (update) {
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(cpr->cpr_ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 	}
 
@@ -1720,7 +1720,7 @@ chk_engine_pool_ult(void *args)
 
 	D_INFO(DF_ENGINE" pool ult enter for "DF_UUIDF"\n", DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid));
 
-	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+	chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 
 	if (cpr->cpr_stop)
 		goto out;
@@ -2017,6 +2017,11 @@ chk_engine_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 	d_rank_list_t			*rank_list = NULL;
 	uint32_t			 cbk_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	int				 rc = 0;
+	uint8_t                          chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	/* Check leader has already verified related parameters, trust them. */
 
@@ -2086,7 +2091,7 @@ reset:
 
 	memset(cbk, 0, sizeof(*cbk));
 	cbk->cb_magic = CHK_BK_MAGIC_ENGINE;
-	cbk->cb_version = DAOS_CHK_VERSION;
+	cbk->cb_version = chk_ver;
 	cbk_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 
 init:
@@ -2158,7 +2163,7 @@ chk_engine_start_post(struct chk_instance *ins)
 		pool_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE -
 						 pool_cbk->cb_phase;
 
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(pool_cbk, uuid_str);
 		if (rc != 0)
 			break;
@@ -2505,7 +2510,7 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	uuid_copy(shard->cqps_uuid, uuid);
 	shard->cqps_rank = dss_self_rank();
 
-	uuid_unparse_lower(uuid, uuid_str);
+	chk_uuid_unparse(cqpa->cqpa_ins, uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc == -DER_NONEXIST) {
 		shard->cqps_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
@@ -2668,12 +2673,12 @@ out:
 }
 
 static int
-chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bool locked)
+chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act)
 {
 	struct chk_pending_rec	*cpr = NULL;
 	int			 rc;
 
-	rc = chk_pending_del(ins, seq, locked, &cpr);
+	rc = chk_pending_del(ins, seq, &cpr);
 	if (rc == 0) {
 		/* The cpr will be destroyed by the waiter via chk_engine_report(). */
 		D_ASSERT(cpr->cpr_busy);
@@ -2697,72 +2702,28 @@ chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bo
 }
 
 int
-chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t flags)
+chk_engine_act(uint64_t gen, uint64_t seq, uint32_t act)
 {
-	struct chk_instance	*ins = chk_engine;
-	struct chk_property	*prop = &ins->ci_prop;
-	struct chk_pool_rec	*pool = NULL;
-	struct chk_pool_rec	*pool_tmp = NULL;
-	struct chk_pending_rec	*cpr = NULL;
-	struct chk_pending_rec	*cpr_tmp = NULL;
-	int			 rc;
+	struct chk_instance *ins = chk_engine;
+	int                  rc;
 
 	if (ins->ci_bk.cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
-	if (unlikely(cla >= CHK_POLICY_MAX)) {
-		D_ERROR("Invalid DAOS inconsistency class %u\n", cla);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
 	/* The admin may input the wrong option, not acceptable. */
 	if (unlikely(act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)) {
-		D_ERROR("%u is not acceptable for interaction decision.\n", cla);
+		D_ERROR("%u is not acceptable for interaction decision.\n", act);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = chk_engine_act_internal(ins, seq, act, false);
+	rc = chk_engine_act_internal(ins, seq, act);
 	if (rc == -DER_NONEXIST || rc == -DER_NO_HDL)
 		rc = 0;
 
-	if (rc != 0 || !(flags & CAF_FOR_ALL))
-		goto out;
-
-	if (likely(prop->cp_policies[cla] != act)) {
-		prop->cp_policies[cla] = act;
-		chk_prop_update(prop, NULL);
-	}
-
-	/*
-	 * Hold reference on each to guarantee that the next 'tmp' will not be unlinked from the
-	 * pool list during current pool process.
-	 */
-	d_list_for_each_entry(pool, &ins->ci_pool_list, cpr_link)
-		chk_pool_get(pool);
-
-	d_list_for_each_entry_safe(pool, pool_tmp, &ins->ci_pool_list, cpr_link) {
-		if (rc == 0) {
-			ABT_rwlock_wrlock(ins->ci_abt_lock);
-			d_list_for_each_entry_safe(cpr, cpr_tmp, &pool->cpr_pending_list,
-						   cpr_pool_link) {
-				if (cpr->cpr_class != cla ||
-				    cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)
-					continue;
-
-				rc = chk_engine_act_internal(ins, cpr->cpr_seq, act, true);
-				if (rc != 0)
-					break;
-			}
-			ABT_rwlock_unlock(ins->ci_abt_lock);
-		}
-		chk_pool_put(pool);
-	}
-
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" on rank %u takes action for seq "
-		 DF_X64" with gen "DF_X64", class %u, action %u, flags %x: "DF_RC"\n",
-		 DP_ENGINE(ins), dss_self_rank(), seq, gen, cla, act, flags, DP_RC(rc));
+		 DF_ENGINE " on rank %u takes act %u, seq " DF_X64 ", gen " DF_X64 ": " DF_RC "\n",
+		 DP_ENGINE(ins), dss_self_rank(), act, seq, gen, DP_RC(rc));
 
 	return rc;
 }
@@ -2933,7 +2894,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 	if (ins->ci_bk.cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 
-	uuid_unparse_lower(uuid, uuid_str);
+	chk_uuid_unparse(ins, uuid, uuid_str);
 
 	d_iov_set(&riov, NULL, 0);
 	d_iov_set(&kiov, uuid, sizeof(uuid_t));
@@ -2955,9 +2916,14 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 			goto out;
 
 		if (rc == -DER_NONEXIST) {
+			uint8_t chk_ver;
+
+			rc = chk_rpc_protocol(&chk_ver);
+			if (rc)
+				goto out;
 			memset(&new, 0, sizeof(new));
 			new.cb_magic = CHK_BK_MAGIC_POOL;
-			new.cb_version = DAOS_CHK_VERSION;
+			new.cb_version            = chk_ver;
 			new.cb_gen = ins->ci_bk.cb_gen;
 			new.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
 			new.cb_time.ct_start_time = time(NULL);
@@ -3097,7 +3063,7 @@ chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label
 		cbk->cb_phase = phase;
 		/* QUEST: How to estimate the left time? */
 		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0)
 			goto put;
@@ -3197,7 +3163,7 @@ new_seq:
 	if (unlikely(rc == -DER_AGAIN)) {
 		D_ASSERT(cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT);
 
-		rc = chk_pending_del(ins, *seq, false, &tmp);
+		rc = chk_pending_del(ins, *seq, &tmp);
 		if (rc == 0)
 			D_ASSERT(tmp == NULL);
 		else if (rc != -DER_NONEXIST)
@@ -3545,7 +3511,8 @@ chk_engine_init(void)
 		}
 
 		ctpa.ctpa_gen = cbk->cb_gen;
-		rc = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
+		ctpa.ctpa_ins = chk_engine;
+		rc            = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
 		/*
 		 * Failed to reset pool status will not affect next check start, so it is not fatal,
 		 * but related check query result may be confused for user.

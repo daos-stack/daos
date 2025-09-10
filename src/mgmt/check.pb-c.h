@@ -513,14 +513,10 @@ struct  _Mgmt__CheckActReq
    * The decision from RASEvent::extended_info::check_info::chk_opts.
    */
   Chk__CheckInconsistAction act;
-  /*
-   * The same action is applicable to the same type of inconsistency.
-   */
-  protobuf_c_boolean for_all;
 };
 #define MGMT__CHECK_ACT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_act_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT, 0 }
+    , (char *)protobuf_c_empty_string, 0, CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT }
 
 
 /*

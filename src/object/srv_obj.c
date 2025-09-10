@@ -2393,9 +2393,10 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t rpc_ma
 	 * which otherwise might be written duplicately, which might cause
 	 * the failure in VOS.
 	 */
-	if ((flags & ORF_REBUILDING_IO) && (!child->sc_pool->spc_pool->sp_disable_rebuild &&
-					    child->sc_pool->spc_rebuild_fence == 0)) {
-		D_ERROR("rebuilding " DF_UUID " retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+	if ((flags & ORF_REBUILDING_IO) &&
+	    (is_pool_rebuild_allowed(child->sc_pool->spc_pool, false) &&
+	     child->sc_pool->spc_rebuild_fence == 0)) {
+		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
 
@@ -2602,6 +2603,81 @@ out:
 	obj_ioc_end(&ioc, rc);
 }
 
+static int
+obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
+		  uint32_t *flags, struct dtx_memberships *mbs, bool leader, bool dist)
+{
+	daos_epoch_t e;
+	uint32_t     ver = *pm_ver;
+	int          rc;
+
+	if (!leader || dist || (flags != NULL && *flags & ORF_RESEND))
+		e = *epoch;
+	else
+		e = 0;
+
+	rc = dtx_handle_resend(coh, dti, &e, &ver);
+	switch (rc) {
+	case -DER_ALREADY:
+		/* Do nothing if 'committed' or 'committable'. */
+		D_GOTO(out, rc = 1);
+	case 0:
+		/* For 'prepared' DTX, if pool map has been changed, then DTX membership maybe
+		 * changed also. Let's refresh it if necessary.
+		 */
+		if (ver < *pm_ver) {
+			rc = vos_dtx_refresh_mbs(coh, dti, mbs, *pm_ver, leader);
+			if (rc < 0)
+				goto out;
+
+			if (rc > 0)
+				rc = 0;
+
+			if (leader && !dist)
+				*pm_ver = ver;
+		}
+
+		if (flags != NULL) {
+			*flags |= ORF_RESEND;
+			*epoch = e;
+		}
+
+		break;
+	case -DER_MISMATCH:
+		if (dist)
+			/* NOTE: For distributed transaction, there is race between the client DTX
+			 *	 commit with restart and the DTX recovery on the new leader. It is
+			 *	 possible that the new DTX leader is waiting for others reply for
+			 *	 related DTX recovery, or the DTX recovery ULT is not started yet.
+			 *
+			 *	 But we do not know whether the old DTX leader has ever committed
+			 *	 related DTX before its corruption or not. If yes, then abort DTX
+			 *	 with old epoch will break the semantics.
+			 *
+			 *	 So here we need to wait the new DTX leader to recover such DTX:
+			 *	 either commit or abort. Let's return '-DER_INPROGRESS' to ask the
+			 *	 client to retry sometime later.
+			 */
+			D_GOTO(out, rc = -DER_INPROGRESS);
+
+		/* Abort it if exist but with different epoch, then re-execute with new epoch. */
+		rc = vos_dtx_abort(coh, dti, e);
+		if (rc < 0 && rc != -DER_NONEXIST)
+			D_GOTO(out, rc);
+		/* Fall through */
+	case -DER_NONEXIST:
+		if (flags != NULL)
+			*flags = 0;
+		rc = 0;
+		break;
+	default:
+		break;
+	}
+
+out:
+	return rc;
+}
+
 void
 ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 {
@@ -2640,8 +2716,15 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch, orw->orw_map_ver, ioc.ioc_map_ver,
 		DP_DTI(&orw->orw_dti));
 
+	tgts    = orw->orw_shard_tgts.ca_arrays;
+	tgt_cnt = orw->orw_shard_tgts.ca_count;
+	rc      = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
+<<<<<<< HEAD
 		daos_epoch_t e = orw->orw_epoch;
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &e, NULL);
@@ -2660,6 +2743,12 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
+=======
+		rc = obj_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &orw->orw_epoch,
+				       &orw->orw_map_ver, NULL, mbs, false, false);
+		if (rc != 0)
+			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+>>>>>>> comm/master
 	}
 
 	/* Inject failure for test to simulate the case of lost some
@@ -2681,6 +2770,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
+<<<<<<< HEAD
 	tgts    = orw->orw_shard_tgts.ca_arrays;
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
@@ -2688,6 +2778,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+=======
+>>>>>>> comm/master
 	epoch.oe_value = orw->orw_epoch;
 	epoch.oe_first = orw->orw_epoch_first;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
@@ -2956,36 +3048,19 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
+<<<<<<< HEAD
 		daos_epoch_t e;
 
+=======
+>>>>>>> comm/master
 		d_tm_inc_counter(opm->opm_update_resent, 1);
 
 again:
-		if (flags & ORF_RESEND)
-			e = orw->orw_epoch;
-		else
-			e = 0;
 		version = orw->orw_map_ver;
-		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &e, &version);
-		switch (rc) {
-		case -DER_ALREADY:
-			D_GOTO(out, rc = 0);
-		case 0:
-			flags |= ORF_RESEND;
-			orw->orw_epoch = e;
-			/* TODO: Also recover the epoch uncertainty. */
-			break;
-		case -DER_MISMATCH:
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, &orw->orw_dti, e);
-			if (rc < 0 && rc != -DER_NONEXIST)
-				D_GOTO(out, rc);
-			/* Fall through */
-		case -DER_NONEXIST:
-			flags = 0;
-			break;
-		default:
-			D_GOTO(out, rc);
-		}
+		rc = obj_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &orw->orw_epoch, &version,
+				       &flags, mbs, true, false);
+		if (rc != 0)
+			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		ioc.ioc_lost_reply = 1;
 		D_GOTO(out, rc);
@@ -3577,6 +3652,7 @@ out:
 int
 obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 {
+<<<<<<< HEAD
 	struct obj_io_context  ioc   = {0};
 	struct obj_io_context *p_ioc = otpa->sponsor_ioc;
 	struct dtx_handle     *dth   = otpa->sponsor_dth;
@@ -3585,6 +3661,15 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 	daos_epoch_t           tmp;
 	uint32_t               dtx_flags = 0;
 	int                    rc        = 0;
+=======
+	struct obj_io_context	 ioc = { 0 };
+	struct obj_io_context	*p_ioc = otpa->sponsor_ioc;
+	struct dtx_handle	*dth = otpa->sponsor_dth;
+	struct obj_punch_in	*opi = otpa->opi;
+	struct dtx_epoch         epoch;
+	uint32_t                 dtx_flags = 0;
+	int                      rc        = 0;
+>>>>>>> comm/master
 
 	if (p_ioc == NULL) {
 		p_ioc = &ioc;
@@ -3603,6 +3688,7 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 	}
 
 	if (opi->opi_flags & ORF_RESEND) {
+<<<<<<< HEAD
 		tmp = opi->opi_epoch;
 		rc  = dtx_handle_resend(p_ioc->ioc_vos_coh, &opi->opi_dti, &tmp, NULL);
 		/* Do nothing if 'prepared' or 'committed'. */
@@ -3618,6 +3704,12 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
+=======
+		rc = obj_handle_resend(p_ioc->ioc_vos_coh, &opi->opi_dti, &opi->opi_epoch,
+				       &opi->opi_map_ver, NULL, otpa->mbs, false, false);
+		if (rc != 0)
+			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+>>>>>>> comm/master
 	}
 
 	epoch.oe_value = opi->opi_epoch;
@@ -3836,34 +3928,17 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
+<<<<<<< HEAD
 		daos_epoch_t e;
 
+=======
+>>>>>>> comm/master
 again:
-		if (flags & ORF_RESEND)
-			e = opi->opi_epoch;
-		else
-			e = 0;
 		version = opi->opi_map_ver;
-		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &e, &version);
-		switch (rc) {
-		case -DER_ALREADY:
-			D_GOTO(out, rc = 0);
-		case 0:
-			opi->opi_epoch = e;
-			flags |= ORF_RESEND;
-			/* TODO: Also recovery the epoch uncertainty. */
-			break;
-		case -DER_MISMATCH:
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, e);
-			if (rc < 0 && rc != -DER_NONEXIST)
-				D_GOTO(out, rc);
-			/* Fall through */
-		case -DER_NONEXIST:
-			flags = 0;
-			break;
-		default:
-			D_GOTO(out, rc);
-		}
+		rc = obj_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &opi->opi_epoch, &version,
+				       &flags, mbs, true, false);
+		if (rc != 0)
+			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST) ||
 		   DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 		goto cleanup;
@@ -4886,25 +4961,35 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	struct daos_cpd_sub_head *dcsh      = ds_obj_cpd_get_head(rpc, 0);
 	struct daos_cpd_disp_ent *dcde      = ds_obj_cpd_get_ents(rpc, 0, -1);
 	struct daos_cpd_sub_req  *dcsr      = ds_obj_cpd_get_reqs(rpc, 0);
+<<<<<<< HEAD
 	daos_epoch_t              e         = dcsh->dcsh_epoch.oe_value;
 	uint32_t                  dtx_flags = DTX_DIST;
 	int                       rc        = 0;
 	int                       rc1       = 0;
+=======
+	daos_epoch_t              epoch     = dcsh->dcsh_epoch.oe_value;
+	uint32_t                  dtx_flags = DTX_DIST;
+	int                       rc        = 0;
+>>>>>>> comm/master
 
 	D_DEBUG(DB_IO, "Handling DTX " DF_DTI " on non-leader\n", DP_DTI(&dcsh->dcsh_xid));
 
-	D_ASSERT(dcsh->dcsh_epoch.oe_value != 0);
-	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
+	D_ASSERT(epoch != 0);
+	D_ASSERT(epoch != DAOS_EPOCH_MAX);
 
 	if (oci->oci_flags & ORF_RESEND) {
-		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &e, NULL);
-		/* Do nothing if 'prepared' or 'committed'. */
-		if (rc1 == -DER_ALREADY || rc1 == 0)
-			D_GOTO(out, rc = 0);
+		rc = obj_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &epoch, &oci->oci_map_ver,
+				       NULL, dcsh->dcsh_mbs, false, true);
+		if (rc != 0)
+			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
 	}
 
 	/* Refuse any modification with old epoch. */
+<<<<<<< HEAD
 	if (dcde->dcde_write_cnt != 0 && dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
+=======
+	if (dcde->dcde_write_cnt != 0 && epoch < dss_get_start_epoch())
+>>>>>>> comm/master
 		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	/* The check for read capa has been done before handling the CPD RPC.
@@ -4914,23 +4999,6 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		rc = obj_capa_check(ioc->ioc_coh, true, false);
 		if (rc != 0)
 			goto out;
-	}
-
-	switch (rc1) {
-	case -DER_NONEXIST:
-	case 0:
-		break;
-	case -DER_MISMATCH:
-		/* For resent RPC, abort it firstly if exist but with different
-		 * (old) epoch, then re-execute with new epoch.
-		 */
-		rc = vos_dtx_abort(ioc->ioc_vos_coh, &dcsh->dcsh_xid, e);
-		if (rc < 0 && rc != -DER_NONEXIST)
-			D_GOTO(out, rc);
-		break;
-	default:
-		D_ASSERTF(rc1 < 0, "Resend check result: %d\n", rc1);
-		D_GOTO(out, rc = rc1);
 	}
 
 	if (oci->oci_flags & ORF_DTX_SYNC)
@@ -5042,6 +5110,7 @@ again:
 		/* For distributed transaction, the 'ORF_RESEND' may means
 		 * that the DTX has been restarted with newer epoch.
 		 */
+<<<<<<< HEAD
 		rc = dtx_handle_resend(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
 				       &dcsh->dcsh_epoch.oe_value, NULL);
 		switch (rc) {
@@ -5076,6 +5145,13 @@ again:
 				D_GOTO(out, rc);
 			break;
 		}
+=======
+		rc = obj_handle_resend(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
+				       &dcsh->dcsh_epoch.oe_value, &oci->oci_map_ver, &flags,
+				       dcsh->dcsh_mbs, true, true);
+		if (rc != 0)
+			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+>>>>>>> comm/master
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		D_GOTO(out, rc = 0);
 	}
@@ -5577,6 +5653,7 @@ out:
 void
 ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 {
+<<<<<<< HEAD
 	struct dss_module_info   *dmi       = dss_get_module_info();
 	struct dtx_leader_handle *dlh       = NULL;
 	struct obj_coll_punch_in *ocpi      = crt_req_get(rpc);
@@ -5605,6 +5682,39 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 		(ocpi->ocpi_flags & ORF_LEADER)
 		    ? "leader"
 		    : (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"),
+=======
+	struct dss_module_info		*dmi = dss_get_module_info();
+	struct dtx_leader_handle	*dlh = NULL;
+	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+	struct obj_dtx_mbs		*odm = &ocpi->ocpi_odm;
+	struct ds_obj_exec_arg		 exec_arg = { 0 };
+	struct obj_io_context		 ioc = { 0 };
+	struct dtx_coll_entry		*dce = NULL;
+	struct daos_coll_target		*dcts = NULL;
+	d_iov_t				 iov = { 0 };
+	crt_proc_t			 proc = NULL;
+	uint32_t			 dct_nr = 0;
+	uint32_t			 flags = 0;
+	uint32_t			 dtx_flags = DTX_TGT_COLL;
+	uint32_t			 version = 0;
+	uint32_t			 max_ver = 0;
+	struct dtx_epoch                 epoch;
+	int				 rc;
+	int				 rc1;
+	int				 i;
+	bool				 need_abort = false;
+	bool                             leader;
+
+	if (ocpi->ocpi_flags & ORF_LEADER)
+		leader = true;
+	else
+		leader = false;
+
+	D_DEBUG(DB_IO,
+		"(%s) handling collective punch RPC %p for obj " DF_UOID " on XS %u/%u epc " DF_X64
+		" pmv %u, with dti " DF_DTI ", forward width %u, forward depth %u, flags %x\n",
+		leader ? "leader" : (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"),
+>>>>>>> comm/master
 		rpc, DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id, ocpi->ocpi_epoch,
 		ocpi->ocpi_map_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_disp_width,
 		ocpi->ocpi_disp_depth, ocpi->ocpi_flags);
@@ -5616,7 +5726,7 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	if (ocpi->ocpi_flags & ORF_LEADER && ocpi->ocpi_bulk_tgt_sz > 0) {
+	if (leader && ocpi->ocpi_bulk_tgt_sz > 0) {
 		rc = obj_coll_punch_bulk(rpc, &iov, &proc, &dcts, &dct_nr);
 		if (rc != 0)
 			goto out;
@@ -5629,7 +5739,7 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	if (ocpi->ocpi_flags & ORF_LEADER) {
+	if (leader) {
 		rc = process_epoch(&ocpi->ocpi_epoch, NULL /* epoch_first */, &ocpi->ocpi_flags);
 		if (rc == PE_OK_LOCAL) {
 			ocpi->ocpi_flags &= ~ORF_EPOCH_UNCERTAIN;
@@ -5647,36 +5757,16 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	if (ocpi->ocpi_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
-	if (!(ocpi->ocpi_flags & ORF_LEADER))
+	if (!leader)
 		dtx_flags |= DTX_RELAY;
 
 	if (ocpi->ocpi_flags & ORF_RESEND) {
 again:
-		if (!(ocpi->ocpi_flags & ORF_LEADER) || (flags & ORF_RESEND))
-			tmp = ocpi->ocpi_epoch;
-		else
-			tmp = 0;
 		version = ocpi->ocpi_map_ver;
-		rc      = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
-		switch (rc) {
-		case -DER_ALREADY:
-			D_GOTO(out, rc = 0);
-		case 0:
-			ocpi->ocpi_epoch = tmp;
-			flags |= ORF_RESEND;
-			/* TODO: Also recovery the epoch uncertainty. */
-			break;
-		case -DER_MISMATCH:
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, &ocpi->ocpi_xid, tmp);
-			if (rc < 0 && rc != -DER_NONEXIST)
-				D_GOTO(out, rc);
-			/* Fall through */
-		case -DER_NONEXIST:
-			flags = 0;
-			break;
-		default:
-			D_GOTO(out, rc);
-		}
+		rc      = obj_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &ocpi->ocpi_epoch,
+					    &version, &flags, odm->odm_mbs, leader, false);
+		if (rc != 0)
+			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
 
 		dce->dce_ver = version;
 	}

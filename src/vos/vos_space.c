@@ -38,15 +38,13 @@ frag_reserve_space(uuid_t uuid, daos_size_t *rsrvd, daos_size_t scm_tot)
 		return;
 	}
 
-	if (ovhd_sz > max_sz) {
+	if (ovhd_sz > max_sz)
 		ovhd_sz = max_sz;
-	}
 
-	if (ovhd_sz < min_sz && scm_tot >= 2 * (min_sz + rsrvd[DAOS_MEDIA_SCM])) {
+	if (ovhd_sz < min_sz && scm_tot >= 2 * (min_sz + rsrvd[DAOS_MEDIA_SCM]))
 		ovhd_sz = min_sz;
-	}
 
-	rsrvd[DAOS_MEDIA_SCM] += ovhd_sz;
+	rsrvd[DAOS_MEDIA_SCM] = max(rsrvd[DAOS_MEDIA_SCM], ovhd_sz);
 }
 
 void

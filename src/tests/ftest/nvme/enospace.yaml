@@ -33,12 +33,11 @@ dmg:
 pool:
   scm_size: 5G
   nvme_size: 5G
-  usage_min:
-    # SCM usage will not be 100% because some space (<1%) is used for the system and data
-    # distribution is not fully uniform.
-    scm: 92
-    # NVMe will not be 100% because data distribution is not fully uniform.
-    nvme: 96
+  # SCM usage will not be 100% because some space (<1%) is used for the system and data
+  # distribution is not fully uniform.
+  usage_min_scm: 92
+  # NVMe will not be 100% because data distribution is not fully uniform.
+  usage_min_nvme: 96
 
 container:
   control_method: daos

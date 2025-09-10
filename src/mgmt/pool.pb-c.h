@@ -114,27 +114,27 @@ typedef enum _Mgmt__StorageMediaType {
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__STORAGE_MEDIA_TYPE)
 } Mgmt__StorageMediaType;
 typedef enum _Mgmt__PoolServiceState {
-	/*
-	 * pool service is being created
-	 */
-	MGMT__POOL_SERVICE_STATE__Creating = 0,
-	/*
-	 * pool service is ready to be used
-	 */
-	MGMT__POOL_SERVICE_STATE__Ready = 1,
-	/*
-	 * pool service is being destroyed
-	 */
-	MGMT__POOL_SERVICE_STATE__Destroying = 2,
-	/*
-	 * pool service has excluded targets
-	 */
-	MGMT__POOL_SERVICE_STATE__TargetsExcluded = 3,
-	/*
-	 * pool service is Unknown state
-	 */
-	MGMT__POOL_SERVICE_STATE__Unknown =
-	    4 PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_SERVICE_STATE)
+  /*
+   * pool service is being created
+   */
+  MGMT__POOL_SERVICE_STATE__Creating = 0,
+  /*
+   * pool service is ready to be used
+   */
+  MGMT__POOL_SERVICE_STATE__Ready = 1,
+  /*
+   * pool service is being destroyed
+   */
+  MGMT__POOL_SERVICE_STATE__Destroying = 2,
+  /*
+   * pool service has excluded targets
+   */
+  MGMT__POOL_SERVICE_STATE__TargetsExcluded = 3,
+  /*
+   * pool service is Unknown state
+   */
+  MGMT__POOL_SERVICE_STATE__Unknown = 4
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_SERVICE_STATE)
 } Mgmt__PoolServiceState;
 
 /* --- messages --- */

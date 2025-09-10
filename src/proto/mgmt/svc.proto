@@ -61,6 +61,7 @@ message JoinResp {
 	string faultDomain = 4; // Fault domain for the instance
 	bool localJoin = 5;	// Join processed locally.
 	uint32 map_version = 6; // Join processed in this version of the system map.
+	uint32 daos_version = 7; // DAOS version that system supported.
 }
 
 message LeaderQueryReq {
@@ -151,6 +152,7 @@ message PingRankReq {
 message SetRankReq {
 	uint32 rank = 1;	// DAOS I/O Engine unique identifier.
 	uint32 map_version = 2;	// System map version in which the rank joined the system.
+	uint32 daos_version = 3; // DAOS version that system supported.
 }
 
 // SetRankResp is identical to DaosResp.
@@ -173,4 +175,13 @@ message ClientTelemetryResp
 {
 	int32 status    = 1; // DAOS status code
 	int32 agent_uid = 2; // UID of agent process
+}
+
+message GetGroupStatusReq {
+	uint32 group_version = 1; // System map version
+}
+
+message GetGroupStatusResp {
+	int32 status = 1; // DAOS status code
+	repeated uint32 dead_ranks = 2; // All dead ranks
 }

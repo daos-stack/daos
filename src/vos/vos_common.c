@@ -13,6 +13,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <libgen.h>
 #include <fcntl.h>
 #include <daos/common.h>
 #include <daos/metrics.h>
@@ -25,6 +26,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/smd.h>
 #include "vos_internal.h"
+#include "pmdk_log.h"
 
 struct vos_self_mode {
 	struct vos_tls		*self_tls;
@@ -644,6 +646,12 @@ vos_mod_init(void)
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = d_hlc_get();
 
+	rc = pmdk_log_attach();
+	if (rc != 0) {
+		D_ERROR("PMDK log initialization error\n");
+		return rc;
+	}
+
 	rc = vos_pool_settings_init(bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
 		D_ERROR("VOS pool setting initialization error\n");
@@ -947,7 +955,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path)
+vos_self_nvme_init(const char *vos_path, bool init_spdk)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -973,12 +981,11 @@ vos_self_nvme_init(const char *vos_path)
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
-		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
-				   VOS_NVME_NR_TARGET, true);
+		rc = bio_nvme_init_ext(NULL, VOS_NVME_NUMA_NODE, 0, 0, VOS_NVME_NR_TARGET, true,
+				       init_spdk);
 	} else {
-		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
-				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
-				   VOS_NVME_NR_TARGET, true);
+		rc = bio_nvme_init_ext(nvme_conf, VOS_NVME_NUMA_NODE, VOS_NVME_MEM_SIZE,
+				       VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET, true, init_spdk);
 		close(fd);
 	}
 
@@ -1027,7 +1034,7 @@ vos_self_fini(void)
 #define LMMDB_PATH	"/var/daos/"
 
 int
-vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init)
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool init_spdk)
 {
 	char		*evt_mode;
 	int		 rc = 0;
@@ -1052,11 +1059,9 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 		goto out;
 	}
 #endif
-	if (nvme_init) {
-		rc = vos_self_nvme_init(db_path);
-		if (rc)
-			goto failed;
-	}
+	rc = vos_self_nvme_init(db_path, init_spdk);
+	if (rc)
+		goto failed;
 
 	rc = vos_mod_init();
 	if (rc)
@@ -1117,4 +1122,41 @@ int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	return vos_self_init_ext(db_path, use_sys_db, tgt_id, true);
+}
+
+int
+vos_sys_db_init(const char *nvme_conf, const char *storage_path)
+{
+	int   rc;
+	char *sys_db_path    = NULL;
+	char *nvme_conf_path = NULL;
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		goto db_init;
+
+	if (nvme_conf == NULL) {
+		D_ERROR("nvme conf path not set\n");
+		return -DER_INVAL;
+	}
+
+	D_STRNDUP(nvme_conf_path, nvme_conf, PATH_MAX);
+	if (nvme_conf_path == NULL)
+		return -DER_NOMEM;
+	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
+	D_FREE(nvme_conf_path);
+	if (sys_db_path == NULL)
+		return -DER_NOMEM;
+
+db_init:
+	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : storage_path);
+	if (rc)
+		goto out;
+
+	rc = smd_init(vos_db_get());
+	if (rc)
+		vos_db_fini();
+out:
+	D_FREE(sys_db_path);
+
+	return rc;
 }

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,8 +31,8 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos/rpc.h.
+ * Please increment DAOS_CHK_VERSION whenever the protocol is changed.
  */
-#define DAOS_CHK_VERSION	1
 
 #define CHK_PROTO_SRV_RPC_LIST									\
 	X(CHK_START,										\
@@ -344,11 +345,6 @@ enum chk_stop_flags {
 	CSF_POOL_STOPPED	= 1,
 };
 
-enum chk_act_flags {
-	/* The action is applicable to the same kind of inconssitency. */
-	CAF_FOR_ALL		= 1,
-};
-
 enum chk_mbs_flags {
 	CMF_REPAIR_LABEL	= 1,
 };
@@ -468,8 +464,7 @@ struct chk_bookmark {
  *
  * About the policies:
  *
- * The repair policies are shared among all pools. For some specified inconsistency, its repair
- * policy may be changed during the check scan via CHECK_ACT dRPC downcall with 'for_all' flag.
+ * The repair policies are shared among all pools.
  *
  * When check start, if do not specify policies, the former policies will be reused. Currently,
  * we do not support to set policy just for special inconsistency class, means that either all
@@ -688,6 +683,7 @@ extern btr_ops_t		chk_pending_ops;
 extern btr_ops_t		chk_rank_ops;
 extern btr_ops_t		chk_cont_ops;
 
+/* clang-format off */
 /* chk_common.c */
 
 void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
@@ -728,8 +724,7 @@ void chk_pool_shard_cleanup(struct chk_instance *ins);
 int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
 		    uint64_t seq, uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr);
 
-int chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked,
-		    struct chk_pending_rec **cpr);
+int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
 
 int chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr);
 
@@ -763,7 +758,7 @@ int chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *ins_st
 
 int chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version);
 
-int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t flags);
+int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t act);
 
 int chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *count);
 
@@ -826,7 +821,7 @@ int chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t
 int chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint32_t version);
 
 int chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
-		   uint32_t act, d_rank_t rank, bool for_all);
+		   uint32_t act, d_rank_t rank);
 
 int chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb, void *args);
 
@@ -883,6 +878,7 @@ int chk_traverse_pools(sys_db_trav_cb_t cb, void *args);
 void chk_vos_init(void);
 
 void chk_vos_fini(void);
+/* clang-format on */
 
 static inline bool
 chk_is_ins_reset(struct chk_instance *ins, uint32_t flags)
@@ -1229,5 +1225,29 @@ chk_report_seq_gen(struct chk_instance *ins)
 
 	return ins->ci_seq;
 }
+
+static inline void
+chk_uuid_unparse(struct chk_instance *ins, const uuid_t uuid, char *uuid_str)
+{
+	if (ins->ci_is_leader == 1)
+		uuid_unparse_upper(uuid, uuid_str);
+	else
+		uuid_unparse_lower(uuid, uuid_str);
+}
+
+static inline bool
+chk_is_valid_uuid_string(struct chk_instance *ins, const char *uuid_str)
+{
+	if (ins->ci_is_leader == 1 && daos_is_valid_uuid_string(uuid_str, UUID_SST_UPPER))
+		return true;
+
+	if (ins->ci_is_leader == 0 && daos_is_valid_uuid_string(uuid_str, UUID_SST_LOWER))
+		return true;
+
+	return false;
+}
+
+int
+chk_rpc_protocol(uint8_t *obj_ver);
 
 #endif /* __CHK_INTERNAL_H__ */
