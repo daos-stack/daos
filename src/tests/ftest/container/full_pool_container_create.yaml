@@ -1,7 +1,6 @@
 hosts:
   test_servers: 1
   test_clients: 1
-
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -12,12 +11,9 @@ server_config:
           class: dcpm
           scm_list: ["/dev/pmem0"]
           scm_mount: /mnt/daos
-
 timeout: 900
-
 pool:
   size: 53687091200  # 50G
   threshold_percent: 0.1  # 10%
-
 container:
   control_method: daos

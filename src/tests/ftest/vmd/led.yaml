@@ -1,9 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 1
-
 timeout: 300
-
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -38,17 +36,14 @@ server_config:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
           bdev_class: nvme
-
 pool:
   mode: 146
   name: daos_server
   size: 50%
   properties: ec_cell_sz:128KiB
-
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
-
 dfuse:
   disable_caching: True
