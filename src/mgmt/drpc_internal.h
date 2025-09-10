@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -118,5 +119,8 @@ ds_mgmt_drpc_check_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void
 ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_get_group_status(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 #endif /* __MGMT_DRPC_INTERNAL_H__ */
