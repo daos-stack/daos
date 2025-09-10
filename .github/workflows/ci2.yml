@@ -34,9 +34,9 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
-          submodules: 'recursive'
+          submodules: true
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Setup git hash
@@ -100,9 +100,9 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
-          submodules: 'recursive'
+          submodules: true
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Setup git hash
