@@ -300,7 +300,8 @@ class TestInfo():
         info = {}
         for key in self.YAML_INFO_KEYS:
             # Get the unique values with lists flattened
-            values = list_unique(list_flatten(dict_extract_values(yaml_data, [key], (str, list))))
+            values = list_unique(list_flatten(
+                dict_extract_values(yaml_data, [key], (str, list, bool))))
             if values:
                 # Use single value if list only contains 1 element
                 info[key] = values if len(values) > 1 else values[0]

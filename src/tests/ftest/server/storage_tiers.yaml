@@ -7,7 +7,7 @@ setup:
   start_agents: false
   server_config_namespace: /run/configurations/*/server_config/*
 
-check_server_storage: "no"
+check_server_storage: false
 
 timeout: 1800
 

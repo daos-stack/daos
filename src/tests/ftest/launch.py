@@ -14,6 +14,7 @@ import sys
 from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from collections import OrderedDict
 
+import distro
 from ClusterShell.NodeSet import NodeSet
 from process_core_files import get_core_file_pattern
 # pylint: disable=import-error,no-name-in-module
@@ -176,6 +177,7 @@ class Launch():
 
         # Add details about the run
         self.details["avocado version"] = str(self.avocado)
+        self.details["distro"] = distro.linux_distribution(full_distribution_name=True)
         self.details["launch host"] = str(self.local_host)
 
     def _create_log_dir(self):
