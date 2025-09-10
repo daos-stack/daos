@@ -77,6 +77,7 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM     = 247,
 	DRPC_METHOD_MGMT_POOL_REBUILD_START     = 248,
 	DRPC_METHOD_MGMT_POOL_REBUILD_STOP      = 249,
+	DRPC_METHOD_MGMT_GET_GROUP_STATUS       = 250,
 
 	NUM_DRPC_MGMT_METHODS /* Must be last */
 };
@@ -91,6 +92,7 @@ enum drpc_srv_method {
 	DRPC_METHOD_CHK_DEREG_POOL        = 308,
 	DRPC_METHOD_CHK_REPORT            = 309,
 	DRPC_METHOD_SRV_LIST_POOLS        = 310,
+	DRPC_METHOD_SRV_GET_PROPS         = 311,
 
 	NUM_DRPC_SRV_METHODS /* Must be last */
 };
