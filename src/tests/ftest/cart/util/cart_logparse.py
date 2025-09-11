@@ -70,6 +70,8 @@ class LogLine():
     the message only, and != which will match the entire line.
     """
 
+    # pylint: disable=too-many-public-methods
+
     @staticmethod
     def is_valid(line):
         """Return True if a valid CaRT log line is recognized."""
@@ -85,8 +87,6 @@ class LogLine():
             and len(fields[1]) == 15 or fields[1][2] == ':' and fields[1][8] == '.'
             # pylint: enable=too-many-boolean-expressions
         )
-
-    # pylint: disable=too-many-public-methods
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
@@ -118,7 +118,9 @@ class LogLine():
         for i in range(4):
             idx += len(fields[i]) + 1
         # Assuming DLOG_FLV_FAC is set in src/gurt/dlog.c - d_vlog()
+        # pylint: disable=wrong-spelling-in-comment
         # snprintf(..., "%-4s ", facstr)
+        # pylint: enable=wrong-spelling-in-comment
         idx += max(len(fields[4]), 4) + 1
         idx += max(len(fields[5]), 4)
         # Assuming DLOG_FLV_TAG and DLOG_FLV_LOGPID are set in src/gurt/dlog.c - d_vlog()
@@ -199,6 +201,7 @@ class LogLine():
         return ' '.join(self._fields[1:])
 
     def get_anon_msg(self):
+        # pylint: disable=too-many-branches
         """Return the message part of a line.
 
         stripping up to and including the filename but removing pointers
@@ -425,6 +428,7 @@ class StateIter():
         return self
 
     def __next__(self):
+        # pylint: disable=too-many-branches
         line = next(self._l)
 
         if not line.trace:
