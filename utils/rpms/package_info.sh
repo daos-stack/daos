@@ -31,7 +31,7 @@ if [[ "${DISTRO:el8}" =~ suse ]]; then
   # Refine this later
   distro_name=".lp155"
 else
-  distro_name="${DISTRO:-el8}"
+  distro_name=".${DISTRO:-el8}"
 fi
 
 daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
