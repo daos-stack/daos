@@ -11,6 +11,7 @@ daos_base_deps:
     - glibc
     - jq
     - lbzip2
+    - libasan
     - numactl
     - numactl-libs
     - numatop
