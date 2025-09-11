@@ -46,7 +46,7 @@ type cliOptions struct {
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
 	Args      struct {
-		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
+		VosPath    vosPathStr `positional-arg-name:"vos_file_path (optional)"`
 		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
 		RunCmdArgs []string   `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
@@ -119,6 +119,10 @@ func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 	return nil
 }
 
+func isValidVosPath(VosPath vosPathStr) bool {
+	return strings.ContainsRune(string(VosPath), '/')
+}
+
 func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.HelpFlag|flags.IgnoreUnknown)
 	p.Name = "ddb"
@@ -181,6 +185,15 @@ Example Paths:
 	}
 	defer cleanup()
 	app := createGrumbleApp(ctx)
+
+	if opts.Args.VosPath != "" && isValidVosPath(opts.Args.VosPath) == false {
+		log.Debug("vos path is not specified")
+		nilVosPath := ""
+		args = append([]string{nilVosPath}, args...)
+		if _, err := p.ParseArgs(args); err != nil {
+			return err
+		}
+	}
 
 	if opts.Args.VosPath != "" {
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
