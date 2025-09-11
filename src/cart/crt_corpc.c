@@ -924,7 +924,6 @@ forward_done:
 
 		D_SPIN_LOCK(&rpc_priv->crp_lock);
 		co_info->co_local_done = 1;
-		rpc_priv->crp_reply_pending = 0;
 		D_SPIN_UNLOCK(&rpc_priv->crp_lock);
 
 		/* Handle ref count difference between call on root vs

@@ -594,6 +594,7 @@ out:
 		 * Let's trigger it explicitly to release related buffer.
 		 */
 		chk_start_post_reply(req, NULL);
+		crt_req_decref(req);
 
 		if (rc < 0) {
 			rc1 = chk_stop_remote(rank_list, gen, pool_nr, pools, NULL, NULL);
@@ -601,8 +602,6 @@ out:
 				D_ERROR("Failed to cleanup DAOS check with gen "DF_X64": "DF_RC"\n",
 					gen, DP_RC(rc1));
 		}
-
-		crt_req_decref(req);
 	}
 
 	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
