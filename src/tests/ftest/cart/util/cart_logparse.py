@@ -74,11 +74,15 @@ class LogLine():
     def is_valid(line):
         """Return True if a valid CaRT log line is recognized."""
         fields = line.split(None, 8)
-        return not (
+        return (
             # pylint: disable=too-many-boolean-expressions
-            len(fields) < 7
-            or len(fields[0]) != 10 or fields[0][4] != '/' or fields[0][7] != '/'
-            or len(fields[1]) != 15 or fields[1][2] != ':' and fields[1][8] != '.'
+            # CaRT log line contains at least 7 fields:
+            # <date> <time> <node_name> <TAG+PIDs> <FAC> <level> <message>
+            len(fields) >= 7
+            # Valid date at the beginning: YYYY/MM/DD
+            and len(fields[0]) == 10 and fields[0][4] == '/' and fields[0][7] == '/'
+            # Valid time at the second position: hh:mm:ss.micros
+            and len(fields[1]) == 15 or fields[1][2] == ':' and fields[1][8] == '.'
             # pylint: enable=too-many-boolean-expressions
         )
 
