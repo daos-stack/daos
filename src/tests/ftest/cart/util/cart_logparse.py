@@ -91,6 +91,9 @@ class LogLine():
     # Match a TAG.
     re_tag = re.compile(r".+?\[(-?\d+)\/-?\d+\/\d+\]$")
 
+    # Address to search.
+    re_address = re.compile(r"0x7fcc8be52010")
+
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
     # Match a pointer, with optional ')', '.' or ',' suffix.
@@ -140,6 +143,7 @@ class LogLine():
                                        Defaults to False.
         """
         self.log_name = log_name
+        self.address = False
         fields = line.split()
         # Check the line header and work out the beginning of the message.
         # The level, date, time, hostname, pid and fac fields are all variable width.
@@ -176,6 +180,8 @@ class LogLine():
                 f"Invalid TAG (PID/TID/UID) \"{fields[4]!r}\" in the log line: {line!r}"
             )
         self.pid = int(match.group(1))
+        if self.re_address.search(line):
+            self.address = True
         if pid_only:
             return
         # Assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 675
