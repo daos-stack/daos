@@ -21,6 +21,7 @@
 #include <daos_event.h>
 #include <daos_task.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/rdb.h>
 #include "cli_internal.h"
@@ -1310,4 +1311,72 @@ dsc_pool_svc_rebuild_start(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t d
 {
 	return dsc_pool_svc_call(pool_uuid, ps_ranks, &pool_rebuild_start_cbs, NULL /* varg */,
 				 deadline);
+}
+
+struct pool_eval_self_heal_arg {
+	uint64_t pesa_sys_self_heal;
+};
+
+static int
+pool_eval_self_heal_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_eval_self_heal_arg *arg = varg;
+	struct pool_eval_self_heal_in  *in  = crt_req_get(rpc);
+
+	in->pesi_sys_self_heal = arg->pesa_sys_self_heal;
+	return 0;
+}
+
+static int
+pool_eval_self_heal_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_eval_self_heal_arg *arg = varg;
+	struct pool_eval_self_heal_out *out = crt_reply_get(rpc);
+	int                             rc  = out->peso_op.po_rc;
+
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to evaluate self-heal policy: sys_self_heal=" DF_X64,
+			 DP_UUID(pool_uuid), arg->pesa_sys_self_heal);
+		return rc;
+	}
+
+	return 0;
+}
+
+/* clang-format off */
+static struct dsc_pool_svc_call_cbs pool_eval_self_heal_cbs = {
+	.pscc_op	= POOL_EVAL_SELF_HEAL,
+	.pscc_init	= pool_eval_self_heal_init,
+	.pscc_consume	= pool_eval_self_heal_consume,
+	.pscc_fini	= NULL
+};
+/* clang-format on */
+
+/**
+ * Evaluate the self-heal policy. Usually called after any pool aspect (e.g.,
+ * pool_exclude or pool_rebuild) of the system self-heal property is enabled,
+ * so that any pending or ignored fault will be processed again according to
+ * \a sys_self_heal.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	deadline	Unix time deadline in milliseconds
+ * \param[in]	sys_self_heal	Value of system property "self_heal"
+ *
+ * \return	0		Success
+ *
+ */
+int
+dsc_pool_svc_eval_self_heal(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+			    uint64_t sys_self_heal)
+{
+	struct pool_eval_self_heal_arg arg = {.pesa_sys_self_heal = sys_self_heal};
+
+	D_DEBUG(DB_MGMT, DF_UUID ": sys_self_heal=" DF_X64 "\n", DP_UUID(pool_uuid), sys_self_heal);
+
+	if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE) &&
+	    !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD))
+		return 0;
+
+	return dsc_pool_svc_call(pool_uuid, ranks, &pool_eval_self_heal_cbs, &arg, deadline);
 }
