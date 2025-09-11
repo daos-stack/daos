@@ -76,6 +76,7 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_CHK_ACT                = 246,
 	DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM     = 247,
 	DRPC_METHOD_MGMT_GET_GROUP_STATUS       = 248,
+	DRPC_METHOD_MGMT_CHK_SET_POLICY         = 249,
 
 	NUM_DRPC_MGMT_METHODS /* Must be last */
 };
