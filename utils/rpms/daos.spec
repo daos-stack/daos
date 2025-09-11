@@ -658,6 +658,9 @@ fi
 %endif
 
 %changelog
+* Thu Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14
+- Fix daos-spdk package
+
 * Mon Aug 11 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-13
 - Switch to fpm build for RPMs
 
