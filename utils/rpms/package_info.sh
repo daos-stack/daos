@@ -89,7 +89,7 @@ export mercury_dev
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
 set_lib_name pmemobj dev libpmemobj libpmemobj1 libpmemobj1
 set_lib_name pmem lib libpmem libpmem1 libpmem1
-set_lib_name pmem dev libpmem libpmem1 libpmem1
+set_lib_name pmem dev libpmem libpmem libpmem1
 set_lib_name pmempool lib libpmempool libpmempool1 libpmempool1
 export pmem_lib
 export pmem_dev

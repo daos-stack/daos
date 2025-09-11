@@ -30,7 +30,7 @@ isal_crypto_pkg="$(utils/rpms/package_version.sh isal_crypto dev)"
 daos_spdk_pkg="daos-spdk-devel$(utils/rpms/package_version.sh daos_spdk dev)"
 pmdk_pkg="$(utils/rpms/package_version.sh pmdk dev pmemobj)"
 
-sudo dnf install -y "${libfabric_pkg}" || echo "${libfabric_pkg} not available"
+sudo dnf install --allowerasing -y "${libfabric_pkg}" || echo "${libfabric_pkg} not available"
 sudo dnf install -y "${mercury_pkg}" || echo "${mercury_pkg} not available"
 sudo dnf install -y "${argobots_pkg}" || echo "${argobots_pkg} not available"
 sudo dnf install -y "${daos_spdk_pkg}" || echo "${daos_spdk_pkg} not available"
