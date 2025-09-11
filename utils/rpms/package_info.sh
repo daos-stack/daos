@@ -27,7 +27,7 @@ set_lib_name() {
   fi
 }
 
-if [[ "${DISTRO:el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el8}" =~ suse ]]; then
   # Refine this later
   distro_name=".lp155"
 else
