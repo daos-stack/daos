@@ -265,6 +265,8 @@ func PoolProperties() PoolPropertyMap {
 						return "not set"
 					}
 					switch n {
+					case 0:
+						return ""
 					case PoolSelfHealingAutoExclude:
 						return "exclude"
 					case PoolSelfHealingAutoRebuild:
@@ -281,6 +283,7 @@ func PoolProperties() PoolPropertyMap {
 				},
 			},
 			values: map[string]uint64{
+				"":                      0,
 				"exclude":               PoolSelfHealingAutoExclude,
 				"rebuild":               PoolSelfHealingAutoRebuild,
 				"delay_rebuild":         PoolSelfHealingDelayRebuild,

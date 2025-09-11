@@ -180,12 +180,15 @@ func TestPoolCommands(t *testing.T) {
 	propWithVal := func(key, val string) *daos.PoolProperty {
 		hdlr := daos.PoolProperties()[key]
 		prop := hdlr.GetProperty(key)
-		if val != "" {
-			if err := prop.SetValue(val); err != nil {
-				panic(err)
-			}
+		if err := prop.SetValue(val); err != nil {
+			panic(err)
 		}
 		return prop
+	}
+
+	propWithNoVal := func(key string) *daos.PoolProperty {
+		hdlr := daos.PoolProperties()[key]
+		return hdlr.GetProperty(key)
 	}
 
 	setQueryMask := func(xfrm func(qm *daos.PoolQueryMask)) daos.PoolQueryMask {
@@ -834,6 +837,20 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set pool properties with empty self_heal value",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool properties with pool flag",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:foo,space_rb:42",
 			strings.Join([]string{
@@ -870,7 +887,7 @@ func TestPoolCommands(t *testing.T) {
 			"Set pool property missing value",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:",
 			"",
-			errors.New("invalid property"),
+			errors.New("invalid label"),
 		},
 		{
 			"Set pool property bad value",
@@ -903,7 +920,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolGetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
-						propWithVal("label", ""),
+						propWithNoVal("label"),
 					},
 				}),
 			}, " "),
@@ -916,8 +933,8 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolGetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
-						propWithVal("label", ""),
-						propWithVal("self_heal", ""),
+						propWithNoVal("label"),
+						propWithNoVal("self_heal"),
 					},
 				}),
 			}, " "),

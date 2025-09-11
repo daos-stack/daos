@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -735,7 +736,7 @@ pool_op_retry(void **state)
 	/* pool set prop success committed, "lost" reply - duplicate RPC retry */
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
 	print_message("set pool prop (retry / dup rpc detection)... ");
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "rebuild");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "");
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 

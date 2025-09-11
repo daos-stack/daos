@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -134,15 +135,17 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 
 	// Split on comma, but ignore commas inside quotes.
 	for _, propStr := range strings.FieldsFunc(fv, splitFn(rune(propSep[0]), -1)) {
-		// Split on colon, but ignore colons inside quotes. Result is
-		// like SplitN, but with quotes ignored.
-		keyVal := strings.FieldsFunc(propStr, splitFn(rune(propKvSep[0]), 1))
-		if len(keyVal) != 2 {
+		// Split on colon, but ignore colons inside quotes.
+		//
+		// Allow an empty value here, and leave the validity to the
+		// property type handler.
+		key, value, ok := ParseKeyValueString(propStr, splitFn(rune(propKvSep[0]), 1))
+		if !ok {
 			return propError("invalid property %q (must be key"+propKvSep+"val)", propStr)
 		}
 
-		key := strings.TrimSpace(keyVal[0])
-		value := strings.TrimSpace(keyVal[1])
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
 		if !f.IsSettable(key) {
 			return propError("%q is not a settable property (valid: %s)", key, strings.Join(f.settableKeys.ToSlice(), ","))
 		}
@@ -155,14 +158,26 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 		if newKey, found := f.deprecatedKeyMap[key]; found {
 			key = newKey
 		}
-		if len(value) == 0 {
-			return propError("value must not be empty")
-		}
 
 		f.ParsedProps[key] = value
 	}
 
 	return nil
+}
+
+// ParseKeyValueString is a version of strings.FieldsFunc specialized for
+// strings representing a key-value pair, but it guarantees to call f over
+// range s, and may return an empty key and/or value.
+func ParseKeyValueString(s string, f func(rune) bool) (k, v string, ok bool) {
+	for i, r := range s {
+		if f(r) {
+			k = s[0:i]
+			v = s[i+1:]
+			ok = true
+			break
+		}
+	}
+	return
 }
 
 // Complete implements the go-flags.Completer interface and is used
