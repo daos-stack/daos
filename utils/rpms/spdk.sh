@@ -52,6 +52,7 @@ EOF
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_server")
 
 ARCH="${isa}"
+CONFLICTS=("daos-server < ${daos_version}-${daos_release}")
 build_package "daos-spdk"
 
 TARGET_PATH="${libdir}/daos_srv"
