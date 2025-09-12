@@ -1067,13 +1067,13 @@ type poolRebuildOpCmd struct {
 }
 
 func (cmd *poolRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force bool) (errOut error) {
-	req := &control.PoolRebuildReq{
-		ID:    cmd.PoolID().String(),
-		Op:    opCode,
-		Force: force,
+	req := &control.PoolRebuildManageReq{
+		ID:     cmd.PoolID().String(),
+		OpCode: opCode,
+		Force:  force,
 	}
 
-	err := control.PoolRebuild(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	err := control.PoolRebuildManage(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil || cmd.JSONOutputEnabled() {
 		if err != nil {
 			cmd.ctlInvoker.Debug(err.Error())
@@ -1082,7 +1082,7 @@ func (cmd *poolRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force boo
 		return err
 	}
 
-	msg := fmt.Sprintf("Pool-rebuild %s request succeeded", opCode.String())
+	msg := fmt.Sprintf("Pool-rebuild %s request succeeded", opCode)
 	cmd.ctlInvoker.Debug(msg)
 	cmd.Info(msg)
 

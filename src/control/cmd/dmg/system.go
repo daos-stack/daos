@@ -44,6 +44,7 @@ type SystemCmd struct {
 	DelAttr      systemDelAttrCmd      `command:"del-attr" description:"Delete system attributes"`
 	SetProp      systemSetPropCmd      `command:"set-prop" description:"Set system properties"`
 	GetProp      systemGetPropCmd      `command:"get-prop" description:"Get system properties"`
+	Rebuild      systemRebuildCmd      `command:"rebuild" description:"Interactive rebuild commands"`
 }
 
 type baseCtlCmd struct {
@@ -691,4 +692,63 @@ func (cmd *systemGetPropCmd) Execute(_ []string) error {
 	cmd.Infof("%s", bld.String())
 
 	return nil
+}
+
+// systemRebuildCmd represents the system rebuild subcommand.
+type systemRebuildCmd struct {
+	Start systemRebuildStartCmd `command:"start" description:"System rebuild start requests submitted to pools"`
+	Stop  systemRebuildStopCmd  `command:"stop" description:"System rebuild stop requests submitted to pools"`
+}
+
+type systemRebuildOpCmd struct {
+	baseCtlCmd
+}
+
+func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force bool) (errOut error) {
+	defer func() {
+		errOut = errors.Wrapf(errOut, "system rebuild %s failed", opCode.String())
+	}()
+
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
+	req := &control.SystemRebuildManageReq{
+		OpCode: opCode,
+		Force:  force,
+	}
+
+	resp, err := control.SystemRebuildManage(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	if resp.Errors() != nil {
+		return errors.Wrapf(resp.Errors(), "System-rebuild %s request failed",
+			opCode.String())
+	}
+
+	cmd.Infof("System-rebuild %s request succeeded", opCode.String())
+	return nil
+}
+
+type systemRebuildStartCmd struct {
+	systemRebuildOpCmd
+}
+
+func (cmd *systemRebuildStartCmd) Execute(_ []string) error {
+	return cmd.execute(control.PoolRebuildOpCodeStart, false)
+}
+
+type systemRebuildStopCmd struct {
+	systemRebuildOpCmd
+	Force bool `short:"f" long:"force" description:"Forcibly stop interactive rebuild"`
+}
+
+func (cmd *systemRebuildStopCmd) Execute(_ []string) error {
+	return cmd.execute(control.PoolRebuildOpCodeStop, cmd.Force)
 }

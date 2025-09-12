@@ -388,6 +388,43 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("not provided"),
 		},
 		{
+			"system rebuild start",
+			"system rebuild start",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system rebuild start with force",
+			"system rebuild start --force",
+			"",
+			errors.New("unknown flag"),
+		},
+		{
+			"system rebuild stop",
+			"system rebuild stop",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system rebuild stop with force",
+			"system rebuild stop --force",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+					Force:  true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
