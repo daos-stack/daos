@@ -104,6 +104,12 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 	}
 
 	for _, ec := range cfg.Engines {
+		if err := ec.UpdateABTEnvarsUCX(); err != nil {
+			return err
+		}
+	}
+
+	for _, ec := range cfg.Engines {
 		if err := ec.UpdatePMDKEnvars(); err != nil {
 			return err
 		}
