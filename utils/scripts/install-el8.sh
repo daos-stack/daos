@@ -79,6 +79,7 @@ dnf --nodocs install ${dnf_install_args} \
     systemd \
     valgrind-devel \
     which \
+    ncurses-devel \
     yasm
 
 if [[ -z "${NO_OPENMPI_DEVEL+set}" ]]; then

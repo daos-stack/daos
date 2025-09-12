@@ -35,8 +35,8 @@ list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/libspdk*.so.*" \
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-22.0"
-list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-22.0/lib*.so.*"
+TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-24.1"
+list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-24.1/lib*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
@@ -52,6 +52,7 @@ EOF
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_server")
 
 ARCH="${isa}"
+CONFLICTS=("daos-server < ${daos_version}-${daos_release}")
 build_package "daos-spdk"
 
 TARGET_PATH="${libdir}/daos_srv"
@@ -64,8 +65,8 @@ list_files files "${SL_SPDK_PREFIX}/lib64/pkgconfig/daos_spdk.pc"
 replace_paths "${SL_SPDK_PREFIX}" "${files[@]}"
 append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-22.0"
-list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-22.0/lib*.so"
+TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-24.1"
+list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-24.1/lib*.so"
 append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}/daos_srv/spdk"
