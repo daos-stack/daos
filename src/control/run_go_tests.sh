@@ -167,7 +167,7 @@ $output
 
 function get_test_runner()
 {
-	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection"
+	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection,spdk"
 	test_runner="go test"
 
 	if which gotestsum >/dev/null; then
