@@ -374,6 +374,9 @@ shm_lru_create_cache(uint32_t n_subcache, uint32_t capacity, uint32_t key_size, 
 		DS_ERROR(EINVAL, "capacity needs to be a multiplier of subcache number");
 		return EINVAL;
 	}
+	if (lru_cache == NULL)
+		return EINVAL;
+
 	capacity_per_subcache = capacity / n_subcache;
 	/* the space pre-allocated for the array of key of all records if keys have a fixed size */
 	size_key_buf =
@@ -425,8 +428,7 @@ shm_lru_create_cache(uint32_t n_subcache, uint32_t capacity, uint32_t key_size, 
 
 		/* invalid node index */
 		node_list[j].off_hnext = -1;
-		if (lru_cache)
-			*lru_cache = cache;
+		*lru_cache = cache;
 
 		rc = shm_mutex_init(&cache_list[i].lock);
 		if (rc)
@@ -437,7 +439,7 @@ shm_lru_create_cache(uint32_t n_subcache, uint32_t capacity, uint32_t key_size, 
 }
 
 static void
-lru_free_dymaic_buff(shm_lru_cache_t *cache)
+lru_free_dynamic_buff(shm_lru_cache_t *cache)
 {
 	int                  i;
 	int                  offset;
@@ -467,7 +469,7 @@ lru_free_dymaic_buff(shm_lru_cache_t *cache)
 void
 shm_lru_destroy_cache(shm_lru_cache_t *cache)
 {
-	lru_free_dymaic_buff(cache);
+	lru_free_dynamic_buff(cache);
 	if (cache)
 		shm_free(cache);
 }
