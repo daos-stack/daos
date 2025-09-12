@@ -118,7 +118,7 @@ clean_bin() {
     relative="$(realpath -s -m "${file}" --relative-to="${tmp}${prefix}")"
     base="$(basename "${relative}")"
     dir="$(dirname "${relative}")"
-    dname="${base}-${VERSION}-${RELEASE}.${DISTRO:-el8}-${isa}.debug"
+    dname="${base}-${VERSION}-${RELEASE}-${isa}.debug"
     dbgroot="${tmp}/usr/lib/debug/${dir}"
     mkdir -p "${dbgroot}"
     dbgpath="${dbgroot}/${dname}"
