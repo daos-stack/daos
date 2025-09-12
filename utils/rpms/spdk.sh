@@ -61,6 +61,7 @@ append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/pkgconfig"
 list_files files "${SL_SPDK_PREFIX}/lib64/pkgconfig/daos_spdk.pc"
+replace_paths "${SL_SPDK_PREFIX}" "${files[@]}"
 append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-22.0"
@@ -78,8 +79,6 @@ append_install_list "${files[@]}"
 TARGET_PATH="${includedir}/daos_srv/dpdk"
 list_files files "${SL_SPDK_PREFIX}/include/daos_srv/dpdk/*.h"
 append_install_list "${files[@]}"
-
-replace_paths "${SL_SPDK_PREFIX}" "${files[@]}"
 
 DEPENDS=("daos-spdk = ${daos_spdk_full}")
 build_package "daos-spdk-devel"
