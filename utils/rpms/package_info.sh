@@ -27,13 +27,7 @@ set_lib_name() {
   fi
 }
 
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
-  # Refine this later
-  distro_name=".suse.lp155"
-else
-  distro_name=".${DISTRO:-el8}"
-fi
-
+distro_name=".${DISTRO:-el8}"
 daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
 export daos_version
 daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
