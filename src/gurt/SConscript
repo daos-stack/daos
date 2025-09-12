@@ -1,4 +1,5 @@
-# (C) Copyright 2016-2023 Intel Corporation.
+# (C) Copyright 2016-2024 Intel Corporation.
+# (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -6,7 +7,7 @@
 
 SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
        'fault_inject.c', 'slab.c', 'telemetry.c', 'hlc.c', 'hlct.c', 'signals.c',
-       'shm_alloc.c', 'shm_dict.c', 'shm_tlsf.c', 'shm_utils.c']
+       'shm_alloc.c', 'shm_dict.c', 'shm_tlsf.c', 'shm_utils.c', 'shm_lru.c']
 
 
 def scons():
