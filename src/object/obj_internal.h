@@ -1085,7 +1085,8 @@ void obj_class_fini(void);
 #define OBJ_COLL_THD_MIN	COLL_DISP_WIDTH_DEF
 #define COLL_BTREE_ORDER	COLL_DISP_WIDTH_DEF
 
-#define IOV_FRAG_SIZE_DEF       4095
+// #define IOV_FRAG_SIZE_DEF       4095
+#define IOV_FRAG_SIZE_DEF       0
 #define IOV_FRAG_COUNT_DEF      128
 #define IOV_FRAG_COUNT_MIN      16
 
