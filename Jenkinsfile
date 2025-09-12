@@ -184,6 +184,38 @@ Map update_default_commit_pragmas() {
     }
 }
 
+Boolean skip_stage_pragma(String stage, String def_val='false') {
+    return cachedCommitPragma('Skip-' + stage, def_val).toLowerCase() == 'true'
+}
+
+Boolean skip_build_stage(String distro='', String compiler='gcc') {
+    // Skip the stage if the CI_<distro>_NOBUILD parameter is set
+    if (distro) {
+        if (paramsValue("CI_${distro.toUpperCase()}_NOBUILD", false)) {
+            // Skip if 'CI_RPM_ubuntu20_NOBUILD: true'
+            return true
+        }
+    }
+
+    // Skip the stage if any Skip-build-<distro>-<compiler>[-<buildtype>] pragmas are true
+    String pragma_names = ["build"]
+    if (distro && compiler) {
+        pragma_names << "build-${distro.toLowerCase()}-${compiler.toLowerCase()}"
+    }
+    def any_skip = skip_pragma.any { pragma_names -> skip_stage_pragma(pragma_names) }
+    if (any_skip) {
+        return true
+    }
+
+    // Skip the stage if a specific DAOS RPM version is specified
+    if (rpmTestVersion() != '') {
+        return true
+    }
+
+    // Otherwise run the build stage
+    return false
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -267,27 +299,15 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_RPM_el8_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for EL 8')
-        booleanParam(name: 'CI_RPM_el9_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for EL 9')
-        booleanParam(name: 'CI_RPM_leap15_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for Leap 15')
-        booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build DEB packages for Ubuntu 20')
         booleanParam(name: 'CI_el8_NOBUILD',
                      defaultValue: false,
-                     description: 'Do not build on EL 8')
+                     description: 'Do not build sources and RPMs on EL 8')
         booleanParam(name: 'CI_el9_NOBUILD',
                      defaultValue: false,
-                     description: 'Do not build on EL 9')
+                     description: 'Do not build sources and RPMs on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
-                     description: 'Do not build on Leap 15')
+                     description: 'Do not build sources and RPMs on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -502,13 +522,13 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !skip_build_stage() }
             }
             parallel {
                 stage('Build on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el8_NOBUILD && !skipStage() }
+                        expression { !skip_build_stage('el8') }
                     }
                     agent {
                         dockerfile {
@@ -518,16 +538,15 @@ pipeline {
                                                                 deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
-						' --build-arg DAOS_PACKAGES_BUILD=no ' +
-						' --build-arg DAOS_KEEP_SRC=yes ' +
-						' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el8 "' +
-				        env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -538,8 +557,7 @@ pipeline {
                                         scons_args: sconsArgs() +
                                                     ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' +
-				        env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -562,7 +580,7 @@ pipeline {
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                        expression { !skip_build_stage('el9') }
                     }
                     agent {
                         dockerfile {
@@ -572,16 +590,15 @@ pipeline {
                                                                 deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-						' --build-arg DAOS_PACKAGES_BUILD=no ' +
-						' --build-arg DAOS_KEEP_SRC=yes ' +
-						' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' +
-				        env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -592,8 +609,7 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' +
-				        env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -616,7 +632,7 @@ pipeline {
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
+                        expression { !skip_build_stage('leap15') }
                     }
                     agent {
                         dockerfile {
@@ -625,16 +641,15 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: false) +
-						' --build-arg DAOS_PACKAGES_BUILD=no ' +
-						' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc"
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp155 "' +
-				        env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/install_deps.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -643,8 +658,7 @@ pipeline {
                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' +
-				        env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -667,7 +681,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
+                        expression { !skip_build_stage('leap15', 'icc') }
                     }
                     agent {
                         dockerfile {
@@ -677,7 +691,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-						' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg COMPILER=icc'
                         }
                     }
