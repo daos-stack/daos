@@ -13,16 +13,21 @@
 #include <uuid/uuid.h>
 #include <gurt/list.h>
 
+#include "dlck_cmds.h"
+
 #define _STRINGIFY(x)                   #x
 #define STRINGIFY(x)                    _STRINGIFY(x)
 
 /** documentation groups */
 
 #define GROUP_OPTIONS                   1
+#define GROUP_AVAILABLE_CMDS            2
 #define GROUP_AUTOMAGIC                 (-1) /** yes, -1 is the last group */
 
 /** all short options */
-
+#define KEY_COMMON_CMD                  'c'
+#define KEY_COMMON_CO_UUID              'q'
+#define KEY_COMMON_WRITE_MODE           'w'
 #define KEY_FILES                       'f'
 /** the options below follow the daos_engine options */
 #define KEY_ENGINE_NUMA_NODE            'p'
@@ -38,6 +43,12 @@
 #define DLCK_DEFAULT_TARGETS            4
 
 #define DLCK_TARGET_MAX                 31
+
+struct dlck_args_common {
+	enum dlck_cmd cmd;
+	uuid_t        co_uuid;    /** Container UUID. */
+	bool          write_mode; /** false by default (dry run) */
+};
 
 /**
  * @struct dlck_file
@@ -80,6 +91,7 @@ struct dlck_print {
 
 struct dlck_control {
 	/** in */
+	struct dlck_args_common common;
 	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
 	/** print */
@@ -175,5 +187,27 @@ dlck_args_free(struct dlck_control *ctrl);
  */
 void
 dlck_args_files_free(struct dlck_args_files *args);
+
+/** dlck_args.c */
+
+/**
+ * \brief Parse provided argc/argv, validate and write down into \p args state.
+ *
+ * It may close the calling process if requested for version or help.
+ *
+ * \param[in]   argc	Length of the \p argv array.
+ * \param[in]   argv  	Standard list of arguments.
+ * \param[out]	control	Control state to store the arguments in.
+ */
+void
+dlck_args_parse(int argc, char *argv[], struct dlck_control *control);
+
+/**
+ * Free arguments.
+ *
+ * \param[in]	ctrl	Control state with arguments to free.
+ */
+void
+dlck_args_free(struct dlck_control *ctrl);
 
 #endif /** __DLCK_ARGS__ */
