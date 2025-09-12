@@ -1777,4 +1777,14 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
+/**
+ * Return the number of DTX committed entries of a container.
+ *
+ * \param[in]	coh	container open handle.
+ *
+ * \return		Number of DTX committed entries.
+ */
+uint32_t
+vos_dtx_get_cmt_cnt(daos_handle_t coh);
+
 #endif /* __VOS_API_H */

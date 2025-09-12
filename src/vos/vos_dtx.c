@@ -4006,3 +4006,39 @@ vos_dtx_local_end(struct dtx_handle *dth, int result)
 
 	return result;
 }
+
+uint32_t
+vos_dtx_get_cmt_cnt(daos_handle_t coh)
+{
+	struct umem_instance   *umm;
+	struct vos_container   *cont;
+	struct vos_dtx_blob_df *dbd;
+	int                     i;
+	uint32_t                cnt;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	umm = vos_cont2umm(cont);
+	dbd = umem_off2ptr(umm, cont->vc_cmt_dtx_reindex_pos);
+	if (dbd == NULL)
+		return 0;
+
+	D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC, "Corrupted committed DTX blob (2) %x\n",
+		  dbd->dbd_magic);
+
+	cnt = 0;
+	for (i = 0; i < dbd->dbd_count; i++) {
+		struct vos_dtx_cmt_ent_df *dce_df;
+
+		dce_df = &dbd->dbd_committed_data[i];
+		if (daos_is_zero_dti(&dce_df->dce_xid) || dce_df->dce_epoch == 0) {
+			D_WARN("Skip invalid committed DTX entry\n");
+			continue;
+		}
+
+		cnt++;
+	}
+
+	return cnt;
+}

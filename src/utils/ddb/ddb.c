@@ -8,39 +8,44 @@
 #include <getopt.h>
 #include <gurt/debug.h>
 #include <daos_srv/vos.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include "ddb.h"
+#include "daos/common.h"
+#include "daos_errno.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
 
-#define MAX_COMMAND_LEN              1024
+#define MAX_COMMAND_LEN                      1024
 
-#define same(a, b) (strcmp((a), (b)) == 0)
-#define COMMAND_NAME_HELP "help"
-#define COMMAND_NAME_QUIT "quit"
-#define COMMAND_NAME_LS "ls"
-#define COMMAND_NAME_OPEN "open"
-#define COMMAND_NAME_VERSION "version"
-#define COMMAND_NAME_CLOSE "close"
-#define COMMAND_NAME_SUPERBLOCK_DUMP "superblock_dump"
-#define COMMAND_NAME_VALUE_DUMP "value_dump"
-#define COMMAND_NAME_RM "rm"
-#define COMMAND_NAME_VALUE_LOAD "value_load"
-#define COMMAND_NAME_ILOG_DUMP "ilog_dump"
-#define COMMAND_NAME_ILOG_COMMIT "ilog_commit"
-#define COMMAND_NAME_ILOG_CLEAR "ilog_clear"
-#define COMMAND_NAME_DTX_DUMP "dtx_dump"
-#define COMMAND_NAME_DTX_CMT_CLEAR "dtx_cmt_clear"
-#define COMMAND_NAME_SMD_SYNC "smd_sync"
-#define COMMAND_NAME_VEA_DUMP "vea_dump"
-#define COMMAND_NAME_VEA_UPDATE "vea_update"
-#define COMMAND_NAME_DTX_ACT_COMMIT "dtx_act_commit"
-#define COMMAND_NAME_DTX_ACT_ABORT "dtx_act_abort"
-#define COMMAND_NAME_FEATURE         "feature"
-#define COMMAND_NAME_RM_POOL         "rm_pool"
+#define same(a, b)                           (strcmp((a), (b)) == 0)
+#define COMMAND_NAME_HELP                    "help"
+#define COMMAND_NAME_QUIT                    "quit"
+#define COMMAND_NAME_LS                      "ls"
+#define COMMAND_NAME_OPEN                    "open"
+#define COMMAND_NAME_VERSION                 "version"
+#define COMMAND_NAME_CLOSE                   "close"
+#define COMMAND_NAME_SUPERBLOCK_DUMP         "superblock_dump"
+#define COMMAND_NAME_VALUE_DUMP              "value_dump"
+#define COMMAND_NAME_RM                      "rm"
+#define COMMAND_NAME_VALUE_LOAD              "value_load"
+#define COMMAND_NAME_ILOG_DUMP               "ilog_dump"
+#define COMMAND_NAME_ILOG_COMMIT             "ilog_commit"
+#define COMMAND_NAME_ILOG_CLEAR              "ilog_clear"
+#define COMMAND_NAME_DTX_DUMP                "dtx_dump"
+#define COMMAND_NAME_DTX_CMT_CLEAR           "dtx_cmt_clear"
+#define COMMAND_NAME_SMD_SYNC                "smd_sync"
+#define COMMAND_NAME_VEA_DUMP                "vea_dump"
+#define COMMAND_NAME_VEA_UPDATE              "vea_update"
+#define COMMAND_NAME_DTX_ACT_COMMIT          "dtx_act_commit"
+#define COMMAND_NAME_DTX_ACT_ABORT           "dtx_act_abort"
+#define COMMAND_NAME_FEATURE                 "feature"
+#define COMMAND_NAME_RM_POOL                 "rm_pool"
 #define COMMAND_NAME_DTX_ACT_DISCARD_INVALID "dtx_act_discard_invalid"
 #define COMMAND_NAME_DEV_LIST                "dev_list"
 #define COMMAND_NAME_DEV_REPLACE             "dev_replace"
+#define COMMAND_NAME_DTX_STAT                "dtx_stat"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -814,6 +819,40 @@ dev_replace_option_parse(struct ddb_ctx *ctx, struct dev_replace_options *cmd_ar
 	return 0;
 }
 
+/* Parse command line options for the 'dtx_stat' command */
+static int
+dtx_stat_option_parse(struct ddb_ctx *ctx, struct dtx_stat_options *cmd_args, uint32_t argc,
+		      char **argv)
+{
+	char         *options_short  = "";
+	int           index          = 0;
+	struct option options_long[] = {{NULL}};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
+	}
+
+	index          = optind;
+	cmd_args->path = NULL;
+	if (argc - index > 0 && *argv[index] != '\0') {
+		cmd_args->path = argv[index];
+		index++;
+	}
+
+	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 int
 ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info)
 {
@@ -935,6 +974,11 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 						argv);
 	}
 
+	if (same(cmd, COMMAND_NAME_DTX_STAT)) {
+		info->dci_cmd = DDB_CMD_DTX_STAT;
+		return dtx_stat_option_parse(ctx, &info->dci_cmd_option.dci_dtx_stat, argc, argv);
+	}
+
 	ddb_errorf(ctx,
 		   "'%s' is not a valid command. Available commands are:"
 		   "'help', "
@@ -960,7 +1004,8 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		   "'feature', "
 		   "'rm_pool', "
 		   "'dev_list', "
-		   "'dev_replace'\n",
+		   "'dev_replace', "
+		   "'dtx_stat'\n",
 		   cmd);
 
 	return -DER_INVAL;
@@ -1134,6 +1179,10 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str)
 
 	case DDB_CMD_DEV_REPLACE:
 		rc = ddb_run_dev_replace(ctx, &info.dci_cmd_option.dci_dev_replace);
+		break;
+
+	case DDB_CMD_DTX_STAT:
+		rc = ddb_run_dtx_stat(ctx, &info.dci_cmd_option.dci_dtx_stat);
 		break;
 
 	case DDB_CMD_UNKNOWN:
@@ -1341,6 +1390,13 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "    -n, --new_dev\n");
 	ddb_print(ctx, "\tSpecify the new device UUID\n");
 	ddb_print(ctx, "\n");
+
+	/* Command: dtx_stat */
+	ddb_print(ctx, "dtx_stat [path]\n");
+	ddb_print(ctx, "\tPrint statistic on the DTX entries.\n");
+	ddb_print(ctx, "    [path]\n");
+	ddb_print(ctx, "\tOptional, VOS tree path to query.\n");
+	ddb_print(ctx, "\n");
 }
 
 void
@@ -1408,4 +1464,5 @@ ddb_program_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "   rm_pool	     Remove pool shard\n");
 	ddb_print(ctx, "   dev_list	     List all devices\n");
 	ddb_print(ctx, "   dev_replace	     Replace an old device with a new unused device\n");
+	ddb_print(ctx, "   dtx_stat	     Stat on DTX entries\n");
 }
