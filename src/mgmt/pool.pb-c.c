@@ -1891,19 +1891,15 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[7]
     },
 };
 static const unsigned mgmt__pool_evict_req__field_indices_by_name[] = {
-  4,   /* field[4] = destroy */
-  5,   /* field[5] = force_destroy */
-  3,   /* field[3] = handles */
-  1,   /* field[1] = id */
-  6,   /* field[6] = machine */
-  2,   /* field[2] = svc_ranks */
-  0,   /* field[0] = sys */
+    4, /* field[4] = destroy */
+    5, /* field[5] = force_destroy */
+    3, /* field[3] = handles */
+    1, /* field[1] = id */
+    6, /* field[6] = machine */
+    2, /* field[2] = svc_ranks */
+    0, /* field[0] = sys */
 };
-static const ProtobufCIntRange mgmt__pool_evict_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 7 }
-};
+static const ProtobufCIntRange   mgmt__pool_evict_req__number_ranges[1 + 1] = {{1, 0}, {0, 7}};
 const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
