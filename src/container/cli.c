@@ -228,6 +228,7 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 	int				rc = 0;
 	uid_t				uid = geteuid();
 	gid_t				gid = getegid();
+	uint32_t                         co_ver = 0;
 
 	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
 
@@ -260,6 +261,10 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 			D_GOTO(err_out, rc);
 		}
 
+		entries++;
+	}
+	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_OBJ_VERSION)) {
+		co_ver = DAOS_POOL_OBJ_VERSION_2;
 		entries++;
 	}
 
@@ -330,6 +335,11 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 				DAOS_PROP_CO_ROOTS;
 			final_prop->dpp_entries[idx].dpe_val_ptr = roots;
 			roots = NULL; /* prop is responsible for it now */
+			idx++;
+		}
+		if (co_ver != 0) {
+			final_prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
+			final_prop->dpp_entries[idx].dpe_val  = co_ver;
 			idx++;
 		}
 	}
@@ -1037,7 +1047,7 @@ dc_cont_open(tse_task_t *task)
 		if (tpriv->cont == NULL)
 			D_GOTO(err_pool, rc = -DER_NOMEM);
 		uuid_generate(tpriv->cont->dc_cont_hdl);
-		tpriv->cont->dc_capas = args->flags;
+		tpriv->cont->dc_capas = args->flags | DAOS_COO_NEW_LAYOUT;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID ":%s: opening: hdl=" DF_UUIDF " flags=%x\n", DP_UUID(pool->dp_pool),
