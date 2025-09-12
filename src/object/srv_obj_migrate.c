@@ -883,7 +883,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 iod_cnt = 0;
 	int			 start;
-	char		 iov_buf[OBJ_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
+	char                    *iov_buf[OBJ_ENUM_UNPACK_MAX_IODS] = {0};
 	bool			 fetch = false;
 	int			 i;
 	int			 rc = 0;
@@ -892,6 +892,10 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
+		D_ALLOC(iov_buf[i], MAX_BUF_SIZE);
+		if (iov_buf[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
 		if (mrone->mo_iods[i].iod_size == 0)
 			continue;
 
@@ -916,10 +920,10 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_epoch, fetch ? "yes" : "no");
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
-		return 0;
+		D_GOTO(out, rc = 0);
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 
 	if (fetch) {
 		if (!daos_oclass_is_ec(&mrone->mo_oca)) {
@@ -1005,6 +1009,8 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 out:
 	if (csum_iov.iov_buf != NULL)
 		D_FREE(csum_iov.iov_buf);
+	for (i = 0; i < mrone->mo_iod_num; i++)
+		D_FREE(iov_buf[i]);
 
 	return rc;
 }
