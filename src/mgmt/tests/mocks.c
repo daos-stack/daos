@@ -595,6 +595,30 @@ mock_ds_mgmt_pool_upgrade_setup(void)
 	uuid_clear(ds_mgmt_pool_upgrade_uuid);
 }
 
+int    ds_mgmt_pool_rebuild_return;
+uuid_t ds_mgmt_pool_rebuild_uuid;
+
+int
+ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	uuid_copy(ds_mgmt_pool_rebuild_uuid, pool_uuid);
+	return ds_mgmt_pool_rebuild_return;
+}
+
+int
+ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks)
+{
+	uuid_copy(ds_mgmt_pool_rebuild_uuid, pool_uuid);
+	return ds_mgmt_pool_rebuild_return;
+}
+
+void
+mock_ds_mgmt_pool_rebuild_setup(void)
+{
+	ds_mgmt_pool_rebuild_return = 0;
+	uuid_clear(ds_mgmt_pool_rebuild_uuid);
+}
+
 int	ds_mgmt_dev_manage_led_return;
 uuid_t  ds_mgmt_dev_manage_led_uuid;
 

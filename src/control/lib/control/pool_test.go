@@ -3600,3 +3600,112 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_PoolRebuild(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolRebuildReq
+		expErr error
+	}{
+		"no opcode": {
+			req: &PoolRebuildReq{
+				ID: test.MockUUID(),
+			},
+			expErr: errors.New("unrecognized pool-rebuild opcode"),
+		},
+		"local failure": {
+			req: &PoolRebuildReq{
+				ID: test.MockUUID(),
+				Op: PoolRebuildOpCodeStart,
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolRebuildReq{
+				ID: test.MockUUID(),
+				Op: PoolRebuildOpCodeStart,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"-DER_GRPVER is retried": {
+			req: &PoolRebuildReq{
+				ID: test.MockUUID(),
+				Op: PoolRebuildOpCodeStart,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+		"-DER_AGAIN is retried": {
+			req: &PoolRebuildReq{
+				ID: test.MockUUID(),
+				Op: PoolRebuildOpCodeStop,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.TryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+		"start rebuild": {
+			req: &PoolRebuildReq{
+				ID: test.MockUUID(),
+				Op: PoolRebuildOpCodeStart,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.DaosResp{},
+				),
+			},
+		},
+		"start rebuild; with force flag": {
+			req: &PoolRebuildReq{
+				ID:    test.MockUUID(),
+				Op:    PoolRebuildOpCodeStart,
+				Force: true,
+			},
+			expErr: errors.New("force flag not supported"),
+		},
+		"stop rebuild; with force flag": {
+			req: &PoolRebuildReq{
+				ID:    test.MockUUID(),
+				Op:    PoolRebuildOpCodeStop,
+				Force: true,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.DaosResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolRebuild(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}

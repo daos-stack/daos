@@ -121,6 +121,8 @@ func (m MgmtMethod) String() string {
 		MethodCheckerAction:        "CheckerAction",
 		MethodSetupClientTelemetry: "SetupClientTelemetry",
 		MethodCheckerSetPolicy:     "CheckerSetPolicy",
+		MethodPoolRebuildStart:     "PoolRebuildStart",
+		MethodPoolRebuildStop:      "PoolRebuildStop",
 	}[m]; ok {
 		return s
 	}
@@ -211,6 +213,10 @@ const (
 	MethodSetupClientTelemetry MgmtMethod = C.DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM
 	// MethodCheckerSetPolicy defines a method to set policy for the checker
 	MethodCheckerSetPolicy MgmtMethod = C.DRPC_METHOD_MGMT_CHK_SET_POLICY
+	// MethodPoolRebuildStart defines a method start an interactive pool rebuild
+	MethodPoolRebuildStart MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_START
+	// MethodPoolRebuildStop defines a method stop an interactive pool rebuild
+	MethodPoolRebuildStop MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_STOP
 )
 
 type SrvMethod int32

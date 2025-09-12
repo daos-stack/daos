@@ -2025,6 +2025,113 @@ out:
 }
 
 void
+ds_mgmt_drpc_pool_rebuild_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc          alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolRebuildStartReq *req   = NULL;
+	Mgmt__DaosResp             resp  = MGMT__DAOS_RESP__INIT;
+	uuid_t                     uuid;
+	d_rank_list_t             *svc_ranks = NULL;
+	uint8_t                   *body;
+	size_t                     len;
+	int                        rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_rebuild_start_req__unpack(&alloc.alloc, drpc_req->body.len,
+						   drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (pool_rebuild_start)\n");
+		return;
+	}
+
+	D_INFO("Received request to interactively start/resume rebuild on pool %s\n", req->id);
+
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
+	}
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_rebuild_start(uuid, svc_ranks);
+
+	d_rank_list_free(svc_ranks);
+
+out:
+	resp.status = rc;
+	len         = mgmt__daos_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__daos_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_rebuild_start_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+ds_mgmt_drpc_pool_rebuild_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc         alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolRebuildStopReq *req   = NULL;
+	Mgmt__DaosResp            resp  = MGMT__DAOS_RESP__INIT;
+	uuid_t                    uuid;
+	d_rank_list_t            *svc_ranks = NULL;
+	uint8_t                  *body;
+	size_t                    len;
+	int                       rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_rebuild_stop_req__unpack(&alloc.alloc, drpc_req->body.len,
+						  drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (pool_rebuild_stop)\n");
+		return;
+	}
+
+	D_INFO("Received request to interactively %sstop rebuild on pool %s\n",
+	       req->force ? "force-" : "", req->id);
+
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
+	}
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_rebuild_stop(uuid, req->force, svc_ranks);
+
+	d_rank_list_free(svc_ranks);
+
+out:
+	resp.status = rc;
+	len         = mgmt__daos_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__daos_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_rebuild_stop_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
 ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev)
 {
 	D_FREE(dev->uuid);

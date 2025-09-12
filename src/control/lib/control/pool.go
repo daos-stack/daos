@@ -1322,3 +1322,73 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 
 	return metaBytes, nvmeBytes, nil
 }
+
+// PoolRebuildOpcode indicates the type of interactive rebuild operation to be triggered.
+type PoolRebuildOpCode int32
+
+// PoolRebuildOpCode definitions for supported interactive rebuild operations.
+const (
+	PoolRebuildOpCodeUnknown PoolRebuildOpCode = iota
+	PoolRebuildOpCodeStart
+	PoolRebuildOpCodeStop
+)
+
+func (op PoolRebuildOpCode) String() string {
+	return map[PoolRebuildOpCode]string{
+		PoolRebuildOpCodeUnknown: "unknown",
+		PoolRebuildOpCodeStart:   "start",
+		PoolRebuildOpCodeStop:    "stop",
+	}[op]
+}
+
+// PoolRebuildReq contains pool-rebuild operation parameters. ID identifies the pool on which the
+// rebuild operation (specified by the opcode) should be run.
+type PoolRebuildReq struct {
+	poolRequest
+	ID    string
+	Op    PoolRebuildOpCode
+	Force bool
+}
+
+// PoolRebuild sends a pool rebuild request relating to the requested opcode to the pool service
+// leader.
+func PoolRebuild(ctx context.Context, rpcClient UnaryInvoker, req *PoolRebuildReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T in PoolRebuild()", req)
+	}
+
+	if req.Op == PoolRebuildOpCodeStart {
+		if req.Force {
+			return errors.Errorf("force flag not supported with pool-rebuild opcode %s",
+				req.Op)
+		}
+
+		pbReq := &mgmtpb.PoolRebuildStartReq{
+			Sys: req.getSystem(rpcClient),
+			Id:  req.ID,
+		}
+		req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+			return mgmtpb.NewMgmtSvcClient(conn).PoolRebuildStart(ctx, pbReq)
+		})
+		rpcClient.Debugf("pool-rebuild request: %s\n", pbUtil.Debug(pbReq))
+	} else if req.Op == PoolRebuildOpCodeStop {
+		pbReq := &mgmtpb.PoolRebuildStopReq{
+			Sys:   req.getSystem(rpcClient),
+			Id:    req.ID,
+			Force: req.Force,
+		}
+		req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+			return mgmtpb.NewMgmtSvcClient(conn).PoolRebuildStop(ctx, pbReq)
+		})
+		rpcClient.Debugf("pool-rebuild request: %s\n", pbUtil.Debug(pbReq))
+	} else {
+		return errors.Errorf("unrecognized pool-rebuild opcode %d", req.Op)
+	}
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	return errors.Wrapf(ur.getMSError(), "pool-rebuild %s failed", req.Op.String())
+}

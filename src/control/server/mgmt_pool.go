@@ -1263,3 +1263,41 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 
 	return resp, nil
 }
+
+// PoolRebuildStart forwards a pool interactive rebuild start request to the I/O Engine.
+func (svc *mgmtSvc) PoolRebuildStart(ctx context.Context, req *mgmtpb.PoolRebuildStartReq) (*mgmtpb.DaosResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, daos.MethodPoolRebuildStart, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// PoolRebuildStop forwards a pool interactive rebuild stop request to the I/O Engine.
+func (svc *mgmtSvc) PoolRebuildStop(ctx context.Context, req *mgmtpb.PoolRebuildStopReq) (*mgmtpb.DaosResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, daos.MethodPoolRebuildStop, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
