@@ -142,7 +142,7 @@ replace_paths() {
 }
 
 create_opts() {
-  local -n opt=$1; shift
+  local opt=$1; shift
   local -n deps=$1; shift
   deps=()
   for dep in "$@"; do
