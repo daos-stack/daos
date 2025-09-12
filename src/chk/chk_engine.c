@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,6 +76,14 @@ struct chk_cont_label_cb_args {
 struct chk_pool_mbs_args {
 	struct ds_pool_svc		*cpma_svc;
 	struct chk_pool_rec		*cpma_cpr;
+};
+
+enum chk_pm_status {
+	CPS_NORMAL,
+	CPS_RANK_NONEXIST,
+	CPS_RANK_DOWN,
+	CPS_TGT_NONEXIST,
+	CPS_TGT_DOWN,
 };
 
 static int chk_engine_report(struct chk_report_unit *cru, uint64_t *seq, int *decision);
@@ -249,7 +258,7 @@ chk_engine_post_repair(struct chk_pool_rec *cpr, int *result, bool update)
 }
 
 static int
-chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
+chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index, uint32_t status)
 {
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_property		*prop = &ins->ci_prop;
@@ -287,14 +296,12 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 	switch (act) {
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
 		/*
-		 * If the rank does not exists in the pool map, then destroy the orphan pool rank
-		 * to release space by default.
-		 *
-		 * NOTE: Currently, we does not support to add the orphan pool rank into the pool
-		 *	 map. If want to add them, it can be done via pool extend after DAOS check.
-		 *
-		 * Fall through.
+		 * If the rank or target exists in the pool map but 'down' or 'downout', then it is
+		 * possible to be incrementally reintegrated back sometime later. So let's keep it.
 		 */
+		if (status != CPS_RANK_NONEXIST && status != CPS_TGT_NONEXIST)
+			goto ignore;
+		/* Fall through to discard for non-referenced rank or target. */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
@@ -316,6 +323,7 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 		}
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+ignore:
 		/* Report the inconsistency without repair. */
 		cbk->cb_statistics.cs_ignored++;
 		break;
@@ -334,12 +342,21 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 		} else {
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
-			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
-			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-			option_nr = 2;
+			if (status == CPS_RANK_NONEXIST || status == CPS_TGT_NONEXIST) {
+				options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+				options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 
-			strs[0] = "Discard the orphan pool shard to release space [suggested].";
-			strs[1] = "Keep the orphan pool shard on engine, repair nothing.";
+				strs[0] = "Discard orphan pool shard to release space [suggested].";
+				strs[1] = "Keep orphan pool shard, repair nothing.";
+			} else {
+				options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+				options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+
+				strs[0] = "Keep orphan pool shard, repair nothing [suggested].";
+				strs[1] = "Discard orphan pool shard to release space.";
+			}
+
+			option_nr = 2;
 
 			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
 			d_iov_set(&iovs[1], strs[1], strlen(strs[1]));
@@ -375,11 +392,11 @@ report:
 	rc = chk_engine_report(&cru, &seq, &decision);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" detects orphan %s entry in pool map for "
-		 DF_UUIDF", rank %u, index %d, action %u (%s), handle_rc %d, "
-		 "report_rc %d, decision %d\n",
-		 DP_ENGINE(ins), index < 0 ? "rank" : "target", DP_UUID(cpr->cpr_uuid), rank,
-		 index, act, option_nr ? "need interact" : "no interact", result, rc, decision);
+		 DF_ENGINE
+		 " detects orphan pool shard in pool map for " DF_UUIDF ", rank %u, "
+		 " index %d, status %u, action %u (%s), handle_rc %d, report_rc %d, decision %d\n",
+		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), rank, index, status, act,
+		 option_nr ? "need interact" : "no interact", result, rc, decision);
 
 	if (rc < 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
@@ -665,6 +682,7 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 	struct pool_domain	*dom;
 	struct pool_component	*comp;
 	int			 i;
+	int                      j;
 	int			 rc = 0;
 	bool			 unknown;
 
@@ -672,26 +690,24 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 	if (dom == NULL) {
 		D_ASSERT(mbs->cpm_rank != dss_self_rank());
 
-		rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, -1);
+		rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, -1, CPS_RANK_NONEXIST);
 		goto out;
 	}
 
-	for (i = 0; i < dom->do_target_nr; i++) {
+	for (i = 0, j = 0; i < dom->do_target_nr; i++) {
 		comp = &dom->do_targets[i].ta_comp;
 		unknown = false;
 
 		switch (comp->co_status) {
 		case PO_COMP_ST_DOWN:
-			/*
-			 * NOTE: In the future, we may support to add the target (if exist) back.
-			 *
-			 * Fall through.
-			 */
 		case PO_COMP_ST_DOWNOUT:
 			if (comp->co_index < mbs->cpm_tgt_nr &&
 			    (mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_EMPTY ||
-			     mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NORMAL))
-				rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, comp->co_index);
+			     mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NORMAL)) {
+				mbs->cpm_tgt_status[comp->co_index] = DS_POOL_TGT_ORPHAN;
+				j++;
+				goto next;
+			}
 			/*
 			 * Otherwise if the down/downout entry only exists in pool map,
 			 * then it is useless, do nothing.
@@ -743,19 +759,34 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 		if (comp->co_index < mbs->cpm_tgt_nr)
 			mbs->cpm_tgt_status[comp->co_index] = DS_POOL_TGT_NONEXIST;
 
+next:
 		comp->co_flags |= PO_COMPF_CHK_DONE;
+	}
+
+	if (j == dom->do_target_nr) {
+		rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, -1, CPS_RANK_DOWN);
+		if (rc != 0)
+			goto out;
+	} else if (j > 0) {
+		for (i = 0; i < mbs->cpm_tgt_nr; i++) {
+			if (mbs->cpm_tgt_status[i] == DS_POOL_TGT_ORPHAN) {
+				rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, i, CPS_TGT_DOWN);
+				if (rc != 0)
+					goto out;
+			}
+		}
 	}
 
 	dom->do_comp.co_flags |= PO_COMPF_CHK_DONE;
 
 	for (i = 0; i < mbs->cpm_tgt_nr; i++) {
 		/*
-		 * All checked cpm_tgt_status[x] have been marked as 'DS_POOL_TGT_NONEXIST'
+		 * All checked cpm_tgt_status[x] have been marked as 'TGT_NONEXIST' or 'TGT_ORPHAN'
 		 * in above for() block. So here, these left ones must be orphan targets.
 		 */
 		if (mbs->cpm_tgt_status[i] == DS_POOL_TGT_EMPTY ||
 		    mbs->cpm_tgt_status[i] == DS_POOL_TGT_NORMAL) {
-			rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, i);
+			rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, i, CPS_TGT_NONEXIST);
 			if (rc != 0)
 				goto out;
 		}
