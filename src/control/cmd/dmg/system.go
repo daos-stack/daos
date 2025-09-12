@@ -549,7 +549,7 @@ func (f *systemSetPropsFlag) UnmarshalFlag(fv string) error {
 	for k, v := range f.SetPropertiesFlag.ParsedProps {
 		if prop, ok := f.SystemProps.Get(k); ok {
 			if err := prop.Value.Handler(v); err != nil {
-				return errors.Wrapf(err, "invalid system property value for %s", k)
+				return errors.Wrapf(err, "invalid system property value for %s: %s", k, v)
 			}
 			f.ParsedProps[prop.Key] = prop.Value
 		} else {
