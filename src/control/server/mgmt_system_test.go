@@ -2725,6 +2725,8 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 	}
 }
 
+// TODO: func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
+
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
