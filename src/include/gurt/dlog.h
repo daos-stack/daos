@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -328,7 +329,7 @@ int d_log_init(void);
 /**
  * Callback to get XS id and ULT id
  */
-typedef void (*d_log_id_cb_t)(uint32_t *xs_id, uint64_t *ult_id);
+typedef void (*d_log_id_cb_t)(pid_t *xs_id, uint64_t *ult_id);
 
 /**
  * Advanced version of log initialing function. User can specify log tag,
