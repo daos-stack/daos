@@ -54,13 +54,15 @@ def scons():
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     vos_src = Glob('../../../vos/*.c')
+    mgmt_src = Glob('../../../mgmt/mgmt_common.c')
 
     mock_src = Glob('../../../dtx/tests/*_mock.c')
     # Pylint does not like the exclude keyword below, but it works.
     # pylint: disable=unexpected-keyword-arg
     ddb_src = Glob('../*.c', exclude=['../ddb_entry.c'])
     src = ['ddb_ut.c', 'ddb_vos_ut.c']
-    ddb_ut = denv.d_program('ddb_ut', src + vos_src + mock_src + ddb_src, LIBS=libs + spdk_libs)
+    ddb_ut = denv.d_program('ddb_ut', src + vos_src + mgmt_src + mock_src + ddb_src,
+                            LIBS=libs + spdk_libs)
 
     denv.Install('$PREFIX/bin/', ddb_ut)
 
