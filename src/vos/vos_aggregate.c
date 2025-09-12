@@ -1626,7 +1626,7 @@ free_removal_records(struct agg_merge_window *mw, d_list_t *head, bool top)
 }
 
 static inline bool
-need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_size)
+need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_size, bool tail)
 {
 	struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
 	struct vos_object	*obj = oiter->it_obj;
@@ -1645,7 +1645,7 @@ need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_si
 
 	/* Some data can be migrated from SCM to NVMe to alleviate SCM pressure */
 	if (src_media != tgt_media)
-		return true;
+		return tail ? false : true;
 
 	/*
 	 * Only trigger SCM to SCM data migration when there are enough amount of
@@ -1718,7 +1718,7 @@ need_flush(daos_handle_t ih, struct vos_agg_param *agg_param, bool last)
 			return true;
 
 		if (i == 0 || (hole != bio_addr_is_hole(&phy_ent->pe_addr))) {
-			if (i && need_merge(ih, src_media, lgc_cnt, seg_width * mw->mw_rsize))
+			if (i && need_merge(ih, src_media, lgc_cnt, seg_width * mw->mw_rsize, false))
 				return true;
 
 			src_media = phy_ent->pe_addr.ba_type;
@@ -1742,7 +1742,7 @@ need_flush(daos_handle_t ih, struct vos_agg_param *agg_param, bool last)
 		hole = bio_addr_is_hole(&phy_ent->pe_addr);
 	}
 
-	if (lgc_cnt && need_merge(ih, src_media, lgc_cnt, seg_width * mw->mw_rsize))
+	if (lgc_cnt && need_merge(ih, src_media, lgc_cnt, seg_width * mw->mw_rsize, true))
 		return true;
 
 	clear_merge_window(mw);
