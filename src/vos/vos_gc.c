@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -195,10 +196,9 @@ gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 
 	D_ASSERT(krec->kr_bmap & KREC_BF_DKEY);
 	if (krec->kr_bmap & KREC_BF_NO_AKEY)
-		gc_add_item(pool, coh, GC_AKEY, item->it_addr, item->it_args);
+		return gc_add_item(pool, coh, GC_AKEY, item->it_addr, item->it_args);
 	else
-		umem_free(&pool->vp_umm, item->it_addr);
-	return 0;
+		return umem_free(&pool->vp_umm, item->it_addr);
 }
 
 /**
@@ -481,7 +481,10 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	 * safe because we never overwrite valid items
 	 */
 	it = &bag->bag_items[bag->bag_item_last];
-	umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
+	rc = umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
 	memcpy(it, item, sizeof(*it));
 
 	last = bag->bag_item_last + 1;
