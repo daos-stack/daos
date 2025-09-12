@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,9 +32,9 @@ dc_obj_verify_list(struct dc_obj_verify_args *dova)
 	memset(dova->kds, 0, sizeof(daos_key_desc_t) * DOVA_NUM);
 	memset(dova->list_buf, 0, dova->list_buf_len);
 
-	dova->list_sgl.sg_nr = 1;
-	dova->list_sgl.sg_nr_out = 1;
-	dova->list_sgl.sg_iovs = &dova->list_iov;
+	dova->list_sgl.sg_nr     = 1;
+	dova->list_sgl.sg_nr_out = 0;
+	dova->list_sgl.sg_iovs   = &dova->list_iov;
 
 	dova->size = 0;
 	dova->num = DOVA_NUM;
@@ -113,9 +114,9 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 	dova->fetch_iov.iov_buf = dova->fetch_buf;
 	dova->fetch_iov.iov_buf_len = dova->fetch_buf_len;
 
-	dova->fetch_sgl.sg_nr = 1;
-	dova->fetch_sgl.sg_nr_out = 1;
-	dova->fetch_sgl.sg_iovs = &dova->fetch_iov;
+	dova->fetch_sgl.sg_nr     = 1;
+	dova->fetch_sgl.sg_nr_out = 0;
+	dova->fetch_sgl.sg_iovs   = &dova->fetch_iov;
 
 	shard = dc_obj_anchor2shard(&dova->dkey_anchor);
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &cursor->dkey, 1,
@@ -677,18 +678,18 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		d_iov_set(&iovs[idx], data, size);
-		sgls[idx].sg_nr = 1;
-		sgls[idx].sg_nr_out = 1;
-		sgls[idx].sg_iovs = &iovs[idx];
+		sgls[idx].sg_nr     = 1;
+		sgls[idx].sg_nr_out = 0;
+		sgls[idx].sg_iovs   = &iovs[idx];
 
 		D_ALLOC(data_verify, size);
 		if (data_verify == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		d_iov_set(&iovs_verify[idx], data_verify, size);
-		sgls_verify[idx].sg_nr = 1;
-		sgls_verify[idx].sg_nr_out = 1;
-		sgls_verify[idx].sg_iovs = &iovs_verify[idx];
+		sgls_verify[idx].sg_nr     = 1;
+		sgls_verify[idx].sg_nr_out = 0;
+		sgls_verify[idx].sg_iovs   = &iovs_verify[idx];
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
 			rc = obj_recx_ec2_daos(obj_get_oca(obj), tgt_off, &iod->iod_recxs, NULL,
 					       &iod->iod_nr, true);
@@ -706,9 +707,8 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	}
 
 	/* Fetch by specific shard */
-	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
-				      0, iods, sgls, NULL, &shard, NULL, NULL, NULL,
-				      &task);
+	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx, DIOF_TO_SPEC_SHARD,
+				      iods, sgls, NULL, &shard, NULL, NULL, NULL, &task);
 	if (rc != 0) {
 		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
 			DP_OID(obj->cob_md.omd_id), idx, shard);
@@ -731,10 +731,9 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 		D_GOTO(out, rc);
 	}
 
-	daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
-				      0, iods, sgls_verify, NULL, &shard, NULL, NULL,
-				      NULL, &verify_task);
+				      DIOF_FOR_FORCE_DEGRADE, iods, sgls_verify, NULL, &shard, NULL,
+				      NULL, NULL, &verify_task);
 	if (rc != 0) {
 		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
 			DP_OID(obj->cob_md.omd_id), idx, shard);
@@ -810,10 +809,10 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		dc_obj_shard2anchor(&dova->dkey_anchor, start + i);
 		daos_anchor_set_flags(&dova->dkey_anchor, DIOF_TO_SPEC_SHARD |
 							  DIOF_WITH_SPEC_EPOCH);
-		dova->th = th;
-		dova->eof = 0;
-		dova->non_exist = 0;
-		dova->current_shard = i;
+		dova->th            = th;
+		dova->eof           = 0;
+		dova->non_exist     = 0;
+		dova->current_shard = start + i;
 		memset(cursor, 0, sizeof(*cursor));
 		cursor->iod.iod_nr = 1;
 		cursor->iod.iod_recxs = &cursor->recx;
