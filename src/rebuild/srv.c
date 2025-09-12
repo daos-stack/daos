@@ -874,9 +874,6 @@ enum {
 	RB_BCAST_QUERY,
 };
 
-/* for interactive mode rebuild fault-injection testing */
-static uuid_t test_stop_start_puuid;
-
 /* administrator (via dmg command) asks to stop the currently-running rebuild for pool */
 int
 ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
@@ -921,9 +918,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 	unsigned int          total;
 	struct sched_req_attr attr = {0};
 	d_rank_t              myrank;
-	unsigned int          nsleeps          = 0;
-	bool                  fi_admin_stop_fi = false;
-	bool                  fi_admin_stop    = false;
 	int                   rc;
 
 	rc = crt_group_size(pool->sp_group, &total);
@@ -947,18 +941,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		d_rank_list_t               excluded      = {0};
 		bool                        rebuild_abort = false;
 		int                         i;
-
-		if (!fi_admin_stop_fi)
-			fi_admin_stop_fi = DAOS_FAIL_CHECK(DAOS_REBUILD_ADMIN_STOP);
-		fi_admin_stop = (fi_admin_stop_fi && (op == RB_OP_REBUILD));
-
-		if (fi_admin_stop && (nsleeps > 0)) {
-			uuid_copy(test_stop_start_puuid, rgt->rgt_pool_uuid);
-
-			/* What the real RPC handler will call. We will exit below due to rgt_abort
-			 */
-			ds_pool_rebuild_stop(test_stop_start_puuid, 0 /* force */, NULL /* hint */);
-		}
 
 		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = map_ranks_init(pool->sp_map,
@@ -1055,8 +1037,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 sleep:
 		update_and_warn_for_slow_engines(rgt);
 		sched_req_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
-		if (fi_admin_stop)
-			nsleeps++;
 	}
 
 	sched_req_put(rgt->rgt_ult);
@@ -2064,23 +2044,11 @@ rebuild_ults(void *arg)
 	while (DAOS_FAIL_CHECK(DAOS_REBUILD_HANG))
 		ABT_thread_yield();
 
-	/* Stay alive for fault-injection possibility (need a ULT for DAOS_REBUILD_ADMIN_START) */
-	while (true) {
-		bool fi_admin_start = false;
-
+	while (!d_list_empty(&rebuild_gst.rg_queue_list) ||
+	       !d_list_empty(&rebuild_gst.rg_running_list)) {
 		if (rebuild_gst.rg_abort) {
 			D_INFO("abort rebuilds\n");
 			break;
-		}
-
-		fi_admin_start = DAOS_FAIL_CHECK(DAOS_REBUILD_ADMIN_START);
-		if (fi_admin_start) {
-			if (!uuid_is_null(test_stop_start_puuid)) {
-				D_INFO("fi_admin_start=%d, apply to pool " DF_UUID "\n",
-				       fi_admin_start, DP_UUID(test_stop_start_puuid));
-				ds_pool_rebuild_start(test_stop_start_puuid, NULL /* hint */);
-				uuid_clear(test_stop_start_puuid);
-			}
 		}
 
 		if (d_list_empty(&rebuild_gst.rg_queue_list) ||
@@ -3026,8 +2994,6 @@ static int
 init(void)
 {
 	int rc;
-
-	uuid_clear(test_stop_start_puuid);
 
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_tgt_tracker_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_global_tracker_list);
