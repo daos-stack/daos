@@ -209,6 +209,7 @@ dc_obj_init(void)
 	tx_verify_rdg = false;
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
 	D_INFO("%s TX redundancy group verification\n", tx_verify_rdg ? "Enable" : "Disable");
+	D_INFO("Enable bind mode by force for bulk transfer\n");
 
 out_class:
 	if (rc)
