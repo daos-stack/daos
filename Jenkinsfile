@@ -184,8 +184,8 @@ Map update_default_commit_pragmas() {
     }
 }
 
-Boolean skip_stage_pragma(String stage, String def_val='false') {
-    return cachedCommitPragma('Skip-' + stage, def_val).toLowerCase() == 'true'
+Boolean skip_stage_pragma(String name, String def_val='false') {
+    return cachedCommitPragma("Skip-${name}", def_val).toLowerCase() == 'true'
 }
 
 Boolean skip_build_stage(String distro='', String compiler='gcc') {
@@ -202,8 +202,8 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     if (distro && compiler) {
         pragma_names << "build-${distro.toLowerCase()}-${compiler.toLowerCase()}"
     }
-    def any_skip = skip_pragma.any { pragma_names -> skip_stage_pragma(pragma_names) }
-    if (any_skip) {
+    def any_pragma_skip = pragma_names.any { name -> skip_stage_pragma(name) }
+    if (any_pragma_skip) {
         return true
     }
 
