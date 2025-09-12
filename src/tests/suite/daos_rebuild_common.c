@@ -1207,6 +1207,31 @@ fi_rebuild_stop(void *data)
 	return 0;
 }
 
+/* inject fault on leader engine to receive stop command during op:Fail_reclaim */
+int
+fi_rebuild_stop_reclaim(void *data)
+{
+	test_arg_t *arg = data;
+	d_rank_t    leader;
+	int         rc;
+
+	if (arg->myrank != 0)
+		return 0;
+
+	rc = test_get_leader(arg, &leader);
+	if (rc) {
+		print_message("get pool " DF_UUIDF " leader failed: %d\n",
+			      DP_UUID(arg->pool.pool_uuid), rc);
+		assert_rc_equal(rc, 0);
+	}
+
+	printf("%s(): pool " DF_UUIDF ": send ADMIN_STOP_RECLAIM to leader rank %d\n", __FUNCTION__,
+	       DP_UUID(arg->pool.pool_uuid), leader);
+	test_set_engine_fail_loc(arg, leader, DAOS_REBUILD_ADMIN_STOP_RECLAIM | DAOS_FAIL_ONCE);
+
+	return 0;
+}
+
 /* resume after a stopped rebuild, and optionally inject a fault to start a new rebuild */
 int
 fi_rebuild_resume_wait(void *data)
