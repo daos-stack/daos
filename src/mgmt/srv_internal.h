@@ -152,6 +152,8 @@ int
 ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks);
 int
      ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int
+     ds_mgmt_check_set_policy(uint32_t policy_nr, Mgmt__CheckInconsistPolicy **policies);
 bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
