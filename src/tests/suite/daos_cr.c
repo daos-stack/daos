@@ -3339,36 +3339,28 @@ cr_fail_sync_orphan(void **state)
  * 2. Fault injection to make inconsistent label for both of them.
  * 3. Start checker on pool1 and pool2 with POOL_BAD_LABEL:CIA_INTERACT
  * 4. Query checker, should show interaction for both pool1 and pool2.
- * 5. Check repair pool2's label with trust PS (trust MS is the default) and "for-all" option.
+ * 5. Check set-policy with POOL_BAD_LABEL:CIA_TRUST_PS.
  * 6. Query checker, both pool1's and pool2's label should be fixed with trust PS.
  * 7. Switch to normal mode and verify pools' labels.
  * 8. Cleanup.
  */
 static void
-cr_inherit_policy(void **state)
+cr_set_policy_after(void **state)
 {
-#if 0
-	test_arg_t			*arg = *state;
-	struct test_pool		 pools[2] = { 0 };
-	struct daos_check_info		 dci = { 0 };
-	struct daos_check_report_info	*dcri;
-	char				*ps_label = NULL;
-	char				*ptr;
-	char				 ms_label[DAOS_PROP_LABEL_MAX_LEN];
-	uint32_t			 class = TCC_POOL_BAD_LABEL;
-	uint32_t			 action;
-	int				 rc;
-	int				 i;
-#endif
+	test_arg_t            *arg      = *state;
+	struct test_pool       pools[2] = {0};
+	struct daos_check_info dci      = {0};
+	char                  *ps_label = NULL;
+	char                  *ptr;
+	char                   ms_label[DAOS_PROP_LABEL_MAX_LEN];
+	uint32_t class = TCC_POOL_BAD_LABEL;
+	uint32_t action;
+	int      rc;
+	int      i;
 
-	/* Skip for DAOS-17422. */
-	print_message("Skip obsolete test\n");
-	skip();
-
-#if 0
 	FAULT_INJECTION_REQUIRED();
 
-	print_message("CR25: inherit check policy from former check repair\n");
+	print_message("CR25: set policy after checker start\n");
 
 	for (i = 0; i < 2; i++) {
 		rc = cr_pool_create(state, &pools[i], false, class);
@@ -3384,28 +3376,38 @@ cr_inherit_policy(void **state)
 	rc = cr_check_start(TCSF_RESET, 0, NULL, "POOL_BAD_LABEL:CIA_INTERACT");
 	assert_rc_equal(rc, 0);
 
+	action = TCA_INTERACT;
+
 	for (i = 0; i < 2; i++) {
 		cr_pool_wait(1, &pools[i].pool_uuid, &dci);
 
 		rc = cr_ins_verify(&dci, TCIS_RUNNING);
 		assert_rc_equal(rc, 0);
 
-		action = TCA_INTERACT;
 		rc = cr_pool_verify(&dci, pools[i].pool_uuid, TCPS_PENDING, 1, &class, &action,
 				    NULL);
 		assert_rc_equal(rc, 0);
 	}
 
-	dcri = cr_locate_dcri(&dci, NULL, pools[1].pool_uuid);
-	action = TCA_TRUST_PS;
-	rc = -DER_MISC;
+	/* Set irrelevant policy will not affect the interaction. */
+	rc = cr_check_set_policy(TCPF_NONE, "POOL_BAD_LABEL:CIA_TRUST_OLDEST");
+	assert_rc_equal(rc, 0);
 
-	for (i = 0; i < dcri->dcri_option_nr; i++) {
-		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
-			break;
-		}
+	for (i = 0; i < 2; i++) {
+		cr_pool_wait(1, &pools[i].pool_uuid, &dci);
+
+		rc = cr_ins_verify(&dci, TCIS_RUNNING);
+		assert_rc_equal(rc, 0);
+
+		rc = cr_pool_verify(&dci, pools[i].pool_uuid, TCPS_PENDING, 1, &class, &action,
+				    NULL);
+		assert_rc_equal(rc, 0);
 	}
+
+	action = TCA_TRUST_PS;
+
+	/* Set valid policy will resolve related interaction. */
+	rc = cr_check_set_policy(TCPF_NONE, "POOL_BAD_LABEL:CIA_TRUST_PS");
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
@@ -3447,7 +3449,6 @@ cr_inherit_policy(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
-#endif
 }
 
 /*
@@ -3783,8 +3784,8 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_multiple_pools, async_disable, test_case_teardown},
 	{ "CR24: check leader failed to notify check engine about orphan process",
 	  cr_fail_sync_orphan, async_disable, test_case_teardown},
-	{ "CR25: inherit check policy from former check repair",
-	  cr_inherit_policy, async_disable, test_case_teardown},
+	{ "CR25: set policy after checker start",
+	  cr_set_policy_after, async_disable, test_case_teardown},
 	{ "CR26: skip the pool if some engine failed to report some pool shard",
 	  cr_handle_fail_pool1, async_disable, test_case_teardown},
 	{ "CR27: handle the pool if some engine failed to report some pool service",
