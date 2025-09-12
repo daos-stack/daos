@@ -184,7 +184,8 @@ Map update_default_commit_pragmas() {
     }
 }
 
-Boolean skip_stage_pragma(String name, String def_val='false') {
+Boolean skip_pragma_set(String name, String def_val='false') {
+    // Return whether or not the skip pragma is set
     return cachedCommitPragma("Skip-${name}", def_val).toLowerCase() == 'true'
 }
 
@@ -192,7 +193,6 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     // Skip the stage if the CI_<distro>_NOBUILD parameter is set
     if (distro) {
         if (paramsValue("CI_${distro.toUpperCase()}_NOBUILD", false)) {
-            // Skip if 'CI_RPM_ubuntu20_NOBUILD: true'
             return true
         }
     }
@@ -202,7 +202,7 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     if (distro && compiler) {
         pragma_names << "build-${distro.toLowerCase()}-${compiler.toLowerCase()}"
     }
-    def any_pragma_skip = pragma_names.any { name -> skip_stage_pragma(name) }
+    def any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
     if (any_pragma_skip) {
         return true
     }
