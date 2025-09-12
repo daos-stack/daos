@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       12%{?relval}%{?dist}
+Release:       14%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -658,6 +658,13 @@ fi
 %endif
 
 %changelog
+* Thu Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14
+- Fix pmdk package for leap
+- Fix daos-spdk package
+
+* Mon Aug 11 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-13
+- Switch to fpm build for RPMs
+
 * Wed Jul 30 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.7.101-12
 - pmemobj errors and warnings reported via DAOS logging system
 

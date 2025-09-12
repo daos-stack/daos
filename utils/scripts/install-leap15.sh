@@ -21,6 +21,7 @@ dnf --nodocs install ${dnf_install_args} \
     curl \
     clang \
     cmake \
+    createrepo_c \
     cunit-devel \
     fdupes \
     flex \

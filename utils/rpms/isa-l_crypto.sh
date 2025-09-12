@@ -4,13 +4,13 @@ set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
-if [ -z "${SL_ISAL_CRYPTO_PREFIX}" ]; then
+if [ -z "${SL_ISAL_CRYPTO_PREFIX:-}" ]; then
   echo "isa-l_crypto must be installed or never built"
   exit 0
 fi
 
 VERSION="${isal_crypto_version}"
-RELEASE="2"
+RELEASE="${isal_crypto_release}"
 LICENSE="BSD-3-Clause"
 ARCH=${isa}
 DESCRIPTION="ISA-L_crypto is a collection of optimized low-level functions
@@ -35,24 +35,22 @@ append_install_list "${files[@]}"
 
 build_package "${isal_crypto_lib}"
 
-if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
-  TARGET_PATH="${libdir}"
-  list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/libisal_crypto.so"
-  append_install_list "${files[@]}"
+TARGET_PATH="${libdir}"
+list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/libisal_crypto.so"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${libdir/pkgconfig}"
-  list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/pkgconfig/libisal_crypto.pc"
-  replace_paths "${SL_ISAL_CRYPTO_PREFIX}" "${files[@]}"
-  append_install_list "${files[@]}"
+TARGET_PATH="${libdir/pkgconfig}"
+list_files files "${SL_ISAL_CRYPTO_PREFIX}/lib64/pkgconfig/libisal_crypto.pc"
+replace_paths "${SL_ISAL_CRYPTO_PREFIX}" "${files[@]}"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${includedir}"
-  list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto.h"
-  append_install_list "${files[@]}"
+TARGET_PATH="${includedir}"
+list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto.h"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${includedir}/isa-l_crypto"
-  list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto/*"
-  append_install_list "${files[@]}"
+TARGET_PATH="${includedir}/isa-l_crypto"
+list_files files "${SL_ISAL_CRYPTO_PREFIX}/include/isa-l_crypto/*"
+append_install_list "${files[@]}"
 
-  DEPENDS=("${isal_crypto_lib} = ${isal_crypto_version}")
-  build_package "${isal_crypto_dev}"
-fi
+DEPENDS=("${isal_crypto_lib} = ${isal_crypto_full}")
+build_package "${isal_crypto_dev}"
