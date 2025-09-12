@@ -372,14 +372,14 @@ dc_cont_create(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
-		goto err_tpriv;
+		goto err_prop;
 	}
 	uuid_clear(null_hdl_uuid);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, pool->dp_pool_hdl, args->uuid,
 			     null_hdl_uuid, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_tpriv, rc);
+		D_GOTO(err_prop, rc);
 	}
 
 	cont_create_in_set_data(rpc, CONT_CREATE, dc_cont_proto_version, rpc_prop);
@@ -398,14 +398,15 @@ dc_cont_create(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
 err_prop:
 	daos_prop_free(rpc_prop);
 err_pool:
 	dc_pool_put(pool);
 err_task:
+	if (tpriv != NULL) {
+		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -510,7 +511,7 @@ dc_cont_destroy(tse_task_t *task)
 		D_ERROR(DF_UUID": %s: cannot find container service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), args->cont ? : "<compat>",
 			DP_RC(rc));
-		goto err_tpriv;
+		goto err_pool;
 	}
 	opc = label ? CONT_DESTROY_BYLABEL : CONT_DESTROY;
 	uuid_clear(null_hdl_uuid);
@@ -518,7 +519,7 @@ dc_cont_destroy(tse_task_t *task)
 			     &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_tpriv, rc);
+		D_GOTO(err_pool, rc);
 	}
 
 	cont_destroy_in_set_data(rpc, opc, dc_cont_proto_version, args->force, label);
@@ -536,12 +537,13 @@ dc_cont_destroy(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
 err_pool:
 	dc_pool_put(pool);
 err:
+	if (tpriv != NULL) {
+		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -1005,7 +1007,7 @@ dc_cont_open(tse_task_t *task)
 		dc_task_set_priv(task, tpriv);
 		tpriv->cont = dc_cont_alloc(uuid);
 		if (tpriv->cont == NULL)
-			D_GOTO(err_tpriv, rc = -DER_NOMEM);
+			D_GOTO(err_pool, rc = -DER_NOMEM);
 		uuid_generate(tpriv->cont->dc_cont_hdl);
 		tpriv->cont->dc_capas = args->flags | DAOS_COO_NEW_LAYOUT;
 	}
@@ -1021,12 +1023,13 @@ dc_cont_open(tse_task_t *task)
 
 err_cont:
 	dc_cont_put(tpriv->cont);
-err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
 err_pool:
 	dc_pool_put(pool);
 err:
+	if (tpriv != NULL) {
+		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "failed to open container: "DF_RC"\n", DP_RC(rc));
 	return rc;
@@ -1180,13 +1183,13 @@ dc_cont_close(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
-		goto err_tpriv;
+		goto err_pool;
 	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, pool->dp_pool_hdl, cont->dc_uuid,
 			     cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		goto err_tpriv;
+		goto err_pool;
 	}
 
 	arg.cca_pool = pool;
@@ -1206,14 +1209,15 @@ dc_cont_close(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
 err_pool:
 	dc_pool_put(pool);
 err_cont:
 	dc_cont_put(cont);
 err:
+	if (tpriv != NULL) {
+		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "failed to close container handle "DF_X64": %d\n",
 		coh.cookie, rc);
@@ -1449,13 +1453,13 @@ dc_cont_query(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
-		goto err_tpriv;
+		goto err_cont;
 	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, pool->dp_pool_hdl, cont->dc_uuid,
 			     cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_tpriv, rc);
+		D_GOTO(err_cont, rc);
 	}
 
 	cont_query_in_set_data(rpc, CONT_QUERY, dc_cont_proto_version, cont_query_bits(args->prop));
@@ -1477,13 +1481,14 @@ dc_cont_query(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
 err:
+	if (tpriv != NULL) {
+		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to query container: "DF_RC"\n", DP_RC(rc));
 	return rc;
@@ -1631,13 +1636,13 @@ dc_cont_set_prop(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
-		goto err_tpriv;
+		goto err_cont;
 	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, pool->dp_pool_hdl,
 			     cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_tpriv, rc);
+		D_GOTO(err_cont, rc);
 	}
 
 	cont_prop_set_in_set_data(rpc, CONT_PROP_SET, dc_cont_proto_version, args->prop,
@@ -1659,13 +1664,14 @@ dc_cont_set_prop(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
 err:
+	if (tpriv != NULL) {
+		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to set prop on container: "DF_RC"\n",
 		DP_RC(rc));
@@ -1770,13 +1776,13 @@ dc_cont_update_acl(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
-		goto err_tpriv;
+		goto err_cont;
 	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, pool->dp_pool_hdl,
 			     cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_tpriv, rc);
+		D_GOTO(err_cont, rc);
 	}
 
 	cont_acl_update_in_set_data(rpc, CONT_ACL_UPDATE, dc_cont_proto_version, args->acl);
@@ -1797,13 +1803,14 @@ dc_cont_update_acl(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
 err:
+	if (tpriv != NULL) {
+		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to update ACL on container: "DF_RC"\n",
 		DP_RC(rc));
@@ -1908,13 +1915,13 @@ dc_cont_delete_acl(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
-		goto err_tpriv;
+		goto err_cont;
 	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, pool->dp_pool_hdl,
 			     cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_tpriv, rc);
+		D_GOTO(err_cont, rc);
 	}
 
 	cont_acl_delete_in_set_data(rpc, CONT_ACL_DELETE, dc_cont_proto_version, args->name,
@@ -1936,13 +1943,14 @@ dc_cont_delete_acl(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_tpriv:
-	D_FREE(tpriv);
-	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
 err:
+	if (tpriv != NULL) {
+		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to delete ACL on container: "DF_RC"\n",
 		DP_RC(rc));
@@ -3534,4 +3542,21 @@ dc_cont_hdl2props(daos_handle_t coh)
 	dc_cont_put(dc);
 
 	return result;
+}
+
+static int
+cont_mark_slave(struct d_hlink *link, void *arg)
+{
+	struct dc_cont *cont;
+
+	cont           = container_of(link, struct dc_cont, dc_hlink);
+	cont->dc_slave = 1;
+
+	return 0;
+}
+
+int
+dc_cont_mark_all_slave(void)
+{
+	return daos_hhash_traverse(DAOS_HTYPE_CO, cont_mark_slave, NULL);
 }

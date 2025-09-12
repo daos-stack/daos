@@ -998,6 +998,11 @@ rebuild_scanner(void *data)
 	if (tls == NULL)
 		return 0;
 
+	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
+	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
 		D_GOTO(out, rc = 0);
