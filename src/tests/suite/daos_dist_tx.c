@@ -19,6 +19,8 @@
 #define DTX_IO_SMALL		32
 #define DTX_NC_CNT		10
 
+/* Only for test. */
+
 D_CASSERT(DTX_NC_CNT % IOREQ_SG_IOD_NR == 0);
 
 static const char *dts_dtx_dkey	= "dtx_dkey";
