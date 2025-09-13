@@ -40,7 +40,7 @@ tests: !mux
       - "get_uri_cache --group-name server_grp_ctl_one_node --rank 0"
       - "list_ctx --group-name server_grp_ctl_one_node --rank 0"
       - "enable_fi --group-name server_grp_ctl_one_node --rank 0"
-      - "set_fi_attr --attr 1911,5,0,1,100 --group-name \
+      - "set_fi_attr --attr 1911,5,0,1,100,100 --group-name \
          server_grp_ctl_one_node --rank 0"
       - "disable_fi --group-name server_grp_ctl_one_node --rank 0"
       - "--name client-group --attach_to server_grp_ctl_one_node --shut_only"
