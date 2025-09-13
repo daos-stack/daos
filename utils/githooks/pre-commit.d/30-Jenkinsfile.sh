@@ -26,7 +26,7 @@ echo "Pre-hook will be restored after new instance of Jenkins will be fully oper
 exit 0
 
 echo "Checking syntax"
-: "${JENKINS_HOST:=build.hpdd.intel.com}"
+: "${JENKINS_HOST:=jenkins-3.daos.hpc.amslabs.hpecorp.net}"
 echo "Temporary no access to $JENKINS_HOST. Skipping"
 exit 0
 # shellcheck disable=SC2317
