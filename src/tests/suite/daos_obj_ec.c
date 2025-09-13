@@ -488,7 +488,7 @@ ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 	recx.rx_nr = size;
 	recx.rx_idx = offset;
 	if (degraded)
-		daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
+		daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ALWAYS);
 
 	lookup_recxs(dkey, akey, 1, th, &recx, 1, data, size, req);
 	assert_memory_equal(data, verify_data, size);
