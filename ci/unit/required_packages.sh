@@ -24,7 +24,7 @@ pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
       $(utils/rpms/package_version.sh libfabric dev)                 \
       $(utils/rpms/package_version.sh pmdk lib pmemobj)              \
       libyaml-devel                                                  \
-      mercury$(utils/rpms/package_version.sh mercury lib)            \
+      $(utils/rpms/package_version.sh mercury dev)                   \
       numactl                                                        \
       numactl-devel                                                  \
       openmpi$OPENMPI_VER                                            \
