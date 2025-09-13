@@ -544,12 +544,35 @@ copy_one_setup(struct bio_desc *biod, int idx, void *data)
 		arg->ca_sgls[idx].sg_nr_out = 0;
 }
 
+#define MAX_MERGE_LEN (1UL << 20) /* 1MB */
+
 static void
 map_one_setup(struct bio_desc *biod, int idx, void *data)
 {
-	struct bio_bulk_args *arg = data;
+	struct bio_bulk_args *arg  = data;
+	struct bio_sglist    *bsgl = &biod->bd_sgls[idx];
+	int                   i, media = DAOS_MEDIA_SCM;
 
 	arg->ba_sgl_idx = idx;
+	arg->ba_merged_len = 0;
+
+	/* Try merge IOVs for bulk transfer */
+	for (i = 0; i < bsgl->bs_nr_out; i++) {
+		struct bio_iov *biov = &bsgl->bs_iovs[i];
+
+		if (i == 0)
+			media = bio_iov2media(biov);
+
+		if ((arg->ba_merged_len + bio_iov2raw_len(biov)) >= MAX_MERGE_LEN ||
+		    is_exclusive_biov(biov) || bio_addr_is_hole(&biov->bi_addr) ||
+		    media != bio_iov2media(biov))
+			break;
+
+		arg->ba_merged_len += bio_iov2raw_len(biov);
+	}
+
+	if (i <= 1)
+		arg->ba_merged_len = 0;
 }
 
 static int
@@ -1171,8 +1194,9 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	}
 
 	D_ASSERT(channel != NULL);
-	D_ASSERT(rg->brr_chk_off == 0);
+	D_ASSERT((rg->brr_chk_off & (BIO_DMA_PAGE_SZ - 1)) == 0);
 	payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
+	payload += rg->brr_chk_off;
 	pg_idx = rg->brr_off >> BIO_DMA_PAGE_SHIFT;
 	pg_cnt = (rg->brr_end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT;
 	D_ASSERT(pg_cnt > pg_idx);
