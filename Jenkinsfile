@@ -192,15 +192,15 @@ Boolean skip_pragma_set(String name, String def_val='false') {
 Boolean skip_build_stage(String distro='', String compiler='gcc') {
     // Skip the stage if the CI_<distro>_NOBUILD parameter is set
     if (distro) {
-        if (paramsValue("CI_${distro.toUpperCase()}_NOBUILD", false)) {
+        if (paramsValue("CI_${distro}_NOBUILD", false)) {
             return true
         }
     }
 
-    // Skip the stage if any Skip-build-<distro>-<compiler>[-<buildtype>] pragmas are true
+    // Skip the stage if any Skip-build-<distro>-<compiler> pragmas are true
     String pragma_names = ["build"]
     if (distro && compiler) {
-        pragma_names << "build-${distro.toLowerCase()}-${compiler.toLowerCase()}"
+        pragma_names << "build-${distro}-${compiler}"
     }
     def any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
     if (any_pragma_skip) {
