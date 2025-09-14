@@ -19,7 +19,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         """Test dmg check start corner cases with single healthy pool.
 
         1. Create a pool and enable checker.
-        2. Start with the pool label. It shouldn’t detect any fault.
+        2. Start with the pool label. It should not detect any fault.
         3. Start with non-existing pool label. Verify error message.
 
         Jira ID: DAOS-17820
@@ -35,8 +35,8 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.check_enable()
 
-        # 2. Start with the pool label. It shouldn’t detect any fault.
-        self.log_step("Start with the pool label. It shouldn’t detect any fault.")
+        # 2. Start with the pool label. It should not detect any fault.
+        self.log_step("Start with the pool label. It should not detect any fault.")
         dmg_command.check_start(pool=pool.identifier)
         query_reports = None
         for _ in range(8):
