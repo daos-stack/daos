@@ -92,9 +92,9 @@ test_teardown(void **unused)
 static void
 test_asserts(void **unused)
 {
-	daos_handle_t           hdl_null = {0};
-	uint32_t                cnt;
-	int                     rc;
+	daos_handle_t hdl_null = {0};
+	uint32_t      cnt;
+	int           rc;
 
 	/* Invalid arguments. */
 	rc = vos_dtx_get_cmt_cnt(hdl_null, &cnt);
