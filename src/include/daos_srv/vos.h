@@ -1781,10 +1781,11 @@ vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
  * Return the number of DTX committed entries of a container.
  *
  * \param[in]	coh	container open handle.
+ * \param[out]	cnt	number of DTX committed entries.
  *
- * \return		Number of DTX committed entries.
+ * \return		0 on success, error otherwise.
  */
-uint32_t
-vos_dtx_get_cmt_cnt(daos_handle_t coh);
+int
+vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt);
 
 #endif /* __VOS_API_H */

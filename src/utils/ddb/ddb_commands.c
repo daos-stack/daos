@@ -1353,7 +1353,9 @@ dtx_stat(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint32_t *cnt)
 	if (!SUCCESS(rc))
 		goto done;
 
-	cnt_tmp = vos_dtx_get_cmt_cnt(coh);
+	rc = vos_dtx_get_cmt_cnt(coh, &cnt_tmp);
+	if (!SUCCESS(rc))
+		goto done;
 	vos_dtx_stat(coh, &stat, 0);
 
 	ddb_print(ctx, "DTX entries statistics of ");
@@ -1391,7 +1393,7 @@ dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	ctx  = args->ctx;
 
 	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
-	++args->cont_seen;
+	++(args->cont_seen);
 
 	rc = dtx_stat(ctx, &itp, &cnt);
 	if (!SUCCESS(rc))
@@ -1407,9 +1409,10 @@ done:
 int
 ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 {
-	vos_iter_param_t     param = {0};
-	struct dtx_stat_args args  = {0};
-	int                  rc;
+	vos_iter_param_t        param   = {0};
+	struct dtx_stat_args    args    = {0};
+	struct vos_iter_anchors anchors = {0};
+	int                     rc;
 
 	if (daos_handle_is_inval(ctx->dc_poh)) {
 		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
@@ -1439,8 +1442,6 @@ done:
 	param.ip_hdl        = ctx->dc_poh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	do {
-		struct vos_iter_anchors anchors = {0};
-
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cb, &args,
 				 NULL);
 	} while (rc > 0);

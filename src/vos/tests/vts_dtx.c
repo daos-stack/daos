@@ -842,15 +842,17 @@ dtx_18(void **state)
 
 	sleep(3);
 
-	cnt = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl);
-	assert_rc_equal(cnt, 10);
+	rc = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl, &cnt);
+	assert_rc_equal(rc, -DER_SUCCESS);
+	assert_int_equal(cnt, 10);
 
 	/* Aggregate the DTXs. */
 	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl);
 	assert_rc_equal(rc, 0);
 
-	cnt = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl);
-	assert_rc_equal(cnt, 0);
+	rc = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl, &cnt);
+	assert_rc_equal(rc, -DER_SUCCESS);
+	assert_int_equal(cnt, 0);
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, false);
