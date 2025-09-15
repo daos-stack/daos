@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -201,7 +202,7 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 	return &ScmMountPoint{
 		Class:      ClassDcpm,
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
-		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
+		DeviceList: []string{fmt.Sprintf("/dev/pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
 		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
 		Rank:       ranklist.Rank(uint32(idx)),
@@ -219,6 +220,20 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 		Name:        fmt.Sprintf("namespace%d.0", idx),
 		NumaNode:    uint32(idx),
 		Size:        uint64(humanize.TByte) * uint64(idx+1),
+	}
+}
+
+// MockScmNamespaceRamdisk returns struct with examples values for namespace representing ramdisk
+// with associated mount point including usage statistics. Avoid creating mock with zero sizes.
+func MockScmNamespaceRamdisk(varIdx ...int32) *ScmNamespace {
+	idx := test.GetIndex(varIdx...)
+
+	return &ScmNamespace{
+		BlockDevice: "ramdisk",
+		Mount: &ScmMountPoint{
+			Class: ClassRam,
+			Path:  fmt.Sprintf("/mnt/daos%d", idx),
+		},
 	}
 }
 

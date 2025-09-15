@@ -451,9 +451,6 @@ func bdevScanEngineAssigned(ctx context.Context, engine Engine, req *ctlpb.ScanN
 	*isStarted = engine.IsStarted()
 	if !*isStarted {
 		engine.Debugf("scanning engine-%d bdevs while engine is down", engine.Index())
-		if req.Meta {
-			return nil, errors.New("meta smd usage info unavailable as engine stopped")
-		}
 
 		return bdevScanToProtoResp(engine.GetStorage().ScanBdevs, bdevCfgs)
 	}

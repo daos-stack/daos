@@ -159,9 +159,11 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 	resp := &ctlpb.ScanNvmeResp{}
 
 	for _, engine := range instances {
+		cs.log.Tracef("scanning engine %d with namespaces %+v", instances, nsps)
+
 		eReq := new(ctlpb.ScanNvmeReq)
 		*eReq = *req
-		if req.Meta {
+		if req.Meta && engine.IsReady() {
 			ms, rs, err := computeMetaRdbSz(cs, engine, nsps)
 			if err != nil {
 				return nil, errors.Wrap(err, "computing meta and rdb size")
@@ -281,6 +283,9 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if err != nil {
 		return nil, err
 	}
+
+	cs.log.Tracef("bdevScanAssigned returned %d, want %d", nrScannedBdevs, nrCfgBdevs)
+
 	if nrScannedBdevs == nrCfgBdevs {
 		return bdevScanTrimResults(req, resp), nil
 	}
@@ -344,10 +349,19 @@ func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*
 		return nil, errors.New("nil scm request")
 	}
 
-	ssr, err := cs.ScmScan(storage.ScmScanRequest{})
-	if err != nil || !req.GetUsage() {
-		return newScanScmResp(ssr, err)
+	reqInner := storage.ScmScanRequest{
+		PMemInConfig: cs.srvCfg.HasPMem(),
 	}
+
+	msg := fmt.Sprintf("pmem scan, req %+v", reqInner)
+
+	ssr, err := cs.ScmScan(reqInner)
+	if err != nil || !req.GetUsage() {
+		resp, err := newScanScmResp(ssr, err)
+		cs.log.Tracef("%s, resp %+v", msg, resp)
+		return resp, err
+	}
+	cs.log.Tracef("%s, resp %+v", msg, ssr)
 
 	ssr, err = cs.getScmUsage(ssr)
 	if err != nil {
@@ -419,39 +433,59 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 
 // Compute the maximal size of the metadata to allow the engine to fill the WallMeta field
 // response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
-// size divided by the number of targets of the engine.
-func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace) (md_size, rdb_size uint64, errOut error) {
+// size divided by the number of targets of the engine. Sizes returned are per-target values.
+func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace) (uint64, uint64, error) {
+	var metaBytes, rdbBytes uint64
+	var msg string
 	for _, nsp := range nsps {
+		msg = fmt.Sprintf("attempt compute of meta/rdb sizes for engine %d, scm-ns: %+v",
+			ei.Index(), nsp)
+
 		mp := nsp.GetMount()
 		if mp == nil {
 			continue
 		}
-		if r, err := ei.GetRank(); err != nil || uint32(r) != mp.GetRank() {
+		if mp.Rank == uint32(ranklist.NilRank) {
+			cs.log.Tracef("%s: skip (mount has nil rank, was engine not running?)", msg)
 			continue
 		}
 
-		// NOTE DAOS-14223: This metadata size calculation won't necessarily match
-		//                  the meta blob size on SSD if --meta-size is specified in
-		//                  pool create command.
-		md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+		r, err := ei.GetRank()
+		if err != nil {
+			cs.log.Tracef("%s: skip (get rank err: %s)", msg, err.Error())
+			continue
+		}
+		if uint32(r) != mp.Rank {
+			cs.log.Tracef("%s: skip (wrong rank, want %d got %d)", msg, r, mp.Rank)
+			continue
+		}
+		msg += fmt.Sprintf(", rank %d", r)
+
+		if ei.GetTargetCount() == 0 {
+			return 0, 0, errors.Errorf("%s: engine with zero tgts is invalid", msg)
+		}
+		metaBytes = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
 
 		engineCfg, err := cs.getEngineCfgFromScmNsp(nsp)
 		if err != nil {
-			errOut = errors.Wrap(err, "Engine with invalid configuration")
-			return
+			return 0, 0, errors.Wrapf(err, "%s: engine with invalid configuration", msg)
 		}
-		rdb_size, errOut = cs.getRdbSize(engineCfg)
-		if errOut != nil {
-			return
+		rdbBytes, err = cs.getRdbSize(engineCfg)
+		if err != nil {
+			return 0, 0, errors.Wrapf(err, "%s: get rdb size with engine cfg %+v", msg,
+				engineCfg)
 		}
-		break
+		break // Just use first namespace.
 	}
 
-	if md_size == 0 {
+	if metaBytes == 0 {
 		cs.log.Noticef("instance %d: no SCM space available for metadata", ei.Index)
+		rdbBytes = 0
 	}
+	cs.log.Tracef("%s: computed meta sz %s and rdb sz %s", msg, humanize.IBytes(metaBytes),
+		humanize.IBytes(rdbBytes))
 
-	return
+	return metaBytes, rdbBytes, nil
 }
 
 type deviceToAdjust struct {
