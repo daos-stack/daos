@@ -245,11 +245,6 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
-        // string(name: 'TestNvme',
-        //        defaultValue: '',
-        //        description: 'The launch.py --nvme argument to use for the Functional test ' +
-        //                     'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
-        //                     '0000:81:00.0, etc.).  Does not apply to MD on SSD stages.')
         string(name: 'BuildType',
                defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
@@ -270,9 +265,6 @@ pipeline {
         booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
                      defaultValue: false,
                      description: 'Do not cancel previous build.')
-        booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
-                     defaultValue: false,
-                     description: 'Only build RPM and DEB packages, Skip unit tests.')
         string(name: 'CI_SCONS_ARGS',
                defaultValue: '',
                description: 'Arguments for scons when building DAOS')
