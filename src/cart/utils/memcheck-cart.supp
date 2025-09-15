@@ -543,9 +543,17 @@
    ...
 }
 {
-   Tcp provider
+   Tcp provider syscall param 2
    Memcheck:Param
    sendmsg(msg.msg_iov[2])
+   ...
+   fun:sendmsg
+   ...
+}
+{
+   Tcp provider syscall param 1
+   Memcheck:SyscallParam
+   sendmsg(msg.msg_iov[1])
    ...
    fun:sendmsg
    ...
