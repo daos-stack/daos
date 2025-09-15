@@ -97,7 +97,10 @@ test_count(void **unused)
 }
 
 /* compilation unit's entry point */
-#define TEST(name, func) {name ": vos_dtx_get_cmt_cnt - " #func, func, test_setup, test_teardown}
+#define TEST(name, func)                                                                           \
+	{                                                                                          \
+		name ": vos_dtx_get_cmt_cnt - " #func, func, test_setup, test_teardown             \
+	}
 
 static const struct CMUnitTest vos_dtx_count_tests_all[] = {
     TEST("DTX600", test_asserts),
