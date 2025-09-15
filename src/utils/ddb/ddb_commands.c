@@ -1307,7 +1307,7 @@ timespec2str(struct timespec *tspec, char *buf, size_t buf_size)
 	if (rc >= buf_size - buf_len)
 		return -DER_TRUNC;
 
-	return -DER_SUCCESS;
+	return 0;
 }
 
 static int
@@ -1331,7 +1331,7 @@ dtx_print_time_stat(struct ddb_ctx *ctx, char *stat_name, uint64_t epoch, char *
 	}
 	ddb_printf(ctx, "\t- %s time:%s%s, %" PRIu64 "\n", stat_name, align, buf, epoch);
 
-	return -DER_SUCCESS;
+	return 0;
 }
 
 struct dtx_stat_args {
@@ -1385,7 +1385,7 @@ dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	int                         rc;
 
 	if (type != VOS_ITER_COUUID) {
-		rc = -DER_SUCCESS;
+		rc = 0;
 		goto done;
 	}
 

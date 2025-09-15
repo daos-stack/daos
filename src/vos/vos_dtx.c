@@ -4043,7 +4043,7 @@ vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt)
 	}
 
 	*cnt = tmp;
-	rc   = -DER_SUCCESS;
+	rc   = 0;
 
 out:
 	return rc;

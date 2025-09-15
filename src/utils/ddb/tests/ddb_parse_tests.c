@@ -374,7 +374,7 @@ date2epoch_tests(void **state)
 
 	rc = ddb_date2epoch("1970-01-01 00:00:00", &epoch);
 	assert_success(rc);
-	assert_int_equal(rc, -DER_SUCCESS);
+	assert_int_equal(rc, 0);
 	assert_int_equal(epoch, 0x9aa0d62878400000ull);
 }
 
