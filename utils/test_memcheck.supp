@@ -36,6 +36,15 @@
 {
    libfabric leaks
    Memcheck:Leak
+   match-leak-kinds:reachable
+   fun:?alloc
+   ...
+   fun:fi_getinfo*
+   ...
+}
+{
+   libfabric leaks
+   Memcheck:Leak
    match-leak-kinds:all
    fun:?alloc
    ...
