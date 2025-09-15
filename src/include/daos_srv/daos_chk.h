@@ -88,6 +88,9 @@ int chk_leader_prop(chk_prop_cb_t prop_cb, void *buf);
 int
     chk_leader_act(uint64_t seq, uint32_t act);
 
+int
+    chk_leader_set_policy(uint32_t policy_nr, struct chk_policy *policies);
+
 int chk_engine_pool_stop(uuid_t pool_uuid, bool destroy);
 
 #endif /* __DAOS_CHK_H__ */
