@@ -48,7 +48,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:plucky
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -104,7 +104,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:plucky
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -164,7 +164,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:plucky
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -330,7 +330,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:plucky
           - distro: alma.8
             base: el.8
             with: almalinux:8
