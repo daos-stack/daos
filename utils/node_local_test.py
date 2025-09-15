@@ -702,7 +702,8 @@ class DaosServer():
                              '--xml-file=dnt.server.%p.memcheck.xml',
                              '--num-callers=10',
                              '--track-origins=yes',
-                             '--leak-check=full']
+                             '--leak-check=full',
+                             '--show-reachable=no']
             suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
             if not os.path.exists(suppression_file):
                 suppression_file = join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')
