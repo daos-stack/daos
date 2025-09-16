@@ -95,7 +95,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 		priv = &dummy_obj;
 	}
 
-	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, priv, &toh);
+	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, priv, NULL, &toh);
 	if (rc == -DER_NONEXIST) { /* empty tree */
 		*empty = true;
 		return 0;

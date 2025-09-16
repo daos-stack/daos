@@ -609,6 +609,55 @@ fail_join_and_free:
 }
 
 int
+dlck_engine_exec(struct dlck_engine *engine, int idx, dlck_ult_func exec,
+		 arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn)
+{
+	struct dlck_ult ult;
+	void           *ult_args;
+	int             rc;
+	int             rc2;
+
+	/** prepare arguments */
+	rc = arg_alloc_fn(engine, idx, custom, &ult_args);
+	if (rc != DER_SUCCESS) {
+		goto fail_join_and_free;
+	}
+
+	/** start an ULT */
+	rc = dlck_ult_create(engine->xss[idx].pool, exec, ult_args, &ult);
+	if (rc != DER_SUCCESS) {
+		goto fail_join_and_free;
+	}
+
+	rc = ABT_thread_join(ult.thread);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto fail_join_and_free;
+	}
+
+	rc = ABT_thread_free(&ult.thread);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto fail_join_and_free;
+	}
+
+	return arg_free_fn(custom, &ult_args);
+
+fail_join_and_free:
+	if (ult.thread != ABT_THREAD_NULL) {
+		rc2 = ABT_thread_join(ult.thread);
+		if (rc2 != ABT_SUCCESS) {
+			/** the ULT did not join - can't free the thread nor free the arguments */
+			return rc;
+		}
+	}
+	(void)ABT_thread_free(&ult.thread);
+	(void)arg_free_fn(custom, &ult_args);
+
+	return rc;
+}
+
+int
 dlck_pool_open_safe(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
 		    daos_handle_t *poh)
 {
@@ -665,4 +714,43 @@ dlck_pool_close_safe(ABT_mutex mtx, daos_handle_t poh)
 	}
 
 	return DER_SUCCESS;
+}
+
+int
+dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr,
+			      void **output_arg)
+{
+	struct xstream_arg *xa;
+
+	D_ALLOC_PTR(xa);
+	if (xa == NULL) {
+		return -DER_NOMEM;
+	}
+
+	xa->ctrl   = ctrl_ptr;
+	xa->engine = engine;
+	xa->xs     = &engine->xss[idx];
+	xa->rc     = DER_SUCCESS;
+
+	*output_arg = xa;
+
+	return DER_SUCCESS;
+}
+
+int
+dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg)
+{
+	struct xstream_arg  *xa = *arg;
+	int                  rc;
+
+	if (xa == NULL) {
+		return DER_SUCCESS;
+	}
+
+	rc = xa->rc;
+
+	D_FREE(*arg);
+	*arg = NULL;
+
+	return rc;
 }

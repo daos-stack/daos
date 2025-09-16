@@ -10,14 +10,34 @@
 enum dlck_cmd {
 	DLCK_CMD_NOT_SET = -2,
 	DLCK_CMD_UNKNOWN = -1,
+	DLCK_CMD_POOL_CHECK,
 };
+
+#define DLCK_CMD_POOL_CHECK_STR "pool_check"
 
 struct dlck_control;
 
 typedef int (*dlck_cmd_func)(struct dlck_control *ctrl);
 
-#define DLCK_CMDS_FUNCS                                                                            \
-	{                                                                                          \
-	}
+/**
+ * \brief Validate the integrity of the pool(s) metadata.
+ *
+ * The \p ctrl argument specifies which pool(s) to check and how the output will be printed.
+ *
+ * \note Validation terminates at the first detected error.
+ *
+ * \param[in] ctrl	Control bundle.
+ *
+ * \retval DER_SUCCESS		All checked pools are ok.
+ * \retval -DER_DF_INVAL	Durable format error.
+ * \retval -DER_DF_INCOMPT	Incompatible durable format.
+ * \retval -DER_ID_MISMATCH	Pool UUID mismatch.
+ * \retval -DER_NOTYPE		Unexpected contents.
+ * \retval -DER_*		Other errors.
+ */
+int
+dlck_cmd_pool_check(struct dlck_control *ctrl);
+
+#define DLCK_CMDS_FUNCS {dlck_cmd_pool_check}
 
 #endif /** __DLCK_CMDS__ */
