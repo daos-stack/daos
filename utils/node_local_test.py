@@ -1279,7 +1279,7 @@ class ValgrindHelper():
             cmd.append('--verbose')
 
         if self.full_check:
-            cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
+            cmd.extend(['--leak-check=full', '--show-leak-kinds=all', '--show-reachable=no'])
         else:
             cmd.append('--leak-check=no')
 
