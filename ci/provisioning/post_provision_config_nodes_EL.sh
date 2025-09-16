@@ -30,8 +30,9 @@ distro_custom() {
 
     # Use a more recent python version for unit testing, this allows us to also test installing
     # pydaos into virtual environments.
-    dnf -y install python39 python39-devel
-    dnf -y install python3.11 python3.11-devel
+    dnf -y install python${PYTHON3_VERSION} python${PYTHON3_VERSION}-devel
+    sudo update-alternatives --set python3 /usr/bin/python${PYTHON3_VERSION}
+    update-alternatives --list
 }
 
 install_mofed() {

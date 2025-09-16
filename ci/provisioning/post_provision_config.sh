@@ -30,6 +30,7 @@ source ci/junit.sh
 # the specific site.
 
 : "${MLNX_VER_NUM:=3.0.0}"
+: "${PYTHON3_VERSION:=314}"
 
 # This is tangled and needs a better fix as it has DISTRO being passed
 # as EL_8 for EL_9, yet other places expect DISTRO to really be EL_8 and
@@ -141,6 +142,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            COVFN_DISABLED=\"${COVFN_DISABLED:-true}\"
            DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:-}\"
            CI_SCONS_ARGS=\"${CI_SCONS_ARGS:-}\"
+           PYTHON_VERSION=\"${PYTHON3_VERSION}\"
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
            $(cat ci/provisioning/post_provision_config_common_functions.sh)
