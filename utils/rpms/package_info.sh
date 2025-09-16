@@ -27,13 +27,7 @@ set_lib_name() {
   fi
 }
 
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
-  # Refine this later
-  distro_name=".lp155"
-else
-  distro_name=".${DISTRO:-el8}"
-fi
-
+distro_name=".${DISTRO:-el8}"
 daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
 export daos_version
 daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
@@ -41,28 +35,28 @@ daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
 export daos_release
 
 export libfabric_version="1.22.0"
-export libfabric_release="3${distro_name}"
+export libfabric_release="4${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.0"
-export mercury_release="6${distro_name}"
+export mercury_release="7${distro_name}"
 export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
-export argobots_release="2${distro_name}"
+export argobots_release="3${distro_name}"
 export argobots_full="${argobots_version}-${argobots_release}"
 export pmdk_version="2.1.0"
-export pmdk_release="5${distro_name}"
+export pmdk_release="6${distro_name}"
 export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.31.1"
-export isal_release="6${distro_name}"
+export isal_release="7${distro_name}"
 export isal_full="${isal_version}-${isal_release}"
 export isal_crypto_version="2.24.0"
-export isal_crypto_release="2${distro_name}"
+export isal_crypto_release="3${distro_name}"
 export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
 export daos_spdk_version="2.0.0"
 export daos_spdk_release="1${distro_name}"
 export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
 export fused_version="1.0.0"
-export fused_release="2${distro_name}"
+export fused_release="3${distro_name}"
 export fused_full="${fused_version}-${fused_release}"
 
 set_lib_name openmpi lib openmpi openmpi3 openmpi
@@ -71,6 +65,11 @@ set_lib_name argobots lib argobots libabt0 libabt0
 export argobots_lib
 set_lib_name argobots dev argobots libabt libabt0
 export argobots_dev
+
+set_lib_name daos_spdk dev daos-spdk daos-spdk daos-spdk
+export spdk_dev
+set_lib_name daos_spdk lib daos-spdk daos-spdk daos-spdk
+export spdk_lib
 
 set_lib_name capstone lib capstone libcapstone4 libcapstone4
 export capstone_lib
@@ -92,6 +91,8 @@ export libfabric_dev
 
 set_lib_name mercury dev mercury mercury mercury
 export mercury_dev
+set_lib_name mercury lib mercury mercury mercury
+export mercury_lib
 
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
 set_lib_name pmemobj dev libpmemobj libpmemobj1 libpmemobj1

@@ -13,18 +13,26 @@ export DISTRO="el8" # should also work for el9
 pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
       boost-python3$PY_MINOR_VER-devel                               \
       capstone                                                       \
-      daos-spdk-devel$(utils/rpms/package_version.sh daos_spdk dev)  \
+      $(utils/rpms/package_version.sh argobots lib)                  \
+      $(utils/rpms/package_version.sh argobots debug)                \
+      $(utils/rpms/package_version.sh daos_spdk dev)                 \
+      $(utils/rpms/package_version.sh daos_spdk debug)               \
+      $(utils/rpms/package_version.sh isal dev)                      \
+      $(utils/rpms/package_version.sh isal_crypto lib)               \
+      $(utils/rpms/package_version.sh isal_crypto debug)             \
+      $(utils/rpms/package_version.sh libfabric dev)                 \
+      $(utils/rpms/package_version.sh libfabric debug)               \
+      $(utils/rpms/package_version.sh mercury dev)                   \
+      $(utils/rpms/package_version.sh mercury debug)                 \
+      $(utils/rpms/package_version.sh pmdk lib pmemobj)              \
+      $(utils/rpms/package_version.sh pmdk debug pmemobj)            \
+      $(utils/rpms/package_version.sh pmdk debug pmem)               \
       fuse3                                                          \
       gotestsum                                                      \
       hwloc-devel                                                    \
       libasan                                                        \
       libipmctl-devel                                                \
-      $(utils/rpms/package_version.sh isal dev)                      \
-      $(utils/rpms/package_version.sh isal_crypto lib)               \
-      $(utils/rpms/package_version.sh libfabric dev)                 \
-      $(utils/rpms/package_version.sh pmdk lib pmemobj)              \
       libyaml-devel                                                  \
-      mercury$(utils/rpms/package_version.sh mercury lib)            \
       numactl                                                        \
       numactl-devel                                                  \
       openmpi$OPENMPI_VER                                            \
