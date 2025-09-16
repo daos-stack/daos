@@ -74,6 +74,7 @@ obj_inherit_timeout(crt_rpc_t *parent, crt_rpc_t *child)
 
 	rc = crt_req_src_timeout_get(parent, &timeout);
 	D_ASSERT(rc == 0);
+
 	rc = crt_req_set_timeout(child, timeout);
 	D_ASSERT(rc == 0);
 }
