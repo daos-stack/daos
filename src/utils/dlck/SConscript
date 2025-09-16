@@ -11,6 +11,7 @@ def scons():
     libs = ['vos_srv', 'daos_common_pmem', 'bio', 'uuid', 'gurt', 'pmemobj', 'abt', 'pthread']
 
     src = [
+        'cmds/dlck_cmd_check.c',
         'dlck_abt.c',
         'dlck_args_common.c',
         'dlck_args_engine.c',
@@ -20,6 +21,8 @@ def scons():
         'dlck_engine.c',
         'dlck_main.c',
         'dlck_pool.c',
+        'dlck_print.c',
+        'dlck_report.c',
         'dlck_sched.c',
         'dlck_tls.c',
         '../../engine/util.c',

@@ -15,6 +15,7 @@
 
 #include <daos_errno.h>
 #include <daos/btree.h>
+#include <daos/dlck.h>
 #include <daos/dtx.h>
 
 #define BTR_EXT_FEAT_MASK (BTR_FEAT_MASK ^ BTR_FEAT_EMBEDDED)
@@ -162,16 +163,17 @@ struct btr_context {
 	struct btr_trace_info            tc_trace;
 	/** trace buffer */
 	struct btr_trace		 tc_traces[BTR_TRACE_MAX];
+	/** DLCK print utility */
+	struct dlck_print               *tc_dlck_print;
 };
 
 /** size of print buffer */
 #define BTR_PRINT_BUF			128
 
-static int btr_class_init(umem_off_t root_off,
-			  struct btr_root *root, unsigned int tree_class,
-			  uint64_t *tree_feats, struct umem_attr *uma,
-			  daos_handle_t coh, void *priv,
-			  struct btr_instance *tins);
+static int
+btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_class,
+	       uint64_t *tree_feats, struct umem_attr *uma, daos_handle_t coh, void *priv,
+	       struct dlck_print *dp, struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  umem_off_t nd_off,
 					  unsigned int at);
@@ -330,13 +332,13 @@ btr_ops(struct btr_context *tcx)
  * \param uma		Memory class attributes.
  * \param coh		The container open handle.
  * \param priv		Private information from user
+ * \param dp		DLCK print utility.
  * \param tcxp		Returned context.
  */
 static int
-btr_context_create(umem_off_t root_off, struct btr_root *root,
-		   unsigned int tree_class, uint64_t tree_feats,
-		   unsigned int tree_order, struct umem_attr *uma,
-		   daos_handle_t coh, void *priv, struct btr_context **tcxp)
+btr_context_create(umem_off_t root_off, struct btr_root *root, unsigned int tree_class,
+		   uint64_t tree_feats, unsigned int tree_order, struct umem_attr *uma,
+		   daos_handle_t coh, void *priv, struct dlck_print *dp, struct btr_context **tcxp)
 {
 	struct btr_context	*tcx;
 	unsigned int		 depth;
@@ -347,8 +349,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 		return -DER_NOMEM;
 
 	tcx->tc_ref = 1; /* for the caller */
-	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma,
-			    coh, priv, &tcx->tc_tins);
+	rc          = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, dp,
+				     &tcx->tc_tins);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
 			DP_RC(rc));
@@ -372,6 +374,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 			root_off);
 	}
 
+	tcx->tc_dlck_print = dp;
+
 	btr_context_set_depth(tcx, depth);
 	*tcxp = tcx;
 	return 0;
@@ -390,10 +394,8 @@ btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
 	int		 rc;
 
 	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
-	rc = btr_context_create(tcx->tc_tins.ti_root_off,
-				tcx->tc_tins.ti_root, -1, -1, -1, &uma,
-				tcx->tc_tins.ti_coh,
-				tcx->tc_tins.ti_priv, tcx_p);
+	rc = btr_context_create(tcx->tc_tins.ti_root_off, tcx->tc_tins.ti_root, -1, -1, -1, &uma,
+				tcx->tc_tins.ti_coh, tcx->tc_tins.ti_priv, NULL, tcx_p);
 	return rc;
 }
 
@@ -1668,6 +1670,61 @@ out:
 	return rc;
 }
 
+#define DLCK_BTREE_NODE_MALFORMED_STR "malformed - "
+#define DLCK_BTREE_NON_ZERO_PADDING_FMT                                                            \
+	DLCK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")"
+#define DLCK_BTREE_NON_ZERO_GEN_FMT DLCK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")"
+
+/**
+ * Validate the integrity of the btree node.
+ *
+ * \param[in] nd	Node to check.
+ * \param[in] nd_off	Node's offset.
+ * \param[in] dp	DLCK print utility.
+ *
+ * \retval DER_SUCCESS	The node is correct.
+ * \retval -DER_NOTYPE	The node is malformed.
+ */
+static int
+dlck_btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct dlck_print *dp)
+{
+	uint16_t unknown_flags;
+
+	D_ASSERT(dp != NULL);
+	DLCK_PRINTF(dp, "Node (off=%#x)... ", nd_off);
+
+	unknown_flags = nd->tn_flags & ~(BTR_NODE_LEAF | BTR_NODE_ROOT);
+	if (unknown_flags != 0) {
+		DLCK_APPENDFL_ERR(dp, DLCK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")",
+				  unknown_flags);
+		return -DER_NOTYPE;
+	}
+
+	if (nd->tn_pad_32 != 0) {
+		if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
+			DLCK_APPENDFL_ERR(dp, DLCK_BTREE_NON_ZERO_PADDING_FMT, nd->tn_pad_32);
+			return -DER_NOTYPE;
+		} else {
+			DLCK_APPENDFL_WARN(dp, DLCK_BTREE_NON_ZERO_PADDING_FMT, nd->tn_pad_32);
+		}
+	}
+
+	if (nd->tn_gen != 0) {
+		if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
+			DLCK_APPENDFL_ERR(dp, DLCK_BTREE_NON_ZERO_GEN_FMT, nd->tn_gen);
+			return -DER_NOTYPE;
+		} else {
+			DLCK_APPENDFL_WARN(dp, DLCK_BTREE_NON_ZERO_GEN_FMT, nd->tn_gen);
+		}
+	}
+
+	DLCK_APPENDL_OK(dp);
+
+	return DER_SUCCESS;
+}
+
+#define EMPTY_TREE_STR "Empty tree\n"
+
 /**
  * Try to find \a key within a btree, it will store the searching path in
  * tcx::tc_traces.
@@ -1705,12 +1762,15 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
 
 	if (btr_root_empty(tcx)) { /* empty tree */
-		D_DEBUG(DB_TRACE, "Empty tree\n");
+		DLCK_PRINT(tcx->tc_dlck_print, EMPTY_TREE_STR);
+		D_DEBUG(DB_TRACE, EMPTY_TREE_STR);
 		rc = PROBE_RC_NONE;
 		goto out;
 	}
 
 	if (btr_has_embedded_value(tcx)) {
+		/** DLCK instrumentation is not present in the embedded probe yet. */
+		D_ASSERT(tcx->tc_dlck_print == NULL);
 		rc = btr_probe_embedded(tcx, probe_opc, intent, key, hkey);
 		return rc;
 	}
@@ -1722,6 +1782,13 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			next_level = false;
 			start	= 0;
 			nd	= btr_off2ptr(tcx, nd_off);
+			if (IS_DLCK(tcx->tc_dlck_print)) {
+				rc = dlck_btr_node_check(nd, nd_off, tcx->tc_dlck_print);
+				if (rc != DER_SUCCESS) {
+					rc = PROBE_RC_DATA_LOSS;
+					goto out;
+				}
+			}
 			end	= nd->tn_keyn - 1;
 
 			D_DEBUG(DB_TRACE,
@@ -3610,8 +3677,8 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 		return -DER_INVAL;
 	}
 
-	rc = btr_context_create(BTR_ROOT_NULL, NULL, tree_class, tree_feats,
-				tree_order, uma, DAOS_HDL_INVAL, NULL, &tcx);
+	rc = btr_context_create(BTR_ROOT_NULL, NULL, tree_class, tree_feats, tree_order, uma,
+				DAOS_HDL_INVAL, NULL, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -3682,8 +3749,8 @@ dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 		return -DER_NO_PERM;
 	}
 
-	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats,
-				tree_order, uma, coh, priv, &tcx);
+	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats, tree_order, uma, coh,
+				priv, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -3713,12 +3780,35 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 	struct btr_context *tcx;
 	int		    rc;
 
-	rc = btr_context_create(root_off, NULL, -1, -1, -1, uma,
-				DAOS_HDL_INVAL, NULL, &tcx);
+	rc = btr_context_create(root_off, NULL, -1, -1, -1, uma, DAOS_HDL_INVAL, NULL, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
 	*toh = btr_tcx2hdl(tcx);
+	return 0;
+}
+
+static int
+dlck_dbtree_check(daos_handle_t toh);
+
+static int
+dbtree_open_inplace_ex_internal(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh,
+				void *priv, struct dlck_print *dp, daos_handle_t *toh)
+{
+	struct btr_context *tcx;
+	int                 rc;
+
+	if (root->tr_order == 0) {
+		D_DEBUG(DB_TRACE, "Nonexistent tree\n");
+		return -DER_NONEXIST;
+	}
+
+	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma, coh, priv, dp, &tcx);
+	if (rc != 0)
+		return rc;
+
+	*toh = btr_tcx2hdl(tcx);
+
 	return 0;
 }
 
@@ -3732,24 +3822,41 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
  * \param[out] toh	Returned tree open handle.
  */
 int
-dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-		       daos_handle_t coh, void *priv, daos_handle_t *toh)
+dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+		       daos_handle_t *toh)
 {
-	struct btr_context *tcx;
-	int		    rc;
+	return dbtree_open_inplace_ex_internal(root, uma, coh, priv, NULL, toh);
+}
 
-	if (root->tr_order == 0) {
-		D_DEBUG(DB_TRACE, "Nonexistent tree\n");
-		return -DER_NONEXIST;
+/**
+ * Open a btree from the root address.
+ *
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[in] coh	The container open handle.
+ * \param[in] priv	Private data for tree opener
+ * \param[in] dp	DLCK print utility.
+ * \param[out] toh	Returned tree open handle.
+ */
+int
+dbtree_open_inplace_dp(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+		       struct dlck_print *dp, daos_handle_t *toh)
+{
+	int rc = dbtree_open_inplace_ex_internal(root, uma, coh, priv, dp, toh);
+	if (rc != DER_SUCCESS) {
+		return rc;
 	}
 
-	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma,
-				coh, priv, &tcx);
-	if (rc != 0)
-		return rc;
+	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
+	if (IS_DLCK(dp)) {
+		DLCK_PRINT(dp, "Nodes:\n");
+		DLCK_INDENT(dp, rc = dlck_dbtree_check(*toh));
+		if (rc != DER_SUCCESS) {
+			dbtree_close(*toh);
+		}
+	}
 
-	*toh = btr_tcx2hdl(tcx);
-	return 0;
+	return rc;
 }
 
 /**
@@ -4446,49 +4553,22 @@ out:
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 
 /**
- * Initialize a tree instance from a registered tree class.
+ * Calculate tree's features.
+ *
+ * \param[in] tree_class	Tree's class identified.
+ * \param[in,out] tree_feats	Tree's features.
+ * \param[in] tc		Tree's class.
+ *
+ * \retval -DER_PROTO	Unsupported features
+ * \retval DER_SUCCESS	Success
  */
 static int
-btr_class_init(umem_off_t root_off, struct btr_root *root,
-	       unsigned int tree_class, uint64_t *tree_feats,
-	       struct umem_attr *uma, daos_handle_t coh, void *priv,
-	       struct btr_instance *tins)
+btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_class *tc)
 {
-	struct btr_class	*tc;
-	uint64_t		 special_feat;
-	int			 rc;
+	uint64_t special_feat;
 
-	memset(tins, 0, sizeof(*tins));
-	rc = umem_class_init(uma, &tins->ti_umm);
-	if (rc != 0)
-		return rc;
-
-	tins->ti_priv = priv;
-	tins->ti_coh = coh;
-	tins->ti_root_off = UMOFF_NULL;
-
-	if (!UMOFF_IS_NULL(root_off)) {
-		tins->ti_root_off = root_off;
-		if (root == NULL)
-			root = umem_off2ptr(&tins->ti_umm, root_off);
-	}
-	tins->ti_root = root;
-
-	if (root != NULL && root->tr_class != 0) {
-		tree_class = root->tr_class;
-		*tree_feats = root->tr_feats;
-	}
-
-	/* XXX should be multi-thread safe */
-	if (tree_class >= BTR_TYPE_MAX) {
-		D_DEBUG(DB_TRACE, "Invalid class id: %d\n", tree_class);
-		return -DER_INVAL;
-	}
-
-	tc = &btr_class_registered[tree_class];
-	if (tc->tc_ops == NULL) {
-		D_DEBUG(DB_TRACE, "Unregistered class id %d\n", tree_class);
-		return -DER_NONEXIST;
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_FEATURES)) { /** fault injection */
+		return -DER_PROTO;
 	}
 
 	/* If no hkey callbacks are supplied, only special key types are
@@ -4522,10 +4602,72 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 
 	/** Only check btree managed bits that can be set in tr_class */
 	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_EXT_FEAT_MASK)) {
-		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
-			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;
 	}
+
+	return DER_SUCCESS;
+}
+
+#define INVALID_CLASS_FMT        "Invalid class id: %d"
+#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d"
+#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64
+
+/**
+ * Initialize a tree instance from a registered tree class.
+ */
+static int
+btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_class,
+	       uint64_t *tree_feats, struct umem_attr *uma, daos_handle_t coh, void *priv,
+	       struct dlck_print *dp, struct btr_instance *tins)
+{
+	struct btr_class *tc;
+	int               rc;
+
+	memset(tins, 0, sizeof(*tins));
+	rc = umem_class_init(uma, &tins->ti_umm);
+	if (rc != 0)
+		return rc;
+
+	tins->ti_priv     = priv;
+	tins->ti_coh      = coh;
+	tins->ti_root_off = UMOFF_NULL;
+
+	if (!UMOFF_IS_NULL(root_off)) {
+		tins->ti_root_off = root_off;
+		if (root == NULL)
+			root = umem_off2ptr(&tins->ti_umm, root_off);
+	}
+	tins->ti_root = root;
+
+	if (root != NULL && root->tr_class != 0) {
+		tree_class  = root->tr_class;
+		*tree_feats = root->tr_feats;
+	}
+
+	DLCK_PRINT(dp, "Tree class... ");
+	/* XXX should be multi-thread safe */
+	if (tree_class >= BTR_TYPE_MAX || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_INV_CLASS)) {
+		DLCK_APPENDFL_ERR(dp, INVALID_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT "\n", tree_class);
+		return -DER_INVAL;
+	}
+
+	tc = &btr_class_registered[tree_class];
+	if (tc->tc_ops == NULL || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_UNREG_CLASS)) {
+		DLCK_APPENDFL_ERR(dp, UNREGISTERED_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT "\n", tree_class);
+		return -DER_NONEXIST;
+	}
+	DLCK_APPENDL_OK(dp);
+
+	DLCK_PRINT(dp, "Tree features... ");
+	rc = btr_class_feats_init(tree_class, tree_feats, tc);
+	if (rc != DER_SUCCESS) {
+		DLCK_APPENDFL_ERR(dp, UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
+		D_ERROR(UNSUPPORTED_FEATURES_FMT "\n", *tree_feats, tc->tc_feats);
+		return rc;
+	}
+	DLCK_APPENDL_OK(dp);
 
 	tins->ti_ops = tc->tc_ops;
 	return rc;
@@ -4640,3 +4782,55 @@ done:
 	return 0;
 }
 
+/**
+ * Validate the integrity of a btree.
+ *
+ * \param[in]	toh	Tree handle.
+ *
+ * \retval DER_SUCCESS		The tree is correct.
+ * \retval -DER_NOTYPE		The tree is malformed.
+ * \retval -DER_NONEXIST	The tree is malformed.
+ * \retval -DER_*		Possibly other errors.
+ */
+static int
+dlck_dbtree_check(daos_handle_t toh)
+{
+	struct btr_context *tcx = btr_hdl2tcx(toh);
+	struct dlck_print  *dp  = tcx->tc_dlck_print;
+	daos_handle_t       ih;
+	int                 rc;
+
+	D_ASSERT(dp != NULL);
+
+	rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED, &ih);
+	if (rc != 0) {
+		DLCK_PRINTL_RC(dp, rc, "failed to prepare tree iterator");
+		return rc;
+	}
+
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_CHECK, NULL /** key */,
+			       NULL /** anchor */);
+	if (rc == -DER_NONEXIST) {
+		rc = DER_SUCCESS;
+		goto err_iter_finish;
+	}
+	if (rc != DER_SUCCESS) {
+		DLCK_PRINTL_RC(dp, rc, "failed to initialize tree iterator");
+	}
+
+	while (rc == DER_SUCCESS) {
+		rc = dbtree_iter_next(ih);
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			break;
+		} else if (rc != DER_SUCCESS) {
+			DLCK_PRINTL_RC(dp, rc, "failed to move tree iterator");
+			break;
+		}
+	}
+
+err_iter_finish:
+	(void)dbtree_iter_finish(ih);
+
+	return rc;
+}

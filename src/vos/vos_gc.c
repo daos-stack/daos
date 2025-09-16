@@ -1492,14 +1492,22 @@ gc_close_bkt(struct vos_gc_info *gc_info)
 	gc_info->gi_last_pinned = UMEM_DEFAULT_MBKT_ID;
 }
 
-static inline int
-gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct vos_gc_info *gc_info)
-{
-	int	rc;
+#define DLCK_GC_TREE_STR "Garbage collector's tree"
 
-	rc = dbtree_open_inplace(&bkt_df->gd_bins_root, uma, &gc_info->gi_bins_btr);
-	if (rc)
+static inline int
+gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_print *dp,
+	    struct vos_gc_info *gc_info)
+{
+	int rc;
+
+	DLCK_PRINT(dp, DLCK_GC_TREE_STR "...\n");
+	DLCK_INDENT(dp, rc = dbtree_open_inplace_dp(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL,
+						    NULL, dp, &gc_info->gi_bins_btr));
+	DLCK_PRINTL_RC(dp, rc, DLCK_GC_TREE_STR);
+	if (rc) {
 		DL_ERROR(rc, "Failed to open GC bin tree.");
+	}
+
 	return rc;
 }
 
@@ -1509,13 +1517,61 @@ gc_close_pool(struct vos_pool *pool)
 	return gc_close_bkt(&pool->vp_gc_info);
 }
 
-int
-gc_open_pool(struct vos_pool *pool)
+#define DLCK_NON_ZERO_PADDING_FMT  "non-zero padding[%d] (%#" PRIx64 ")"
+#define DLCK_NON_ZERO_RESERVED_FMT "non-zero reserved space (%#" PRIx64 ")"
+
+static int
+dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct dlck_print *dp)
 {
-	struct vos_pool_ext_df	*pd_ext = umem_off2ptr(&pool->vp_umm, pool->vp_pool_df->pd_ext);
+	DLCK_PRINTF(dp, "Pool extension (off=%#x)... ", off);
+
+	if (pd_ext == NULL) {
+		DLCK_APPENDL_OK(dp);
+		return DER_SUCCESS;
+	}
+
+	for (int i = 0; i < VOS_POOL_EXT_DF_PADDING_SIZE; ++i) {
+		if (pd_ext->ped_paddings[i] != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_PADDING)) {
+			if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
+				DLCK_APPENDFL_ERR(dp, DLCK_NON_ZERO_PADDING_FMT, i,
+						  pd_ext->ped_paddings[i]);
+				return -DER_NOTYPE;
+			} else {
+				DLCK_APPENDFL_WARN(dp, DLCK_NON_ZERO_PADDING_FMT, i,
+						   pd_ext->ped_paddings[i]);
+			}
+		}
+	}
+
+	if (pd_ext->ped_reserve != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_RESERVED)) {
+		if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
+			DLCK_APPENDFL_ERR(dp, DLCK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
+			return -DER_NOTYPE;
+		} else {
+			DLCK_APPENDFL_WARN(dp, DLCK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
+		}
+	}
+
+	DLCK_APPENDL_OK(dp);
+
+	return DER_SUCCESS;
+}
+
+int
+gc_open_pool(struct vos_pool *pool, struct dlck_print *dp)
+{
+	struct vos_pool_ext_df *pd_ext = umem_off2ptr(&pool->vp_umm, pool->vp_pool_df->pd_ext);
+	int                     rc;
+
+	if (IS_DLCK(dp)) {
+		rc = dlck_pd_ext_check(pd_ext, pool->vp_pool_df->pd_ext, dp);
+		if (rc != DER_SUCCESS) {
+			return rc;
+		}
+	}
 
 	if (pd_ext != NULL)
-		return gc_open_bkt(&pool->vp_uma, &pd_ext->ped_gc_bkt, &pool->vp_gc_info);
+		return gc_open_bkt(&pool->vp_uma, &pd_ext->ped_gc_bkt, dp, &pool->vp_gc_info);
 	return 0;
 }
 
@@ -1533,7 +1589,7 @@ gc_open_cont(struct vos_container *cont)
 	struct vos_cont_ext_df	*cd_ext = umem_off2ptr(&pool->vp_umm, cont->vc_cont_df->cd_ext);
 
 	if (cd_ext != NULL)
-		return gc_open_bkt(&pool->vp_uma, &cd_ext->ced_gc_bkt, &cont->vc_gc_info);
+		return gc_open_bkt(&pool->vp_uma, &cd_ext->ced_gc_bkt, NULL, &cont->vc_gc_info);
 	return 0;
 }
 
