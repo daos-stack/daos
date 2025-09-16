@@ -1,0 +1,11 @@
+"""Build tests"""
+
+
+def scons():
+    """Execute build"""
+    # build tests
+    SConscript('tests/SConscript')
+
+
+if __name__ == "SCons.Script":
+    scons()

@@ -75,6 +75,8 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_CHK_PROP               = 245,
 	DRPC_METHOD_MGMT_CHK_ACT                = 246,
 	DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM     = 247,
+	DRPC_METHOD_MGMT_GET_GROUP_STATUS       = 248,
+	DRPC_METHOD_MGMT_CHK_SET_POLICY         = 249,
 
 	NUM_DRPC_MGMT_METHODS /* Must be last */
 };
@@ -89,6 +91,7 @@ enum drpc_srv_method {
 	DRPC_METHOD_CHK_DEREG_POOL        = 308,
 	DRPC_METHOD_CHK_REPORT            = 309,
 	DRPC_METHOD_SRV_LIST_POOLS        = 310,
+	DRPC_METHOD_SRV_GET_PROPS         = 311,
 
 	NUM_DRPC_SRV_METHODS /* Must be last */
 };

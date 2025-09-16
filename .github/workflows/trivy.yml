@@ -23,10 +23,10 @@ jobs:
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Run Trivy vulnerability scanner in filesystem mode (table format)
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4  # 0.32.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # 0.33.1
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -51,14 +51,14 @@ jobs:
           sed -i 's/format: template/format: sarif/g' utils/trivy/trivy.yaml
 
       - name: Run Trivy vulnerability scanner in filesystem mode (sarif format)
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4  # 0.32.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # 0.33.1
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@181d5eefc20863364f96762470ba6f862bdef56b  # v3.29.2
+        uses: github/codeql-action/upload-sarif@192325c86100d080feab897ff886c34abd4c83a3  # v3.30.3
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -69,7 +69,7 @@ jobs:
           sed -i 's/exit-code: 0/exit-code: 1/g' utils/trivy/trivy.yaml
 
       - name: Run Trivy vulnerability scanner in filesystem mode (human readable format)
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4  # 0.32.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # 0.33.1
         with:
           scan-type: 'fs'
           scan-ref: '.'

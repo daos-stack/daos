@@ -460,6 +460,7 @@ do_mtime(void **state)
 	/* Open a file and sanity check the mtime */
 	fd = openat(root, "mtime_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
+	usleep(10000);
 
 	rc = fstatfs(root, &fs);
 	assert_return_code(fd, errno);
@@ -479,6 +480,7 @@ do_mtime(void **state)
 	}
 
 	/* Write to the file and verify mtime is newer */
+	usleep(10000);
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
@@ -495,6 +497,7 @@ do_mtime(void **state)
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/* Truncate the file and verify mtime is newer */
+	usleep(10000);
 	rc = ftruncate(fd, 0);
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
@@ -510,6 +513,7 @@ do_mtime(void **state)
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/* Set and verify mtime set in the past */
+	usleep(10000);
 	times[0]         = now;
 	times[1].tv_sec  = now.tv_sec - 10;
 	times[1].tv_nsec = 20;
@@ -523,6 +527,7 @@ do_mtime(void **state)
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/* Repeat the write test again */
+	usleep(10000);
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);

@@ -10,6 +10,8 @@
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
+#include <daos_srv/daos_mgmt_srv.h>
+
 #include <signal.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
@@ -3029,4 +3031,92 @@ ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	mgmt__check_act_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+ds_mgmt_drpc_get_group_status(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__GetGroupStatusReq *req;
+	Mgmt__GetGroupStatusResp resp = MGMT__GET_GROUP_STATUS_RESP__INIT;
+	uint8_t                 *body;
+	size_t                   len;
+	int                      rc;
+
+	req = mgmt__get_group_status_req__unpack(&alloc.alloc, drpc_req->body.len,
+						 drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (get group status)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to get group status: group_version=%u\n", req->group_version);
+
+	rc = ds_mgmt_get_group_status(req->group_version, &resp.dead_ranks, &resp.n_dead_ranks);
+	if (rc != 0) {
+		DL_CDEBUG(rc == -DER_GRPVER, DLOG_DBG, DLOG_ERR, rc, "Failed to get group status");
+		resp.dead_ranks   = NULL;
+		resp.n_dead_ranks = 0;
+	}
+	resp.status = rc;
+
+	len = mgmt__get_group_status_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (get group status)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__get_group_status_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__get_group_status_req__free_unpacked(req, &alloc.alloc);
+	D_FREE(resp.dead_ranks);
+}
+
+void
+ds_mgmt_drpc_check_set_policy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	uint8_t                 *body;
+	Mgmt__CheckSetPolicyReq *req   = NULL;
+	struct drpc_alloc        alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__DaosResp           resp  = MGMT__DAOS_RESP__INIT;
+	int                      rc    = 0;
+	size_t                   len;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_set_policy_req__unpack(&alloc.alloc, drpc_req->body.len,
+						 drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (set policy for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to set policy for check\n");
+
+	rc = ds_mgmt_check_set_policy(req->n_policies, req->policies);
+	if (rc != 0)
+		D_ERROR("Failed to set policy for check: " DF_RC "\n", DP_RC(rc));
+
+	resp.status = rc;
+	len         = mgmt__daos_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (set policy for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__daos_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__check_set_policy_req__free_unpacked(req, &alloc.alloc);
 }
