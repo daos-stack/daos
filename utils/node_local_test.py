@@ -702,8 +702,7 @@ class DaosServer():
                              '--xml-file=dnt.server.%p.memcheck.xml',
                              '--num-callers=10',
                              '--track-origins=yes',
-                             '--leak-check=full',
-                             '--show-reachable=no']
+                             '--leak-check=full']
             suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
             if not os.path.exists(suppression_file):
                 suppression_file = join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')
@@ -1279,7 +1278,7 @@ class ValgrindHelper():
             cmd.append('--verbose')
 
         if self.full_check:
-            cmd.extend(['--leak-check=full', '--show-leak-kinds=all', '--show-reachable=no'])
+            cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
             cmd.append('--leak-check=no')
 

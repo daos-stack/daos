@@ -543,26 +543,16 @@
    ...
 }
 {
-   Tcp provider syscall param 2
+   Tcp provider with ofi rxm 2
    Memcheck:Param
    sendmsg(msg.msg_iov[2])
    ...
    fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
    ...
-}
-{
-   Tcp provider syscall param 1
-   Memcheck:Param
-   sendmsg(msg.msg_iov[1])
+   fun:fi_tsend
    ...
-   fun:sendmsg
-   ...
-}
-{
-   Go syscall.
-   Memcheck:Param
-   write(buf)
-   fun:syscall.Syscall.abi0
 }
 {
    Go syscall.

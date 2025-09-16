@@ -138,7 +138,7 @@ class ValgrindHelper():
     @staticmethod
     def setup_cmd(base, cmd, name):
         """Return a new command using valgrind"""
-        cmd_prefix = ["valgrind", "--leak-check=full", "--show-reachable=no", "--num-callers=20",
+        cmd_prefix = ["valgrind", "--leak-check=full", "--num-callers=20",
                       "--error-limit=no", "--fair-sched=try",
                       f"--suppressions={ValgrindHelper.get_supp(base)}",
                       "--gen-suppressions=all", "--error-exitcode=42", "--xml=yes",
