@@ -1477,9 +1477,9 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tSpecify tmpfs size(GiB) for scm_mount. By default, the value is computed "
 		       "automatically, mirroring the logic used by daos_server\n");
 	ddb_print(ctx, "    <db_path>\n");
-	ddb_print(ctx, "\tPath to the vos db. (default: /var/daos/config/daos_control/engine0/)\n");
+	ddb_print(ctx, "\tPath to the vos db.\n");
 	ddb_print(ctx, "    <scm_mount>\n");
-	ddb_print(ctx, "\tPath to the scm mountpoint. (default: /mnt/daos\n");
+	ddb_print(ctx, "\tPath to the scm mountpoint.\n");
 	ddb_print(ctx, "\n");
 }
 
