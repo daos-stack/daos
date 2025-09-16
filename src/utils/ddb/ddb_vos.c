@@ -2118,8 +2118,8 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 {
 	int          rc;
 	bool         md_on_ssd;
-	bool         need_mount                    = true;
-	unsigned int sz                            = scm_mount_size;
+	bool         need_mount = true;
+	unsigned int sz         = scm_mount_size;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2129,7 +2129,7 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 
 	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
 	if (!md_on_ssd) {
-		D_ERROR("Not md on ssd mode, Ignore to provisioning memory environment.");
+		D_ERROR("Not in MD-on-SSD mode; skipping memory environment provisioning.");
 		goto out;
 	}
 
@@ -2140,10 +2140,10 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 			D_ERROR("Failed to calculate scm size. " DF_RC "", DP_RC(rc));
 			goto out;
 		}
-		D_INFO("Not specify scm size. Automatically calculated size %uGiB", sz);
+		D_INFO("SCM size not specified; automatically calculated as %u GiB.", sz);
 	}
 
-	/* Make sure mountpoint is clear */
+	/** Make sure the mountpoint is mounted and if the mount meets criteria. */
 	rc = ddb_tmpfs_pre_mount_check(scm_mount, sz, &need_mount);
 	if (rc) {
 		D_ERROR("Failed to check scm mountpoint %s. " DF_RC "", scm_mount, DP_RC(rc));
@@ -2157,8 +2157,8 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 			goto out;
 		}
 	} else {
-		D_INFO("Detected the scm mount %s has already been mounted. The VOS files will be "
-		       "created directly.",
+		D_INFO("SCM mount %s is already mounted; VOS files will be created without "
+		       "remounting.",
 		       scm_mount);
 	}
 
@@ -2173,8 +2173,9 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 		D_ERROR("Failed to recreate vos/rdb files. " DF_RC "\n", DP_RC(rc));
 	}
 out2:
-	if (rc && need_mount == true)
+	if (rc && need_mount == true) {
 		umount(scm_mount);
+	}
 out:
 	vos_self_fini();
 	return rc;

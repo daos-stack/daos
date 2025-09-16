@@ -27,7 +27,7 @@
 static int
 get_hugepage_total_size(unsigned long *hugepage_total_size)
 {
-	char          line[256];
+	char          line[DDB_PROV_MEM_BUF_MAX];
 	unsigned long hugepage_size = 0;
 	unsigned long hugepage_nr   = 0;
 	int           parse_cnt     = 0;

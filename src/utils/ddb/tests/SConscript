@@ -54,7 +54,7 @@ def scons():
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     vos_src = Glob('../../../vos/*.c')
-    mgmt_src = Glob('../../../mgmt/mgmt_common.c')
+    mgmt_src = ['../../../mgmt/mgmt_common.c']
 
     mock_src = Glob('../../../dtx/tests/*_mock.c')
     # Pylint does not like the exclude keyword below, but it works.
