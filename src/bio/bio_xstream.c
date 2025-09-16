@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ *
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -171,6 +173,10 @@ bio_spdk_env_init(void)
 			DL_ERROR(rc, "Failed to process nvme config");
 			goto out;
 		}
+	}
+
+	if (geteuid() != 0) {
+		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
 	}
 
 	/* Don't pass opt for reinitialization, otherwise it will fail */

@@ -206,4 +206,7 @@ dc_pool_ping_target(int tgt_id, daos_handle_t pool_hdl, tse_task_t *task);
 int
 dc_pool_mark_all_slave(void);
 
+int
+dc_pool_mark_all_slave(void);
+
 #endif /* __DD_POOL_H__ */
