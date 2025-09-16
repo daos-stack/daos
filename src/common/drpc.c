@@ -377,9 +377,11 @@ send_chunked(struct drpc *ctx, uint8_t *msg, size_t msg_len)
 			chunk_idx + 1, num_chunks, data_len, chunk_len);
 		D_ALLOC(chunk_buf, chunk_len);
 		if (chunk_buf == NULL) {
-			D_ERROR("failed to allocate buffer for chunk (idx=%lu, size=%lu)",
-				chunk_idx, chunk_len);
-			return -DER_NOMEM;
+			rc = -DER_NOMEM;
+			D_ERROR("failed to allocate buffer for chunk (idx=%lu, size=%lu): " DF_RC
+				"\n",
+				chunk_idx, chunk_len, DP_RC(rc));
+			return rc;
 		}
 
 		header                  = (struct drpc_header *)chunk_buf;
