@@ -2165,6 +2165,7 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 	/* setup vos_file */
 	rc = ddb_dirs_prepare(scm_mount);
 	if (rc != 0) {
+		D_ERROR("Failed to prepare directory " DF_RC "", DP_RC(rc));
 		goto out2;
 	}
 
