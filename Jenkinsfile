@@ -193,6 +193,7 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     // Skip the stage if the CI_<distro>_NOBUILD parameter is set
     if (distro) {
         if (startedByUser() && paramsValue("CI_${distro}_NOBUILD", false)) {
+            println("[${env.STAGE_NAME}] Skipping build stage due to CI_${distro}_NOBUILD")
             return true
         }
     }
@@ -204,11 +205,13 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     }
     def any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
     if (any_pragma_skip) {
+        println("[${env.STAGE_NAME}] Skipping build stage for due to Skip-[${pragma_names}] pragma")
         return true
     }
 
     // Skip the stage if a specific DAOS RPM version is specified
     if (rpmTestVersion() != '') {
+        println("[${env.STAGE_NAME}] Skipping build stage for due to specific DAOS RPM version")
         return true
     }
 
@@ -265,6 +268,9 @@ pipeline {
         booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
                      defaultValue: false,
                      description: 'Do not cancel previous build.')
+        booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
+                     defaultValue: false,
+                     description: 'Build RPM and DEB packages, Skip unit tests.')
         string(name: 'CI_SCONS_ARGS',
                defaultValue: '',
                description: 'Arguments for scons when building DAOS')
