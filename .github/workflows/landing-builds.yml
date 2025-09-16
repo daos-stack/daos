@@ -44,7 +44,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:plucky
+            with: ubuntu:noble
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -99,7 +99,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:plucky
+            with: ubuntu:noble
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -159,7 +159,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:plucky
+            with: ubuntu:noble
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -324,7 +324,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:plucky
+            with: ubuntu:noble
           - distro: alma.8
             base: el.8
             with: almalinux:8
