@@ -18,7 +18,6 @@ pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
       $(utils/rpms/package_version.sh daos_spdk dev)                 \
       $(utils/rpms/package_version.sh daos_spdk debug)               \
       $(utils/rpms/package_version.sh isal dev)                      \
-      $(utils/rpms/package_version.sh isal debug)                    \
       $(utils/rpms/package_version.sh isal_crypto lib)               \
       $(utils/rpms/package_version.sh isal_crypto debug)             \
       $(utils/rpms/package_version.sh libfabric dev)                 \
