@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
   Copyright 2023-2024 Intel Corporation.
-  Copyright 2025 Google LLC
   Copyright 2025 Hewlett Packard Enterprise Development LP
   All rights reserved.
 
@@ -138,7 +137,7 @@ class ValgrindHelper():
     @staticmethod
     def setup_cmd(base, cmd, name):
         """Return a new command using valgrind"""
-        cmd_prefix = ["valgrind", "--leak-check=full", "--num-callers=20",
+        cmd_prefix = ["valgrind", "--leak-check=full", "--show-reachable=yes", "--num-callers=20",
                       "--error-limit=no", "--fair-sched=try",
                       f"--suppressions={ValgrindHelper.get_supp(base)}",
                       "--gen-suppressions=all", "--error-exitcode=42", "--xml=yes",
