@@ -192,7 +192,7 @@ Boolean skip_pragma_set(String name, String def_val='false') {
 Boolean skip_build_stage(String distro='', String compiler='gcc') {
     // Skip the stage if the CI_<distro>_NOBUILD parameter is set
     if (distro) {
-        if (paramsValue("CI_${distro}_NOBUILD", false)) {
+        if (startedByUser() && paramsValue("CI_${distro}_NOBUILD", false)) {
             return true
         }
     }
