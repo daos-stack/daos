@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (C) Copyright 2025 Google LLC
 
 # Install OS updates and packages as required for building DAOS on EL 9 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.

@@ -1,4 +1,5 @@
 #!/bin/bash
+# (C) Copyright 2025 Google LLC
 root="$(realpath "$(dirname "$(dirname "$(dirname "${BASH_SOURCE[0]}")")")")"
 set_lib_name() {
   comp="$1"; shift
