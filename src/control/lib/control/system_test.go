@@ -2012,3 +2012,66 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_SystemSelfHealEval(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *SystemSelfHealEvalReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemSelfHealEvalResp
+		expRespErr error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemSelfHealEvalReq request"),
+		},
+		"local failure": {
+			req:    new(SystemSelfHealEvalReq),
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    new(SystemSelfHealEvalReq),
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"success": {
+			req:     new(SystemSelfHealEvalReq),
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.DaosResp{}),
+			expResp: new(SystemSelfHealEvalResp),
+		},
+		"failure": {
+			req: new(SystemSelfHealEvalReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.DaosResp{
+				Status: -1,
+			}),
+			expErr: errors.New("DER_UNKNOWN"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemSelfHealEval(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemSelfHealEvalResp{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+		})
+	}
+}

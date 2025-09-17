@@ -54,6 +54,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemRebuildManage":      {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemSelfHealEval":       {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},

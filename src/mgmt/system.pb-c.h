@@ -29,6 +29,7 @@ typedef struct _Mgmt__SystemDrainResp Mgmt__SystemDrainResp;
 typedef struct _Mgmt__SystemRebuildManageReq             Mgmt__SystemRebuildManageReq;
 typedef struct _Mgmt__PoolRebuildManageResult            Mgmt__PoolRebuildManageResult;
 typedef struct _Mgmt__SystemRebuildManageResp            Mgmt__SystemRebuildManageResp;
+typedef struct _Mgmt__SystemSelfHealEvalReq              Mgmt__SystemSelfHealEvalReq;
 typedef struct _Mgmt__SystemQueryReq Mgmt__SystemQueryReq;
 typedef struct _Mgmt__SystemQueryResp Mgmt__SystemQueryResp;
 typedef struct _Mgmt__SystemEraseReq Mgmt__SystemEraseReq;
@@ -361,6 +362,20 @@ struct _Mgmt__SystemRebuildManageResp {
 };
 #define MGMT__SYSTEM_REBUILD_MANAGE_RESP__INIT                                                     \
 	{PROTOBUF_C_MESSAGE_INIT(&mgmt__system_rebuild_manage_resp__descriptor), 0, NULL}
+
+/*
+ * SystemSelfHealEvalReq supplies system self-heal eval parameters.
+ */
+struct _Mgmt__SystemSelfHealEvalReq {
+	ProtobufCMessage base;
+	/*
+	 * DAOS system name
+	 */
+	char            *sys;
+};
+#define MGMT__SYSTEM_SELF_HEAL_EVAL_REQ__INIT                                                      \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__system_self_heal_eval_req__descriptor),                    \
+	 (char *)protobuf_c_empty_string}
 
 /*
  * SystemQueryReq supplies system query parameters.
@@ -877,8 +892,24 @@ Mgmt__SystemRebuildManageResp *
 mgmt__system_rebuild_manage_resp__unpack(ProtobufCAllocator *allocator, size_t len,
 					 const uint8_t *data);
 void
-       mgmt__system_rebuild_manage_resp__free_unpacked(Mgmt__SystemRebuildManageResp *message,
-						       ProtobufCAllocator            *allocator);
+mgmt__system_rebuild_manage_resp__free_unpacked(Mgmt__SystemRebuildManageResp *message,
+						ProtobufCAllocator            *allocator);
+/* Mgmt__SystemSelfHealEvalReq methods */
+void
+mgmt__system_self_heal_eval_req__init(Mgmt__SystemSelfHealEvalReq *message);
+size_t
+mgmt__system_self_heal_eval_req__get_packed_size(const Mgmt__SystemSelfHealEvalReq *message);
+size_t
+mgmt__system_self_heal_eval_req__pack(const Mgmt__SystemSelfHealEvalReq *message, uint8_t *out);
+size_t
+mgmt__system_self_heal_eval_req__pack_to_buffer(const Mgmt__SystemSelfHealEvalReq *message,
+						ProtobufCBuffer                   *buffer);
+Mgmt__SystemSelfHealEvalReq *
+mgmt__system_self_heal_eval_req__unpack(ProtobufCAllocator *allocator, size_t len,
+					const uint8_t *data);
+void
+       mgmt__system_self_heal_eval_req__free_unpacked(Mgmt__SystemSelfHealEvalReq *message,
+						      ProtobufCAllocator          *allocator);
 /* Mgmt__SystemQueryReq methods */
 void   mgmt__system_query_req__init
                      (Mgmt__SystemQueryReq         *message);
@@ -1160,6 +1191,8 @@ typedef void (*Mgmt__PoolRebuildManageResult_Closure)(const Mgmt__PoolRebuildMan
 						      void *closure_data);
 typedef void (*Mgmt__SystemRebuildManageResp_Closure)(const Mgmt__SystemRebuildManageResp *message,
 						      void *closure_data);
+typedef void (*Mgmt__SystemSelfHealEvalReq_Closure)(const Mgmt__SystemSelfHealEvalReq *message,
+						    void *closure_data);
 typedef void (*Mgmt__SystemQueryReq_Closure)
                  (const Mgmt__SystemQueryReq *message,
                   void *closure_data);
@@ -1230,6 +1263,7 @@ extern const ProtobufCMessageDescriptor mgmt__system_drain_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_rebuild_manage_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_manage_result__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_rebuild_manage_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__system_self_heal_eval_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_query_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_erase_req__descriptor;
