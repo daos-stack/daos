@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /* Copyright 2016-2024, Intel Corporation */
+/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
 
 /*
  * memblock.c -- implementation of memory block
@@ -728,7 +729,7 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	uint16_t num = m->size_idx;
 	uint32_t pos = m->block_off % RUN_BITS_PER_VALUE;
 
-	ASSERT_rt(num > 0 && num <= RUN_BITS_PER_VALUE);
+	D_ASSERT(num > 0 && num <= RUN_BITS_PER_VALUE);
 	bmask = ULOG_ENTRY_TO_VAL(pos, num);
 #endif
 
@@ -1571,7 +1572,8 @@ memblock_from_offset_opt(struct palloc_heap *heap, uint64_t off, int size)
 		off -= m.block_off * unit_size;
 	}
 
-	struct alloc_class_collection *acc = heap_alloc_classes(heap);
+	struct mbrt                   *mb  = heap_mbrt_get_mb(heap, m.zone_id);
+	struct alloc_class_collection *acc = mbrt_alloc_classes(mb);
 
 	if (acc != NULL) {
 		struct alloc_class *ac = alloc_class_by_run(acc,

@@ -9,6 +9,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -164,6 +165,99 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 				t.Fatal("expected no superblock written")
 			} else {
 				test.CmpErr(t, syscall.ENOENT, err)
+			}
+		})
+	}
+}
+
+func TestServer_EngineInstance_updateIncarnation(t *testing.T) {
+	for name, tc := range map[string]struct {
+		noTestSubdirs    bool
+		reqIncarnation   uint64
+		startIncarnation uint64
+		startSuperblock  *Superblock
+		expErr           error
+		expIncarnation   uint64
+		expSuperblock    *Superblock
+		expWritten       bool
+	}{
+		"nil superblock": {
+			reqIncarnation: 123,
+			expErr:         errors.New("nil superblock"),
+			expIncarnation: 123, // set in memory even if we can't write the superblock
+		},
+		"superblock write failed": {
+			noTestSubdirs:   true,
+			reqIncarnation:  456,
+			startSuperblock: &Superblock{},
+			expErr:          syscall.ENOENT,
+			expIncarnation:  456,
+			expSuperblock:   &Superblock{Incarnation: 456},
+		},
+		"superblock incarnation unset": {
+			reqIncarnation:  456,
+			startSuperblock: &Superblock{},
+			expIncarnation:  456,
+			expSuperblock:   &Superblock{Incarnation: 456},
+			expWritten:      true,
+		},
+		"superblock incarnation set": {
+			reqIncarnation:  456,
+			startSuperblock: &Superblock{Incarnation: 123},
+			expIncarnation:  456,
+			expSuperblock:   &Superblock{Incarnation: 456},
+			expWritten:      true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			testEngineIdx := 0
+			baseDir, cleanup := test.CreateTestDir(t)
+			defer cleanup()
+			mdDir := filepath.Join(baseDir, "daos_control", fmt.Sprintf("engine%d", testEngineIdx))
+
+			if !tc.noTestSubdirs {
+				if err := os.MkdirAll(mdDir, 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			storageProv := storage.NewProvider(logging.FromContext(ctx), testEngineIdx, &storage.Config{
+				ControlMetadata: storage.ControlMetadata{Path: baseDir},
+			}, nil, nil, nil, nil)
+			ei := newTestEngine(logging.FromContext(ctx), false, storageProv, &engine.Config{})
+			ei.incarnation = tc.startIncarnation
+			ei.setSuperblock(tc.startSuperblock)
+
+			err := ei.updateIncarnation(&srvpb.NotifyReadyReq{
+				Incarnation: tc.reqIncarnation,
+			})
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expIncarnation, ei.incarnation, "")
+			test.CmpAny(t, "superblock", tc.expSuperblock, ei.getSuperblock())
+
+			sbBytes, err := os.ReadFile(filepath.Join(mdDir, "superblock"))
+			if tc.expWritten {
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				writtenSb := &Superblock{}
+				if err := writtenSb.Unmarshal(sbBytes); err != nil {
+					t.Fatal(err)
+				}
+
+				test.CmpAny(t, "written superblock", tc.expSuperblock, writtenSb)
+			} else {
+				if err == nil {
+					t.Fatal("expected superblock NOT to be written")
+				}
+
+				if !os.IsNotExist(err) {
+					t.Fatal(err)
+				}
 			}
 		})
 	}

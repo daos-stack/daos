@@ -7,13 +7,10 @@
 
 // This file imports all of the DAOS dRPC module/method IDs.
 
-package drpc
+package daos
 
 import (
-	fmt "fmt"
-
-	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
+	"fmt"
 )
 
 // #cgo CFLAGS: -I${SRCDIR}/../../include
@@ -22,10 +19,8 @@ import "C"
 
 const moduleMethodOffset = 100
 
-type ModuleID int32
-
-func (id ModuleID) String() string {
-	if name, ok := map[ModuleID]string{
+func moduleName(id int32) string {
+	if name, ok := map[int32]string{
 		ModuleSecurityAgent: "Agent Security",
 		ModuleMgmt:          "Management",
 		ModuleSrv:           "Server",
@@ -37,48 +32,20 @@ func (id ModuleID) String() string {
 	return fmt.Sprintf("unknown module id: %d", id)
 }
 
-func (id ModuleID) GetMethod(methodID int32) (Method, error) {
-	if m, ok := map[ModuleID]Method{
-		ModuleSecurityAgent: securityAgentMethod(methodID),
-		ModuleMgmt:          MgmtMethod(methodID),
-		ModuleSrv:           srvMethod(methodID),
-		ModuleSecurity:      securityMethod(methodID),
-	}[id]; ok {
-		if !m.IsValid() {
-			return nil, errors.Errorf("invalid method %d for module %s",
-				methodID, id)
-		}
-		return m, nil
-	}
-
-	return nil, errors.Errorf("unknown module id %d", id)
-}
-
-func (id ModuleID) ID() int32 {
-	return int32(id)
-}
-
 const (
 	// ModuleSecurityAgent is the dRPC module for security tasks in DAOS agent
-	ModuleSecurityAgent ModuleID = C.DRPC_MODULE_SEC_AGENT
+	ModuleSecurityAgent int32 = C.DRPC_MODULE_SEC_AGENT
 	// ModuleMgmt is the dRPC module for management service tasks
-	ModuleMgmt ModuleID = C.DRPC_MODULE_MGMT
+	ModuleMgmt int32 = C.DRPC_MODULE_MGMT
 	// ModuleSrv is the dRPC module for tasks relating to server setup
-	ModuleSrv ModuleID = C.DRPC_MODULE_SRV
+	ModuleSrv int32 = C.DRPC_MODULE_SRV
 	// ModuleSecurity is the dRPC module for security tasks in DAOS server
-	ModuleSecurity ModuleID = C.DRPC_MODULE_SEC
+	ModuleSecurity int32 = C.DRPC_MODULE_SEC
 )
-
-type Method interface {
-	ID() int32
-	Module() ModuleID
-	String() string
-	IsValid() bool
-}
 
 type securityAgentMethod int32
 
-func (m securityAgentMethod) Module() ModuleID {
+func (m securityAgentMethod) Module() int32 {
 	return ModuleSecurityAgent
 }
 
@@ -93,18 +60,7 @@ func (m securityAgentMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
-}
-
-// IsValid sanity checks the Method ID is within expected bounds.
-func (m securityAgentMethod) IsValid() bool {
-	startMethodID := int32(m.Module()) * moduleMethodOffset
-
-	if m.ID() <= startMethodID || m.ID() >= int32(C.NUM_DRPC_SEC_AGENT_METHODS) {
-		return false
-	}
-
-	return true
+	return fmt.Sprintf("%s:%d", moduleName(m.Module()), m.ID())
 }
 
 const (
@@ -114,7 +70,7 @@ const (
 
 type MgmtMethod int32
 
-func (m MgmtMethod) Module() ModuleID {
+func (m MgmtMethod) Module() int32 {
 	return ModuleMgmt
 }
 
@@ -158,23 +114,20 @@ func (m MgmtMethod) String() string {
 		MethodPoolGetProp:          "PoolGetProp",
 		MethodPoolUpgrade:          "PoolUpgrade",
 		MethodLedManage:            "LedManage",
+		MethodCheckerStart:         "CheckerStart",
+		MethodCheckerStop:          "CheckerStop",
+		MethodCheckerQuery:         "CheckerQuery",
+		MethodCheckerProp:          "CheckerProp",
+		MethodCheckerAction:        "CheckerAction",
 		MethodSetupClientTelemetry: "SetupClientTelemetry",
+		MethodCheckerSetPolicy:     "CheckerSetPolicy",
+		MethodPoolRebuildStart:     "PoolRebuildStart",
+		MethodPoolRebuildStop:      "PoolRebuildStop",
 	}[m]; ok {
 		return s
 	}
 
-	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
-}
-
-// IsValid sanity checks the Method ID is within expected bounds.
-func (m MgmtMethod) IsValid() bool {
-	startMethodID := int32(m.Module()) * moduleMethodOffset
-
-	if m.ID() <= startMethodID || m.ID() >= int32(C.NUM_DRPC_MGMT_METHODS) {
-		return false
-	}
-
-	return true
+	return fmt.Sprintf("%s:%d", moduleName(m.Module()), m.ID())
 }
 
 const (
@@ -242,6 +195,8 @@ const (
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
+	// MethodLedManage defines a method to manage a VMD device LED state
+	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
 	// MethodCheckerStart defines a method for starting the checker
 	MethodCheckerStart MgmtMethod = C.DRPC_METHOD_MGMT_CHK_START
 	// MethodCheckerStop defines a method for stopping the checker
@@ -254,24 +209,28 @@ const (
 	MethodCheckerAction MgmtMethod = C.DRPC_METHOD_MGMT_CHK_ACT
 	// MethodPoolUpgrade defines a method for upgrade pool
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
-	// MethodLedManage defines a method to manage a VMD device LED state
-	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
 	// MethodSetupClientTelemetry defines a method to setup client telemetry
 	MethodSetupClientTelemetry MgmtMethod = C.DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM
+	// MethodCheckerSetPolicy defines a method to set policy for the checker
+	MethodCheckerSetPolicy MgmtMethod = C.DRPC_METHOD_MGMT_CHK_SET_POLICY
+	// MethodPoolRebuildStart defines a method start an interactive pool rebuild
+	MethodPoolRebuildStart MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_START
+	// MethodPoolRebuildStop defines a method stop an interactive pool rebuild
+	MethodPoolRebuildStop MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_STOP
 )
 
-type srvMethod int32
+type SrvMethod int32
 
-func (m srvMethod) Module() ModuleID {
+func (m SrvMethod) Module() int32 {
 	return ModuleSrv
 }
 
-func (m srvMethod) ID() int32 {
+func (m SrvMethod) ID() int32 {
 	return int32(m)
 }
 
-func (m srvMethod) String() string {
-	if s, ok := map[srvMethod]string{
+func (m SrvMethod) String() string {
+	if s, ok := map[SrvMethod]string{
 		MethodNotifyReady:         "notify ready",
 		MethodClusterEvent:        "cluster event",
 		MethodGetPoolServiceRanks: "get pool service ranks",
@@ -281,44 +240,33 @@ func (m srvMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
-}
-
-// IsValid sanity checks the Method ID is within expected bounds.
-func (m srvMethod) IsValid() bool {
-	startMethodID := int32(m.Module()) * moduleMethodOffset
-
-	if m.ID() <= startMethodID || m.ID() >= int32(C.NUM_DRPC_SRV_METHODS) {
-		return false
-	}
-
-	return true
+	return fmt.Sprintf("%s:%d", moduleName(m.Module()), m.ID())
 }
 
 const (
 	// MethodNotifyReady is a ModuleSrv method
-	MethodNotifyReady srvMethod = C.DRPC_METHOD_SRV_NOTIFY_READY
+	MethodNotifyReady SrvMethod = C.DRPC_METHOD_SRV_NOTIFY_READY
 	// MethodGetPoolServiceRanks requests the service ranks for a pool
-	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
+	MethodGetPoolServiceRanks SrvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
 	// MethodPoolFindByLabel requests the service ranks and UUID for a pool
-	MethodPoolFindByLabel srvMethod = C.DRPC_METHOD_SRV_POOL_FIND_BYLABEL
+	MethodPoolFindByLabel SrvMethod = C.DRPC_METHOD_SRV_POOL_FIND_BYLABEL
 	// MethodClusterEvent notifies of a cluster event in the I/O Engine.
-	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
+	MethodClusterEvent SrvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
 	// MethodCheckerListPools requests the list of pools from the MS
-	MethodCheckerListPools srvMethod = C.DRPC_METHOD_CHK_LIST_POOL // TODO (DAOS-16126): Merge with MethodListPools
+	MethodCheckerListPools SrvMethod = C.DRPC_METHOD_CHK_LIST_POOL // TODO (DAOS-16126): Merge with MethodListPools
 	// MethodCheckerRegisterPool registers a pool with the MS
-	MethodCheckerRegisterPool srvMethod = C.DRPC_METHOD_CHK_REG_POOL
+	MethodCheckerRegisterPool SrvMethod = C.DRPC_METHOD_CHK_REG_POOL
 	// MethodCheckerDeregisterPool deregisters a pool with the MS
-	MethodCheckerDeregisterPool srvMethod = C.DRPC_METHOD_CHK_DEREG_POOL
+	MethodCheckerDeregisterPool SrvMethod = C.DRPC_METHOD_CHK_DEREG_POOL
 	// MethodCheckerReport reports a checker finding to the MS
-	MethodCheckerReport srvMethod = C.DRPC_METHOD_CHK_REPORT
+	MethodCheckerReport SrvMethod = C.DRPC_METHOD_CHK_REPORT
 	// MethodListPools requests the list of pools in the system
-	MethodListPools srvMethod = C.DRPC_METHOD_SRV_LIST_POOLS
+	MethodListPools SrvMethod = C.DRPC_METHOD_SRV_LIST_POOLS
 )
 
 type securityMethod int32
 
-func (m securityMethod) Module() ModuleID {
+func (m securityMethod) Module() int32 {
 	return ModuleSecurity
 }
 
@@ -333,31 +281,10 @@ func (m securityMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
-}
-
-// IsValid sanity checks the Method ID is within expected bounds.
-func (m securityMethod) IsValid() bool {
-	startMethodID := int32(m.Module()) * moduleMethodOffset
-
-	if m.ID() <= startMethodID || m.ID() >= int32(C.NUM_DRPC_SEC_METHODS) {
-		return false
-	}
-
-	return true
+	return fmt.Sprintf("%s:%d", moduleName(m.Module()), m.ID())
 }
 
 const (
 	// MethodValidateCredentials is a ModuleSecurity method
 	MethodValidateCredentials securityMethod = C.DRPC_METHOD_SEC_VALIDATE_CREDS
 )
-
-// Marshal is a utility function that can be used by dRPC method handlers to
-// marshal their method-specific response to be passed back to the ModuleService.
-func Marshal(message proto.Message) ([]byte, error) {
-	msgBytes, err := proto.Marshal(message)
-	if err != nil {
-		return nil, MarshalingFailure()
-	}
-	return msgBytes, nil
-}

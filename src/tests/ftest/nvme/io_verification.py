@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -46,13 +47,13 @@ class NvmeIoVerification(IorTestBase):
         ior_processes = self.params.get("np", '/run/ior/*')
         ior_transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
         ior_block_size = self.ior_cmd.block_size.value
-        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
+        num_pools = self.params.get("num_pools", '/run/pool/*')
         job_manager = self.get_ior_job_manager_command()
 
         # Loop for every pool size
-        for index in range(ior_seq_pool_qty):
+        for index in range(num_pools):
             # Create and connect to a pool with namespace
-            self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
+            self.add_pool(namespace=f"/run/pool_{index}/*")
 
             # get pool info
             self.pool.get_info()
@@ -112,15 +113,15 @@ class NvmeIoVerification(IorTestBase):
         ior_processes = self.params.get("np", '/run/ior/*')
         ior_transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
         ior_block_size = self.ior_cmd.block_size.value
-        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
+        num_pools = self.params.get("num_pools", '/run/pool/*')
         ior_flag_write = self.params.get("write", '/run/ior/*/')
         ior_flag_read = self.params.get("read", '/run/ior/*/')
         job_manager = self.get_ior_job_manager_command()
 
         # Loop for every pool size
-        for index in range(ior_seq_pool_qty):
+        for index in range(num_pools):
             # Create and connect to a pool with namespace
-            self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
+            self.add_pool(namespace="/run/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math"
 	"os/user"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -548,9 +549,8 @@ func (pqr *PoolQueryResp) UpdateState() error {
 		pqr.State = daos.PoolServiceStateUnknown
 	}
 
-	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
 	if pqr.State == daos.PoolServiceStateReady && pqr.DisabledTargets > 0 {
-		pqr.State = daos.PoolServiceStateDegraded
+		pqr.State = daos.PoolServiceStateTargetsExcluded
 	}
 
 	return nil
@@ -676,14 +676,23 @@ type PoolGetPropReq struct {
 
 // PoolGetProp sends a pool get-prop request to the pool service leader.
 func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*daos.PoolProperty, error) {
-	// Get all by default.
 	if len(req.Properties) == 0 {
+		// Get all by default.
 		allProps := daos.PoolProperties()
 		req.Properties = make([]*daos.PoolProperty, 0, len(allProps))
 		for _, key := range allProps.Keys() {
 			hdlr := allProps[key]
 			req.Properties = append(req.Properties, hdlr.GetProperty(key))
 		}
+	} else {
+		for _, prop := range req.Properties {
+			if prop == nil {
+				return nil, errors.New("nil property")
+			}
+		}
+		slices.SortFunc(req.Properties, func(a, b *daos.PoolProperty) int {
+			return strings.Compare(a.Name, b.Name)
+		})
 	}
 
 	pbReq := &mgmtpb.PoolGetPropReq{
@@ -723,6 +732,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		pbMap[prop.GetNumber()] = prop
 	}
 
+	// We've already sorted req.Properties above.
 	resp := make([]*daos.PoolProperty, 0, len(req.Properties))
 	for _, prop := range req.Properties {
 		pbProp, found := pbMap[prop.Number]
@@ -1311,4 +1321,74 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		metaBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
 
 	return metaBytes, nvmeBytes, nil
+}
+
+// PoolRebuildOpcode indicates the type of interactive rebuild operation to be triggered.
+type PoolRebuildOpCode int32
+
+// PoolRebuildOpCode definitions for supported interactive rebuild operations.
+const (
+	PoolRebuildOpCodeUnknown PoolRebuildOpCode = iota
+	PoolRebuildOpCodeStart
+	PoolRebuildOpCodeStop
+)
+
+func (op PoolRebuildOpCode) String() string {
+	return map[PoolRebuildOpCode]string{
+		PoolRebuildOpCodeUnknown: "unknown",
+		PoolRebuildOpCodeStart:   "start",
+		PoolRebuildOpCodeStop:    "stop",
+	}[op]
+}
+
+// PoolRebuildReq contains pool-rebuild operation parameters. ID identifies the pool on which the
+// rebuild operation (specified by the opcode) should be run.
+type PoolRebuildReq struct {
+	poolRequest
+	ID    string
+	Op    PoolRebuildOpCode
+	Force bool
+}
+
+// PoolRebuild sends a pool rebuild request relating to the requested opcode to the pool service
+// leader.
+func PoolRebuild(ctx context.Context, rpcClient UnaryInvoker, req *PoolRebuildReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T in PoolRebuild()", req)
+	}
+
+	if req.Op == PoolRebuildOpCodeStart {
+		if req.Force {
+			return errors.Errorf("force flag not supported with pool-rebuild opcode %s",
+				req.Op)
+		}
+
+		pbReq := &mgmtpb.PoolRebuildStartReq{
+			Sys: req.getSystem(rpcClient),
+			Id:  req.ID,
+		}
+		req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+			return mgmtpb.NewMgmtSvcClient(conn).PoolRebuildStart(ctx, pbReq)
+		})
+		rpcClient.Debugf("pool-rebuild request: %s\n", pbUtil.Debug(pbReq))
+	} else if req.Op == PoolRebuildOpCodeStop {
+		pbReq := &mgmtpb.PoolRebuildStopReq{
+			Sys:   req.getSystem(rpcClient),
+			Id:    req.ID,
+			Force: req.Force,
+		}
+		req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+			return mgmtpb.NewMgmtSvcClient(conn).PoolRebuildStop(ctx, pbReq)
+		})
+		rpcClient.Debugf("pool-rebuild request: %s\n", pbUtil.Debug(pbReq))
+	} else {
+		return errors.Errorf("unrecognized pool-rebuild opcode %d", req.Op)
+	}
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	return errors.Wrapf(ur.getMSError(), "pool-rebuild %s failed", req.Op.String())
 }

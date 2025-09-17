@@ -511,6 +511,11 @@ dss_init_state_set(enum dss_init_state state)
 {
 }
 
+void
+dss_set_join_version(daos_version_t version)
+{
+}
+
 int
 dss_module_setup_all()
 {
@@ -588,6 +593,30 @@ mock_ds_mgmt_pool_upgrade_setup(void)
 {
 	ds_mgmt_pool_upgrade_return = 0;
 	uuid_clear(ds_mgmt_pool_upgrade_uuid);
+}
+
+int    ds_mgmt_pool_rebuild_return;
+uuid_t ds_mgmt_pool_rebuild_uuid;
+
+int
+ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	uuid_copy(ds_mgmt_pool_rebuild_uuid, pool_uuid);
+	return ds_mgmt_pool_rebuild_return;
+}
+
+int
+ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks)
+{
+	uuid_copy(ds_mgmt_pool_rebuild_uuid, pool_uuid);
+	return ds_mgmt_pool_rebuild_return;
+}
+
+void
+mock_ds_mgmt_pool_rebuild_setup(void)
+{
+	ds_mgmt_pool_rebuild_return = 0;
+	uuid_clear(ds_mgmt_pool_rebuild_uuid);
 }
 
 int	ds_mgmt_dev_manage_led_return;
@@ -674,7 +703,13 @@ ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf)
 }
 
 int
-ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all)
+ds_mgmt_check_act(uint64_t seq, uint32_t act)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_set_policy(uint32_t policy_nr, Mgmt__CheckInconsistPolicy **policies)
 {
 	return 0;
 }
@@ -683,4 +718,11 @@ bool
 ds_mgmt_check_enabled(void)
 {
 	return true;
+}
+
+int
+ds_mgmt_get_group_status(uint32_t group_version, d_rank_t **dead_ranks_out,
+			 size_t *n_dead_ranks_out)
+{
+	return 0;
 }

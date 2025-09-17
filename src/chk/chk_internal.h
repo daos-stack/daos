@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,9 +31,10 @@
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos/rpc.h.
+ * Please increment DAOS_CHK_VERSION whenever the protocol is changed.
  */
-#define DAOS_CHK_VERSION	1
 
+/* clang-format off */
 #define CHK_PROTO_SRV_RPC_LIST									\
 	X(CHK_START,										\
 		0,	&CQF_chk_start,		ds_chk_start_hdlr,	&chk_start_co_ops),	\
@@ -53,7 +55,10 @@
 	X(CHK_REPORT,										\
 		0,	&CQF_chk_report,	ds_chk_report_hdlr,	NULL),			\
 	X(CHK_REJOIN,										\
-		0,	&CQF_chk_rejoin,	ds_chk_rejoin_hdlr,	NULL)
+		0,	&CQF_chk_rejoin,	ds_chk_rejoin_hdlr,	NULL),			\
+	X(CHK_SET_POLICY,									\
+		0,	&CQF_chk_set_policy,	ds_chk_set_policy_hdlr,	&chk_set_policy_co_ops)
+/* clang-format on */
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -271,6 +276,22 @@ CRT_RPC_DECLARE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 
 CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
+/* clang-format off */
+/*
+ * CHK_SET_POLICY:
+ * From check leader to check engine to set policy during check instance running.
+ */
+#define DAOS_ISEQ_CHK_SET_POLICY						\
+	((uint64_t)		(cspi_gen)		CRT_VAR)		\
+	((struct chk_policy)	(cspi_policies)		CRT_ARRAY)
+
+#define DAOS_OSEQ_CHK_SET_POLICY						\
+	((int32_t)		(cspo_status)		CRT_VAR)		\
+	((uint32_t)		(cspo_padding)		CRT_VAR)
+
+CRT_RPC_DECLARE(chk_set_policy, DAOS_ISEQ_CHK_SET_POLICY, DAOS_OSEQ_CHK_SET_POLICY);
+/* clang-format on */
+
 /* dkey for check DB under sys_db */
 #define CHK_DB_TABLE		"chk"
 
@@ -308,6 +329,8 @@ CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
 #define CHK_MSG_BUFLEN		320
 
+#define CHK_INTERACT_OPTION_MAX 3
+
 /*
  * NOTE: Please be careful when change CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
  *	 to avoid hole is the struct chk_property.
@@ -342,11 +365,6 @@ enum chk_start_flags {
 enum chk_stop_flags {
 	/* The check on some pools have been stopped. */
 	CSF_POOL_STOPPED	= 1,
-};
-
-enum chk_act_flags {
-	/* The action is applicable to the same kind of inconssitency. */
-	CAF_FOR_ALL		= 1,
 };
 
 enum chk_mbs_flags {
@@ -468,8 +486,7 @@ struct chk_bookmark {
  *
  * About the policies:
  *
- * The repair policies are shared among all pools. For some specified inconsistency, its repair
- * policy may be changed during the check scan via CHECK_ACT dRPC downcall with 'for_all' flag.
+ * The repair policies are shared among all pools.
  *
  * When check start, if do not specify policies, the former policies will be reused. Currently,
  * we do not support to set policy just for special inconsistency class, means that either all
@@ -520,8 +537,10 @@ struct chk_instance {
 
 	struct btr_root		 ci_pending_btr;
 	daos_handle_t		 ci_pending_hdl;
+	d_list_t                 ci_pending_list;
 
-	d_list_t		 ci_pool_shutdown_list;
+	d_list_t                 ci_interaction_filter_list;
+	d_list_t                 ci_pool_shutdown_list;
 
 	/* The slowest phase for the failed pool or rank. */
 	uint32_t		 ci_slowest_fail_phase;
@@ -623,19 +642,22 @@ struct chk_pool_rec {
 
 struct chk_pending_rec {
 	/* Link into chk_pool_rec::cpr_pending_list. */
-	d_list_t		 cpr_pool_link;
+	d_list_t  cpr_pool_link;
 	/* Link into chk_rank_rec::crr_pending_list. */
-	d_list_t		 cpr_rank_link;
-	uuid_t			 cpr_uuid;
-	uint64_t		 cpr_seq;
-	d_rank_t		 cpr_rank;
-	uint32_t		 cpr_class;
-	uint32_t		 cpr_action;
-	uint32_t		 cpr_busy:1,
-				 cpr_exiting:1,
-				 cpr_on_leader:1;
-	ABT_mutex		 cpr_mutex;
-	ABT_cond		 cpr_cond;
+	d_list_t  cpr_rank_link;
+	/* Link into chk_instance::ci_pending_list or chk_instance::ci_interaction_filter_list. */
+	d_list_t  cpr_ins_link;
+	uuid_t    cpr_uuid;
+	uint64_t  cpr_seq;
+	d_rank_t  cpr_rank;
+	uint32_t  cpr_class;
+	uint32_t  cpr_action;
+	uint32_t  cpr_busy : 1, cpr_exiting : 1, cpr_on_leader : 1;
+	uint32_t  cpr_option_nr;
+	/* Currently, support at most three options, can be extended if necessary in future. */
+	uint32_t  cpr_options[CHK_INTERACT_OPTION_MAX];
+	ABT_mutex cpr_mutex;
+	ABT_cond  cpr_cond;
 };
 
 struct chk_report_unit {
@@ -682,12 +704,14 @@ extern struct crt_corpc_ops	chk_mark_co_ops;
 extern struct crt_corpc_ops	chk_act_co_ops;
 extern struct crt_corpc_ops	chk_cont_list_co_ops;
 extern struct crt_corpc_ops	chk_pool_start_co_ops;
+extern struct crt_corpc_ops     chk_set_policy_co_ops;
 
 extern btr_ops_t		chk_pool_ops;
 extern btr_ops_t		chk_pending_ops;
 extern btr_ops_t		chk_rank_ops;
 extern btr_ops_t		chk_cont_ops;
 
+/* clang-format off */
 /* chk_common.c */
 
 void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
@@ -726,14 +750,16 @@ int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t 
 void chk_pool_shard_cleanup(struct chk_instance *ins);
 
 int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
-		    uint64_t seq, uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr);
+		    uint64_t seq, uint32_t rank, uint32_t cla, uint32_t option_nr,
+		    uint32_t *options, struct chk_pending_rec **cpr);
 
-int chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked,
-		    struct chk_pending_rec **cpr);
+int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
 
 int chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr);
 
 void chk_pending_destroy(struct chk_pending_rec *cpr);
+
+int chk_policy_refresh(uint32_t policy_nr, struct chk_policy *policies, struct chk_property *prop);
 
 int chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
 		     uint32_t policy_nr, struct chk_policy *policies,
@@ -763,7 +789,7 @@ int chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *ins_st
 
 int chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version);
 
-int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t flags);
+int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t act);
 
 int chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *count);
 
@@ -772,6 +798,8 @@ int chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t fl
 int chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label, uint64_t seq,
 			uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
 			struct rsvc_hint *hint);
+
+int chk_engine_set_policy(uint64_t gen, uint32_t policy_nr, struct chk_policy *policies);
 
 int chk_engine_notify(struct chk_iv *iv);
 
@@ -826,7 +854,7 @@ int chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t
 int chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint32_t version);
 
 int chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
-		   uint32_t act, d_rank_t rank, bool for_all);
+		   uint32_t act, d_rank_t rank);
 
 int chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb, void *args);
 
@@ -845,6 +873,9 @@ int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act,
 
 int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags,
 		      uint32_t *pool_nr, uuid_t **pools);
+
+int chk_set_policy_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t policy_nr,
+			  struct chk_policy *policies);
 
 /* chk_updcall.c */
 
@@ -883,6 +914,7 @@ int chk_traverse_pools(sys_db_trav_cb_t cb, void *args);
 void chk_vos_init(void);
 
 void chk_vos_fini(void);
+/* clang-format on */
 
 static inline bool
 chk_is_ins_reset(struct chk_instance *ins, uint32_t flags)
@@ -1229,5 +1261,42 @@ chk_report_seq_gen(struct chk_instance *ins)
 
 	return ins->ci_seq;
 }
+
+static inline void
+chk_uuid_unparse(struct chk_instance *ins, const uuid_t uuid, char *uuid_str)
+{
+	if (ins->ci_is_leader == 1)
+		uuid_unparse_upper(uuid, uuid_str);
+	else
+		uuid_unparse_lower(uuid, uuid_str);
+}
+
+static inline bool
+chk_is_valid_uuid_string(struct chk_instance *ins, const char *uuid_str)
+{
+	if (ins->ci_is_leader == 1 && daos_is_valid_uuid_string(uuid_str, UUID_SST_UPPER))
+		return true;
+
+	if (ins->ci_is_leader == 0 && daos_is_valid_uuid_string(uuid_str, UUID_SST_LOWER))
+		return true;
+
+	return false;
+}
+
+static inline bool
+chk_is_valid_action(struct chk_pending_rec *pending, uint32_t act)
+{
+	int i;
+
+	for (i = 0; i < pending->cpr_option_nr; i++) {
+		if (act == pending->cpr_options[i])
+			return true;
+	}
+
+	return false;
+}
+
+int
+chk_rpc_protocol(uint8_t *obj_ver);
 
 #endif /* __CHK_INTERNAL_H__ */
