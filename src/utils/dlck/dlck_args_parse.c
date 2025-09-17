@@ -98,3 +98,11 @@ free_file:
 
 	return rc;
 }
+
+enum dlck_cmd
+parse_command(const char *arg)
+{
+	/** placeholder for future commands */
+
+	return DLCK_CMD_UNKNOWN;
+}

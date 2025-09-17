@@ -488,6 +488,7 @@ fi
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
 %{_bindir}/ddb
+%{_bindir}/dlck
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libchk.so
