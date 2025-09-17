@@ -7,6 +7,8 @@
 #ifndef __DAOS_DLCK_H__
 #define __DAOS_DLCK_H__
 
+#include <daos_types.h>
+
 #define DLCK_PRINT_INDENT_MAX 10
 #define DLCK_PRINT_INDENT     '-'
 
@@ -136,5 +138,19 @@ dlck_print_indent_dec(struct dlck_print *dp)
 			D_ASSERT(cond);                                                            \
 		}                                                                                  \
 	} while (0)
+
+/**
+ * Validate the integrity of a btree.
+ *
+ * \param[in]	toh	Tree handle.
+ * \param[in]	dp	DLCK print utility.
+ *
+ * \retval DER_SUCCESS		The tree is correct.
+ * \retval -DER_NOTYPE		The tree is malformed.
+ * \retval -DER_NONEXIST	The tree is malformed.
+ * \retval -DER_*		Possibly other errors.
+ */
+int
+dlck_dbtree_check(daos_handle_t toh, struct dlck_print *dp);
 
 #endif /** __DAOS_DLCK_H__ */

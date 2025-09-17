@@ -1751,13 +1751,26 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	/* Cache container table btree hdl */
 	rc = dbtree_open_inplace_ex(&pool_df->pd_cont_root, &pool->vp_uma, DAOS_HDL_INVAL, pool, dp,
 				    &pool->vp_cont_th);
-	dlck_print_indent_dec(dp);
-	DLCK_PRINT(dp, "Containers tree... ");
 	if (rc) {
+		dlck_print_indent_dec(dp);
+		DLCK_PRINT(dp, "Containers tree... ");
 		DLCK_PRINT_RC(dp, rc);
 		D_ERROR("Container Tree open failed\n");
 		goto out;
 	}
+
+	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
+	if (dp != NULL) {
+		rc = dlck_dbtree_check(pool->vp_cont_th, dp);
+		if (rc != DER_SUCCESS) {
+			dlck_print_indent_dec(dp);
+			DLCK_PRINT(dp, "Containers tree... ");
+			DLCK_PRINT_RC(dp, rc);
+			goto out;
+		}
+	}
+	dlck_print_indent_dec(dp);
+	DLCK_PRINT(dp, "Containers tree... ");
 	DLCK_PRINT_OK(dp);
 
 	pool->vp_metrics = metrics;

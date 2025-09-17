@@ -603,8 +603,7 @@ ik_btr_iterate(void **state)
 		uint64_t	key;
 
 		if (i == 0 || (del != 0 && d <= del)) {
-			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT,
-						   NULL, NULL);
+			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL, NULL);
 			if (rc == -DER_NONEXIST)
 				break;
 

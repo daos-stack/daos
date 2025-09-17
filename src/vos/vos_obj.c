@@ -1146,8 +1146,7 @@ key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t flags
 
 	rc = dbtree_iter_probe(oiter->it_hdl,
 			       vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc,
-			       vos_iter_intent(&oiter->it_iter),
-			       NULL, anchor);
+			       vos_iter_intent(&oiter->it_iter), NULL, anchor, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1297,8 +1296,8 @@ singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 	key.sk_epoch = entry->ie_epoch;
 	key.sk_minor_epc = entry->ie_minor_epc;
 
-	rc = dbtree_iter_probe(oiter->it_hdl, opc,
-			       vos_iter_intent(&oiter->it_iter), &kiov, NULL);
+	rc = dbtree_iter_probe(oiter->it_hdl, opc, vos_iter_intent(&oiter->it_iter), &kiov, NULL,
+			       NULL);
 	if (rc != 0)
 		return rc;
 
@@ -1398,8 +1397,8 @@ singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t fla
 		opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
 	}
 
-	rc = dbtree_iter_probe(oiter->it_hdl, opc,
-			       vos_iter_intent(&oiter->it_iter), NULL, anchor);
+	rc = dbtree_iter_probe(oiter->it_hdl, opc, vos_iter_intent(&oiter->it_iter), NULL, anchor,
+			       NULL);
 	if (rc != 0)
 		return rc;
 

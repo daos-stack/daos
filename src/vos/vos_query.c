@@ -99,7 +99,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		else
 			opc = BTR_PROBE_GT;
 	}
-	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, anchor);
+	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, anchor, NULL);
 	if (rc != 0)
 		goto out;
 
