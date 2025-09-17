@@ -1397,5 +1397,20 @@ func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolReb
 		return err
 	}
 
-	return errors.Wrapf(ur.getMSError(), "pool-rebuild %s failed", req.OpCode)
+	msg := fmt.Sprintf("pool-rebuild %s failed", req.OpCode)
+	msErr := ur.getMSError()
+	if msErr != nil {
+		return errors.Wrap(msErr, msg)
+	}
+	resp := new(mgmtpb.DaosResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return errors.Wrap(err, msg)
+	}
+
+	rpcClient.Debugf("resp: %+v", resp)
+	if s := daos.Status(resp.Status); s != daos.Success {
+		return s
+	}
+
+	return nil
 }

@@ -2725,7 +2725,200 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 	}
 }
 
-// TODO: func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
+func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req            *mgmtpb.SystemRebuildManageReq
+		useLabels      bool
+		pools          []string
+		mic            *control.MockInvokerConfig // For control-API PoolRebuildStart/Stop
+		expCtlApiCount int
+		expErr         error
+		expResp        *mgmtpb.SystemRebuildManageResp
+	}{
+		"nil req": {
+			req:    (*mgmtpb.SystemRebuildManageReq)(nil),
+			expErr: errors.New("nil *mgmt.SystemRebuildManageReq"),
+		},
+		"not system leader": {
+			req:    &mgmtpb.SystemRebuildManageReq{Sys: "quack"},
+			expErr: FaultWrongSystem("quack", build.DefaultSystemName),
+		},
+		"local failure on pool rebuild start": {
+			req: &mgmtpb.SystemRebuildManageReq{
+				OpCode: uint32(control.PoolRebuildOpCodeStart),
+			},
+			pools: []string{test.MockUUID(1)},
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expResp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:      test.MockUUID(1),
+						OpCode:  uint32(control.PoolRebuildOpCodeStart),
+						Errored: true,
+						Msg:     "local failed",
+					},
+				},
+			},
+		},
+		"remote failure on pool rebuild stop": {
+			req: &mgmtpb.SystemRebuildManageReq{
+				OpCode: uint32(control.PoolRebuildOpCodeStop),
+			},
+			pools: []string{test.MockUUID(1)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", errors.New("remote failed"),
+						nil),
+				},
+			},
+			expResp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:      test.MockUUID(1),
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+						Errored: true,
+						Msg:     "pool-rebuild stop failed: remote failed",
+					},
+				},
+			},
+			expCtlApiCount: 1,
+		},
+		"start pool rebuild on one pool": {
+			req: &mgmtpb.SystemRebuildManageReq{
+				OpCode: uint32(control.PoolRebuildOpCodeStart),
+			},
+			pools: []string{test.MockUUID(1)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+			expResp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     test.MockUUID(1),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
+					},
+				},
+			},
+			expCtlApiCount: 1,
+		},
+		"stop pool rebuild fails on one pool": {
+			req: &mgmtpb.SystemRebuildManageReq{
+				OpCode: uint32(control.PoolRebuildOpCodeStop),
+			},
+			pools: []string{test.MockUUID(1)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{
+						Status: -1,
+					}),
+				},
+			},
+			expResp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:      test.MockUUID(1),
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+						Errored: true,
+						Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+					},
+				},
+			},
+			expCtlApiCount: 1,
+		},
+		"start pool rebuild results on multiple pools; use label identifiers": {
+			req: &mgmtpb.SystemRebuildManageReq{
+				OpCode: uint32(control.PoolRebuildOpCodeStart),
+			},
+			useLabels: true,
+			pools:     []string{test.MockUUID(3), test.MockUUID(2), test.MockUUID(1)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{
+						Status: -1,
+					}),
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+			expResp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						// Verify label used instead of UUID.
+						Id:     strings.Split(test.MockUUID(1), "-")[0],
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
+					},
+					{
+						Id:      strings.Split(test.MockUUID(2), "-")[0],
+						OpCode:  uint32(control.PoolRebuildOpCodeStart),
+						Errored: true,
+						Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+					},
+					{
+						Id:     strings.Split(test.MockUUID(3), "-")[0],
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
+					},
+				},
+			},
+			expCtlApiCount: 3,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t)
+			svc := newTestMgmtSvc(t, log)
+
+			cfg := new(mockDrpcClientConfig)
+			mdc := newMockDrpcClient(cfg)
+			setupSvcDrpcClient(svc, 0, mdc)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = control.DefaultMockInvokerConfig()
+			}
+			mi := control.NewMockInvoker(log, mic)
+			svc.rpcClient = mi
+
+			for _, uuidStr := range tc.pools {
+				var label string
+				if tc.useLabels {
+					label = uuidStr[:8]
+				}
+				addTestPoolService(t, svc.sysdb, &system.PoolService{
+					PoolUUID:  uuid.MustParse(uuidStr),
+					PoolLabel: label,
+					State:     system.PoolServiceStateReady,
+					Replicas:  []ranklist.Rank{0},
+				})
+			}
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
+			gotResp, gotErr := svc.SystemRebuildManage(ctx, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expErr == nil {
+				cmpOpts := []cmp.Option{
+					cmpopts.IgnoreUnexported(mgmtpb.SystemRebuildManageResp{},
+						mgmtpb.PoolRebuildManageResult{}),
+				}
+				if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+				}
+			}
+
+			test.AssertEqual(t, tc.expCtlApiCount, mi.GetInvokeCount(),
+				"rpc client invoke count")
+		})
+	}
+}
 
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
