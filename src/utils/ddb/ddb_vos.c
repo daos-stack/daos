@@ -8,6 +8,7 @@
 
 #include <sys/mount.h>
 #include <string.h>
+#include <sys/vfs.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <vos_internal.h>
@@ -2143,15 +2144,14 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 		D_INFO("SCM size not specified; automatically calculated as %u GiB.", sz);
 	}
 
-	/** Make sure the mountpoint is mounted and if the mount meets criteria. */
-	rc = ddb_tmpfs_pre_mount_check(scm_mount, sz, &need_mount);
-	if (rc) {
-		D_ERROR("Failed to check scm mountpoint %s. " DF_RC "", scm_mount, DP_RC(rc));
+	rc = ddb_is_mountpoint(scm_mount);
+	if (rc < 0) {
+		D_ERROR("Failed to check mountpoint of %s. " DF_RC "", scm_mount, DP_RC(rc));
 		goto out;
 	}
+	need_mount = (!rc);
 
 	if (need_mount) {
-		/** Mount */
 		rc = ddb_mount(scm_mount, sz);
 		if (rc) {
 			goto out;
@@ -2162,16 +2162,17 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 		       scm_mount);
 	}
 
-	/* setup vos_file */
+	/* Create the directory architecture */
 	rc = ddb_dirs_prepare(scm_mount);
 	if (rc != 0) {
 		D_ERROR("Failed to prepare directory " DF_RC "", DP_RC(rc));
 		goto out2;
 	}
 
+	/*  Create VOS files  */
 	rc = ddb_recreate_pooltgts(scm_mount);
 	if (rc != 0) {
-		D_ERROR("Failed to recreate vos/rdb files. " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to recreate vos files. " DF_RC "", DP_RC(rc));
 	}
 out2:
 	if (rc && need_mount == true) {
