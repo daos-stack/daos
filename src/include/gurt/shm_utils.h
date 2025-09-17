@@ -379,79 +379,17 @@ shm_ht_rec_num_ref(d_shm_ht_rec_loc_t rec_loc);
 /* dynamic allocation if data is larger than this threshold */
 #define LRU_ALLOC_SIZE_THRESHOLD (4096)
 
-/* Node of entry in LRU cache */
-typedef struct shm_lru_node {
-	/* key size*/
-	uint32_t    key_size;
-	/* data size*/
-	uint32_t    data_size;
-	/* store the offset to key */
-	long int    key;
-	/* store the offset to data */
-	long int    data;
-	/* the reference count of this record */
-	_Atomic int ref_count;
-	/* off_prev and off_next are used in doubly linked list for LRU */
-	int         off_prev;
-	int         off_next;
-	/* offset to the next node in hash chain in each bucket for allocated node. point to next
-	 * available node for free nodes
-	 */
-	int         off_hnext;
-	/* the index of hash bucket this record is in */
-	uint32_t    idx_bucket;
-	/* the index of sub-cache this record is in */
-	uint32_t    idx_subcache;
-} shm_lru_node_t;
-
-/* This implementation of shm LRU is mainly optimized for performance by using pre-allocated buffer
- * when possible
- */
-
-typedef struct {
-	/* number of nodes allocated in this shard */
-	uint32_t      size;
-	/* Most recently used node */
-	int           off_head;
-	/* Least recently used node */
-	int           off_tail;
-	/* First available/free node */
-	int           first_av;
-	/* the offset to the array of offset of hash buckets */
-	long int      off_hashbuckets;
-	/* the offset to the array of preallocated array of nodes */
-	long int      off_nodelist;
-	/* the offset to the array of preallocated array of keys */
-	long int      off_keylist;
-	/* the offset to the array of preallocated array of data */
-	long int      off_datalist;
-
-	d_shm_mutex_t lock;
-	char          pad[8];
-} shm_lru_cache_var_t;
-
-/* LRU Cache structure */
-typedef struct {
-	/* the number of sub-cache to use */
-	uint32_t n_subcache;
-	/* max number of nodes to hold in each shard */
-	uint32_t capacity;
-	/* the size of key. zero means key size is variable */
-	uint32_t key_size;
-	/* the size of data. zero means data size is variable */
-	uint32_t data_size;
-
-	/* the offset to shm_lru_cache_var_t */
-	long int off_cache_list;
-
-	char     pad[8];
-} shm_lru_cache_t;
+typedef struct shm_lru_cache shm_lru_cache_t;
+typedef struct shm_lru_node  shm_lru_node_t;
 
 /**
  * create LRU cache
  *
- * \param[in] n_subcache	the number of subcache. Each subcache owns a private lock
- * \param[in] capacity		the max number of total records in cache
+ * \param[in] auto_partition	if true, automatically divide cache into many partitions based on
+ * 				the number of cores to use finer grained lock
+ * \param[in] capacity		the max number of total records in cache suggested. Real capacity
+ *				allocated could be slightly larger than this number if
+ *				auto_partition is set true
  * \param[in] key_size		size of key in bytes. zero for non-uniform size
  * \param[in] data_size		size of data in bytes. zero for non-uniform size
  *
@@ -460,13 +398,13 @@ typedef struct {
  * \return			error code
  */
 int
-shm_lru_create_cache(uint32_t n_subcache, uint32_t capacity, uint32_t key_size, uint32_t data_size,
+shm_lru_create_cache(bool auto_partition, uint32_t capacity, uint32_t key_size, uint32_t data_size,
 		     shm_lru_cache_t **cache);
 
 /**
  * decrease the reference count of a LRU cache node after retrieving data
  *
- * \param[in] node			LRU node
+ * \param[in] node		LRU node
  */
 void
 shm_lru_node_dec_ref(shm_lru_node_t *node);
@@ -486,14 +424,15 @@ int
 shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, uint32_t data_size);
 
 /**
- * query LRU cache
+ * query LRU cache. If entry is found, its reference count is increase by 1. Need to call
+ * shm_lru_node_dec_ref() to decrease its reference count once cache entry is not needed.
  *
  * \param[in] cache		LRU cache
  * \param[in] key		key
  * \param[in] key_size		size of key in bytes
  *
  * \param[out] node_found	LRU cache node containing the key
- * \param[out] val		LRU cache node containing the key
+ * \param[out] val		returned data buffer of LRU cache entry
  *
  * \return			error code. 0 - success, otherwise error
  */
@@ -504,9 +443,9 @@ shm_lru_get(shm_lru_cache_t *cache, void *key, uint32_t key_size, shm_lru_node_t
 /**
  * destroy LRU cache
  *
- * \param[in] cache			LRU cache created
+ * \param[in] cache		LRU cache created
  *
- * \return					error code
+ * \return			error code
  */
 void
 shm_lru_destroy_cache(shm_lru_cache_t *cache);
