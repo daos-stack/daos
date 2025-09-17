@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       14%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -658,7 +658,10 @@ fi
 %endif
 
 %changelog
-* Thu Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14
+* Thu Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
+- Fix leap package name
+
+* Thu Sep 11 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14
 - Fix pmdk package for leap
 - Fix daos-spdk package
 
