@@ -738,6 +738,7 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	rpc_priv->crp_timeout_sec = timeout_sec;
+	rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(timeout_sec);
 
 	RPC_TRACE(DB_NET, rpc_priv, "Caller set explicit timeout to %d\n", timeout_sec);
 out:
@@ -1767,6 +1768,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	if (!srv_flag) {
 		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 					     ctx->cc_timeout_sec);
+		rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
 	}
 }
 
