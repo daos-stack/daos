@@ -458,16 +458,26 @@ void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 int rebuild_pool_disconnect_internal(void *data);
 int rebuild_pool_connect_internal(void *data);
 
-int rebuild_sub_setup(void **state);
-int rebuild_sub_rf1_setup(void **state);
-int rebuild_sub_rf0_setup(void **state);
-int rebuild_sub_teardown(void **state);
-int rebuild_small_sub_setup(void **state);
-int rebuild_small_sub_rf1_setup(void **state);
-int rebuild_small_sub_rf0_setup(void **state);
-int rebuild_sub_3nodes_rf0_setup(void **state);
-int rebuild_sub_6nodes_rf1_setup(void **state);
-int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
+int
+rebuild_sub_setup(void **state);
+int
+rebuild_sub_rf1_setup(void **state);
+int
+rebuild_sub_rf0_setup(void **state);
+int
+rebuild_sub_teardown(void **state);
+int
+rebuild_small_sub_setup(void **state);
+int
+rebuild_small_sub_rf1_setup(void **state);
+int
+rebuild_small_sub_rf0_setup(void **state);
+int
+rebuild_sub_3nodes_rf0_setup(void **state);
+int
+rebuild_sub_6nodes_rf1_setup(void **state);
+int
+rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
 int
 rebuild_stop_with_dmg(void *data);
 int
