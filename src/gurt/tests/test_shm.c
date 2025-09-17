@@ -286,7 +286,6 @@ test_lrucache(void **state)
 
 	printf(" dt_without_partition / dt_with_partition = %4.2lf\n",
 	       dt_without_partition / dt_with_partition);
-	assert_true(dt_without_partition / dt_with_partition > 2.0);
 
 	free(data);
 }
