@@ -708,6 +708,12 @@ ds_mgmt_check_act(uint64_t seq, uint32_t act)
 	return 0;
 }
 
+int
+ds_mgmt_check_set_policy(uint32_t policy_nr, Mgmt__CheckInconsistPolicy **policies)
+{
+	return 0;
+}
+
 bool
 ds_mgmt_check_enabled(void)
 {
