@@ -18,7 +18,7 @@ int
 ddb_clear_dir(const char *dir);
 
 int
-ddb_tmpfs_pre_mount_check(const char *path, unsigned int size_limit, bool *need_mount);
+ddb_is_mountpoint(const char *path);
 
 int
 ddb_dirs_prepare(const char *scm_mount);
