@@ -407,8 +407,8 @@ shm_lru_create_cache(bool auto_partition, uint32_t capacity, uint32_t key_size, 
 
 	/* the space pre-allocated for the array of data of all records if data have a fixed size */
 	size_data_buf = (data_size > 0 && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
-			   ? (data_size * capacity_per_subcache)
-			   : 0;
+			    ? (data_size * capacity_per_subcache)
+			    : 0;
 
 	/**
 	 * sub-cache header (sizeof(shm_lru_cache_var_t)),
