@@ -2785,6 +2785,19 @@ func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
 			},
 			expCtlApiCount: 1,
 		},
+		"stop pool rebuild on no pools": {
+			req: &mgmtpb.SystemRebuildManageReq{
+				OpCode: uint32(control.PoolRebuildOpCodeStop),
+			},
+			// Verify this doesn't get called by returning error.
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", errors.New("remote failed"),
+						nil),
+				},
+			},
+			expResp: &mgmtpb.SystemRebuildManageResp{},
+		},
 		"start pool rebuild on one pool": {
 			req: &mgmtpb.SystemRebuildManageReq{
 				OpCode: uint32(control.PoolRebuildOpCodeStart),

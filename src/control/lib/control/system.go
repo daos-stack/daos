@@ -1295,8 +1295,7 @@ func SystemRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *Syste
 	}
 
 	pbReq := &mgmtpb.SystemRebuildManageReq{
-		Sys: req.getSystem(rpcClient),
-		//Sys:    req.Sys, // getSystem() used in control API rebuild later in call-stack.
+		Sys:    req.getSystem(rpcClient),
 		OpCode: uint32(req.OpCode),
 		Force:  req.Force,
 	}

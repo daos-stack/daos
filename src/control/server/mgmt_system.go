@@ -1406,7 +1406,7 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 		return nil, err
 	}
 	if len(poolIDs) == 0 {
-		return nil, errors.New("no pools found to operate on")
+		return &mgmtpb.SystemRebuildManageResp{}, nil // Successful no-op.
 	}
 
 	var results []*control.PoolRebuildManageResult

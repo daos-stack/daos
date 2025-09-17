@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -495,7 +496,7 @@ func (cmd *systemGetAttrCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	prettyPrintAttrs(&bld, resp.Attributes)
-	cmd.Infof("%s", bld.String())
+	cmd.Infof("%s", bld)
 
 	return nil
 }
@@ -689,7 +690,7 @@ func (cmd *systemGetPropCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	prettyPrintSysProps(&bld, resp.Properties)
-	cmd.Infof("%s", bld.String())
+	cmd.Infof("%s", bld)
 
 	return nil
 }
@@ -702,11 +703,12 @@ type systemRebuildCmd struct {
 
 type systemRebuildOpCmd struct {
 	baseCtlCmd
+	Verbose bool `short:"v" long:"verbose" description:"Print pool identifiers"`
 }
 
 func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force bool) (errOut error) {
 	defer func() {
-		errOut = errors.Wrapf(errOut, "system rebuild %s failed", opCode.String())
+		errOut = errors.Wrapf(errOut, "system rebuild %s failed", opCode)
 	}()
 
 	if cmd.config == nil {
@@ -727,12 +729,26 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	if resp.Errors() != nil {
-		return errors.Wrapf(resp.Errors(), "System-rebuild %s request failed",
-			opCode.String())
+	// Print successful results before returning any error.
+	respPoolsSuccess := []string{}
+	for _, res := range resp.Results {
+		if !res.Errored {
+			respPoolsSuccess = append(respPoolsSuccess, res.ID)
+		}
+	}
+	msg := fmt.Sprintf("System-rebuild %s request succeeded", opCode)
+	pStr := common.Pluralise("pool", len(respPoolsSuccess))
+	if cmd.Verbose {
+		cmd.Infof("%s on %s %v", msg, pStr, respPoolsSuccess)
+	} else {
+		cmd.Infof("%s on %d %s", msg, len(respPoolsSuccess), pStr)
 	}
 
-	cmd.Infof("System-rebuild %s request succeeded", opCode.String())
+	if resp.Errors() != nil {
+		return errors.Wrapf(resp.Errors(), "System-rebuild %s request failed",
+			opCode)
+	}
+
 	return nil
 }
 

@@ -1915,6 +1915,11 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
 		},
+		"no pools; rebuild-stop no-op": {
+			req:     &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStop},
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{}),
+			expResp: &SystemRebuildManageResp{},
+		},
 		"dual pools; rebuild-start": {
 			req: &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart},
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{
