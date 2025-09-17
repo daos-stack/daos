@@ -66,6 +66,11 @@ export argobots_lib
 set_lib_name argobots dev argobots libabt libabt0
 export argobots_dev
 
+set_lib_name daos_spdk dev daos-spdk daos-spdk daos-spdk
+export spdk_dev
+set_lib_name daos_spdk lib daos-spdk daos-spdk daos-spdk
+export spdk_lib
+
 set_lib_name capstone lib capstone libcapstone4 libcapstone4
 export capstone_lib
 
@@ -86,6 +91,8 @@ export libfabric_dev
 
 set_lib_name mercury dev mercury mercury mercury
 export mercury_dev
+set_lib_name mercury lib mercury mercury mercury
+export mercury_lib
 
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
 set_lib_name pmemobj dev libpmemobj libpmemobj1 libpmemobj1
