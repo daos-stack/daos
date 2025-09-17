@@ -27,7 +27,7 @@ argobots_pkg="$(utils/rpms/package_version.sh argobots dev)"
 fused_pkg="$(utils/rpms/package_version.sh fused dev)"
 isal_pkg="$(utils/rpms/package_version.sh isal dev)"
 isal_crypto_pkg="$(utils/rpms/package_version.sh isal_crypto dev)"
-daos_spdk_pkg="daos-spdk-devel$(utils/rpms/package_version.sh daos_spdk dev)"
+daos_spdk_pkg="$(utils/rpms/package_version.sh daos_spdk dev)"
 pmdk_pkg="$(utils/rpms/package_version.sh pmdk dev pmemobj)"
 
 sudo dnf install --allowerasing -y "${libfabric_pkg}" || echo "${libfabric_pkg} not available"

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -67,6 +68,9 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
 	"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolRebuildStart":         {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolRebuildStop":          {ComponentAdmin},
 	"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
 	"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
 	"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
@@ -83,7 +87,6 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},
