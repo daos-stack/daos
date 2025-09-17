@@ -143,7 +143,7 @@ struct shm_lru_cache {
 	uint32_t data_size;
 
 	/* number of bytes per sub-cache */
-	size_t  size_per_subcache;
+	size_t   size_per_subcache;
 };
 
 /*

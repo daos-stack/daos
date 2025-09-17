@@ -40,16 +40,16 @@ typedef struct {
 	int              start;
 	int              end;
 	int             *data;
-}thread_param_t;
+} thread_param_t;
 
 static void *
 thread_cache_op(void *arg)
 {
-	int              i;
-	int              rc;
-	shm_lru_node_t  *node_found;
-	thread_param_t  *param = (thread_param_t *)arg;
-	int             *addr_val;
+	int             i;
+	int             rc;
+	shm_lru_node_t *node_found;
+	thread_param_t *param = (thread_param_t *)arg;
+	int            *addr_val;
 
 	/* insert entries */
 	for (i = param->start; i < param->end; i++) {
@@ -214,7 +214,7 @@ test_lrucache(void **state)
 	capacity        = 500000;
 	size_per_thread = (int)(capacity * 0.85f / MAX_THREAD);
 	num_keys        = size_per_thread * MAX_THREAD;
-	data = malloc(sizeof(int) * num_keys);
+	data            = malloc(sizeof(int) * num_keys);
 	assert_true(data != NULL);
 
 	srand(1);
@@ -252,7 +252,6 @@ test_lrucache(void **state)
 		assert(*addr_val == data[i]);
 	}
 	shm_lru_destroy_cache(cache);
-
 
 	/* cache without partitions has bad lock contention in multi-threads */
 	rc = shm_lru_create_cache(false, capacity, sizeof(int), sizeof(int), &cache);
