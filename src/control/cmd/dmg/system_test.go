@@ -425,6 +425,14 @@ func TestDmg_SystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"system self-heal evaluate",
+			"system self-heal eval",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSelfHealEvalReq{}),
+			}, " "),
+			nil,
+		},
+		{
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{

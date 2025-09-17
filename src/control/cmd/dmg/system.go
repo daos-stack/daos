@@ -46,6 +46,7 @@ type SystemCmd struct {
 	SetProp      systemSetPropCmd      `command:"set-prop" description:"Set system properties"`
 	GetProp      systemGetPropCmd      `command:"get-prop" description:"Get system properties"`
 	Rebuild      systemRebuildCmd      `command:"rebuild" description:"Interactive rebuild commands"`
+	SelfHeal     systemSelfHealCmd     `command:"self-heal" description:"Self-heal commands for auto recovery"`
 }
 
 type baseCtlCmd struct {
@@ -745,8 +746,7 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 	}
 
 	if resp.Errors() != nil {
-		return errors.Wrapf(resp.Errors(), "System-rebuild %s request failed",
-			opCode)
+		return resp.Errors()
 	}
 
 	return nil
@@ -767,4 +767,41 @@ type systemRebuildStopCmd struct {
 
 func (cmd *systemRebuildStopCmd) Execute(_ []string) error {
 	return cmd.execute(control.PoolRebuildOpCodeStop, cmd.Force)
+}
+
+// systemSelfHealCmd represents the system self-heal auto recovery subcommand.
+type systemSelfHealCmd struct {
+	Eval systemSelfHealEvalCmd `command:"eval" description:"Trigger updates based on the system self_heal property"`
+}
+
+type systemSelfHealEvalCmd struct {
+	baseCtlCmd
+}
+
+func (cmd *systemSelfHealEvalCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system self-heal eval failed")
+	}()
+
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
+	req := &control.SystemSelfHealEvalReq{}
+
+	resp, err := control.SystemSelfHealEval(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	if resp.Errors() != nil {
+		return resp.Errors()
+	}
+
+	cmd.Info("System self-heal eval request succeeded")
+	return nil
 }

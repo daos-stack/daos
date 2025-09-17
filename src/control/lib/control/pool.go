@@ -1409,7 +1409,7 @@ func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolReb
 
 	rpcClient.Debugf("resp: %+v", resp)
 	if s := daos.Status(resp.Status); s != daos.Success {
-		return s
+		return errors.Wrap(s, msg)
 	}
 
 	return nil

@@ -59,6 +59,7 @@ const (
 	MgmtSvc_SystemExclude_FullMethodName            = "/mgmt.MgmtSvc/SystemExclude"
 	MgmtSvc_SystemDrain_FullMethodName              = "/mgmt.MgmtSvc/SystemDrain"
 	MgmtSvc_SystemRebuildManage_FullMethodName      = "/mgmt.MgmtSvc/SystemRebuildManage"
+	MgmtSvc_SystemSelfHealEval_FullMethodName       = "/mgmt.MgmtSvc/SystemSelfHealEval"
 	MgmtSvc_SystemErase_FullMethodName              = "/mgmt.MgmtSvc/SystemErase"
 	MgmtSvc_SystemCleanup_FullMethodName            = "/mgmt.MgmtSvc/SystemCleanup"
 	MgmtSvc_SystemCheckEnable_FullMethodName        = "/mgmt.MgmtSvc/SystemCheckEnable"
@@ -150,8 +151,10 @@ type MgmtSvcClient interface {
 	SystemExclude(ctx context.Context, in *SystemExcludeReq, opts ...grpc.CallOption) (*SystemExcludeResp, error)
 	// Drain or reintegrate DAOS ranks from all pools
 	SystemDrain(ctx context.Context, in *SystemDrainReq, opts ...grpc.CallOption) (*SystemDrainResp, error)
-	// Before interactive rebuild operation on all DAOS pools
+	// Perform interactive rebuild operation on all DAOS pools
 	SystemRebuildManage(ctx context.Context, in *SystemRebuildManageReq, opts ...grpc.CallOption) (*SystemRebuildManageResp, error)
+	// Evaluate self-heal system property and perform updates based on its value.
+	SystemSelfHealEval(ctx context.Context, in *SystemSelfHealEvalReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
@@ -506,6 +509,16 @@ func (c *mgmtSvcClient) SystemRebuildManage(ctx context.Context, in *SystemRebui
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemSelfHealEval(ctx context.Context, in *SystemSelfHealEvalReq, opts ...grpc.CallOption) (*DaosResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_SystemSelfHealEval_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SystemEraseResp)
@@ -748,8 +761,10 @@ type MgmtSvcServer interface {
 	SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error)
 	// Drain or reintegrate DAOS ranks from all pools
 	SystemDrain(context.Context, *SystemDrainReq) (*SystemDrainResp, error)
-	// Before interactive rebuild operation on all DAOS pools
+	// Perform interactive rebuild operation on all DAOS pools
 	SystemRebuildManage(context.Context, *SystemRebuildManageReq) (*SystemRebuildManageResp, error)
+	// Evaluate self-heal system property and perform updates based on its value.
+	SystemSelfHealEval(context.Context, *SystemSelfHealEvalReq) (*DaosResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
@@ -886,6 +901,9 @@ func (UnimplementedMgmtSvcServer) SystemDrain(context.Context, *SystemDrainReq) 
 }
 func (UnimplementedMgmtSvcServer) SystemRebuildManage(context.Context, *SystemRebuildManageReq) (*SystemRebuildManageResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemRebuildManage not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemSelfHealEval(context.Context, *SystemSelfHealEvalReq) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemSelfHealEval not implemented")
 }
 func (UnimplementedMgmtSvcServer) SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemErase not implemented")
@@ -1517,6 +1535,24 @@ func _MgmtSvc_SystemRebuildManage_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemSelfHealEval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemSelfHealEvalReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemSelfHealEval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_SystemSelfHealEval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemSelfHealEval(ctx, req.(*SystemSelfHealEvalReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_SystemErase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemEraseReq)
 	if err := dec(in); err != nil {
@@ -1953,6 +1989,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemRebuildManage",
 			Handler:    _MgmtSvc_SystemRebuildManage_Handler,
+		},
+		{
+			MethodName: "SystemSelfHealEval",
+			Handler:    _MgmtSvc_SystemSelfHealEval_Handler,
 		},
 		{
 			MethodName: "SystemErase",
