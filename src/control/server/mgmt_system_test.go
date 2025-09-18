@@ -2836,7 +2836,8 @@ func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
 						Id:      test.MockUUID(1),
 						OpCode:  uint32(control.PoolRebuildOpCodeStop),
 						Errored: true,
-						Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+						Msg: "pool-rebuild stop failed: " +
+							"DER_UNKNOWN(-1): Unknown error code -1",
 					},
 				},
 			},
@@ -2868,7 +2869,8 @@ func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
 						Id:      strings.Split(test.MockUUID(2), "-")[0],
 						OpCode:  uint32(control.PoolRebuildOpCodeStart),
 						Errored: true,
-						Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+						Msg: "pool-rebuild start failed: " +
+							"DER_UNKNOWN(-1): Unknown error code -1",
 					},
 					{
 						Id:     strings.Split(test.MockUUID(3), "-")[0],
