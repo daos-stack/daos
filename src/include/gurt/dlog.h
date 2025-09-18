@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,6 +39,8 @@ typedef uint64_t d_dbug_t;
 #define DLOG_FLV_TAG	(1 << 4)	/**< log tag */
 #define DLOG_FLV_STDOUT	(1 << 5)	/**< always log to stdout */
 #define DLOG_FLV_STDERR	(1 << 6)	/**< always log to stderr */
+
+#define DLOG_FLV_DEFAULT (DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG | DLOG_FLV_YEAR)
 
 /* per-message log flag values */
 #define DLOG_STDERR     0x20000000	/**< always log to stderr */
