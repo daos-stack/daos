@@ -353,7 +353,7 @@ int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
 int
-vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool init_spdk);
 
 /**
  * Finalize the environment for a VOS instance
@@ -363,6 +363,19 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
  */
 void
 vos_self_fini(void);
+
+/**
+ * Initialize the environment for a VOS instance as an engine.
+ *
+ * \param[in]	nvme_conf	NVMe config file
+ * \param[in]	storage_path	Storage path e.g. /mnt/daos
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
+ */
+int
+vos_sys_db_init(const char *nvme_conf, const char *storage_path);
 
 /**
  * Versioning Object Storage Pool (VOSP)
@@ -1303,12 +1316,13 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
- * Iterate VOS objects and subtrees when recursive mode is specified. When it's
- * called against md-on-ssd phase2 pool, it iterates objects in bucket ID order
- * instead of OID order to minimize bucket eviction/load.
+ * Recursively iterate VOS objects and subtrees. When it's called against md-on-ssd
+ * phase2 pool, it iterates objects in bucket ID order instead of OID order to
+ * minimize the bucket eviction/loading.
+ *
+ * Note: Don't use this interface when caller requires iterating in OID order.
  *
  * \param[in]		param		iteration parameters
- * \param[in]		recursive	iterate in lower level recursively
  * \param[in]		anchors		array of anchors, one for each
  *					iteration level
  * \param[in]		pre_cb		pre subtree iteration callback
@@ -1321,8 +1335,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \retval		-DER_*	error (but never -DER_NONEXIST)
  */
 int
-vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
-		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+vos_iterate_obj(vos_iter_param_t *param, struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+		vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
  * Skip the object not located on specified bucket (for md-on-ssd phase2).
