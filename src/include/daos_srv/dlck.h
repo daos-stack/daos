@@ -60,7 +60,7 @@ struct dlck_print {
 
 #define DLCK_PRINT_RC(print, rc)       DLCK_PRINTF_WO_PREFIX(print, DF_RC "\n", DP_RC(rc))
 
-inline void
+static inline void
 dlck_print_indent_set(struct dlck_print *dp)
 {
 	memset(dp->prefix, DLCK_PRINT_INDENT, DLCK_PRINT_INDENT_MAX);
@@ -72,7 +72,7 @@ dlck_print_indent_set(struct dlck_print *dp)
 	}
 }
 
-inline void
+static inline void
 dlck_print_indent_inc(struct dlck_print *dp)
 {
 	if (dp == NULL) {
@@ -88,7 +88,7 @@ dlck_print_indent_inc(struct dlck_print *dp)
 	dlck_print_indent_set(dp);
 }
 
-inline void
+static inline void
 dlck_print_indent_dec(struct dlck_print *dp)
 {
 	if (dp == NULL) {
