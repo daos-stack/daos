@@ -709,7 +709,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8') {
+                stage('Unit Test on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -731,7 +731,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8') {
+                stage('Unit Test bdev on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -753,7 +753,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8') {
+                stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { params.CI_NLT_TEST && !skipStage() }
@@ -793,7 +793,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test with memcheck on EL 8') {
+                stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -817,8 +817,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8')
-                stage('Unit Test bdev with memcheck on EL 8') {
+                } // stage('Unit Test with memcheck on EL 8.8')
+                stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
