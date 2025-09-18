@@ -1144,6 +1144,7 @@ pipeline {
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
+                            image_version: 'el9.5',
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
