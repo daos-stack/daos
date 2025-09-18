@@ -38,6 +38,9 @@ typedef int (*dlck_cmd_func)(struct dlck_control *ctrl);
 int
 dlck_cmd_pool_check(struct dlck_control *ctrl);
 
-#define DLCK_CMDS_FUNCS {dlck_cmd_pool_check}
+#define DLCK_CMDS_FUNCS                                                                            \
+	{                                                                                          \
+		dlck_cmd_pool_check                                                                \
+	}
 
 #endif /** __DLCK_CMDS__ */

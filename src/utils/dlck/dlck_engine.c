@@ -740,8 +740,8 @@ dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_pt
 int
 dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg)
 {
-	struct xstream_arg  *xa = *arg;
-	int                  rc;
+	struct xstream_arg *xa = *arg;
+	int                 rc;
 
 	if (xa == NULL) {
 		return DER_SUCCESS;
