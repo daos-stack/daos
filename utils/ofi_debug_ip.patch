@@ -1,8 +1,8 @@
 diff --git a/prov/tcp/src/xnet.h b/prov/tcp/src/xnet.h
-index ee16d7e3a..1ee7d77a6 100644
+index ee16d7e3a..72304bcec 100644
 --- a/prov/tcp/src/xnet.h
 +++ b/prov/tcp/src/xnet.h
-@@ -754,4 +754,26 @@ int xnet_rdm_ops_open(struct fid *fid, const char *name,
+@@ -754,4 +754,29 @@ int xnet_rdm_ops_open(struct fid *fid, const char *name,
  	FI_WARN(&xnet_prov, subsystem, log_str "%s (%d)\n", \
  		fi_strerror((int) -(err)), (int) err)
  
@@ -23,11 +23,14 @@ index ee16d7e3a..1ee7d77a6 100644
 +	ofi_straddr(_buf, &_len, ofi_translate_addr_format(ofi_sa_family(_addr)), _addr);	\
 +	ofi_straddr(_src_buf, &_src_len, ofi_translate_addr_format(ofi_sa_family(_src_addr)),	\
 +		    _src_addr);									\
-+												\
-+	FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "error on %s From %s : %s\n", _buf, _src_buf,	\
-+		fi_strerror(err));								\
++	if (err)										\
++		FI_WARN(&xnet_prov, FI_LOG_EP_CTRL, "ep %p state %u on %s from %s : %s\n",	\
++			ep, ep->state, _buf, _src_buf, fi_strerror(err));			\
++	else											\
++		FI_LOG_SPARSE(&xnet_prov, FI_LOG_INFO, FI_LOG_EP_CTRL,				\
++			      "ep %p state %u on %s from %s : %s\n",				\
++			      ep, ep->state, _buf, _src_buf, fi_strerror(err));			\
 +} while(0)
-+
  #endif //_XNET_H_
 diff --git a/prov/tcp/src/xnet_ep.c b/prov/tcp/src/xnet_ep.c
 index 64772fef0..4c0166ae8 100644
@@ -138,3 +141,15 @@ index aa76968e1..be76c245f 100644
  	xnet_report_error(rx_entry, (int) -ret);
  	xnet_free_xfer(xnet_ep2_progress(ep), rx_entry);
  	xnet_reset_rx(ep);
+diff --git a/prov/tcp/src/xnet_rdm_cm.c b/prov/tcp/src/xnet_rdm_cm.c
+index 4dfc96650..3896f3cab 100644
+--- a/prov/tcp/src/xnet_rdm_cm.c
++++ b/prov/tcp/src/xnet_rdm_cm.c
+@@ -367,6 +367,7 @@ ssize_t xnet_get_conn(struct xnet_rdm *rdm, fi_addr_t addr,
+ 		/* Force progress for apps that simply retry sending without
+ 		 * trying to drive progress in between.
+ 		 */
++		XNET_OUTPUT_ERR_WARN((*conn)->ep, 0);
+ 		xnet_run_progress(xnet_rdm2_progress(rdm), false);
+ 		return -FI_EAGAIN;
+ 	}
