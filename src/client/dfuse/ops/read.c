@@ -633,7 +633,7 @@ static void
 dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 {
 	struct dfuse_info        *dfuse_info = ev->de_di;
-	struct dfuse_inode_entry *ie         = ev->de_oh->doh_ie;
+	struct dfuse_inode_entry *ie         = ev->de_ie;
 	struct active_inode      *active     = ie->ie_active;
 
 	active->readahead->dra_rc = ev->de_ev.ev_error;
@@ -656,9 +656,10 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	pre_read_mark_done(active);
 
 	dfuse_cb_slave_list_read_complete(ev, ie);
+
+	ie->ie_readahead_inflight = 0;
 	/* Drop the extra ref on active, the file could be closed before this read completes */
 	active_ie_decref(dfuse_info, ie);
-	ev->de_oh->doh_readahead_inflight = 0;
 }
 
 static int
@@ -720,32 +721,32 @@ dfuse_pre_read_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 }
 
 void
-dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
+dfuse_pre_read_abort(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		     struct dfuse_event *ev, int rc)
 {
-	struct active_inode *active = oh->doh_ie->ie_active;
+	struct active_inode *active = ie->ie_active;
 
-	oh->doh_readahead_inflight = 0;
+	ie->ie_readahead_inflight  = 0;
 	active->readahead->dra_rc  = rc;
 	if (ev) {
 		daos_event_fini(&ev->de_ev);
 		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		active->readahead->dra_ev = NULL;
 	}
-	active_ie_decref(dfuse_info, oh->doh_ie);
+	active_ie_decref(dfuse_info, ie);
 	pre_read_mark_done(active);
 }
 
 void
-dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct dfuse_event *ev)
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, struct dfuse_event *ev)
 {
 	struct dfuse_eq *eqt = ev->de_eqt;
 	int              rc;
 
-	ev->de_oh = oh;
+	ev->de_ie = ie;
 	ev->de_di = dfuse_info;
 
-	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
+	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
 	if (rc != 0)
 		goto err;
 
@@ -757,5 +758,5 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh, struct d
 
 	return;
 err:
-	dfuse_pre_read_abort(dfuse_info, oh, ev, rc);
+	dfuse_pre_read_abort(dfuse_info, ie, ev, rc);
 }
