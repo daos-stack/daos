@@ -853,7 +853,7 @@ pipeline {
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
-                stage('Functional on EL 8 with Valgrind') {
+                stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -874,8 +874,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8 with Valgrind')
-                stage('Functional on EL 8') {
+                } // stage('Functional on EL 8.8 with Valgrind')
+                stage('Functional on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -896,7 +896,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8')
+                } // stage('Functional on EL 8.8')
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
@@ -964,7 +964,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8') {
+                stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1019,7 +1019,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing on EL 8')
+                } // stage('Fault injection testing on EL 8.8')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
@@ -1094,7 +1094,7 @@ pipeline {
                 } // stage('Test RPMs on Leap 15.5')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep on EL 8') {
+        stage('Test Storage Prep on EL 8.8') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
