@@ -1,11 +1,14 @@
 /**
  * (C) Copyright 2022-2025 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <sys/mount.h>
 #include <string.h>
+#include <sys/vfs.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <vos_internal.h>
@@ -13,6 +16,7 @@
 #include <bio_wal.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
+#include "ddb_mgmt.h"
 #include "ddb_vos.h"
 #include "ddb_spdk.h"
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
@@ -2106,6 +2110,75 @@ out:
 		bio_free_dev_info(dev_info);
 	}
 
+	vos_self_fini();
+	return rc;
+}
+
+int
+dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mount_size)
+{
+	int          rc;
+	bool         md_on_ssd;
+	bool         need_mount = true;
+	unsigned int sz         = scm_mount_size;
+
+	rc = vos_self_init(db_path, true, 0);
+	if (rc) {
+		D_ERROR("Initialize standalone VOS failed. " DF_RC "", DP_RC(rc));
+		return rc;
+	}
+
+	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
+	if (!md_on_ssd) {
+		D_ERROR("Not in MD-on-SSD mode; skipping memory environment provisioning.");
+		goto out;
+	}
+
+	/* Fetch scm_mount_size */
+	if (sz == 0) {
+		rc = ddb_auto_calculate_scm_mount_size(&sz);
+		if (rc) {
+			D_ERROR("Failed to calculate scm size. " DF_RC "", DP_RC(rc));
+			goto out;
+		}
+		D_INFO("SCM size not specified; automatically calculated as %u GiB.", sz);
+	}
+
+	rc = ddb_is_mountpoint(scm_mount);
+	if (rc < 0) {
+		D_ERROR("Failed to check mountpoint of %s. " DF_RC "", scm_mount, DP_RC(rc));
+		goto out;
+	}
+	need_mount = (!rc);
+
+	if (need_mount) {
+		rc = ddb_mount(scm_mount, sz);
+		if (rc) {
+			goto out;
+		}
+	} else {
+		D_INFO("SCM mount %s is already mounted; VOS files will be created without "
+		       "remounting.",
+		       scm_mount);
+	}
+
+	/* Create the directory architecture */
+	rc = ddb_dirs_prepare(scm_mount);
+	if (rc != 0) {
+		D_ERROR("Failed to prepare directory " DF_RC "", DP_RC(rc));
+		goto out2;
+	}
+
+	/*  Create VOS files  */
+	rc = ddb_recreate_pooltgts(scm_mount);
+	if (rc != 0) {
+		D_ERROR("Failed to recreate vos files. " DF_RC "", DP_RC(rc));
+	}
+out2:
+	if (rc && need_mount == true) {
+		umount(scm_mount);
+	}
+out:
 	vos_self_fini();
 	return rc;
 }

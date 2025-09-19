@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1272,6 +1273,40 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
 	else
 		ddb_print(ctx, "Device replacing succeeded\n");
+
+	return rc;
+}
+
+int
+ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
+{
+	int  rc                      = 0;
+	char *db_path                 = opt->db_path;
+	char scm_mount[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+
+	if (db_path == NULL || strlen(db_path) == 0 || strlen(db_path) >= DDB_PATH_MAX) {
+		ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
+			   db_path, DDB_PATH_MAX);
+		return -DER_INVAL;
+	}
+
+	if (opt->scm_mount != NULL) {
+		if (strlen(opt->scm_mount) == 0 || strlen(opt->scm_mount) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx,
+				   "scm_mount '%s' either too short (==0) or too long (>=%d)\n",
+				   opt->scm_mount, DDB_PATH_MAX);
+			return -DER_INVAL;
+		}
+		strncpy(scm_mount, opt->scm_mount, ARRAY_SIZE(scm_mount) - 1);
+	}
+
+	/** setup tmpfs and prepare the vos file on scm_mount */
+	rc = dv_run_prov_mem(db_path, scm_mount, opt->scm_mount_size);
+	if (rc) {
+		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
+	} else {
+		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", scm_mount);
+	}
 
 	return rc;
 }
