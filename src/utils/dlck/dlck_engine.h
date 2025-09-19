@@ -9,6 +9,8 @@
 
 #include <abt.h>
 
+#include <daos_srv/dlck.h>
+
 #include "dlck_args.h"
 
 struct dlck_ult {
@@ -167,6 +169,28 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn);
 
 /**
+ * \brief Run the \p exec function as a ULT on an execution stream of the \p engine as indicated by
+ * \p idx.
+ *
+ * The function does not return as along as the ULT concludes.
+ *
+ * The \p arg_alloc_func and \p arg_free_fn are called to allocate and free arguments respectively.
+ *
+ * \param[in]	engine		Engine to run the created ULT.
+ * \param[in]	idx		ID of an execution stream to use.
+ * \param[in]	exec		Function to run in the ULT.
+ * \param[in]	arg_alloc_fn	Function to allocate arguments for an ULT.
+ * \param[in]	custom		Custom parameters for \p arg_alloc_fn and \p arg_free_fn function.
+ * \param[in]	arg_free_fn	Function to free arguments.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_engine_exec(struct dlck_engine *engine, int idx, dlck_ult_func exec,
+		 arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn);
+
+/**
  * Open a pool but lock the \p mtx mutex first and unlock it after. Thread-safe.
  *
  * \param[in]	mtx		Mutex.
@@ -198,5 +222,43 @@ dlck_pool_open_safe(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int
  */
 int
 dlck_pool_close_safe(ABT_mutex mtx, daos_handle_t poh);
+
+/**
+ * @struct xstream_arg
+ *
+ * Arguments passed to the main ULT on each of the execution streams.
+ */
+struct xstream_arg {
+	struct dlck_control *ctrl;   /** Control state. */
+	struct dlck_engine  *engine; /** Engine itself. */
+	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
+	int                  rc;     /** [out] return code */
+};
+
+/**
+ * Allocate arguments for a ULT.
+ *
+ * \param[in]	engine		Engine the ULT is about to be run in.
+ * \param[in]	idx		ULT ID.
+ * \param[in]	ctrl_ptr	Control state to be passed to the ULT.
+ * \param[out]	output_arg	Allocated argument for the ULT.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ */
+int
+dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr,
+			      void **output_arg);
+
+/**
+ * Free arguments of a ULT.
+ *
+ * \param[out]		ctrl_ptr	Control state to collect stats in.
+ * \param[in,out]	arg		ULT arguments to process and free.
+ *
+ * \return The return code for the ULT.
+ */
+int
+dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg);
 
 #endif /** __DLCK_ENGINE__ */

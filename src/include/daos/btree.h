@@ -17,6 +17,8 @@
 #include <daos_types.h>
 #include <daos/mem.h>
 
+struct dlck_print;
+
 /**
  * KV record of the btree.
  *
@@ -541,8 +543,9 @@ int  dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
-int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-			    daos_handle_t coh, void *priv, daos_handle_t *toh);
+int
+dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+		       struct dlck_print *dp, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);
@@ -632,8 +635,9 @@ int dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
-int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		      uint32_t intent, d_iov_t *key, daos_anchor_t *anchor);
+int
+    dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent, d_iov_t *key,
+		      daos_anchor_t *anchor, struct dlck_print *dp);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,

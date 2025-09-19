@@ -78,8 +78,7 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
-			       NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL, NULL, NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -158,8 +157,7 @@ obj_tree_destroy_current_probe(daos_handle_t ih, daos_handle_t cur_hdl, d_iov_t 
 	}
 
 	/* Some one might insert new record to the tree let's reprobe */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, key_iov,
-			       NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, key_iov, NULL, NULL);
 	if (rc) {
 		D_ERROR("dbtree_iter_probe failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -172,8 +170,7 @@ obj_tree_destroy_current_probe(daos_handle_t ih, daos_handle_t cur_hdl, d_iov_t 
 	}
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
-			       NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL, NULL, NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 

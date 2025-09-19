@@ -731,8 +731,7 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
 
 	next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_GT : BTR_PROBE_GE;
 	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
-	rc = dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter), NULL,
-			       anchor);
+	rc = dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter), NULL, anchor, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 

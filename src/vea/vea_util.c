@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -130,7 +131,7 @@ vea_dump_bitmap(struct vea_space_info *vsi, bool transient)
 	if (rc)
 		return rc;
 
-	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL);
+	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL, NULL);
 
 	D_PRINT("Bitmaps:");
 	while (rc == 0) {
@@ -194,7 +195,7 @@ vea_dump_extent(struct vea_space_info *vsi, bool transient)
 	if (rc)
 		return rc;
 
-	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL);
+	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL, NULL);
 
 	D_PRINT("Free extents:");
 	while (rc == 0) {
