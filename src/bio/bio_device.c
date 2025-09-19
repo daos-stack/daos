@@ -65,6 +65,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	    struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 {
 	struct bio_blobstore	*bbs = old_dev->bb_blobstore;
+	struct bio_dev_info     *b_info;
 	unsigned int		 old_roles;
 	int			 rc;
 
@@ -86,14 +87,23 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	/* Avoid re-enter or being destroyed by hot remove callback */
 	new_dev->bb_replacing = 1;
 
+	b_info = alloc_dev_info(new_dev->bb_uuid, new_dev, NULL);
+	if (b_info == NULL) {
+		D_ERROR("Failed to alloc bio_dev_info.");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
 	old_roles = bio_nvme_configured(SMD_DEV_TYPE_META) ? old_dev->bb_roles : NVME_ROLE_DATA;
 	/* Replace old device with new device in SMD */
-	rc = smd_dev_replace(old_dev->bb_uuid, new_dev->bb_uuid, old_roles);
+	rc = smd_dev_replace(old_dev->bb_uuid, new_dev->bb_uuid, old_roles, b_info->bdi_ctrlr);
 	if (rc) {
 		DL_ERROR(rc, "Failed to replace dev: "DF_UUID" -> "DF_UUID". roles(%u)",
 			 DP_UUID(old_dev->bb_uuid), DP_UUID(new_dev->bb_uuid), old_roles);
+		bio_free_dev_info(b_info);
 		goto out;
 	}
+	bio_free_dev_info(b_info);
 
 	/* Replace in-memory bio_bdev */
 	replace_bio_bdev(old_dev, new_dev);
@@ -331,40 +341,6 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 	return rc;
 }
 
-static struct bio_dev_info *
-alloc_dev_info(uuid_t dev_id, char *dev_name, struct smd_dev_info *s_info)
-{
-	struct bio_dev_info	*info;
-	int                      tgt_cnt = 0, i;
-
-	D_ALLOC_PTR(info);
-	if (info == NULL)
-		return NULL;
-
-	if (s_info != NULL) {
-		tgt_cnt = s_info->sdi_tgt_cnt;
-		info->bdi_flags |= NVME_DEV_FL_INUSE;
-		if (s_info->sdi_state == SMD_DEV_FAULTY)
-			info->bdi_flags |= NVME_DEV_FL_FAULTY;
-	}
-
-	if (tgt_cnt != 0) {
-		D_ALLOC_ARRAY(info->bdi_tgts, tgt_cnt);
-		if (info->bdi_tgts == NULL) {
-			bio_free_dev_info(info);
-			return NULL;
-		}
-	}
-
-	D_INIT_LIST_HEAD(&info->bdi_link);
-	uuid_copy(info->bdi_dev_id, dev_id);
-	info->bdi_tgt_cnt = tgt_cnt;
-	for (i = 0; i < info->bdi_tgt_cnt; i++)
-		info->bdi_tgts[i] = s_info->sdi_tgts[i];
-
-	return info;
-}
-
 static struct smd_dev_info *
 find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 {
@@ -461,7 +437,7 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 }
 
 static int
-alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
+alloc_ctrlr_info(char *dev_name, struct bio_dev_info *b_info)
 {
 	struct spdk_bdev *bdev;
 	uint32_t          blk_sz;
@@ -470,14 +446,7 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 
 	D_ASSERT(b_info != NULL);
 	D_ASSERT(b_info->bdi_ctrlr == NULL);
-
-	if (dev_name == NULL) {
-		D_DEBUG(DB_MGMT,
-			"missing bdev device name for device " DF_UUID ", skipping ctrlr "
-			"info fetch\n",
-			DP_UUID(dev_id));
-		return 0;
-	}
+	D_ASSERT(dev_name != NULL);
 
 	bdev = spdk_bdev_get_by_name(dev_name);
 	if (bdev == NULL) {
@@ -516,6 +485,95 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 	return fetch_pci_dev_info(b_info->bdi_ctrlr, b_info->bdi_traddr);
 }
 
+static int
+alloc_ctrlr_from_smd(struct bio_dev_info *b_info, struct smd_dev_info *s_info)
+{
+	D_ASSERT(b_info != NULL);
+	D_ASSERT(b_info->bdi_ctrlr == NULL);
+
+	if (s_info->sdi_model == NULL && s_info->sdi_serial == NULL)
+		return 0;
+
+	D_ALLOC_PTR(b_info->bdi_ctrlr);
+	if (b_info->bdi_ctrlr == NULL)
+		return -DER_NOMEM;
+
+	if (s_info->sdi_model) {
+		D_STRNDUP(b_info->bdi_ctrlr->model, s_info->sdi_model, strlen(s_info->sdi_model));
+		if (b_info->bdi_ctrlr->model == NULL)
+			return -DER_NOMEM;
+	}
+
+	if (s_info->sdi_serial) {
+		D_STRNDUP(b_info->bdi_ctrlr->serial, s_info->sdi_serial,
+			  strlen(s_info->sdi_serial));
+		if (b_info->bdi_ctrlr->serial == NULL)
+			return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+struct bio_dev_info *
+alloc_dev_info(uuid_t dev_id, struct bio_bdev *d_bdev, struct smd_dev_info *s_info)
+{
+	struct bio_dev_info *info;
+	int                  tgt_cnt = 0, i, rc;
+
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return NULL;
+
+	if (s_info != NULL) {
+		tgt_cnt = s_info->sdi_tgt_cnt;
+		info->bdi_flags |= NVME_DEV_FL_INUSE;
+		if (s_info->sdi_state == SMD_DEV_FAULTY)
+			info->bdi_flags |= NVME_DEV_FL_FAULTY;
+
+		/* When the device isn't plugged, get ctrlr data from SMD */
+		if (d_bdev == NULL || d_bdev->bb_removed) {
+			rc = alloc_ctrlr_from_smd(info, s_info);
+			if (rc) {
+				DL_ERROR(rc, "Failed to get ctrlr data from SMD.");
+				bio_free_dev_info(info);
+				return NULL;
+			}
+		}
+	}
+
+	if (tgt_cnt != 0) {
+		D_ALLOC_ARRAY(info->bdi_tgts, tgt_cnt);
+		if (info->bdi_tgts == NULL) {
+			bio_free_dev_info(info);
+			return NULL;
+		}
+	}
+
+	if (d_bdev != NULL) {
+		info->bdi_dev_roles = d_bdev->bb_roles;
+		if (!d_bdev->bb_removed) {
+			info->bdi_flags |= NVME_DEV_FL_PLUGGED;
+			/* Get ctrlr data when the SSD is plugged */
+			rc = alloc_ctrlr_info(d_bdev->bb_name, info);
+			if (rc) {
+				DL_ERROR(rc, "Failed to get ctrlr details");
+				bio_free_dev_info(info);
+				return NULL;
+			}
+		}
+		if (d_bdev->bb_faulty)
+			info->bdi_flags |= NVME_DEV_FL_FAULTY;
+	}
+
+	D_INIT_LIST_HEAD(&info->bdi_link);
+	uuid_copy(info->bdi_dev_id, dev_id);
+	info->bdi_tgt_cnt = tgt_cnt;
+	for (i = 0; i < info->bdi_tgt_cnt; i++)
+		info->bdi_tgts[i] = s_info->sdi_tgts[i];
+
+	return info;
+}
+
 int
 bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 {
@@ -541,26 +599,12 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
-		char *dev_name = d_bdev->bb_removed ? NULL : d_bdev->bb_name;
-
 		s_info = find_smd_dev(d_bdev->bb_uuid, &s_dev_list);
 
-		b_info = alloc_dev_info(d_bdev->bb_uuid, dev_name, s_info);
+		b_info = alloc_dev_info(d_bdev->bb_uuid, d_bdev, s_info);
 		if (b_info == NULL) {
 			D_ERROR("Failed to allocate device info\n");
 			rc = -DER_NOMEM;
-			goto out;
-		}
-		b_info->bdi_dev_roles = d_bdev->bb_roles;
-		if (!d_bdev->bb_removed)
-			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
-		if (d_bdev->bb_faulty)
-			b_info->bdi_flags |= NVME_DEV_FL_FAULTY;
-
-		rc = alloc_ctrlr_info(d_bdev->bb_uuid, dev_name, b_info);
-		if (rc) {
-			DL_ERROR(rc, "Failed to get ctrlr details");
-			bio_free_dev_info(b_info);
 			goto out;
 		}
 
