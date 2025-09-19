@@ -61,6 +61,7 @@ def scons():
         'sched_mock.c',
         'srv_mock.c',
         'srv_module_mock.c',
+        'dts_count.c'
     ]
     dtx_ut = tenv.d_program('dtx_ut', test_src + vos_src, LIBS=libraries)
 
