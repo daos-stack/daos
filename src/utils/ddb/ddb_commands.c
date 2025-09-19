@@ -1451,3 +1451,65 @@ done:
 
 	return rc;
 }
+
+int
+ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
+{
+	struct dv_indexed_tree_path itp = {0};
+	daos_handle_t               coh = {0};
+	uint64_t                   *epoch;
+	int                         rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
+	rc = init_path(ctx, opt->path, &itp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (!itp_has_cont(&itp)) {
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
+	if (!SUCCESS(rc))
+		goto done;
+
+	switch (opt->format) {
+	case DDB_DTX_AGGR_NOW:
+		epoch = NULL;
+		break;
+	case DDB_DTX_AGGR_DATE:
+		rc = ddb_date2epoch(optarg, &opt->epoch);
+		if (!SUCCESS(rc)) {
+			ddb_error(ctx, "'--date' option arg date format is invalid\n");
+			goto done;
+		}
+	case DDB_DTX_AGGR_EPOCH:
+		epoch = &opt->epoch;
+		break;
+	default:
+		D_ASSERT(false && "Invalid dtx_aggr options");
+	}
+
+	ddb_print(ctx, "Starting DTX entries aggregation of ");
+	itp_print_full(ctx, &itp);
+	ddb_print(ctx, "\n");
+	rc = vos_dtx_aggregate(coh, epoch);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Aggregation of DTX entries failed: " DF_RC "\n", DP_RC(rc));
+		goto done;
+	}
+	ddb_print(ctx, "Aggregation of DTX is done\n");
+
+	rc = 0;
+
+done:
+	itp_free(&itp);
+	dv_cont_close(&coh);
+
+	return rc;
+}
