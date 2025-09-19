@@ -1250,14 +1250,21 @@ static int
 assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 {
 	enum smd_dev_type	st, failed_st;
+	struct bio_dev_info    *b_info;
 	bool			assigned = false;
 	int			rc;
+
+	b_info = alloc_dev_info(d_bdev->bb_uuid, d_bdev, NULL);
+	if (b_info == NULL) {
+		D_ERROR("Failed to alloc bio_dev_info.");
+		return -DER_NOMEM;
+	}
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 
-		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st);
+		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st, b_info->bdi_ctrlr);
 		if (rc) {
 			D_ERROR("Failed to map dev "DF_UUID" type:%u to tgt %d. "DF_RC"\n",
 				DP_UUID(d_bdev->bb_uuid), st, tgt_id, DP_RC(rc));
@@ -1292,8 +1299,11 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 			break;
 	}
 
+	bio_free_dev_info(b_info);
+
 	return assigned ? 0 : -DER_INVAL;
 error:
+	bio_free_dev_info(b_info);
 	for (st = SMD_DEV_TYPE_DATA; st < failed_st; st++) {
 		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
@@ -1346,9 +1356,12 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	 */
 	d_bdev = lookup_dev_by_id(dev_info->sdi_id);
 	if (d_bdev == NULL)
-		D_ERROR("Device "DF_UUID" for target %d type %d isn't plugged or the "
-			"SMD table is stale/corrupted.\n",
-			DP_UUID(dev_info->sdi_id), tgt_id, st);
+		ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " "
+				  "[model:%s, serial:%s] for target:%d type:%d is unplugged\n",
+				  DP_UUID(dev_info->sdi_id), dev_info->sdi_model,
+				  dev_info->sdi_serial, tgt_id, st);
 	smd_dev_free_info(dev_info);
 
 	return d_bdev;
