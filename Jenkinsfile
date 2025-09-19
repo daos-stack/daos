@@ -1264,7 +1264,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            codeCoverageReport(
+                            runScriptWithStashes(
                                 stashes: ['code_coverage_Unit_Test_on_EL_8.8',
                                           'code_coverage_Unit_Test_bdev_on_EL_8.8',
                                           'code_coverage_NLT_on_EL_8.8',
