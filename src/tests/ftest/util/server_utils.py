@@ -1210,6 +1210,6 @@ class DaosServerManager(SubprocessManager):
         log_dir = os.path.dirname(self.get_config_value("log_file"))
         command = (f"find {log_dir} -type f -regextype egrep "
                    r"-regex '.*/daos_server[[:digit:]]?\.log\.[[:digit:]]+' -print0 "
-                   f"| xargs -0 grep -E -e '{pattern}'")
+                   f"| xargs -0 -r grep -E -e '{pattern}'")
         result = run_remote(self.log, self.hosts, command_as_user(command, "root"))
         return result
