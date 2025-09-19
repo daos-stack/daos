@@ -47,6 +47,11 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			fv:     strings.Repeat("x", ui.MaxPropKeyLen+1) + ":value",
 			expErr: errors.New("key too long"),
 		},
+		"duplicated properties": {
+			settable: []string{"a", "b"},
+			fv:       "a:c,b:d,a:d",
+			expErr:   errors.New("more than once"),
+		},
 		"valid properties": {
 			settable: []string{"a", "b"},
 			fv:       "b:d,a:c",
