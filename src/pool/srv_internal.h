@@ -250,6 +250,8 @@ ds_pool_rebuild_stop_handler(crt_rpc_t *rpc);
 void
 ds_pool_rebuild_start_handler(crt_rpc_t *rpc);
 void
+ds_pool_recov_cont_handler(crt_rpc_t *rpc);
+void
 ds_pool_tgt_warmup_handler(crt_rpc_t *rpc);
 int
 ds_pool_lookup_map_bc(struct ds_pool *pool, crt_context_t ctx, struct ds_pool_map_bc **map_bc_out,
