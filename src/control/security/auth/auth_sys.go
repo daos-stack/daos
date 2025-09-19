@@ -10,14 +10,12 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"os"
-	"os/user"
-	"strconv"
-	"strings"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -66,228 +64,6 @@ func VerifyToken(key crypto.PublicKey, token *Token, sig []byte) error {
 	return errors.Wrap(err, "token verification Failed")
 }
 
-func sysNameToPrincipalName(name string) string {
-	return name + "@"
-}
-
-func stripHostName(name string) string {
-	return strings.Split(name, ".")[0]
-}
-
-// GetMachineName returns the "short" hostname by stripping the domain from the FQDN.
-func GetMachineName() (string, error) {
-	name, err := os.Hostname()
-	if err != nil {
-		return "", err
-	}
-
-	return stripHostName(name), nil
-}
-
-type (
-	getHostnameFn   func() (string, error)
-	getUserFn       func(string) (*user.User, error)
-	getGroupFn      func(string) (*user.Group, error)
-	getGroupIdsFn   func(*CredentialRequest) ([]string, error)
-	getGroupNamesFn func(*CredentialRequest) ([]string, error)
-
-	// CredentialRequest defines the request parameters for GetSignedCredential.
-	CredentialRequest struct {
-		DomainInfo    *security.DomainInfo
-		SigningKey    crypto.PrivateKey
-		getHostname   getHostnameFn
-		getUser       getUserFn
-		getGroup      getGroupFn
-		getGroupIds   getGroupIdsFn
-		getGroupNames getGroupNamesFn
-	}
-)
-
-func getGroupIds(req *CredentialRequest) ([]string, error) {
-	u, err := req.user()
-	if err != nil {
-		return nil, err
-	}
-	return u.GroupIds()
-}
-
-func getGroupNames(req *CredentialRequest) ([]string, error) {
-	groupIds, err := req.getGroupIds(req)
-	if err != nil {
-		return nil, err
-	}
-
-	groupNames := make([]string, len(groupIds))
-	for i, gID := range groupIds {
-		g, err := req.getGroup(gID)
-		if err != nil {
-			return nil, err
-		}
-		groupNames[i] = g.Name
-	}
-
-	return groupNames, nil
-}
-
-// NewCredentialRequest returns a properly initialized CredentialRequest.
-func NewCredentialRequest(info *security.DomainInfo, key crypto.PrivateKey) *CredentialRequest {
-	return &CredentialRequest{
-		DomainInfo:    info,
-		SigningKey:    key,
-		getHostname:   GetMachineName,
-		getUser:       user.LookupId,
-		getGroup:      user.LookupGroupId,
-		getGroupIds:   getGroupIds,
-		getGroupNames: getGroupNames,
-	}
-}
-
-func (r *CredentialRequest) hostname() (string, error) {
-	if r.getHostname == nil {
-		return "", errors.New("hostname lookup function not set")
-	}
-
-	hostname, err := r.getHostname()
-	if err != nil {
-		return "", errors.Wrap(err, "failed to get hostname")
-	}
-	return stripHostName(hostname), nil
-}
-
-func (r *CredentialRequest) user() (*user.User, error) {
-	if r.getUser == nil {
-		return nil, errors.New("user lookup function not set")
-	}
-	return r.getUser(strconv.Itoa(int(r.DomainInfo.Uid())))
-}
-
-func (r *CredentialRequest) userPrincipal() (string, error) {
-	u, err := r.user()
-	if err != nil {
-		return "", err
-	}
-	return sysNameToPrincipalName(u.Username), nil
-}
-
-func (r *CredentialRequest) group() (*user.Group, error) {
-	if r.getGroup == nil {
-		return nil, errors.New("group lookup function not set")
-	}
-	return r.getGroup(strconv.Itoa(int(r.DomainInfo.Gid())))
-}
-
-func (r *CredentialRequest) groupPrincipal() (string, error) {
-	g, err := r.group()
-	if err != nil {
-		return "", err
-	}
-	return sysNameToPrincipalName(g.Name), nil
-}
-
-func (r *CredentialRequest) groupPrincipals() ([]string, error) {
-	if r.getGroupNames == nil {
-		return nil, errors.New("groupNames function not set")
-	}
-
-	groupNames, err := r.getGroupNames(r)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get group names")
-	}
-
-	for i, g := range groupNames {
-		groupNames[i] = sysNameToPrincipalName(g)
-	}
-	return groupNames, nil
-}
-
-// WithUserAndGroup provides an override to set the user, group, and optional list
-// of group names to be used for the request.
-func (r *CredentialRequest) WithUserAndGroup(userStr, groupStr string, groupStrs ...string) {
-	r.getUser = func(id string) (*user.User, error) {
-		return &user.User{
-			Uid:      id,
-			Gid:      id,
-			Username: userStr,
-		}, nil
-	}
-	r.getGroup = func(id string) (*user.Group, error) {
-		return &user.Group{
-			Gid:  id,
-			Name: groupStr,
-		}, nil
-	}
-	r.getGroupNames = func(*CredentialRequest) ([]string, error) {
-		return groupStrs, nil
-	}
-}
-
-// GetSignedCredential returns a credential based on the provided domain info and
-// signing key.
-func GetSignedCredential(ctx context.Context, req *CredentialRequest) (*Credential, error) {
-	if req == nil {
-		return nil, errors.Errorf("%T is nil", req)
-	}
-
-	if req.DomainInfo == nil {
-		return nil, errors.New("No domain info supplied")
-	}
-
-	hostname, err := req.hostname()
-	if err != nil {
-		return nil, err
-	}
-
-	userPrinc, err := req.userPrincipal()
-	if err != nil {
-		return nil, err
-	}
-
-	groupPrinc, err := req.groupPrincipal()
-	if err != nil {
-		return nil, err
-	}
-
-	groupPrincs, err := req.groupPrincipals()
-	if err != nil {
-		return nil, err
-	}
-
-	// Craft AuthToken
-	sys := Sys{
-		Stamp:       0,
-		Machinename: hostname,
-		User:        userPrinc,
-		Group:       groupPrinc,
-		Groups:      groupPrincs,
-		Secctx:      req.DomainInfo.Ctx()}
-
-	// Marshal our AuthSys token into a byte array
-	tokenBytes, err := proto.Marshal(&sys)
-	if err != nil {
-		return nil, errors.Wrap(err, "Unable to marshal AuthSys token")
-	}
-	token := Token{
-		Flavor: Flavor_AUTH_SYS,
-		Data:   tokenBytes}
-
-	verifier, err := VerifierFromToken(req.SigningKey, &token)
-	if err != nil {
-		return nil, errors.WithMessage(err, "Unable to generate verifier")
-	}
-
-	verifierToken := Token{
-		Flavor: Flavor_AUTH_SYS,
-		Data:   verifier}
-
-	credential := Credential{
-		Token:    &token,
-		Verifier: &verifierToken,
-		Origin:   "agent"}
-
-	logging.FromContext(ctx).Tracef("%s: successfully signed credential", req.DomainInfo)
-	return &credential, nil
-}
-
 // AuthSysFromAuthToken takes an opaque AuthToken and turns it into a
 // concrete AuthSys data structure.
 func AuthSysFromAuthToken(authToken *Token) (*Sys, error) {
@@ -302,3 +78,59 @@ func AuthSysFromAuthToken(authToken *Token) (*Sys, error) {
 	}
 	return sysToken, nil
 }
+
+func CredentialRequestGetSigned(ctx context.Context, log logging.Logger, req CredentialRequest) (*Credential, error) {
+	return req.GetSignedCredential(log, ctx)
+}
+
+func registerAllAuthenticationMethods() AuthMap {
+	var ar = make(map[AuthTag]CredentialRequestFactory)
+	for _, req := range CredentialRequests {
+		authName := req.GetAuthName()
+		_, found := ar[authName]
+		if found {
+			panic(fmt.Errorf("multiple authentication methods with the name `%s` were found - confirm that all implementations of `GetAuthName` are unique", authName))
+		}
+		ar[authName] = req
+	}
+	return ar
+}
+
+const (
+	AuthTagSize = 4
+)
+
+type (
+	AuthTag [AuthTagSize]byte
+
+	AuthMap map[AuthTag]CredentialRequestFactory
+
+	CredentialRequestFactory interface {
+		// Allocate, and return, an instance of the type that implements CredentialRequest interface.
+		AllocCredentialRequest() CredentialRequest
+		// Returns a unique 4 character identifier (AuthTag) that refers to the CredentialRequest implementation.
+		GetAuthName() AuthTag
+	}
+
+	CredentialRequest interface {
+		// Using information stored in the agent's security config, the session/socket, request body, and the agent's signing key,
+		// initalize the state of the Credential Request so that it can sign a credential in the future. Return an error if
+		// a problem occurs during initializiation.
+		InitCredentialRequest(log logging.Logger, sec_cfg *security.CredentialConfig, session *drpc.Session, req_body []byte, key crypto.PrivateKey) error
+		// Contact a source of authenticity (e.g. domain socket, access manager) using the initalized state of the CredentialRequest
+		// to construct a Credential object.
+		GetSignedCredential(log logging.Logger, ctx context.Context) (*Credential, error)
+		// Returns a key, as a string, representing a unique identifer specific to the request. This key is used by the cache
+		// to remember credentials. It is vital for security that this identifer cannot be forged or easily guessed by the client - 
+		// otherwise cached credentials can be "stolen".
+		CredReqKey() string
+	}
+)
+
+// CredentialRequests is a list of request types that can be used for authentication.
+// To add a new type of authentication simply implement the CredentialRequest interface and add
+// an instance to the CredentialRequests list.
+// The agent must be configured to allow an authentication method when it is initalized.
+// By default, only Unix authentication is enabled.
+var CredentialRequests = []CredentialRequestFactory{&CredentialRequestUnix{}, &CredentialRequestAM{}}
+var AuthRegister = registerAllAuthenticationMethods()
