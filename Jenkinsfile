@@ -19,7 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
-@Library(value='pipeline-lib@hendersp/DAOS-17259_2') _
+@Library(value='pipeline-lib@hendersp/DAOS-17259') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -1245,25 +1245,43 @@ pipeline {
             }
         } // stage('Test Hardware')
         stage('Test Summary') {
-            steps {
-                script {
-                    parallel(
-                        'Code Coverage Report': getSummaryStage(
-                            name: 'Code Coverage Report',
-                            docker_filename: 'utils/docker/Dockerfile.el.8',
-                            script_stashes: ['code_coverage_Unit_Test_on_EL_8.8',
-                                             'code_coverage_Unit_Test_bdev_on_EL_8.8',
-                                             'code_coverage_NLT_on_EL_8.8',
-                                             'code_coverage_Unit_Test_with_memcheck_on_EL_8.8',
-                                             'code_coverage_Unit_Test_bdev_with_memcheck_on_EL_8.8'],
-                            script_name: 'ci/code_coverage_report.sh',
-                            script_label: 'Code Coverage Report',
-                            artifacts: 'code_coverage_report/*',
-                            job_status: job_status_internal
-                        )
-                    )
-                }
+            when {
+                beforeAgent true
+                expression { true }
             }
+            parallel {
+                stage('Code Coverage Report') {
+                    when {
+                        beforeAgent true
+                        expression { params.CI_CODE_COVERAGE }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(add_repos: false)
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            codeCoverageReport(
+                                stashes: ['code_coverage_Unit_Test_on_EL_8.8',
+                                          'code_coverage_Unit_Test_bdev_on_EL_8.8',
+                                          'code_coverage_NLT_on_EL_8.8',
+                                          'code_coverage_Unit_Test_with_memcheck_on_EL_8.8',
+                                          'code_coverage_Unit_Test_bdev_with_memcheck_on_EL_8.8'],
+                                script: 'ci/code_coverage_report.sh',
+                                label: 'Code Coverage Report'))
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'code_coverage_report/*',
+                                             allowEmptyArchive: false
+                            job_status_update()
+                        }
+                    }
+                } // stage('Code Coverage Report')
+            } // parallel
         } // stage('Test Summary')
     } // stages
     post {
