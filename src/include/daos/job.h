@@ -45,6 +45,16 @@ extern char *dc_jobid;
 int
 dc_set_default_jobid(const char *default_jobid);
 
+/**
+ * Check if the provided jobid string matches the default jobid.
+ *
+ * \param[in]	jobid	The job ID string to check.
+ *
+ * \return		true if the jobid matches the default.
+ */
+bool
+dc_jobid_is_default(const char *jobid);
+
 /*
  * The answer of what the max length of envvar name is very tricky. Arguments
  * and environment variable share the same memory space so to make things easy
