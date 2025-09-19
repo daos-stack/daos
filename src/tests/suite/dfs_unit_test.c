@@ -2475,6 +2475,58 @@ dfs_test_oclass_hints(void **state)
 	rc = daos_cont_destroy(arg->pool.poh, "oc_cont2", 0, NULL);
 	assert_success(rc);
 
+	/** create container with RF = 3 */
+	print_message("DFS object class hints with container RF3:\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val  = DAOS_PROP_CO_REDUN_RF3;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont3", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** set the expect EC object class ID based on domain nr */
+	if (attr.pa_domain_nr >= 22)
+		ecidx = OC_EC_16P3GX;
+	else if (attr.pa_domain_nr >= 14)
+		ecidx = OC_EC_8P3GX;
+	else if (attr.pa_domain_nr >= 10)
+		ecidx = OC_EC_4P3GX;
+	else
+		ecidx = OC_RP_4GX;
+
+	rc = dfs_suggest_oclass(dfs_l, "file:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"file:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_4G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "File:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"File:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, ecidx);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "dir:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"dir:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_4G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "Directory:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_4GX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_success(rc);
+	rc = daos_cont_destroy(arg->pool.poh, "oc_cont3", 0, NULL);
+	assert_success(rc);
+
 	daos_prop_free(prop);
 }
 
