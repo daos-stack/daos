@@ -25,4 +25,4 @@ server_config:
       storage: auto
 
 pool:
-  size: 50GB
+  size: 100GB
