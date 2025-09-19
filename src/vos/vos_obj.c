@@ -1526,6 +1526,8 @@ recx_get_flags(struct vos_obj_iter *oiter, bool embed)
 		options |= EVT_ITER_FOR_DISCARD;
 	if (oiter->it_flags & VOS_IT_FOR_MIGRATION)
 		options |= EVT_ITER_FOR_MIGRATION;
+	if (oiter->it_flags & VOS_IT_FOR_CHECK)
+		options |= EVT_ITER_FOR_CHECK;
 	return options;
 }
 
