@@ -425,6 +425,24 @@ chk_pool_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+static int
+chk_set_policy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct chk_set_policy_in  *in_source  = crt_req_get(source);
+	struct chk_set_policy_out *out_source = crt_reply_get(source);
+	struct chk_set_policy_out *out_result = crt_reply_get(result);
+
+	if (out_source->cspo_status != 0) {
+		D_ERROR("Failed to set policy with gen " DF_X64 ": " DF_RC "\n",
+			in_source->cspi_gen, DP_RC(out_source->cspo_status));
+
+		if (out_result->cspo_status == 0)
+			out_result->cspo_status = out_source->cspo_status;
+	}
+
+	return 0;
+}
+
 struct crt_corpc_ops chk_start_co_ops = {
 	.co_aggregate	= chk_start_aggregator,
 	.co_pre_forward	= NULL,
@@ -462,6 +480,11 @@ struct crt_corpc_ops chk_cont_list_co_ops = {
 struct crt_corpc_ops chk_pool_start_co_ops = {
 	.co_aggregate	= chk_pool_start_aggregator,
 	.co_pre_forward	= NULL,
+};
+
+struct crt_corpc_ops chk_set_policy_co_ops = {
+    .co_aggregate   = chk_set_policy_aggregator,
+    .co_pre_forward = NULL,
 };
 
 static inline int
@@ -1041,6 +1064,41 @@ out:
 	return rc;
 }
 
+int
+chk_set_policy_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t policy_nr,
+		      struct chk_policy *policies)
+{
+	crt_rpc_t                 *req = NULL;
+	struct chk_set_policy_in  *cspi;
+	struct chk_set_policy_out *cspo;
+	int                        rc;
+
+	rc = chk_co_rpc_prepare(rank_list, CHK_SET_POLICY, &req, false);
+	if (rc != 0)
+		goto out;
+
+	cspi                          = crt_req_get(req);
+	cspi->cspi_gen                = gen;
+	cspi->cspi_policies.ca_count  = policy_nr;
+	cspi->cspi_policies.ca_arrays = policies;
+
+	rc = dss_rpc_send(req);
+	if (rc != 0)
+		goto out;
+
+	cspo = crt_reply_get(req);
+	rc   = cspo->cspo_status;
+
+out:
+	if (req != NULL)
+		crt_req_decref(req);
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "Set policy for DAOS check with gen " DF_X64 ": " DF_RC "\n", gen, DP_RC(rc));
+
+	return rc;
+}
+
 static int
 crt_proc_struct_chk_policy(crt_proc_t proc, crt_proc_op_t proc_op, struct chk_policy *policy)
 {
@@ -1375,3 +1433,4 @@ CRT_RPC_DEFINE(chk_pool_start, DAOS_ISEQ_CHK_POOL_START, DAOS_OSEQ_CHK_POOL_STAR
 CRT_RPC_DEFINE(chk_pool_mbs, DAOS_ISEQ_CHK_POOL_MBS, DAOS_OSEQ_CHK_POOL_MBS);
 CRT_RPC_DEFINE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 CRT_RPC_DEFINE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
+CRT_RPC_DEFINE(chk_set_policy, DAOS_ISEQ_CHK_SET_POLICY, DAOS_OSEQ_CHK_SET_POLICY);

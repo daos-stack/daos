@@ -108,6 +108,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_EXTEND:
 		ds_mgmt_drpc_pool_extend(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_REBUILD_START:
+		ds_mgmt_drpc_pool_rebuild_start(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_REBUILD_STOP:
+		ds_mgmt_drpc_pool_rebuild_stop(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
 		ds_mgmt_drpc_bio_health_query(drpc_req, drpc_resp);
 		break;
@@ -176,6 +182,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_GET_GROUP_STATUS:
 		ds_mgmt_drpc_get_group_status(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_SET_POLICY:
+		ds_mgmt_drpc_check_set_policy(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
