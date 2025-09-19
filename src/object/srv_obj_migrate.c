@@ -764,7 +764,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if (rc == -DER_TIMEDOUT &&
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -883,7 +883,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 iod_cnt = 0;
 	int			 start;
-	char		 iov_buf[OBJ_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
+	char                    *iov_buf[OBJ_ENUM_UNPACK_MAX_IODS] = {0};
 	bool			 fetch = false;
 	int			 i;
 	int			 rc = 0;
@@ -892,6 +892,10 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
+		D_ALLOC(iov_buf[i], MAX_BUF_SIZE);
+		if (iov_buf[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
 		if (mrone->mo_iods[i].iod_size == 0)
 			continue;
 
@@ -916,10 +920,10 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_epoch, fetch ? "yes" : "no");
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
-		return 0;
+		D_GOTO(out, rc = 0);
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 
 	if (fetch) {
 		if (!daos_oclass_is_ec(&mrone->mo_oca)) {
@@ -1005,6 +1009,8 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 out:
 	if (csum_iov.iov_buf != NULL)
 		D_FREE(csum_iov.iov_buf);
+	for (i = 0; i < mrone->mo_iod_num; i++)
+		D_FREE(iov_buf[i]);
 
 	return rc;
 }
@@ -1327,14 +1333,12 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			 * the rebuild and retry.
 			 */
 			rc = -DER_DATA_LOSS;
-			D_DEBUG(DB_REBUILD,
-				DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
-				" eph "DF_U64" "DF_RC"\n",
-				DP_UOID(mrone->mo_oid),
-				mrone, DP_KEY(&mrone->mo_dkey),
-				DP_KEY(&mrone->mo_iods[i].iod_name),
-				mrone->mo_iod_num, i, mrone->mo_epoch,
-				DP_RC(rc));
+			DL_INFO(rc,
+				DF_UOID " %p dkey " DF_KEY " " DF_KEY " nr %d/%d"
+					" eph " DF_X64,
+				DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
+				DP_KEY(&mrone->mo_iods[i].iod_name), mrone->mo_iod_num, i,
+				mrone->mo_epoch);
 			D_GOTO(out, rc);
 		}
 
