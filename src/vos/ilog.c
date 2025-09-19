@@ -195,13 +195,18 @@ ilog_init(void)
 	return 0;
 }
 
-/* 4 bit magic number + version */
-#define ILOG_MAGIC		0x00000006
-#define ILOG_MAGIC_BITS		4
-#define ILOG_MAGIC_MASK		((1 << ILOG_MAGIC_BITS) - 1)
-#define ILOG_VERSION_INC	(1 << ILOG_MAGIC_BITS)
-#define ILOG_VERSION_MASK	~(ILOG_VERSION_INC - 1)
-#define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
+/* 4-bit magic number + 24-bits version + 4-bits flags */
+#define ILOG_MAGIC              0x00000006
+#define ILOG_MAGIC_BITS         4
+#define ILOG_MAGIC_MASK         ((1 << ILOG_MAGIC_BITS) - 1)
+#define ILOG_VERSION_BITS       24
+#define ILOG_VERSION_INC        (1 << ILOG_MAGIC_BITS)
+#define ILOG_FLAGS_SHIFT        (ILOG_MAGIC_BITS + ILOG_VERSION_BITS)
+#define ILOG_FLAGS_BITS         (32 - ILOG_FLAGS_SHIFT)
+#define ILOG_FLAGS_MAX          ((1 << ILOG_FLAGS_BITS) - 1)
+#define ILOG_FLAGS_MASK         (~((1 << ILOG_FLAGS_SHIFT) - 1))
+#define ILOG_VERSION_MASK       ((~(ILOG_VERSION_INC - 1)) & (~ILOG_FLAGS_MASK))
+#define ILOG_MAGIC_VALID(magic) (((magic)&ILOG_MAGIC_MASK) == ILOG_MAGIC)
 
 static inline uint32_t
 ilog_mag2ver(uint32_t magic) {
@@ -209,6 +214,15 @@ ilog_mag2ver(uint32_t magic) {
 		return 0;
 
 	return (magic & ILOG_VERSION_MASK) >> ILOG_MAGIC_BITS;
+}
+
+static inline int
+ilog_mag2flags(uint32_t magic)
+{
+	if (!ILOG_MAGIC_VALID(magic))
+		return -1;
+
+	return (magic & ILOG_FLAGS_MASK) >> ILOG_FLAGS_SHIFT;
 }
 
 /** Increment the version of the log.   The object tree in particular can
@@ -892,8 +906,32 @@ const char *opc_str[] = {
 };
 
 static int
-ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
-	    const daos_epoch_range_t *epr, int opc)
+ilog_magic_add_flags(struct ilog_context *lctx, uint32_t flags, uint32_t *magic)
+{
+	uint32_t new;
+	int old;
+	int rc;
+
+	D_ASSERT(flags <= ILOG_FLAGS_MAX);
+	D_ASSERT(flags > 0);
+
+	old = ilog_mag2flags(*magic);
+	if (unlikely(old < 0)) {
+		rc = old;
+	} else if ((flags & old) != flags) {
+		D_INFO("Add flags %x to ilog with old magic %x\n", flags, *magic);
+		new = *magic | (flags << ILOG_FLAGS_SHIFT);
+		rc  = ilog_ptr_set(lctx, magic, &new);
+	} else {
+		rc = -DER_ALREADY;
+	}
+
+	return rc;
+}
+
+static int
+ilog_modify(daos_handle_t loh, const struct ilog_id *id_in, const daos_epoch_range_t *epr, int opc,
+	    uint32_t flags)
 {
 	struct ilog_context	*lctx;
 	struct ilog_root	*root;
@@ -915,9 +953,15 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 
 	version = ilog_mag2ver(root->lr_magic);
 
-	D_DEBUG(DB_TRACE, "%s in incarnation log: log:"DF_X64 " epoch:" DF_X64
-		" tree_version: %d\n", opc_str[opc], lctx->ic_root_off,
-		id_in->id_epoch, version);
+	D_DEBUG(DB_TRACE,
+		"%s in incarnation log: " DF_X64 " epoch:" DF_X64 " flags %x, tree_version: %d\n",
+		opc_str[opc], lctx->ic_root_off, id_in->id_epoch, flags, version);
+
+	if (flags != 0) {
+		rc = ilog_magic_add_flags(lctx, flags, &root->lr_magic);
+		if (rc != 0)
+			return rc;
+	}
 
 	if (root->lr_tree.it_embedded && root->lr_id.id_epoch <= epr->epr_hi
 	    && root->lr_id.id_epoch >= epr->epr_lo) {
@@ -985,9 +1029,9 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	}
 done:
 	rc = ilog_tx_end(lctx, rc);
-	D_DEBUG(DB_TRACE,
-		"%s in incarnation log " DF_X64 " status: rc=" DF_RC " tree_version: %d\n",
-		opc_str[opc], id_in->id_epoch, DP_RC(rc), ilog_mag2ver(lctx->ic_root->lr_magic));
+	DL_CDEBUG(rc == 0 || rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR, rc,
+		  "%s in incarnation log " DF_X64 " flags %x, tree_version: %d", opc_str[opc],
+		  id_in->id_epoch, flags, ilog_mag2ver(lctx->ic_root->lr_magic));
 
 	if (rc == 0 && opc != ILOG_OP_UPDATE) {
 		if (version == ilog_mag2ver(lctx->ic_root->lr_magic)) {
@@ -1027,8 +1071,19 @@ ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
 	if (epr)
 		range = *epr;
 
-	return ilog_modify(loh, &id, &range, ILOG_OP_UPDATE);
+	return ilog_modify(loh, &id, &range, ILOG_OP_UPDATE, 0);
+}
 
+int
+ilog_set_flags(daos_handle_t loh, daos_epoch_t epoch, uint32_t flags)
+{
+	daos_epoch_range_t range = {0, DAOS_EPOCH_MAX};
+	struct ilog_id     id    = {0};
+
+	id.id_epoch            = epoch;
+	id.id_update_minor_eph = VOS_MINOR_EPC_MAX;
+
+	return ilog_modify(loh, &id, &range, ILOG_OP_UPDATE, flags);
 }
 
 /** Makes a specific update to the incarnation log permanent and
@@ -1040,7 +1095,7 @@ ilog_persist(daos_handle_t loh, const struct ilog_id *id)
 	daos_epoch_range_t	 range = {id->id_epoch, id->id_epoch};
 	int	rc;
 
-	rc = ilog_modify(loh, id, &range, ILOG_OP_PERSIST);
+	rc = ilog_modify(loh, id, &range, ILOG_OP_PERSIST, 0);
 
 	return rc;
 }
@@ -1053,7 +1108,7 @@ ilog_abort(daos_handle_t loh, const struct ilog_id *id)
 
 	D_DEBUG(DB_IO, "Aborting ilog entry %d "DF_X64"\n", id->id_tx_id,
 		id->id_epoch);
-	return ilog_modify(loh, id, &range, ILOG_OP_ABORT);
+	return ilog_modify(loh, id, &range, ILOG_OP_ABORT, 0);
 }
 
 #define NUM_EMBEDDED 8
@@ -1537,7 +1592,8 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	/* This can potentially be optimized but using ilog_fetch gets some code
 	 * reuse.
 	 */
-	rc = ilog_fetch(umm, ilog, cbs, DAOS_INTENT_PURGE, false, entries);
+	rc = ilog_fetch(umm, ilog, cbs, discard ? DAOS_INTENT_DISCARD : DAOS_INTENT_PURGE, false,
+			entries);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_TRACE, "log is empty\n");
 		/* Log is empty */
@@ -1604,6 +1660,18 @@ done:
 		return rc;
 
 	return empty;
+}
+
+bool
+ilog_is_corrupted(struct ilog_df *ilog_df)
+{
+	struct ilog_root *root  = (struct ilog_root *)ilog_df;
+	int               flags = ilog_mag2flags(root->lr_magic);
+
+	if (flags < 0)
+		return true;
+
+	return flags & ILOG_FLAGS_CORRUPTED;
 }
 
 uint32_t *
