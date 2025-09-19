@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,7 +33,7 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	d_rank_t		extra_kill_ranks[4] = { -1 };
 	int			rc;
 
-	if (oclass == OC_EC_2P1G1 && !test_runable(arg, 4))
+	if (oclass == OC_EC_2P1GX && !test_runable(arg, 4))
 		return;
 	if (oclass == OC_EC_4P2G1 && !test_runable(arg, 8))
 		return;
@@ -69,7 +70,7 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	/*
 	 * let's kill extra data node to verify parity is correct.
 	 */
-	if (oclass == OC_EC_2P1G1) {
+	if (oclass == OC_EC_2P1GX) {
 		get_killing_rank_by_oid(arg, oid, 1, 0, extra_kill_ranks, NULL);
 		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, true);
 	} else { /* oclass OC_EC_4P2G1 */
@@ -77,7 +78,7 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, true);
 	}
 
-	if (oclass == OC_EC_2P1G1)
+	if (oclass == OC_EC_2P1GX)
 		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, true);
 	else /* oclass OC_EC_4P2G1 */
 		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, true);
@@ -314,49 +315,49 @@ rebuild_ec_6nodes_setup(void **state)
 static void
 rebuild_partial_fail_data(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1GX, 1, 0, PARTIAL_UPDATE);
 }
 
 static void
 rebuild_partial_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1GX, 0, 1, PARTIAL_UPDATE);
 }
 
 static void
 rebuild_full_fail_data(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1GX, 1, 0, FULL_UPDATE);
 }
 
 static void
 rebuild_full_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1GX, 0, 1, FULL_UPDATE);
 }
 
 static void
 rebuild_full_partial_fail_data(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, FULL_PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1GX, 1, 0, FULL_PARTIAL_UPDATE);
 }
 
 static void
 rebuild_full_partial_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, FULL_PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1GX, 0, 1, FULL_PARTIAL_UPDATE);
 }
 
 static void
 rebuild_partial_full_fail_data(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, PARTIAL_FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1GX, 1, 0, PARTIAL_FULL_UPDATE);
 }
 
 static void
 rebuild_partial_full_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, PARTIAL_FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1GX, 0, 1, PARTIAL_FULL_UPDATE);
 }
 
 static void
