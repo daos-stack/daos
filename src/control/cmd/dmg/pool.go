@@ -337,7 +337,7 @@ func (cmd *poolCreateCmd) Execute(args []string) error {
 		User:       cmd.UserName.String(),
 		UserGroup:  cmd.GroupName.String(),
 		NumSvcReps: cmd.NumSvcReps,
-		Properties: cmd.Properties.ToSet,
+		Properties: cmd.Properties.ToSet.Slice(),
 		Ranks:      cmd.RankList.Ranks(),
 	}
 
@@ -832,7 +832,7 @@ func (cmd *poolSetPropCmd) Execute(_ []string) error {
 
 	req := &control.PoolSetPropReq{
 		ID:         cmd.PoolID().String(),
-		Properties: cmd.Args.Props.ToSet,
+		Properties: cmd.Args.Props.ToSet.Slice(),
 	}
 
 	err := control.PoolSetProp(cmd.MustLogCtx(), cmd.ctlInvoker, req)
