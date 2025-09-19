@@ -114,10 +114,12 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         # 5. Immediately after starting the first pool, start the second pool.
         self.log_step("Immediately after starting the first pool, start the second pool.")
+        pool_2_started = False
         for count in range(8):
             try:
                 dmg_command.check_start(pool=pool_2.identifier)
                 self.log.info("dmg check start pool_2 worked. - %d", count)
+                pool_2_started = True
                 break
             except CommandFailure as command_failure:
                 # Starting back to back may cause Operation already performed error. In
@@ -126,6 +128,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
                 self.log.info(
                     "dmg check start pool_2 failed. - %d; %s", count, command_failure)
             time.sleep(5)
+        self.assertTrue(pool_2_started, "dmg check start pool_2 failed after 40 sec!")
 
         # 6. Query checker and verify that they’re fixed.
         self.log_step("Query checker and verify that they’re fixed.")
