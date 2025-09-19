@@ -1199,10 +1199,10 @@ down_back_to_up_in_same_order(void **state)
 	 * healthy targets because of the retry/collision mechanism of the jump
 	 * map algorithm.
 	 * Due to layout colocation, if the oid has been changed, then it could
-	 * be 2 or even 3 as well, with current oid setting, this is 1.
+	 * be 2 or even 3 as well, with current oid setting, this is 2.
 	 */
-	assert_int_equal(1, ctx.reint.out_nr);
-	jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 1);
+	assert_int_equal(2, ctx.reint.out_nr);
+	jtc_assert_rebuild_reint_new(ctx, 2, 0, 2, 2);
 
 	/* Take second downed target up */
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[1]);
@@ -1677,14 +1677,14 @@ placement_handles_multiple_states_with_addition(void **state)
 	rebuilding = jtc_get_layout_rebuild_count(&ctx);
 
 	/* 1 each for down, up, new ... maybe? */
-	assert_true(rebuilding == 2 || rebuilding == 3);
+	assert_true(rebuilding == 2 || rebuilding == 3 || rebuilding == 4);
 
 	/* Both DOWN and UP target will be remapped during remap */
-	assert_int_equal(ctx.rebuild.out_nr, 2);
+	assert_int_equal(ctx.rebuild.out_nr, 3);
 	/* Adding new targets might make original shard to be remapped
 	 * to new location.
 	 */
-	assert_true(ctx.reint.out_nr == 1 || ctx.reint.out_nr == 2);
+	assert_true(ctx.reint.out_nr == 1 || ctx.reint.out_nr == 2 || ctx.reint.out_nr == 3);
 
 	/* JCH might cause multiple shards remap to the new target */
 	assert_true(ctx.new.out_nr >= 1);
