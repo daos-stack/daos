@@ -26,16 +26,20 @@ struct dlck_print {
 	char prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
 };
 
+#define IS_DLCK(dp)     (unlikely((dp) != NULL))
+
+#define IS_NOT_DLCK(dp) (likely((dp) == NULL))
+
 #define DLCK_PRINT(print, msg)                                                                     \
 	do {                                                                                       \
-		if ((print) != NULL) {                                                             \
+		if (IS_DLCK(print)) {                                                              \
 			(void)(print)->dp_printf("%s" msg, (print)->prefix);                       \
 		}                                                                                  \
 	} while (0)
 
 #define DLCK_PRINTF(print, fmt, ...)                                                               \
 	do {                                                                                       \
-		if (print != NULL) {                                                               \
+		if (IS_DLCK(print)) {                                                              \
 			(void)print->dp_printf("%s" fmt, print->prefix, __VA_ARGS__);              \
 		}                                                                                  \
 	} while (0)
@@ -44,14 +48,14 @@ struct dlck_print {
 
 #define DLCK_PRINT_WO_PREFIX(print, msg)                                                           \
 	do {                                                                                       \
-		if (print != NULL) {                                                               \
+		if (IS_DLCK(print)) {                                                              \
 			(void)print->dp_printf(msg);                                               \
 		}                                                                                  \
 	} while (0)
 
 #define DLCK_PRINTF_WO_PREFIX(print, fmt, ...)                                                     \
 	do {                                                                                       \
-		if (print != NULL) {                                                               \
+		if (IS_DLCK(print)) {                                                              \
 			(void)print->dp_printf(fmt, __VA_ARGS__);                                  \
 		}                                                                                  \
 	} while (0)
@@ -65,10 +69,6 @@ struct dlck_print {
 
 #define DLCK_PRINT_RC(print, rc)                                                                   \
 	DLCK_PRINTF_WO_PREFIX(print, DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc))
-
-#define IS_DLCK(dp)                    (unlikely((dp) != NULL))
-
-#define IS_NOT_DLCK(dp)                (likely((dp) == NULL))
 
 static inline void
 dlck_print_indent_set(struct dlck_print *dp)
