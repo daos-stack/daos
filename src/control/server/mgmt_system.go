@@ -1207,19 +1207,10 @@ func (svc *mgmtSvc) queryPool(ctx context.Context, id string, getEnabled bool) (
 	return ranklist.MustCreateRankSet(rankStr), nil
 }
 
-type poolRanksMap map[string]*ranklist.RankSet
-
-// Build mappings of pools to any ranks that match the input filter by iterating through the pool
-// service list. Identify pools by label if possible.
-func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.RankSet, getEnabled bool) ([]string, poolRanksMap, error) {
+func (svc *mgmtSvc) getPoolIDs() ([]string, error) {
 	psList, err := svc.sysdb.PoolServiceList(false)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	filterRanksMap := make(map[ranklist.Rank]struct{})
-	for _, r := range filterRanks.Ranks() {
-		filterRanksMap[r] = struct{}{}
+		return nil, err
 	}
 
 	var poolIDs []string
@@ -1232,6 +1223,24 @@ func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.Rank
 		poolIDs = append(poolIDs, poolID)
 	}
 	sort.Strings(poolIDs)
+
+	return poolIDs, err
+}
+
+type poolRanksMap map[string]*ranklist.RankSet
+
+// Build mappings of pools to any ranks that match the input filter by iterating through the pool
+// service list. Identify pools by label if possible.
+func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.RankSet, getEnabled bool) ([]string, poolRanksMap, error) {
+	filterRanksMap := make(map[ranklist.Rank]struct{})
+	for _, r := range filterRanks.Ranks() {
+		filterRanksMap[r] = struct{}{}
+	}
+
+	poolIDs, err := svc.getPoolIDs()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	var outPoolIDs []string
 	poolRanks := make(poolRanksMap)
@@ -1378,6 +1387,57 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainRe
 		return nil, errors.Wrapf(err, "convert %T->%T", resps, pbResp.Responses)
 	}
 	pbResp.Reint = pbReq.Reint
+
+	return pbResp, nil
+}
+
+// SystemRebuildManage triggers pool-rebuild operations on all pools in system.
+func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.SystemRebuildManageReq) (*mgmtpb.SystemRebuildManageResp, error) {
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T", pbReq)
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(pbReq)); err != nil {
+		return nil, err
+	}
+
+	poolIDs, err := svc.getPoolIDs()
+	if err != nil {
+		return nil, err
+	}
+	if len(poolIDs) == 0 {
+		return &mgmtpb.SystemRebuildManageResp{}, nil // Successful no-op.
+	}
+
+	var results []*control.PoolRebuildManageResult
+	for _, id := range poolIDs {
+		opCode := control.PoolRebuildOpCode(pbReq.OpCode)
+
+		req := &control.PoolRebuildManageReq{
+			ID:     id,
+			OpCode: opCode,
+			Force:  pbReq.Force,
+		}
+		svc.log.Tracef("%T: %+v", req, req)
+
+		result := &control.PoolRebuildManageResult{
+			ID:     id,
+			OpCode: opCode,
+		}
+
+		if err := control.PoolRebuildManage(ctx, svc.rpcClient, req); err != nil {
+			result.Errored = true
+			result.Msg = err.Error()
+		}
+
+		svc.log.Tracef("%T: %+v", result, result)
+		results = append(results, result)
+	}
+
+	pbResp := &mgmtpb.SystemRebuildManageResp{}
+	if err := convert.Types(results, &pbResp.Results); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", results, pbResp.Results)
+	}
 
 	return pbResp, nil
 }
