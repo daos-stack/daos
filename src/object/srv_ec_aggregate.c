@@ -1074,7 +1074,7 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 	buf  = entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
 	diff = entry->ae_sgl.sg_iovs[AGG_IOV_DIFF].iov_buf;
 
-	for (i = 0, j = 0; i < cell_cnt; i++) {
+	for (i = 0, j = 0; i < cell_cnt; i++, j++) {
 		old = &obuf[i * cell_bytes];
 		new = &buf[i * cell_bytes];
 		vects[0] = old;
