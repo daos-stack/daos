@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -70,8 +71,9 @@ class SparseFile(IorTestBase):
         # remote node
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
+        pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser("~/.ssh/id_rsa"))
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(self.hostlist_clients[0], username=getuser())
+        ssh.connect(self.hostlist_clients[0], username=getuser(), pkey=pkey)
         sftp = ssh.open_sftp()
 
         # open remote file
