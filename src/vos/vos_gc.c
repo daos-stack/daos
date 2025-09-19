@@ -1492,7 +1492,7 @@ gc_close_bkt(struct vos_gc_info *gc_info)
 	gc_info->gi_last_pinned = UMEM_DEFAULT_MBKT_ID;
 }
 
-#define DLCK_GC_TREE_STR "Gargabe collector's tree... "
+#define DLCK_GC_TREE_STR "Garbage collector's tree... "
 
 static inline int
 gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_print *dp,
