@@ -360,10 +360,9 @@ class PoolListConsolidationTest(TestWithServers):
         1. Create a pool.
         2. Stop servers.
         3. Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.
-        4. Start servers.
-        5. Run DAOS checker under kinds of mode.
-        6. Check that the pool does not appear with dmg pool list.
-        7. Verify that the pool directory was removed from the mount point.
+        4. Run DAOS checker under kinds of mode.
+        5. Check that the pool does not appear with dmg pool list.
+        6. Verify that the pool directory was removed from the mount point.
 
         Jira ID: DAOS-12067
 
@@ -373,36 +372,42 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
         self.log_step("Create a pool.")
-        pool = self.get_pool()
+        pool = self.get_pool(connect=False)
 
         self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.")
-        rdb_pool_path = f"{self.server_managers[0].get_vos_path(pool)}/rdb-pool"
-        rdb_pool_out = check_file_exists(
-            hosts=self.hostlist_servers, filename=rdb_pool_path, sudo=True)
-        if not rdb_pool_out[0]:
+        engine_params = self.server_managers[0].manager.job.yaml.engine_params
+        scm_mount_0 = engine_params[0].get_value("scm_mount")
+        scm_mount_1 = engine_params[1].get_value("scm_mount")
+        rdb_pool_path_0 = f"{scm_mount_0}/{pool.uuid.lower()}/rdb-pool"
+        rdb_pool_path_1 = f"{scm_mount_1}/{pool.uuid.lower()}/rdb-pool"
+        self.log.info("rdb_pool_path_0 = %s", rdb_pool_path_0)
+        self.log.info("rdb_pool_path_1 = %s", rdb_pool_path_1)
+        rdb_pool_out_0 = check_file_exists(
+            hosts=self.hostlist_servers, filename=rdb_pool_path_0, sudo=True)
+        rdb_pool_out_1 = check_file_exists(
+            hosts=self.hostlist_servers, filename=rdb_pool_path_1, sudo=True)
+        if not rdb_pool_out_0[0] or not rdb_pool_out_1[0]:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
             self.log.info(msg)
             dmg_command.system_start()
             # return results in PASS.
             return
-        command = f"sudo rm {rdb_pool_path}"
-        remove_result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
-        if not remove_result.passed:
-            self.fail(f"Failed to remove {rdb_pool_path} from {self.hostlist_servers}")
-        success_nodes = remove_result.passed_hosts
-        if self.hostlist_servers != success_nodes:
-            msg = (f"Failed to remove rdb-pool! All = {self.hostlist_servers}, "
-                   f"Success = {success_nodes}")
-            self.fail(msg)
-
-        # 4. Start servers.
-        self.log_step("Start servers.")
-        dmg_command.system_start()
+        rdb_pool_path_list = [rdb_pool_path_0, rdb_pool_path_1]
+        for rdb_pool_path in rdb_pool_path_list:
+            command = f"sudo rm {rdb_pool_path}"
+            remove_result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
+            if not remove_result.passed:
+                self.fail(f"Failed to remove {rdb_pool_path} from {self.hostlist_servers}")
+            success_nodes = remove_result.passed_hosts
+            if self.hostlist_servers != success_nodes:
+                msg = (f"Failed to remove rdb-pool! All = {self.hostlist_servers}, "
+                       f"Success = {success_nodes}")
+                self.fail(msg)
 
         self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
