@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-if-dependabot:
-    if: github.actor == 'dependabot'
+    if: startsWith(github.actor, 'dependabot')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
