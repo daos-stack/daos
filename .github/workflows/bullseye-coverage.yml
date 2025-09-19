@@ -201,15 +201,15 @@ jobs:
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
-      OPERATIONS_EMAIL: brian.murrell@intel.com
+      OPERATIONS_EMAIL: tomasz.gromadzki@hpe.com
       TEST_RPMS: true
       COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
-      JENKINS_URL: https://build.hpdd.intel.com/
-      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      JENKINS_URL: https://jenkins.daos.hpc.amslabs.hpecorp.net/
+      REPOSITORY_URL: https://nexus.daos.hpc.amslabs.hpecorp.net/repository
       REMOVE_EXISTING_RPMS: false
       # TODO -- this should be on stable, backedup storage
       ARTIFACTS_URL: file:///scratch/job_repos/
-      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      REPO_FILE_URL: https://artifactory.daos.hpc.amslabs.hpecorp.net/artifactory/repo-files/
       # keep VS Code's GHA linting happy
       NODESTRING:
       CP_PR_REPOS:
@@ -491,15 +491,15 @@ jobs:
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
-      OPERATIONS_EMAIL: brian.murrell@intel.com
+      OPERATIONS_EMAIL: tomasz.gromadzki@hpe.com
       TEST_RPMS: true
       COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
-      JENKINS_URL: https://build.hpdd.intel.com/
-      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      JENKINS_URL: https://jenkins.daos.hpc.amslabs.hpecorp.net/
+      REPOSITORY_URL: https://nexus.daos.hpc.amslabs.hpecorp.net/repository
       REMOVE_EXISTING_RPMS: false
       # TODO -- this should be on stable, backedup storage
       ARTIFACTS_URL: file:///scratch/job_repos/
-      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      REPO_FILE_URL: https://artifactory.daos.hpc.amslabs.hpecorp.net/artifactory/repo-files/
       # keep VS Code's GHA linting happy
       NODESTRING:
       CP_PR_REPOS:

@@ -26,7 +26,7 @@ if [ -n "$repo_files_pr" ]; then
         branch="${branch%:*}"
     fi
     # shellcheck disable=SC2034
-    REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
+    REPO_FILE_URL="${JENKINS_URL:-https://jenkins.daos.hpc.amslabs.hpecorp.net/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
 fi
 
 # shellcheck disable=SC1091
