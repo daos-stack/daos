@@ -62,6 +62,8 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	for (i = 0; i < arg_cnt; i++) {
 		rc = dmg_pool_exclude(args[i]->dmg_config, args[i]->pool.pool_uuid,
 				      args[i]->group, rank, tgt_idx);
+		print_message("dmg pool exclude rank %u tgt_idx=%d " DF_UUID ", rc=%d\n", rank,
+			      tgt_idx, DP_UUID(args[i]->pool.pool_uuid), rc);
 		assert_success(rc);
 	}
 }
@@ -83,6 +85,9 @@ rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed) {
 			rc = dmg_pool_reintegrate(args[i]->dmg_config, args[i]->pool.pool_uuid,
 						  args[i]->group, rank, tgt_idx);
+			print_message("dmg pool reintegrate rank %u tgt_idx=%d " DF_UUID
+				      ", rc=%d\n",
+				      rank, tgt_idx, DP_UUID(args[i]->pool.pool_uuid), rc);
 			assert_success(rc);
 		}
 		sleep(2);
@@ -100,6 +105,8 @@ rebuild_extend_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed) {
 			rc = dmg_pool_extend(args[i]->dmg_config, args[i]->pool.pool_uuid,
 					     args[i]->group, &rank, 1);
+			print_message("dmg pool extend rank %u " DF_UUID ", rc=%d\n", rank,
+				      DP_UUID(args[i]->pool.pool_uuid), rc);
 			assert_success(rc);
 		}
 		sleep(2);
@@ -117,6 +124,8 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed) {
 			rc = dmg_pool_drain(args[i]->dmg_config, args[i]->pool.pool_uuid,
 					    args[i]->group, rank, tgt_idx);
+			print_message("dmg pool drain rank %u tgt_idx=%d " DF_UUID ", rc=%d\n",
+				      rank, tgt_idx, DP_UUID(args[i]->pool.pool_uuid), rc);
 			assert_success(rc);
 		}
 		sleep(2);
@@ -162,16 +171,24 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		par_barrier(PAR_COMM_WORLD);
 
 		for (i = 0; i < args_cnt; i++)
-			if (args[i]->rebuild_cb)
+			if (args[i]->rebuild_cb) {
+				print_message("call rebuild_cb for exclude rebuilding pool " DF_UUID
+					      "\n",
+					      DP_UUID(args[i]->pool.pool_uuid));
 				args[i]->rebuild_cb(args[i]);
+			}
 
 		if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 			test_rebuild_wait(args, args_cnt);
 
 		par_barrier(PAR_COMM_WORLD);
 		for (i = 0; i < args_cnt; i++) {
-			if (args[i]->rebuild_post_cb)
+			if (args[i]->rebuild_post_cb) {
+				print_message(
+				    "call rebuild_post_cb for exclude rebuilt pool " DF_UUID "\n",
+				    DP_UUID(args[i]->pool.pool_uuid));
 				args[i]->rebuild_post_cb(args[i]);
+			}
 		}
 		return;
 
@@ -179,6 +196,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 
 	for (i = 0; i < rank_nr; i++) {
 		int j;
+		const char *op_type_str = NULL;
 
 		/* No concurrent drain/extend/reintegration are allowed, so
 		 * it has to reintegrate/extend one by one.
@@ -187,15 +205,18 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[0]->myrank == 0) {
 			switch (op_type) {
 			case RB_OP_TYPE_REINT:
+				op_type_str = "reintegrate";
 				rebuild_reint_tgt(args, args_cnt, ranks[i],
 						  tgts ? tgts[i] : -1, kill);
 				break;
 			case RB_OP_TYPE_ADD:
+				op_type_str = "extend";
 				rebuild_extend_tgt(args, args_cnt, ranks[i],
 						   tgts ? tgts[i] : -1,
 						   args[i]->pool.pool_size);
 				break;
 			case RB_OP_TYPE_DRAIN:
+				op_type_str = "drain";
 				rebuild_drain_tgt(args, args_cnt, ranks[i],
 						tgts ? tgts[i] : -1);
 				break;
@@ -208,20 +229,30 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 				D_ASSERT(op_type != RB_OP_TYPE_RECLAIM);
 				break;
 			default:
+				op_type_str = "UNKNOWN";
 				break;
 			}
 		}
 		par_barrier(PAR_COMM_WORLD);
 		for (j = 0; j < args_cnt; j++)
-			if (args[j]->rebuild_cb)
+			if (args[j]->rebuild_cb) {
+				print_message("call rebuild_cb for %s rebuilding pool " DF_UUID
+					      "\n",
+					      op_type_str, DP_UUID(args[i]->pool.pool_uuid));
+
 				args[j]->rebuild_cb(args[j]);
+			}
 
 		if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 			test_rebuild_wait(args, args_cnt);
 
 		for (j = 0; j < args_cnt; j++) {
-			if (args[j]->rebuild_post_cb)
+			if (args[j]->rebuild_post_cb) {
+				print_message("call rebuild_post_cb for %s rebuilt pool " DF_UUID
+					      "\n",
+					      op_type_str, DP_UUID(args[i]->pool.pool_uuid));
 				args[j]->rebuild_post_cb(args[j]);
+			}
 		}
 	}
 }
@@ -970,8 +1001,8 @@ reintegrate_inflight_io(void *data)
 
 	}
 	ioreq_fini(&req);
-	sleep(12);
 	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
+	sleep(12);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
 				      NULL);
@@ -1182,81 +1213,74 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 		*ranks_num = idx;
 }
 
-/* inject fault on leader engine to stop an in-progress rebuild */
-int
-fi_rebuild_stop(void *data)
+static int
+rebuild_stop_with_dmg_internal(const char *cfg, const uuid_t uuid, const char *grp, bool force)
 {
-	test_arg_t *arg = data;
-	d_rank_t    leader;
-	int         rc;
+	int rc;
 
-	if (arg->myrank != 0)
-		return 0;
-
-	rc = test_get_leader(arg, &leader);
-	if (rc) {
-		print_message("get pool " DF_UUIDF " leader failed: %d\n",
-			      DP_UUID(arg->pool.pool_uuid), rc);
-		assert_rc_equal(rc, 0);
-	}
-
-	printf("%s(): pool " DF_UUIDF ": send ADMIN_STOP to leader rank %d\n", __FUNCTION__,
-	       DP_UUID(arg->pool.pool_uuid), leader);
-	test_set_engine_fail_loc(arg, leader, DAOS_REBUILD_ADMIN_STOP | DAOS_FAIL_ONCE);
-
+	rc = dmg_pool_rebuild_stop(cfg, uuid, grp, force);
+	print_message("dmg pool rebuild stop " DF_UUID ", force=%d, rc=%d\n", DP_UUID(uuid), force,
+		      rc);
+	assert_rc_equal(rc, 0);
 	return 0;
 }
 
-/* inject fault on leader engine to receive stop command during op:Fail_reclaim */
+/* stop an in-progress rebuild with dmg pool rebuild stop command */
 int
-fi_rebuild_stop_reclaim(void *data)
+rebuild_stop_with_dmg(void *data)
 {
 	test_arg_t *arg = data;
-	d_rank_t    leader;
+
+	print_message("wait for rebuild to start for pool " DF_UUID "\n",
+		      DP_UUID(arg->pool.pool_uuid));
+	test_rebuild_wait_to_start(&arg, 1);
+	sleep(4);
+
+	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					      false);
+}
+
+/* stop an in-progress rebuild with dmg pool rebuild stop command (force stop option) */
+int
+rebuild_force_stop_with_dmg(void *data)
+{
+	test_arg_t *arg = data;
+
+	print_message("wait for rebuild to start for pool " DF_UUID "\n",
+		      DP_UUID(arg->pool.pool_uuid));
+	test_rebuild_wait_to_start(&arg, 1);
+	sleep(4);
+
+	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					      true);
+}
+
+/* start/reesume a stopped rebuild with dmg pool rebuild start command */
+int
+rebuild_start_with_dmg(void *data)
+{
+	test_arg_t *arg = data;
 	int         rc;
 
-	if (arg->myrank != 0)
-		return 0;
-
-	rc = test_get_leader(arg, &leader);
-	if (rc) {
-		print_message("get pool " DF_UUIDF " leader failed: %d\n",
-			      DP_UUID(arg->pool.pool_uuid), rc);
-		assert_rc_equal(rc, 0);
-	}
-
-	printf("%s(): pool " DF_UUIDF ": send ADMIN_STOP_RECLAIM to leader rank %d\n", __FUNCTION__,
-	       DP_UUID(arg->pool.pool_uuid), leader);
-	test_set_engine_fail_loc(arg, leader, DAOS_REBUILD_ADMIN_STOP_RECLAIM | DAOS_FAIL_ONCE);
-
+	rc = dmg_pool_rebuild_start(arg->dmg_config, arg->pool.pool_uuid, arg->group);
+	print_message("dmg pool rebuild start " DF_UUID ", rc=%d\n", DP_UUID(arg->pool.pool_uuid),
+		      rc);
+	assert_rc_equal(rc, 0);
 	return 0;
 }
 
-/* resume after a stopped rebuild, and optionally inject a fault to start a new rebuild */
 int
-fi_rebuild_resume_wait(void *data)
+rebuild_resume_wait(void *data)
 {
 	test_arg_t                 *arg = data;
-	struct daos_rebuild_status *rst = &arg->pool.pool_info.pi_rebuild_st;
-
+	struct daos_rebuild_status *rst          = &arg->pool.pool_info.pi_rebuild_st;
 	bool                        skip_restart = false;
-	d_rank_t                    leader;
 	int                         rc;
 
-	if (arg->myrank != 0)
-		return 0;
-
-	if (arg->rebuild_cb == fi_rebuild_resume_wait && arg->rebuild_cb_arg)
+	if (arg->rebuild_cb == rebuild_resume_wait && arg->rebuild_cb_arg)
 		skip_restart = *((bool *)arg->rebuild_cb_arg);
-	if (arg->rebuild_post_cb == fi_rebuild_resume_wait && arg->rebuild_post_cb_arg)
+	if (arg->rebuild_post_cb == rebuild_resume_wait && arg->rebuild_post_cb_arg)
 		skip_restart = *((bool *)arg->rebuild_post_cb_arg);
-
-	rc = test_get_leader(arg, &leader);
-	if (rc) {
-		print_message("get pool " DF_UUIDF " leader failed: %d\n",
-			      DP_UUID(arg->pool.pool_uuid), rc);
-		assert_rc_equal(rc, 0);
-	}
 
 	/* Verify that the stop resulted in the correct rebuild status */
 	print_message("check: stopped rebuild rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
@@ -1268,10 +1292,8 @@ fi_rebuild_resume_wait(void *data)
 	if (skip_restart)
 		return 0;
 
-	/* Issue start fault injection to re-run the rebuild to successful completion */
-	printf("%s(): pool " DF_UUIDF ": send ADMIN_START to leader rank %d\n", __FUNCTION__,
-	       DP_UUID(arg->pool.pool_uuid), leader);
-	test_set_engine_fail_loc(arg, leader, DAOS_REBUILD_ADMIN_START | DAOS_FAIL_ONCE);
+	rc = rebuild_start_with_dmg(data);
+	assert_rc_equal(rc, 0);
 
 	/* Verify that the start resulted in a fully completed rebuild.
 	 * NB: loop to get past the immediate remnant state from the previous stop (OP_CANCELED)
