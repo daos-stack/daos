@@ -5,7 +5,9 @@ hosts:
 setup:
   start_servers: false
   start_agents: false
-  server_config_namespace: /run/server_configurations/*/server_config/*
+  server_config_namespace: /run/configurations/*/server_config/*
+
+check_server_storage: false
 
 timeout: 1800
 
@@ -33,23 +35,23 @@ storage_1: &storage_ram
 
 storage_2: &storage_nvme_all
   class: nvme
-  roles: [wal, index, data]
+  bdev_roles: [wal, index, data]
 
 storage_3: &storage_nvme_wal_index
   class: nvme
-  roles: [wal, index]
+  bdev_roles: [wal, index]
 
 storage_4: &storage_nvme_wal
   class: nvme
-  roles: [wal]
+  bdev_roles: [wal]
 
 storage_5: &storage_nvme_index
   class: nvme
-  roles: [index]
+  bdev_roles: [index]
 
 storage_6: &storage_nvme_data
   class: nvme
-  roles: [data]
+  bdev_roles: [data]
 
 configurations: !mux
   1_tier_dcpm:

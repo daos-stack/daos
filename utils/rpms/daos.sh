@@ -82,6 +82,7 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   list_files files "${SL_PREFIX}/bin/daos_engine" \
                    "${SL_PREFIX}/bin/daos_metrics" \
                    "${SL_PREFIX}/bin/ddb" \
+                   "${SL_PREFIX}/bin/dlck" \
                    "${SL_PREFIX}/bin/daos_server_helper" \
                    "${SL_PREFIX}/bin/daos_storage_estimator.py" \
                    "${SL_PREFIX}/bin/daos_server"
