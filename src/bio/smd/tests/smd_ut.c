@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -266,23 +267,23 @@ ut_device(void **state)
 	uuid_generate(id3);
 
 	/* Assigned dev1 to target 0, 1, 2, dev2 to target 3. 4. 5 */
-	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA);
+	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA);
+	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA, NULL);
 	assert_rc_equal(rc, -DER_EXIST);
 
 	for (i = 1; i < 3; i++) {
-		rc = smd_dev_add_tgt(dev_id1, i, SMD_DEV_TYPE_DATA);
+		rc = smd_dev_add_tgt(dev_id1, i, SMD_DEV_TYPE_DATA, NULL);
 		assert_rc_equal(rc, 0);
 	}
 
-	rc = smd_dev_add_tgt(dev_id2, 1, SMD_DEV_TYPE_DATA);
+	rc = smd_dev_add_tgt(dev_id2, 1, SMD_DEV_TYPE_DATA, NULL);
 	assert_rc_equal(rc, -DER_EXIST);
 
 	for (i = 3; i < 6; i++) {
 		st = (i < 4) ? SMD_DEV_TYPE_DATA : SMD_DEV_TYPE_DATA + i - 3;
-		rc = smd_dev_add_tgt(dev_id2, i, st);
+		rc = smd_dev_add_tgt(dev_id2, i, st, NULL);
 		assert_rc_equal(rc, 0);
 	}
 
@@ -466,18 +467,18 @@ ut_dev_replace(void **state)
 	uuid_generate(dev_id3);
 
 	/* Replace dev1 with dev3 without marking dev1 as faulty */
-	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA));
+	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA), NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = smd_dev_set_state(dev_id1, SMD_DEV_FAULTY);
 	assert_rc_equal(rc, 0);
 
 	/* Replace dev1 with dev2 */
-	rc = smd_dev_replace(dev_id1, dev_id2, smd_dev_type2role(SMD_DEV_TYPE_DATA));
+	rc = smd_dev_replace(dev_id1, dev_id2, smd_dev_type2role(SMD_DEV_TYPE_DATA), NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* Replace dev1 with dev3 */
-	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA));
+	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA), NULL);
 	assert_rc_equal(rc, 0);
 
 	/* Verify device after replace */
