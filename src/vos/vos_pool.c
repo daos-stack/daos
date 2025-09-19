@@ -1805,7 +1805,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	if (rc)
 		goto out;
 
-	rc = gc_open_pool(pool);
+	rc = gc_open_pool(pool, dp);
 	if (rc)
 		goto out;
 

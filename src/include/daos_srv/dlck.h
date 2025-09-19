@@ -8,6 +8,7 @@
 #define __DAOS_DLCK_H__
 
 #include <daos_types.h>
+#include <daos/common.h>
 
 #define DLCK_PRINT_INDENT_MAX 10
 #define DLCK_PRINT_INDENT     '-'
@@ -37,6 +38,8 @@ struct dlck_print {
 		}                                                                                  \
 	} while (0)
 
+#define DLCK_PRINTF_ERR(print, fmt, ...) DLCK_PRINTF(print, "error: " fmt, __VA_ARGS__)
+
 #define DLCK_PRINT_WO_PREFIX(print, msg)                                                           \
 	do {                                                                                       \
 		if (print != NULL) {                                                               \
@@ -60,6 +63,10 @@ struct dlck_print {
 
 #define DLCK_PRINT_RC(print, rc)       DLCK_PRINTF_WO_PREFIX(print, DF_RC "\n", DP_RC(rc))
 
+#define IS_DLCK(dp)                    (unlikely((dp) != NULL))
+
+#define IS_NOT_DLCK(dp)                (likely((dp) == NULL))
+
 static inline void
 dlck_print_indent_set(struct dlck_print *dp)
 {
@@ -75,7 +82,7 @@ dlck_print_indent_set(struct dlck_print *dp)
 static inline void
 dlck_print_indent_inc(struct dlck_print *dp)
 {
-	if (dp == NULL) {
+	if (IS_NOT_DLCK(dp)) {
 		return;
 	}
 
@@ -91,7 +98,7 @@ dlck_print_indent_inc(struct dlck_print *dp)
 static inline void
 dlck_print_indent_dec(struct dlck_print *dp)
 {
-	if (dp == NULL) {
+	if (IS_NOT_DLCK(dp)) {
 		return;
 	}
 
@@ -106,7 +113,7 @@ dlck_print_indent_dec(struct dlck_print *dp)
 
 #define DLCK_DEBUG(dp, flag, fmt, ...)                                                             \
 	do {                                                                                       \
-		if (dp) {                                                                          \
+		if (IS_DLCK(dp)) {                                                                 \
 			DLCK_PRINTF(dp, fmt, __VA_ARGS__);                                         \
 		} else {                                                                           \
 			D_DEBUG(flag, fmt, __VA_ARGS__);                                           \
@@ -115,7 +122,7 @@ dlck_print_indent_dec(struct dlck_print *dp)
 
 #define DLCK_LOG(dp, level, fmt, ...)                                                              \
 	do {                                                                                       \
-		if (dp) {                                                                          \
+		if (IS_DLCK(dp)) {                                                                 \
 			DLCK_PRINTF(dp, fmt, __VA_ARGS__);                                         \
 		} else {                                                                           \
 			D_##level(fmt, __VA_ARGS__);                                               \
@@ -131,7 +138,7 @@ dlck_print_indent_dec(struct dlck_print *dp)
  */
 #define DLCK_ASSERT(dp, msg, cond)                                                                 \
 	do {                                                                                       \
-		if (dp) {                                                                          \
+		if (IS_DLCK(dp)) {                                                                 \
 			DLCK_PRINT(dp, msg);                                                       \
 			DLCK_PRINT_YES_NO(dp, cond);                                               \
 		} else {                                                                           \
