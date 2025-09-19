@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,29 +95,30 @@ int ddb_init(void);
 void ddb_fini(void);
 
 enum ddb_cmd {
-	DDB_CMD_UNKNOWN         = 0,
-	DDB_CMD_HELP            = 1,
-	DDB_CMD_QUIT            = 2,
-	DDB_CMD_LS              = 3,
-	DDB_CMD_OPEN            = 4,
-	DDB_CMD_VERSION         = 5,
-	DDB_CMD_CLOSE           = 6,
-	DDB_CMD_SUPERBLOCK_DUMP = 7,
-	DDB_CMD_VALUE_DUMP      = 8,
-	DDB_CMD_RM              = 9,
-	DDB_CMD_VALUE_LOAD      = 10,
-	DDB_CMD_ILOG_DUMP       = 11,
-	DDB_CMD_ILOG_COMMIT     = 12,
-	DDB_CMD_ILOG_CLEAR      = 13,
-	DDB_CMD_DTX_DUMP        = 14,
-	DDB_CMD_DTX_CMT_CLEAR   = 15,
-	DDB_CMD_SMD_SYNC        = 16,
-	DDB_CMD_VEA_DUMP        = 17,
-	DDB_CMD_VEA_UPDATE      = 18,
-	DDB_CMD_DTX_ACT_COMMIT  = 19,
-	DDB_CMD_DTX_ACT_ABORT   = 20,
-	DDB_CMD_FEATURE         = 21,
-	DDB_CMD_RM_POOL         = 22,
+	DDB_CMD_UNKNOWN                 = 0,
+	DDB_CMD_HELP                    = 1,
+	DDB_CMD_QUIT                    = 2,
+	DDB_CMD_LS                      = 3,
+	DDB_CMD_OPEN                    = 4,
+	DDB_CMD_VERSION                 = 5,
+	DDB_CMD_CLOSE                   = 6,
+	DDB_CMD_SUPERBLOCK_DUMP         = 7,
+	DDB_CMD_VALUE_DUMP              = 8,
+	DDB_CMD_RM                      = 9,
+	DDB_CMD_VALUE_LOAD              = 10,
+	DDB_CMD_ILOG_DUMP               = 11,
+	DDB_CMD_ILOG_COMMIT             = 12,
+	DDB_CMD_ILOG_CLEAR              = 13,
+	DDB_CMD_DTX_DUMP                = 14,
+	DDB_CMD_DTX_CMT_CLEAR           = 15,
+	DDB_CMD_SMD_SYNC                = 16,
+	DDB_CMD_VEA_DUMP                = 17,
+	DDB_CMD_VEA_UPDATE              = 18,
+	DDB_CMD_DTX_ACT_COMMIT          = 19,
+	DDB_CMD_DTX_ACT_ABORT           = 20,
+	DDB_CMD_FEATURE                 = 21,
+	DDB_CMD_RM_POOL                 = 22,
+	DDB_CMD_DTX_ACT_DISCARD_INVALID = 23,
 };
 
 /* option and argument structures for commands that need them */
@@ -177,12 +179,7 @@ struct vea_update_options {
 	char *blk_cnt;
 };
 
-struct dtx_act_commit_options {
-	char *path;
-	char *dtx_id;
-};
-
-struct dtx_act_abort_options {
+struct dtx_act_options {
 	char *path;
 	char *dtx_id;
 };
@@ -214,11 +211,10 @@ struct ddb_cmd_info {
 		struct dtx_dump_options dci_dtx_dump;
 		struct dtx_cmt_clear_options dci_dtx_cmt_clear;
 		struct smd_sync_options dci_smd_sync;
-		struct vea_update_options dci_vea_update;
-		struct dtx_act_commit_options dci_dtx_act_commit;
-		struct dtx_act_abort_options dci_dtx_act_abort;
+		struct vea_update_options     dci_vea_update;
 		struct feature_options        dci_feature;
 		struct rm_pool_options        dci_rm_pool;
+		struct dtx_act_options        dci_dtx_act;
 	} dci_cmd_option;
 };
 
@@ -247,15 +243,19 @@ int ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt
 int ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt);
 int ddb_run_vea_dump(struct ddb_ctx *ctx);
 int ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt);
-int ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_commit_options *opt);
-int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt);
+int
+ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_options *opt);
+int
+ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_options *opt);
 int
 ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt);
 int
 ddb_feature_string2flags(struct ddb_ctx *ctx, const char *string, uint64_t *compat_flags,
 			 uint64_t *incompat_flags);
 int
-     ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt);
+ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt);
+int
+     ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt);
 
 void ddb_program_help(struct ddb_ctx *ctx);
 void ddb_commands_help(struct ddb_ctx *ctx);
