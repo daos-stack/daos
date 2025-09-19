@@ -7,7 +7,7 @@ def scons():
 
     denv = env.Clone()
 
-    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'cart']
+    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'ssl', 'cart']
     # spdk libraries
     libs += ['spdk_event', 'spdk_log']
     libs += ['spdk_bdev', 'spdk_blob', 'spdk_blob_bdev', 'spdk_json']
