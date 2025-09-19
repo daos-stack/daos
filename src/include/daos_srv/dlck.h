@@ -13,6 +13,8 @@
 #define DLCK_PRINT_INDENT_MAX 10
 #define DLCK_PRINT_INDENT     '-'
 
+#define DLCK_ERROR_INFIX      "error: "
+
 /**
  * @struct dlck_print
  *
@@ -38,7 +40,7 @@ struct dlck_print {
 		}                                                                                  \
 	} while (0)
 
-#define DLCK_PRINTF_ERR(print, fmt, ...) DLCK_PRINTF(print, "error: " fmt, __VA_ARGS__)
+#define DLCK_PRINTF_ERR(print, fmt, ...) DLCK_PRINTF(print, DLCK_ERROR_INFIX fmt, __VA_ARGS__)
 
 #define DLCK_PRINT_WO_PREFIX(print, msg)                                                           \
 	do {                                                                                       \
@@ -61,7 +63,8 @@ struct dlck_print {
 
 #define DLCK_PRINT_OK(print)           DLCK_PRINT_WO_PREFIX(print, "ok.\n")
 
-#define DLCK_PRINT_RC(print, rc)       DLCK_PRINTF_WO_PREFIX(print, DF_RC "\n", DP_RC(rc))
+#define DLCK_PRINT_RC(print, rc)                                                                   \
+	DLCK_PRINTF_WO_PREFIX(print, DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc))
 
 #define IS_DLCK(dp)                    (unlikely((dp) != NULL))
 

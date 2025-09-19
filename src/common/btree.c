@@ -1688,20 +1688,21 @@ dlck_btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct dlck_print *d
 
 	unknown_flags = nd->tn_flags & ~(BTR_NODE_LEAF | BTR_NODE_ROOT);
 	if (unknown_flags != 0) {
-		DLCK_PRINTF(dp, DLCK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")\n",
-			    unknown_flags);
+		DLCK_PRINTF_ERR(dp, DLCK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")\n",
+				unknown_flags);
 		return -DER_NOTYPE;
 	}
 
 	if (nd->tn_pad_32 != 0) {
-		DLCK_PRINTF(dp, DLCK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")\n",
-			    nd->tn_pad_32);
+		DLCK_PRINTF_ERR(dp,
+				DLCK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")\n",
+				nd->tn_pad_32);
 		return -DER_NOTYPE;
 	}
 
 	if (nd->tn_gen != 0) {
-		DLCK_PRINTF(dp, DLCK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")\n",
-			    nd->tn_gen);
+		DLCK_PRINTF_ERR(dp, DLCK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")\n",
+				nd->tn_gen);
 		return -DER_NOTYPE;
 	}
 
@@ -1766,7 +1767,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32_t intent
 			next_level = false;
 			start	= 0;
 			nd	= btr_off2ptr(tcx, nd_off);
-			if (unlikely(dp != NULL)) {
+			if (IS_DLCK(dp)) {
 				rc = dlck_btr_node_check(nd, nd_off, dp);
 				if (rc != DER_SUCCESS) {
 					goto out;
@@ -1820,7 +1821,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32_t intent
 		btr_trace_debug(tcx, &tcx->tc_trace.ti_trace[level], "probe child\n");
 
 		/* Search the next level. */
-		if (unlikely(dp != NULL)) {
+		if (IS_DLCK(dp)) {
 			if (nd->tn_flags & BTR_NODE_LEAF) {
 				DLCK_PRINTF(dp,
 					    "Attempted to traverse to the next level from a leaf "
@@ -4558,6 +4559,10 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 	return DER_SUCCESS;
 }
 
+#define INVALID_CLASS_FMT        "Invalid class id: %d\n"
+#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d\n"
+#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64 "\n"
+
 /**
  * Initialize a tree instance from a registered tree class.
  */
@@ -4593,13 +4598,15 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	/* XXX should be multi-thread safe */
 	DLCK_PRINT(dp, "Tree class... ");
 	if (tree_class >= BTR_TYPE_MAX) {
-		DLCK_DEBUG(dp, DB_TRACE, "Invalid class id: %d\n", tree_class);
+		DLCK_PRINTF_ERR(dp, INVALID_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT, tree_class);
 		return -DER_INVAL;
 	}
 
 	tc = &btr_class_registered[tree_class];
 	if (tc->tc_ops == NULL) {
-		DLCK_DEBUG(dp, DB_TRACE, "Unregistered class id %d\n", tree_class);
+		DLCK_PRINTF_ERR(dp, UNREGISTERED_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT, tree_class);
 		return -DER_NONEXIST;
 	}
 	DLCK_PRINT_OK(dp);
@@ -4607,8 +4614,8 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	DLCK_PRINT(dp, "Tree features... ");
 	rc = btr_class_feats_init(tree_class, tree_feats, tc);
 	if (rc != DER_SUCCESS) {
-		DLCK_LOG(dp, ERROR, "Unsupported features " DF_X64 "/" DF_X64 "\n", *tree_feats,
-			 tc->tc_feats);
+		DLCK_PRINTF_ERR(dp, UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
+		D_ERROR(UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
 		return rc;
 	}
 	DLCK_PRINT_OK(dp);
@@ -4739,7 +4746,7 @@ dlck_dbtree_check(daos_handle_t toh, struct dlck_print *dp)
 
 	rc = dbtree_iter_prepare(toh, 0 /** options */, &ih);
 	if (rc != 0) {
-		DLCK_PRINTF(dp, "Failed to prepare tree iterator: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERR(dp, "failed to prepare tree iterator: " DF_RC "\n", DP_RC(rc));
 		dlck_print_indent_dec(dp);
 		return rc;
 	}
@@ -4752,7 +4759,7 @@ dlck_dbtree_check(daos_handle_t toh, struct dlck_print *dp)
 		return DER_SUCCESS;
 	}
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF(dp, "Failed to initialize tree iterator" DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERR(dp, "failed to initialize tree iterator" DF_RC "\n", DP_RC(rc));
 	}
 
 	while (rc != DER_SUCCESS) {
@@ -4761,7 +4768,7 @@ dlck_dbtree_check(daos_handle_t toh, struct dlck_print *dp)
 			rc = 0;
 			break;
 		} else if (rc != DER_SUCCESS) {
-			DLCK_PRINTF(dp, "Failed to move tree iterator: " DF_RC "\n", DP_RC(rc));
+			DLCK_PRINTF_ERR(dp, "failed to move tree iterator: " DF_RC "\n", DP_RC(rc));
 			break;
 		}
 	}

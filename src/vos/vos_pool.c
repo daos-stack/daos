@@ -1012,6 +1012,8 @@ umem_create:
 	return rc;
 }
 
+#define BIO_META_CLOSE_FAIL_FMT "Failed to close BIO meta context. " DF_RC "\n"
+
 static int
 vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned int flags,
 		 void *metrics, struct dlck_print *dp, struct umem_pool **ph)
@@ -1071,8 +1073,8 @@ umem_open:
 	if (store.stor_priv != NULL) {
 		ret = bio_mc_close(store.stor_priv);
 		if (ret) {
-			DLCK_LOG(dp, ERROR, "Failed to close BIO meta context. " DF_RC "\n",
-				 DP_RC(ret));
+			DLCK_PRINTF_ERR(dp, BIO_META_CLOSE_FAIL_FMT, DP_RC(ret));
+			D_ERROR(BIO_META_CLOSE_FAIL_FMT, DP_RC(ret));
 		}
 	}
 
@@ -1760,7 +1762,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	}
 
 	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
-	if (dp != NULL) {
+	if (IS_DLCK(dp)) {
 		rc = dlck_dbtree_check(pool->vp_cont_th, dp);
 		if (rc != DER_SUCCESS) {
 			dlck_print_indent_dec(dp);
@@ -1910,7 +1912,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	pool_df = vos_pool_pop2df(ph);
 	DLCK_PRINT(dp, "Magic... ");
 	if (pool_df->pd_magic != POOL_DF_MAGIC) {
-		DLCK_PRINTF(dp, "invalid (%#x)\n", pool_df->pd_magic);
+		DLCK_PRINTF_ERR(dp, "invalid (%#x)\n", pool_df->pd_magic);
 		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
 		rc = -DER_DF_INVAL;
 		goto out;
@@ -1920,7 +1922,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	DLCK_PRINT(dp, "Version... ");
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
-		DLCK_PRINTF(dp, "unsupported (%#x)\n", pool_df->pd_version);
+		DLCK_PRINTF_ERR(dp, "unsupported (%#x)\n", pool_df->pd_version);
 		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
 		/** Send a RAS notification */
 		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
@@ -1933,8 +1935,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 
 	DLCK_PRINT(dp, "UUID... ");
 	if (uuid_compare(uuid, pool_df->pd_id)) {
-		DLCK_PRINTF(dp, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")\n",
-			    DP_UUID(uuid), DP_UUID(pool_df->pd_id));
+		DLCK_PRINTF_ERR(dp, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")\n",
+				DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		D_ERROR("Mismatch uuid, user=" DF_UUIDF ", pool=" DF_UUIDF "\n", DP_UUID(uuid),
 			DP_UUID(pool_df->pd_id));
 		rc = -DER_ID_MISMATCH;
