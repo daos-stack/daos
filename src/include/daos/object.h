@@ -653,6 +653,8 @@ enum daos_io_flags {
 	DIOF_RECX_REVERSE = 0x800,
 	/* Use for rebuild fetch epoch selection */
 	DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY = 0x1000,
+	/* Do not degrade enumeration/fetch if data shard failed */
+	DIOF_EC_NO_DEGRADE = 0x2000,
 };
 
 /**
