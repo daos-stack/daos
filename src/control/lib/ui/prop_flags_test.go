@@ -40,8 +40,8 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			expErr: errors.New("must not be empty"),
 		},
 		"empty value": {
-			fv:     "key: ",
-			expErr: errors.New("must not be empty"),
+			fv:       "key: ",
+			expProps: map[string]string{"key": ""},
 		},
 		"key too long": {
 			fv:     strings.Repeat("x", ui.MaxPropKeyLen+1) + ":value",
