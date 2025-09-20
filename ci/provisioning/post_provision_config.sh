@@ -30,7 +30,7 @@ source ci/junit.sh
 # the specific site.
 
 : "${MLNX_VER_NUM:=3.0.0}"
-: "${PYTHON_VERSION:=3.14}"
+: "${PYTHON_VERSION:=3.11}"
 
 # This is tangled and needs a better fix as it has DISTRO being passed
 # as EL_8 for EL_9, yet other places expect DISTRO to really be EL_8 and
