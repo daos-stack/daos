@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1242,11 +1244,72 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		d_tm_print_stats(stream, stats, format);
 }
 
+static uint64_t
+d_tm_histogram_get_value(struct d_tm_histogram_t *histogram, uint64_t total_count,
+			 uint32_t percentile)
+{
+	double target_num;
+	double current_num = 0;
+	double prev_num    = 0;
+	int    i;
+
+	if (percentile == 0)
+		return histogram->dth_buckets[0].dtb_min;
+
+	if (percentile >= 100)
+		return histogram->dth_buckets[histogram->dth_num_buckets - 1].dtb_max;
+
+	target_num = total_count * ((double)percentile / 100);
+	for (i = 0; i < histogram->dth_num_buckets; i++) {
+		uint64_t current_val;
+
+		current_val = histogram->dth_buckets[i].dtb_bucket->dtn_metric->dtm_data.value;
+		prev_num    = current_num;
+		current_num += current_val;
+		if (target_num <= current_num) {
+			uint64_t low            = histogram->dth_buckets[i].dtb_min;
+			uint64_t high           = histogram->dth_buckets[i].dtb_max;
+			double   cur_percentage = (target_num - prev_num) / current_val;
+
+			return low + cur_percentage * (high - low);
+		}
+	}
+
+	return histogram->dth_buckets[histogram->dth_num_buckets - 1].dtb_max;
+}
+
+static void
+d_tm_print_histogram(FILE *stream, struct d_tm_histogram_t *histogram, int format)
+{
+	uint64_t total_count = 0;
+	uint64_t p50;
+	uint64_t p90;
+	uint64_t p99;
+	int      i;
+
+	for (i = 0; i < histogram->dth_num_buckets; i++)
+		total_count += histogram->dth_buckets[i].dtb_bucket->dtn_metric->dtm_data.value;
+
+	if (total_count == 0)
+		return;
+
+	p50 = d_tm_histogram_get_value(histogram, total_count, 50);
+	p90 = d_tm_histogram_get_value(histogram, total_count, 90);
+	p99 = d_tm_histogram_get_value(histogram, total_count, 99);
+	if (format == D_TM_CSV) {
+		fprintf(stream, "%ju,%ju,%ju", p50, p90, p99);
+		return;
+	}
+
+	fprintf(stream, " [p50: %ju, p90: %ju, p99: %ju]", p50, p90, p99);
+}
+
 /**
  * Prints the gauge \a val and \a stats with \a name to the \a stream provided
  *
  * \param[in]	tms		Timer value
  * \param[in]	stats		Optional statistics
+ * \param[in]	histogram	Optional histogram statistics
  * \param[in]	name		Timer name
  * \param[in]	format		Output format.
  *				Choose D_TM_STANDARD for standard output.
@@ -1257,8 +1320,8 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
  * \param[in]	stream		Output stream (stdout, stderr)
  */
 void
-d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
-		 int format, char *units, int opt_fields, FILE *stream)
+d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, struct d_tm_histogram_t *histogram,
+		 char *name, int format, char *units, int opt_fields, FILE *stream)
 {
 	if ((name == NULL) || (stream == NULL))
 		return;
@@ -1278,6 +1341,9 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 
 	if ((stats != NULL) && (stats->sample_size > 0))
 		d_tm_print_stats(stream, stats, format);
+
+	if (histogram != NULL && histogram->dth_num_buckets > 0)
+		d_tm_print_histogram(stream, histogram, format);
 }
 
 /**
@@ -1314,6 +1380,9 @@ d_tm_print_metadata(char *desc, char *units, int format, FILE *stream)
 static int
 d_tm_get_meminfo(struct d_tm_context *ctx, struct d_tm_meminfo_t *meminfo,
 		 struct d_tm_node_t *node);
+static int
+d_tm_get_histogram(struct d_tm_context *ctx, uint64_t *val, struct d_tm_histogram_t *histogram,
+		   struct d_tm_node_t *node);
 /**
  * Prints a single \a node.
  * Used as a convenience function to demonstrate usage for the client
@@ -1338,6 +1407,10 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 		char *path, int format, int opt_fields, FILE *stream)
 {
 	struct d_tm_stats_t stats = {0};
+	struct d_tm_histogram_t histogram = {0};
+	struct d_tm_bucket_t    h_buckets[20];
+	struct d_tm_node_t      h_nodes[20];
+	struct d_tm_metric_t    h_metrics[20];
 	struct timespec     tms;
 	uint64_t            val;
 	time_t              clk;
@@ -1457,8 +1530,19 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on gauge read: %d\n", rc);
 			break;
 		}
-		d_tm_print_gauge(val, &stats, name, format, units, opt_fields,
-				 stream);
+
+		histogram.dth_buckets = h_buckets;
+		for (i = 0; i < 20; i++) {
+			h_nodes[i].dtn_metric   = &h_metrics[i];
+			h_buckets[i].dtb_bucket = &h_nodes[i];
+		}
+		rc = d_tm_get_histogram(ctx, &val, &histogram, node);
+		if (rc != DER_SUCCESS) {
+			fprintf(stream, "Error on gauge read: %d\n", rc);
+			break;
+		}
+
+		d_tm_print_gauge(val, &stats, &histogram, name, format, units, opt_fields, stream);
 		if (stats.sample_size > 0)
 			stats_printed = true;
 		break;
@@ -3644,11 +3728,10 @@ d_tm_get_duration(struct d_tm_context *ctx, struct timespec *tms,
  */
 
 int
-d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
-	       struct d_tm_stats_t *stats, struct d_tm_node_t *node)
+d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val, struct d_tm_stats_t *stats,
+	       struct d_tm_node_t *node)
 {
-	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_stats_t	*dtm_stats = NULL;
+	struct d_tm_metric_t    *metric_data = NULL;
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	double			 sum = 0;
 	int			 rc;
@@ -3668,6 +3751,8 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data != NULL) {
+		struct d_tm_stats_t *dtm_stats = NULL;
+
 		dtm_stats = conv_ptr(shmem, metric_data->dtm_stats);
 		d_tm_node_lock(node);
 		*val = metric_data->dtm_data.value;
@@ -3685,6 +3770,64 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 						      stats->mean);
 			stats->sum_of_squares = dtm_stats->sum_of_squares;
 			stats->sample_size = dtm_stats->sample_size;
+		}
+		d_tm_node_unlock(node);
+	} else {
+		return -DER_METRIC_NOT_FOUND;
+	}
+	return DER_SUCCESS;
+}
+
+static int
+d_tm_get_histogram(struct d_tm_context *ctx, uint64_t *val, struct d_tm_histogram_t *histogram,
+		   struct d_tm_node_t *node)
+{
+	struct d_tm_metric_t  *metric_data = NULL;
+	struct d_tm_shmem_hdr *shmem       = NULL;
+	int                    rc;
+
+	if (ctx == NULL || val == NULL || node == NULL)
+		return -DER_INVAL;
+
+	rc = validate_node_ptr(ctx, node, &shmem);
+	if (rc != 0)
+		return rc;
+
+	if (!is_gauge(node))
+		return -DER_OP_NOT_PERMITTED;
+
+	if (unlikely(!node_is_readable(node)))
+		return -DER_AGAIN;
+
+	metric_data = conv_ptr(shmem, node->dtn_metric);
+	if (metric_data != NULL) {
+		struct d_tm_histogram_t *dtm_histogram = NULL;
+
+		dtm_histogram = conv_ptr(shmem, metric_data->dtm_histogram);
+		d_tm_node_lock(node);
+		if (has_stats(node) && histogram != NULL && dtm_histogram != NULL) {
+			struct d_tm_bucket_t *buckets;
+			uint64_t              total = 0;
+			int                   i;
+
+			buckets                      = conv_ptr(shmem, dtm_histogram->dth_buckets);
+			histogram->dth_num_buckets   = dtm_histogram->dth_num_buckets;
+			histogram->dth_initial_width = dtm_histogram->dth_initial_width;
+			histogram->dth_value_multiplier = dtm_histogram->dth_value_multiplier;
+			for (i = 0; i < histogram->dth_num_buckets; i++) {
+				struct d_tm_node_t   *bucket_node;
+				struct d_tm_metric_t *metric;
+
+				histogram->dth_buckets[i].dtb_min = buckets[i].dtb_min;
+				histogram->dth_buckets[i].dtb_max = buckets[i].dtb_max;
+				bucket_node = conv_ptr(shmem, buckets[i].dtb_bucket);
+				metric      = conv_ptr(shmem, bucket_node->dtn_metric);
+				histogram->dth_buckets[i].dtb_bucket->dtn_metric->dtm_data.value =
+				    metric->dtm_data.value;
+				total += metric->dtm_data.value;
+			}
+			if (val != NULL)
+				*val = total;
 		}
 		d_tm_node_unlock(node);
 	} else {
