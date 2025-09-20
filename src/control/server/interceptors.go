@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -192,7 +193,7 @@ func checkVersion(ctx context.Context, log logging.Logger, self *build.Versioned
 		return FaultIncompatibleComponents(self, other)
 	}
 
-	log.Debugf("%s is compatible with %s", other, self)
+	log.Tracef("%s is compatible with %s", other, self)
 	return nil
 }
 
