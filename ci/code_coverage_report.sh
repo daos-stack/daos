@@ -4,6 +4,7 @@ set -eux
 
 # Generate code coverage report
 if [[ -n $(find . -name "code_coverage.json") ]]; then
+    dnf install -y python3.11 python3.11-devel
     python3.11 -m venv venv
     # shellcheck disable=SC1091
     source venv/bin/activate
