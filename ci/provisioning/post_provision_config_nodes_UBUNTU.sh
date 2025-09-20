@@ -9,7 +9,7 @@
 post_provision_config_nodes() {
     # should we port this to Ubuntu or just consider $CONFIG_POWER_ONLY dead?
     #if $CONFIG_POWER_ONLY; then
-    #    rm -f /etc/yum.repos.d/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
+    #    rm -f /etc/yum.repos.d/*.daos.hpc.amslabs.hpecorp.net_job_daos-stack_job_*_job_*.repo
     #    yum -y erase fio fuse ior-hpc mpich-autoload               \
     #                 ompi argobots cart daos daos-client dpdk      \
     #                 fuse-libs libisa-l libpmemobj mercury mpich   \
