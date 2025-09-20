@@ -611,7 +611,10 @@ def create_steps_log(logger, job_results_dir, test_result):
 
     test_logs_lnk = os.path.join(job_results_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
-    job_log = os.path.join(test_logs_dir, 'job.log')
+    for _name in ('full.log', 'job.log'):
+        job_log = os.path.join(test_logs_dir, _name)
+        if os.path.exists(job_log):
+            break
     step_log = os.path.join(test_logs_dir, 'steps.log')
     command = rf"grep -E '(INFO |ERROR)\| (==> Step|START|PASS|FAIL|ERROR)' {job_log}"
     result = run_local(logger, command)
