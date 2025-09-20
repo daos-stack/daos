@@ -70,8 +70,8 @@ dnf --nodocs install ${dnf_install_args} \
     pciutils \
     pciutils-devel \
     protobuf-c-devel \
-    python3-devel \
-    python3-pip \
+    python3.11 \
+    python3.11-devel \
     rpm-build \
     sg3_utils \
     squashfs-tools \
