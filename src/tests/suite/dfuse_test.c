@@ -948,6 +948,7 @@ do_cachingcheck(void **state)
 	int   fd;
 	int   rc;
 	int   pid;
+	int   status;
 	char  dir_name[256];
 	char  file_name[256];
 	char  exe_name[] = "/usr/bin/cat";
@@ -987,6 +988,9 @@ do_cachingcheck(void **state)
 		/* Run command "cat test_file" in a new process */
 		execv(exe_name, argv);
 	}
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
 	rc = unlink(file_name);
 	assert_return_code(rc, errno);
 
