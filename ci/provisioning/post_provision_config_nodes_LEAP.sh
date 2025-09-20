@@ -23,4 +23,11 @@ distro_custom() {
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                     \
                /etc/profile.d/lmod.sh;                                        \
     fi
+
+    # Use a more recent python version for unit testing, this allows us to also test installing
+    # pydaos into virtual environments.
+    : "${PYTHON_VERSION:=}"
+    dnf -y install "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-devel"
+    sudo update-alternatives --set python3 "/usr/bin/python${PYTHON_VERSION}"
+    update-alternatives --list python3
 }
