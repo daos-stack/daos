@@ -28,6 +28,6 @@ distro_custom() {
     # pydaos into virtual environments.
     : "${PYTHON_VERSION:=}"
     dnf -y install "python${PYTHON_VERSION//./}" "python${PYTHON_VERSION//./}-devel"
-    sudo update-alternatives --set python3 "/usr/bin/python${PYTHON_VERSION//./}"
+    sudo update-alternatives --set python3 "/usr/bin/python${PYTHON_VERSION}"
     update-alternatives --list python3
 }
