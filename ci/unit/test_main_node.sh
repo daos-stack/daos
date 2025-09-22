@@ -81,7 +81,7 @@ fi
 rm -rf "$test_log_dir"
 
 # Use default python as that's where storage_estimator is installed.
-: "${PYTHON_VERSION:=3.12}"
+: "${PYTHON_VERSION:=3.11}"
 python${PYTHON_VERSION} -m venv venv
 
 # Workaround until we have a setup.py script for the storage estimator and we're able to do this:

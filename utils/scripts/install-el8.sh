@@ -14,7 +14,7 @@ arch=$(uname -m)
 
 dnf_install_args="${1:-}"
 
-: "${PYTHON_VERSION:=3.12}"
+: "${PYTHON_VERSION:=3.11}"
 
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \

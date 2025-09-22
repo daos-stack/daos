@@ -25,7 +25,7 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 #			   --server-valgrind all
 
 # Use the latest version that CI has available.
-: "${PYTHON_VERSION:=3.12}"
+: "${PYTHON_VERSION:=3.11}"
 python${PYTHON_VERSION} -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate

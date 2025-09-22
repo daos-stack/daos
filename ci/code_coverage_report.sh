@@ -2,11 +2,11 @@
 
 set -eux
 
-: "${PYTHON_VERSION:=3.12}"
+: "${PYTHON_VERSION:=3.11}"
 
 # Generate code coverage report
 if [[ -n $(find . -name "code_coverage.json") ]]; then
-    python${PYTHON_VERSION} -m venv venv
+    "python${PYTHON_VERSION}" -m venv venv
     # shellcheck disable=SC1091
     source venv/bin/activate
     touch venv/pip.conf

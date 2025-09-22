@@ -27,7 +27,7 @@ group_repo_post() {
 
 distro_custom() {
     # TODO: This code is not exiting on failure.
-    : "${PYTHON_VERSION:=3.12}"
+    : "${PYTHON_VERSION:=3.11}"
 
     # Use a more recent python version for unit testing, this allows us to also test installing
     # pydaos into virtual environments.

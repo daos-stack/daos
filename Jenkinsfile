@@ -210,7 +210,7 @@ pipeline {
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsArgs()
         HTTPS_PROXY = ''
-        PYTHON_VERSION = '3.12'
+        PYTHON_VERSION = '3.11'
     }
 
     options {
