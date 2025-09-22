@@ -18,15 +18,11 @@ ARG BASE_DISTRO
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
-# Use a more recent python version for unit testing
-# ARG PYTHON_VERSION="3.12"
-# FROM python:${PYTHON_VERSION}-slim
-FROM python:3.12-slim
-
 ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
+ARG PYTHON_VERSION=3.12
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 # script to setup local repo if available
@@ -45,6 +41,7 @@ FROM basic
 RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
         direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
     dnf upgrade &&        \
+    export PYTHON_VERSION=${PYTHON_VERSION} && \
     /tmp/install.sh &&    \
     dnf clean all &&      \
     rm -f /tmp/install.sh
