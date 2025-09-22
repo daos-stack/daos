@@ -4908,29 +4908,23 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 			uint32_t     dup_sg_idx   = 0;
 			uint32_t     dup_buf_size = 0;
 			uint32_t     dup_data_len = 0;
-			uint32_t     sg_nr_out    = 0;
 			char        *dup_buf;
 
 			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i])
 				continue;
 
 			D_ASSERT(ctx->merged_bitmaps[i] != NULL);
-			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out;) {
+			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out; j++) {
 				iov     = &sg_orig->sg_iovs[j];
 				iov_dup = &sg_dup->sg_iovs[dup_sg_idx];
 
-				if (skip_sgl_iov(false, iov)) {
-					j++;
-					sg_nr_out++;
+				if (skip_sgl_iov(false, iov))
 					continue;
-				}
 
 				/* Direct copy if entry wasn't modified */
 				if (!isset_range((uint8_t *)ctx->merged_bitmaps[i], j, j)) {
 					*iov = *iov_dup;
 					D_ASSERT(dup_data_len == 0);
-					j++;
-					sg_nr_out++;
 					dup_sg_idx++;
 					continue;
 				}
@@ -4949,14 +4943,12 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 				dup_data_len -= iov->iov_len;
 				dup_buf += iov->iov_len;
 				dup_buf_size -= iov->iov_len;
-				sg_nr_out++;
-				j++;
 
 				/* When current duplicate buffer is exhausted, get next entry */
 				if (dup_data_len == 0)
 					dup_sg_idx++;
 			}
-			sg_orig->sg_nr_out = sg_nr_out;
+			sg_orig->sg_nr_out = j;
 		}
 	}
 
