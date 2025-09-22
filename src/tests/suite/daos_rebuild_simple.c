@@ -108,8 +108,8 @@ rebuild_dkeys(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	arg->rebuild_cb      = NULL;
@@ -170,8 +170,8 @@ rebuild_akeys(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, kill_rank, tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -222,8 +222,8 @@ rebuild_indexes(void **state)
 
 	/* Rebuild rank 1 */
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -283,8 +283,8 @@ rebuild_snap_update_recs(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -349,8 +349,8 @@ rebuild_snap_punch_recs(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -409,8 +409,8 @@ rebuild_snap_update_keys(void **state)
 	}
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -517,8 +517,8 @@ rebuild_snap_punch_keys(void **state)
 	}
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -606,8 +606,8 @@ rebuild_snap_punch_empty(void **state)
 	/* stop exclude rebuild, but skip the start, then directly reintegrate */
 	if (arg->interactive_rebuild) {
 		bool skip_restart        = true;
-		arg->rebuild_cb          = fi_rebuild_stop;
-		arg->rebuild_post_cb     = fi_rebuild_resume_wait;
+		arg->rebuild_cb          = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb     = rebuild_resume_wait;
 		arg->rebuild_post_cb_arg = &skip_restart;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
@@ -655,8 +655,8 @@ rebuild_snap_punch_empty(void **state)
 
 	/* from a stopped (not restarted) exclude, directly reintegrate (stop+start this rebuild) */
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
@@ -705,8 +705,8 @@ rebuild_multiple(void **state)
 	}
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -763,8 +763,8 @@ rebuild_large_rec(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -803,8 +803,8 @@ rebuild_objects(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	arg->rebuild_cb      = NULL;
@@ -844,6 +844,12 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 	if (!test_runable(arg, 4))
 		return;
 
+	if (arg->interactive_rebuild && !wait_rebuild) {
+		print_message("SKIP due to interactive_rebuild enabled, but not tested here\n");
+		skip();
+		return;
+	}
+
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	print_message("insert 100 dkeys\n");
@@ -874,30 +880,35 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 
 	/** exclude the target of this obj's replicas */
-	if (arg->interactive_rebuild)
-		fi_rebuild_stop(arg);
+	print_message("dmg pool exclude rank %u " DF_UUID "\n", rank, DP_UUID(arg->pool.pool_uuid));
 	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
 			      arg->group, rank, -1);
 	assert_success(rc);
+
+	if (arg->interactive_rebuild)
+		rebuild_stop_with_dmg(arg);
 
 	/* wait until exclude rebuild done */
 	if (wait_rebuild) {
 		test_rebuild_wait(&arg, 1);
 		if (arg->interactive_rebuild)
-			fi_rebuild_resume_wait(arg);
+			rebuild_resume_wait(arg);
 	}
 
-	if (arg->interactive_rebuild)
-		fi_rebuild_stop(arg);
+	print_message("dmg pool reintegrate rank %u " DF_UUID "\n", rank,
+		      DP_UUID(arg->pool.pool_uuid));
 	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 				  rank, -1);
 	assert_success(rc);
+
+	if (arg->interactive_rebuild)
+		rebuild_stop_with_dmg(arg);
 
 	/* wait until reintegration rebuild is done */
 	if (wait_rebuild) {
 		test_rebuild_wait(&arg, 1);
 		if (arg->interactive_rebuild)
-			fi_rebuild_resume_wait(arg);
+			rebuild_resume_wait(arg);
 	}
 
 	print_message("lookup 100 dkeys\n");
@@ -978,27 +989,32 @@ rebuild_large_object(void **state)
 		ioreq_fini(&req);
 	}
 
-	if (arg->interactive_rebuild)
-		fi_rebuild_stop(arg);
+	print_message("dmg pool exclude rank %u " DF_UUID "\n", rank, DP_UUID(arg->pool.pool_uuid));
 	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 			      rank, -1);
 	assert_success(rc);
 
+	if (arg->interactive_rebuild)
+		rebuild_stop_with_dmg(arg);
+
 	/* wait until exclude rebuild done */
 	test_rebuild_wait(&arg, 1);
 	if (arg->interactive_rebuild)
-		fi_rebuild_resume_wait(arg);
+		rebuild_resume_wait(arg);
 
-	if (arg->interactive_rebuild)
-		fi_rebuild_stop(arg);
+	print_message("dmg pool reintegrate rank %u " DF_UUID "\n", rank,
+		      DP_UUID(arg->pool.pool_uuid));
 	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 				  rank, -1);
 	assert_success(rc);
 
+	if (arg->interactive_rebuild)
+		rebuild_stop_with_dmg(arg);
+
 	/* wait until reintegration rebuild is done */
 	test_rebuild_wait(&arg, 1);
 	if (arg->interactive_rebuild)
-		fi_rebuild_resume_wait(arg);
+		rebuild_resume_wait(arg);
 
 	print_message("success\n");
 }
@@ -1094,8 +1110,8 @@ rebuild_large_snap(void **state)
 
 	/* stop and resume the exclude rebuild */
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	ioreq_fini(&req);
@@ -1142,8 +1158,8 @@ rebuild_full_shards(void **state)
 
 	/* rebuild and reintegration to use full shards */
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	/* stop and resume the first exclude rebuild (but not the second one) */
 	rebuild_single_pool_target(arg, 0, -1, false);
@@ -1153,8 +1169,8 @@ rebuild_full_shards(void **state)
 
 	/* stop and resume the first reintegrate rebuild (but not the second one) */
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	reintegrate_single_pool_target(arg, 0, -1);
 	arg->rebuild_cb      = NULL;
@@ -1196,8 +1212,8 @@ rebuild_punch_recs(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, ranks_to_kill[0], -1, false);
 	arg->rebuild_cb      = NULL;
@@ -1253,8 +1269,8 @@ rebuild_multiple_group(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	arg->rebuild_cb      = NULL;
@@ -1264,10 +1280,6 @@ rebuild_multiple_group(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = NULL;
-		arg->rebuild_post_cb = NULL;
-	}
 	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
@@ -1311,8 +1323,8 @@ rebuild_with_large_offset(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	arg->rebuild_cb      = NULL;
@@ -1363,8 +1375,8 @@ rebuild_with_large_key(void **state)
 	ioreq_fini(&req);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	arg->rebuild_cb      = NULL;
@@ -1432,8 +1444,8 @@ rebuild_with_dfs_open_create_punch(void **state)
 	dfs_obj2id(dir, &oid);
 
 	if (arg->interactive_rebuild) {
-		arg->rebuild_cb      = fi_rebuild_stop;
-		arg->rebuild_post_cb = fi_rebuild_resume_wait;
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
 	}
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_single_pool_rank(arg, rank, false);
