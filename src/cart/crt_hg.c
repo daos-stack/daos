@@ -1103,6 +1103,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
 
+	/* populate rpc_priv based on raw header values in rpc_tmp.
+	 * perform conversion to either a timeout or deadline based on header
+	 * feature flag and set rpc_priv fields accordingly
+	 * returns error if an rpc is determined to be expired already
+	 */
 	rc = crt_hg_process_header(&rpc_tmp, rpc_priv);
 	if (unlikely(rc != 0)) {
 		RPC_WARN(rpc_priv, "RPC expired. Deadline was %d\n", rpc_priv->crp_deadline_sec);

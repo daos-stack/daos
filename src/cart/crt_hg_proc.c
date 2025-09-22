@@ -576,7 +576,15 @@ out:
 	return rc;
 }
 
-/* Process header */
+/* Process header.
+ * Populate 'out' fields of rpc_priv struct based on incoming rpc header 'in'
+ *
+ * Treat incoming 'cch_src_deadline_sec' header value as either a timeout or a
+ * deadline based on a feature flag set in the RPC header.
+ *
+ *
+ * Returns 0 on success or -DER_TIMEDOUT if RPC is determined to be expired already.
+ */
 int
 crt_hg_process_header(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 {
