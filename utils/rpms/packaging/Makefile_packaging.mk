@@ -130,7 +130,7 @@ define install_repos
 	        fi;                                                                                        \
 	    fi;                                                                                            \
 	    $(call distro_map)                                                                             \
-	    baseurl=$${JENKINS_URL:-https://jenkins.daos.hpc.amslabs.hpecorp.net/}job/daos-stack/job/$$repo/job/$$branch/; \
+	    baseurl=$${JENKINS_URL:-https://jenkins-3.daos.hpc.amslabs.hpecorp.net/}job/daos-stack/job/$$repo/job/$$branch/; \
 	    baseurl+=$$build_number/artifact/artifacts/$$distro/;                                          \
 	    $(call install_repo,$$baseurl)                                                                 \
         done

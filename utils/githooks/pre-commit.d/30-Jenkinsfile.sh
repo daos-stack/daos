@@ -22,7 +22,9 @@ if [ -z "$(_git_diff_cached_files "Jenkinsfile")" ] ; then
 fi
 
 echo "Checking syntax"
-: "${JENKINS_HOST:=jenkins.daos.hpc.amslabs.hpecorp.net}"
+: "${JENKINS_HOST:=jenkins-3.daos.hpc.amslabs.hpecorp.net}"
+echo "Temporary no access to $JENKINS_HOST. Skipping"
+exit 0
 # shellcheck disable=SC2317
 if ! ping -c 1 "$JENKINS_HOST" &> /dev/null; then
     echo "Failed to access $JENKINS_HOST. Skipping"

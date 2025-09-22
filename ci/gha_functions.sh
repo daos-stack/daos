@@ -234,6 +234,6 @@ test_test_tag_and_features() {
 }
 
 #test_jenkins_curl() {
-#    JENKINS_URL="${JENKINS_URL:-https://jenkins.daos.hpc.amslabs.hpecorp.net/}"
+#    JENKINS_URL="${JENKINS_URL:-https://jenkins-3.daos.hpc.amslabs.hpecorp.net/}"
 #    assert_equals "$(QUIET=true VERBOSE=false jenkins_curl -X POST "${JENKINS_URL}api/xml" 3>&1 >/dev/null | tr -d '\r' | grep '^X-Content-Type-Options:')" "X-Content-Type-Options: nosniff"
 #}

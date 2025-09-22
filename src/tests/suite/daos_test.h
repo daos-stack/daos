@@ -471,6 +471,8 @@ int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, u
 int
 fi_rebuild_stop(void *data);
 int
+fi_rebuild_stop_reclaim(void *data);
+int
      fi_rebuild_resume_wait(void *data);
 
 int get_server_config(char *host, char *server_config_file);
