@@ -1,28 +1,12 @@
-### Ignored hadoop 3.4.1 related CVEs
-## CVE-2023-39410,HIGH,7.5,"apache-avro: Apache Avro Java SDK: Memory when deserializing untrusted data in Avro Java SDK","org.apache.avro:avro","1.7.7","1.11.3",https://avd.aquasec.com/nvd/# CVE-2023-39410
-CVE-2023-39410
-
-## CVE-2024-47561,CRITICAL,,"apache-avro: Schema parsing may trigger Remote Code Execution (RCE)","org.apache.avro:avro","1.9.2","1.11.4",https://avd.aquasec.com/nvd/# CVE-2024-47561
-CVE-2024-47561
-
-## CVE-2025-24970,HIGH,,"io.netty:netty-handler: SslHandler doesn't correctly validate packets which can lead to native crash when using native SSLEngine","io.netty:netty-handler","4.1.100.Final","4.1.118.Final",https://avd.aquasec.com/nvd/# CVE-2025-24970
-CVE-2025-24970
-
-## CVE-2025-52999,HIGH,,"com.fasterxml.jackson.core/jackson-core: jackson-core Potential StackoverflowError","com.fasterxml.jackson.core:jackson-core","2.10.2","2.15.0",https://avd.aquasec.com/nvd/# CVE-2025-52999
+### Ignored hadoop 3.4.2 related CVEs
+## CVE-2025-52999,HIGH,,"com.fasterxml.jackson.core/jackson-core: jackson-core Potential StackoverflowError","com.fasterxml.jackson.core:jackson-core","2.10.2","2.15.0",https://avd.aquasec.com/nvd/cve-2025-52999
 CVE-2025-52999
 
-## CVE-2025-49128,MEDIUM,,"com.fasterxml.jackson.core/jackson-core: Jackson-core Memory Disclosure via Source Snippet in JsonLocation","com.fasterxml.jackson.core:jackson-core","2.10.2","2.13.0",https://avd.aquasec.com/nvd/# CVE-2025-49128
-CVE-2025-49128
-
-## CVE-2025-53864,MEDIUM,,"com.nimbusds/nimbus-jose-jwt: Uncontrolled recursion in Connect2id Nimbus JOSE + JWT","com.nimbusds:nimbus-jose-jwt","9.37.2","10.0.2",https://avd.aquasec.com/nvd/# CVE-2025-53864
+## CVE-2025-53864,MEDIUM,,"com.nimbusds/nimbus-jose-jwt: Uncontrolled recursion in Connect2id Nimbus JOSE + JWT","com.nimbusds:nimbus-jose-jwt","9.37.2","10.0.2",https://avd.aquasec.com/nvd/cve-2025-53864
 CVE-2025-53864
 
-## CVE-2025-48734,HIGH,,"commons-beanutils: Apache Commons BeanUtils: PropertyUtilsBean does not suppresses an enum's declaredClass property by default","commons-beanutils:commons-beanutils","1.9.4","1.11.0",https://avd.aquasec.com/nvd/# CVE-2025-48734
-CVE-2025-48734
-
-## CVE-2025-48924,MEDIUM,,"commons-lang/commons-lang: org.apache.commons/commons-lang3: Uncontrolled Recursion vulnerability in Apache Commons Lang","org.apache.commons:commons-lang3","3.12.0","3.18.0",https://avd.aquasec.com/nvd/# CVE-2025-48924
+## CVE-2025-48924,MEDIUM,,"commons-lang/commons-lang: org.apache.commons/commons-lang3: Uncontrolled Recursion vulnerability in Apache Commons Lang","org.apache.commons:commons-lang3","3.12.0","3.18.0",https://avd.aquasec.com/nvd/cve-2025-48924
 CVE-2025-48924
 
-### Ignored io.netty:netty-buffer:4.1.115.Final and hadoop-common:3.4.1 CVEs
-## CVE-2025-25193,MEDIUM,,"Netty, an asynchronous, event-driven network application framework, ha ...","io.netty:netty-common","4.1.115.Final","",https://avd.aquasec.com/nvd/# CVE-2025-25193
-CVE-2025-25193
+## CVE-2025-58057,MEDIUM,7.5,"netty-codec: netty-codec-compression: Netty's BrotliDecoder is vulnerable to DoS via zip bomb style attack","io.netty:netty-codec","4.1.100.Final","4.1.125.Final",https://avd.aquasec.com/nvd/cve-2025-58057
+CVE-2025-58057
