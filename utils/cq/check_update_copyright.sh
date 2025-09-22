@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
-#  Copyright 2023-2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
 #  Copyright 2025 Google LLC
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
