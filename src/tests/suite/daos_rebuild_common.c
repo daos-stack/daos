@@ -949,6 +949,7 @@ reintegrate_inflight_io(void *data)
 		sprintf(key, "d_inflight_%d", i);
 		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
 			      DAOS_TX_NONE, &req);
+		print_message("done insert_single key=%s\n", key);
 
 		sprintf(key, "d_inflight_1M_%d", i);
 		recx.rx_idx = 0;
@@ -957,17 +958,19 @@ reintegrate_inflight_io(void *data)
 		req.iod_type = DAOS_IOD_ARRAY;
 		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
 			     buf, DATA_SIZE, &req);
+		print_message("done insert_recxs key=%s\n", key);
 
 		req.iod_type = DAOS_IOD_SINGLE;
 		memset(single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
 		sprintf(key, "d_inflight_single_small_%d", i);
 		insert_single(key, "a_key", 0, single_data,
 			      SMALL_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+		print_message("done insert_single key=%s\n", key);
 
 		sprintf(key, "d_inflight_single_large_%d",  i);
 		insert_single(key, "a_key", 0, single_data,
 			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
-
+		print_message("done insert_single key=%s\n", key);
 	}
 	ioreq_fini(&req);
 	sleep(12);
