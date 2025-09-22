@@ -48,19 +48,14 @@ test_setup(void **unused)
 	for (i = 0; i < DBD_COUNT; i++) {
 		D_ALLOC(mock_dbds[i], CELL_SIZE);
 		assert_non_null(mock_dbds[i]);
+		mock_dbds_off[i] = umem_ptr2off(&mock_pool.vp_umm, mock_dbds[i]);
 	}
 
 	for (i = 0; i < DBD_COUNT; i++) {
 		mock_dbds[i]->dbd_magic = DTX_CMT_BLOB_MAGIC;
 		mock_dbds[i]->dbd_cap   = DBD_BLOB_DF_CAP;
-		if (i == DBD_COUNT - 1)
-			mock_dbds[i]->dbd_next = UMOFF_NULL;
-		else
-			mock_dbds[i]->dbd_next = umem_ptr2off(&mock_pool.vp_umm, mock_dbds[i + 1]);
-		if (i == 0)
-			mock_dbds[i]->dbd_prev = UMOFF_NULL;
-		else
-			mock_dbds[i]->dbd_prev = umem_ptr2off(&mock_pool.vp_umm, mock_dbds[i - 1]);
+		mock_dbds[i]->dbd_next  = (i == DBD_COUNT - 1) ? UMOFF_NULL : mock_dbds_off[i + 1];
+		mock_dbds[i]->dbd_prev  = (i == 0) ? UMOFF_NULL : mock_dbds_off[i - 1];
 		mock_dbds[i]->dbd_count = (i + 1) * 2;
 		assert_true(mock_dbds[i]->dbd_count <= DBD_BLOB_DF_CAP);
 
