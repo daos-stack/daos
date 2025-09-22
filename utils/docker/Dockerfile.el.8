@@ -18,6 +18,10 @@ ARG BASE_DISTRO
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
+# Use a more recent python version for unit testing
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim
+
 ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
@@ -64,6 +68,7 @@ ARG JENKINS_URL
 USER daos_server:daos_server
 
 # Setup a python venv so that python packages can be installed locally.
+RUN python3 -V
 RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
