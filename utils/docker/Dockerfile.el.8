@@ -19,8 +19,9 @@ ARG BASE_DISTRO
 ARG CB0
 
 # Use a more recent python version for unit testing
-ARG PYTHON_VERSION=3.12
-FROM python:${PYTHON_VERSION}-slim
+# ARG PYTHON_VERSION="3.12"
+# FROM python:${PYTHON_VERSION}-slim
+FROM python:3.12-slim
 
 ARG REPO_FILE_URL
 ARG JENKINS_URL
