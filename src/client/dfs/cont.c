@@ -126,9 +126,13 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	struct daos_prop_co_roots roots;
 	int                       rc, rc2;
 	struct daos_prop_entry   *dpe;
+	struct daos_prop_entry   *roots_entry  = NULL;
+	struct daos_prop_entry   *layout_entry = NULL;
 	struct timespec           now;
 	uint32_t                  cid_tf;
 	uint32_t                  pa_domain;
+	uint32_t                  prop_nr      = 0;
+	uint32_t                  props_to_add = 0;
 	int                       cont_tf;
 
 	if (cuuid == NULL)
@@ -138,10 +142,24 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		return EINVAL;
 	}
 
-	if (attr != NULL && attr->da_props != NULL)
-		prop = daos_prop_alloc(attr->da_props->dpp_nr + 2);
-	else
-		prop = daos_prop_alloc(2);
+	if (attr != NULL && attr->da_props != NULL) {
+		prop_nr = attr->da_props->dpp_nr;
+
+		roots_entry = daos_prop_entry_get(attr->da_props, DAOS_PROP_CO_ROOTS);
+		if (roots_entry == NULL)
+			props_to_add++;
+
+		layout_entry = daos_prop_entry_get(attr->da_props, DAOS_PROP_CO_LAYOUT_TYPE);
+		if (layout_entry == NULL) {
+			props_to_add++;
+		}
+	} else {
+		/* roots and layout are still needed */
+		props_to_add = 2;
+	}
+	prop_nr += props_to_add;
+
+	prop = daos_prop_alloc(prop_nr);
 	if (prop == NULL)
 		return ENOMEM;
 
@@ -267,13 +285,31 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 
 	/* store SB & root OIDs as container property */
 	roots.cr_oids[2] = roots.cr_oids[3]          = DAOS_OBJ_NIL;
-	prop->dpp_entries[prop->dpp_nr - 2].dpe_type = DAOS_PROP_CO_ROOTS;
-	rc = daos_prop_entry_set_ptr(&prop->dpp_entries[prop->dpp_nr - 2], &roots, sizeof(roots));
+
+	if (roots_entry == NULL) {
+		/* need to add roots prop to list */
+		roots_entry           = &prop->dpp_entries[prop->dpp_nr - props_to_add];
+		roots_entry->dpe_type = DAOS_PROP_CO_ROOTS;
+		props_to_add--;
+	} else {
+		/* roots passed in will be overwritten */
+		D_FREE(roots_entry->dpe_val_ptr);
+	}
+	rc = daos_prop_entry_set_ptr(roots_entry, &roots, sizeof(roots));
 	if (rc)
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 
-	prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
-	prop->dpp_entries[prop->dpp_nr - 1].dpe_val  = DAOS_PROP_CO_LAYOUT_POSIX;
+	if (layout_entry == NULL) {
+		/* need to add layout prop to list */
+		layout_entry           = &prop->dpp_entries[prop->dpp_nr - props_to_add];
+		layout_entry->dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+		props_to_add--;
+	}
+
+	/* layout passed in will be overwritten */
+	layout_entry->dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
+
+	D_ASSERT(props_to_add == 0);
 
 	rc = daos_cont_create(poh, cuuid, prop, NULL);
 	if (rc) {
