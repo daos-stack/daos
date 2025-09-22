@@ -33,4 +33,5 @@ func ResetTestStubs() {
 	reset_daos_pool_stubs()
 	reset_daos_cont_stubs()
 	reset_dfs_stubs()
+	reset_ioctl_stubs()
 }

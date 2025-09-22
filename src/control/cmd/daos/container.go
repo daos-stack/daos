@@ -62,6 +62,8 @@ type containerCmd struct {
 	DestroySnapshot containerSnapDestroyCmd      `command:"destroy-snap" description:"destroy container snapshot"`
 	ListSnapshots   containerSnapListCmd         `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
 	Rollback        containerSnapshotRollbackCmd `command:"rollback" description:"roll back container to specified snapshot"`
+
+	Telemetry containerTelemetryCmd `command:"telemetry" description:"container telemetry commands"`
 }
 
 type containerBaseCmd struct {
