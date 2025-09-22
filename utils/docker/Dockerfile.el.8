@@ -66,13 +66,13 @@ ARG JENKINS_URL
 
 USER daos_server:daos_server
 
-# Create and activate the python virtual environment and install dependencies
-COPY requirements-build.txt requirements-utest.txt ./
-RUN python3 -V
-RUN python3 -m venv /home/daos/venv \
-    && . /home/daos/venv/bin/activate \
-    && python3 -m pip --no-cache-dir install --upgrade pip \
-    && python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+# Setup a python venv so that python packages can be installed locally.
+RUN python${PYTHON_VERSION} -m venv /home/daos/venv
+COPY requirements-build.txt requirements-utest.txt /home/daos/venv/
+RUN source /home/daos/venv/bin/activate && \
+    python${PYTHON_VERSION} -m pip --no-cache-dir install --upgrade pip && \
+    python${PYTHON_VERSION} -m pip --no-cache-dir install \
+        -r /home/daos/venv/requirements-build.txt -r /home/daos/venv/requirements-utest.txt
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
