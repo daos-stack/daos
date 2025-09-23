@@ -117,7 +117,7 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t next /
 	} else {
 		oiter->oit_linear = false;
 		rc = dbtree_iter_probe(oiter->oit_hdl, BTR_PROBE_GE, vos_iter_intent(iter), NULL,
-				       anchor, NULL);
+				       anchor);
 		if (rc != 0)
 			goto out;
 

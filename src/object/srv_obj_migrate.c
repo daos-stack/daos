@@ -3537,8 +3537,7 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 	/* migrate_system_enter possibly yielded the ULT, let's re-probe before delete  */
 	if (yielded) {
 		d_iov_set(&tmp_iov, oid, sizeof(*oid));
-		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, &tmp_iov, NULL,
-				       NULL);
+		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, &tmp_iov, NULL);
 		if (rc) {
 			D_ASSERT(rc != -DER_NONEXIST);
 			DL_ERROR(rc, DF_RB ": obj " DF_UOID " probe failed",
@@ -3559,7 +3558,7 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 	}
 
 	/* re-probe the dbtree after deletion */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL, NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 	else if (rc != 0)
@@ -3644,7 +3643,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 	/* Snapshot fetch will yield the ULT, let's reprobe before delete  */
 	d_iov_set(&tmp_iov, cont_uuid, sizeof(uuid_t));
-	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, &tmp_iov, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, &tmp_iov, NULL);
 	if (rc) {
 		D_ASSERT(rc != -DER_NONEXIST);
 		D_GOTO(free, rc);
@@ -3657,7 +3656,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	}
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL, NULL);
 
 	if (rc == -DER_NONEXIST) {
 		rc = 1; /* empty after delete */

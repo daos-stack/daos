@@ -153,7 +153,6 @@ dlck_print_indent_dec(struct dlck_print *dp)
  * Validate the integrity of a btree.
  *
  * \param[in]	toh	Tree handle.
- * \param[in]	dp	DLCK print utility.
  *
  * \retval DER_SUCCESS		The tree is correct.
  * \retval -DER_NOTYPE		The tree is malformed.
@@ -161,6 +160,6 @@ dlck_print_indent_dec(struct dlck_print *dp)
  * \retval -DER_*		Possibly other errors.
  */
 int
-dlck_dbtree_check(daos_handle_t toh, struct dlck_print *dp);
+dlck_dbtree_check(daos_handle_t toh);
 
 #endif /** __DAOS_DLCK_H__ */

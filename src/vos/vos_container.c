@@ -818,7 +818,7 @@ cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags
 	/* The container tree will not be affected by the iterator intent,
 	 * just set it as DAOS_INTENT_DEFAULT.
 	 */
-	return dbtree_iter_probe(co_iter->cot_hdl, opc, DAOS_INTENT_DEFAULT, NULL, anchor, NULL);
+	return dbtree_iter_probe(co_iter->cot_hdl, opc, DAOS_INTENT_DEFAULT, NULL, anchor);
 }
 
 static int

@@ -1514,7 +1514,7 @@ gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_pri
 	}
 
 	if (IS_DLCK(dp)) {
-		rc = dlck_dbtree_check(gc_info->gi_bins_btr, dp);
+		rc = dlck_dbtree_check(gc_info->gi_bins_btr);
 		if (rc != DER_SUCCESS) {
 			dlck_print_indent_dec(dp);
 			DLCK_PRINT(dp, DLCK_GC_TREE_STR);

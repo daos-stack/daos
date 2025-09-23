@@ -163,6 +163,8 @@ struct btr_context {
 	struct btr_trace_info            tc_trace;
 	/** trace buffer */
 	struct btr_trace		 tc_traces[BTR_TRACE_MAX];
+	/** DLCK print utility */
+	struct dlck_print               *tc_dlck_print;
 };
 
 /** size of print buffer */
@@ -371,6 +373,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root, unsigned int tree
 		D_DEBUG(DB_TRACE, "Load tree context from "DF_X64"\n",
 			root_off);
 	}
+
+	tcx->tc_dlck_print = dp;
 
 	btr_context_set_depth(tcx, depth);
 	*tcxp = tcx;
@@ -1719,7 +1723,7 @@ dlck_btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct dlck_print *d
  */
 static enum btr_probe_rc
 btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32_t intent, d_iov_t *key,
-	  char hkey[DAOS_HKEY_MAX], struct dlck_print *dp)
+	  char hkey[DAOS_HKEY_MAX])
 {
 	int			 start;
 	int			 end;
@@ -1748,14 +1752,14 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32_t intent
 	btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
 
 	if (btr_root_empty(tcx)) { /* empty tree */
-		DLCK_DEBUG(dp, DB_TRACE, "%s", "Empty tree\n");
+		DLCK_DEBUG(tcx->tc_dlck_print, DB_TRACE, "%s", "Empty tree\n");
 		rc = PROBE_RC_NONE;
 		goto out;
 	}
 
 	if (btr_has_embedded_value(tcx)) {
 		/** DLCK instrumentation is not present in the embedded probe yet. */
-		D_ASSERT(dp == NULL);
+		D_ASSERT(tcx->tc_dlck_print == NULL);
 		rc = btr_probe_embedded(tcx, probe_opc, intent, key, hkey);
 		return rc;
 	}
@@ -1767,8 +1771,8 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32_t intent
 			next_level = false;
 			start	= 0;
 			nd	= btr_off2ptr(tcx, nd_off);
-			if (IS_DLCK(dp)) {
-				rc = dlck_btr_node_check(nd, nd_off, dp);
+			if (IS_DLCK(tcx->tc_dlck_print)) {
+				rc = dlck_btr_node_check(nd, nd_off, tcx->tc_dlck_print);
 				if (rc != DER_SUCCESS) {
 					goto out;
 				}
@@ -1821,9 +1825,9 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32_t intent
 		btr_trace_debug(tcx, &tcx->tc_trace.ti_trace[level], "probe child\n");
 
 		/* Search the next level. */
-		if (IS_DLCK(dp)) {
+		if (IS_DLCK(tcx->tc_dlck_print)) {
 			if (nd->tn_flags & BTR_NODE_LEAF) {
-				DLCK_PRINTF(dp,
+				DLCK_PRINTF(tcx->tc_dlck_print,
 					    "Attempted to traverse to the next level from a leaf "
 					    "node (flags=%#x)\n",
 					    nd->tn_flags);
@@ -2007,7 +2011,7 @@ btr_probe_key(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	char hkey[DAOS_HKEY_MAX];
 
 	btr_hkey_gen(tcx, key, hkey);
-	return btr_probe(tcx, probe_opc, intent, key, hkey, NULL);
+	return btr_probe(tcx, probe_opc, intent, key, hkey);
 }
 
 static bool
@@ -3789,6 +3793,7 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
  * \param[in] uma	Memory class attributes.
  * \param[in] coh	The container open handle.
  * \param[in] priv	Private data for tree opener
+ * \param[in] dp	DLCK print utility.
  * \param[out] toh	Returned tree open handle.
  */
 int
@@ -4140,14 +4145,13 @@ dbtree_iter_finish(daos_handle_t ih)
  *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
  * \param[in] anchor	the anchor point to probe, it will be ignored if
  *			\a key is provided.
- * \param[in] dp	DLCK print utility.
  *
  * \note		If opc is not BTR_PROBE_FIRST or BTR_PROBE_LAST,
  *			key or anchor is required.
  */
 int
 dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent, d_iov_t *key,
-		  daos_anchor_t *anchor, struct dlck_print *dp)
+		  daos_anchor_t *anchor)
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
@@ -4170,16 +4174,16 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent, d_i
 		return -DER_NO_HDL;
 
 	if (opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST)
-		rc = btr_probe(tcx, opc, intent, NULL, NULL, dp);
+		rc = btr_probe(tcx, opc, intent, NULL, NULL);
 	else if (btr_is_direct_key(tcx)) {
 		D_ASSERT(key != NULL || anchor != NULL);
 		if (key)
-			rc = btr_probe(tcx, opc, intent, key, NULL, dp);
+			rc = btr_probe(tcx, opc, intent, key, NULL);
 		else {
 			d_iov_t direct_key;
 
 			btr_key_decode(tcx, &direct_key, anchor);
-			rc = btr_probe(tcx, opc, intent, &direct_key, NULL, dp);
+			rc = btr_probe(tcx, opc, intent, &direct_key, NULL);
 		}
 	} else {
 		D_ASSERT(key != NULL || anchor != NULL);
@@ -4189,7 +4193,7 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent, d_i
 			btr_hkey_gen(tcx, key, hkey);
 		else
 			btr_hkey_copy(tcx, hkey, (char *)&anchor->da_buf[0]);
-		rc = btr_probe(tcx, opc, intent, key, hkey, dp);
+		rc = btr_probe(tcx, opc, intent, key, hkey);
 	}
 
 	switch (rc) {
@@ -4445,7 +4449,7 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 	}
 
 	rc = dbtree_iter_probe(ih, backward ? BTR_PROBE_LAST : BTR_PROBE_FIRST, intent,
-			       NULL /* key */, NULL /* anchor */, NULL);
+			       NULL /* key */, NULL /* anchor */);
 	if (rc == -DER_NONEXIST) {
 		D_GOTO(out_iter, rc = 0);
 	} else if (rc != 0) {
@@ -4734,8 +4738,10 @@ done:
 }
 
 int
-dlck_dbtree_check(daos_handle_t toh, struct dlck_print *dp)
+dlck_dbtree_check(daos_handle_t toh)
 {
+	struct btr_context *tcx = btr_hdl2tcx(toh);
+	struct dlck_print  *dp  = tcx->tc_dlck_print;
 	daos_handle_t ih;
 	int           rc;
 
@@ -4744,7 +4750,7 @@ dlck_dbtree_check(daos_handle_t toh, struct dlck_print *dp)
 	DLCK_PRINT(dp, "Nodes:\n");
 	dlck_print_indent_inc(dp);
 
-	rc = dbtree_iter_prepare(toh, 0 /** options */, &ih);
+	rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED, &ih);
 	if (rc != 0) {
 		DLCK_PRINTF_ERR(dp, "failed to prepare tree iterator: " DF_RC "\n", DP_RC(rc));
 		dlck_print_indent_dec(dp);
@@ -4752,7 +4758,7 @@ dlck_dbtree_check(daos_handle_t toh, struct dlck_print *dp)
 	}
 
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_CHECK, NULL /** key */,
-			       NULL /** anchor */, dp);
+			       NULL /** anchor */);
 	if (rc == -DER_NONEXIST) {
 		(void)dbtree_iter_finish(ih);
 		dlck_print_indent_dec(dp);

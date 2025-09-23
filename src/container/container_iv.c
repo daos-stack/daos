@@ -103,7 +103,7 @@ delete_iter_cb(daos_handle_t ih, d_iov_t *key,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_PUNCH, NULL, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_PUNCH, NULL, NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 

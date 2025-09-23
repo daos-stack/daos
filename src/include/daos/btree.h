@@ -637,7 +637,7 @@ int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 int dbtree_iter_finish(daos_handle_t ih);
 int
     dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent, d_iov_t *key,
-		      daos_anchor_t *anchor, struct dlck_print *dp);
+		      daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,

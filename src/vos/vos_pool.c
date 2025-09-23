@@ -1763,7 +1763,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 
 	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
 	if (IS_DLCK(dp)) {
-		rc = dlck_dbtree_check(pool->vp_cont_th, dp);
+		rc = dlck_dbtree_check(pool->vp_cont_th);
 		if (rc != DER_SUCCESS) {
 			dlck_print_indent_dec(dp);
 			DLCK_PRINT(dp, "Containers tree... ");
