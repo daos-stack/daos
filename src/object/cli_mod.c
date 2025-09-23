@@ -83,6 +83,7 @@ dc_obj_tls_init(int tags, int xs_id, int pid)
 	if (rc)
 		D_GOTO(out, rc);
 
+	D_INFO("test with rebuild patch set Sep-09, client\n");
 out:
 	if (rc) {
 		D_FREE(tls);
