@@ -1085,6 +1085,7 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 			goto out;
 		while (!isset(bit_map, j))
 			j++;
+		D_ASSERTF(j < k, "bad cell_idx %d, number of data shards %d\n", j, k);
 		agg_diff_preprocess(entry, diff, j);
 		ec_encode_data_update(cell_bytes, k, p, j,
 				      entry->ae_codec->ec_gftbls, diff,
@@ -1950,15 +1951,15 @@ out:
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
 			if (rc)
-				D_ERROR("agg_peer_update fail: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "agg_peer_update failed, write_parity %d\n",
+					 write_parity);
 		}
 
 		if (rc == 0) {
 			rc = agg_update_vos(agg_param, entry, write_parity);
 			if (rc)
-				D_ERROR("agg_update_vos failed: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "agg_update_vos failed, write_parity %d\n",
+					 write_parity);
 		}
 	}
 
