@@ -59,8 +59,8 @@ thread_cache_op(void *arg)
 	/* verify entries exist */
 	for (i = param->start; i < param->end; i++) {
 		rc = shm_lru_get(param->cache, &i, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == param->data[i]);
+		assert_true(rc == 0);
+		assert_true(*addr_val == param->data[i]);
 	}
 	pthread_exit(NULL);
 }
@@ -102,8 +102,8 @@ test_lrucache(void **state)
 	for (key_size = 1; key_size <= 15; key_size++) {
 		memcpy(key_var, key_long, key_size);
 		rc = shm_lru_get(cache, key_var, key_size, &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == key_size);
+		assert_true(rc == 0);
+		assert_true(*addr_val == key_size);
 		shm_lru_node_dec_ref(node_found);
 	}
 
@@ -120,7 +120,7 @@ test_lrucache(void **state)
 	for (i = 1; i <= 16; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, key_long, i, &node_found, (void **)&addr_val);
-		assert(rc == 0);
+		assert_true(rc == 0);
 		assert_true(memcmp(addr_val, data_long, i) == 0);
 		shm_lru_node_dec_ref(node_found);
 	}
@@ -144,8 +144,8 @@ test_lrucache(void **state)
 
 	key = 1;
 	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-	assert(rc == 0);
-	assert(*addr_val == 10);
+	assert_true(rc == 0);
+	assert_true(*addr_val == 10);
 	shm_lru_node_dec_ref(node_found);
 
 	key = 3;
@@ -154,12 +154,12 @@ test_lrucache(void **state)
 
 	key = 2;
 	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-	assert(rc == ENOENT);
+	assert_true(rc == ENOENT);
 
 	key = 1;
 	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-	assert(rc == 0);
-	assert(*addr_val == 10);
+	assert_true(rc == 0);
+	assert_true(*addr_val == 10);
 	shm_lru_node_dec_ref(node_found);
 
 	shm_lru_destroy_cache(cache);
@@ -180,8 +180,8 @@ test_lrucache(void **state)
 	for (i = 0; i < capacity; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == i);
+		assert_true(rc == 0);
+		assert_true(*addr_val == i);
 		shm_lru_node_dec_ref(node_found);
 	}
 
@@ -196,15 +196,15 @@ test_lrucache(void **state)
 	for (i = 0; i < 50; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == ENOENT);
+		assert_true(rc == ENOENT);
 	}
 
 	/* verify remaining items do exist */
 	for (i = 50; i < capacity + 50; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == i);
+		assert_true(rc == 0);
+		assert_true(*addr_val == i);
 		shm_lru_node_dec_ref(node_found);
 	}
 
@@ -229,8 +229,8 @@ test_lrucache(void **state)
 	gettimeofday(&tm1, NULL);
 	for (i = 0; i < MAX_THREAD; i++) {
 		thread_param_list[i].cache = cache;
-		thread_param_list[i].start = i * size_per_thread;
-		thread_param_list[i].end   = thread_param_list[i].start + size_per_thread;
+		thread_param_list[i].start = 0;
+		thread_param_list[i].end   = num_keys;
 		thread_param_list[i].data  = data;
 
 		rc = pthread_create(&thread_list[i], NULL, thread_cache_op,
@@ -248,8 +248,8 @@ test_lrucache(void **state)
 	for (i = 0; i < num_keys; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == data[i]);
+		assert_true(rc == 0);
+		assert_true(*addr_val == data[i]);
 	}
 	shm_lru_destroy_cache(cache);
 
@@ -259,11 +259,6 @@ test_lrucache(void **state)
 
 	gettimeofday(&tm1, NULL);
 	for (i = 0; i < MAX_THREAD; i++) {
-		thread_param_list[i].cache = cache;
-		thread_param_list[i].start = i * size_per_thread;
-		thread_param_list[i].end   = thread_param_list[i].start + size_per_thread;
-		thread_param_list[i].data  = data;
-
 		rc = pthread_create(&thread_list[i], NULL, thread_cache_op,
 				    (void *)&thread_param_list[i]);
 		assert_true(rc == 0);
@@ -279,8 +274,8 @@ test_lrucache(void **state)
 	for (i = 0; i < num_keys; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == data[i]);
+		assert_true(rc == 0);
+		assert_true(*addr_val == data[i]);
 	}
 	shm_lru_destroy_cache(cache);
 

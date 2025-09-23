@@ -412,6 +412,9 @@ shm_lru_node_dec_ref(shm_lru_node_t *node);
 /**
  * create/update LRU record
  *
+ * We currently assume data are same for the same key if multiple put() are trying to insert/update
+ * the same key. There could be consistency issue if this assumption is false.
+ *
  * \param[in] cache		LRU cache
  * \param[in] key		key
  * \param[in] key_size		size of key in bytes
