@@ -1722,8 +1722,8 @@ dlck_btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct dlck_print *d
  * \return	see btr_probe_rc
  */
 static enum btr_probe_rc
-btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32_t intent, d_iov_t *key,
-	  char hkey[DAOS_HKEY_MAX])
+btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
+	  uint32_t intent, d_iov_t *key, char hkey[DAOS_HKEY_MAX])
 {
 	int			 start;
 	int			 end;
@@ -4145,13 +4145,12 @@ dbtree_iter_finish(daos_handle_t ih)
  *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
  * \param[in] anchor	the anchor point to probe, it will be ignored if
  *			\a key is provided.
- *
  * \note		If opc is not BTR_PROBE_FIRST or BTR_PROBE_LAST,
  *			key or anchor is required.
  */
 int
-dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent, d_iov_t *key,
-		  daos_anchor_t *anchor)
+dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
+		  d_iov_t *key, daos_anchor_t *anchor)
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
@@ -4448,8 +4447,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 		D_GOTO(out, rc);
 	}
 
-	rc = dbtree_iter_probe(ih, backward ? BTR_PROBE_LAST : BTR_PROBE_FIRST, intent,
-			       NULL /* key */, NULL /* anchor */);
+	rc = dbtree_iter_probe(ih, backward ? BTR_PROBE_LAST : BTR_PROBE_FIRST,
+			       intent, NULL /* key */, NULL /* anchor */);
 	if (rc == -DER_NONEXIST) {
 		D_GOTO(out_iter, rc = 0);
 	} else if (rc != 0) {
