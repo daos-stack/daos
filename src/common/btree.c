@@ -4741,8 +4741,8 @@ dlck_dbtree_check(daos_handle_t toh)
 {
 	struct btr_context *tcx = btr_hdl2tcx(toh);
 	struct dlck_print  *dp  = tcx->tc_dlck_print;
-	daos_handle_t ih;
-	int           rc;
+	daos_handle_t       ih;
+	int                 rc;
 
 	D_ASSERT(dp != NULL);
 
