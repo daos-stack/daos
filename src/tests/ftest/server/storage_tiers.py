@@ -29,7 +29,7 @@ class StorageTiers(TestWithServers):
             Does not test or rely on actual hardware being present.
 
         :avocado: tags=all,pr
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=server,storage,storage_tiers
         :avocado: tags=StorageTiers,test_tiers
         """
