@@ -4767,7 +4767,7 @@ dlck_dbtree_check(daos_handle_t toh)
 		DLCK_PRINTF_ERR(dp, "failed to initialize tree iterator" DF_RC "\n", DP_RC(rc));
 	}
 
-	while (rc != DER_SUCCESS) {
+	while (rc == DER_SUCCESS) {
 		rc = dbtree_iter_next(ih);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
