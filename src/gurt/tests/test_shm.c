@@ -46,22 +46,27 @@ static void *
 thread_cache_op(void *arg)
 {
 	int             i;
+	int             j;
 	int             rc;
 	shm_lru_node_t *node_found;
 	thread_param_t *param = (thread_param_t *)arg;
 	int            *addr_val;
 
-	/* insert entries */
-	for (i = param->start; i < param->end; i++) {
-		shm_lru_put(param->cache, &i, sizeof(int), &param->data[i], sizeof(int));
+	for (j = 0; j < 10; j++) {
+		/* insert entries */
+		for (i = param->start; i < param->end; i++) {
+			shm_lru_put(param->cache, &i, sizeof(int), &param->data[i], sizeof(int));
+		}
+
+		/* verify entries exist */
+		for (i = param->start; i < param->end; i++) {
+			rc = shm_lru_get(param->cache, &i, sizeof(int), &node_found,
+					 (void **)&addr_val);
+			assert_true(rc == 0);
+			assert_true(*addr_val == param->data[i]);
+		}
 	}
 
-	/* verify entries exist */
-	for (i = param->start; i < param->end; i++) {
-		rc = shm_lru_get(param->cache, &i, sizeof(int), &node_found, (void **)&addr_val);
-		assert_true(rc == 0);
-		assert_true(*addr_val == param->data[i]);
-	}
 	pthread_exit(NULL);
 }
 
@@ -81,7 +86,6 @@ test_lrucache(void **state)
 	int              capacity;
 	shm_lru_cache_t *cache;
 	thread_param_t   thread_param_list[MAX_THREAD];
-	int              size_per_thread;
 	int             *data;
 	int              num_keys;
 	struct timeval   tm1, tm2;
@@ -212,8 +216,7 @@ test_lrucache(void **state)
 
 	/* start multiple threads to operate LRU cache */
 	capacity        = 500000;
-	size_per_thread = (int)(capacity * 0.85f / MAX_THREAD);
-	num_keys        = size_per_thread * MAX_THREAD;
+	num_keys        = (int)(capacity * 0.85f);
 	data            = malloc(sizeof(int) * num_keys);
 	assert_true(data != NULL);
 
