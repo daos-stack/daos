@@ -1951,7 +1951,7 @@ rebuild_task_ult(void *arg)
 	if (rc) {
 		D_ERROR(DF_UUID ": ds_cont_svc_refresh_agg_eph failed, " DF_RC "\n",
 			DP_UUID(task->dst_pool_uuid), DP_RC(rc));
-		goto out_task;
+		goto out_pool;
 	}
 
 	while (1) {
