@@ -14,6 +14,7 @@
 #define DLCK_PRINT_INDENT     '-'
 
 #define DLCK_ERROR_INFIX      "error: "
+#define DLCK_OK_SUFFIX        "ok."
 
 /**
  * @struct dlck_print
@@ -65,10 +66,15 @@ struct dlck_print {
 
 #define DLCK_PRINT_YES_NO(print, cond) DLCK_PRINTF_WO_PREFIX(print, "%s.\n", (cond) ? "yes" : "no")
 
-#define DLCK_PRINT_OK(print)           DLCK_PRINT_WO_PREFIX(print, "ok.\n")
+#define DLCK_PRINT_OK(print)           DLCK_PRINT_WO_PREFIX(print, DLCK_OK_SUFFIX "\n")
 
 #define DLCK_PRINT_RC(print, rc)                                                                   \
 	DLCK_PRINTF_WO_PREFIX(print, DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc))
+
+#define DLCK_PRINT_MSG_OK(print, msg) DLCK_PRINT(print, msg DLCK_OK_SUFFIX "\n")
+
+#define DLCK_PRINT_MSG_RC(print, msg, rc)                                                          \
+	DLCK_PRINTF(print, msg DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc))
 
 static inline void
 dlck_print_indent_set(struct dlck_print *dp)

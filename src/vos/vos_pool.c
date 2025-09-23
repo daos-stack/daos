@@ -1708,6 +1708,8 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	return rc;
 }
 
+#define DLCK_CONT_TREE_STR "Containers tree... "
+
 static int
 pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned int flags,
 	       void *metrics, struct vos_pool *pool, struct dlck_print *dp, int ret)
@@ -1748,15 +1750,14 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 		goto out;
 	}
 
-	DLCK_PRINT(dp, "Containers tree...\n");
+	DLCK_PRINT(dp, DLCK_CONT_TREE_STR "\n");
 	dlck_print_indent_inc(dp);
 	/* Cache container table btree hdl */
 	rc = dbtree_open_inplace_ex(&pool_df->pd_cont_root, &pool->vp_uma, DAOS_HDL_INVAL, pool, dp,
 				    &pool->vp_cont_th);
 	if (rc) {
 		dlck_print_indent_dec(dp);
-		DLCK_PRINT(dp, "Containers tree... ");
-		DLCK_PRINT_RC(dp, rc);
+		DLCK_PRINT_MSG_RC(dp, DLCK_CONT_TREE_STR, rc);
 		D_ERROR("Container Tree open failed\n");
 		goto out;
 	}
@@ -1766,14 +1767,12 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 		rc = dlck_dbtree_check(pool->vp_cont_th);
 		if (rc != DER_SUCCESS) {
 			dlck_print_indent_dec(dp);
-			DLCK_PRINT(dp, "Containers tree... ");
-			DLCK_PRINT_RC(dp, rc);
+			DLCK_PRINT_MSG_RC(dp, DLCK_CONT_TREE_STR, rc);
 			goto out;
 		}
 	}
 	dlck_print_indent_dec(dp);
-	DLCK_PRINT(dp, "Containers tree... ");
-	DLCK_PRINT_OK(dp);
+	DLCK_PRINT_MSG_OK(dp, DLCK_CONT_TREE_STR);
 
 	pool->vp_metrics = metrics;
 	if (!(flags & VOS_POF_FOR_FEATURE_FLAG) && bio_nvme_configured(SMD_DEV_TYPE_DATA) &&
@@ -1950,8 +1949,7 @@ out:
 		*poh = vos_pool2hdl(pool);
 
 		dlck_print_indent_dec(dp);
-		DLCK_PRINT(dp, "Check pool... ");
-		DLCK_PRINT_OK(dp);
+		DLCK_PRINT_MSG_OK(dp, "Check pool... ");
 	}
 
 	/* Close this local handle, if it hasn't been consumed nor already
