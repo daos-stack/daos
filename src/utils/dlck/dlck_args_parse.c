@@ -9,6 +9,7 @@
 #include <daos/common.h>
 
 #include "dlck_args.h"
+#include "dlck_bitmap.h"
 
 int
 parse_unsigned(const char *arg, unsigned *value, struct argp_state *state)
@@ -77,7 +78,7 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
 			FAIL(state, rc, EINVAL, "Chosen target is too big: %" PRIu32 ">%" PRIu32,
 			     target, DLCK_TARGET_MAX);
 		}
-		file->targets_bitmap |= (1 << target);
+		dlck_bitmap_setbit32(&file->targets_bitmap, target);
 	}
 
 	/** No target means all targets. */
