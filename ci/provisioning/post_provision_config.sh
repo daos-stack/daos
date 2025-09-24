@@ -140,7 +140,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            REPO_PATH=\"${REPO_PATH:-}\"
            ARTIFACTS_URL=\"${ARTIFACTS_URL:-}\"
            COVFN_DISABLED=\"${COVFN_DISABLED:-true}\"
-           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:-}\"
+           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:?DAOS_CI_INFO_DIR is missing. Can not continue with node(s) provisioning process}\"
            CI_SCONS_ARGS=\"${CI_SCONS_ARGS:-}\"
            PYTHON_VERSION=\"${PYTHON_VERSION}\"
            $(cat ci/stacktrace.sh)
