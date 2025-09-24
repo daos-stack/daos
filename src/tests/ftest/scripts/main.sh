@@ -9,6 +9,8 @@
 
 set -eux
 
+: "${PYTHON_VERSION:=3.11}"
+
 # check that vm.max_map_count has been configured/bumped
 if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     echo "vm.max_map_count is not set as expected"
@@ -23,7 +25,7 @@ then
     rm -rf venv
 fi
 
-python3 -m venv venv
+"python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
