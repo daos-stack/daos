@@ -26,7 +26,7 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 
 # Use the latest version that CI has available.
 : "${PYTHON_VERSION:=3.11}"
-python${PYTHON_VERSION} -m venv venv
+"python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 touch venv/pip.conf

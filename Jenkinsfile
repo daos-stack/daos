@@ -1259,9 +1259,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
+                            filename 'utils/docker/Dockerfile.code_coverage'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
+                            additionalBuildArgs dockerBuildArgs(add_repos: false) +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {

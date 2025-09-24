@@ -31,7 +31,7 @@ distro_custom() {
 
     # Use a more recent python version for unit testing, this allows us to also test installing
     # pydaos into virtual environments.
-    dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-devel
+    dnf -y install "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-devel"
 }
 
 install_mofed() {
