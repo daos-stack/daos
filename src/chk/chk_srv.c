@@ -145,7 +145,7 @@ ds_chk_act_hdlr(crt_rpc_t *rpc)
 	struct chk_act_out	*cao = crt_reply_get(rpc);
 	int			 rc;
 
-	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_cla, cai->cai_act, cai->cai_flags);
+	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_act);
 
 	cao->cao_status = rc;
 	rc = crt_reply_send(rpc);
@@ -269,6 +269,20 @@ ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 		D_ERROR("Failed to reply check rejoin: "DF_RC"\n", DP_RC(rc));
 
 	D_FREE(pools);
+}
+
+static void
+ds_chk_set_policy_hdlr(crt_rpc_t *rpc)
+{
+	struct chk_set_policy_in  *cspi = crt_req_get(rpc);
+	struct chk_set_policy_out *cspo = crt_reply_get(rpc);
+	int                        rc;
+
+	cspo->cspo_status = chk_engine_set_policy(cspi->cspi_gen, cspi->cspi_policies.ca_count,
+						  cspi->cspi_policies.ca_arrays);
+	rc                = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("Failed to reply check set policy: " DF_RC "\n", DP_RC(rc));
 }
 
 static int

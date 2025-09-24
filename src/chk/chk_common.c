@@ -182,12 +182,15 @@ btr_ops_t chk_pool_ops = {
 };
 
 struct chk_pending_bundle {
-	d_list_t		*cpb_pool_head;
-	d_list_t		*cpb_rank_head;
-	d_rank_t		 cpb_rank;
-	uuid_t			 cpb_uuid;
-	uint32_t		 cpb_class;
-	uint64_t		 cpb_seq;
+	struct chk_instance *cpb_ins;
+	d_list_t            *cpb_pool_head;
+	d_list_t            *cpb_rank_head;
+	uuid_t               cpb_uuid;
+	d_rank_t             cpb_rank;
+	uint32_t             cpb_class;
+	uint64_t             cpb_seq;
+	uint32_t             cpb_option_nr;
+	uint32_t            *cpb_options;
 };
 
 static int
@@ -211,6 +214,7 @@ chk_pending_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	struct chk_pending_bundle	*cpb = val_iov->iov_buf;
 	struct chk_pending_rec		*cpr = NULL;
 	int				 rc = 0;
+	int                              i;
 
 	D_ASSERT(cpb != NULL);
 	D_ASSERT(val_out != NULL);
@@ -232,6 +236,15 @@ chk_pending_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	cpr->cpr_rank = cpb->cpb_rank;
 	cpr->cpr_class = cpb->cpb_class;
 	cpr->cpr_action = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+
+	D_ASSERTF(cpb->cpb_option_nr <= CHK_INTERACT_OPTION_MAX, "Too many options: %u > %u(max)\n",
+		  cpb->cpb_option_nr, CHK_INTERACT_OPTION_MAX);
+	cpr->cpr_option_nr = cpb->cpb_option_nr;
+
+	for (i = 0; i < cpb->cpb_option_nr; i++)
+		cpr->cpr_options[i] = cpb->cpb_options[i];
+
+	d_list_add_tail(&cpr->cpr_ins_link, &cpb->cpb_ins->ci_pending_list);
 
 	if (cpb->cpb_rank_head != NULL)
 		d_list_add_tail(&cpr->cpr_rank_link, cpb->cpb_rank_head);
@@ -266,6 +279,7 @@ chk_pending_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	rec->rec_off = UMOFF_NULL;
 	d_list_del_init(&cpr->cpr_pool_link);
 	d_list_del_init(&cpr->cpr_rank_link);
+	d_list_del_init(&cpr->cpr_ins_link);
 
 	if (val_iov != NULL) {
 		d_iov_set(val_iov, cpr, sizeof(*cpr));
@@ -416,9 +430,8 @@ chk_pool_restart_svc(struct chk_pool_rec *cpr)
 static void
 chk_pool_wait(struct chk_pool_rec *cpr)
 {
-	struct chk_instance	*ins = cpr->cpr_ins;
-	struct chk_pending_rec	*pending;
-	struct chk_pending_rec	*tmp;
+	struct chk_instance    *ins = cpr->cpr_ins;
+	struct chk_pending_rec *pending;
 
 	D_ASSERT(cpr->cpr_refs > 0);
 	/*
@@ -435,7 +448,8 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 
 		/* Cleanup all pending records belong to this pool. */
 		ABT_rwlock_wrlock(ins->ci_abt_lock);
-		d_list_for_each_entry_safe(pending, tmp, &cpr->cpr_pending_list, cpr_pool_link)
+		while ((pending = d_list_pop_entry(&cpr->cpr_pending_list, struct chk_pending_rec,
+						   cpr_pool_link)) != NULL)
 			chk_pending_wakeup(ins, pending);
 		ABT_rwlock_unlock(ins->ci_abt_lock);
 
@@ -487,7 +501,7 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, uint32
 			if (status == CHK__CHECK_POOL_STATUS__CPS_STOPPED)
 				ins->ci_pool_stopped = 1;
 			cbk->cb_time.ct_stop_time = time(NULL);
-			uuid_unparse_lower(uuid, uuid_str);
+			chk_uuid_unparse(ins, uuid, uuid_str);
 			rc = chk_bk_update_pool(cbk, uuid_str);
 		}
 
@@ -500,7 +514,7 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, uint32
 		chk_pool_put(cpr);
 	}
 
-	if (ret != NULL)
+	if (ret != NULL && *ret == 0)
 		*ret = rc;
 }
 
@@ -518,8 +532,7 @@ chk_pool_stop_all(struct chk_instance *ins, uint32_t status, int *ret)
 		chk_pool_get(cpr);
 
 	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
-		if (ret == NULL || *ret == 0)
-			chk_pool_stop_one(ins, cpr->cpr_uuid, status, CHK_INVAL_PHASE, ret);
+		chk_pool_stop_one(ins, cpr->cpr_uuid, status, CHK_INVAL_PHASE, ret);
 		chk_pool_put(cpr);
 	}
 }
@@ -532,7 +545,8 @@ chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	struct chk_bookmark		 cbk;
 	int				 rc = 0;
 
-	if (!daos_is_valid_uuid_string(uuid_str))
+	if (!daos_is_valid_uuid_string(uuid_str, ctpa->ctpa_ins->ci_is_leader ? UUID_SST_UPPER
+									      : UUID_SST_LOWER))
 		D_GOTO(out, rc = 0);
 
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
@@ -557,11 +571,13 @@ out:
 int
 chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 {
-	char			*uuid_str = key->iov_buf;
-	struct chk_bookmark	 cbk;
-	int			 rc = 0;
+	struct chk_traverse_pools_args *ctpa     = args;
+	char                           *uuid_str = key->iov_buf;
+	struct chk_bookmark             cbk;
+	int                             rc = 0;
 
-	if (!daos_is_valid_uuid_string(uuid_str))
+	if (!daos_is_valid_uuid_string(uuid_str, ctpa->ctpa_ins->ci_is_leader ? UUID_SST_UPPER
+									      : UUID_SST_LOWER))
 		D_GOTO(out, rc = 0);
 
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
@@ -584,7 +600,7 @@ chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen)
 	if (rc)
 		return rc;
 
-	uuid_unparse_lower(uuid, uuid_str);
+	chk_uuid_unparse(ins, uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		goto out;
@@ -631,7 +647,7 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 				break;
 		}
 
-		uuid_unparse_lower(pools[i], uuid_str);
+		chk_uuid_unparse(ins, pools[i], uuid_str);
 		rc = chk_bk_fetch_pool(&cbk, uuid_str);
 		if (rc != 0 && rc != -DER_NONEXIST)
 			break;
@@ -705,7 +721,7 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	int				 rc = 0;
 	uint8_t                          chk_ver;
 
-	if (!daos_is_valid_uuid_string(uuid_str))
+	if (!chk_is_valid_uuid_string(ins, uuid_str))
 		D_GOTO(out, rc = 0);
 
 	rc = chk_rpc_protocol(&chk_ver);
@@ -776,7 +792,7 @@ chk_pools_update_bk(struct chk_instance *ins, uint32_t phase)
 		if (cbk->cb_phase < phase &&
 		    cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING) {
 			cbk->cb_phase = phase;
-			uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+			chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 			rc1 = chk_bk_update_pool(cbk, uuid_str);
 			if (rc1 != 0)
 				rc = rc1;
@@ -831,7 +847,7 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 	if (iv->ci_phase != cbk->cb_phase || iv->ci_pool_status != cbk->cb_pool_status) {
 		cbk->cb_phase = iv->ci_phase;
 		cbk->cb_pool_status = iv->ci_pool_status;
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 	}
 
@@ -913,7 +929,8 @@ chk_pool_shard_cleanup(struct chk_instance *ins)
 
 int
 chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
-		uint64_t seq, uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr)
+		uint64_t seq, uint32_t rank, uint32_t cla, uint32_t option_nr, uint32_t *options,
+		struct chk_pending_rec **cpr)
 {
 	struct chk_pending_bundle	rbund;
 	d_iov_t				kiov;
@@ -926,9 +943,12 @@ chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_he
 	uuid_copy(rbund.cpb_uuid, uuid);
 	rbund.cpb_pool_head = pool_head;
 	rbund.cpb_rank_head = rank_head;
-	rbund.cpb_seq = seq;
-	rbund.cpb_rank = rank;
-	rbund.cpb_class = cla;
+	rbund.cpb_ins       = ins;
+	rbund.cpb_seq       = seq;
+	rbund.cpb_rank      = rank;
+	rbund.cpb_class     = cla;
+	rbund.cpb_option_nr = option_nr;
+	rbund.cpb_options   = options;
 
 	d_iov_set(&viov, NULL, 0);
 	d_iov_set(&riov, &rbund, sizeof(rbund));
@@ -952,7 +972,7 @@ chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_he
 }
 
 int
-chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked, struct chk_pending_rec **cpr)
+chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr)
 {
 	d_iov_t		kiov;
 	d_iov_t		riov;
@@ -961,12 +981,9 @@ chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked, struct chk_
 	d_iov_set(&riov, NULL, 0);
 	d_iov_set(&kiov, &seq, sizeof(seq));
 
-	if (!locked)
-		ABT_rwlock_wrlock(ins->ci_abt_lock);
+	ABT_rwlock_wrlock(ins->ci_abt_lock);
 	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
-	if (!locked)
-		ABT_rwlock_unlock(ins->ci_abt_lock);
-
+	ABT_rwlock_unlock(ins->ci_abt_lock);
 	if (rc == 0)
 		*cpr = (struct chk_pending_rec *)riov.iov_buf;
 	else
@@ -1020,6 +1037,7 @@ chk_pending_destroy(struct chk_pending_rec *cpr)
 {
 	D_ASSERT(d_list_empty(&cpr->cpr_pool_link));
 	D_ASSERT(d_list_empty(&cpr->cpr_rank_link));
+	D_ASSERT(d_list_empty(&cpr->cpr_ins_link));
 
 	if (cpr->cpr_cond != ABT_COND_NULL)
 		ABT_cond_free(&cpr->cpr_cond);
@@ -1031,12 +1049,32 @@ chk_pending_destroy(struct chk_pending_rec *cpr)
 }
 
 int
+chk_policy_refresh(uint32_t policy_nr, struct chk_policy *policies, struct chk_property *prop)
+{
+	int changed;
+	int i;
+
+	for (i = 0, changed = 0; i < policy_nr; i++) {
+		if (unlikely(policies[i].cp_class >= CHK_POLICY_MAX)) {
+			D_ERROR("Invalid DAOS inconsistency class %u\n", policies[i].cp_class);
+			return -DER_INVAL;
+		}
+
+		if (prop->cp_policies[policies[i].cp_class] != policies[i].cp_action) {
+			prop->cp_policies[policies[i].cp_class] = policies[i].cp_action;
+			changed++;
+		}
+	}
+
+	return changed;
+}
+
+int
 chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
 		 uint32_t policy_nr, struct chk_policy *policies,
 		 d_rank_list_t *ranks, struct chk_property *prop)
 {
-	int	rc = 0;
-	int	i;
+	int rc = 0;
 
 	prop->cp_leader = leader;
 	if (!(flags & CHK__CHECK_FLAG__CF_DRYRUN))
@@ -1056,20 +1094,12 @@ chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
 	/* Reuse former policies if "policy_nr == 0". */
 	if (policy_nr > 0) {
 		memset(prop->cp_policies, 0, sizeof(Chk__CheckInconsistAction) * CHK_POLICY_MAX);
-		for (i = 0; i < policy_nr; i++) {
-			if (unlikely(policies[i].cp_class >= CHK_POLICY_MAX)) {
-				D_ERROR("Invalid DAOS inconsistency class %u\n",
-					policies[i].cp_class);
-				D_GOTO(out, rc = -DER_INVAL);
-			}
-
-			prop->cp_policies[policies[i].cp_class] = policies[i].cp_action;
-		}
+		rc = chk_policy_refresh(policy_nr, policies, prop);
 	}
 
-	rc = chk_prop_update(prop, ranks);
+	if (rc >= 0)
+		rc = chk_prop_update(prop, ranks);
 
-out:
 	return rc;
 }
 
@@ -1222,6 +1252,9 @@ chk_ins_init(struct chk_instance **p_ins)
 	D_INIT_LIST_HEAD(&ins->ci_pool_list);
 
 	ins->ci_pending_hdl = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&ins->ci_pending_list);
+
+	D_INIT_LIST_HEAD(&ins->ci_interaction_filter_list);
 	D_INIT_LIST_HEAD(&ins->ci_pool_shutdown_list);
 
 	rc = ABT_rwlock_create(&ins->ci_abt_lock);
@@ -1280,6 +1313,9 @@ chk_ins_fini(struct chk_instance **p_ins)
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
+	D_ASSERT(d_list_empty(&ins->ci_pending_list));
+
+	D_ASSERT(d_list_empty(&ins->ci_interaction_filter_list));
 	D_ASSERT(d_list_empty(&ins->ci_pool_shutdown_list));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)

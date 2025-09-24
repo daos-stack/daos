@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,7 +49,7 @@ var (
 
 func mockEvtEngineDied(t *testing.T) *events.RASEvent {
 	t.Helper()
-	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
+	return events.NewEngineDiedEvent("foo", 0, 0, 0, common.NormalExit, 1234)
 }
 
 // checkUnorderedRankResults fails if results slices contain any differing results,
@@ -378,7 +379,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				*ei._superblock.Rank = ranklist.Rank(i + 1)
 
 				ei.OnInstanceExit(
-					func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
+					func(_ context.Context, _ uint32, _ ranklist.Rank, _ uint64, _ error, _ int) error {
 						svc.events.Publish(mockEvtEngineDied(t))
 						return nil
 					})

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -73,26 +74,6 @@ free:
 		d_sgl_fini(sgl, true);
 
 	return rc;
-}
-
-static inline size_t
-pool_iv_conn_size(size_t cred_size)
-{
-	return sizeof(struct pool_iv_conn) + cred_size;
-}
-
-static inline struct pool_iv_conn*
-pool_iv_conn_next(struct pool_iv_conn *conn)
-{
-	return (struct pool_iv_conn *)((char *)conn +
-		pool_iv_conn_size(conn->pic_cred_size));
-}
-
-static inline size_t
-pool_iv_conn_ent_size(size_t cred_size)
-{
-	return sizeof(struct pool_iv_entry) +
-	       pool_iv_conn_size(cred_size);
 }
 
 /* FIXME: Need better handling here, for example retry if the size is not
@@ -515,14 +496,13 @@ pool_iv_conns_ent_fetch(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 }
 
 static int
-pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int old_size,
-		     unsigned int new_size)
+pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int new_size)
 {
 	struct pool_iv_entry *old_ent = sgl->sg_iovs[0].iov_buf;
 	struct pool_iv_entry *new_ent;
 	struct pool_iv_conns *new_conns;
 
-	D_REALLOC(new_ent, old_ent, old_size, new_size);
+	D_REALLOC(new_ent, old_ent, sgl->sg_iovs[0].iov_buf_len, new_size);
 	if (new_ent == NULL)
 		return -DER_NOMEM;
 
@@ -571,12 +551,10 @@ pool_iv_conns_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 	dst_conns_size = dst_conns->pic_size + src_conns->pic_size;
 	if (dst_conns_size > dst_conns->pic_buf_size ||
 	    dst_conns->pic_buf_size > dst_sgl->sg_iovs[0].iov_buf_len) {
-		unsigned int old_size;
 		unsigned int new_size;
 
 		new_size = sizeof(*dst_conns) + dst_conns_size;
-		old_size = dst_sgl->sg_iovs[0].iov_buf_len;
-		rc = pool_iv_conns_resize(dst_sgl, old_size, new_size);
+		rc       = pool_iv_conns_resize(dst_sgl, new_size);
 		if (rc)
 			return rc;
 
@@ -795,9 +773,6 @@ pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	int			rc;
 
 	if (dss_self_rank() == entry->ns->iv_master_rank) {
-		/* The PS leader might still in initialization phase, the IV entry may
-		 * not be fully initialized yet.
-		 */
 		if (!entry->iv_valid) {
 			D_INFO(DF_UUID" master %u is still stepping up: %d.\n",
 			       DP_UUID(entry->ns->iv_pool_uuid), entry->ns->iv_master_rank,
@@ -1264,6 +1239,30 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_v
 }
 
 int
+ds_pool_iv_conn_hdls_update(struct ds_pool *pool, struct pool_iv_conns *iv_conns)
+{
+	struct pool_iv_entry *iv_entry;
+	daos_size_t           iv_entry_size;
+	int                   rc;
+
+	iv_entry_size = sizeof(*iv_entry) + iv_conns->pic_size;
+	D_ALLOC(iv_entry, iv_entry_size);
+	if (iv_entry == NULL)
+		return -DER_NOMEM;
+
+	iv_entry->piv_conn_hdls.pic_size     = iv_conns->pic_size;
+	iv_entry->piv_conn_hdls.pic_buf_size = iv_conns->pic_size;
+	memcpy(&iv_entry->piv_conn_hdls.pic_conns, iv_conns->pic_conns, iv_conns->pic_size);
+
+	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, pool->sp_uuid, iv_entry, iv_entry_size,
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY, false);
+	D_DEBUG(DB_MD, DF_UUID " distribute hdls %d\n", DP_UUID(pool->sp_uuid), rc);
+
+	D_FREE(iv_entry);
+	return rc;
+}
+
+int
 ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			   uint64_t flags, uint64_t sec_capas,
 			   d_iov_t *cred, uint32_t global_ver, uint32_t layout_ver)
@@ -1289,9 +1288,8 @@ ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 	pic->pic_obj_ver = layout_ver;
 	memcpy(&pic->pic_creds[0], cred->iov_buf, cred->iov_len);
 
-	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, hdl_uuid,
-			    iv_entry, iv_entry_size, CRT_IV_SHORTCUT_NONE,
-			    CRT_IV_SYNC_EAGER, false);
+	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, pool->sp_uuid, iv_entry, iv_entry_size,
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, false);
 	D_DEBUG(DB_MD, DF_UUID" distribute hdl "DF_UUID" capas "DF_U64" %d\n",
 		DP_UUID(pool->sp_uuid), DP_UUID(hdl_uuid), sec_capas, rc);
 
