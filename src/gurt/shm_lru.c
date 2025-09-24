@@ -235,7 +235,7 @@ shm_lru_get(shm_lru_cache_t *cache, void *key, uint32_t key_size, shm_lru_node_t
 	hash         = d_hash_murmur64(key, key_size, 0);
 	idx_subcache = (cache->n_subcache == 1) ? (0) : (uint32_t)(hash % cache->n_subcache);
 	sub_cache    = (shm_lru_cache_var_t *)((long int)cache + sizeof(shm_lru_cache_t) +
-					       idx_subcache * cache->size_per_subcache);
+                                            idx_subcache * cache->size_per_subcache);
 	off_bucket   = (int *)((long int)cache + (long int)sub_cache->off_hashbuckets);
 	index        = (uint32_t)(hash % cache->capacity_per_subcache);
 	offset       = off_bucket[index];
@@ -291,7 +291,7 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 	idx_subcache = (cache->n_subcache == 1) ? (0) : (uint32_t)(hash % cache->n_subcache);
 	index        = (uint32_t)(hash % cache->capacity_per_subcache);
 	sub_cache    = (shm_lru_cache_var_t *)((long int)cache + sizeof(shm_lru_cache_t) +
-					       idx_subcache * cache->size_per_subcache);
+                                            idx_subcache * cache->size_per_subcache);
 	off_bucket   = (int *)((long int)cache + (long int)sub_cache->off_hashbuckets);
 	offset       = off_bucket[index];
 
@@ -321,8 +321,8 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 					memcpy(buf_data, data, data_size);
 
 					/* new data size is different from the old one,
-					* free the data buffer previously allocated
-					*/
+					 * free the data buffer previously allocated
+					 */
 					if (buf_to_free)
 						shm_free(buf_to_free);
 				} else {
