@@ -317,8 +317,8 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 						/* the old data buffer is kept valid */
 						return ENOMEM;
 					}
-					node->off_data = (long int)buf_data - (long int)cache;
 					memcpy(buf_data, data, data_size);
+					node->off_data = (long int)buf_data - (long int)cache;
 
 					/* new data size is different from the old one,
 					 * free the data buffer previously allocated
