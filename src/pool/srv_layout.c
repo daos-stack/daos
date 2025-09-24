@@ -34,6 +34,7 @@ RDB_STRING_KEY(ds_pool_prop_, svc_ops_num);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_age);
 RDB_STRING_KEY(ds_pool_prop_, srv_handle);
 RDB_STRING_KEY(ds_pool_prop_, srv_cont_handle);
+RDB_STRING_KEY(ds_pool_prop_, recov_cont);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
