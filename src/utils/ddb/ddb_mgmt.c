@@ -24,7 +24,7 @@
 #define DDB_PROV_MEM_BUF_MAX 256
 
 int
-ddb_auto_calculate_scm_mount_size(unsigned int *scm_mount_size)
+ddb_auto_calculate_meta_mount_size(unsigned int *meta_mount_size)
 {
 	struct smd_pool_info *pool_info = NULL;
 	struct smd_pool_info *tmp;
@@ -35,7 +35,7 @@ ddb_auto_calculate_scm_mount_size(unsigned int *scm_mount_size)
 	uint64_t              total_size;
 	const unsigned long   GiB = (1ul << 30);
 
-	D_ASSERT(scm_mount_size != NULL);
+	D_ASSERT(meta_mount_size != NULL);
 	D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
 	D_INIT_LIST_HEAD(&pool_list);
 	rc = smd_pool_list(&pool_list, &pool_list_cnt);
@@ -66,7 +66,7 @@ ddb_auto_calculate_scm_mount_size(unsigned int *scm_mount_size)
 		smd_pool_free_info(pool_info);
 	}
 
-	*scm_mount_size = (D_ALIGNUP(total_size, GiB) / GiB);
+	*meta_mount_size = (D_ALIGNUP(total_size, GiB) / GiB);
 	return rc;
 }
 

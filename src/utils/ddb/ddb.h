@@ -218,8 +218,8 @@ struct dtx_stat_options {
 
 struct prov_mem_options {
 	char        *db_path;
-	char        *scm_mount;
-	unsigned int scm_mount_size;
+	char        *meta_mount;
+	unsigned int meta_mount_size;
 };
 
 struct ddb_cmd_info {

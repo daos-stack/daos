@@ -868,7 +868,7 @@ prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, ui
 {
 	char         *options_short  = "s";
 	int           index          = 0, opt;
-	const struct option options_long[] = {{"scm_mount_size", required_argument, NULL, 's'},
+	const struct option options_long[] = {{"meta_mount_size", required_argument, NULL, 's'},
 					      {NULL}};
 
 	memset(cmd_args, 0, sizeof(*cmd_args));
@@ -879,7 +879,7 @@ prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, ui
 	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
 		switch (opt) {
 		case 's':
-			cmd_args->scm_mount_size = (unsigned int)strtoul(optarg, NULL, 10);
+			cmd_args->meta_mount_size = (unsigned int)strtoul(optarg, NULL, 10);
 			break;
 		case '?':
 			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
@@ -898,10 +898,10 @@ prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, ui
 		return -DER_INVAL;
 	}
 	if (arg_exists(argc, index)) {
-		cmd_args->scm_mount = argv[index];
+		cmd_args->meta_mount = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'scm_mount'\n");
+		ddb_print(ctx, "Expected argument 'meta_mount'\n");
 		return -DER_INVAL;
 	}
 
@@ -1470,16 +1470,16 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\n");
 
 	/* Command: prov_mem */
-	ddb_print(ctx, "prov_mem [Options] <db_path> <scm_mount>\n");
+	ddb_print(ctx, "prov_mem [Options] <db_path> <meta_mount>\n");
 	ddb_print(ctx, "\tPrepare the memory environment for md-on-ssd mode.\n");
 	ddb_print(ctx, "Options:\n");
-	ddb_print(ctx, "    -s, --scm_mount_size\n");
-	ddb_print(ctx, "\tSpecify tmpfs size(GiB) for scm_mount. By default, the value is computed "
-		       "automatically, mirroring the logic used by daos_server\n");
+	ddb_print(ctx, "    -s, --meta_mount_size\n");
+	ddb_print(ctx, "\tSpecify tmpfs size(GiB) for meta_mount. By default, The total size of "
+		       "all VOS files will be used.\n");
 	ddb_print(ctx, "    <db_path>\n");
-	ddb_print(ctx, "\tPath to the vos db.\n");
-	ddb_print(ctx, "    <scm_mount>\n");
-	ddb_print(ctx, "\tPath to the scm mountpoint.\n");
+	ddb_print(ctx, "\tPath to the sys db.\n");
+	ddb_print(ctx, "    <meta_mount>\n");
+	ddb_print(ctx, "\tPath to the meta mountpoint.\n");
 	ddb_print(ctx, "\n");
 }
 

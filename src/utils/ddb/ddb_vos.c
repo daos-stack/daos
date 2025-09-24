@@ -2115,12 +2115,12 @@ out:
 }
 
 int
-dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mount_size)
+dv_run_prov_mem(const char *db_path, const char *meta_mount, unsigned int meta_mount_size)
 {
 	int          rc;
 	bool         md_on_ssd;
-	bool         need_mount = true;
-	unsigned int sz         = scm_mount_size;
+	bool         need_mount = false;
+	unsigned int sz         = meta_mount_size;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2134,49 +2134,49 @@ dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mou
 		goto out;
 	}
 
-	/* Fetch scm_mount_size */
+	/* Fetch meta_mount_size */
 	if (sz == 0) {
-		rc = ddb_auto_calculate_scm_mount_size(&sz);
+		rc = ddb_auto_calculate_meta_mount_size(&sz);
 		if (rc) {
-			D_ERROR("Failed to calculate scm size. " DF_RC "", DP_RC(rc));
+			D_ERROR("Failed to calculate meta size. " DF_RC "", DP_RC(rc));
 			goto out;
 		}
 		D_INFO("SCM size not specified; automatically calculated as %u GiB.", sz);
 	}
 
-	rc = ddb_is_mountpoint(scm_mount);
+	rc = ddb_is_mountpoint(meta_mount);
 	if (rc < 0) {
-		D_ERROR("Failed to check mountpoint of %s. " DF_RC "", scm_mount, DP_RC(rc));
+		D_ERROR("Failed to check mountpoint of %s. " DF_RC "", meta_mount, DP_RC(rc));
 		goto out;
 	}
 	need_mount = (!rc);
 
 	if (need_mount) {
-		rc = ddb_mount(scm_mount, sz);
+		rc = ddb_mount(meta_mount, sz);
 		if (rc) {
 			goto out;
 		}
 	} else {
 		D_INFO("SCM mount %s is already mounted; VOS files will be created without "
 		       "remounting.",
-		       scm_mount);
+		       meta_mount);
 	}
 
 	/* Create the directory architecture */
-	rc = ddb_dirs_prepare(scm_mount);
+	rc = ddb_dirs_prepare(meta_mount);
 	if (rc != 0) {
 		D_ERROR("Failed to prepare directory " DF_RC "", DP_RC(rc));
 		goto out2;
 	}
 
 	/*  Create VOS files  */
-	rc = ddb_recreate_pooltgts(scm_mount);
+	rc = ddb_recreate_pooltgts(meta_mount);
 	if (rc != 0) {
 		D_ERROR("Failed to recreate vos files. " DF_RC "", DP_RC(rc));
 	}
 out2:
 	if (rc && need_mount == true) {
-		umount(scm_mount);
+		umount(meta_mount);
 	}
 out:
 	vos_self_fini();

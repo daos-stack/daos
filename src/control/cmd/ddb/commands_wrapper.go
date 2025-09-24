@@ -301,15 +301,15 @@ func ddbDtxStat(ctx *DdbContext, path string) error {
 	return daosError(C.ddb_run_dtx_stat(&ctx.ctx, &options))
 }
 
-func ddbProvMem(ctx *DdbContext, db_path string, scm_mount string, size uint) error {
+func ddbProvMem(ctx *DdbContext, db_path string, meta_mount string, meta_mount_size uint) error {
 	/* Set up the options */
 	options := C.struct_prov_mem_options{}
 	options.db_path = C.CString(db_path)
 	defer freeString(options.db_path)
-	options.scm_mount = C.CString(scm_mount)
-	defer freeString(options.scm_mount)
+	options.meta_mount = C.CString(meta_mount)
+	defer freeString(options.meta_mount)
 
-	options.scm_mount_size = C.uint(size)
+	options.meta_mount_size = C.uint(meta_mount_size)
 	/* Run the c code command */
 	return daosError(C.ddb_run_prov_mem(&ctx.ctx, &options))
 }
