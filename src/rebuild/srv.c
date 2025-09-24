@@ -1936,8 +1936,7 @@ rebuild_task_ult(void *arg)
 	cur_ts = daos_gettime_coarse();
 	D_ASSERT(task->dst_schedule_time != (uint64_t)-1);
 	if (cur_ts < task->dst_schedule_time) {
-		D_DEBUG(DB_REBUILD, "rebuild task sleep "DF_U64" second\n",
-			task->dst_schedule_time - cur_ts);
+		D_INFO("rebuild task sleep " DF_U64 " second\n", task->dst_schedule_time - cur_ts);
 		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
 	}
 
@@ -1946,6 +1945,13 @@ rebuild_task_ult(void *arg)
 		D_ERROR(DF_UUID": failed to look up pool: %d\n",
 			DP_UUID(task->dst_pool_uuid), rc);
 		D_GOTO(out_task, rc = -DER_NONEXIST);
+	}
+
+	rc = ds_cont_svc_refresh_agg_eph(task->dst_pool_uuid);
+	if (rc) {
+		D_ERROR(DF_UUID ": ds_cont_svc_refresh_agg_eph failed, " DF_RC "\n",
+			DP_UUID(task->dst_pool_uuid), DP_RC(rc));
+		goto out_task;
 	}
 
 	while (1) {
@@ -2540,7 +2546,8 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 
 /* Regenerate the rebuild tasks when changing the leader. */
 int
-ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal)
+ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal,
+			   uint64_t delay_sec)
 {
 	struct daos_prop_entry *entry;
 	char                   *env;
@@ -2575,11 +2582,12 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys
 	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD) &&
 	    !pool->sp_disable_rebuild) {
 		rc = regenerate_task_of_type(
-		    pool, PO_COMP_ST_DOWN, entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : 0);
+		    pool, PO_COMP_ST_DOWN,
+		    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : delay_sec);
 		if (rc != 0)
 			return rc;
 
-		rc = regenerate_task_of_type(pool, PO_COMP_ST_DRAIN, 0);
+		rc = regenerate_task_of_type(pool, PO_COMP_ST_DRAIN, delay_sec);
 		if (rc != 0)
 			return rc;
 	} else {
@@ -2597,7 +2605,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys
 	 * discarding on an empty targets is harmless. So it is ok to use REINT to
 	 * do EXTEND here.
 	 */
-	rc = regenerate_task_of_type(pool, PO_COMP_ST_UP, 0);
+	rc = regenerate_task_of_type(pool, PO_COMP_ST_UP, delay_sec);
 	if (rc != 0)
 		return rc;
 
@@ -2620,7 +2628,7 @@ ds_rebuild_admin_start(struct ds_pool *pool)
 		goto out;
 	}
 
-	rc = ds_rebuild_regenerate_task(pool, &prop, DS_MGMT_SELF_HEAL_ALL);
+	rc = ds_rebuild_regenerate_task(pool, &prop, DS_MGMT_SELF_HEAL_ALL, 0);
 	daos_prop_fini(&prop);
 	if (rc)
 		DL_ERROR(rc, DF_UUID ": regenerate rebuild task failed", DP_UUID(pool->sp_uuid));
