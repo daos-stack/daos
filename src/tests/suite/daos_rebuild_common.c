@@ -238,7 +238,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			if (args[j]->rebuild_cb) {
 				print_message("call rebuild_cb for %s rebuilding pool " DF_UUID
 					      "\n",
-					      op_type_str, DP_UUID(args[i]->pool.pool_uuid));
+					      op_type_str, DP_UUID(args[j]->pool.pool_uuid));
 
 				args[j]->rebuild_cb(args[j]);
 			}
@@ -250,7 +250,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			if (args[j]->rebuild_post_cb) {
 				print_message("call rebuild_post_cb for %s rebuilt pool " DF_UUID
 					      "\n",
-					      op_type_str, DP_UUID(args[i]->pool.pool_uuid));
+					      op_type_str, DP_UUID(args[j]->pool.pool_uuid));
 				args[j]->rebuild_post_cb(args[j]);
 			}
 		}
@@ -996,9 +996,8 @@ reintegrate_inflight_io(void *data)
 			      SMALL_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
 
 		sprintf(key, "d_inflight_single_large_%d",  i);
-		insert_single(key, "a_key", 0, single_data,
-			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
-
+		insert_single(key, "a_key", 0, single_data, LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE,
+			      &req);
 	}
 	ioreq_fini(&req);
 	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
@@ -1234,7 +1233,7 @@ rebuild_stop_with_dmg(void *data)
 	print_message("wait for rebuild to start for pool " DF_UUID "\n",
 		      DP_UUID(arg->pool.pool_uuid));
 	test_rebuild_wait_to_start(&arg, 1);
-	sleep(4);
+	sleep(5);
 
 	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					      false);
@@ -1249,7 +1248,7 @@ rebuild_force_stop_with_dmg(void *data)
 	print_message("wait for rebuild to start for pool " DF_UUID "\n",
 		      DP_UUID(arg->pool.pool_uuid));
 	test_rebuild_wait_to_start(&arg, 1);
-	sleep(4);
+	sleep(5);
 
 	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					      true);
