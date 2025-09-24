@@ -71,8 +71,9 @@ class SparseFile(IorTestBase):
         # remote node
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
-        pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser("~/.ssh/id_rsa"))
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        pkey_file = os.path.expanduser(os.path.join('~', '.ssh', 'id_rsa'))
+        pkey = paramiko.PKey.from_private_key_file(pkey_file)
         ssh.connect(self.hostlist_clients[0], username=getuser(), pkey=pkey)
         sftp = ssh.open_sftp()
 
