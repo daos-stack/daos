@@ -70,8 +70,11 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 COPY requirements-build.txt requirements-utest.txt ./
-RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+RUN source /home/daos/venv/bin/activate && \
+    touch /home/daos/venv/pip.conf && \
+    pip config set global.proxy $HTTPS_PROXY && \
+    pip --no-cache-dir install --upgrade pip && \
+    pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
