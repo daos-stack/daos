@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -527,6 +528,7 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		createMS    func(*testing.T, logging.Logger) *mgmtSvc
+		getMockDrpc func() *mockDrpcClient
 		req         *mgmtpb.CheckSetPolicyReq
 		expResp     *mgmtpb.DaosResp
 		expErr      error
@@ -600,6 +602,27 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 					},
 				}),
 		},
+		"dRPC fails": {
+			req: interactReq,
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClient(nil, errors.New("mock dRPC"))
+			},
+			expErr: errors.New("mock dRPC"),
+		},
+		"bad dRPC resp": {
+			req: interactReq,
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClientBytes([]byte("garbage"), nil)
+			},
+			expErr: errors.New("unmarshal CheckRepair response"),
+		},
+		"bad dRPC status": {
+			req: interactReq,
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClient(&mgmtpb.DaosResp{Status: daos.IOError.Int32()}, nil)
+			},
+			expErr: daos.IOError,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -611,6 +634,14 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 				}
 			}
 			svc := tc.createMS(t, log)
+
+			if tc.getMockDrpc == nil {
+				tc.getMockDrpc = func() *mockDrpcClient {
+					return getMockDrpcClient(&mgmtpb.CheckStartResp{}, nil)
+				}
+			}
+			mockDrpc := tc.getMockDrpc()
+			setupSvcDrpcClient(svc, 0, mockDrpc)
 
 			resp, err := svc.SystemCheckSetPolicy(test.Context(t), tc.req)
 

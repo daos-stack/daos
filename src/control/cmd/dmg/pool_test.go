@@ -1187,7 +1187,7 @@ func TestPoolCommands(t *testing.T) {
 			"Query pool with empty ID",
 			"pool query \"\"",
 			"",
-			fmt.Errorf("invalid label"),
+			errors.New("invalid label"),
 		},
 		{
 			"Upgrade pool with pool ID",
@@ -1200,10 +1200,90 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Interactive rebuild with no operation specified",
+			"pool rebuild",
+			"",
+			errors.New("specify one command"),
+		},
+		{
+			"Interactive rebuild with no operation specified but label",
+			"pool rebuild test_label",
+			"",
+			errors.New("specify one command"),
+		},
+		{
+			"Start interactive rebuild on pool with no ID or label",
+			"pool rebuild start",
+			"",
+			errors.New("not provided"),
+		},
+		{
+			"Start interactive rebuild on pool with empty ID or label",
+			"pool rebuild start \"\"",
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Start interactive rebuild on pool with ID",
+			"pool rebuild start 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Op: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Start interactive rebuild on pool with label",
+			"pool rebuild start test_label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildReq{
+					ID: "test_label",
+					Op: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Stop interactive rebuild on pool with no ID or label",
+			"pool rebuild stop",
+			"",
+			errors.New("not provided"),
+		},
+		{
+			"Stop interactive rebuild on pool with empty ID or label",
+			"pool rebuild stop \"\"",
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Stop interactive rebuild on pool with ID",
+			"pool rebuild stop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Op: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Stop interactive rebuild on pool with label",
+			"pool rebuild stop test_label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildReq{
+					ID: "test_label",
+					Op: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
-			fmt.Errorf("Unknown command"),
+			errors.New("Unknown command"),
 		},
 	})
 }
