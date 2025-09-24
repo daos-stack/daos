@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <pthread.h>
+#include <hwloc.h>
 
 #include <gurt/shm_utils.h>
 #include "shm_internal.h"
@@ -47,14 +48,47 @@ static uint64_t       page_size;
 
 extern __thread pid_t d_tid;
 
+#define INVALID_NUM_CORE (0xFFFFFFFF)
+static unsigned int
+get_cpu_core(void)
+{
+	hwloc_topology_t topology;
+	unsigned int     cpu_count;
+	int              depth;
+
+	/* Allocate, initialize, and perform topology detection */
+	hwloc_topology_init(&topology);
+	hwloc_topology_load(topology);
+
+	/* Try to get the number of CPU cores from topology */
+	depth = hwloc_get_type_depth(topology, HWLOC_OBJ_CORE);
+	if (depth == HWLOC_TYPE_DEPTH_UNKNOWN) {
+		DS_ERROR(EINVAL, "libhwloc failed to get the number of cores\n");
+		cpu_count = INVALID_NUM_CORE;
+		goto out;
+	}
+
+	cpu_count = hwloc_get_nbobjs_by_depth(topology, depth);
+
+out:
+	/* Destroy topology object and return */
+	hwloc_topology_destroy(topology);
+	return cpu_count;
+}
+
 static int
 create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 {
-	int   i;
-	int   shm_ht_fd;
-	int   shmopen_perm = 0600;
-	void *shm_addr;
-	char  daos_shm_name_buf[64];
+	int      i;
+	int      shm_ht_fd;
+	int      shmopen_perm = 0600;
+	void    *shm_addr;
+	char     daos_shm_name_buf[64];
+	uint32_t cpu_count;
+
+	cpu_count = get_cpu_core();
+	if (cpu_count == INVALID_NUM_CORE)
+		return errno;
 
 	/* the shared memory only accessible for individual user for now */
 	sprintf(daos_shm_name_buf, "%s_%d", daos_shm_name, getuid());
@@ -113,6 +147,7 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	d_shm_head->size          = shm_size;
 	d_shm_head->shm_pool_size = shm_pool_size;
 	d_shm_head->version       = 1;
+	d_shm_head->num_core      = cpu_count;
 	__sync_synchronize();
 	d_shm_head->magic = DSM_MAGIC;
 	/* initialization is finished now. */

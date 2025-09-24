@@ -38,7 +38,7 @@ lru_create_node(shm_lru_cache_t *cache, shm_lru_cache_var_t *subcache, void *key
 	node               = &(node_list[idx_node]);
 	subcache->first_av = node->off_hnext;
 
-	if ((key_size > LRU_ALLOC_SIZE_THRESHOLD) || (cache->key_size == 0)) {
+	if (cache->prealloc_key == 0) {
 		/* key is too long or has unknown size, dynamically allocate
 		 * space for key
 		 */
@@ -54,7 +54,7 @@ lru_create_node(shm_lru_cache_t *cache, shm_lru_cache_var_t *subcache, void *key
 	}
 	node->key_size = key_size;
 
-	if ((data_size > LRU_ALLOC_SIZE_THRESHOLD) || (cache->data_size == 0)) {
+	if (cache->prealloc_data == 0) {
 		/* data are too long or has unknown size, dynamically allocate
 		 * space for data
 		 */
@@ -67,6 +67,8 @@ lru_create_node(shm_lru_cache_t *cache, shm_lru_cache_var_t *subcache, void *key
 		node->off_data = (long int)buf_data - (long int)cache;
 		memcpy(buf_data, data, data_size);
 	} else {
+		/* make sure data size not longer than buffer */
+		D_ASSERT(data_size <= cache->data_size);
 		/* use preallocated buffer for data */
 		node->off_data = subcache->off_datalist + idx_node * (long int)cache->data_size;
 		memcpy((char *)cache + node->off_data, data, data_size);
@@ -153,12 +155,12 @@ lru_remove_near_tail(shm_lru_cache_t *cache, shm_lru_cache_var_t *subcache)
 	}
 
 	/* node will be removed. Free dynamically allocated key/data space */
-	if (node->key_size > LRU_ALLOC_SIZE_THRESHOLD || cache->key_size == 0)
+	if (cache->prealloc_key == 0)
 		shm_free((char *)cache + node->off_key);
-	if (node->data_size > LRU_ALLOC_SIZE_THRESHOLD || cache->data_size == 0)
+	if (cache->prealloc_data == 0)
 		shm_free((char *)cache + node->off_data);
 
-	/* updata the linked list in the hash bucket */
+	/* update the linked list in the hash bucket */
 	off_node_to_remove = (long int)node - (long int)cache;
 	if (off_bucket[node->idx_bucket] == off_node_to_remove) {
 		/* the head node of this bucket */
@@ -219,19 +221,24 @@ int
 shm_lru_get(shm_lru_cache_t *cache, void *key, uint32_t key_size, shm_lru_node_t **node_found,
 	    void **val)
 {
-	uint64_t hash = d_hash_murmur64(key, key_size, 0);
-	uint32_t idx_subcache =
-	    (cache->n_subcache == 1) ? (0) : (uint32_t)(hash % cache->n_subcache);
-	shm_lru_cache_var_t *sub_cache =
-	    (shm_lru_cache_var_t *)((long int)cache + sizeof(shm_lru_cache_t) +
-				    idx_subcache * cache->size_per_subcache);
-	int     *off_bucket = (int *)((long int)cache + (long int)sub_cache->off_hashbuckets);
-	uint32_t index      = (uint32_t)(hash % cache->capacity);
-	int      offset     = off_bucket[index];
-	shm_lru_node_t *node;
+	uint64_t             hash;
+	uint32_t             idx_subcache;
+	shm_lru_cache_var_t *sub_cache;
+	int                 *off_bucket;
+	uint32_t             index;
+	int                  offset;
+	shm_lru_node_t      *node;
 
 	if (cache == NULL || key == NULL || node_found == NULL || val == NULL)
 		return EINVAL;
+
+	hash         = d_hash_murmur64(key, key_size, 0);
+	idx_subcache = (cache->n_subcache == 1) ? (0) : (uint32_t)(hash % cache->n_subcache);
+	sub_cache    = (shm_lru_cache_var_t *)((long int)cache + sizeof(shm_lru_cache_t) +
+					       idx_subcache * cache->size_per_subcache);
+	off_bucket   = (int *)((long int)cache + (long int)sub_cache->off_hashbuckets);
+	index        = (uint32_t)(hash % cache->capacity_per_subcache);
+	offset       = off_bucket[index];
 
 	shm_mutex_lock(&sub_cache->lock);
 
@@ -264,53 +271,69 @@ shm_lru_get(shm_lru_cache_t *cache, void *key, uint32_t key_size, shm_lru_node_t
 int
 shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, uint32_t data_size)
 {
-	int      rc;
-	uint64_t hash = d_hash_murmur64(key, key_size, 0);
-	uint32_t idx_subcache =
-	    (cache->n_subcache == 1) ? (0) : (uint32_t)(hash % cache->n_subcache);
-	uint32_t             index = (uint32_t)(hash % cache->capacity);
-	shm_lru_cache_var_t *sub_cache =
-	    (shm_lru_cache_var_t *)((long int)cache + sizeof(shm_lru_cache_t) +
-				    idx_subcache * cache->size_per_subcache);
-	int  *off_bucket = (int *)((long int)cache + (long int)sub_cache->off_hashbuckets);
-	int   offset     = off_bucket[index];
-	char *buf_data   = NULL;
-	shm_lru_node_t *node;
-	shm_lru_node_t *node_head;
-	shm_lru_node_t *node_new;
+	int                  rc;
+	uint64_t             hash;
+	uint32_t             idx_subcache;
+	uint32_t             index;
+	shm_lru_cache_var_t *sub_cache;
+	int                 *off_bucket;
+	int                  offset;
+	char                *buf_to_free = NULL;
+	char                *buf_data    = NULL;
+	shm_lru_node_t      *node;
+	shm_lru_node_t      *node_head;
+	shm_lru_node_t      *node_new;
 
 	if (cache == NULL || key == NULL || data == NULL)
 		return EINVAL;
+
+	hash         = d_hash_murmur64(key, key_size, 0);
+	idx_subcache = (cache->n_subcache == 1) ? (0) : (uint32_t)(hash % cache->n_subcache);
+	index        = (uint32_t)(hash % cache->capacity_per_subcache);
+	sub_cache    = (shm_lru_cache_var_t *)((long int)cache + sizeof(shm_lru_cache_t) +
+					       idx_subcache * cache->size_per_subcache);
+	off_bucket   = (int *)((long int)cache + (long int)sub_cache->off_hashbuckets);
+	offset       = off_bucket[index];
 
 	shm_mutex_lock(&sub_cache->lock);
 	while (offset) {
 		node = (shm_lru_node_t *)((long int)cache + offset);
 		if (key_cmp(cache, node, key, key_size) == 0) {
 			/* key exists in cache */
-
 			if (node->data_size == data_size) {
 				/* data size does not change */
 				memcpy((char *)cache + node->off_data, data, data_size);
 			} else {
-				/* new data size is different from the old one,
-				 * free the data buffer previously allocated
-				 */
-				if (node->data_size > LRU_ALLOC_SIZE_THRESHOLD ||
-				    cache->data_size == 0)
-					shm_free((char *)cache + node->off_data);
+				if (cache->prealloc_data == 0) {
+					/* save the data buffer pointer which will be freed later */
+					buf_to_free = (char *)cache + node->off_data;
 
-				if ((data_size > LRU_ALLOC_SIZE_THRESHOLD) ||
-				    (cache->data_size == 0)) {
-					/* data are too long or has unknown size,
+					/* data are too long or have unknown size,
 					 * dynamically allocate space for data
 					 */
-					buf_data       = shm_alloc(data_size);
+					buf_data = shm_alloc(data_size);
+					if (buf_data == NULL) {
+						shm_mutex_unlock(&sub_cache->lock);
+						/* the old data buffer is kept valid */
+						return ENOMEM;
+					}
 					node->off_data = (long int)buf_data - (long int)cache;
 					memcpy(buf_data, data, data_size);
+
+					/* new data size is different from the old one,
+					* free the data buffer previously allocated
+					*/
+					if (buf_to_free)
+						shm_free(buf_to_free);
 				} else {
+					/* make sure data size not longer than buffer */
+					D_ASSERT(data_size <= cache->data_size);
 					/* use preallocated buffer for data */
 					memcpy((char *)cache + node->off_data, data, data_size);
 				}
+
+				/* update data size */
+				node->data_size = data_size;
 			}
 
 			lru_move_to_head(cache, sub_cache, node);
@@ -321,13 +344,14 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 	}
 
 	/* Not found, remove one node near tail and create new node */
-	if (sub_cache->size >= cache->capacity) {
+	if (sub_cache->size >= cache->capacity_per_subcache) {
 		rc = lru_remove_near_tail(cache, sub_cache);
 		if (rc) {
 			shm_mutex_unlock(&sub_cache->lock);
 			return rc;
 		}
 	}
+	D_ASSERT(sub_cache->size < cache->capacity_per_subcache);
 
 	rc = lru_create_node(cache, sub_cache, key, key_size, data, data_size, &node_new);
 	if (rc)
@@ -348,7 +372,7 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 		sub_cache->off_tail = (long int)node_new - (long int)cache;
 
 	sub_cache->size++;
-	if (sub_cache->size == cache->capacity)
+	if (sub_cache->size == cache->capacity_per_subcache)
 		sub_cache->first_av = -1;
 
 	shm_mutex_unlock(&sub_cache->lock);
@@ -372,6 +396,8 @@ shm_lru_create_cache(bool auto_partition, uint32_t capacity, uint32_t key_size, 
 	uint32_t             j;
 	uint32_t             n_subcache;
 	uint32_t             capacity_per_subcache;
+	uint32_t             prealloc_key;
+	uint32_t             prealloc_data;
 	size_t               size_key_buf;
 	size_t               size_data_buf;
 	size_t               size_per_subcache;
@@ -386,10 +412,7 @@ shm_lru_create_cache(bool auto_partition, uint32_t capacity, uint32_t key_size, 
 
 	if (auto_partition) {
 		/* query the number of cores on current machine */
-		num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-		if (num_cores == -1)
-			return errno;
-
+		num_cores             = d_shm_head->num_core;
 		n_subcache            = (uint32_t)num_cores;
 		capacity_per_subcache = capacity / n_subcache;
 		if (capacity % n_subcache)
@@ -401,14 +424,12 @@ shm_lru_create_cache(bool auto_partition, uint32_t capacity, uint32_t key_size, 
 	}
 
 	/* the space pre-allocated for the array of key of all records if keys have a fixed size */
-	size_key_buf = (key_size > 0 && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
-			   ? (key_size * capacity_per_subcache)
-			   : 0;
+	prealloc_key = (key_size > 0 && data_size <= LRU_ALLOC_SIZE_THRESHOLD) ? 1 : 0;
+	size_key_buf = (prealloc_key == 1) ? (key_size * capacity_per_subcache) : 0;
 
 	/* the space pre-allocated for the array of data of all records if data have a fixed size */
-	size_data_buf = (data_size > 0 && data_size <= LRU_ALLOC_SIZE_THRESHOLD)
-			    ? (data_size * capacity_per_subcache)
-			    : 0;
+	prealloc_data = (data_size > 0 && data_size <= LRU_ALLOC_SIZE_THRESHOLD) ? 1 : 0;
+	size_data_buf = (prealloc_data == 1) ? (data_size * capacity_per_subcache) : 0;
 
 	/**
 	 * sub-cache header (sizeof(shm_lru_cache_var_t)),
@@ -428,11 +449,13 @@ shm_lru_create_cache(bool auto_partition, uint32_t capacity, uint32_t key_size, 
 		return ENOMEM;
 	memset(cache, 0, size_tot);
 
-	cache->n_subcache        = n_subcache;
-	cache->capacity          = capacity_per_subcache;
-	cache->key_size          = key_size;
-	cache->data_size         = data_size;
-	cache->size_per_subcache = size_per_subcache;
+	cache->n_subcache            = n_subcache;
+	cache->capacity_per_subcache = capacity_per_subcache;
+	cache->key_size              = key_size;
+	cache->data_size             = data_size;
+	cache->prealloc_key          = prealloc_key;
+	cache->prealloc_data         = prealloc_data;
+	cache->size_per_subcache     = size_per_subcache;
 
 	for (i = 0; i < n_subcache; i++) {
 		/* the header of individual sub-cache */
@@ -482,8 +505,7 @@ lru_free_dynamic_buff(shm_lru_cache_t *cache)
 	shm_lru_node_t      *node;
 	shm_lru_cache_var_t *sub_cache;
 
-	if (cache->key_size > 0 && cache->key_size <= LRU_ALLOC_SIZE_THRESHOLD &&
-	    cache->data_size > 0 && cache->data_size <= LRU_ALLOC_SIZE_THRESHOLD)
+	if (cache->prealloc_key == 1 && cache->prealloc_data == 1)
 		return;
 
 	for (i = 0; i < cache->n_subcache; i++) {
@@ -493,9 +515,9 @@ lru_free_dynamic_buff(shm_lru_cache_t *cache)
 		/* need to loop over all LRU nodes to free key & data buffer */
 		while (offset) {
 			node = (shm_lru_node_t *)((long int)cache + (long int)offset);
-			if (node->key_size > LRU_ALLOC_SIZE_THRESHOLD || cache->key_size == 0)
+			if (cache->prealloc_key == 0)
 				shm_free((char *)cache + node->off_key);
-			if (node->data_size > LRU_ALLOC_SIZE_THRESHOLD || cache->data_size == 0)
+			if (cache->prealloc_data == 0)
 				shm_free((char *)cache + node->off_data);
 			offset = node->off_next;
 		}

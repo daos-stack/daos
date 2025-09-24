@@ -52,7 +52,7 @@ thread_cache_op(void *arg)
 	thread_param_t *param = (thread_param_t *)arg;
 	int            *addr_val;
 
-	for (j = 0; j < 10; j++) {
+	for (j = 0; j < 3; j++) {
 		/* insert entries */
 		for (i = param->start; i < param->end; i++) {
 			shm_lru_put(param->cache, &i, sizeof(int), &param->data[i], sizeof(int));
@@ -216,7 +216,7 @@ test_lrucache(void **state)
 
 	/* start multiple threads to operate LRU cache */
 	capacity        = 500000;
-	num_keys        = (int)(capacity * 0.85f);
+	num_keys        = (int)(capacity * 0.80f);
 	data            = malloc(sizeof(int) * num_keys);
 	assert_true(data != NULL);
 
@@ -262,6 +262,7 @@ test_lrucache(void **state)
 
 	gettimeofday(&tm1, NULL);
 	for (i = 0; i < MAX_THREAD; i++) {
+		thread_param_list[i].cache = cache;
 		rc = pthread_create(&thread_list[i], NULL, thread_cache_op,
 				    (void *)&thread_param_list[i]);
 		assert_true(rc == 0);

@@ -61,6 +61,9 @@ struct d_shm_hdr {
 	uint64_t         size;
 	/* size of each shared memory allocator's pool */
 	uint64_t         shm_pool_size;
+	/* the number of physical cores on current node */
+	uint32_t         num_core;
+	uint32_t         pad;
 	/* reserved for future usage */
 	char             reserved[256];
 };
@@ -136,11 +139,15 @@ struct shm_lru_cache {
 	/* the number of sub-cache to use */
 	uint32_t n_subcache;
 	/* max number of nodes to hold in each shard */
-	uint32_t capacity;
+	uint32_t capacity_per_subcache;
 	/* the size of key. zero means key size is variable */
 	uint32_t key_size;
 	/* the size of data. zero means data size is variable */
 	uint32_t data_size;
+	/* 0 - dynamically allocate buffer for key, 1 - use pre-allocated buffer for key */
+	uint32_t prealloc_key;
+	/* 0 - dynamically allocate buffer for data, 1 - use pre-allocated buffer for data */
+	uint32_t prealloc_data;
 
 	/* number of bytes per sub-cache */
 	size_t   size_per_subcache;
