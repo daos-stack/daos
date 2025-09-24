@@ -26,6 +26,7 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/rsvc.h>
 
 /* Pool service (opaque) */
 struct ds_pool_svc;
@@ -114,6 +115,8 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
 	uint32_t		 sp_reint_mode;
+	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
+	ABT_rwlock               sp_recov_lock;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -544,6 +547,9 @@ int ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out);
 int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct rsvc_hint *hint);
 
 void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
+
+int
+ds_pool_prop_recov_cont_reset(struct rdb_tx *tx, struct ds_rsvc *rsvc);
 
 static inline bool
 is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)
