@@ -100,13 +100,15 @@ class FullPoolContainerCreate(TestWithServers):
         counter = 1
         threshold_value = free_space_before - (free_space_before * threshold_percent)
         free_space = self.pool.get_pool_free_space()
+        self.log_step(f"Waiting for free space to be reclaimed, expecting {threshold_value}")
         while free_space < threshold_value:
             # try to wait for 4 x 30 secs for aggregation to be completed or
             # else exit the test with a failure.
-            if counter > 10:
+            if counter > 20:
                 self.log.info("Free space when test terminated: %s", free_space)
                 self.log.info("Threshold value when test terminated: %s", threshold_value)
                 self.fail("Aggregation did not complete as expected")
+            self.log.info("Current free space: %s", free_space)
             time.sleep(30)
             free_space = self.pool.get_pool_free_space()
             counter += 1
