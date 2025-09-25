@@ -341,12 +341,8 @@ class CartTest(TestWithoutServers):
         job.pprnode.update(tst_ppn)
         job.processes.update(tst_processes)
 
-        # This would normally be called as part of Orterun.run(), but since we only use the command
-        # string from 'job', we need to register the cleanup method here.
-        if callable(self.register_cleanup_method):
-            # Stop any running processes started by this job manager when the test completes
-            # pylint: disable=not-callable
-            self.register_cleanup_method(stop_job_manager, job_manager=job)
+        # Add a step to ensure this job is stopped when the test finishes or times out
+        self.register_cleanup(stop_job_manager, job_manager=job)
 
         return str(job)
 
