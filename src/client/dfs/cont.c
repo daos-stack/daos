@@ -150,9 +150,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 			props_to_add++;
 
 		layout_entry = daos_prop_entry_get(attr->da_props, DAOS_PROP_CO_LAYOUT_TYPE);
-		if (layout_entry == NULL) {
+		if (layout_entry == NULL)
 			props_to_add++;
-		}
 	} else {
 		/* roots and layout are still needed */
 		props_to_add = 2;
@@ -291,10 +290,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		roots_entry           = &prop->dpp_entries[prop->dpp_nr - props_to_add];
 		roots_entry->dpe_type = DAOS_PROP_CO_ROOTS;
 		props_to_add--;
-	} else {
-		/* roots passed in will be overwritten */
-		D_FREE(roots_entry->dpe_val_ptr);
 	}
+	/* if an existing roots prop was passed in, it will be overwritten */
 	rc = daos_prop_entry_set_ptr(roots_entry, &roots, sizeof(roots));
 	if (rc)
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
