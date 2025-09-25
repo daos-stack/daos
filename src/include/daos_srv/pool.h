@@ -30,12 +30,6 @@
 /* Pool service (opaque) */
 struct ds_pool_svc;
 
-/**
- * Each individual object layout format, like oid layout, dkey to group,
- * dkey to EC group start.
- */
-#define DS_POOL_OBJ_VERSION		1
-
 /* age of an entry in svc_ops KVS before it may be evicted */
 #define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
 
