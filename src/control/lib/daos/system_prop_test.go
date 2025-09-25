@@ -177,3 +177,21 @@ func TestDaos_SystemPropertyKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestDaos_SystemPropertySelfHealHasFlag(t *testing.T) {
+	if SystemPropertySelfHealHasFlag("none", "exclude") {
+		t.Fatal("value \"none\" should not have flag \"exclude\"")
+	}
+	if SystemPropertySelfHealHasFlag("pool_exclude", "exclude") {
+		t.Fatal("value \"pool_exclude\" should not have flag \"exclude\"")
+	}
+	if !SystemPropertySelfHealHasFlag("exclude;pool_rebuild", "pool_rebuild") {
+		t.Fatal("value \"exclude;pool_rebuild\" should have flag \"pool_rebuild\"")
+	}
+	if SystemPropertySelfHealHasFlag("exclude;pool_rebuild", "") {
+		t.Fatal("value \"exclude;pool_rebuild\" should not have (invalid) flag \"\"")
+	}
+	if SystemPropertySelfHealHasFlag("none", "none") {
+		t.Fatal("value \"none\" should not have (invalid) flag \"none\"")
+	}
+}
