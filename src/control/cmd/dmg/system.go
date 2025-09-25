@@ -740,7 +740,7 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 	msg := fmt.Sprintf("System-rebuild %s request succeeded", opCode)
 	pStr := common.Pluralise("pool", len(respPoolsSuccess))
 	if cmd.Verbose {
-		cmd.Infof("%s on %s %v", msg, pStr, respPoolsSuccess)
+		cmd.Infof("%s on %d %s %v", msg, len(respPoolsSuccess), pStr, respPoolsSuccess)
 	} else {
 		cmd.Infof("%s on %d %s", msg, len(respPoolsSuccess), pStr)
 	}
