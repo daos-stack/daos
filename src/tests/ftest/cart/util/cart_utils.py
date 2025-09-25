@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -15,9 +16,7 @@ import cart_logparse
 import cart_logtest
 from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
-from host_utils import get_local_host
-from job_manager_utils import Orterun
-from run_utils import stop_processes
+from job_manager_utils import Orterun, stop_job_manager
 from write_host_file import write_host_file
 
 
@@ -35,6 +34,7 @@ class CartTest(TestWithoutServers):
         self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))))
         self.attach_dir = None
+        self.cleanup_jobs = []
 
     def setUp(self):
         """Set up the test case."""
@@ -48,7 +48,7 @@ class CartTest(TestWithoutServers):
 
         for file in filtered:
             to_del = os.path.join(self.attach_dir, file)
-            print("WARN: stale file {} found, deleting...\n".format(to_del))
+            self.print(f"WARN: stale file {to_del} found, deleting...\n")
             os.remove(to_del)
 
         # Add test binaries and daos binaries to PATH
@@ -63,21 +63,21 @@ class CartTest(TestWithoutServers):
                 if os.path.basename(path_dirname) == "TESTING":
                     added_path = os.path.join(path_dirname, test_dirs["TESTING"])
                     os.environ["PATH"] += os.pathsep + added_path
-                    self.print("\nAdding {} to PATH\n".format(added_path))
+                    self.print(f"\nAdding {added_path} to PATH\n")
                     found_path = True
                 elif os.path.basename(path_dirname) == "install":
                     self.supp_file = path_dirname + "/etc/memcheck-cart.supp"
                     added_path = os.path.join(path_dirname, test_dirs["install"])
                     if os.path.isdir(added_path):
                         os.environ["PATH"] += os.pathsep + added_path
-                        self.print("\nAdding {} to PATH\n".format(added_path))
+                        self.print(f"\nAdding {added_path} to PATH\n")
                         found_path = True
                     else:
-                        print("ERROR: Directory does not exist: " + added_path)
+                        self.print(f"ERROR: Directory does not exist: {added_path}")
                 elif re.match(r"^\s*\/+\s*$", path_dirname) is not None:
                     if not found_path:
-                        print("ERROR: Couldn't find a directory named 'TESTING' or 'install' "
-                              + "to add to your PATH.\n")
+                        self.print("ERROR: Couldn't find a directory named 'TESTING' or 'install' "
+                                   "to add to your PATH.\n")
                     break
 
                 path_dirname = os.path.dirname(path_dirname)
@@ -89,13 +89,12 @@ class CartTest(TestWithoutServers):
             if os.path.isdir(tests_dir):
                 os.environ["PATH"] += os.pathsep + tests_dir
             else:
-                print("WARNING: I didn't find the daos tests directory. "
-                      + "No test directories have been added to your PATH..\n")
+                self.print("WARNING: I didn't find the daos tests directory. "
+                           "No test directories have been added to your PATH..\n")
 
     def tearDown(self):
         """Tear down the test case."""
         self.report_timeout()
-        self._teardown_errors.extend(self.cleanup_processes())
         super().tearDown()
 
     @staticmethod
@@ -147,21 +146,6 @@ class CartTest(TestWithoutServers):
             os.unlink(_file)
 
         return found_files
-
-    def cleanup_processes(self):
-        """Clean up cart processes, in case avocado/apricot does not."""
-        error_list = []
-        localhost = get_local_host()
-        processes = r"'\<(crt_launch|orterun)\>'"
-        negative_filter = r"'\<(grep|defunct)\>'"
-        running = True
-        for _ in range(2):
-            _, running = stop_processes(self.log, localhost, processes, exclude=negative_filter)
-            if not running:
-                break
-        if running:
-            error_list.append("Unable to stop cart processes!")
-        return error_list
 
     @staticmethod
     def stop_process(proc):
@@ -356,13 +340,21 @@ class CartTest(TestWithoutServers):
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)
         job.processes.update(tst_processes)
+
+        # This would normally be called as part of Orterun.run(), but since we only use the command
+        # string from 'job', we need to register the cleanup method here.
+        if callable(self.register_cleanup_method):
+            # Stop any running processes started by this job manager when the test completes
+            # pylint: disable=not-callable
+            self.register_cleanup_method(stop_job_manager, job_manager=job)
+
         return str(job)
 
     def convert_xml(self, xml_file):
         """Modify the xml file"""
 
-        with open(xml_file, 'r') as fd:
-            with open('{}.xml'.format(xml_file), 'w') as ofd:
+        with open(xml_file, 'r', encoding='utf-8') as fd:
+            with open('{}.xml'.format(xml_file), 'w', encoding='utf-8') as ofd:
                 for line in fd:
                     if self.src_dir in line:
                         ofd.write(re.sub(r'<dir>\/*' + self.src_dir + r'\/*', r'<dir>', line))
@@ -398,15 +390,13 @@ class CartTest(TestWithoutServers):
         # Verify the server is still running.
         if not self.check_process(srv_rtn):
             procrtn = self.stop_process(srv_rtn)
-            self.fail("Server did not launch, return code {}".format(procrtn))
+            self.fail(f"Server did not launch, return code {procrtn}")
 
         cli_rtn = self.launch_test(clicmd, srv_rtn)
         srv_rtn = self.stop_process(srv_rtn)
 
         if srv_rtn:
-            self.fail(
-                "Failed, return codes client {} server {}".format(
-                    cli_rtn, srv_rtn))
+            self.fail(f"Failed, return codes client {cli_rtn} server {srv_rtn}")
 
         self.convert_xml_files()
 
@@ -414,18 +404,18 @@ class CartTest(TestWithoutServers):
 
     def launch_test(self, cmd, srv1=None, srv2=None):
         """Launch a test."""
-        self.print("\nCMD : {}\n".format(cmd))
-        self.print("\nENV : {}\n".format(os.environ))
+        self.print(f"\nCMD : {cmd}\n")
+        self.print(f"\nENV : {os.environ}\n")
 
         cmd = shlex.split(cmd)
-        rtn = subprocess.call(cmd)
+        rtn = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         if rtn:
             if srv1 is not None:
                 self.stop_process(srv1)
             if srv2 is not None:
                 self.stop_process(srv2)
-            self.fail("Failed, return codes {}".format(rtn))
+            self.fail(f"Failed, return codes {rtn}")
 
         self.convert_xml_files()
 
@@ -433,11 +423,11 @@ class CartTest(TestWithoutServers):
 
     def launch_cmd_bg(self, cmd):
         """Launch the given cmd in background."""
-        self.print("\nCMD : {}\n".format(cmd))
+        self.print(f"\nCMD : {cmd}\n")
 
         cmd = shlex.split(cmd)
         # pylint: disable-next=consider-using-with
-        rtn = subprocess.Popen(cmd)
+        rtn = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         if rtn is None:
             self.fail("Failed to start command\n")

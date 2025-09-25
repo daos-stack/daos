@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -153,11 +154,11 @@ class CartIvOneNodeTest(CartTest):
                 # codecs.open(log_file, "w", "unicode").write('')
 
                 # DEBUGGING: dump contents of JSON file to screen
-                with open(log_path, 'r') as file:
-                    print(file.read())
+                with open(log_path, 'r', encoding='utf-8') as file:
+                    self.print(file.read())
 
                 # Read the result into test_result and remove the temp file
-                with open(log_path, 'r') as log_file:
+                with open(log_path, 'r', encoding='utf-8') as log_file:
                     test_result = json.load(log_file)
 
                 os.close(log_fd)
