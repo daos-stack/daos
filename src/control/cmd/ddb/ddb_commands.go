@@ -405,14 +405,14 @@ the path must include the extent, otherwise, it must not.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
-			f.Uint("s", "meta_mount_size", 0, "Specify tmpfs size(GiB) for meta_mount. By default, The total size of all VOS files will be used")
+			f.Uint("s", "tmpfs_mount_size", 0, "Specify tmpfs size(GiB) for mount. By default, The total size of all VOS files will be used")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("db_path", "Path to the sys db.")
-			a.String("meta_mount", "Path to the meta mountpoint.")
+			a.String("tmpfs_mount", "Path to the tmpfs mountpoint.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbProvMem(ctx, c.Args.String("db_path"), c.Args.String("meta_mount"), c.Flags.Uint("meta_mount_size"))
+			return ddbProvMem(ctx, c.Args.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_mount_size"))
 		},
 		Completer: nil,
 	})

@@ -24,7 +24,7 @@
 #define DDB_PROV_MEM_BUF_MAX 256
 
 int
-ddb_auto_calculate_meta_mount_size(unsigned int *meta_mount_size)
+ddb_auto_calculate_tmpfs_mount_size(unsigned int *tmpfs_mount_size)
 {
 	struct smd_pool_info *pool_info = NULL;
 	struct smd_pool_info *tmp;
@@ -35,7 +35,7 @@ ddb_auto_calculate_meta_mount_size(unsigned int *meta_mount_size)
 	uint64_t              total_size;
 	const unsigned long   GiB = (1ul << 30);
 
-	D_ASSERT(meta_mount_size != NULL);
+	D_ASSERT(tmpfs_mount_size != NULL);
 	D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
 	D_INIT_LIST_HEAD(&pool_list);
 	rc = smd_pool_list(&pool_list, &pool_list_cnt);
@@ -45,7 +45,7 @@ ddb_auto_calculate_meta_mount_size(unsigned int *meta_mount_size)
 	}
 
 	total_size = 0;
-	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
 		if ((pool_info->spi_blob_sz[SMD_DEV_TYPE_META] == 0) ||
 		    (pool_info->spi_flags[SMD_DEV_TYPE_META] & SMD_POOL_IN_CREATION)) {
 			continue;
@@ -66,7 +66,7 @@ ddb_auto_calculate_meta_mount_size(unsigned int *meta_mount_size)
 		smd_pool_free_info(pool_info);
 	}
 
-	*meta_mount_size = (D_ALIGNUP(total_size, GiB) / GiB);
+	*tmpfs_mount_size = (D_ALIGNUP(total_size, GiB) / GiB);
 	return rc;
 }
 
@@ -75,6 +75,7 @@ destroy_cb(const char *path, const struct stat *sb, int flag, struct FTW *ftwbuf
 {
 	int rc;
 
+	/** skip the root directory itself */
 	if (ftwbuf->level == 0)
 		return 0;
 
@@ -134,7 +135,7 @@ ddb_is_mountpoint(const char *path)
 }
 
 int
-ddb_recreate_pooltgts(const char *scm_mount)
+ddb_recreate_pooltgts(const char *storage_path)
 {
 	struct smd_pool_info *pool_info = NULL;
 	struct smd_pool_info *tmp;
@@ -160,8 +161,8 @@ ddb_recreate_pooltgts(const char *scm_mount)
 		D_ASSERT(pool_info->spi_scm_sz > 0);
 		/* specify rdb_blob_sz as zero to skip rdb file creation */
 		rc = ds_mgmt_tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
-					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], 0, scm_mount,
-					  NULL);
+					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], 0,
+					  storage_path, NULL);
 		if (rc) {
 			break;
 		}
@@ -189,18 +190,18 @@ ddb_mkdir(const char *path, mode_t __mode)
 }
 
 int
-ddb_dirs_prepare(const char *scm_mount)
+ddb_dirs_prepare(const char *path)
 {
 	int    rc = 0;
 	char   newborns_path[DDB_PROV_MEM_BUF_MAX];
 	char   zombies_path[DDB_PROV_MEM_BUF_MAX];
 
 	/* create the path string */
-	rc = snprintf(newborns_path, sizeof(newborns_path), "%s/" DIR_NEWBORNS "", scm_mount);
+	rc = snprintf(newborns_path, sizeof(newborns_path), "%s/" DIR_NEWBORNS "", path);
 	if (unlikely(rc >= sizeof(newborns_path)))
 		return -DER_EXCEEDS_PATH_LEN;
 
-	rc = snprintf(zombies_path, sizeof(zombies_path), "%s/" DIR_ZOMBIES "", scm_mount);
+	rc = snprintf(zombies_path, sizeof(zombies_path), "%s/" DIR_ZOMBIES "", path);
 	if (unlikely(rc >= sizeof(zombies_path)))
 		return -DER_EXCEEDS_PATH_LEN;
 
@@ -225,21 +226,20 @@ ddb_dirs_prepare(const char *scm_mount)
 }
 
 int
-ddb_mount(const char *scm_mount, unsigned int scm_mount_size)
+ddb_mount(const char *path, unsigned int size)
 {
 	char options[DDB_PROV_MEM_BUF_MAX] = {0};
 	int  rc;
 
 	memset(options, 0, sizeof(options));
-	rc = snprintf(options, sizeof(options), "mpol=prefer:0,size=%ug,huge=always",
-		      scm_mount_size);
+	rc = snprintf(options, sizeof(options), "mpol=prefer:0,size=%ug,huge=always", size);
 	if (unlikely(rc >= sizeof(options))) {
 		D_ERROR("The mount options too long. (%d >= %lu)", rc, sizeof(options));
 		return -DER_EXCEEDS_PATH_LEN;
 	}
-	rc = mount("tmpfs", scm_mount, "tmpfs", MS_NOATIME, (void *)options);
+	rc = mount("tmpfs", path, "tmpfs", MS_NOATIME, (void *)options);
 	if (rc) {
-		D_ERROR("Failed to mount tmpfs on %s: %s", scm_mount, strerror(errno));
+		D_ERROR("Failed to mount tmpfs on %s: %s", path, strerror(errno));
 		return daos_errno2der(errno);
 	}
 

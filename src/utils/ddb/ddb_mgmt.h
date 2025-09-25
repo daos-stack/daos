@@ -9,10 +9,10 @@
 #define __DDB_MGMT_H__
 
 int
-ddb_auto_calculate_meta_mount_size(unsigned int *meta_mount_size);
+ddb_auto_calculate_tmpfs_mount_size(unsigned int *tmpfs_mount_size);
 
 int
-ddb_recreate_pooltgts(const char *meta_mount);
+ddb_recreate_pooltgts(const char *storage_path);
 
 int
 ddb_clear_dir(const char *dir);
@@ -21,9 +21,9 @@ int
 ddb_is_mountpoint(const char *path);
 
 int
-ddb_dirs_prepare(const char *meta_mount);
+ddb_dirs_prepare(const char *path);
 
 int
-ddb_mount(const char *meta_mount, unsigned int meta_mount_size);
+ddb_mount(const char *path, unsigned int size);
 
 #endif /** __DDB_MGMT_H__ */

@@ -1458,7 +1458,7 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 {
 	int  rc                      = 0;
 	char *db_path                 = opt->db_path;
-	char  meta_mount[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+	char  tmpfs_mount[DDB_PATH_MAX] = DEFAULT_DB_PATH;
 
 	if (db_path == NULL || strlen(db_path) == 0 || strlen(db_path) >= DDB_PATH_MAX) {
 		ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
@@ -1466,25 +1466,25 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 		return -DER_INVAL;
 	}
 
-	if (opt->meta_mount != NULL) {
-		if (strlen(opt->meta_mount) == 0 || strlen(opt->meta_mount) >= DDB_PATH_MAX) {
+	if (opt->tmpfs_mount != NULL) {
+		if (strlen(opt->tmpfs_mount) == 0 || strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
 			ddb_errorf(ctx,
-				   "meta_mount '%s' either too short (==0) or too long (>=%d)\n",
-				   opt->meta_mount, DDB_PATH_MAX);
+				   "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
+				   opt->tmpfs_mount, DDB_PATH_MAX);
 			return -DER_INVAL;
 		}
-		strncpy(meta_mount, opt->meta_mount, ARRAY_SIZE(meta_mount) - 1);
+		strncpy(tmpfs_mount, opt->tmpfs_mount, ARRAY_SIZE(tmpfs_mount) - 1);
 	} else {
-		ddb_printf(ctx, "meta_mount not specific, will use default path '%s'\n",
-			   meta_mount);
+		ddb_printf(ctx, "tmpfs_mount not specific, will use default path '%s'\n",
+			   tmpfs_mount);
 	}
 
-	/** setup tmpfs and prepare the vos file on meta_mount */
-	rc = dv_run_prov_mem(db_path, meta_mount, opt->meta_mount_size);
+	/** setup tmpfs and prepare the vos file on tmpfs_mount */
+	rc = dv_run_prov_mem(db_path, tmpfs_mount, opt->tmpfs_mount_size);
 	if (rc) {
 		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
 	} else {
-		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", meta_mount);
+		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", tmpfs_mount);
 	}
 
 	return rc;
