@@ -55,15 +55,25 @@ get_cpu_core(void)
 	hwloc_topology_t topology;
 	unsigned int     cpu_count;
 	int              depth;
+	int              rc;
 
 	/* Allocate, initialize, and perform topology detection */
-	hwloc_topology_init(&topology);
-	hwloc_topology_load(topology);
+	rc = hwloc_topology_init(&topology);
+	if (rc) {
+		DS_ERROR(EINVAL, "libhwloc hwloc_topology_init() failed");
+		return INVALID_NUM_CORE;
+	}
 
+	rc = hwloc_topology_load(topology);
+	if (rc) {
+		DS_ERROR(EINVAL, "libhwloc hwloc_topology_load() failed");
+		cpu_count = INVALID_NUM_CORE;
+		goto out;
+	}
 	/* Try to get the number of CPU cores from topology */
 	depth = hwloc_get_type_depth(topology, HWLOC_OBJ_CORE);
 	if (depth == HWLOC_TYPE_DEPTH_UNKNOWN) {
-		DS_ERROR(EINVAL, "libhwloc failed to get the number of cores\n");
+		DS_ERROR(EINVAL, "libhwloc hwloc_get_type_depth() failed");
 		cpu_count = INVALID_NUM_CORE;
 		goto out;
 	}
