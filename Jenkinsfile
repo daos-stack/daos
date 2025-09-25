@@ -185,7 +185,7 @@ Map update_default_commit_pragmas() {
 }
 
 pipeline {
-    agent { label 'lightweight' }
+    agent { label 'lightweight_fox-116' }
 
     environment {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
@@ -359,6 +359,12 @@ pipeline {
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
+
+        string(name: 'DOCKER_LABEL',
+                       defaultValue: 'docker_runner',
+                       description: 'Label to use for docker host')
+
+
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -474,7 +480,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.code_scanning'
-                            label 'docker_runner'
+                            label params.DOCKER_LABEL
                             additionalBuildArgs dockerBuildArgs(add_repos: false) +
                                                 ' --build-arg FVERSION=37'
                         }
@@ -513,7 +519,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label params.DOCKER_LABEL
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: false,
                                                                 parallel_build: true) +
@@ -562,12 +568,12 @@ pipeline {
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
+                            label params.DOCKER_LABEL
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: false,
                                                                 parallel_build: true) +
@@ -621,7 +627,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
+                            label params.DOCKER_LABEL
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: false) +
@@ -667,12 +673,12 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
+                            label params.DOCKER_LABEL
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
@@ -972,7 +978,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label params.DOCKER_LABEL
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true)
