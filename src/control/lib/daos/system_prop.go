@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -303,6 +304,7 @@ func (sp SystemPropertyKey) String() string {
 		SystemPropertyDaosSystem:      "daos_system",
 		SystemPropertyPoolScrubMode:   "pool_scrub_mode",
 		SystemPropertyPoolScrubThresh: "pool_scrub_thresh",
+		SystemPropertySelfHeal:        "self_heal",
 	}[sp]; found {
 		return str
 	}
@@ -342,6 +344,8 @@ const (
 	SystemPropertyPoolScrubMode
 	// SystemPropertyPoolScrubThresh sets or retrieves the scrubbing error threshold for each pool in the system.
 	SystemPropertyPoolScrubThresh
+	// SystemPropertySelfHeal stores the self-heal policy for the system.
+	SystemPropertySelfHeal
 	// NB: This must be the last entry.
 	systemPropertyMax
 )
@@ -487,6 +491,50 @@ func pph2sp(key SystemPropertyKey, pph *PoolPropHandler, def string) SystemPrope
 	return property
 }
 
+// SystemPropertySelfHealHasFlag returns true if the given self-heal property
+// value contains the specified flag.
+func SystemPropertySelfHealHasFlag(value string, flag string) bool {
+	if value == "none" {
+		return false
+	}
+
+	flags := strings.Split(value, ";")
+	for _, f := range flags {
+		if f == flag {
+			return true
+		}
+	}
+
+	return false
+}
+
+// subsets returns a slice of all subsets of strings, including the empty set
+// represented by empty. In each nonempty subset, the elements are separated by
+// sep. For example,
+//
+//	subsets([]string{"a","b","c"}, ";", "none")
+//
+// returns
+//
+//	[]string{"a;b;c", "a;b", "a;c", "a", "b;c", "b", "c", "none"}.
+func subsets(strings []string, sep string, empty string) []string {
+	if len(strings) == 0 {
+		return []string{empty}
+	}
+
+	sets := subsets(strings[1:], sep, empty)
+	result := make([]string, len(sets)*2)
+	for i, s := range sets {
+		if s == empty {
+			result[i] = strings[0]
+		} else {
+			result[i] = strings[0] + sep + s
+		}
+	}
+	copy(result[len(sets):], sets)
+	return result
+}
+
 // SystemProperties returns the map of standard system properties.
 func SystemProperties() SystemPropertyMap {
 	poolProps := PoolProperties()
@@ -504,5 +552,10 @@ func SystemProperties() SystemPropertyMap {
 		},
 		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub_thresh"], "0"),
 		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"], "off"),
+		SystemPropertySelfHeal: SystemProperty{
+			Key:         SystemPropertySelfHeal,
+			Value:       NewStringPropVal("exclude;pool_exclude;pool_rebuild", subsets([]string{"exclude", "pool_exclude", "pool_rebuild"}, ";", "none")...),
+			Description: "Self-heal policy for the system",
+		},
 	}
 }
