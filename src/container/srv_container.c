@@ -710,10 +710,12 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 			}
 			break;
 		case DAOS_PROP_CO_GLOBAL_VERSION:
-		case DAOS_PROP_CO_OBJ_VERSION:
-			D_ERROR("container global/obj %u version could be not set\n",
-				entry->dpe_type);
+			D_ERROR("container global %u version could be not set\n", entry->dpe_type);
 			return -DER_INVAL;
+		case DAOS_PROP_CO_OBJ_VERSION:
+			/* this is a walkaround for 2.6 only */
+			entry_def->dpe_val = entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -768,8 +770,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 
 	/* inherit object version from pool*/
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_OBJ_VERSION);
-	if (entry_def)
+	if (entry_def && entry_def->dpe_val == 0)
 		entry_def->dpe_val = pool_hdl->sph_obj_ver;
+
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);
@@ -2341,6 +2344,17 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
 	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
+	if (!(flags & DAOS_COO_NEW_LAYOUT)) {
+		struct daos_prop_entry *entry;
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION);
+		if (entry && entry->dpe_val >= DAOS_POOL_OBJ_VERSION_2) {
+			D_ERROR(DF_CONT ": refusing attempt to open with new layout: " DF_X64 "\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), entry->dpe_val);
+			rc = -DER_NOTSUPPORTED;
+			D_GOTO(out, rc);
+		}
+	}
 
 	get_cont_prop_access_info(prop, &owner, &acl);
 
@@ -4686,7 +4700,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
-		obj_ver = DS_POOL_OBJ_VERSION;
+		obj_ver = DAOS_POOL_OBJ_VERSION;
 		d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 		rc = rdb_tx_update(ap->tx, &cont->c_prop,
 				   &ds_cont_prop_cont_obj_version, &value);
@@ -4781,9 +4795,9 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION);
 	D_ASSERT(entry != NULL);
-	entry->dpe_val = DS_POOL_OBJ_VERSION;
+	entry->dpe_val = DAOS_POOL_OBJ_VERSION;
 	entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
-	obj_ver = DS_POOL_OBJ_VERSION;
+	obj_ver = DAOS_POOL_OBJ_VERSION;
 	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 	rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_cont_obj_version, &value);
 	if (rc) {
