@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,7 +12,7 @@ from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
 from util.host_utils import get_local_host
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
-                                get_common_provider, get_fastest_interface)
+                                get_common_provider, get_fastest_interfaces)
 from util.run_utils import run_remote
 
 
@@ -322,15 +323,15 @@ class TestEnvironment():
         Returns:
             str: the default interface; can be None
         """
-        interface = os.environ.get("D_INTERFACE")
-        if interface is None and hosts:
+        interfaces = list(filter(None, [os.environ.get("D_INTERFACE")]))
+        if not interfaces and hosts:
             # Find all the /sys/class/net interfaces on the launch node (excluding lo)
             logger.debug("Detecting network devices - D_INTERFACE not set")
             try:
-                interface = get_fastest_interface(logger, hosts | get_local_host())
+                interfaces = get_fastest_interfaces(logger, hosts | get_local_host())
             except NetworkException as error:
                 raise TestEnvironmentException("Error obtaining a default interface!") from error
-        return interface
+        return ",".join(interfaces)
 
     @property
     def provider(self):

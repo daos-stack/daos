@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -384,8 +385,8 @@ def get_interface_providers(interface, provider_data):
     return providers
 
 
-def get_fastest_interface(logger, hosts, verbose=True):
-    """Get the fastest active interface common to all hosts.
+def get_fastest_interfaces(logger, hosts, verbose=True):
+    """Get the fastest active interfaces common to all hosts.
 
     Args:
         logger (Logger): logger for the messages produced by this method
@@ -396,12 +397,12 @@ def get_fastest_interface(logger, hosts, verbose=True):
         NetworkException: if there is an error detecting the fastest active interface
 
     Returns:
-        str: the fastest active interface common to all hosts specified
+        list: the fastest active interfaces common to all hosts specified
     """
     common_interfaces = get_common_interfaces(logger, hosts, verbose)
 
     # Find the speed of each common active interface in order to be able to choose the fastest
-    interface_speeds = {}
+    interfaces_at_speed = {}
     for interface in common_interfaces:
         detected_speeds = get_interface_speeds(logger, hosts, interface, verbose)
         speed_list = []
@@ -411,26 +412,23 @@ def get_fastest_interface(logger, hosts, verbose=True):
             speed_hosts.add(node_set)
         if speed_list and speed_hosts == hosts:
             # Only include interface speeds if a speed is detected on all the hosts
-            interface_speeds[interface] = min(speed_list)
+            min_speed = min(speed_list)
+            if min_speed not in interfaces_at_speed:
+                interfaces_at_speed[min_speed] = []
+            interfaces_at_speed[min_speed].append(interface)
 
     logger.info("Active network interface speeds on %s:", hosts)
-    available_interfaces = {}
-    for interface in sorted(interface_speeds):
-        logger.info("  - %-8s (speed: %6s)", interface, interface_speeds[interface])
+    for speed in sorted(interfaces_at_speed):
+        logger.info("  - speed: %6s => %s", speed, sorted(interfaces_at_speed[speed]))
 
-        # Only include the first active interface (as determined by alphabetic sort) for each speed
-        if interface_speeds[interface] not in available_interfaces:
-            available_interfaces[interface_speeds[interface]] = interface
-
-    logger.info("Available interfaces on %s: %s", hosts, available_interfaces)
     try:
-        # Select the fastest active interface available by sorting the speed
-        interface = available_interfaces[sorted(available_interfaces)[-1]]
+        fastest_speed = sorted(interfaces_at_speed)[-1]
+        fastest_interfaces = interfaces_at_speed[fastest_speed]
     except IndexError as error:
         raise NetworkException("Error obtaining a default interface!") from error
 
-    logger.info("Fastest interface detected on %s: %s", hosts, interface)
-    return interface
+    logger.info("Fastest interfaces detected on %s: %s", hosts, fastest_interfaces)
+    return fastest_interfaces
 
 
 def get_common_provider(logger, hosts, interface, supported=None, verbose=True):
