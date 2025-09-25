@@ -503,23 +503,23 @@ out:
 
 void
 ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
-			 daos_epoch_t *stable_eph, uint32_t *generation)
+			 daos_epoch_t *upbound_eph, uint32_t *generation)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
 
 	if (upper_ver)
 		*upper_ver = 0;
-	if (stable_eph)
-		*stable_eph = 0;
+	if (upbound_eph)
+		*upbound_eph = 0;
 	if (generation)
 		*generation = -1;
 	rpt = rpt_lookup(pool_uuid, opc, -1, -1);
 	if (rpt != NULL && !rpt->rt_global_done && !rpt->rt_abort) {
-		D_DEBUG(DB_REBUILD, DF_UUID" rebuild %p running eph/ver/gen "DF_X64"/%u/%u\n",
-			DP_UUID(pool_uuid), rpt, rpt->rt_stable_epoch, rpt->rt_rebuild_ver,
+		D_DEBUG(DB_REBUILD, DF_UUID " rebuild %p running eph/ver/gen " DF_X64 "/%u/%u\n",
+			DP_UUID(pool_uuid), rpt, rpt->rt_upbound_eph, rpt->rt_rebuild_ver,
 			rpt->rt_rebuild_gen);
-		if (stable_eph)
-			*stable_eph = rpt->rt_stable_epoch;
+		if (upbound_eph)
+			*upbound_eph = rpt->rt_upbound_eph;
 		if (upper_ver)
 			*upper_ver = rpt->rt_rebuild_ver;
 		if (generation)
@@ -655,7 +655,7 @@ rebuild_leader_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_
 	iv.riv_leader_term	= rgt->rgt_leader_term;
 	iv.riv_rebuild_gen	= rgt->rgt_rebuild_gen;
 	iv.riv_seconds          = rgt->rgt_status.rs_seconds;
-	iv.riv_stable_epoch	= rgt->rgt_stable_epoch;
+	iv.riv_stable_epoch         = rgt->rgt_upbound_eph;
 	iv.riv_sync = 1;
 	rgt->rgt_dtx_resync_version = iv.riv_global_dtx_resyc_version =
 				rebuild_get_global_dtx_resync_ver(rgt);
@@ -790,16 +790,15 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 
 		rs->rs_seconds =
 			(d_timeus_secdiff(0) - rgt->rgt_time_start) / 1e6;
-		snprintf(sbuf, RBLD_SBUF_LEN,
-			 "%s [%s] (pool "DF_UUID" leader %u term "DF_U64" dtx gl %u ver=%u,"
-			 "gen %u toberb_obj=" DF_U64", rb_obj="DF_U64", rec="DF_U64", size="DF_U64
-			 " done %d status %d/%d  stable "DF_X64" reclaim "DF_X64
-			 " duration=%d secs)\n",
-			 RB_OP_STR(op), str, DP_UUID(pool->sp_uuid), myrank,
-			 rgt->rgt_leader_term, rgt->rgt_dtx_resync_version, rgt->rgt_rebuild_ver,
-			 rgt->rgt_rebuild_gen, rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
-			 rs->rs_size, rs->rs_state, rs->rs_errno, rs->rs_fail_rank,
-			 rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch, rs->rs_seconds);
+		snprintf(
+		    sbuf, RBLD_SBUF_LEN,
+		    "%s [%s] (pool " DF_UUID " leader %u term " DF_U64 " dtx gl %u ver=%u,"
+		    "gen %u toberb_obj=" DF_U64 ", rb_obj=" DF_U64 ", rec=" DF_U64 ", size=" DF_U64
+		    " done %d status %d/%d  upbound_eph " DF_X64 "  duration=%d secs)\n",
+		    RB_OP_STR(op), str, DP_UUID(pool->sp_uuid), myrank, rgt->rgt_leader_term,
+		    rgt->rgt_dtx_resync_version, rgt->rgt_rebuild_ver, rgt->rgt_rebuild_gen,
+		    rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr, rs->rs_size, rs->rs_state,
+		    rs->rs_errno, rs->rs_fail_rank, rgt->rgt_upbound_eph, rs->rs_seconds);
 
 		D_INFO("%s", sbuf);
 		if (rs->rs_state == DRS_COMPLETED || rebuild_gst.rg_abort ||
@@ -841,8 +840,8 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 
 static int
 rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t rebuild_gen,
-				   uint64_t leader_term, daos_epoch_t reclaim_eph,
-				   uint32_t opc, struct rebuild_global_pool_tracker **p_rgt)
+				   uint64_t leader_term, daos_epoch_t upbound_eph, uint32_t opc,
+				   struct rebuild_global_pool_tracker **p_rgt)
 {
 	struct rebuild_global_pool_tracker *rgt;
 	int rank_nr;
@@ -881,7 +880,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	rgt->rgt_leader_term = leader_term;
 	rgt->rgt_rebuild_gen = rebuild_gen;
 	rgt->rgt_time_start = d_timeus_secdiff(0);
-	rgt->rgt_reclaim_epoch = reclaim_eph;
+	rgt->rgt_upbound_eph       = upbound_eph;
 	rgt->rgt_opc = opc;
 	d_list_add(&rgt->rgt_list, &rebuild_gst.rg_global_tracker_list);
 	*p_rgt = rgt;
@@ -932,12 +931,9 @@ rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver, uns
  * 0: does not need to rebuild.
  */
 static int
-rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
-		uint32_t rebuild_gen, uint64_t leader_term,
-		daos_epoch_t reclaim_eph,
-		struct pool_target_id_list *tgts,
-		daos_rebuild_opc_t rebuild_op,
-		struct rebuild_global_pool_tracker **rgt)
+rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver, uint32_t rebuild_gen,
+		uint64_t leader_term, daos_epoch_t upbound_eph, struct pool_target_id_list *tgts,
+		daos_rebuild_opc_t rebuild_op, struct rebuild_global_pool_tracker **rgt)
 {
 	int	rc = 0;
 
@@ -984,7 +980,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 
 		/* Update pool iv ns for the pool */
 		ret = rebuild_global_pool_tracker_create(pool, rebuild_ver, rebuild_gen,
-							leader_term, reclaim_eph, rebuild_op, rgt);
+							 leader_term, upbound_eph, rebuild_op, rgt);
 		if (ret) {
 			D_ERROR("rebuild_global_pool_tracker create failed: "DF_RC"\n",
 				DP_RC(ret));
@@ -1073,10 +1069,9 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
 	rsi->rsi_rebuild_ver = rgt->rgt_rebuild_ver;
 	rsi->rsi_rebuild_gen = rgt->rgt_rebuild_gen;
-	if (rebuild_op == RB_OP_RECLAIM || rebuild_op == RB_OP_FAIL_RECLAIM)
-		D_ASSERT(rgt->rgt_reclaim_epoch != 0);
+	D_ASSERT(rgt->rgt_upbound_eph != 0);
 
-	rsi->rsi_reclaim_epoch = rgt->rgt_reclaim_epoch;
+	rsi->rsi_upbound_epoch = rgt->rgt_upbound_eph;
 	rsi->rsi_layout_ver = layout_version;
 	rsi->rsi_tgts_num = tgts_failed->pti_number;
 	rsi->rsi_rebuild_op = rebuild_op;
@@ -1088,10 +1083,8 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		rc = rso->rso_status;
 
 	rgt->rgt_init_scan = 1;
-	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
-	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID": "DF_RC" got stable/reclaim epoch "
-		DF_X64"/"DF_X64"\n", DP_UUID(rsi->rsi_pool_uuid), DP_RC(rc),
-		rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch);
+	D_DEBUG(DB_REBUILD, "rebuild " DF_UUID ": " DF_RC " upbound_eph " DF_X64 "\n",
+		DP_UUID(rsi->rsi_pool_uuid), DP_RC(rc), rgt->rgt_upbound_eph);
 	crt_req_decref(rpc);
 out:
 	if (excluded)
@@ -1396,9 +1389,8 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	if (version < task->dst_map_ver)
 		generation = ++pool->sp_rebuild_gen;
 
-	rc = rebuild_prepare(pool, task->dst_map_ver, generation,
-			     leader_term, task->dst_reclaim_eph, &task->dst_tgts,
-			     task->dst_rebuild_op, p_rgt);
+	rc = rebuild_prepare(pool, task->dst_map_ver, generation, leader_term,
+			     task->dst_upbound_eph, &task->dst_tgts, task->dst_rebuild_op, p_rgt);
 	if (rc <= 0)
 		return rc;
 
@@ -1489,9 +1481,9 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 
 		DL_INFO(ret, DF_UUID" retry opc %u/%u", DP_UUID(task->dst_pool_uuid),
 			task->dst_rebuild_op, task->dst_map_ver);
-		rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_reclaim_eph,
-					 task->dst_new_layout_version,
-					 &task->dst_tgts, task->dst_rebuild_op, 5);
+		rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_upbound_eph,
+					 task->dst_new_layout_version, &task->dst_tgts,
+					 task->dst_rebuild_op, 5);
 		return rc;
 	}
 
@@ -1516,7 +1508,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
 			DL_INFO(ret, DF_UUID" retry opc %u/%u", DP_UUID(task->dst_pool_uuid),
 				task->dst_rebuild_op, task->dst_map_ver);
-			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
+			rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_upbound_eph,
 						 task->dst_new_layout_version, &task->dst_tgts,
 						 task->dst_rebuild_op, 5);
 			return rc;
@@ -1534,10 +1526,9 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 				DF_UUID" opc %u/%u, schedule RB_OP_FAIL_RECLAIM.",
 				DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op,
 				task->dst_map_ver);
-			rc = ds_rebuild_schedule(pool, task->dst_reclaim_ver - 1,
-						 rgt->rgt_stable_epoch,
-						 task->dst_new_layout_version,
-						 &task->dst_tgts, RB_OP_FAIL_RECLAIM, 5);
+			rc = ds_rebuild_schedule(
+			    pool, task->dst_reclaim_ver - 1, task->dst_upbound_eph,
+			    task->dst_new_layout_version, &task->dst_tgts, RB_OP_FAIL_RECLAIM, 5);
 			if (rc)
 				D_ERROR(DF_UUID "schedule reclaim fail: "DF_RC"\n",
 					DP_UUID(task->dst_pool_uuid), DP_RC(rc));
@@ -1548,9 +1539,9 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		if (retry_opc == RB_OP_NONE)
 			D_GOTO(complete, rc);
 
-		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
-					 task->dst_new_layout_version, &task->dst_tgts,
-					 retry_opc, 5);
+		rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_upbound_eph,
+					 task->dst_new_layout_version, &task->dst_tgts, retry_opc,
+					 5);
 		DL_INFO(rc, DF_UUID" opc %u/%u, error %d, re-scheduled opc %u.",
 			DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver,
 			rgt->rgt_status.rs_errno, retry_opc);
@@ -1561,9 +1552,9 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		D_DEBUG(DB_REBUILD, DF_UUID" opc %u/%u, error %d, schedule RECLAIM.\n",
 			DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver,
 			rgt->rgt_status.rs_errno);
-		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_reclaim_epoch,
-					 task->dst_new_layout_version,
-					 &task->dst_tgts, RB_OP_RECLAIM, 5);
+		rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_upbound_eph,
+					 task->dst_new_layout_version, &task->dst_tgts,
+					 RB_OP_RECLAIM, 5);
 		if (rc != 0)
 			D_ERROR("reschedule reclaim, "DF_UUID" failed: "DF_RC"\n",
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
@@ -1649,6 +1640,17 @@ rebuild_task_ult(void *arg)
 	if (rc)
 		D_ERROR(DF_UUID": failed to send RAS event\n",
 			DP_UUID(task->dst_pool_uuid));
+
+	/* as above ds_pool_svc_query_map_dist() ensures latest pool map on PS leader has already
+	 * been distributed to all engines (ds_pool_iv_map_update works in CRT_IV_SYNC_EAGER mode),
+	 * it is safe to select the rebuild upbound_eph now.
+	 */
+	if (task->dst_upbound_eph == 0) {
+		task->dst_upbound_eph = ds_rebuild_get_upbound_eph();
+		D_INFO("%s (pool " DF_UUID "), set upbound_eph " DF_X64 "\n",
+		       RB_OP_STR(task->dst_rebuild_op), DP_UUID(task->dst_pool_uuid),
+		       task->dst_upbound_eph);
+	}
 
 	rc = rebuild_leader_start(pool, task, &rgt);
 	if (rc == 0) {
@@ -2006,9 +2008,8 @@ rebuild_print_list_update(const uuid_t uuid, const uint32_t map_ver,
  * pool.
  */
 int
-ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
-		    daos_epoch_t reclaim_eph, uint32_t layout_version,
-		    struct pool_target_id_list *tgts,
+ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t upbound_eph,
+		    uint32_t layout_version, struct pool_target_id_list *tgts,
 		    daos_rebuild_opc_t rebuild_op, uint64_t delay_sec)
 {
 	struct rebuild_task	*new_task;
@@ -2054,7 +2055,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 	new_task->dst_map_ver = map_ver;
 	new_task->dst_reclaim_ver = map_ver;
 	new_task->dst_rebuild_op = rebuild_op;
-	new_task->dst_reclaim_eph = reclaim_eph;
+	new_task->dst_upbound_eph        = upbound_eph;
 	new_task->dst_new_layout_version = layout_version;
 	uuid_copy(new_task->dst_pool_uuid, pool->sp_uuid);
 	D_INIT_LIST_HEAD(&new_task->dst_list);
@@ -2123,7 +2124,6 @@ static int
 regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 			 unsigned int tgts_cnt, uint64_t delay)
 {
-	daos_epoch_t	eph = d_hlc_get();
 	daos_epoch_t	current_eph;
 	unsigned int	i;
 	int		rc;
@@ -2141,15 +2141,14 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 		id_list.pti_ids = &tgt_id;
 		id_list.pti_number = 1;
 
+		/* if current_eph is zero, will select upbound_eph before rebuild_leader_start() */
 		if (tgt->ta_comp.co_status & (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN)) {
-			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
-						 current_eph == 0 ? eph : current_eph,
-						 0, &id_list, RB_OP_REBUILD, delay);
+			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq, current_eph, 0,
+						 &id_list, RB_OP_REBUILD, delay);
 		} else {
 			D_ASSERT(tgt->ta_comp.co_status == PO_COMP_ST_UP);
-			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_in_ver,
-						 current_eph == 0 ? eph : current_eph,
-						 0, &id_list, RB_OP_REBUILD, delay);
+			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_in_ver, current_eph, 0,
+						 &id_list, RB_OP_REBUILD, delay);
 		}
 		if (rc) {
 			D_ERROR(DF_UUID" schedule ver %d failed: "DF_RC"\n",
@@ -2267,18 +2266,18 @@ rebuild_fini_one(void *arg)
 	/* Reset rebuild epoch, then reset the aggregation epoch, so
 	 * it can aggregate the rebuild epoch.
 	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
+	D_ASSERT(rpt->rt_upbound_eph != 0);
+	if (rpt->rt_upbound_eph == dpc->spc_rebuild_fence) {
 		dpc->spc_rebuild_fence = 0;
-		dpc->spc_rebuild_end_hlc = d_hlc_get();
+		dpc->spc_rebuild_end_hlc = rpt->rt_upbound_eph;
 		D_DEBUG(DB_REBUILD, DF_UUID": Reset aggregation end hlc "
 			DF_U64"\n", DP_UUID(rpt->rt_pool_uuid),
 			dpc->spc_rebuild_end_hlc);
 	} else {
-		D_DEBUG(DB_REBUILD, DF_UUID": pool is still being rebuilt"
-			" rt_rebuild_fence "DF_U64" spc_rebuild_fence "
-			DF_U64"\n", DP_UUID(rpt->rt_pool_uuid),
-			rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
+		D_DEBUG(DB_REBUILD,
+			DF_UUID ": pool is still being rebuilt"
+				" rt_upbound_eph " DF_X64 " spc_rebuild_fence " DF_X64 "\n",
+			DP_UUID(rpt->rt_pool_uuid), rpt->rt_upbound_eph, dpc->spc_rebuild_fence);
 	}
 
 	ds_pool_child_put(dpc);
@@ -2524,11 +2523,13 @@ rebuild_prepare_one(void *data)
 	/* Set the rebuild epoch per VOS container, so VOS aggregation will not
 	 * cross the epoch to cause problem.
 	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	dpc->spc_rebuild_fence = rpt->rt_rebuild_fence;
-	D_DEBUG(DB_REBUILD, "open local container "DF_UUID"/"DF_UUID
-		" rebuild eph "DF_X64" "DF_RC"\n", DP_UUID(rpt->rt_pool_uuid),
-		DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence, DP_RC(rc));
+	D_ASSERT(rpt->rt_upbound_eph != 0);
+	dpc->spc_rebuild_fence = rpt->rt_upbound_eph;
+	D_DEBUG(DB_REBUILD,
+		"open local container " DF_UUID "/" DF_UUID " rebuild upbound epoch " DF_X64
+		" " DF_RC "\n",
+		DP_UUID(rpt->rt_pool_uuid), DP_UUID(rpt->rt_coh_uuid), rpt->rt_upbound_eph,
+		DP_RC(rc));
 
 put:
 	ds_pool_child_put(dpc);
@@ -2537,9 +2538,8 @@ put:
 }
 
 static int
-rpt_create(struct ds_pool *pool, uint32_t master_rank, uint32_t pm_ver,
-	   uint64_t leader_term, uint32_t rebuild_gen, uint32_t layout_ver,
-	   uint64_t reclaim_epoch, uint32_t tgts_num,
+rpt_create(struct ds_pool *pool, uint32_t master_rank, uint32_t pm_ver, uint64_t leader_term,
+	   uint32_t rebuild_gen, uint32_t layout_ver, uint64_t upbound_epoch, uint32_t tgts_num,
 	   struct rebuild_tgt_pool_tracker **p_rpt)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
@@ -2573,7 +2573,7 @@ rpt_create(struct ds_pool *pool, uint32_t master_rank, uint32_t pm_ver,
 	rpt->rt_leader_term = leader_term;
 	rpt->rt_rebuild_gen = rebuild_gen;
 	rpt->rt_tgts_num = tgts_num;
-	rpt->rt_reclaim_epoch = reclaim_epoch;
+	rpt->rt_upbound_eph          = upbound_epoch;
 	crt_group_rank(pool->sp_group, &rank);
 	rpt->rt_rank = rank;
 	rpt->rt_leader_rank = master_rank;
@@ -2633,9 +2633,8 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		D_GOTO(out, rc);
 
 	/* Create rpt for the target */
-	rc = rpt_create(pool, rsi->rsi_master_rank, rsi->rsi_rebuild_ver,
-			rsi->rsi_leader_term, rsi->rsi_rebuild_gen,
-			rsi->rsi_layout_ver, rsi->rsi_reclaim_epoch,
+	rc = rpt_create(pool, rsi->rsi_master_rank, rsi->rsi_rebuild_ver, rsi->rsi_leader_term,
+			rsi->rsi_rebuild_gen, rsi->rsi_layout_ver, rsi->rsi_upbound_epoch,
 			rsi->rsi_tgts_num, &rpt);
 	if (rc)
 		D_GOTO(out, rc);
@@ -2674,12 +2673,13 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rpt->rt_rebuild_fence = d_hlc_get();
-	rc                    = ds_pool_task_collective(rpt->rt_pool_uuid,
-							PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-							rebuild_prepare_one, rpt, 0);
+	D_ASSERTF(rpt->rt_upbound_eph != 0 && rsi->rsi_upbound_epoch == rpt->rt_upbound_eph,
+		  "bad epoch " DF_X64 ", " DF_X64 "\n", rsi->rsi_upbound_epoch,
+		  rpt->rt_upbound_eph);
+	rc = ds_pool_task_collective(rpt->rt_pool_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     rebuild_prepare_one, rpt, 0);
 	if (rc) {
-		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);
 		D_GOTO(out, rc);
 	}
