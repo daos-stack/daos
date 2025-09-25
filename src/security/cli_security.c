@@ -48,16 +48,48 @@ dc_sec_request_creds(d_iov_t *creds)
 	return rc;
 }
 
+static int 
+get_delegation_token(const char *delegation_token_filename, uint8_t **token_buffer, unsigned int *token_buffer_length)
+{
+	FILE *token_fptr = fopen(delegation_token_filename, "r");
+
+	if(token_fptr == NULL) {
+		D_ERROR("AM path is not a valid file. Please specify a valid path in $AM_PATH\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC(*token_buffer, MAX_DELEGATION_TOKEN_SIZE + AGENT_AUTH_METHOD_NAME_SIZE);
+	if (token_buffer == NULL) {
+		D_ERROR("Failed to allocate buffer for delegation token.\n");
+		return -DER_NOMEM;
+	}
+
+	// Save the first AGENT_AUTH_METHOD_NAME_SIZE bytes for the method name
+	*token_buffer_length = fread(*token_buffer + AGENT_AUTH_METHOD_NAME_SIZE, 1, MAX_DELEGATION_TOKEN_SIZE, token_fptr);
+	if (*token_buffer_length == 0) {
+		D_ERROR("Found an empty file.\n");
+		return -DER_INVAL;
+	}
+	// Add length of method name to total buffer size
+	*token_buffer_length += AGENT_AUTH_METHOD_NAME_SIZE;
+
+	fclose(token_fptr);
+	return -DER_SUCCESS;
+}
+
 static int
 request_credentials_via_drpc(Drpc__Response **response)
 {
 	Drpc__Call	*request;
 	struct drpc	*agent_socket;
 	int		rc;
+	uint8_t *token_buffer = NULL;
+	unsigned int token_buffer_length = 0;
+	char *delegation_token_path = getenv("TOKEN_PATH");
+	int use_access_manager = delegation_token_path != NULL && strcmp(delegation_token_path, "");
 
 	if (dc_agent_sockpath == NULL) {
-		D_ERROR("DAOS Socket Path is Uninitialized\n");
-		return -DER_UNINIT;
+		dc_agent_sockpath = DEFAULT_DAOS_AGENT_DRPC_SOCK;
 	}
 
 	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
@@ -65,7 +97,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 		D_ERROR("Can't connect to agent socket "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
-
+	
 	rc = drpc_call_create(agent_socket,
 			      DRPC_MODULE_SEC_AGENT,
 			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
@@ -74,6 +106,17 @@ request_credentials_via_drpc(Drpc__Response **response)
 		D_ERROR("Couldn't allocate dRPC call "DF_RC"\n", DP_RC(rc));
 		drpc_close(agent_socket);
 		return rc;
+	}
+
+	if (use_access_manager) {
+		rc = get_delegation_token(delegation_token_path, &token_buffer, &token_buffer_length);
+		memcpy(token_buffer, AGENT_AUTH_METHOD_AM, AGENT_AUTH_METHOD_NAME_SIZE);
+		if (rc != -DER_SUCCESS) {
+			D_ERROR("Error in retrieving delegation token\n");
+			return rc;
+		}
+		request->body.len = token_buffer_length;
+		request->body.data = token_buffer;
 	}
 
 	rc = drpc_call(agent_socket, R_SYNC, request, response);
