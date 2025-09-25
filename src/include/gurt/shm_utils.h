@@ -376,4 +376,81 @@ shm_ht_rec_data(d_shm_ht_rec_loc_t rec_loc, int *err);
 int
 shm_ht_rec_num_ref(d_shm_ht_rec_loc_t rec_loc);
 
+/* dynamic allocation if data is larger than this threshold */
+#define LRU_ALLOC_SIZE_THRESHOLD (4096)
+
+typedef struct shm_lru_cache shm_lru_cache_t;
+typedef struct shm_lru_node  shm_lru_node_t;
+
+/**
+ * create LRU cache
+ *
+ * \param[in] auto_partition	if true, automatically divide cache into many partitions based on
+ * 				the number of cores to use finer grained lock
+ * \param[in] capacity		the max number of total records in cache suggested. Real capacity
+ *				allocated could be slightly larger than this number if
+ *				auto_partition is set true
+ * \param[in] key_size		size of key in bytes. zero for non-uniform size
+ * \param[in] data_size		size of data in bytes. zero for non-uniform size
+ *
+ * \param[out] cache		LRU cache created
+ *
+ * \return			error code
+ */
+int
+shm_lru_create_cache(bool auto_partition, uint32_t capacity, uint32_t key_size, uint32_t data_size,
+		     shm_lru_cache_t **cache);
+
+/**
+ * decrease the reference count of a LRU cache node after retrieving data
+ *
+ * \param[in] node		LRU node
+ */
+void
+shm_lru_node_dec_ref(shm_lru_node_t *node);
+
+/**
+ * create/update LRU record
+ *
+ * We currently assume data are same for the same key if multiple put() are trying to insert/update
+ * the same key. There could be consistency issue if this assumption is false.
+ *
+ * \param[in] cache		LRU cache
+ * \param[in] key		key
+ * \param[in] key_size		size of key in bytes
+ * \param[in] data		data
+ * \param[in] data_size		size of data in bytes
+ *
+ * \return			error code
+ */
+int
+shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, uint32_t data_size);
+
+/**
+ * query LRU cache. If entry is found, its reference count is increase by 1. Need to call
+ * shm_lru_node_dec_ref() to decrease its reference count once cache entry is not needed.
+ *
+ * \param[in] cache		LRU cache
+ * \param[in] key		key
+ * \param[in] key_size		size of key in bytes
+ *
+ * \param[out] node_found	LRU cache node containing the key
+ * \param[out] val		returned data buffer of LRU cache entry
+ *
+ * \return			error code. 0 - success, otherwise error
+ */
+int
+shm_lru_get(shm_lru_cache_t *cache, void *key, uint32_t key_size, shm_lru_node_t **node_found,
+	    void **val);
+
+/**
+ * destroy LRU cache
+ *
+ * \param[in] cache		LRU cache created
+ *
+ * \return			error code
+ */
+void
+shm_lru_destroy_cache(shm_lru_cache_t *cache);
+
 #endif
