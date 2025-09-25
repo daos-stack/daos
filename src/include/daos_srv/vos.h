@@ -208,6 +208,18 @@ int
 vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
 
 /**
+ * Discard the active DTX entry's records if invalid.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	The DTX identifier to be validated.
+ * \param discarded	[OUT]	The number of discarded records.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *discarded);
+
+/**
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
