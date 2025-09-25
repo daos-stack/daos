@@ -509,7 +509,7 @@ class EngineYamlParameters(YamlParameters):
         self.targets = BasicParameter(None, 8)
         self.first_core = BasicParameter(None, 0)
         self.nr_xs_helpers = BasicParameter(None, 4)
-        self.fabric_iface = BasicParameter(None, default_interface[index])
+        self.fabric_iface = BasicParameter(None, default_interface)
         self.fabric_iface_port = BasicParameter(None, default_port)
         self.pinned_numa_node = BasicParameter(None)
         self.log_mask = BasicParameter(None, "INFO")
