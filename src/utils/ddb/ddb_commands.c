@@ -1456,8 +1456,8 @@ done:
 int
 ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 {
-	int  rc                      = 0;
-	char *db_path                 = opt->db_path;
+	int   rc                        = 0;
+	char *db_path                   = opt->db_path;
 	char  tmpfs_mount[DDB_PATH_MAX] = DEFAULT_DB_PATH;
 
 	if (db_path == NULL || strlen(db_path) == 0 || strlen(db_path) >= DDB_PATH_MAX) {

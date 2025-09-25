@@ -867,7 +867,7 @@ prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, ui
 		      char **argv)
 {
 	const char         *options_short  = "s:";
-	int           index          = 0, opt;
+	int                 index          = 0, opt;
 	const struct option options_long[] = {{"tmpfs_mount_size", required_argument, NULL, 's'},
 					      {NULL}};
 

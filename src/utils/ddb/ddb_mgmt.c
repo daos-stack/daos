@@ -111,9 +111,9 @@ ddb_clear_dir(const char *dir)
 int
 ddb_is_mountpoint(const char *path)
 {
-	int           rc = 0;
-	struct stat   st_path, st_parent;
-	char          parent_path[DDB_PROV_MEM_BUF_MAX];
+	int         rc = 0;
+	struct stat st_path, st_parent;
+	char        parent_path[DDB_PROV_MEM_BUF_MAX];
 
 	D_ASSERT(path != NULL);
 	if (access(path, F_OK) != 0)
@@ -192,9 +192,9 @@ ddb_mkdir(const char *path, mode_t __mode)
 int
 ddb_dirs_prepare(const char *path)
 {
-	int    rc = 0;
-	char   newborns_path[DDB_PROV_MEM_BUF_MAX];
-	char   zombies_path[DDB_PROV_MEM_BUF_MAX];
+	int  rc = 0;
+	char newborns_path[DDB_PROV_MEM_BUF_MAX];
+	char zombies_path[DDB_PROV_MEM_BUF_MAX];
 
 	/* create the path string */
 	rc = snprintf(newborns_path, sizeof(newborns_path), "%s/" DIR_NEWBORNS "", path);
