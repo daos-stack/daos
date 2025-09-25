@@ -739,8 +739,7 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 	 * partial extents. Unit test multiple_overlapping_extents() verifies
 	 * this case. srv_csum.c has some logic that might be useful/reused.
 	 */
-	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchor,
-			 obj_iter_scrub_pre_cb, NULL, ctx, NULL);
+	rc = vos_iterate_obj(&param, &anchor, obj_iter_scrub_pre_cb, NULL, ctx, NULL);
 
 	if (rc != DER_SUCCESS) {
 		if (rc == -DER_INPROGRESS)

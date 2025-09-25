@@ -180,6 +180,14 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRanksResp{})
 	case *control.PoolExtendReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
+	case *control.PoolRebuildManageReq:
+		if req.OpCode == control.PoolRebuildOpCodeStart {
+			resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+		} else if req.OpCode == control.PoolRebuildOpCodeStop {
+			resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+		}
+	case *control.SystemRebuildManageReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemRebuildManageResp{})
 	case *control.SystemCheckEnableReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckDisableReq:
