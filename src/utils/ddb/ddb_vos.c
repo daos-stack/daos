@@ -24,7 +24,7 @@
 						anchors, cb, NULL, args, NULL)
 
 int
-dv_pool_open(const char *path, daos_handle_t *poh, uint32_t flags)
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags)
 {
 	struct vos_file_parts   path_parts = {0};
 	int			rc;
@@ -38,6 +38,11 @@ dv_pool_open(const char *path, daos_handle_t *poh, uint32_t flags)
 	rc = vos_path_parse(path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
+
+	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
+		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
+		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path));
+	}
 
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {

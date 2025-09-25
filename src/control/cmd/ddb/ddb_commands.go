@@ -43,12 +43,13 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.Bool("w", "write_mode", false, "Open the vos file in write mode.")
+			f.String("p", "db_path", "", "Path to the sys db to open.")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Path to the vos file to open.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbOpen(ctx, c.Args.String("path"), c.Flags.Bool("write_mode"))
+			return ddbOpen(ctx, c.Args.String("path"), c.Flags.String("db_path"), c.Flags.Bool("write_mode"))
 		},
 		Completer: openCompleter,
 	})
@@ -309,13 +310,14 @@ the path must include the extent, otherwise, it must not.`,
 		Flags: func(f *grumble.Flags) {
 			f.String("e", "enable", "", "Enable vos pool features")
 			f.String("d", "disable", "", "Disable vos pool features")
+			f.String("p", "db_path", "", "Path to the sys db")
 			f.Bool("s", "show", false, "Show current features")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
 		},
 		Completer: featureCompleter,
 	})

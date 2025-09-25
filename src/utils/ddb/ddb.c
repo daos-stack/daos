@@ -101,12 +101,11 @@ static int
 open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 		  uint32_t argc, char **argv)
 {
-	char		 *options_short = "w";
+	char             *options_short  = "w:p";
 	int		  index = 0, opt;
-	struct option	  options_long[] = {
-		{ "write_mode", no_argument, NULL, 'w' },
-		{ NULL }
-	};
+	struct option     options_long[] = {{"write_mode", no_argument, NULL, 'w'},
+					    {"db_path", required_argument, NULL, 'p'},
+					    {NULL}};
 
 	memset(cmd_args, 0, sizeof(*cmd_args));
 
@@ -117,6 +116,9 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 		switch (opt) {
 		case 'w':
 			cmd_args->write_mode = true;
+			break;
+		case 'p':
+			cmd_args->db_path = optarg;
 			break;
 		case '?':
 			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
@@ -644,11 +646,12 @@ static int
 feature_option_parse(struct ddb_ctx *ctx, struct feature_options *cmd_args, uint32_t argc,
 		     char **argv)
 {
-	char         *options_short  = "e:d:s";
+	char         *options_short  = "e:d:p:s";
 	int           index          = 0, opt;
 	int           rc             = 0;
 	struct option options_long[] = {{"enable", required_argument, NULL, 'e'},
 					{"disable", required_argument, NULL, 'd'},
+					{"db_path", required_argument, NULL, 'p'},
 					{"show", no_argument, NULL, 's'},
 					{NULL}};
 
@@ -1302,6 +1305,8 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -w, --write_mode\n");
 	ddb_print(ctx, "\tOpen the vos file in write mode.\n");
+	ddb_print(ctx, "    -p, --db_path\n");
+	ddb_print(ctx, "\tPath to the sys db.\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: version */
@@ -1441,6 +1446,8 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tDisable vos pool features\n");
 	ddb_print(ctx, "    -s, --show\n");
 	ddb_print(ctx, "\tShow current features\n");
+	ddb_print(ctx, "    -p, --db_path\n");
+	ddb_print(ctx, "\tPath to the sys db.\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: dev_list */
@@ -1517,9 +1524,11 @@ ddb_program_help(struct ddb_ctx *ctx)
 		       "\tcommit_ilog, etc commands.\n");
 	ddb_print(ctx, "   -R, --run_cmd <cmd>\n");
 	ddb_print(ctx, "\tExecute the single command <cmd>, then exit.\n");
-	ddb_print(ctx, "   -f, --file_cmd <path>\n");
+	ddb_print(ctx, "   -f, --cmd_file <path>\n");
 	ddb_print(ctx, "\tPath to a file container a list of ddb commands, one command\n"
 		       "\tper line, then exit.\n");
+	ddb_print(ctx, "   -p, --db_path <path>\n");
+	ddb_print(ctx, "\tPath to the sys db.\n");
 	ddb_print(ctx, "   -h, --help\n");
 	ddb_print(ctx, "\tShow tool usage.\n");
 

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -181,13 +182,13 @@ open_pool_test(void **state)
 	daos_handle_t		 poh;
 	struct dt_vos_pool_ctx	*tctx = *state;
 
-	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", &poh, 0));
+	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", NULL, &poh, 0));
 
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, 0));
 	assert_success(dv_pool_close(poh));
 
 	/* should be able to open again after closing */
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, 0));
 	assert_success(dv_pool_close(poh));
 }
 
@@ -1086,7 +1087,7 @@ dv_test_setup(void **state)
 
 	active_entry_handler_called = 0;
 	committed_entry_handler_called = 0;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0));
 	return 0;
 }
 
@@ -1107,7 +1108,7 @@ pool_flags_tests(void **state)
 	uint64_t                compat_flags;
 	uint64_t                incompat_flags;
 
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, VOS_POF_FOR_FEATURE_FLAG));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, VOS_POF_FOR_FEATURE_FLAG));
 	assert_success(dv_pool_get_flags(poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == 0);
 	assert(incompat_flags == 0);

@@ -74,11 +74,13 @@ func ddbLs(ctx *DdbContext, path string, recursive bool, details bool) error {
 	return daosError(C.ddb_run_ls(&ctx.ctx, &options))
 }
 
-func ddbOpen(ctx *DdbContext, path string, write_mode bool) error {
+func ddbOpen(ctx *DdbContext, path string, db_path string, write_mode bool) error {
 	/* Set up the options */
 	options := C.struct_open_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
 	options.write_mode = C.bool(write_mode)
 	/* Run the c code command */
 	return daosError(C.ddb_run_open(&ctx.ctx, &options))
@@ -226,11 +228,13 @@ func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
 }
 
-func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error {
+func ddbFeature(ctx *DdbContext, path, db_path, enable, disable string, show bool) error {
 	/* Set up the options */
 	options := C.struct_feature_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
 	if enable != "" {
 		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(enable),
 			&options.set_compat_flags, &options.set_incompat_flags))

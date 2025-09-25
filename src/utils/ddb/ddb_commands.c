@@ -67,7 +67,7 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 		return -DER_EXIST;
 	}
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, &ctx->dc_poh, 0);
+	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0);
 }
 
 int
@@ -1067,7 +1067,10 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
 		opt->path = ctx->dc_pool_path;
 
-	rc = dv_pool_open(opt->path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
+	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
+		opt->db_path = ctx->dc_db_path;
+
+	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
 	if (rc)
 		return rc;
 	close = true;

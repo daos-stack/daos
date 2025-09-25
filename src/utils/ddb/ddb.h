@@ -89,6 +89,7 @@ struct ddb_ctx {
 	bool			 dc_should_quit;
 	bool			 dc_write_mode;
 	const char              *dc_pool_path;
+	const char              *dc_db_path;
 };
 
 void ddb_ctx_init(struct ddb_ctx *ctx);
@@ -136,6 +137,7 @@ struct ls_options {
 struct open_options {
 	bool write_mode;
 	char *path;
+	char *db_path;
 };
 
 struct value_dump_options {
@@ -196,6 +198,7 @@ struct feature_options {
 	uint64_t    clear_incompat_flags;
 	bool        show_features;
 	const char *path;
+	const char *db_path;
 };
 
 struct rm_pool_options {
