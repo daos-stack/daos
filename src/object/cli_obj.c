@@ -4910,49 +4910,48 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 			d_sg_list_t *sg_orig      = &ctx->sgls_orig[i];
 			uint32_t     dup_sg_idx   = 0;
 			uint32_t     dup_buf_size = 0;
-			uint32_t     sg_nr_out    = 0;
+			uint32_t     dup_data_len = 0;
 			char        *dup_buf;
 
 			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i])
 				continue;
 
 			D_ASSERT(ctx->merged_bitmaps[i] != NULL);
-			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out;) {
+			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out; j++) {
 				iov     = &sg_orig->sg_iovs[j];
 				iov_dup = &sg_dup->sg_iovs[dup_sg_idx];
 
-				if (skip_sgl_iov(false, iov)) {
-					j++;
+				if (skip_sgl_iov(false, iov))
 					continue;
-				}
 
 				/* Direct copy if entry wasn't modified */
 				if (!isset_range((uint8_t *)ctx->merged_bitmaps[i], j, j)) {
 					*iov = *iov_dup;
-					D_ASSERT(dup_buf_size == 0);
-					j++;
-					sg_nr_out++;
+					D_ASSERT(dup_data_len == 0);
 					dup_sg_idx++;
 					continue;
 				}
-				if (dup_buf_size == 0) {
+				if (dup_data_len == 0) {
+					dup_data_len = iov_dup->iov_len;
 					dup_buf_size = iov_dup->iov_buf_len;
 					dup_buf      = (char *)iov_dup->iov_buf;
 				}
 
+				/* Update iov_len for short read */
+				if (dup_data_len < iov->iov_len)
+					iov->iov_len = dup_data_len;
 				/* Copy data from duplicate buffer to original buffer */
-				D_ASSERT(dup_buf_size >= iov->iov_buf_len);
-				memcpy((char *)iov->iov_buf, dup_buf, iov->iov_buf_len);
-				dup_buf_size -= iov->iov_buf_len;
-				dup_buf += iov->iov_buf_len;
-				sg_nr_out++;
-				j++;
+				D_ASSERT(dup_buf_size >= iov->iov_len);
+				memcpy((char *)iov->iov_buf, dup_buf, iov->iov_len);
+				dup_data_len -= iov->iov_len;
+				dup_buf += iov->iov_len;
+				dup_buf_size -= iov->iov_len;
 
 				/* When current duplicate buffer is exhausted, get next entry */
-				if (dup_buf_size == 0)
+				if (dup_data_len == 0)
 					dup_sg_idx++;
 			}
-			sg_orig->sg_nr_out = sg_nr_out;
+			sg_orig->sg_nr_out = j;
 		}
 	}
 
@@ -4977,7 +4976,8 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 	}
 	obj_bulk_fini(obj_auxi);
 	obj_auxi_free_failed_tgt_list(obj_auxi);
-	obj_dup_sgls_free(obj_auxi);
+	if (!retry)
+		obj_dup_sgls_free(obj_auxi);
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 	obj_auxi->req_reasbed = false;
 
