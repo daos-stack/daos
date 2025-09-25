@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -911,4 +912,34 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	}
 
 	return nil
+}
+
+// GetBdevConfigs retrieves all engine bdev storage tier configs from a server configuration.
+func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
+	if cfg == nil {
+		return
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
+	}
+
+	return
+}
+
+// HasPMem returns true if any engine storage config contains a DCPM-class SCM-tier.
+func (cfg *Server) HasPMem() bool {
+	if cfg == nil {
+		return false
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		for _, scmCfg := range engineCfg.Storage.Tiers.ScmConfigs() {
+			if scmCfg.Class == storage.ClassDcpm {
+				return true
+			}
+		}
+	}
+
+	return false
 }
