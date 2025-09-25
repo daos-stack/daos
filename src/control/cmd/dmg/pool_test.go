@@ -1237,9 +1237,9 @@ func TestPoolCommands(t *testing.T) {
 			"Start interactive rebuild on pool with ID",
 			"pool rebuild start 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
-				printRequest(t, &control.PoolRebuildReq{
-					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Op: control.PoolRebuildOpCodeStart,
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					OpCode: control.PoolRebuildOpCodeStart,
 				}),
 			}, " "),
 			nil,
@@ -1248,9 +1248,9 @@ func TestPoolCommands(t *testing.T) {
 			"Start interactive rebuild on pool with label",
 			"pool rebuild start test_label",
 			strings.Join([]string{
-				printRequest(t, &control.PoolRebuildReq{
-					ID: "test_label",
-					Op: control.PoolRebuildOpCodeStart,
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "test_label",
+					OpCode: control.PoolRebuildOpCodeStart,
 				}),
 			}, " "),
 			nil,
@@ -1271,9 +1271,9 @@ func TestPoolCommands(t *testing.T) {
 			"Stop interactive rebuild on pool with ID",
 			"pool rebuild stop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
-				printRequest(t, &control.PoolRebuildReq{
-					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Op: control.PoolRebuildOpCodeStop,
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					OpCode: control.PoolRebuildOpCodeStop,
 				}),
 			}, " "),
 			nil,
@@ -1282,9 +1282,9 @@ func TestPoolCommands(t *testing.T) {
 			"Stop interactive rebuild on pool with label",
 			"pool rebuild stop test_label",
 			strings.Join([]string{
-				printRequest(t, &control.PoolRebuildReq{
-					ID: "test_label",
-					Op: control.PoolRebuildOpCodeStop,
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "test_label",
+					OpCode: control.PoolRebuildOpCodeStop,
 				}),
 			}, " "),
 			nil,
