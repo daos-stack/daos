@@ -12,6 +12,8 @@ set -e
 
 dnf_install_args="${1:-}"
 
+: "${PYTHON_VERSION:=3.11}"
+
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
     boost-python3-devel \
@@ -71,8 +73,8 @@ dnf --nodocs install ${dnf_install_args} \
     pciutils \
     pciutils-devel \
     protobuf-c-devel \
-    python3-devel \
-    python3-pip \
+    python${PYTHON_VERSION}-devel \
+    python${PYTHON_VERSION}-pip \
     rpm-build \
     sg3_utils \
     squashfs-tools \
