@@ -630,19 +630,24 @@ void make_buffer(char *buffer, char start, int total)
 static void
 write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 {
-	char		key[32];
-	daos_recx_t	recx;
-	int		i;
-	char		single_data[LARGE_SINGLE_VALUE_SIZE];
+	char        key[32];
+	daos_recx_t recx;
+	int         small_size = 5;
+	int         i;
+	char       *single_data;
+
+	assert_true(small_size <= size);
+
+	D_ALLOC(single_data, LARGE_SINGLE_VALUE_SIZE);
+	assert_non_null(single_data);
 
 	for (i = 0; i < KEY_NR; i++) {
 		req->iod_type = DAOS_IOD_ARRAY;
 
 		sprintf(key, "dkey_small_%d", index);
-		recx.rx_nr = 5;
+		recx.rx_nr  = small_size;
 		recx.rx_idx = off + i * 10485760;
-		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
-			     data, size, req);
+		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1, data, small_size, req);
 
 		sprintf(key, "dkey_%d", index);
 		recx.rx_nr = size;
@@ -664,6 +669,8 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 		insert_single(key, "a_key", 0, single_data,
 			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, req);
 	}
+
+	D_FREE(single_data);
 }
 
 static void
@@ -1203,6 +1210,31 @@ fi_rebuild_stop(void *data)
 	printf("%s(): pool " DF_UUIDF ": send ADMIN_STOP to leader rank %d\n", __FUNCTION__,
 	       DP_UUID(arg->pool.pool_uuid), leader);
 	test_set_engine_fail_loc(arg, leader, DAOS_REBUILD_ADMIN_STOP | DAOS_FAIL_ONCE);
+
+	return 0;
+}
+
+/* inject fault on leader engine to receive stop command during op:Fail_reclaim */
+int
+fi_rebuild_stop_reclaim(void *data)
+{
+	test_arg_t *arg = data;
+	d_rank_t    leader;
+	int         rc;
+
+	if (arg->myrank != 0)
+		return 0;
+
+	rc = test_get_leader(arg, &leader);
+	if (rc) {
+		print_message("get pool " DF_UUIDF " leader failed: %d\n",
+			      DP_UUID(arg->pool.pool_uuid), rc);
+		assert_rc_equal(rc, 0);
+	}
+
+	printf("%s(): pool " DF_UUIDF ": send ADMIN_STOP_RECLAIM to leader rank %d\n", __FUNCTION__,
+	       DP_UUID(arg->pool.pool_uuid), leader);
+	test_set_engine_fail_loc(arg, leader, DAOS_REBUILD_ADMIN_STOP_RECLAIM | DAOS_FAIL_ONCE);
 
 	return 0;
 }

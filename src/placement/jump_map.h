@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,4 +62,22 @@ get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layou
 	   uint8_t *dom_full, uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real,
 	   uint8_t *tgts_used, int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
 	   pool_comp_type_t fdom_lvl, uint32_t grp_size, uint32_t *spare_left, bool *spare_avail);
+
+static inline uint64_t
+jm_crc(uint64_t val0, uint64_t val1, uint64_t val2)
+{
+	uint64_t data[3];
+
+	data[0] = val0;
+	data[1] = val1;
+	data[2] = val2;
+	return crc64_ecma_refl(0xbabecafe, (uint8_t *)data, 24);
+}
+
+static inline uint64_t
+jm_oid_hash(uint32_t layout_ver, daos_obj_id_t oid)
+{
+	return layout_ver <= 1 ? (oid.hi ^ oid.lo) : jm_crc(oid.hi, oid.lo, 0xbabeface);
+}
+
 #endif /* __JUMP_MAP_H__ */
