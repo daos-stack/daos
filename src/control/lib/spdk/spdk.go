@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +23,11 @@ type Env interface {
 
 // EnvImpl is a an implementation of the Env interface.
 type EnvImpl struct{}
+
+// NewEnvImpl is a constructor for the EnvImpl implementation of the Env interface.
+func NewEnvImpl() *EnvImpl {
+	return &EnvImpl{}
+}
 
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
