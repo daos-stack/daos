@@ -2431,6 +2431,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
 	d_rank_t                rank               = dss_self_rank();
+	uint64_t                age_sec, delay;
 	int			rc;
 
 	D_ASSERTF(svc->ps_error == 0, "ps_error: " DF_RC "\n", DP_RC(svc->ps_error));
@@ -2552,7 +2553,9 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, 0);
+	age_sec = d_hlc_age2sec(dss_get_start_epoch());
+	delay   = age_sec < 200 ? (200 - age_sec) : 0;
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, delay);
 	if (rc != 0)
 		goto out;
 
@@ -6394,7 +6397,6 @@ static int
 pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 				 bool *scheduled_layout_upgrade)
 {
-	daos_epoch_t	upgrade_eph = d_hlc_get();
 	d_iov_t		value;
 	uint32_t	current_layout_ver = 0;
 	int		rc = 0;
@@ -6407,10 +6409,11 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 		current_layout_ver = 0;
 
 	if (current_layout_ver < DAOS_POOL_OBJ_VERSION) {
-		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
-					 DAOS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE,
-					 RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
-					 false /* stop_admin */, 0);
+		/* pass zero upbound_eph, will select it before rebuild_leader_start() */
+		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
+					 0 /* upbound_eph */, DAOS_POOL_OBJ_VERSION, NULL,
+					 RB_OP_UPGRADE, RB_OP_NONE /* retry_rebuild_op */,
+					 0 /* retry_map_ver */, false /* stop_admin */, 0);
 		if (rc == 0)
 			*scheduled_layout_upgrade = true;
 	}
@@ -7674,8 +7677,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	uint32_t                         tgt_map_ver = 0;
 	bool				updated;
 	int				rc;
-	char				*env;
-	daos_epoch_t			rebuild_eph = d_hlc_get();
+	char                            *env;
 	uint64_t			delay = 2;
 	bool                             sys_self_heal_applicable;
 	uint64_t                         sys_self_heal = 0;
@@ -7756,8 +7758,10 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		tgt_map_ver);
 
 	if (tgt_map_ver != 0) {
-		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
-					 RB_OP_REBUILD, RB_OP_NONE /* retry_rebuild_op */,
+		/* pass zero upbound_eph, will select it before rebuild_leader_start() */
+		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, 0 /* upbound_eph */,
+					 0, &target_list, RB_OP_REBUILD,
+					 RB_OP_NONE /* retry_rebuild_op */,
 					 0 /* retry_map_ver */, false /* stop_admin */, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));

@@ -1364,12 +1364,12 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			 * the rebuild and retry.
 			 */
 			rc = -DER_DATA_LOSS;
-			D_DEBUG(DB_REBUILD,
+			DL_INFO(rc,
 				DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
-				      " nr %d/%d eph " DF_U64 " " DF_RC "\n",
+				      " nr %d/%d eph " DF_U64,
 				DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone,
 				DP_KEY(&mrone->mo_dkey), DP_KEY(&mrone->mo_iods[i].iod_name),
-				mrone->mo_iod_num, i, mrone->mo_epoch, DP_RC(rc));
+				mrone->mo_iod_num, i, mrone->mo_epoch);
 			D_GOTO(out, rc);
 		}
 
