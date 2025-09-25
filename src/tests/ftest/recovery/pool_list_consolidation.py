@@ -11,7 +11,7 @@ from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, report_errors
 from recovery_utils import wait_for_check_complete
-from run_utils import run_remote
+from run_utils import command_as_user, run_remote
 
 
 class PoolListConsolidationTest(TestWithServers):
@@ -290,14 +290,16 @@ class PoolListConsolidationTest(TestWithServers):
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
         rdb_pool_path = f"{self.server_managers[0].get_vos_path(pool)}/rdb-pool"
-        command = f"sudo rm {rdb_pool_path}"
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
         for host in hosts:
             node = NodeSet(host)
             check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
             if check_out[0]:
-                if not run_remote(log=self.log, hosts=node, command=command).passed:
+                remove_cmd_passed = run_remote(
+                    log=self.log, hosts=node, command=f"rm {rdb_pool_path}",
+                    user="root").passed
+                if not remove_cmd_passed:
                     self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                 self.log.info("rm rdb-pool from %s", str(node))
                 count += 1
@@ -379,35 +381,26 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.")
-        engine_params = self.server_managers[0].manager.job.yaml.engine_params
-        scm_mount_0 = engine_params[0].get_value("scm_mount")
-        scm_mount_1 = engine_params[1].get_value("scm_mount")
-        rdb_pool_path_0 = f"{scm_mount_0}/{pool.uuid.lower()}/rdb-pool"
-        rdb_pool_path_1 = f"{scm_mount_1}/{pool.uuid.lower()}/rdb-pool"
-        self.log.info("rdb_pool_path_0 = %s", rdb_pool_path_0)
-        self.log.info("rdb_pool_path_1 = %s", rdb_pool_path_1)
-        rdb_pool_out_0 = check_file_exists(
-            hosts=self.hostlist_servers, filename=rdb_pool_path_0, sudo=True)
-        rdb_pool_out_1 = check_file_exists(
-            hosts=self.hostlist_servers, filename=rdb_pool_path_1, sudo=True)
-        if not rdb_pool_out_0[0] or not rdb_pool_out_1[0]:
+        scm_mounts = self.server_managers[0].manager.job.yaml.get_engine_values(
+            "scm_mount")
+        rdb_pool_paths = [f"{scm}/{pool.uuid.lower()}/rdb-pool" for scm in scm_mounts]
+        self.log.info("rdb_pool_paths: %s", rdb_pool_paths)
+        rdb_pool_exists = [check_file_exists(
+            self.hostlist_servers, path, sudo=True)[0] for path in rdb_pool_paths]
+        if not all(rdb_pool_exists):
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
             self.log.info(msg)
             dmg_command.system_start()
             # return results in PASS.
             return
-        rdb_pool_path_list = [rdb_pool_path_0, rdb_pool_path_1]
-        for rdb_pool_path in rdb_pool_path_list:
-            command = f"sudo rm {rdb_pool_path}"
-            remove_result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
+        for rdb_pool_path in rdb_pool_paths:
+            command = command_as_user(command=f"rm {rdb_pool_path}", user="root")
+            remove_result = run_remote(
+                log=self.log, hosts=self.hostlist_servers, command=command)
             if not remove_result.passed:
-                self.fail(f"Failed to remove {rdb_pool_path} from {self.hostlist_servers}")
-            success_nodes = remove_result.passed_hosts
-            if self.hostlist_servers != success_nodes:
-                msg = (f"Failed to remove rdb-pool! All = {self.hostlist_servers}, "
-                       f"Success = {success_nodes}")
-                self.fail(msg)
+                self.fail(
+                    f"Failed to remove {rdb_pool_path} from {remove_result.failed_hosts}")
 
         self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
