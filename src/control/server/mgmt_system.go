@@ -1442,6 +1442,65 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 	return pbResp, nil
 }
 
+// SystemSelfHealEval triggers actions based on self_heal system property values.
+func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.SystemSelfHealEvalReq) (*mgmtpb.DaosResp, error) {
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T", pbReq)
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(pbReq)); err != nil {
+		return nil, err
+	}
+
+	// Retrieve system self-heal property.
+	curVal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, daos.SystemPropertySelfHeal.String())
+	if err != nil {
+		return nil, errors.Wrapf(err, "retrieving %s system property", daos.SystemPropertySelfHeal)
+	}
+
+	svc.log.Debugf("System Property %s = '%+v'", curVal)
+
+	//	poolIDs, err := svc.getPoolIDs()
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	if len(poolIDs) == 0 {
+	//		return &mgmtpb.SystemSelfHealEvalResp{}, nil // Successful no-op.
+	//	}
+	//
+	//	var results []*control.PoolSelfHealEvalResult
+	//	for _, id := range poolIDs {
+	//		opCode := control.PoolRebuildOpCode(pbReq.OpCode)
+	//
+	//		req := &control.PoolSelfHealEvalReq{
+	//			ID:     id,
+	//			OpCode: opCode,
+	//			Force:  pbReq.Force,
+	//		}
+	//		svc.log.Tracef("%T: %+v", req, req)
+	//
+	//		result := &control.PoolSelfHealEvalResult{
+	//			ID:     id,
+	//			OpCode: opCode,
+	//		}
+	//
+	//		if err := control.PoolSelfHealEval(ctx, svc.rpcClient, req); err != nil {
+	//			result.Errored = true
+	//			result.Msg = err.Error()
+	//		}
+	//
+	//		svc.log.Tracef("%T: %+v", result, result)
+	//		results = append(results, result)
+	//	}
+
+	//pbResp := &mgmtpb.SystemSelfHealEvalResp{}
+	//	if err := convert.Types(results, &pbResp.Results); err != nil {
+	//		return nil, errors.Wrapf(err, "convert %T->%T", results, pbResp.Results)
+	//	}
+
+	return new(mgmtpb.DaosResp), nil
+}
+
 // ClusterEvent management service gRPC handler receives ClusterEvent requests
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).
