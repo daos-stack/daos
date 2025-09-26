@@ -62,7 +62,7 @@ def scons():
     # pylint: disable=unexpected-keyword-arg
     ddb_obj = tenv.Object(Glob('../*.c', exclude=['../ddb_entry.c']))
     ddb_ut = tenv.d_program('ddb_ut', src + vos_obj + mock_obj + mgmt_obj + ddb_obj,
-                             LIBS=libs + spdk_libs)
+                            LIBS=libs + spdk_libs)
 
     tenv.Install('$PREFIX/bin/', ddb_ut)
 

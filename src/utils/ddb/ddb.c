@@ -1041,7 +1041,7 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		info->dci_cmd = DDB_CMD_DTX_STAT;
 		return dtx_stat_option_parse(ctx, &info->dci_cmd_option.dci_dtx_stat, argc, argv);
 	}
-	
+
 	if (same(cmd, COMMAND_NAME_PROV_MEM)) {
 		info->dci_cmd = DDB_CMD_PROV_MEM;
 		return prov_mem_option_parse(ctx, &info->dci_cmd_option.dci_prov_mem, argc, argv);
