@@ -101,7 +101,7 @@ static int
 open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 		  uint32_t argc, char **argv)
 {
-	char             *options_short  = "w:p";
+	char             *options_short  = "wp";
 	int		  index = 0, opt;
 	struct option     options_long[] = {{"write_mode", no_argument, NULL, 'w'},
 					    {"db_path", required_argument, NULL, 'p'},
