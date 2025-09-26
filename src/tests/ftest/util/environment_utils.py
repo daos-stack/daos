@@ -146,6 +146,11 @@ class TestEnvironment():
         all_hosts.update(servers)
         all_hosts.update(clients)
 
+        if logger:
+            logger.debug(
+                "Set default test environment variables: servers=%s, clients=%s, all_hosts=%s",
+                servers, clients, all_hosts)
+
         # Override values if explicitly specified
         if log_dir is not None:
             self.log_dir = log_dir
@@ -326,7 +331,8 @@ class TestEnvironment():
         if not hosts:
             return None
 
-        logger.debug("Detecting network devices - %s not set", self.__ENV_VAR_MAP['interface'])
+        logger.debug(
+            "Detecting network devices on %s - %s not set", hosts, self.__ENV_VAR_MAP['interface'])
         try:
             interfaces = get_fastest_interfaces(logger, hosts | get_local_host())
         except NetworkException as error:
@@ -376,8 +382,8 @@ class TestEnvironment():
 
         first_interface = self.interface.split(",", maxsplit=1)[0]
         logger.debug(
-            "Detecting provider for %s - %s not set",
-            first_interface, self.__ENV_VAR_MAP['provider'])
+            "Detecting provider for %s on %s - %s not set",
+            first_interface, hosts, self.__ENV_VAR_MAP['provider'])
         provider = None
         supported = list(SUPPORTED_PROVIDERS)
 
