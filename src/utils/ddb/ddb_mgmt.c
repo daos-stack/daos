@@ -151,7 +151,7 @@ ddb_recreate_pooltgts(const char *storage_path)
 		return rc;
 	}
 
-	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
 		if ((pool_info->spi_blob_sz[SMD_DEV_TYPE_META] == 0) ||
 		    (pool_info->spi_flags[SMD_DEV_TYPE_META] & SMD_POOL_IN_CREATION)) {
 			continue;

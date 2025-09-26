@@ -871,8 +871,7 @@ prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, ui
 {
 	const char         *options_short  = "s:";
 	int                 index          = 0, opt;
-	const struct option options_long[] = {{"tmpfs_mount_size", required_argument, NULL, 's'},
-					      {NULL}};
+	const struct option options_long[] = {{"tmpfs_size", required_argument, NULL, 's'}, {NULL}};
 
 	memset(cmd_args, 0, sizeof(*cmd_args));
 
@@ -1480,7 +1479,7 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "prov_mem [Options] <db_path> <tmpfs_mount>\n");
 	ddb_print(ctx, "\tPrepare the memory environment for md-on-ssd mode.\n");
 	ddb_print(ctx, "Options:\n");
-	ddb_print(ctx, "    -s, --tmpfs_mount_size\n");
+	ddb_print(ctx, "    -s, --tmpfs_size\n");
 	ddb_print(ctx, "\tSpecify tmpfs size(GiB) for tmpfs_mount. By default, The total size of "
 		       "all VOS files will be used.\n");
 	ddb_print(ctx, "    <db_path>\n");
