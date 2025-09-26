@@ -168,7 +168,7 @@ class TestEnvironment():
         if self.user_dir is None:
             self.user_dir = os.path.join(self.log_dir, "user")
         if self.interface is None:
-            self.interface = self._default_interface(logger, all_hosts)
+            self.interface = self._default_interface(logger, servers)
         if self.provider is None:
             self.provider = self._default_provider(logger, servers)
         if self.insecure_mode is None:
@@ -323,14 +323,16 @@ class TestEnvironment():
         Returns:
             str: the default interface; can be None
         """
-        interfaces = list(filter(None, [os.environ.get("D_INTERFACE")]))
-        if not interfaces and hosts:
-            # Find all the /sys/class/net interfaces on the launch node (excluding lo)
-            logger.debug("Detecting network devices - D_INTERFACE not set")
-            try:
-                interfaces = get_fastest_interfaces(logger, hosts | get_local_host())
-            except NetworkException as error:
-                raise TestEnvironmentException("Error obtaining a default interface!") from error
+        if not hosts:
+            return None
+
+        logger.debug("Detecting network devices - %s not set", self.__ENV_VAR_MAP['interface'])
+        try:
+            interfaces = get_fastest_interfaces(logger, hosts | get_local_host())
+        except NetworkException as error:
+            raise TestEnvironmentException("Error obtaining a default interface!") from error
+
+        logger.debug("  Found %s interface(s)", ",".join(interfaces))
         return ",".join(interfaces)
 
     @property
@@ -369,12 +371,13 @@ class TestEnvironment():
         Returns:
             str: the default provider; can be None
         """
-        if not hosts:
+        if not hosts or self.interface is None:
             return None
 
+        first_interface = self.interface.split(",", maxsplit=1)[0]
         logger.debug(
             "Detecting provider for %s - %s not set",
-            self.interface, self.__ENV_VAR_MAP['provider'])
+            first_interface, self.__ENV_VAR_MAP['provider'])
         provider = None
         supported = list(SUPPORTED_PROVIDERS)
 
@@ -388,7 +391,7 @@ class TestEnvironment():
             supported = list(filter(lambda x: 'verbs' not in x, supported))
 
         # Detect all supported providers for this interface that are common to all of the hosts
-        common_providers = get_common_provider(logger, hosts, self.interface, supported)
+        common_providers = get_common_provider(logger, hosts, first_interface, supported)
         if common_providers:
             # Select the preferred found provider based upon SUPPORTED_PROVIDERS order
             logger.debug("Supported providers detected: %s", common_providers)
@@ -400,9 +403,9 @@ class TestEnvironment():
         # Report an error if a provider cannot be found
         if not provider:
             raise TestEnvironmentException(
-                f"Error obtaining a supported provider for {self.interface} from: {supported}")
+                f"Error obtaining a supported provider for {first_interface} from: {supported}")
 
-        logger.debug("  Found %s provider for %s", provider, self.interface)
+        logger.debug("  Found %s provider for %s", provider, first_interface)
         return provider
 
     @property
