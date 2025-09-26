@@ -380,6 +380,11 @@ ds_mgmt_svc_put(struct mgmt_svc *svc)
  *
  * \param[in]	req		Request (owned by caller)
  * \param[out]	resp_out	Response (ownership transferred to caller)
+ *
+ * \retval	-DER_TIMEDOUT	Could not get a response from the MS due to a
+ *				potentially retriable error
+ * \retval	-DER_PROTO	Encountered an unretriable error such as
+ *				marshall/unmarshall errors
  */
 static int
 ds_mgmt_get_props(Mgmt__SystemGetPropReq *req, Mgmt__SystemGetPropResp **resp_out)
@@ -400,16 +405,20 @@ ds_mgmt_get_props(Mgmt__SystemGetPropReq *req, Mgmt__SystemGetPropResp **resp_ou
 			   0 /* flags */, &dresp);
 	if (rc != 0)
 		goto out_reqb;
-	if (dresp->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("received erroneous dRPC response: %d\n", dresp->status);
-		rc = -DER_IO;
+	if (dresp->status == DRPC__STATUS__FAILURE) {
+		D_ERROR("no dRPC response\n");
+		rc = -DER_TIMEDOUT;
+		goto out_dresp;
+	} else if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received dRPC protocol error: %d\n", dresp->status);
+		rc = -DER_PROTO;
 		goto out_dresp;
 	}
 
 	resp = mgmt__system_get_prop_resp__unpack(NULL, dresp->body.len, dresp->body.data);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack dRPC response\n");
-		rc = -DER_IO;
+		rc = -DER_PROTO;
 		goto out_dresp;
 	}
 
@@ -437,29 +446,26 @@ ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t
 	Mgmt__SystemGetPropReq   req  = MGMT__SYSTEM_GET_PROP_REQ__INIT;
 	char                    *key  = "self_heal";
 	Mgmt__SystemGetPropResp *resp = NULL;
+	int                      retries = 2;
 	char                    *sep  = ";";
 	char                    *p;
 	char                    *saveptr;
 	int                      rc;
-
-	/* TODO: Integrate with the control plane changes. */
-	if (true) {
-		*policy = DS_MGMT_SELF_HEAL_ALL;
-		return 0;
-	}
 
 	req.sys    = daos_sysname;
 	req.keys   = &key;
 	req.n_keys = 1;
 
 retry:
+	D_DEBUG(DB_MGMT, "getting property %s: retries=%d\n", key, retries);
 	rc = ds_mgmt_get_props(&req, &resp);
-	/* TODO: The retry case may need integration and revision. */
 	if (rc == -DER_TIMEDOUT) {
-		if (abort(abort_arg)) {
-			DL_INFO(rc, "aborting");
+		if (retries == 0 || abort(abort_arg)) {
+			DL_ERROR(rc, "aborting");
 			goto out;
 		}
+		retries--;
+		dss_sleep(3000 /* ms */);
 		goto retry;
 	} else if (rc != 0) {
 		DL_ERROR(rc, "failed to unpack response");
