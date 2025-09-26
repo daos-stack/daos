@@ -57,7 +57,7 @@ func (d *DomainSocketServer) listenSession(ctx context.Context, s *Session) {
 		// The most likely reason for this to happen is that a logger is already embedded in the
 		// context. If we shift to using loggers passed in context more generally on the server side,
 		// there's no need to do it here.
-		d.log.Errorf("failed to embed logger in context for dRPC session: %s", err.Error())
+		d.log.Debugf("failed to embed logger in context for dRPC session: %s", err.Error())
 		logCtx = ctx
 	}
 
