@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -66,7 +67,7 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 		return -DER_EXIST;
 	}
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, &ctx->dc_poh, 0);
+	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0);
 }
 
 int
@@ -1066,7 +1067,10 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
 		opt->path = ctx->dc_pool_path;
 
-	rc = dv_pool_open(opt->path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
+	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
+		opt->db_path = ctx->dc_db_path;
+
+	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
 	if (rc)
 		return rc;
 	close = true;
@@ -1448,6 +1452,43 @@ done:
 	if (rc == 0)
 		ddb_printf(ctx, "Number of committed DTX of the pool:\t\t\t%" PRIu32 "\n",
 			   args.cmt_cnt);
+
+	return rc;
+}
+
+int
+ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
+{
+	int   rc                        = 0;
+	char *db_path                   = opt->db_path;
+	char  tmpfs_mount[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+
+	if (db_path == NULL || strlen(db_path) == 0 || strlen(db_path) >= DDB_PATH_MAX) {
+		ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
+			   db_path, DDB_PATH_MAX);
+		return -DER_INVAL;
+	}
+
+	if (opt->tmpfs_mount != NULL) {
+		if (strlen(opt->tmpfs_mount) == 0 || strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx,
+				   "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
+				   opt->tmpfs_mount, DDB_PATH_MAX);
+			return -DER_INVAL;
+		}
+		strncpy(tmpfs_mount, opt->tmpfs_mount, ARRAY_SIZE(tmpfs_mount) - 1);
+	} else {
+		ddb_printf(ctx, "tmpfs_mount not specific, will use default path '%s'\n",
+			   tmpfs_mount);
+	}
+
+	/** setup tmpfs and prepare the vos file on tmpfs_mount */
+	rc = dv_run_prov_mem(db_path, tmpfs_mount, opt->tmpfs_mount_size);
+	if (rc) {
+		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
+	} else {
+		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", tmpfs_mount);
+	}
 
 	return rc;
 }

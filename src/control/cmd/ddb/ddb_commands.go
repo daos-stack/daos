@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Vdura Inc.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -42,12 +43,13 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.Bool("w", "write_mode", false, "Open the vos file in write mode.")
+			f.String("p", "db_path", "", "Path to the sys db to open.")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Path to the vos file to open.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbOpen(ctx, c.Args.String("path"), c.Flags.Bool("write_mode"))
+			return ddbOpen(ctx, c.Args.String("path"), c.Flags.String("db_path"), c.Flags.Bool("write_mode"))
 		},
 		Completer: openCompleter,
 	})
@@ -308,13 +310,14 @@ the path must include the extent, otherwise, it must not.`,
 		Flags: func(f *grumble.Flags) {
 			f.String("e", "enable", "", "Enable vos pool features")
 			f.String("d", "disable", "", "Disable vos pool features")
+			f.String("p", "db_path", "", "Path to the sys db")
 			f.Bool("s", "show", false, "Show current features")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
 		},
 		Completer: featureCompleter,
 	})
@@ -393,6 +396,25 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxStat(ctx, c.Args.String("path"))
+		},
+		Completer: nil,
+	})
+	// Command prov_mem
+	app.AddCommand(&grumble.Command{
+		Name:      "prov_mem",
+		Aliases:   nil,
+		Help:      "Prepare the memory environment for md-on-ssd mode",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.Uint("s", "tmpfs_size", 0, "Specify tmpfs size(GiB) for mount. By default, The total size of all VOS files will be used")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the sys db.")
+			a.String("tmpfs_mount", "Path to the tmpfs mountpoint.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbProvMem(ctx, c.Args.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_size"))
 		},
 		Completer: nil,
 	})
