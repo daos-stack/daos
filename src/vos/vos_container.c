@@ -412,9 +412,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	gc_check_cont(cont);
 
 	/* Cache this btr object ID in container handle */
-	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,
-				    &pool->vp_uma, vos_cont2hdl(cont),
-				    cont->vc_pool, &cont->vc_btr_hdl);
+	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root, &pool->vp_uma,
+				    vos_cont2hdl(cont), cont->vc_pool, NULL, &cont->vc_btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc);

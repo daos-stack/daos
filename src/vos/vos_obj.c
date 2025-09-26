@@ -1082,7 +1082,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 			info->ii_fake_akey_flag = VOS_IT_DKEY_EV;
 		} else {
 			rc = dbtree_open_inplace_ex(&krec->kr_btr, info->ii_uma,
-						    vos_cont2hdl(obj->obj_cont), obj,
+						    vos_cont2hdl(obj->obj_cont), obj, NULL,
 						    &info->ii_tree_hdl);
 			if (rc) {
 				D_DEBUG(DB_TRACE,
@@ -2050,8 +2050,8 @@ vos_obj_akey_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		goto success;
 	}
 
-	rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma, vos_cont2hdl(obj->obj_cont),
-				    obj, &toh);
+	rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma, vos_cont2hdl(obj->obj_cont), obj,
+				    NULL, &toh);
 	if (rc) {
 		D_DEBUG(DB_TRACE,
 			"Failed to open tree for iterator:"
@@ -2107,8 +2107,8 @@ vos_obj_iter_sv_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		goto prepare;
 	}
 
-	rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma, vos_cont2hdl(obj->obj_cont),
-				    obj, &toh);
+	rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma, vos_cont2hdl(obj->obj_cont), obj,
+				    NULL, &toh);
 	if (rc) {
 		D_DEBUG(DB_TRACE,
 			"Failed to open tree for iterator:"
