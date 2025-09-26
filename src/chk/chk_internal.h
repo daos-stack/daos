@@ -727,16 +727,17 @@ void chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, u
 
 void chk_pool_stop_all(struct chk_instance *ins, uint32_t status, int *ret);
 
-int chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args);
+int chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts);
 
-int chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args);
+int chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts);
 
 int chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen);
 
 int chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 			int pool_nr, uuid_t pools[], uint32_t *phase);
 
-int chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args);
+int chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args,
+			   unsigned *acts);
 
 int chk_pools_update_bk(struct chk_instance *ins, uint32_t phase);
 

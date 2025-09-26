@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -423,7 +424,7 @@ out:
 }
 
 static int
-smd_pool_list_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
+smd_pool_list_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts)
 {
 	struct smd_trav_data    *td = args;
 	struct smd_pool_info    *info;
