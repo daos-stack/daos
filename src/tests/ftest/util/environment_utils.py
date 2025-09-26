@@ -334,7 +334,7 @@ class TestEnvironment():
         logger.debug(
             "Detecting network devices on %s - %s not set", hosts, self.__ENV_VAR_MAP['interface'])
         try:
-            interfaces = get_fastest_interfaces(logger, hosts | get_local_host())
+            interfaces = get_fastest_interfaces(logger, hosts)
         except NetworkException as error:
             raise TestEnvironmentException("Error obtaining a default interface!") from error
 
