@@ -59,7 +59,7 @@ class MemRatioTest(TestWithServers):
                 self.random.randint(76, 99),
                 self.random.randint(51, 75),
                 self.random.randint(26, 50),
-                self.random.randint(1, 25)]
+                self.random.randint(10, 25)]     # Limit smallest mem-ratio sizes due to DAOS-18004
             kwargs_list[0]["mem_ratio"] = _ratios[0]
             for index in range(1, 5):
                 kwargs_list.append({
@@ -70,7 +70,7 @@ class MemRatioTest(TestWithServers):
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
-        pools = add_pools(dmg, kwargs_list, error_handler=self.check_insufficient_scm_size)
+        pools = add_pools(dmg, kwargs_list)
 
         # Collect the pool create output values
         data = {}

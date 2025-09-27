@@ -10,8 +10,9 @@ import os
 import time
 from getpass import getuser
 
-from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
+
+from avocado import fail_on
 from command_utils import SubprocessManager
 from command_utils_base import BasicParameter, CommonConfig
 from dmg_utils import get_dmg_command
