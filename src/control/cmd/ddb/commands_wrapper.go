@@ -290,3 +290,12 @@ func ddbDevReplace(ctx *DdbContext, db_path string, old_devid string, new_devid 
 	/* Run the c code command */
 	return daosError(C.ddb_run_dev_replace(&ctx.ctx, &options))
 }
+
+func ddbDtxStat(ctx *DdbContext, path string) error {
+	/* Set up the options */
+	options := C.struct_dtx_stat_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	/* Run the c code command */
+	return daosError(C.ddb_run_dtx_stat(&ctx.ctx, &options))
+}

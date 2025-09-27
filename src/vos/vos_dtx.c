@@ -4006,3 +4006,45 @@ vos_dtx_local_end(struct dtx_handle *dth, int result)
 
 	return result;
 }
+
+int
+vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt)
+{
+	struct umem_instance   *umm;
+	struct vos_container   *cont;
+	struct vos_dtx_blob_df *dbd;
+	uint32_t                tmp;
+	int                     rc;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+	if (cnt == NULL) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	tmp = 0;
+	umm = vos_cont2umm(cont);
+	dbd = umem_off2ptr(umm, cont->vc_cont_df->cd_dtx_committed_head);
+	while (dbd != NULL) {
+		if (dbd->dbd_magic != DTX_CMT_BLOB_MAGIC) {
+			D_ERROR("Committed DTX blob with bad magic: container=" DF_UUID
+				", wait=%#x, get=%#x\n",
+				DP_UUID(cont->vc_id), DTX_CMT_BLOB_MAGIC, dbd->dbd_magic);
+			rc = -DER_INVAL;
+			goto out;
+		}
+		tmp += dbd->dbd_count;
+
+		dbd = umem_off2ptr(umm, dbd->dbd_next);
+	}
+
+	*cnt = tmp;
+	rc   = 0;
+
+out:
+	return rc;
+}
