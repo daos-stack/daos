@@ -187,7 +187,6 @@ def define_mercury(reqs):
 
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
-                     '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
                      '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
                      '-DMERCURY_INSTALL_LIB_DIR:PATH=$MERCURY_PREFIX/lib64',
@@ -207,6 +206,19 @@ def define_mercury(reqs):
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
                      '../mercury']
+
+    build_type = "RelWithDebInfo"
+    try:
+        sanitizers = reqs.get_env('SANITIZERS').split(',')
+        if 'address' in sanitizers:
+            build_type = "Asan"
+        elif 'thread' in sanitizers:
+            build_type = "Tsan"
+        elif 'undefined' in sanitizers:
+            build_type = "Ubsan"
+    except KeyError:
+        pass
+    mercury_build.append(f'-DCMAKE_BUILD_TYPE:STRING={build_type}')
 
     if reqs.target_type == 'debug':
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
