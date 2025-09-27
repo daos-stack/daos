@@ -16,7 +16,7 @@ dnf_install_args="${1:-}"
 
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
-    boost-python${PYTHON_VERSION}-devel \
+    boost-python3-devel \
     bzip2 \
     capstone-devel \
     clang \
