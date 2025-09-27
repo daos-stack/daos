@@ -130,7 +130,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         distro = "ubuntu"
 
     python_exe = f"python{sys.version_info.major}.{sys.version_info.minor}"
-    cmds = [f'{python_exe} -m venv {}/venv'.format(mount_dir),
+    cmds = [f'{python_exe} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',

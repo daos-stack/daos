@@ -256,13 +256,13 @@ class CoreFileProcessing():
             if self.distro_info.name.lower() == "almalinux":
                 # pylint: disable=consider-using-f-string
                 install_pkgs.append(
-                    {f'name': 'python{sys.version_info.major}.{sys.version_info.minor}-debuginfo'})
+                    {'name': f'python{sys.version_info.major}.{sys.version_info.minor}-debuginfo'})
             elif self.distro_info.name.lower() == "rocky":
                 # https://bugs.rockylinux.org/view.php?id=3499
                 pass
             else:
                 # pylint: disable=consider-using-f-string
-                install_pkgs.append({f'name': 'python{sys.version_info.major}-debuginfo'})
+                install_pkgs.append({'name': f'python{sys.version_info.major}-debuginfo'})
         cmds = []
 
         # -debuginfo packages that don't get installed with debuginfo-install
