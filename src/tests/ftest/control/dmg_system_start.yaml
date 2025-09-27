@@ -5,7 +5,6 @@ server_config:
   engines_per_host: 2
   engines:
     0:
-      fabric_iface_port: 31416
       log_file: daos_server0.log
       targets: 4
       nr_xs_helpers: 0
@@ -14,7 +13,6 @@ server_config:
           class: ram
           scm_mount: /mnt/daos0
     1:
-      fabric_iface_port: 31516
       log_file: daos_server1.log
       targets: 4
       nr_xs_helpers: 0

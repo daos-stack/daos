@@ -1,9 +1,12 @@
 hosts:
   test_servers: 3
   test_clients: 1
+
 timeout: 900
+
 daos_server:
   pattern_timeout: 60
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -11,27 +14,26 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
       targets: 16
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
       targets: 16
+
 pool:
   size: 80%
   svcn: 3
+
 container:
   type: POSIX
   control_method: daos
   oclass: RP_2GX
   properties: "cksum:crc16,rf:1"
+
 ior:
   client_processes:
     np: 2

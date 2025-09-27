@@ -1,7 +1,9 @@
 hosts:
   test_servers: 5
   test_clients: 3
+
 timeout: 5000
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -9,22 +11,21 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+
 pool:
   size: 95%
+
 container:
   type: POSIX
   control_method: daos
+
 largefilecount:
   api:
     - DFS
@@ -36,6 +37,7 @@ largefilecount:
     mdtest_oclass:       # Run once with S1 and then with EC_16P2G1
       - S1
       - EC_2P1G1
+
 ior:
   np: 30
   dfs_destroy: false
@@ -46,6 +48,7 @@ ior:
   block_size: '7G'
   env_vars:
     - D_IL_REPORT=1
+
 dfuse:
   disable_caching: true
 

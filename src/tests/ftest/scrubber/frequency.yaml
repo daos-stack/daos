@@ -1,9 +1,12 @@
 hosts:
   test_servers: 2
   test_clients: 1
+
 timeout: 1800
+
 setup:
   start_servers_once: false
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -11,8 +14,6 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31416
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -21,13 +22,12 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31516
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
       storage: auto
+
 pool:
   scm_size: 6000000000
   nvme_size: 54000000000
@@ -35,10 +35,12 @@ pool:
   rebuild_timeout: 120
   pool_query_timeout: 30
   properties: "scrub:timed"
+
 container:
   type: POSIX
   control_method: daos
   oclass: RP_2G1
+
 ior:
   ior_timeout: 60
   client_processes:
