@@ -255,14 +255,14 @@ class CoreFileProcessing():
         if self.is_el():
             if self.distro_info.name.lower() == "almalinux":
                 # pylint: disable=consider-using-f-string
-                install_pkgs.append({'name': 'python%s.%s-debuginfo' % (sys.version_info.major,
-                                                                        sys.version_info.minor)})
+                install_pkgs.append(
+                    {f'name': 'python{sys.version_info.major}.{sys.version_info.minor}-debuginfo'})
             elif self.distro_info.name.lower() == "rocky":
                 # https://bugs.rockylinux.org/view.php?id=3499
                 pass
             else:
                 # pylint: disable=consider-using-f-string
-                install_pkgs.append({'name': 'python%s-debuginfo' % sys.version_info.major})
+                install_pkgs.append({f'name': 'python{sys.version_info.major}-debuginfo'})
         cmds = []
 
         # -debuginfo packages that don't get installed with debuginfo-install
@@ -292,15 +292,14 @@ class CoreFileProcessing():
             dnf_args = ["--nobest", "--exclude", "ompi-debuginfo"]
             if os.getenv("TEST_RPMS", 'false') == 'true':
                 if "suse" in self.distro_info.name.lower():
-                    dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
-                elif "centos" in self.distro_info.name.lower() and self.distro_info.version == "7":
                     dnf_args.extend(
-                        ["--enablerepo=*-debuginfo", "--exclude", "nvml-debuginfo", "libpmemobj",
-                         "python36", "openmpi3", "gcc"])
+                        ["libpmemobj1", f"python{sys.version_info.major}{sys.version_info.minor}",
+                         "openmpi3"])
                 elif self.is_el() and int(self.distro_info.version) >= 8:
                     dnf_args.extend(
-                        ["libpmemobj", "python3", "openmpi", "gcc", 'libpmem', "ndctl-libs",
-                         "daxctl-libs", "libgcc", "systemd-libs"])
+                        ["libpmemobj", f"python{sys.version_info.major}.{sys.version_info.minor}",
+                         "openmpi", "gcc", 'libpmem', "ndctl-libs", "daxctl-libs", "libgcc",
+                         "systemd-libs"])
                 else:
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)

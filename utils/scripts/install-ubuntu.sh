@@ -16,6 +16,8 @@ arch=$(uname -i)
 
 apt_get_install_args="${1:-}"
 
+: "${PYTHON_VERSION:=3.11}"
+
 # shellcheck disable=SC2086
 apt-get install ${apt_get_install_args} \
     autoconf \
@@ -60,8 +62,8 @@ apt-get install ${apt_get_install_args} \
     pciutils \
     pkg-config \
     ruby \
-    python3-dev \
-    python3-venv \
+    python${PYTHON_VERSION}-dev \
+    python${PYTHON_VERSION}-venv \
     sudo \
     uuid-dev \
     valgrind \
