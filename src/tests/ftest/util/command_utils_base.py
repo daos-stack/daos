@@ -503,7 +503,7 @@ class CommandWithParameters(ObjectWithParameters):
         self._python = None
         if self.command.endswith('.py'):
             # Run python scripts with the python command
-            self._python = f'{os.path.realpath(executable)}'
+            self._python = f'{os.path.abspath(executable)}'
 
     @property
     def command(self):
