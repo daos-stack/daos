@@ -31,7 +31,7 @@ fi
 
 echo "Checking if python imports are sorted"
 
-if ! echo "$py_files" | xargs -r isort --check-only --jobs 8; then
-    echo "  isort check failed, run 'isort --jobs 8 .' to fix."
+if ! echo "$py_files" | xargs -r isort -w 100 --check-only --jobs 8; then
+    echo "  isort check failed, run 'isort -w 100 --jobs 8 .' to fix."
     exit 1
 fi
