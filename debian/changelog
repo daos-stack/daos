@@ -1,3 +1,9 @@
+daos (2.7.101-13) unstable; urgency=medium
+  [ Cedric Koch-Hofer]
+  * Add support of the Google Performance tools
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Thu, 25 Sep 2025 12:00:00 +0200
+
 daos (2.7.101-12) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * pmemobj errors and warnings reported via DAOS logging system
