@@ -14,6 +14,7 @@ from collections import OrderedDict
 from difflib import unified_diff
 
 from ClusterShell.NodeSet import NodeSet
+
 from process_core_files import CoreFileException, CoreFileProcessing
 # pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment

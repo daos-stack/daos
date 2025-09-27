@@ -15,14 +15,17 @@ from datetime import datetime
 from getpass import getuser
 from logging import getLogger
 
-from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
-from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
-                                FormattedParameter, LogParameter, ObjectWithParameters)
+
+from avocado.utils import process
+from command_utils_base import (BasicParameter, CommandWithParameters,
+                                EnvironmentVariables, FormattedParameter,
+                                LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
 from file_utils import change_file_owner, create_directory, distribute_files
 from general_utils import (DaosTestError, check_file_exists, get_file_listing,
-                           get_job_manager_class, get_subprocess_stdout, run_command)
+                           get_job_manager_class, get_subprocess_stdout,
+                           run_command)
 from run_utils import command_as_user, run_remote
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data

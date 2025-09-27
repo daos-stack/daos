@@ -18,11 +18,12 @@ from getpass import getuser
 from importlib import import_module
 from logging import getLogger
 
+from ClusterShell.NodeSet import NodeSet
+from ClusterShell.Task import task_self
+
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
-from ClusterShell.NodeSet import NodeSet
-from ClusterShell.Task import task_self
 from run_utils import command_as_user, run_local, run_remote
 
 

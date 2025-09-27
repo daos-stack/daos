@@ -5,17 +5,17 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import glob
-import logging
 import os
 import re
 import shlex
 import subprocess  # nosec
 import time
 
+from ClusterShell.NodeSet import NodeSet
+
 import cart_logparse
 import cart_logtest
 from apricot import TestWithoutServers
-from ClusterShell.NodeSet import NodeSet
 from job_manager_utils import Orterun, stop_job_manager
 from write_host_file import write_host_file
 
