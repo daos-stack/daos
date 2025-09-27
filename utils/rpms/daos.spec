@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       15%{?relval}%{?dist}
+Release:       16%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -136,6 +136,7 @@ BuildRequires: libasan
 %if (0%{?suse_version} > 0)
 BuildRequires: libasan8
 %endif
+BuildRequires: gperftools-devel
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -659,7 +660,10 @@ fi
 %endif
 
 %changelog
-* Thu Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
+* Thu Sep 25 2025  Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.101-16
+- Add support of the Google Performance tools
+
+* Fri Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
 - Fix leap package name
 
 * Thu Sep 11 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14

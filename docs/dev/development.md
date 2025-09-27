@@ -174,6 +174,32 @@ ASan support in DAOS is still experimental and has the following known issues:
    ASan is not fully integrated with the DAOS regression testing framework. Some tests, such as
    those using Valgrind, may fail due to false positives.
 
+### Heap Profiler
+
+To debug memory leaks which are properly deleted when the application stop, the
+[Gperftools Heap Profiler](https://gperftools.github.io/gperftools/heapprofile.html) can be used.
+This heap profiler mostly rely on the [TCMalloc](https://github.com/google/tcmalloc) memory
+allocator.  This memory allocator can either be linked to DAOS executables or loaded at runtime
+thanks to `LD_PRELOAD`.
+
+To profile heap allocation of the `daos_engine` with `LD_PRELOAD`, the following entries can be
+added to the `env_vars` section of the `daos_server.yml` configuration file:
+```yaml
+engines:
+- ...
+  env_vars:
+  ...
+  - LD_PRELOAD=/usr/lib64/libtcmalloc.so.4
+  - HEAPPROFILE=/var/daos/hprof/daos_engine.1.hprof
+  - HEAP_PROFILE_INUSE_INTERVAL=1073741824
+  - HEAP_PROFILE_ALLOCATION_INTERVAL=0
+  - HEAP_PROFILE_TIME_INTERVAL=0
+```
+
+To link DAOS executabls with the TCMalloc memory allocator, use the `HEAP_PROFILER=true` flag with
+the `scons` command.  To profile the daos engien heap allocation, the same `daos_server.yml`
+configuration can be used without setting the `LD_PRELOAD` environment variable.
+
 ## Go dependencies
 
 Developers contributing Go code may need to change the external dependencies
