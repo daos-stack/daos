@@ -29,7 +29,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
         except Exception as error:
-            self.print("Exception in launching server : {}".format(error))
+            self.log.info("Exception in launching server : %s", error)
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
@@ -51,8 +51,6 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
 
         # Verify the server(s) exited gracefully
         if not self.check_files(glob_pat, count=3, retries=4):
-            self.print("Didn't find completion file(s): '{}'. "
-                       "This indicates not all CaRT binaries exited "
-                       "gracefully. "
-                       "Marking test pass while DAOS-7892 remains "
-                       "unresolved.\n".format(glob_pat))
+            self.log.info("Didn't find completion file(s): '%s'.", glob_pat)
+            self.log.info("This indicates not all CaRT binaries exited gracefully.")
+            self.log.info("Marking test pass while DAOS-7892 remains unresolved.")
