@@ -221,7 +221,7 @@ class FtestTagMap():
 
         try:
             module = ast.parse(file_data)
-        except Exception as error:
+        except Exception as error:      # pylint: disable=broad-except
             print(f"Error parsing data from {file}: {error}")
             return
         for class_def in filter(lambda val: isinstance(val, ast.ClassDef), module.body):
