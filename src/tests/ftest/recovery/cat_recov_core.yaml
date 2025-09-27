@@ -1,6 +1,8 @@
 hosts:
   test_servers: 4
+
 timeout: 5400
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -8,8 +10,6 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 0
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -23,8 +23,6 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 0
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -38,12 +36,15 @@ server_config:
   transport_config:
     allow_insecure: true
   system_ram_reserved: 64
+
 agent_config:
   transport_config:
     allow_insecure: true
+
 dmg:
   transport_config:
     allow_insecure: true
+
 daos_tests:
   num_clients:
     test_daos_cat_recov_core: 1

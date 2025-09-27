@@ -486,8 +486,12 @@ class EngineYamlParameters(YamlParameters):
         super().__init__(os.path.join(*namespace))
 
         # Use environment variables to get default parameters
-        default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
-        default_port = int(os.environ.get("D_PORT", 31416))
+        try:
+            _defaults = os.environ.get("DAOS_TEST_FABRIC_IFACE").split(",")
+            default_interface = list(filter(None, _defaults))[index]
+        except (AttributeError, IndexError):
+            default_interface = f"eth{index}"
+        default_port = int(os.environ.get("D_PORT", 31317 + (100 * index)))
 
         # All log files should be placed in the same directory on each host
         # to enable easy log file archiving by launch.py
