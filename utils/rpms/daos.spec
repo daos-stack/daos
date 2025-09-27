@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       17%{?relval}%{?dist}
+Release:       18%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -136,6 +136,7 @@ BuildRequires: libasan
 %if (0%{?suse_version} > 0)
 BuildRequires: libasan8
 %endif
+BuildRequires: gperftools-devel
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -659,6 +660,9 @@ fi
 %endif
 
 %changelog
+* Mon Oct 27 2025  Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.7.101-18
+- Add support of the Google Performance tools
+
 * Mon Oct 27 2025  Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.7.101-17
 - Add support of the libasan to the mercury dependencies
 

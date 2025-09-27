@@ -518,6 +518,8 @@ class PreReqComponent():
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
+        opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
+                              False))
 
         opts.Update(self.__env)
 
