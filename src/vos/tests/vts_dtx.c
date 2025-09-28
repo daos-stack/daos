@@ -791,21 +791,22 @@ dtx_17(void **state)
 static void
 dtx_18(void **state)
 {
-	struct io_test_args		*args = *state;
-	struct dtx_id			 xid[10];
-	daos_iod_t			 iod = { 0 };
-	d_sg_list_t			 sgl = { 0 };
-	daos_recx_t			 rex = { 0 };
-	daos_key_t			 dkey;
-	daos_key_t			 akey;
-	d_iov_t				 val_iov;
-	uint64_t			 epoch;
-	char				 dkey_buf[UPDATE_DKEY_SIZE];
-	char				 akey_buf[UPDATE_AKEY_SIZE];
-	char				 update_buf[UPDATE_BUF_SIZE];
-	char				 fetch_buf[UPDATE_BUF_SIZE];
-	int				 rc;
-	int				 i;
+	struct io_test_args *args = *state;
+	struct dtx_id        xid[10];
+	daos_iod_t           iod = {0};
+	d_sg_list_t          sgl = {0};
+	daos_recx_t          rex = {0};
+	daos_key_t           dkey;
+	daos_key_t           akey;
+	d_iov_t              val_iov;
+	uint64_t             epoch;
+	uint32_t             cnt;
+	char                 dkey_buf[UPDATE_DKEY_SIZE];
+	char                 akey_buf[UPDATE_AKEY_SIZE];
+	char                 update_buf[UPDATE_BUF_SIZE];
+	char                 fetch_buf[UPDATE_BUF_SIZE];
+	int                  rc;
+	int                  i;
 
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
@@ -841,9 +842,17 @@ dtx_18(void **state)
 
 	sleep(3);
 
+	rc = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl, &cnt);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cnt, 10);
+
 	/* Aggregate the DTXs. */
 	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl);
 	assert_rc_equal(rc, 0);
+
+	rc = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl, &cnt);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cnt, 0);
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, false);
