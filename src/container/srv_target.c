@@ -32,6 +32,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/srv_obj_ec.h>
+#include <daos_srv/security.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include <daos/cont_props.h>
@@ -1557,12 +1558,12 @@ ds_cont_srv_close(struct ds_pool_child *pool_child)
 {
 	struct ds_cont_hdl *hdl;
 
-	if (!d_list_empty(&pool_child->spc_hdl_list)) {
-		hdl = d_list_entry(pool_child->spc_hdl_list.next, struct ds_cont_hdl, sch_link);
+	if (!d_list_empty(&pool_child->spc_srv_cont_hdl)) {
+		hdl = d_list_entry(pool_child->spc_srv_cont_hdl.next, struct ds_cont_hdl, sch_link);
 		d_list_del_init(&hdl->sch_link);
 		D_FREE(hdl);
 	}
-	D_ASSERT(d_list_empty(&pool_child->spc_hdl_list));
+	D_ASSERT(d_list_empty(&pool_child->spc_srv_cont_hdl));
 }
 
 static inline struct ds_cont_hdl *
@@ -1587,7 +1588,7 @@ ds_cont_hdl_alloc(uuid_t cont_hdl_uuid, uint64_t flags, uint64_t sec_capas)
 }
 
 int
-ds_cont_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uint64_t flags, uint64_t sec_capas)
+ds_cont_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid)
 {
 	struct ds_pool_child *pool_child;
 	struct ds_cont_hdl   *hdl;
@@ -1600,20 +1601,20 @@ ds_cont_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uint64_t flags, uint64_
 		return -DER_NO_HDL;
 	}
 
-	if (!d_list_empty(&pool_child->spc_hdl_list)) {
-		hdl = d_list_entry(pool_child->spc_hdl_list.next, struct ds_cont_hdl, sch_link);
+	if (!d_list_empty(&pool_child->spc_srv_cont_hdl)) {
+		hdl = d_list_entry(pool_child->spc_srv_cont_hdl.next, struct ds_cont_hdl, sch_link);
 		/* Handle UUID change can only happen on old pool (< 2.8) */
 		if (uuid_compare(cont_hdl_uuid, hdl->sch_uuid) != 0)
 			uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
 		goto out;
 	}
 
-	hdl = ds_cont_hdl_alloc(cont_hdl_uuid, flags, sec_capas);
+	hdl = ds_cont_hdl_alloc(cont_hdl_uuid, 0, ds_sec_get_rebuild_cont_capabilities());
 	if (hdl == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	d_list_add(&hdl->sch_link, &pool_child->spc_hdl_list);
+	d_list_add(&hdl->sch_link, &pool_child->spc_srv_cont_hdl);
 out:
 	ds_pool_child_put(pool_child);
 	return rc;

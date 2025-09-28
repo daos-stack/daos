@@ -172,7 +172,7 @@ struct ds_pool_child {
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
-	d_list_t                 spc_hdl_list; /* Single server cont handle */
+	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
 	 * vos aggregation can not cross this epoch during rebuild to avoid

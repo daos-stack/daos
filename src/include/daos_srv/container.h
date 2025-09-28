@@ -46,7 +46,7 @@ int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
 		     uint32_t status_pm_ver);
 int
-ds_cont_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uint64_t flags, uint64_t sec_capas);
+ds_cont_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid);
 void
 ds_cont_srv_close(struct ds_pool_child *pool_child);
 
@@ -183,7 +183,7 @@ struct ds_cont_hdl {
 	d_list_t		sch_entry;
 	/*
 	 * Link to ds_cont_child::sc_open_hdls if sch_cont is not NULL, otherwise,
-	 * link to ds_pool_child::spc_hdl_list.
+	 * link to ds_pool_child::spc_srv_cont_hdl.
 	 */
 	d_list_t		sch_link;
 	uuid_t			sch_uuid;	/* of the container handle */

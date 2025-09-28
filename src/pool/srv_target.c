@@ -38,7 +38,6 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/srv_csum.h>
-#include <daos_srv/security.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -344,7 +343,7 @@ pool_child_create(uuid_t pool_uuid, struct ds_pool *pool, uint32_t pool_map_ver)
 	child->spc_pool = pool;
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
-	D_INIT_LIST_HEAD(&child->spc_hdl_list);
+	D_INIT_LIST_HEAD(&child->spc_srv_cont_hdl);
 
 	D_ASSERT(info->dmi_tgt_id < dss_tgt_nr);
 	child->spc_state = &pool->sp_states[info->dmi_tgt_id];
@@ -1091,10 +1090,8 @@ ds_pool_put(struct ds_pool *pool)
 }
 
 struct cont_srv_open_arg {
-	uuid_t   pool_uuid;
-	uuid_t   cont_hdl_uuid;
-	uint64_t flags;
-	uint64_t sec_capas;
+	uuid_t pool_uuid;
+	uuid_t cont_hdl_uuid;
 };
 
 static inline int
@@ -1102,7 +1099,7 @@ cont_srv_open_one(void *vin)
 {
 	struct cont_srv_open_arg *arg = vin;
 
-	return ds_cont_srv_open(arg->pool_uuid, arg->cont_hdl_uuid, arg->flags, arg->sec_capas);
+	return ds_cont_srv_open(arg->pool_uuid, arg->cont_hdl_uuid);
 }
 
 int
@@ -1113,8 +1110,6 @@ ds_pool_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid)
 	D_ASSERT(!uuid_is_null(cont_hdl_uuid));
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
-	arg.flags     = 0;
-	arg.sec_capas = ds_sec_get_rebuild_cont_capabilities();
 
 	return ds_pool_task_collective(pool_uuid,
 				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
@@ -1169,10 +1164,10 @@ eph_report_ult(void *data)
 			} else {
 				conn_hdl_fetched = true;
 			}
-		}
 
-		if (eph_report_exiting(pool))
-			break;
+			if (eph_report_exiting(pool))
+				break;
+		}
 
 		/* Fetch server pool/cont open handles */
 		if (!srv_hdl_fetched) {
@@ -1200,10 +1195,10 @@ eph_report_ult(void *data)
 					srv_hdl_fetched = true;
 				}
 			}
-		}
 
-		if (eph_report_exiting(pool))
-			break;
+			if (eph_report_exiting(pool))
+				break;
+		}
 
 		/* Report EC agg epoch boundary */
 		rc = ds_cont_eph_report(pool);
