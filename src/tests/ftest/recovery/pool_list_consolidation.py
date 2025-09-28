@@ -361,7 +361,7 @@ class PoolListConsolidationTest(TestWithServers):
         2. Stop servers.
         3. Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.
         4. Run DAOS checker under kinds of mode.
-        5. Check that the pool does not appear with dmg pool list.
+        5. Check that the pool does not appear with "dmg pool list".
         6. Verify that the pool directory was removed from the mount point.
 
         Jira ID: DAOS-12067
