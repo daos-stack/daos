@@ -376,6 +376,11 @@ show_help(char *name)
 	    "  The default is --enable-wb-cache.\n"
 	    "* If --disable-caching and --enable-wb-cache are both specified,\n"
 	    "  the --enable-wb-cache option is ignored and no caching is performed.\n"
+	    "* If --dump-handles is used from one dfuse mount and --read-handles is used for\n"
+	    "  starting other dfuse mounts, the dfuse mount that dumps the handles cannot be\n"
+	    "  umounted before the others, otherwise the other mounts will become inaccessible\n"
+	    "  since the g2l & l2g method for sharing DAOS handles requires the main process\n"
+	    "  that establishes the pool and container connections to keep those alive.\n"
 	    "\n"
 	    "Version: %s\n",
 	    name, DAOS_VERSION);
