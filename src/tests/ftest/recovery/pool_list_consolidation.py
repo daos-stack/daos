@@ -290,16 +290,14 @@ class PoolListConsolidationTest(TestWithServers):
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
         rdb_pool_path = f"{self.server_managers[0].get_vos_path(pool)}/rdb-pool"
-        command = command_as_user(command=f"rm {rdb_pool_path}", user="root")
+        command = f"sudo rm {rdb_pool_path}"
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
         for host in hosts:
             node = NodeSet(host)
             check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
             if check_out[0]:
-                remove_cmd_passed = run_remote(
-                    log=self.log, hosts=node, command=command).passed
-                if not remove_cmd_passed:
+                if not run_remote(log=self.log, hosts=node, command=command).passed:
                     self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                 self.log.info("rm rdb-pool from %s", str(node))
                 count += 1
