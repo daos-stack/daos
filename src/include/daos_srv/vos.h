@@ -365,6 +365,19 @@ void
 vos_self_fini(void);
 
 /**
+ * Initialize the environment for a VOS instance as an engine.
+ *
+ * \param[in]	nvme_conf	NVMe config file
+ * \param[in]	storage_path	Storage path e.g. /mnt/daos
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
+ */
+int
+vos_sys_db_init(const char *nvme_conf, const char *storage_path);
+
+/**
  * Versioning Object Storage Pool (VOSP)
  * A VOSP creates and manages a versioned object store on a local
  * storage device. The capacity of an OSP is determined
@@ -1763,5 +1776,16 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
  */
 bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
+
+/**
+ * Return the number of DTX committed entries of a container.
+ *
+ * \param[in]	coh	container open handle.
+ * \param[out]	cnt	number of DTX committed entries.
+ *
+ * \return		0 on success, error otherwise.
+ */
+int
+vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt);
 
 #endif /* __VOS_API_H */

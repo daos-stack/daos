@@ -57,5 +57,5 @@ if $notify; then
         env | sort | grep ^CHANGE_
         echo
         echo "See details in $dir."
-    } | mail -r "$HOSTNAME"@intel.com -s "Launchable prediction failure: ${not_predicted_percent}%" brian.murrell@intel.com
+    } | mail -r "$HOSTNAME"@hpe.com -s "Launchable prediction failure: ${not_predicted_percent}%" john.malmberg@hpe.com
 fi

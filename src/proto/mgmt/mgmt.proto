@@ -64,6 +64,12 @@ service MgmtSvc {
 	rpc PoolUpdateACL(ModifyACLReq) returns (ACLResp) {}
 	// Delete an entry from a DAOS pool's Access Control List.
 	rpc PoolDeleteACL(DeleteACLReq) returns (ACLResp) {}
+	// PoolUpgrade upgrades a DAOS pool.
+	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
+	// PoolRebuildStart starts an interactive rebuild on a DAOS pool.
+	rpc PoolRebuildStart(PoolRebuildStartReq) returns (DaosResp) {}
+	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
+	rpc PoolRebuildStop(PoolRebuildStopReq) returns (DaosResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
@@ -82,6 +88,8 @@ service MgmtSvc {
 	rpc SystemExclude(SystemExcludeReq) returns(SystemExcludeResp) {}
 	// Drain or reintegrate DAOS ranks from all pools
 	rpc SystemDrain(SystemDrainReq) returns (SystemDrainResp) {}
+	// Before interactive rebuild operation on all DAOS pools
+	rpc SystemRebuildManage(SystemRebuildManageReq) returns (SystemRebuildManageResp) {}
 	// Erase DAOS system database prior to reformat
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
@@ -101,9 +109,7 @@ service MgmtSvc {
 	// Query system check properties
 	rpc SystemCheckGetPolicy(CheckGetPolicyReq) returns(CheckGetPolicyResp){}
 	// Send the desired action to repair an inconsistency.
-	rpc SystemCheckRepair(CheckActReq) returns(CheckActResp){}
-	// PoolUpgrade queries a DAOS pool.
-	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
+	rpc SystemCheckRepair(CheckActReq) returns (CheckActResp) {}
 	// Set a system attribute or attributes.
 	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
 	// Get a system attribute or attributes.

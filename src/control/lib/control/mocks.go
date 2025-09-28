@@ -378,10 +378,16 @@ func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 // defined by the variant input string parameter.
 func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	ssr := standardServerScanResponse(t)
-	nss := func(idxs ...int) storage.ScmNamespaces {
+	nss := func(withUsage bool, idxs ...int) storage.ScmNamespaces {
 		nss := make(storage.ScmNamespaces, 0, len(idxs))
 		for _, i := range idxs {
 			ns := storage.MockScmNamespace(int32(i))
+			if withUsage {
+				sm := storage.MockScmMountPoint(int32(i))
+				sm.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 75% available
+				sm.UsableBytes = uint64((humanize.TByte/4)*2) * uint64(i) // 50% usable
+				ns.Mount = sm
+			}
 			nss = append(nss, ns)
 		}
 		return nss
@@ -405,6 +411,16 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		sd.Roles = storage.BdevRolesFromBits(roleBits)
 		nc.SmdDevices = append(nc.SmdDevices, sd)
 		return nc
+	}
+	ctrlrsWithUsage := func(rank int, roleBits int, idxs ...int) storage.NvmeControllers {
+		ncs := make(storage.NvmeControllers, 0)
+		for _, i := range idxs {
+			ncs = append(ncs, ctrlrWithUsage(i, rank, roleBits,
+				uint64(humanize.TByte)*uint64(i),
+				uint64((humanize.TByte/4)*3)*uint64(i),  // 75% available
+				uint64((humanize.TByte/4)*2)*uint64(i))) // 50% usable
+		}
+		return ncs
 	}
 	ctrlrsWithUsageSepRoles := func(firstRank, secondRank int, baseBytes uint64) storage.NvmeControllers {
 		ncs := make(storage.NvmeControllers, 0)
@@ -433,30 +449,35 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 
 	switch variant {
 	case "withSpaceUsage":
-		snss := make(storage.ScmNamespaces, 0)
-		for _, i := range []int{0, 1} {
-			sm := storage.MockScmMountPoint(int32(i))
-			sm.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 75% available
-			sm.UsableBytes = uint64((humanize.TByte/4)*2) * uint64(i) // 50% usable
-			sns := storage.MockScmNamespace(int32(i))
-			sns.Mount = sm
-			snss = append(snss, sns)
-		}
+		snss := nss(true, 0, 1)
 		if err := convert.Types(snss, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-		ncs := make(storage.NvmeControllers, 0)
-		for _, i := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
-			ncs = append(ncs, ctrlrWithUsage(i, 0, storage.BdevRoleAll,
-				uint64(humanize.TByte)*uint64(i),
-				uint64((humanize.TByte/4)*3)*uint64(i),  // 75% available
-				uint64((humanize.TByte/4)*2)*uint64(i))) // 50% usable
+		ncs := ctrlrsWithUsage(0 /* rank */, 0 /* roles */, 1, 2, 3, 4, 5, 6, 7, 8)
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
 		}
+	case "withSpaceUsageRolesAll":
+		snss := nss(true, 0, 1)
+		if err := convert.Types(snss, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ncs := ctrlrsWithUsage(0 /* rank */, storage.BdevRoleAll /* roles */, 1, 2, 3, 4, 5, 6, 7, 8)
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
 	case "withSpaceUsageRolesSeparate1":
 		ncs := ctrlrsWithUsageSepRoles(0, 1, humanize.TByte)
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "withSpaceUsageRolesSeparate1NilRank":
+		ncs := ctrlrsWithUsageSepRoles(0, 1, humanize.TByte)
+		// Set all rank-1 ssds to a nil-rank value.
+		ncs[4].SmdDevices[0].Rank = ranklist.NilRank
+		ncs[5].SmdDevices[0].Rank = ranklist.NilRank
+		ncs[6].SmdDevices[0].Rank = ranklist.NilRank
+		ncs[7].SmdDevices[0].Rank = ranklist.NilRank
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
@@ -466,7 +487,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			t.Fatal(err)
 		}
 	case "pmemSingle":
-		if err := convert.Types(nss(0), &ssr.Scm.Namespaces); err != nil {
+		if err := convert.Types(nss(false, 0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
 	case "pmemDupNuma":
@@ -481,11 +502,11 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "pmemA":
 		// verify out of order namespace ids
-		if err := convert.Types(nss(1, 0), &ssr.Scm.Namespaces); err != nil {
+		if err := convert.Types(nss(false, 1, 0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
 	case "pmemB":
-		ns := nss(0, 1)
+		ns := nss(false, 0, 1)
 		for _, n := range ns {
 			n.Size += uint64(humanize.GByte * 100)
 		}
@@ -493,26 +514,26 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			t.Fatal(err)
 		}
 	case "nvmeSingle":
-		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+		if err := convert.Types(nss(false, 0, 1), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
 		ssr.Nvme.Ctrlrs[0].SocketId = 0
 	case "nvmeA":
-		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+		if err := convert.Types(nss(false, 0, 1), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
 		if err := convert.Types(ctrlrs(1, 2, 3, 4), &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
 	case "nvmeB":
-		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+		if err := convert.Types(nss(false, 0, 1), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
 		if err := convert.Types(ctrlrs(1, 2, 5, 4), &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
 	case "nvmeBasicA":
-		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+		if err := convert.Types(nss(false, 0, 1), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
 		ncs := ctrlrs(1, 4)
@@ -525,7 +546,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			t.Fatal(err)
 		}
 	case "nvmeBasicB":
-		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+		if err := convert.Types(nss(false, 0, 1), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
 		ncs := ctrlrs(1, 4)
@@ -569,7 +590,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			Error:  "nvme scan failed",
 		}
 	case "noNvmeOnNuma1":
-		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+		if err := convert.Types(nss(false, 0, 1), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
 		if err := convert.Types(ctrlrs(0, 2), &ssr.Nvme.Ctrlrs); err != nil {
