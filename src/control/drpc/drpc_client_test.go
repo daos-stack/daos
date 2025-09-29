@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -222,15 +223,16 @@ func TestClient_SendMsg_Success(t *testing.T) {
 	client.sequence = 2 // ClientConnection keeps track of sequence
 
 	call := newTestCall()
-	callBytes := conn.SetWriteOutputBytesForCall(t, call)
+	callBytes := marshallCallToBytes(t, call)
+	callChunks := testChunks(callBytes)
 
 	expectedResp := newTestResponse(client.sequence + 1)
 	conn.SetReadOutputBytesToResponse(t, expectedResp)
-	expectedRespBytes := conn.ReadOutputBytes
+	expectedRespBytes := conn.ReadOutputBytes[0]
 
 	response, err := client.SendMsg(test.Context(t), call)
 
-	test.AssertTrue(t, err == nil, "Expected no error")
+	test.CmpErr(t, nil, err)
 	if response == nil {
 		t.Fatal("Expected a real response")
 		return
@@ -242,11 +244,10 @@ func TestClient_SendMsg_Success(t *testing.T) {
 	test.AssertEqual(t, response.Body, expectedResp.Body,
 		"Response should match expected")
 	conn.WithLock(func(conn *mockConn) {
-		test.AssertEqual(t, conn.WriteInputBytes, callBytes,
+		test.AssertEqual(t, conn.WriteInputBytes, callChunks,
 			"Expected call to be marshalled and passed to write")
-		test.AssertTrue(t, conn.ReadInputBytes != nil,
-			"Expected read called with buffer")
-		test.AssertEqual(t, conn.ReadInputBytes, expectedRespBytes,
+		test.AssertEqual(t, len(conn.ReadInputBytes), 1, "Expected read called with buffer")
+		test.AssertEqual(t, conn.ReadInputBytes[0][:len(expectedRespBytes)], expectedRespBytes,
 			"Marshalled response should be copied into the buffer")
 	})
 }
@@ -296,9 +297,7 @@ func TestClient_SendMsg_ReadError(t *testing.T) {
 	client := newTestClientConnection(newMockDialer(), conn)
 
 	call := newTestCall()
-	conn.SetWriteOutputBytesForCall(t, call)
 
-	conn.ReadOutputNumBytes = 0
 	conn.ReadOutputError = errors.New("mock read failure")
 
 	response, err := client.SendMsg(test.Context(t), call)
@@ -314,9 +313,7 @@ func TestClient_SendMsg_ReadErrorOnContextCancel(t *testing.T) {
 	client := newTestClientConnection(newMockDialer(), conn)
 
 	call := newTestCall()
-	conn.SetWriteOutputBytesForCall(t, call)
 
-	conn.ReadOutputNumBytes = 0
 	conn.ReadOutputError = errors.New("mock read failure")
 
 	ctx, cancel := context.WithCancel(test.Context(t))
@@ -332,14 +329,13 @@ func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
 	client := newTestClientConnection(newMockDialer(), conn)
 
 	call := newTestCall()
-	conn.SetWriteOutputBytesForCall(t, call)
 
 	// Invalid response - fails to unmarshal
-	conn.ReadOutputBytes = make([]byte, 1024)
+	badBytes := make([]byte, 1024)
 	for i := 0; i < len(conn.ReadOutputBytes); i++ {
-		conn.ReadOutputBytes[i] = 0xFF
+		badBytes[i] = 0xFF
 	}
-	conn.ReadOutputNumBytes = len(conn.ReadOutputBytes)
+	conn.ReadOutputBytes = testChunks(badBytes)
 
 	response, err := client.SendMsg(test.Context(t), call)
 
