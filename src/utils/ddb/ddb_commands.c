@@ -1478,8 +1478,9 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 		}
 		strncpy(tmpfs_mount, opt->tmpfs_mount, ARRAY_SIZE(tmpfs_mount) - 1);
 	} else {
-		ddb_printf(ctx, "tmpfs_mount not specific, will use default path '%s'\n",
+		ddb_errorf(ctx, "tmpfs_mount not specific, will use default path '%s'\n",
 			   tmpfs_mount);
+		return -DER_INVAL;
 	}
 
 	/** setup tmpfs and prepare the vos file on tmpfs_mount */

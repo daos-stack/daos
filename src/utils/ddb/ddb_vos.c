@@ -2124,7 +2124,6 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 {
 	int          rc;
 	bool         md_on_ssd;
-	bool         need_mount = false;
 	unsigned int sz         = tmpfs_mount_size;
 
 	rc = vos_self_init(db_path, true, 0);
@@ -2154,17 +2153,16 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 		D_ERROR("Failed to check mountpoint of %s. " DF_RC "", tmpfs_mount, DP_RC(rc));
 		goto out;
 	}
-	need_mount = (!rc);
 
-	if (need_mount) {
+	if (rc == 0) {
 		rc = ddb_mount(tmpfs_mount, sz);
 		if (rc) {
 			goto out;
 		}
 	} else {
-		D_INFO("SCM mount %s is already mounted; VOS files will be created without "
-		       "remounting.",
-		       tmpfs_mount);
+		D_INFO("tmpfs_mount %s is already a mountpoint, refuse to prov_mem.", tmpfs_mount);
+		rc = -DER_ALREADY;
+		goto out;
 	}
 
 	/* Create the directory architecture */
@@ -2180,7 +2178,7 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 		D_ERROR("Failed to recreate vos files. " DF_RC "", DP_RC(rc));
 	}
 out2:
-	if (rc && need_mount == true) {
+	if (rc) {
 		umount(tmpfs_mount);
 	}
 out:
