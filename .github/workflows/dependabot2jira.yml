@@ -34,7 +34,7 @@ jobs:
                                 description: $body,
                                 issuetype: { name: "Story" }
                               }
-                            }')" ${{ secrets.JIRA_BASE_URL }}
+                            }')" ${{ secrets.JIRA_ISSUES_REST_API_URL }}
            )
 
           jira_ticket_key=$(echo $jira_response | jq -r .key)
