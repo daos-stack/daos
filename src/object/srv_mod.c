@@ -41,7 +41,7 @@ obj_mod_init(void)
 		goto out_class;
 	}
 
-	D_INFO("test with rebuild patch set Sep-24, server\n");
+	D_INFO("test with rebuild patch set Sep-29 revert, server\n");
 
 	return 0;
 
