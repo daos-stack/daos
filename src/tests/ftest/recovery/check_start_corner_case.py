@@ -26,7 +26,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         Jira ID: DAOS-17820
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartCornerCaseTest,test_start_single_pool
         """
@@ -82,7 +82,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         Jira ID: DAOS-17860
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartCornerCaseTest,test_start_back_to_back
         """
