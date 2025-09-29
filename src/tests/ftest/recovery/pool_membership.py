@@ -328,7 +328,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
-        dmg_command.system_stop()
+        dmg_command.system_stop(force=True)
 
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
