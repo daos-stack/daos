@@ -73,6 +73,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolRebuildStart":         {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolRebuildStop":          {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolSelfHealEval":         {ComponentAdmin},
 	"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
 	"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
 	"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},

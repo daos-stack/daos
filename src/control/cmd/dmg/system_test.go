@@ -633,7 +633,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			opCode:  control.PoolRebuildOpCodeStart,
 			verbose: true,
 			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "System-rebuild start request succeeded on pools []",
+			expInfo: "System-rebuild start request succeeded on 0 pools []",
 		},
 		"pool stop failed": {
 			ctlCfg: &control.Config{},
@@ -681,7 +681,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "System-rebuild start request succeeded on pools [foo bar baz]",
+			expInfo: "System-rebuild start request succeeded on 3 pools [foo bar baz]",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

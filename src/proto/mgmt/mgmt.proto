@@ -70,6 +70,8 @@ service MgmtSvc {
 	rpc PoolRebuildStart(PoolRebuildStartReq) returns (DaosResp) {}
 	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
 	rpc PoolRebuildStop(PoolRebuildStopReq) returns (DaosResp) {}
+	// PoolSelfHealEval evaluates self_heal system property on a DAOS pool.
+	rpc PoolSelfHealEval(PoolSelfHealEvalReq) returns (DaosResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.

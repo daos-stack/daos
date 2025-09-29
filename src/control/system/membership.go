@@ -512,7 +512,7 @@ func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (me
 	return
 }
 
-func msgBadStateTransition(m *Member, ts MemberState) string {
+func MsgBadStateTransition(m *Member, ts MemberState) string {
 	return fmt.Sprintf("illegal member state update for rank %d: %s->%s", m.Rank, m.State, ts)
 }
 
@@ -554,7 +554,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		}
 
 		if member.State.isTransitionIllegal(result.State) {
-			m.log.Debugf("skipping %s", msgBadStateTransition(member, result.State))
+			m.log.Debugf("skipping %s", MsgBadStateTransition(member, result.State))
 			continue
 		}
 		member.State = result.State
@@ -675,7 +675,7 @@ func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) error {
 
 	ns := MemberStateExcluded
 	if member.State.isTransitionIllegal(ns) {
-		msg := msgBadStateTransition(member, ns)
+		msg := MsgBadStateTransition(member, ns)
 		// excluded->excluded transitions expected for multiple swim
 		// notifications, if so return error to skip group update
 		if member.State != ns {
@@ -725,7 +725,7 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 
 	newState := MemberStateErrored
 	if member.State.isTransitionIllegal(newState) {
-		m.log.Debugf("skipping %s", msgBadStateTransition(member, newState))
+		m.log.Debugf("skipping %s", MsgBadStateTransition(member, newState))
 		return
 	}
 

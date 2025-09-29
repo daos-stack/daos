@@ -123,6 +123,7 @@ func (m MgmtMethod) String() string {
 		MethodCheckerSetPolicy:     "CheckerSetPolicy",
 		MethodPoolRebuildStart:     "PoolRebuildStart",
 		MethodPoolRebuildStop:      "PoolRebuildStop",
+		MethodGroupStatusGet:       "GroupStatusGet",
 	}[m]; ok {
 		return s
 	}
@@ -217,6 +218,8 @@ const (
 	MethodPoolRebuildStart MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_START
 	// MethodPoolRebuildStop defines a method stop an interactive pool rebuild
 	MethodPoolRebuildStop MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_STOP
+	// MethodGroupStatusGet defines a method for retrieving the group status of a system
+	MethodGroupStatusGet MgmtMethod = C.DRPC_METHOD_MGMT_GROUP_STATUS_GET
 )
 
 type SrvMethod int32
@@ -231,11 +234,15 @@ func (m SrvMethod) ID() int32 {
 
 func (m SrvMethod) String() string {
 	if s, ok := map[SrvMethod]string{
-		MethodNotifyReady:         "notify ready",
-		MethodClusterEvent:        "cluster event",
-		MethodGetPoolServiceRanks: "get pool service ranks",
-		MethodPoolFindByLabel:     "find pool by label",
-		MethodListPools:           "list pools",
+		MethodNotifyReady:           "notify ready",
+		MethodGetPoolServiceRanks:   "get pool service ranks",
+		MethodPoolFindByLabel:       "find pool by label",
+		MethodClusterEvent:          "cluster event",
+		MethodCheckerListPools:      "checker list pools",
+		MethodCheckerRegisterPool:   "checker register pool",
+		MethodCheckerDeregisterPool: "checker deregister pool",
+		MethodCheckerReport:         "checker report",
+		MethodListPools:             "list pools",
 	}[m]; ok {
 		return s
 	}

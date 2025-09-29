@@ -289,7 +289,7 @@ func (sp *SystemProperty) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// SystemProperty defines a type to be used to represent DAOS system property keys.
+// SystemPropertyKey defines a type to be used to represent DAOS system property keys.
 type SystemPropertyKey int
 
 // IsValid returns a boolean indicating whether or not the system property key
@@ -331,11 +331,49 @@ func (sp *SystemPropertyKey) FromString(val string) error {
 	return errors.Errorf("unknown system property key %q", val)
 }
 
+// SelfHealFlag defines a type to be used to represent self-heal flags.
+type SelfHealFlag int
+
+// IsValid returns a boolean indicating whether or not the self-heal flag is valid.
+func (shf SelfHealFlag) IsValid() bool {
+	return shf > selfHealFlagUnknown && shf < selfHealFlagMax
+}
+
+func (shf SelfHealFlag) String() string {
+	if str, found := map[SelfHealFlag]string{
+		SelfHealFlagExclude:     "exclude",
+		SelfHealFlagPoolRebuild: "pool_rebuild",
+		SelfHealFlagPoolExclude: "pool_exclude",
+	}[shf]; found {
+		return str
+	}
+
+	return "unknown"
+}
+
+// FromString initializes a SelfHealFlag from a string.
+func (shf *SelfHealFlag) FromString(val string) error {
+	if shf == nil {
+		return errors.Errorf("%T is nil", shf)
+	}
+	if val == "" {
+		return errors.New("empty string")
+	}
+
+	for i := selfHealFlagUnknown + 1; i < selfHealFlagMax; i++ {
+		if strings.EqualFold(val, i.String()) {
+			*shf = i
+			return nil
+		}
+	}
+
+	return errors.Errorf("unknown self heal flag %q", val)
+}
+
 // NB: System properties are not tied to engine constants, but are defined
 // here for consistency.
 const (
 	systemPropertyUnknown SystemPropertyKey = iota
-
 	// SystemPropertyDaosVersion retrieves the DAOS version.
 	SystemPropertyDaosVersion
 	// SystemPropertyDaosSystem retrieves the DAOS system name.
@@ -348,6 +386,16 @@ const (
 	SystemPropertySelfHeal
 	// NB: This must be the last entry.
 	systemPropertyMax
+
+	selfHealFlagUnknown SelfHealFlag = iota
+	// SelfHealFlagExclude indicates system-level exclusion is enabled.
+	SelfHealFlagExclude
+	// SelfHealFlagPoolRebuild indicates pool rebuild is enabled.
+	SelfHealFlagPoolRebuild
+	// SelfHealFlagPoolExclude indicates pool-level exclusion is enabled.
+	SelfHealFlagPoolExclude
+	// NB: This must be the last entry.
+	selfHealFlagMax
 )
 
 type (
@@ -493,14 +541,15 @@ func pph2sp(key SystemPropertyKey, pph *PoolPropHandler, def string) SystemPrope
 
 // SystemPropertySelfHealHasFlag returns true if the given self-heal property
 // value contains the specified flag.
-func SystemPropertySelfHealHasFlag(value string, flag string) bool {
+func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
 	if value == "none" {
 		return false
 	}
 
 	flags := strings.Split(value, ";")
-	for _, f := range flags {
-		if f == flag {
+	for _, strFlag := range flags {
+		var f SelfHealFlag
+		if err := f.FromString(strFlag); err == nil && f == flag {
 			return true
 		}
 	}
@@ -538,23 +587,36 @@ func subsets(strings []string, sep string, empty string) []string {
 // SystemProperties returns the map of standard system properties.
 func SystemProperties() SystemPropertyMap {
 	poolProps := PoolProperties()
+	healFlagStrs := []string{
+		SelfHealFlagExclude.String(),
+		SelfHealFlagPoolExclude.String(),
+		SelfHealFlagPoolRebuild.String(),
+	}
+	defSelfHealFlagsStr := strings.Join(healFlagStrs, ";")
 
 	return SystemPropertyMap{
 		SystemPropertyDaosVersion: SystemProperty{
-			Key:         SystemPropertyDaosVersion,
-			Value:       &CompPropVal{ValueSource: func() string { return build.DaosVersion }},
+			Key: SystemPropertyDaosVersion,
+			Value: &CompPropVal{ValueSource: func() string {
+				return build.DaosVersion
+			}},
 			Description: "DAOS version",
 		},
 		SystemPropertyDaosSystem: SystemProperty{
-			Key:         SystemPropertyDaosSystem,
-			Value:       &CompPropVal{ValueSource: func() string { return build.DefaultSystemName }},
+			Key: SystemPropertyDaosSystem,
+			Value: &CompPropVal{ValueSource: func() string {
+				return build.DefaultSystemName
+			}},
 			Description: "DAOS system name",
 		},
-		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub_thresh"], "0"),
-		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"], "off"),
+		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh,
+			poolProps["scrub_thresh"], "0"),
+		SystemPropertyPoolScrubMode: pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"],
+			"off"),
 		SystemPropertySelfHeal: SystemProperty{
-			Key:         SystemPropertySelfHeal,
-			Value:       NewStringPropVal("exclude;pool_exclude;pool_rebuild", subsets([]string{"exclude", "pool_exclude", "pool_rebuild"}, ";", "none")...),
+			Key: SystemPropertySelfHeal,
+			Value: NewStringPropVal(defSelfHealFlagsStr,
+				subsets(healFlagStrs, ";", "none")...),
 			Description: "Self-heal policy for the system",
 		},
 	}

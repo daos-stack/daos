@@ -1361,7 +1361,7 @@ type PoolRebuildManageReq struct {
 // leader.
 func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolRebuildManageReq) error {
 	if req == nil {
-		return errors.Errorf("nil %T in PoolRebuild()", req)
+		return errors.Errorf("nil %T in PoolRebuildManage()", req)
 	}
 
 	if req.OpCode == PoolRebuildOpCodeStart {
@@ -1398,6 +1398,53 @@ func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolReb
 	}
 
 	msg := fmt.Sprintf("pool-rebuild %s failed", req.OpCode)
+	msErr := ur.getMSError()
+	if msErr != nil {
+		return errors.Wrap(msErr, msg)
+	}
+	resp := new(mgmtpb.DaosResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return errors.Wrap(err, msg)
+	}
+
+	rpcClient.Debugf("resp: %+v", resp)
+	if s := daos.Status(resp.Status); s != daos.Success {
+		return errors.Wrap(s, msg)
+	}
+
+	return nil
+}
+
+// PoolSelfHealEvalReq contains pool-self-heal-eval operation parameters. ID identifies the pool on which the
+// operation should be run.
+type PoolSelfHealEvalReq struct {
+	poolRequest
+	ID      string
+	PropVal string
+}
+
+// PoolSelfHealEval sends a pool-self-heal-eval request to the pool service leader.
+func PoolSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *PoolSelfHealEvalReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T in PoolSelfHealEval()", req)
+	}
+
+	pbReq := &mgmtpb.PoolSelfHealEvalReq{
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		PropVal: req.PropVal,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolSelfHealEval(ctx, pbReq)
+	})
+	rpcClient.Debugf("pool-self-heal-eval request: %s\n", pbUtil.Debug(pbReq))
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msg := "pool-self-heal-eval failed"
 	msErr := ur.getMSError()
 	if msErr != nil {
 		return errors.Wrap(msErr, msg)

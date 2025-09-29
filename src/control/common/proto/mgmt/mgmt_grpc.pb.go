@@ -49,6 +49,7 @@ const (
 	MgmtSvc_PoolUpgrade_FullMethodName              = "/mgmt.MgmtSvc/PoolUpgrade"
 	MgmtSvc_PoolRebuildStart_FullMethodName         = "/mgmt.MgmtSvc/PoolRebuildStart"
 	MgmtSvc_PoolRebuildStop_FullMethodName          = "/mgmt.MgmtSvc/PoolRebuildStop"
+	MgmtSvc_PoolSelfHealEval_FullMethodName         = "/mgmt.MgmtSvc/PoolSelfHealEval"
 	MgmtSvc_GetAttachInfo_FullMethodName            = "/mgmt.MgmtSvc/GetAttachInfo"
 	MgmtSvc_ListPools_FullMethodName                = "/mgmt.MgmtSvc/ListPools"
 	MgmtSvc_ListContainers_FullMethodName           = "/mgmt.MgmtSvc/ListContainers"
@@ -133,6 +134,8 @@ type MgmtSvcClient interface {
 	PoolRebuildStart(ctx context.Context, in *PoolRebuildStartReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
 	PoolRebuildStop(ctx context.Context, in *PoolRebuildStopReq, opts ...grpc.CallOption) (*DaosResp, error)
+	// PoolSelfHealEval evaluates self_heal system property on a DAOS pool.
+	PoolSelfHealEval(ctx context.Context, in *PoolSelfHealEvalReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(ctx context.Context, in *GetAttachInfoReq, opts ...grpc.CallOption) (*GetAttachInfoResp, error)
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
@@ -403,6 +406,16 @@ func (c *mgmtSvcClient) PoolRebuildStop(ctx context.Context, in *PoolRebuildStop
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DaosResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolRebuildStop_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolSelfHealEval(ctx context.Context, in *PoolSelfHealEvalReq, opts ...grpc.CallOption) (*DaosResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolSelfHealEval_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -743,6 +756,8 @@ type MgmtSvcServer interface {
 	PoolRebuildStart(context.Context, *PoolRebuildStartReq) (*DaosResp, error)
 	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
 	PoolRebuildStop(context.Context, *PoolRebuildStopReq) (*DaosResp, error)
+	// PoolSelfHealEval evaluates self_heal system property on a DAOS pool.
+	PoolSelfHealEval(context.Context, *PoolSelfHealEvalReq) (*DaosResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error)
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
@@ -871,6 +886,9 @@ func (UnimplementedMgmtSvcServer) PoolRebuildStart(context.Context, *PoolRebuild
 }
 func (UnimplementedMgmtSvcServer) PoolRebuildStop(context.Context, *PoolRebuildStopReq) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolRebuildStop not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolSelfHealEval(context.Context, *PoolSelfHealEvalReq) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolSelfHealEval not implemented")
 }
 func (UnimplementedMgmtSvcServer) GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAttachInfo not implemented")
@@ -1351,6 +1369,24 @@ func _MgmtSvc_PoolRebuildStop_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).PoolRebuildStop(ctx, req.(*PoolRebuildStopReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolSelfHealEval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolSelfHealEvalReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolSelfHealEval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_PoolSelfHealEval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolSelfHealEval(ctx, req.(*PoolSelfHealEvalReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1949,6 +1985,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PoolRebuildStop",
 			Handler:    _MgmtSvc_PoolRebuildStop_Handler,
+		},
+		{
+			MethodName: "PoolSelfHealEval",
+			Handler:    _MgmtSvc_PoolSelfHealEval_Handler,
 		},
 		{
 			MethodName: "GetAttachInfo",

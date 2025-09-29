@@ -180,7 +180,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_CHK_ACT:
 		ds_mgmt_drpc_check_act(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_GET_GROUP_STATUS:
+	case DRPC_METHOD_MGMT_GROUP_STATUS_GET:
 		ds_mgmt_drpc_get_group_status(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_CHK_SET_POLICY:
