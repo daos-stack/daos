@@ -31,9 +31,44 @@
 #include <gurt/debug.h>
 #include <gurt/shm_utils.h>
 
-#define MAX_THREAD 32
+#define MAX_THREAD 16
 
 pthread_t thread_list[MAX_THREAD];
+
+typedef struct {
+	shm_lru_cache_t *cache;
+	int              start;
+	int              end;
+	int             *data;
+} thread_param_t;
+
+static void *
+thread_cache_op(void *arg)
+{
+	int             i;
+	int             j;
+	int             rc;
+	shm_lru_node_t *node_found;
+	thread_param_t *param = (thread_param_t *)arg;
+	int            *addr_val;
+
+	for (j = 0; j < 3; j++) {
+		/* insert entries */
+		for (i = param->start; i < param->end; i++) {
+			shm_lru_put(param->cache, &i, sizeof(int), &param->data[i], sizeof(int));
+		}
+
+		/* verify entries exist */
+		for (i = param->start; i < param->end; i++) {
+			rc = shm_lru_get(param->cache, &i, sizeof(int), &node_found,
+					 (void **)&addr_val);
+			assert_true(rc == 0);
+			assert_true(*addr_val == param->data[i]);
+		}
+	}
+
+	pthread_exit(NULL);
+}
 
 void
 test_lrucache(void **state)
@@ -50,10 +85,16 @@ test_lrucache(void **state)
 	shm_lru_node_t  *node_found;
 	int              capacity;
 	shm_lru_cache_t *cache;
+	thread_param_t   thread_param_list[MAX_THREAD];
+	int             *data;
+	int              num_keys;
+	struct timeval   tm1, tm2;
+	double           dt_with_partition;
+	double           dt_without_partition;
 
 	/* test keys with various size */
 	/* key_size is zero, so key could have various length */
-	rc = shm_lru_create_cache(1, 16, 0, sizeof(int), &cache);
+	rc = shm_lru_create_cache(false, 16, 0, sizeof(int), &cache);
 	assert_true(rc == 0);
 
 	for (key_size = 1; key_size <= 15; key_size++) {
@@ -65,15 +106,15 @@ test_lrucache(void **state)
 	for (key_size = 1; key_size <= 15; key_size++) {
 		memcpy(key_var, key_long, key_size);
 		rc = shm_lru_get(cache, key_var, key_size, &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == key_size);
+		assert_true(rc == 0);
+		assert_true(*addr_val == key_size);
 		shm_lru_node_dec_ref(node_found);
 	}
 
 	shm_lru_destroy_cache(cache);
 
 	/* test various key size and data size */
-	rc = shm_lru_create_cache(1, 16, 0, 0, &cache);
+	rc = shm_lru_create_cache(false, 16, 0, 0, &cache);
 	assert_true(rc == 0);
 
 	for (i = 1; i <= 16; i++) {
@@ -83,7 +124,7 @@ test_lrucache(void **state)
 	for (i = 1; i <= 16; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, key_long, i, &node_found, (void **)&addr_val);
-		assert(rc == 0);
+		assert_true(rc == 0);
 		assert_true(memcmp(addr_val, data_long, i) == 0);
 		shm_lru_node_dec_ref(node_found);
 	}
@@ -91,7 +132,7 @@ test_lrucache(void **state)
 	shm_lru_destroy_cache(cache);
 
 	/* test updating existing key */
-	rc = shm_lru_create_cache(1, 2, sizeof(int), sizeof(int), &cache);
+	rc = shm_lru_create_cache(false, 2, sizeof(int), sizeof(int), &cache);
 	assert_true(rc == 0);
 
 	key = 1;
@@ -107,8 +148,8 @@ test_lrucache(void **state)
 
 	key = 1;
 	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-	assert(rc == 0);
-	assert(*addr_val == 10);
+	assert_true(rc == 0);
+	assert_true(*addr_val == 10);
 	shm_lru_node_dec_ref(node_found);
 
 	key = 3;
@@ -117,19 +158,19 @@ test_lrucache(void **state)
 
 	key = 2;
 	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-	assert(rc == ENOENT);
+	assert_true(rc == ENOENT);
 
 	key = 1;
 	rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-	assert(rc == 0);
-	assert(*addr_val == 10);
+	assert_true(rc == 0);
+	assert_true(*addr_val == 10);
 	shm_lru_node_dec_ref(node_found);
 
 	shm_lru_destroy_cache(cache);
 
 	/* large number of operations */
 	capacity = 100;
-	rc       = shm_lru_create_cache(1, capacity, sizeof(int), sizeof(int), &cache);
+	rc       = shm_lru_create_cache(false, capacity, sizeof(int), sizeof(int), &cache);
 	assert_true(rc == 0);
 
 	/* make cache full */
@@ -143,8 +184,8 @@ test_lrucache(void **state)
 	for (i = 0; i < capacity; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == i);
+		assert_true(rc == 0);
+		assert_true(*addr_val == i);
 		shm_lru_node_dec_ref(node_found);
 	}
 
@@ -159,19 +200,93 @@ test_lrucache(void **state)
 	for (i = 0; i < 50; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == ENOENT);
+		assert_true(rc == ENOENT);
 	}
 
 	/* verify remaining items do exist */
 	for (i = 50; i < capacity + 50; i++) {
 		key = i;
 		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
-		assert(rc == 0);
-		assert(*addr_val == i);
+		assert_true(rc == 0);
+		assert_true(*addr_val == i);
 		shm_lru_node_dec_ref(node_found);
 	}
 
 	shm_lru_destroy_cache(cache);
+
+	/* start multiple threads to operate LRU cache */
+	capacity = 500000;
+	num_keys = (int)(capacity * 0.80f);
+	data     = malloc(sizeof(int) * num_keys);
+	assert_true(data != NULL);
+
+	srand(1);
+	for (i = 0; i < num_keys; i++) {
+		data[i] = rand();
+	}
+
+	/* cache with partitions for better performance in multi-threads */
+	rc = shm_lru_create_cache(true, capacity, sizeof(int), sizeof(int), &cache);
+	assert_true(rc == 0);
+
+	gettimeofday(&tm1, NULL);
+	for (i = 0; i < MAX_THREAD; i++) {
+		thread_param_list[i].cache = cache;
+		thread_param_list[i].start = 0;
+		thread_param_list[i].end   = num_keys;
+		thread_param_list[i].data  = data;
+
+		rc = pthread_create(&thread_list[i], NULL, thread_cache_op,
+				    (void *)&thread_param_list[i]);
+		assert_true(rc == 0);
+	}
+	for (i = 0; i < MAX_THREAD; i++) {
+		rc = pthread_join(thread_list[i], NULL);
+		assert_true(rc == 0);
+	}
+	gettimeofday(&tm2, NULL);
+	dt_with_partition = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
+
+	/* verify all entries exist */
+	for (i = 0; i < num_keys; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		assert_true(rc == 0);
+		assert_true(*addr_val == data[i]);
+	}
+	shm_lru_destroy_cache(cache);
+
+	/* cache without partitions has bad lock contention in multi-threads */
+	rc = shm_lru_create_cache(false, capacity, sizeof(int), sizeof(int), &cache);
+	assert_true(rc == 0);
+
+	gettimeofday(&tm1, NULL);
+	for (i = 0; i < MAX_THREAD; i++) {
+		thread_param_list[i].cache = cache;
+		rc                         = pthread_create(&thread_list[i], NULL, thread_cache_op,
+							    (void *)&thread_param_list[i]);
+		assert_true(rc == 0);
+	}
+	for (i = 0; i < MAX_THREAD; i++) {
+		rc = pthread_join(thread_list[i], NULL);
+		assert_true(rc == 0);
+	}
+	gettimeofday(&tm2, NULL);
+	dt_without_partition = (tm2.tv_sec - tm1.tv_sec) + (tm2.tv_usec - tm1.tv_usec) * 0.000001;
+
+	/* verify all entries exist */
+	for (i = 0; i < num_keys; i++) {
+		key = i;
+		rc  = shm_lru_get(cache, &key, sizeof(int), &node_found, (void **)&addr_val);
+		assert_true(rc == 0);
+		assert_true(*addr_val == data[i]);
+	}
+	shm_lru_destroy_cache(cache);
+
+	printf(" dt_without_partition / dt_with_partition = %4.2lf\n",
+	       dt_without_partition / dt_with_partition);
+
+	free(data);
 }
 
 #define N_LOOP_MEM (8)

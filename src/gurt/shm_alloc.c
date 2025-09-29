@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <pthread.h>
+#include <hwloc.h>
 
 #include <gurt/shm_utils.h>
 #include "shm_internal.h"
@@ -47,6 +48,44 @@ static uint64_t       page_size;
 
 extern __thread pid_t d_tid;
 
+#define INVALID_NUM_CORE (0xFFFFFFFF)
+static unsigned int
+get_cpu_core(void)
+{
+	hwloc_topology_t topology;
+	unsigned int     cpu_count;
+	int              depth;
+	int              rc;
+
+	/* Allocate, initialize, and perform topology detection */
+	rc = hwloc_topology_init(&topology);
+	if (rc) {
+		DS_ERROR(EINVAL, "libhwloc hwloc_topology_init() failed");
+		return INVALID_NUM_CORE;
+	}
+
+	rc = hwloc_topology_load(topology);
+	if (rc) {
+		DS_ERROR(EINVAL, "libhwloc hwloc_topology_load() failed");
+		cpu_count = INVALID_NUM_CORE;
+		goto out;
+	}
+	/* Try to get the number of CPU cores from topology */
+	depth = hwloc_get_type_depth(topology, HWLOC_OBJ_CORE);
+	if (depth == HWLOC_TYPE_DEPTH_UNKNOWN) {
+		DS_ERROR(EINVAL, "libhwloc hwloc_get_type_depth() failed");
+		cpu_count = INVALID_NUM_CORE;
+		goto out;
+	}
+
+	cpu_count = hwloc_get_nbobjs_by_depth(topology, depth);
+
+out:
+	/* Destroy topology object and return */
+	hwloc_topology_destroy(topology);
+	return cpu_count;
+}
+
 static int
 create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 {
@@ -56,7 +95,12 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	int              shmopen_perm = 0600;
 	void            *shm_addr;
 	char             daos_shm_name_buf[64];
+	uint32_t         cpu_count;
 	shm_lru_cache_t *lru_cache_dentry;
+
+	cpu_count = get_cpu_core();
+	if (cpu_count == INVALID_NUM_CORE)
+		return errno;
 
 	/* the shared memory only accessible for individual user for now */
 	sprintf(daos_shm_name_buf, "%s_%d", daos_shm_name, getuid());
@@ -115,12 +159,13 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	d_shm_head->size          = shm_size;
 	d_shm_head->shm_pool_size = shm_pool_size;
 	d_shm_head->version       = 1;
+	d_shm_head->num_core      = cpu_count;
 	__sync_synchronize();
 	d_shm_head->magic = DSM_MAGIC;
 	/* initialization is finished now. */
 	close(shm_ht_fd);
 
-	rc = shm_lru_create_cache(NUM_SUB_CACHE, DEFAULT_CACHE_DENTRY_CAPACITY, 0, 0,
+	rc = shm_lru_create_cache(true, DEFAULT_CACHE_DENTRY_CAPACITY, 0, 0,
 				  &lru_cache_dentry);
 	if (rc) {
 		D_ERROR("Failed to create dentry cache: %d (%s)\n", rc, strerror(rc));
