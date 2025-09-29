@@ -2124,7 +2124,7 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 {
 	int          rc;
 	bool         md_on_ssd;
-	unsigned int sz         = tmpfs_mount_size;
+	unsigned int sz = tmpfs_mount_size;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
