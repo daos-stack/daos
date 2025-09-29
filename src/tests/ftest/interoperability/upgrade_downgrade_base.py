@@ -422,13 +422,12 @@ class UpgradeDowngradeBase(IorTestBase):
     
         self.log.info("Successfully handled excluded ranks: %s and rebuild completed", ranks)
     
-    def pool_upgrade(self, pool, with_fault=False, with_rebuild=False):
+    def pool_upgrade(self, pool, with_fault=False):
         """Run and verify dmg pool upgrade.
     
         Args:
             pool (TestPool): pool to be upgraded
             with_fault (bool): whether to use and verify fault injection
-            with_rebuild (bool): whether to trigger and wait for rebuild after upgrade
         """
         # Make sure an upgrade isn't already in progress
         self.wait_for_pool_upgrade(pool, ["not started", "completed"], fail_on_status=["failed"])
@@ -469,11 +468,6 @@ class UpgradeDowngradeBase(IorTestBase):
                 'Expected pool_layout_ver to increase. '
                 f'pre={pre_pool_layout_ver}, post={post_pool_layout_ver}')
         # TODO verify they are EQUAL
-    
-        # Trigger rebuild only if with_fault is True and with_rebuild is True
-        if with_fault and with_rebuild:
-            self.log.info("Triggering rebuild as with_fault and with_rebuild are both set to True")
-            self.trigger_and_wait_for_rebuild(pool, rank="2")
 
     def verify_write_read(self, clients, container, write=True, read=True):
         """Verify write and/or read with IOR.
@@ -640,6 +634,9 @@ class UpgradeDowngradeBase(IorTestBase):
 
         self.show_daos_version(all_hosts, hosts_client)
 
+        self.log_step("Trigger and wait for rebuild completion")    
+        self.trigger_and_wait_for_rebuild(pool, rank="2")
+
         self.log_step("Verify client/server communication - new client, new server, old pool")
         self.verify_server_client_comm(pool)
 
@@ -656,6 +653,10 @@ class UpgradeDowngradeBase(IorTestBase):
         tmp_cont = self.get_container(pool)
         self.verify_write_read(hosts_client, tmp_cont, write=True, read=True)
         tmp_cont.destroy()
+
+        self.log_step("Handle excluded ranks and wait for rebuild")
+        excluded_ranks = "2"  # rank(s) to handle
+        self.handle_excluded_ranks(pool, excluded_ranks)
 
         if do_test_diff_version_server_client:
             self.log_step(f"Downgrade DAOS clients to version {self.old_version}")
@@ -697,7 +698,7 @@ class UpgradeDowngradeBase(IorTestBase):
 
         if fault_on_pool_upgrade and self.has_fault_injection(hosts_client):
             self.log_step("Verify dmg pool upgrade with fault-injection - new server, old pool")
-            self.pool_upgrade(pool, with_fault=True, with_rebuild=True)
+            self.pool_upgrade(pool, with_fault=True)
         else:
             self.log_step("Verify dmg pool upgrade - new server, old pool")
             self.pool_upgrade(pool)
@@ -718,10 +719,6 @@ class UpgradeDowngradeBase(IorTestBase):
         tmp_cont = self.get_container(pool)
         self.verify_write_read(hosts_client, tmp_cont, write=True, read=True)
         tmp_cont.destroy()
-
-        self.log_step("Handle excluded ranks and wait for rebuild")
-        excluded_ranks = "2"  # rank(s) to handle
-        self.handle_excluded_ranks(pool, excluded_ranks)
 
         self.log_step("Destroy current pool and container")
         cont1.destroy()
