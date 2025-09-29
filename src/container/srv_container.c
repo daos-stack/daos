@@ -2085,7 +2085,8 @@ cont_agg_eph_leader_ult(void *arg)
 		goto out;
 
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
-		cont_agg_eph_sync(pool, svc);
+		if (!pool->sp_rebuilding)
+			cont_agg_eph_sync(pool, svc);
 
 		if (dss_ult_exiting(svc->cs_ec_leader_ephs_req))
 			break;
