@@ -1843,9 +1843,10 @@ crt_hdlr_iv_sync_aux(void *arg)
 	grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver != input->ivs_grp_ver) {
-		D_DEBUG(DB_ALL, "Group (%s) version mismatch. Local: %d Remote :%d",
+		rc = -DER_GRPVER;
+		DL_INFO(rc, "Group (%s) version mismatch. Local: %d Remote :%d",
 			ivns_id.ii_group_name, grp_ver, input->ivs_grp_ver);
-		D_GOTO(exit, rc = -DER_GRPVER);
+		goto exit;
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);

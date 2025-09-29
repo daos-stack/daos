@@ -1951,14 +1951,14 @@ out:
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
 			if (rc)
-				DL_ERROR(rc, "agg_peer_update failed, write_parity %d",
+				DL_ERROR(rc, "agg_peer_update failed, write_parity %d\n",
 					 write_parity);
 		}
 
 		if (rc == 0) {
 			rc = agg_update_vos(agg_param, entry, write_parity);
 			if (rc)
-				DL_ERROR(rc, "agg_update_vos failed, write_parity %d",
+				DL_ERROR(rc, "agg_update_vos failed, write_parity %d\n",
 					 write_parity);
 		}
 	}

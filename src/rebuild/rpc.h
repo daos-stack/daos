@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +46,7 @@ extern struct crt_proto_format rebuild_proto_fmt;
 #define DAOS_ISEQ_REBUILD_SCAN	/* input fields */		 \
 	((uuid_t)		(rsi_pool_uuid)		CRT_VAR) \
 	((uint64_t)		(rsi_leader_term)	CRT_VAR) \
-	((uint64_t)		(rsi_upbound_epoch)	CRT_VAR) \
+	((uint64_t)		(rsi_reclaim_epoch)	CRT_VAR) \
 	((int32_t)		(rsi_rebuild_op)	CRT_VAR) \
 	((uint32_t)		(rsi_tgts_num)		CRT_VAR) \
 	((uint32_t)		(rsi_ns_id)		CRT_VAR) \
@@ -57,7 +56,7 @@ extern struct crt_proto_format rebuild_proto_fmt;
 	((uint32_t)		(rsi_layout_ver)	CRT_VAR)
 
 #define DAOS_OSEQ_REBUILD_SCAN	/* output fields */		 \
-	((uint64_t)		(rso_reserved)		CRT_VAR) \
+	((uint64_t)		(rso_stable_epoch)	CRT_VAR) \
 	((int32_t)		(rso_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)

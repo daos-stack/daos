@@ -72,15 +72,16 @@ struct rebuild_tgt_pool_tracker {
 	/* reported # rebuilt objs */
 	uint64_t		rt_reported_obj_cnt;
 	uint64_t		rt_reported_rec_cnt;
-	uint64_t                 rt_reported_size;
+	uint64_t		rt_reported_size;
+	/* global stable epoch to use for rebuilding the data */
+	uint64_t		rt_stable_epoch;
 
-	/* Upper bound epoch for the rebuild -
-	 * 1) Global consistent epoch for rebuild, and
-	 * 2) reclaim epoch of the rebuild, which is used to discard
-	 *    the half-rebuild data if rebuild fails.
-	 * And to constrain the VOS aggregation will not cross the epoch.
+	/* Only used by reclaim job to discard those half-rebuild data */
+	uint64_t		rt_reclaim_epoch;
+	/* local rebuild epoch mainly to constrain the VOS aggregation
+	 * to make sure aggregation will not cross the epoch
 	 */
-	uint64_t                 rt_upbound_eph;
+	uint64_t		rt_rebuild_fence;
 
 	uint32_t		rt_leader_rank;
 
@@ -139,12 +140,15 @@ struct rebuild_global_pool_tracker {
 
 	uint64_t	rgt_time_start;
 
-	/* Upper bound epoch for the rebuild -
-	 * 1) Global consistent epoch for rebuild, and
-	 * 2) reclaim epoch of the rebuild, which is used to discard
-	 *    the half-rebuild data if rebuild fails.
+	/* Stable epoch of the rebuild, the minimum epoch from
+	 * all rebuilding targets
 	 */
-	uint64_t                        rgt_upbound_eph;
+	uint64_t	rgt_stable_epoch;
+
+	/* reclaim epoch of the rebuild, which is used to discard
+	 * the half-rebuild data if rebuild fails
+	 */
+	uint64_t	rgt_reclaim_epoch;
 
 	ABT_mutex	rgt_lock;
 	/* The current rebuild is done on the leader */
@@ -220,12 +224,10 @@ struct rebuild_task {
 	struct pool_target_id_list	dst_tgts;
 	daos_rebuild_opc_t		dst_rebuild_op;
 
-	/* Upper bound epoch for the rebuild task. Used as
-	 * 1) Stable epoch for rebuild, and
-	 * 2) Epoch to use for reclaim job for discarding the data
-	 *    of half-rebuild/reintegrated job.
+	/* Epoch to use for reclaim job for discarding the data
+	 * of half-rebuild/reintegrated job.
 	 */
-	daos_epoch_t                    dst_upbound_eph;
+	daos_epoch_t			dst_reclaim_eph;
 	uint64_t			dst_schedule_time;
 	uint32_t			dst_map_ver;
 	uint32_t			dst_new_layout_version;

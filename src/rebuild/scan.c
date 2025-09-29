@@ -110,18 +110,19 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 	if (daos_fail_check(DAOS_REBUILD_TGT_SEND_OBJS_FAIL))
 		D_GOTO(out, rc = -DER_IO);
 
-	D_DEBUG(DB_REBUILD,
-		"send rebuild objects " DF_UUID " to tgt %d"
-		" cnt %d upbound epoch " DF_U64 "\n",
-		DP_UUID(rpt->rt_pool_uuid), arg->tgt_id, arg->count, rpt->rt_upbound_eph);
+	D_DEBUG(DB_REBUILD, "send rebuild objects "DF_UUID" to tgt %d"
+		" cnt %d stable epoch "DF_U64"\n", DP_UUID(rpt->rt_pool_uuid), arg->tgt_id,
+		arg->count, rpt->rt_stable_epoch);
 	while (1) {
 		enqueue_id = 0;
 		max_delay = 0;
-		rc         = ds_object_migrate_send(
-                    rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->cont_uuid, arg->tgt_id,
-                    rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_upbound_eph, arg->oids,
-                    arg->ephs, arg->punched_ephs, arg->shards, arg->count, rpt->rt_new_layout_ver,
-                    rpt->rt_rebuild_op, &enqueue_id, &max_delay);
+		rc = ds_object_migrate_send(rpt->rt_pool, rpt->rt_poh_uuid,
+					    rpt->rt_coh_uuid, arg->cont_uuid,
+					    arg->tgt_id, rpt->rt_rebuild_ver,
+					    rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+					    arg->oids, arg->ephs, arg->punched_ephs, arg->shards,
+					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op,
+					    &enqueue_id, &max_delay);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_OVERLOAD_RETRY && rc != -DER_AGAIN &&
@@ -301,7 +302,11 @@ rebuild_objects_send_ult(void *data)
 	arg.punched_ephs = punched_ephs;
 	arg.rpt = rpt;
 	while (!tls->rebuild_pool_scan_done || !dbtree_is_empty(tls->rebuild_tree_hdl)) {
-		D_ASSERT(rpt->rt_upbound_eph != 0);
+		if (rpt->rt_stable_epoch == 0) {
+			dss_sleep(0);
+			continue;
+		}
+
 		if (dbtree_is_empty(tls->rebuild_tree_hdl)) {
 			dss_sleep(0);
 			continue;
@@ -537,7 +542,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	D_ASSERT(tls != NULL);
 	tls->rebuild_pool_reclaim_obj_count++;
 
-	discard_epr.epr_hi = rpt->rt_upbound_eph;
+	discard_epr.epr_hi = rpt->rt_reclaim_epoch;
 	discard_epr.epr_lo = 0;
 	/*
 	 * It's possible this object might still be being
@@ -582,7 +587,7 @@ rebuild_obj_ult(void *data)
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
 	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
-			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_upbound_eph,
+			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
 			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
 	rpt_put(rpt);
@@ -903,7 +908,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 	}
 
-	epoch.oe_value = rpt->rt_upbound_eph;
+	epoch.oe_value = rpt->rt_stable_epoch;
 	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
 		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
 	D_ASSERT(rc == 0);
@@ -1295,6 +1300,7 @@ out:
 	}
 	rso                   = crt_reply_get(rpc);
 	rso->rso_status       = rc;
+	rso->rso_stable_epoch = d_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
 
@@ -1307,6 +1313,10 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	if (dst->rso_status == 0)
 		dst->rso_status = src->rso_status;
+
+	if (src->rso_status == 0 &&
+	    dst->rso_stable_epoch < src->rso_stable_epoch)
+		dst->rso_stable_epoch = src->rso_stable_epoch;
 
 	return 0;
 }
