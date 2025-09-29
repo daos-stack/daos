@@ -371,16 +371,68 @@ class UpgradeDowngradeBase(IorTestBase):
                     f'to be {status}')
             time.sleep(3)
 
-    def pool_upgrade(self, pool, with_fault=False):
-        """Run and verify dmg pool upgrade.
+    def trigger_and_wait_for_rebuild(self, pool, rank):
+        """Trigger rebuild by excluding a rank and wait for rebuild to complete.
 
+        Args:
+            pool (TestPool): The pool on which to trigger rebuild.
+            rank (str): The rank to exclude to trigger rebuild.
+
+        Raises:
+            TestFail: If rebuild does not complete successfully.
+        """
+        self.log.info("Triggering rebuild by excluding rank %s", rank)
+        self.get_dmg_command().system_exclude(ranks=rank)
+
+        self.log.info("Waiting for rebuild to start")
+        pool.wait_for_rebuild(True)
+
+        self.log.info("Waiting for rebuild to complete")
+        pool.wait_for_rebuild(False)
+
+        self.log.info("Rebuild completed successfully")
+
+    def handle_excluded_ranks(self, pool, ranks):
+        """Handle excluded ranks by clearing exclusion, starting the ranks, reintegrating them, and waiting for rebuild.
+    
+        Args:
+            pool (TestPool): The pool on which to reintegrate the ranks.
+            ranks (str): The ranks to handle (comma-separated string of rank IDs).
+    
+        Raises:
+            TestFail: If any of the commands fail or rebuild does not complete successfully.
+        """
+        self.log.info("Handling excluded ranks: %s", ranks)
+    
+        # Step 1: Clear exclusion for the specified ranks
+        self.log.info("Clearing exclusion for ranks: %s", ranks)
+        self.get_dmg_command().system_clear_exclude(ranks=ranks)
+    
+        # Step 2: Start the specified ranks
+        self.log.info("Starting ranks: %s", ranks)
+        self.get_dmg_command().system_start(ranks=ranks)
+    
+        # Step 3: Reintegrate the ranks into the pool
+        self.log.info("Reintegrating ranks: %s into pool %s", ranks, pool.identifier)
+        self.get_dmg_command().pool_reintegrate(pool=pool.identifier, ranks=ranks)
+    
+        # Step 4: Wait for rebuild to complete
+        self.log.info("Waiting for rebuild to complete after reintegration")
+        pool.wait_for_rebuild(False)
+    
+        self.log.info("Successfully handled excluded ranks: %s and rebuild completed", ranks)
+    
+    def pool_upgrade(self, pool, with_fault=False, with_rebuild=False):
+        """Run and verify dmg pool upgrade.
+    
         Args:
             pool (TestPool): pool to be upgraded
             with_fault (bool): whether to use and verify fault injection
+            with_rebuild (bool): whether to trigger and wait for rebuild after upgrade
         """
         # Make sure an upgrade isn't already in progress
         self.wait_for_pool_upgrade(pool, ["not started", "completed"], fail_on_status=["failed"])
-
+    
         self.log.info('Check the layout version before upgrading')
         response = self.get_dmg_command().pool_query(pool=pool.identifier)['response']
         pre_pool_layout_ver = int(response['pool_layout_ver'])
@@ -388,14 +440,14 @@ class UpgradeDowngradeBase(IorTestBase):
         if pre_pool_layout_ver == pre_upgrade_layout_ver:
             self.log.info('Pool does not need upgrade. Skipping.')
             return
-
+    
         if with_fault:
             # Stop a rank right before upgrade
             self.get_dmg_command().system_stop(force=True, ranks="1")
-
+    
         # Pool upgrade
         self.pool.upgrade()
-
+    
         if with_fault:
             # Upgrade should fail because a rank is stopped/stopping
             self.wait_for_pool_upgrade(pool, ["failed"], fail_on_status=["completed"])
@@ -403,10 +455,10 @@ class UpgradeDowngradeBase(IorTestBase):
             self.get_dmg_command().system_start(ranks="1")
             self.log.info("Sleeping for 30 seconds after system start")
             time.sleep(30)
-
+    
         # Verify pool upgrade completed
         self.wait_for_pool_upgrade(pool, ["completed"], fail_on_status=["failed"])
-
+    
         self.log.info('Sleep 5 seconds after upgrade is complete')
         time.sleep(5)
         self.log.info('Verify the layout version increased after upgrading')
@@ -417,8 +469,11 @@ class UpgradeDowngradeBase(IorTestBase):
                 'Expected pool_layout_ver to increase. '
                 f'pre={pre_pool_layout_ver}, post={post_pool_layout_ver}')
         # TODO verify they are EQUAL
-
-        # TODO also check [rebuild][state]
+    
+        # Trigger rebuild only if with_fault is True and with_rebuild is True
+        if with_fault and with_rebuild:
+            self.log.info("Triggering rebuild as with_fault and with_rebuild are both set to True")
+            self.trigger_and_wait_for_rebuild(pool, rank="2")
 
     def verify_write_read(self, clients, container, write=True, read=True):
         """Verify write and/or read with IOR.
@@ -642,7 +697,7 @@ class UpgradeDowngradeBase(IorTestBase):
 
         if fault_on_pool_upgrade and self.has_fault_injection(hosts_client):
             self.log_step("Verify dmg pool upgrade with fault-injection - new server, old pool")
-            self.pool_upgrade(pool, with_fault=True)
+            self.pool_upgrade(pool, with_fault=True, with_rebuild=True)
         else:
             self.log_step("Verify dmg pool upgrade - new server, old pool")
             self.pool_upgrade(pool)
@@ -663,6 +718,10 @@ class UpgradeDowngradeBase(IorTestBase):
         tmp_cont = self.get_container(pool)
         self.verify_write_read(hosts_client, tmp_cont, write=True, read=True)
         tmp_cont.destroy()
+
+        self.log_step("Handle excluded ranks and wait for rebuild")
+        excluded_ranks = "2"  # rank(s) to handle
+        self.handle_excluded_ranks(pool, excluded_ranks)
 
         self.log_step("Destroy current pool and container")
         cont1.destroy()
