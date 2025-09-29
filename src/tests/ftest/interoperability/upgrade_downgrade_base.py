@@ -432,7 +432,7 @@ class UpgradeDowngradeBase(IorTestBase):
         """
         # Make sure an upgrade isn't already in progress
         self.wait_for_pool_upgrade(pool, ["not started", "completed"], fail_on_status=["failed"])
-    
+
         self.log.info('Check the layout version before upgrading')
         response = self.get_dmg_command().pool_query(pool=pool.identifier)['response']
         pre_pool_layout_ver = int(response['pool_layout_ver'])
@@ -440,14 +440,14 @@ class UpgradeDowngradeBase(IorTestBase):
         if pre_pool_layout_ver == pre_upgrade_layout_ver:
             self.log.info('Pool does not need upgrade. Skipping.')
             return
-    
+
         if with_fault:
             # Stop a rank right before upgrade
             self.get_dmg_command().system_stop(force=True, ranks="1")
-    
+
         # Pool upgrade
         self.pool.upgrade()
-    
+
         if with_fault:
             # Upgrade should fail because a rank is stopped/stopping
             self.wait_for_pool_upgrade(pool, ["failed"], fail_on_status=["completed"])
@@ -455,10 +455,10 @@ class UpgradeDowngradeBase(IorTestBase):
             self.get_dmg_command().system_start(ranks="1")
             self.log.info("Sleeping for 30 seconds after system start")
             time.sleep(30)
-    
+
         # Verify pool upgrade completed
         self.wait_for_pool_upgrade(pool, ["completed"], fail_on_status=["failed"])
-    
+
         self.log.info('Sleep 5 seconds after upgrade is complete')
         time.sleep(5)
         self.log.info('Verify the layout version increased after upgrading')
