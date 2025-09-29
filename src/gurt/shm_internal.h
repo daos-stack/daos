@@ -35,9 +35,6 @@
  */
 #define LARGE_MEM        (64 * 1024)
 
-/* a large cache can be divided into the number of sub-caches to use finer-grained lock */
-#define NUM_SUB_CACHE                 (128)
-
 #define DEFAULT_CACHE_DENTRY_CAPACITY (256 * 1024)
 
 /* Head of shared memory region */

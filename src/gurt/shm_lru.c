@@ -13,6 +13,9 @@
 #include "shm_internal.h"
 #include <gurt/shm_utils.h>
 
+/* dynamic allocation if data is larger than this threshold */
+#define LRU_ALLOC_SIZE_THRESHOLD (4096)
+
 /* the address of shared memory region */
 extern struct d_shm_hdr *d_shm_head;
 

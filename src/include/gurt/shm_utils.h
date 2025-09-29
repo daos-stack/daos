@@ -376,9 +376,6 @@ shm_ht_rec_data(d_shm_ht_rec_loc_t rec_loc, int *err);
 int
 shm_ht_rec_num_ref(d_shm_ht_rec_loc_t rec_loc);
 
-/* dynamic allocation if data is larger than this threshold */
-#define LRU_ALLOC_SIZE_THRESHOLD (4096)
-
 typedef struct shm_lru_cache shm_lru_cache_t;
 typedef struct shm_lru_node  shm_lru_node_t;
 
