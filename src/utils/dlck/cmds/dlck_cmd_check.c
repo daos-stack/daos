@@ -89,7 +89,7 @@ exec(void *arg)
 }
 
 int
-dlck_cmd_pool_check(struct dlck_control *ctrl)
+dlck_cmd_check(struct dlck_control *ctrl)
 {
 	struct dlck_engine *engine = NULL;
 	/**
