@@ -66,3 +66,10 @@ sched_req_wait(struct sched_request *req, bool abort)
 {
 	assert_true(false);
 }
+
+uint64_t
+sched_cur_seq(void)
+{
+	assert_true(false);
+	return UINT64_MAX;
+}
