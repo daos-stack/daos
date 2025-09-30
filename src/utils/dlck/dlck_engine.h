@@ -146,6 +146,13 @@ dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *u
 typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom, void **arg);
 typedef int (*arg_free_fn_t)(void *custom, void **arg);
 
+struct dlck_exec {
+	struct dlck_ult *ults;
+	void           **ult_args;
+	void            *custom;
+	arg_free_fn_t    arg_free_fn;
+};
+
 /**
  * \brief Run the \p exec_one function as a set of ULTs on all the daos_io_* execution streams
  * of the \p engine.
@@ -165,8 +172,51 @@ typedef int (*arg_free_fn_t)(void *custom, void **arg);
  * \retval -DER_*	Error.
  */
 int
-dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
-		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn);
+dlck_engine_exec_all_sync(struct dlck_engine *engine, dlck_ult_func exec_one,
+			  arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn);
+
+/**
+ * \brief Run the \p exec_one function as a set of ULTs on all the daos_io_* execution streams
+ * of the \p engine.
+ *
+ * The function returns immediately and does not wait for the ULTs to conclude.
+ *
+ * The \p arg_alloc_func and \p arg_free_fn are called to allocate and free arguments respectively.
+ * Each of ULTs has a separate arguments allocated for its own use.
+ *
+ * All the allocated resources and information required to stop the created ULTs are stored in \p
+ * de.
+ *
+ * \note In case of an error, all ULTs are stopped immediately and resources are freed.
+ *
+ * \param[in]	engine		Engine to run the created ULTs.
+ * \param[in]	exec_one	Function to run in the ULTs.
+ * \param[in]	arg_alloc_fn	Function to allocate arguments for an ULT.
+ * \param[in]	custom		Custom parameters for \p arg_alloc_fn and \p arg_free_fn function.
+ * \param[in]	arg_free_fn	Function to free arguments.
+ * \param[out]	de		Execution describing object.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_engine_exec_all_async(struct dlck_engine *engine, dlck_ult_func exec_one,
+			   arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn,
+			   struct dlck_exec *de);
+
+/**
+ * \brief Wait for the execution \p de to conclude.
+ *
+ * \note All the allocated resources are freed and ULTs stopped regardless of the result.
+ *
+ * \param[in]		engine	Engine to run the created ULTs.
+ * \param[in,out]	de	Execution describing object.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de);
 
 /**
  * \brief Run the \p exec function as a ULT on an execution stream of the \p engine as indicated by

@@ -528,69 +528,24 @@ dlck_engine_stop(struct dlck_engine *engine)
 	return rc;
 }
 
-int
-dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
-		     arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn)
+/**
+ * \brief Join all ULTs but ignore errors. No error returned neither.
+ *
+ * \note It is designed as a cleanup procedure in case of an error either while starting or stopping
+ * ULTs.
+ *
+ * \param[in]		engine	Engine to clean up.
+ * \param[in,out]	de	Execution to stop and cleanup after.
+ */
+static void
+dlck_engine_join_all_no_error(struct dlck_engine *engine, struct dlck_exec *de)
 {
-	struct dlck_ult *ults;
-	void           **ult_args;
-	int              rc;
-	int              rc2;
-
-	D_ALLOC_ARRAY(ults, engine->targets);
-	if (ults == NULL) {
-		return -DER_NOMEM;
-	}
-
-	D_ALLOC_ARRAY(ult_args, engine->targets);
-	if (ult_args == NULL) {
-		D_FREE(ults);
-		return -DER_NOMEM;
-	}
+	int rc;
 
 	for (int i = 0; i < engine->targets; ++i) {
-		/** prepare arguments */
-		rc = arg_alloc_fn(engine, i, custom, &ult_args[i]);
-		if (rc != DER_SUCCESS) {
-			goto fail_join_and_free;
-		}
-
-		/** start an ULT */
-		rc = dlck_ult_create(engine->xss[i].pool, exec_one, ult_args[i], &ults[i]);
-		if (rc != DER_SUCCESS) {
-			goto fail_join_and_free;
-		}
-	}
-
-	for (int i = 0; i < engine->targets; ++i) {
-		rc = ABT_thread_join(ults[i].thread);
-		if (rc != ABT_SUCCESS) {
-			rc = dss_abterr2der(rc);
-			goto fail_join_and_free;
-		}
-
-		rc = ABT_thread_free(&ults[i].thread);
-		if (rc != ABT_SUCCESS) {
-			rc = dss_abterr2der(rc);
-			goto fail_join_and_free;
-		}
-
-		rc = arg_free_fn(custom, &ult_args[i]);
-		if (rc != 0) {
-			goto fail_join_and_free;
-		}
-	}
-
-	D_FREE(ult_args);
-	D_FREE(ults);
-
-	return DER_SUCCESS;
-
-fail_join_and_free:
-	for (int i = 0; i < engine->targets; ++i) {
-		if (ults[i].thread != ABT_THREAD_NULL) {
-			rc2 = ABT_thread_join(ults[i].thread);
-			if (rc2 != ABT_SUCCESS) {
+		if (de->ults[i].thread != ABT_THREAD_NULL) {
+			rc = ABT_thread_join(de->ults[i].thread);
+			if (rc != ABT_SUCCESS) {
 				/**
 				 * the ULT did not join - can't free the thread nor free the
 				 * arguments
@@ -598,14 +553,103 @@ fail_join_and_free:
 				continue;
 			}
 		}
-		(void)ABT_thread_free(&ults[i].thread);
-		(void)arg_free_fn(custom, &ult_args[i]);
+		(void)ABT_thread_free(&de->ults[i].thread);
+		(void)de->arg_free_fn(de->custom, &de->ult_args[i]);
 	}
 
-	D_FREE(ult_args);
-	D_FREE(ults);
+	D_FREE(de->ult_args);
+	D_FREE(de->ults);
+}
 
+int
+dlck_engine_exec_all_async(struct dlck_engine *engine, dlck_ult_func exec_one,
+			   arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn,
+			   struct dlck_exec *de)
+{
+	int rc;
+
+	D_ASSERT(de != NULL);
+
+	D_ALLOC_ARRAY(de->ults, engine->targets);
+	if (de->ults == NULL) {
+		return -DER_NOMEM;
+	}
+
+	D_ALLOC_ARRAY(de->ult_args, engine->targets);
+	if (de->ult_args == NULL) {
+		D_FREE(de->ults);
+		return -DER_NOMEM;
+	}
+
+	de->custom      = custom;
+	de->arg_free_fn = arg_free_fn;
+
+	for (int i = 0; i < engine->targets; ++i) {
+		/** prepare arguments */
+		rc = arg_alloc_fn(engine, i, custom, &de->ult_args[i]);
+		if (rc != DER_SUCCESS) {
+			dlck_engine_join_all_no_error(engine, de);
+			return rc;
+		}
+
+		/** start an ULT */
+		rc = dlck_ult_create(engine->xss[i].pool, exec_one, de->ult_args[i], &de->ults[i]);
+		if (rc != DER_SUCCESS) {
+			dlck_engine_join_all_no_error(engine, de);
+			return rc;
+		}
+	}
+
+	return DER_SUCCESS;
+}
+
+int
+dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de)
+{
+	int rc;
+
+	for (int i = 0; i < engine->targets; ++i) {
+		rc = ABT_thread_join(de->ults[i].thread);
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			goto fail_join_and_free;
+		}
+
+		rc = ABT_thread_free(&de->ults[i].thread);
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			goto fail_join_and_free;
+		}
+
+		rc = de->arg_free_fn(de->custom, &de->ult_args[i]);
+		if (rc != 0) {
+			goto fail_join_and_free;
+		}
+	}
+
+	D_FREE(de->ult_args);
+	D_FREE(de->ults);
+
+	return DER_SUCCESS;
+
+fail_join_and_free:
+	dlck_engine_join_all_no_error(engine, de);
 	return rc;
+}
+
+int
+dlck_engine_exec_all_sync(struct dlck_engine *engine, dlck_ult_func exec_one,
+			  arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn)
+{
+	struct dlck_exec de = {0};
+	int              rc;
+
+	rc = dlck_engine_exec_all_async(engine, exec_one, arg_alloc_fn, custom, arg_free_fn, &de);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	return dlck_engine_join_all(engine, &de);
 }
 
 int
