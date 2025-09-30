@@ -21,6 +21,8 @@ int
 run_structs_tests(void);
 int
 run_discard_invalid_tests(void);
+int
+run_dtx_count_tests(void);
 
 static void
 print_usage()
@@ -40,6 +42,7 @@ run_all_tests(int keys)
 
 	failed += run_structs_tests();
 	failed += run_discard_invalid_tests();
+	failed += run_dtx_count_tests();
 
 	return failed;
 }
@@ -77,7 +80,7 @@ main(int argc, char **argv)
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			cmocka_set_skip_filter(optarg);
 #else
-			D_PRINT("filter not enabled");
+			D_PRINT("filter not enabled\n");
 #endif
 
 			break;
@@ -92,7 +95,7 @@ main(int argc, char **argv)
 			printf("Test filter: %s\n", filter);
 		}
 #else
-			D_PRINT("filter not enabled");
+			D_PRINT("filter not enabled\n");
 #endif
 		break;
 		default:
