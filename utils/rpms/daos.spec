@@ -10,9 +10,11 @@
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4
+%global mercury_version   2.4.0-7%{?dist}
 %global libfabric_version 1.15.1-1
-%global argobots_version 1.2
+%global argobots_version 1.2-1%{?dist}
+%global fuse_version 3.16.2-2%{?dist}
+%global spdk_version 22.01.2-6%{?dist}
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -23,7 +25,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -36,7 +38,7 @@ BuildRequires: python3-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel >= %{mercury_version}
+BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 %global openmpi openmpi
@@ -49,22 +51,22 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= %{argobots_version}
+BuildRequires: argobots-devel = %{argobots_version}
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
-BuildRequires: libabt-devel >= %{argobots_version}
+BuildRequires: libabt-devel = %{argobots_version}
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
-BuildRequires: libpmemobj-devel >= 2.1.0
-%endif
-%if (0%{?rhel} >= 8)
-BuildRequires: fuse3-devel >= 3
+%if (0%{?suse_version} >= 1500)
+BuildRequires: libpmemobj-devel = 2.1.0-3.suse1500
 %else
-BuildRequires: fuse3-devel >= 3.4.2
+BuildRequires: libpmemobj-devel = 2.1.0-3%{?dist}
 %endif
+%endif
+BuildRequires: fuse3-devel = %{fuse_version}
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
@@ -77,7 +79,7 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
+BuildRequires: spdk-devel = %{spdk_version}
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -132,7 +134,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 
 
 %description
@@ -150,20 +152,20 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
+Requires: spdk-tools = %{spdk_version}
 Conflicts: daos-spdk
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.0-1.suse1500
+Requires: libpmemobj1 = 2.1.0-3.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.0-1%{?dist}
+Requires: libpmemobj = 2.1.0-3%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
@@ -184,11 +186,11 @@ This package contains DAOS administrative tools (e.g. dmg).
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
-Requires: libfuse3-3 >= 3.4.2
+Requires: libfuse3-3 = %{fuse_version}
 %endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -241,11 +243,7 @@ Requires: libcapstone-devel
 Requires: Lmod >= 8.7.36
 Requires: capstone-devel
 %endif
-%if (0%{?rhel} >= 8)
-Requires: fuse3-devel >= 3
-%else
-Requires: fuse3-devel >= 3.4.2
-%endif
+Requires: fuse3-devel = %{fuse_version}
 Requires: pciutils-devel
 %if (0%{?suse_version} > 0)
 Requires: libndctl-devel
@@ -633,6 +631,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Sep 30 2025 Ryon Jensen <ryon.jensen@hpe.com> 2.6.4-4
+- Pin versions of mercury, fuse, spdk, pmem, argobots for 2.6.4
+
 * Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-3
 - Ensure daos-server installs spdk
 
