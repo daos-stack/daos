@@ -22,20 +22,20 @@ static const dlck_cmd_func dlck_cmds[] = DLCK_CMDS_FUNCS;
  * Intended to ensure no useful diagnostic information is lost due to unflushed buffers.
  */
 static int
-dlck_printf(const char *fmt, ...)
+dlck_printf(struct dlck_print *dp, const char *fmt, ...)
 {
 	va_list args;
 	int     rc;
 
 	va_start(args, fmt);
-	rc = vprintf(fmt, args);
+	rc = vfprintf(dp->stream, fmt, args);
 	va_end(args);
 	if (rc < 0) {
-		D_ERROR("vprintf() failed: %s (%d)\n", strerror(errno), errno);
+		D_ERROR("vfprintf() failed: %s (%d)\n", strerror(errno), errno);
 		return rc;
 	}
 
-	rc = fflush(stdout);
+	rc = fflush(dp->stream);
 	if (rc == EOF) {
 		D_ERROR("fflush() failed: %s (%d)\n", strerror(errno), errno);
 	}
@@ -55,6 +55,7 @@ main(int argc, char *argv[])
 	D_ASSERT(ctrl.common.cmd >= 0);
 
 	ctrl.print.dp_printf = dlck_printf;
+	ctrl.print.stream    = stdout;
 
 	rc = dlck_cmds[ctrl.common.cmd](&ctrl);
 

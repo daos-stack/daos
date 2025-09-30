@@ -22,7 +22,8 @@
  * Printer for DLCK purposes.
  */
 struct dlck_print {
-	int (*dp_printf)(const char *fmt, ...);
+	int (*dp_printf)(struct dlck_print *dp, const char *fmt, ...);
+	FILE *stream;
 	int  level;
 	char prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
 };
@@ -34,14 +35,14 @@ struct dlck_print {
 #define DLCK_PRINT(print, msg)                                                                     \
 	do {                                                                                       \
 		if (IS_DLCK(print)) {                                                              \
-			(void)(print)->dp_printf("%s" msg, (print)->prefix);                       \
+			(void)(print)->dp_printf(print, "%s" msg, (print)->prefix);                \
 		}                                                                                  \
 	} while (0)
 
 #define DLCK_PRINTF(print, fmt, ...)                                                               \
 	do {                                                                                       \
 		if (IS_DLCK(print)) {                                                              \
-			(void)print->dp_printf("%s" fmt, print->prefix, __VA_ARGS__);              \
+			(void)print->dp_printf(print, "%s" fmt, print->prefix, __VA_ARGS__);       \
 		}                                                                                  \
 	} while (0)
 
@@ -50,14 +51,14 @@ struct dlck_print {
 #define DLCK_PRINT_WO_PREFIX(print, msg)                                                           \
 	do {                                                                                       \
 		if (IS_DLCK(print)) {                                                              \
-			(void)print->dp_printf(msg);                                               \
+			(void)print->dp_printf(print, msg);                                        \
 		}                                                                                  \
 	} while (0)
 
 #define DLCK_PRINTF_WO_PREFIX(print, fmt, ...)                                                     \
 	do {                                                                                       \
 		if (IS_DLCK(print)) {                                                              \
-			(void)print->dp_printf(fmt, __VA_ARGS__);                                  \
+			(void)print->dp_printf(print, fmt, __VA_ARGS__);                           \
 		}                                                                                  \
 	} while (0)
 
