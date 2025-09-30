@@ -69,6 +69,8 @@ class SparseFile(IorTestBase):
 
         # create and open a connection on remote node to open file on that
         # remote node
+
+        # pylint: disable=wrong-spelling-in-comment
         # ssh = paramiko.SSHClient()
         # ssh.load_system_host_keys()
         # ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
