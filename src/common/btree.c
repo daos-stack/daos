@@ -1825,16 +1825,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		btr_trace_debug(tcx, &tcx->tc_trace.ti_trace[level], "probe child\n");
 
 		/* Search the next level. */
-		if (IS_DLCK(tcx->tc_dlck_print)) {
-			if (nd->tn_flags & BTR_NODE_LEAF) {
-				DLCK_PRINTF(tcx->tc_dlck_print,
-					    "Attempted to traverse to the next level from a leaf "
-					    "node (flags=%#x)\n",
-					    nd->tn_flags);
-				rc = -DER_NONEXIST;
-				goto out;
-			}
-		}
 		nd_off = btr_node_child_at(tcx, nd_off, at);
 		next_level = true;
 		level++;
