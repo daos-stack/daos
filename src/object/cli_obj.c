@@ -5746,6 +5746,12 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 		if (likely(ec_deg_tgt == tgt_idx))
 			continue;
 
+		if (args->extra_flags & DIOF_EC_NO_DEGRADE) {
+			D_WARN(DF_OID "have to degraded fetch for %u => %u, but sponsor forbid.\n",
+			       DP_OID(obj->cob_md.omd_id), tgt_idx, ec_deg_tgt);
+			D_GOTO(out, rc = -DER_IO);
+		}
+
 		if (obj_auxi->ec_in_recov) {
 			D_DEBUG(DB_IO, DF_OID " shard %d failed recovery.\n",
 				DP_OID(obj->cob_md.omd_id), grp_start + tgt_idx);

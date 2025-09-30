@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,6 +49,7 @@ dss_drpc_thread(void *varg)
 			dss_drpc_path, DP_RC(rc));
 		goto out;
 	}
+	ctx->yield = ABT_thread_yield;
 
 	rc = drpc_call_create(ctx, arg->cta_module, arg->cta_method, &call);
 	if (rc != 0) {
@@ -185,6 +187,7 @@ drpc_notify_ready(bool check_mode)
 		D_GOTO(out_uri, rc = -DER_NOMEM);
 	srv__notify_ready_req__pack(&req, reqb);
 
+	D_INFO("notifying server ready\n");
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, reqb,
 			   reqb_size, DSS_DRPC_NO_SCHED, &dresp);
 	if (rc != 0)
