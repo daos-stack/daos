@@ -337,8 +337,8 @@ class PoolMembershipTest(IorTestBase):
             pool_directory_result = check_file_exists(
                 hosts=self.hostlist_servers, filename=pool_directory, directory=True)
             if not pool_directory_result[0]:
-                msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                    "after system stop.")
+                msg = ("MD-on-SSD cluster. Contents under mount point are removed by "
+                       "control plane after system stop.")
                 self.log.info(msg)
                 dmg_command.system_start()
                 # return results in PASS.
