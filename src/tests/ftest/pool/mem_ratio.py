@@ -7,7 +7,7 @@ import json
 
 from apricot import TestWithServers
 from general_utils import dict_to_str, list_to_str, report_errors
-from test_utils_pool import add_pools
+from test_utils_pool import add_pools, get_pool_create_percentages
 
 
 class MemRatioTest(TestWithServers):
@@ -47,23 +47,30 @@ class MemRatioTest(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=MemRatioTest,test_mem_ratio
         """
+        _pool_size_percent = self.params.get("pool_size_percent", "/run/*")
+        _sizes = get_pool_create_percentages(5, _pool_size_percent)
+
         dmg = self.get_dmg_command()
-        kwargs_list = [{"test": self, "dmg": dmg.copy()}]
+        kwargs_list = [{"test": self, "dmg": dmg.copy(), "size": _sizes[0]}]
         if self.server_managers[0].manager.job.using_control_metadata:
             # Additional pools for MD on SSD
-            kwargs_list[0]["mem_ratio"] = 100
-            kwargs_list.append(
-                {"test": self, "dmg": dmg.copy(), "mem_ratio": self.random.randint(76, 99)})
-            kwargs_list.append(
-                {"test": self, "dmg": dmg.copy(), "mem_ratio": self.random.randint(51, 75)})
-            kwargs_list.append(
-                {"test": self, "dmg": dmg.copy(), "mem_ratio": self.random.randint(26, 50)})
-            kwargs_list.append(
-                {"test": self, "dmg": dmg.copy(), "mem_ratio": self.random.randint(1, 25)})
+            _ratios = [
+                100,
+                self.random.randint(76, 99),
+                self.random.randint(51, 75),
+                self.random.randint(26, 50),
+                self.random.randint(10, 25)]     # Limit smallest mem-ratio sizes due to DAOS-18004
+            kwargs_list[0]["mem_ratio"] = _ratios[0]
+            for index in range(1, 5):
+                kwargs_list.append({
+                    "test": self,
+                    "dmg": dmg.copy(),
+                    "size": _sizes[index],
+                    "mem_ratio": _ratios[index]})
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
-        pools = add_pools(dmg, kwargs_list, error_handler=self.check_insufficient_scm_size)
+        pools = add_pools(dmg, kwargs_list)
 
         # Collect the pool create output values
         data = {}

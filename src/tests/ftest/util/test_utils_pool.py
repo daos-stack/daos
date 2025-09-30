@@ -10,12 +10,13 @@ import json
 import os
 from time import sleep, time
 
+from pydaos.raw import DaosApiError, DaosPool, c_uuid_to_str, daos_cref
+
 from avocado import TestFail, fail_on
 from command_utils import BasicParameter
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, check_file_exists
-from pydaos.raw import DaosApiError, DaosPool, c_uuid_to_str, daos_cref
 from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
@@ -219,6 +220,23 @@ def time_pool_create(log, number, pool):
     duration = time() - start
     log.info("Pool %s creation: %s seconds", number, duration)
     return duration
+
+
+def get_pool_create_percentages(num_pools, total_percent):
+    """Get a list of percentages for pool create sizes.
+
+    Args:
+        num_pools (int): number of pools to create
+        total_percent (int): total percent of the storage to use
+
+    Returns:
+        list: list of the percentages for each pool create
+    """
+    percentages = []
+    for index in range(num_pools):
+        remaining_pools = num_pools - index
+        percentages.append(f"{round(total_percent / remaining_pools)}%")
+    return percentages
 
 
 class TestPool(TestDaosApiBase):
