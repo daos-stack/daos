@@ -114,6 +114,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_REBUILD_STOP:
 		ds_mgmt_drpc_pool_rebuild_stop(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_SELF_HEAL_EVAL:
+		ds_mgmt_drpc_pool_self_heal_eval(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
 		ds_mgmt_drpc_bio_health_query(drpc_req, drpc_resp);
 		break;
