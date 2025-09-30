@@ -178,7 +178,7 @@ def check_server_storage(logger, test, test_result, stage):
     }
     logger.debug("-" * 80)
     logger.debug(f"Verifying server storage during the {stage.lower()} stage for \'{test}\'")
-    if "check_server_storage" in test.yaml_info and test.yaml_info["check_server_storage"] is False:
+    if "check_server_storage" in test.yaml_info and not test.yaml_info["check_server_storage"]:
         logger.debug(" - Test requested skip via 'check_server_storage' yaml entry")
         return status
     for key, command in commands.items():
