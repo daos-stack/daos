@@ -1459,17 +1459,18 @@ done:
 int
 ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 {
-	int   rc          = 0;
+	int rc = 0;
 
-	if (opt->db_path == NULL || strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+	if (opt->db_path == NULL || strlen(opt->db_path) == 0 ||
+	    strlen(opt->db_path) >= DDB_PATH_MAX) {
 		ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
 			   opt->db_path, DDB_PATH_MAX);
 		return -DER_INVAL;
 	}
 
-	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 || strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
-		ddb_errorf(ctx,
-			   "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
+	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 ||
+	    strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
+		ddb_errorf(ctx, "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
 			   opt->tmpfs_mount, DDB_PATH_MAX);
 		return -DER_INVAL;
 	}
