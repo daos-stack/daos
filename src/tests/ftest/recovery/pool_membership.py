@@ -328,20 +328,23 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
-        dmg_command.system_stop(force=True)
+        dmg_command.system_stop()
 
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
         pool_directory = self.server_managers[0].get_vos_path(self.pool)
-        pool_directory_result = check_file_exists(
-            hosts=self.hostlist_servers, filename=pool_directory, directory=True)
-        if not pool_directory_result[0]:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
+        for count in range(5):
+            pool_directory_result = check_file_exists(
+                hosts=self.hostlist_servers, filename=pool_directory, directory=True)
+            if not pool_directory_result[0]:
+                msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                    "after system stop.")
+                self.log.info(msg)
+                dmg_command.system_start()
+                # return results in PASS.
+                return
+            self.log.info("Pool dir exists under mount. Wait 3 sec. count = %s", count)
+            time.sleep(3)
         rm_cmd = f"sudo rm -rf {pool_directory}"
         if not run_remote(log=self.log, hosts=rank_1_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_1_host}! {rm_cmd}")
