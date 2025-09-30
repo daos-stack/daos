@@ -1459,36 +1459,27 @@ done:
 int
 ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 {
-	int   rc                        = 0;
-	char *db_path                   = opt->db_path;
-	char  tmpfs_mount[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+	int   rc          = 0;
 
-	if (db_path == NULL || strlen(db_path) == 0 || strlen(db_path) >= DDB_PATH_MAX) {
+	if (opt->db_path == NULL || strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
 		ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
-			   db_path, DDB_PATH_MAX);
+			   opt->db_path, DDB_PATH_MAX);
 		return -DER_INVAL;
 	}
 
-	if (opt->tmpfs_mount != NULL) {
-		if (strlen(opt->tmpfs_mount) == 0 || strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
-			ddb_errorf(ctx,
-				   "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
-				   opt->tmpfs_mount, DDB_PATH_MAX);
-			return -DER_INVAL;
-		}
-		strncpy(tmpfs_mount, opt->tmpfs_mount, ARRAY_SIZE(tmpfs_mount) - 1);
-	} else {
-		ddb_errorf(ctx, "tmpfs_mount not specific, will use default path '%s'\n",
-			   tmpfs_mount);
+	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 || strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
+		ddb_errorf(ctx,
+			   "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
+			   opt->tmpfs_mount, DDB_PATH_MAX);
 		return -DER_INVAL;
 	}
 
 	/** setup tmpfs and prepare the vos file on tmpfs_mount */
-	rc = dv_run_prov_mem(db_path, tmpfs_mount, opt->tmpfs_mount_size);
+	rc = dv_run_prov_mem(opt->db_path, opt->tmpfs_mount, opt->tmpfs_mount_size);
 	if (rc) {
 		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
 	} else {
-		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", tmpfs_mount);
+		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", opt->tmpfs_mount);
 	}
 
 	return rc;

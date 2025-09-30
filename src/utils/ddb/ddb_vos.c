@@ -2161,7 +2161,7 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 		}
 	} else {
 		D_INFO("tmpfs_mount %s is already a mountpoint, refuse to prov_mem.", tmpfs_mount);
-		rc = -DER_ALREADY;
+		rc = -DER_BUSY;
 		goto out;
 	}
 
