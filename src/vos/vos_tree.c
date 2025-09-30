@@ -919,7 +919,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	if (expected_flag == KREC_BF_EVT) {
 		rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
 	} else {
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, obj, NULL, sub_toh);
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, obj, sub_toh);
 	}
 	if (rc != 0)
 		D_ERROR("Failed to open tree: " DF_RC "\n", DP_RC(rc));
@@ -1273,8 +1273,10 @@ obj_tree_init(struct vos_object *obj)
 					      obj, &obj->obj_toh);
 	} else {
 		D_DEBUG(DB_DF, "Open btree for object\n");
-		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree, vos_obj2uma(obj),
-					    vos_cont2hdl(obj->obj_cont), obj, NULL, &obj->obj_toh);
+		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree,
+					    vos_obj2uma(obj),
+					    vos_cont2hdl(obj->obj_cont),
+					    obj, &obj->obj_toh);
 	}
 
 	if (rc)

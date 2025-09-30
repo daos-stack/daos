@@ -1753,7 +1753,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	DLCK_PRINT(dp, DLCK_CONT_TREE_STR "\n");
 	dlck_print_indent_inc(dp);
 	/* Cache container table btree hdl */
-	rc = dbtree_open_inplace_ex(&pool_df->pd_cont_root, &pool->vp_uma, DAOS_HDL_INVAL, pool, dp,
+	rc = dbtree_open_inplace_dp(&pool_df->pd_cont_root, &pool->vp_uma, DAOS_HDL_INVAL, pool, dp,
 				    &pool->vp_cont_th);
 	if (rc) {
 		dlck_print_indent_dec(dp);

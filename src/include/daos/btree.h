@@ -543,8 +543,10 @@ int  dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
+int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
+			    daos_handle_t coh, void *priv, daos_handle_t *toh);
 int
-dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+dbtree_open_inplace_dp(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
 		       struct dlck_print *dp, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);

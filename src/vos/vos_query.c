@@ -517,8 +517,8 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	if (to_open->tr_class == 0)
 		return -DER_NONEXIST;
 
-	rc = dbtree_open_inplace_ex(to_open, &query->qt_pool->vp_uma, query->qt_coh, query->qt_obj,
-				    NULL, toh);
+	rc = dbtree_open_inplace_ex(to_open, &query->qt_pool->vp_uma,
+				    query->qt_coh, query->qt_obj, toh);
 	if (rc != 0)
 		return rc;
 

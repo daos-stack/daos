@@ -3776,19 +3776,9 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 	return 0;
 }
 
-/**
- * Open a btree from the root address.
- *
- * \param[in] root	Address of the tree root.
- * \param[in] uma	Memory class attributes.
- * \param[in] coh	The container open handle.
- * \param[in] priv	Private data for tree opener
- * \param[in] dp	DLCK print utility.
- * \param[out] toh	Returned tree open handle.
- */
-int
-dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
-		       struct dlck_print *dp, daos_handle_t *toh)
+static int
+dbtree_open_inplace_ex_internal(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh,
+				void *priv, struct dlck_print *dp, daos_handle_t *toh)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -3811,13 +3801,46 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle
  *
  * \param[in] root	Address of the tree root.
  * \param[in] uma	Memory class attributes.
+ * \param[in] coh	The container open handle.
+ * \param[in] priv	Private data for tree opener
+ * \param[out] toh	Returned tree open handle.
+ */
+int
+dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+		       daos_handle_t *toh)
+{
+	return dbtree_open_inplace_ex_internal(root, uma, coh, priv, NULL, toh);
+}
+
+/**
+ * Open a btree from the root address.
+ *
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[in] coh	The container open handle.
+ * \param[in] priv	Private data for tree opener
+ * \param[in] dp	DLCK print utility.
+ * \param[out] toh	Returned tree open handle.
+ */
+int
+dbtree_open_inplace_dp(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+		       struct dlck_print *dp, daos_handle_t *toh)
+{
+	return dbtree_open_inplace_ex_internal(root, uma, coh, priv, dp, toh);
+}
+
+/**
+ * Open a btree from the root address.
+ *
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
  * \param[out] toh	Returned tree open handle.
  */
 int
 dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 		    daos_handle_t *toh)
 {
-	return dbtree_open_inplace_ex(root, uma, DAOS_HDL_INVAL, NULL, NULL, toh);
+	return dbtree_open_inplace_ex(root, uma, DAOS_HDL_INVAL, NULL, toh);
 }
 
 /**

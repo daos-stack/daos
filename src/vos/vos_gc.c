@@ -95,7 +95,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 		priv = &dummy_obj;
 	}
 
-	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, priv, NULL, &toh);
+	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, priv, &toh);
 	if (rc == -DER_NONEXIST) { /* empty tree */
 		*empty = true;
 		return 0;
@@ -1503,7 +1503,7 @@ gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_pri
 	DLCK_PRINT(dp, DLCK_GC_TREE_STR "\n");
 	dlck_print_indent_inc(dp);
 
-	rc = dbtree_open_inplace_ex(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL, NULL, dp,
+	rc = dbtree_open_inplace_dp(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL, NULL, dp,
 				    &gc_info->gi_bins_btr);
 	if (rc) {
 		dlck_print_indent_dec(dp);
