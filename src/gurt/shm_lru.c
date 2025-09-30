@@ -13,6 +13,9 @@
 #include "shm_internal.h"
 #include <gurt/shm_utils.h>
 
+/* dynamic allocation if data is larger than this threshold */
+#define LRU_ALLOC_SIZE_THRESHOLD (4096)
+
 /* the address of shared memory region */
 extern struct d_shm_hdr *d_shm_head;
 
@@ -532,4 +535,16 @@ shm_lru_destroy_cache(shm_lru_cache_t *cache)
 
 	lru_free_dynamic_buff(cache);
 	shm_free(cache);
+}
+
+shm_lru_cache_t *
+shm_lru_get_cache(enum SHM_LRU_CACHE_TYPE type)
+{
+	switch (type) {
+	case CACHE_DENTRY:
+		return (shm_lru_cache_t *)((long int)d_shm_head + d_shm_head->off_lru_cache_dentry);
+
+	default:
+		return NULL;
+	};
 }
