@@ -10,13 +10,12 @@ import json
 import os
 from time import sleep, time
 
-from pydaos.raw import DaosApiError, DaosPool, c_uuid_to_str, daos_cref
-
 from avocado import TestFail, fail_on
 from command_utils import BasicParameter
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, check_file_exists
+from pydaos.raw import DaosApiError, DaosPool, c_uuid_to_str, daos_cref
 from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
