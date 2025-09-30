@@ -18,6 +18,7 @@
 #include <daos/debug.h>
 #include <gurt/hash.h>
 #include <gurt/list.h>
+#include <gurt/shm_utils.h>
 #include <daos/common.h>
 
 #include "dfs_internal.h"
@@ -472,7 +473,7 @@ dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_p
 	if (dcache_tmp == NULL)
 		return ENOMEM;
 
-	dcache_tmp->dd_dfs             = dfs;
+	dcache_tmp->dd_dfs                = dfs;
 	dcache_tmp->dd_type               = DFS_CACHE_DRAM;
 	dcache_tmp->dh.destroy_fn         = dcache_destroy_act;
 	dcache_tmp->dh.find_insert_fn     = dcache_find_insert_act;
