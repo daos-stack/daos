@@ -19,7 +19,7 @@ db:
   no-progress: false
   repository: ghcr.io/aquasecurity/trivy-db
   skip-update: false
-debug: true
+debug: false
 dependency-tree: true
 exit-code: 0
 generate-default-config: false
@@ -228,6 +228,7 @@ scan:
   # ignore all hadoop dependencies
   skip-dirs:
     ./src/client/java/hadoop-daos
+    ./build
   skip-files: []
   show-suppressed: true
 secret:
