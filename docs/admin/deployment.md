@@ -1471,9 +1471,7 @@ This configuration yields the fastest access to that network device.
 Information about the network configuration is stored as metadata on the DAOS
 storage.
 
-If, after initial deployment, the provider must be changed, it is necessary to
-reformat the storage devices using `dmg storage format` after the configuration
-file has been updated with the new provider.
+If, after initial deployment, the provider must be changed, please follow the directions to [`change fabric provider`](https://github.com/daos-stack/daos/blob/master/docs/admin/common_tasks.md#change-fabric-provider-on-a-daos-system).
 
 #### Provider Testing
 
