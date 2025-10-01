@@ -287,8 +287,11 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	D_ASSERT(dae_old != dae_new);
 
 	if (unlikely(dae_old->dae_aborting)) {
-		D_ERROR("Hit former in-aborting DTX entry %p "DF_DTI"\n",
-			dae_old, DP_DTI(&DAE_XID(dae_old)));
+		D_ERROR("Hit former in-aborting DTX entry %p: ID " DF_DTI ", LID %u, flags %x, "
+			"attached %s, status bits: preparing %d, prepared %d, aborted %d.\n",
+			dae_old, DP_DTI(&DAE_XID(dae_old)), DAE_LID(dae_old), DAE_FLAGS(dae_old),
+			dae_old->dae_dth != NULL ? "yes" : "no", dae_old->dae_preparing ? 1 : 0,
+			dae_old->dae_prepared ? 1 : 0, dae_old->dae_aborted ? 1 : 0);
 		return -DER_INPROGRESS;
 	}
 

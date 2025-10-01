@@ -2513,9 +2513,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	}
 
 	if (svc->ps_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_SRV_HDLS) {
-		/* See the is_pool_from_srv comment in the "else" branch. */
 		if (uuid_is_null(svc->ps_pool->sp_srv_pool_hdl))
 			uuid_copy(svc->ps_pool->sp_srv_pool_hdl, srv_pool_hdl);
+		if (uuid_is_null(svc->ps_pool->sp_srv_cont_hdl))
+			uuid_copy(svc->ps_pool->sp_srv_cont_hdl, srv_cont_hdl);
 	} else {
 		if (!uuid_is_null(svc->ps_pool->sp_srv_cont_hdl)) {
 			uuid_copy(srv_pool_hdl, svc->ps_pool->sp_srv_pool_hdl);
@@ -2523,11 +2524,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		} else {
 			uuid_generate(srv_pool_hdl);
 			uuid_generate(srv_cont_hdl);
-			/* Only copy server handle to make is_pool_from_srv() check correctly, and
-			 * container server handle will not be copied here, otherwise
-			 * ds_pool_iv_refresh_hdl will not open the server container handle.
-			 */
 			uuid_copy(svc->ps_pool->sp_srv_pool_hdl, srv_pool_hdl);
+			uuid_copy(svc->ps_pool->sp_srv_cont_hdl, srv_cont_hdl);
 		}
 	}
 
@@ -6410,7 +6408,7 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
 					 DAOS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE,
 					 RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
-					 false /* stop_admin */, 0);
+					 false /* stop_admin */, NULL /* cur_taskp */, 0);
 		if (rc == 0)
 			*scheduled_layout_upgrade = true;
 	}
@@ -7758,7 +7756,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	if (tgt_map_ver != 0) {
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
 					 RB_OP_REBUILD, RB_OP_NONE /* retry_rebuild_op */,
-					 0 /* retry_map_ver */, false /* stop_admin */, delay);
+					 0 /* retry_map_ver */, false /* stop_admin */,
+					 NULL /* cur_taskp */, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);

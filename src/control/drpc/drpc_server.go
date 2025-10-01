@@ -20,14 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// MaxMsgSize is the maximum drpc message size that may be sent.
-// Using a packetsocket over the unix domain socket means that we receive
-// a whole message at a time without knowing its size. So for this reason
-// we need to restrict the maximum message size so we can preallocate a
-// buffer to put all of the information in. Corresponding C definition is
-// found in include/daos/drpc.h
-const MaxMsgSize = 1 << 20
-
 // DomainSocketServer is the object that listens for incoming dRPC connections,
 // maintains the connections for sessions, and manages the message processing.
 type DomainSocketServer struct {
@@ -55,9 +47,9 @@ func (d *DomainSocketServer) listenSession(ctx context.Context, s *Session) {
 	logCtx, err := logging.ToContext(ctx, d.log)
 	if err != nil {
 		// The most likely reason for this to happen is that a logger is already embedded in the
-		// context. If we shift to using loggers passed in context more generally on the server side,
-		// there's no need to do it here.
-		d.log.Errorf("failed to embed logger in context for dRPC session: %s", err.Error())
+		// context. Not a big deal if it is, but we are not passing loggers around this way
+		// universally yet.
+		d.log.Tracef("failed to embed logger in context for dRPC session: %s", err.Error())
 		logCtx = ctx
 	}
 
@@ -181,16 +173,14 @@ type Session struct {
 // ProcessIncomingMessage listens for an incoming message on the session,
 // calls its handler, and sends the response.
 func (s *Session) ProcessIncomingMessage(ctx context.Context) error {
-	buffer := make([]byte, MaxMsgSize)
-
-	bytesRead, err := s.Conn.Read(buffer)
+	buffer, err := recvMsg(ctx, s.Conn)
 	if err != nil {
 		// This indicates that we have reached a bad state
 		// for the connection and we need to terminate the handler.
 		return err
 	}
 
-	response, err := s.mod.ProcessMessage(ctx, s, buffer[:bytesRead])
+	response, err := s.mod.ProcessMessage(ctx, s, buffer)
 	if err != nil {
 		// The only way we hit here is if we fail to marshal the module's
 		// response. Should not actually be possible. ProcessMessage
@@ -198,8 +188,7 @@ func (s *Session) ProcessIncomingMessage(ctx context.Context) error {
 		return err
 	}
 
-	_, err = s.Conn.Write(response)
-	if err != nil {
+	if err := sendMsg(ctx, s.Conn, response); err != nil {
 		// This should only happen if we're shutting down while
 		// trying to send our response.
 		return err
