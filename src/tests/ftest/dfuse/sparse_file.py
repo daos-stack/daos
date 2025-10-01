@@ -78,17 +78,18 @@ class SparseFile(IorTestBase):
         # pkey = paramiko.RSAKey.from_private_key_file(pkey_file)
         # ssh.connect(self.hostlist_clients[0], username=getuser(), pkey=pkey)
         # sftp = ssh.open_sftp()
-        key_path = os.path.expanduser(os.path.join('~', '.ssh', 'id_rsa'))
-        ssh = paramiko.SSHClient()
-        ssh.load_system_host_keys(key_path)
-        ssh.connect(hostname=self.hostlist_clients[0], username=getuser(), key_filename=key_path)
-        sftp = ssh.open_sftp()
 
         # key_path = os.path.expanduser(os.path.join('~', '.ssh', 'id_rsa'))
         # ssh = paramiko.SSHClient()
-        # private_key = paramiko.RSAKey(key_path)
-        # ssh.connect(hostname=self.hostlist_clients[0], username=getuser(), pkey=private_key)
+        # ssh.load_system_host_keys(key_path)
+        # ssh.connect(hostname=self.hostlist_clients[0], username=getuser(), key_filename=key_path)
         # sftp = ssh.open_sftp()
+
+        key_path = os.path.expanduser(os.path.join('~', '.ssh', 'id_rsa'))
+        ssh = paramiko.SSHClient()
+        private_key = paramiko.RSAKey(key_path)
+        ssh.connect(hostname=self.hostlist_clients[0], username=getuser(), pkey=private_key)
+        sftp = ssh.open_sftp()
 
         # open remote file
         file_obj = sftp.open(sparse_file, 'r+')
