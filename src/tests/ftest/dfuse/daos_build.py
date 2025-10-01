@@ -11,9 +11,8 @@ import re
 import sys
 import time
 
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
 from dfuse_utils import get_dfuse, start_dfuse
 from distro_utils import detect

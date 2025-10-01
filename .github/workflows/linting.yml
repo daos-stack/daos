@@ -38,7 +38,6 @@ jobs:
         uses: isort/isort-action@24d8a7a51d33ca7f36c3f23598dafa33f7071326  # v1.1.1
         with:
           requirementsFiles: "requirements.txt"
-          configuration: "-w 100 --check-only --diff"
       - name: Run on SConstruct file.
         run: isort --check-only SConstruct
       - name: Run on build files.

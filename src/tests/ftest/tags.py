@@ -9,8 +9,7 @@ import ast
 import os
 import re
 import sys
-from argparse import (ArgumentParser, ArgumentTypeError,
-                      RawDescriptionHelpFormatter)
+from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path

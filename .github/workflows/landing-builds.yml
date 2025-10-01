@@ -62,6 +62,7 @@ jobs:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
+      PYTHON_VERSION: 3.11
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
@@ -82,11 +83,13 @@ jobs:
                             --build-arg DAOS_DEPS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
       - name: Build dependencies in Docker
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
       - name: Prune images not required for build.
         run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
 
@@ -132,6 +135,7 @@ jobs:
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
@@ -200,6 +204,7 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER
                             --build-arg DAOS_KEEP_SRC=yes
@@ -208,12 +213,14 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER
       - name: Build debug in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER
@@ -221,6 +228,7 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
@@ -263,11 +271,13 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_BUILD=no
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=clang
                             --build-arg DAOS_KEEP_SRC=yes
@@ -276,12 +286,14 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER=clang
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=clang
@@ -289,6 +301,7 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=clang
@@ -296,12 +309,14 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=gcc
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=gcc
@@ -309,6 +324,7 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
@@ -352,11 +368,13 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_BUILD=no
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=clang
                             --build-arg DAOS_KEEP_SRC=yes
@@ -365,12 +383,14 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER=clang
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=clang
@@ -378,6 +398,7 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=clang
@@ -385,12 +406,14 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=gcc
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=gcc
@@ -398,6 +421,7 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc

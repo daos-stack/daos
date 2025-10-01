@@ -16,7 +16,7 @@ arch=$(uname -i)
 
 apt_get_install_args="${1:-}"
 
-: "${PYTHON_VERSION:=3}"
+: "${PYTHON_VERSION:=3.11}"
 
 # shellcheck disable=SC2086
 apt-get install ${apt_get_install_args} \
