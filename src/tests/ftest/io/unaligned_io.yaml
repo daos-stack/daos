@@ -1,6 +1,8 @@
 hosts:
   test_servers: 4
+
 timeout: 900
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -9,8 +11,6 @@ server_config:
       targets: 8
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -25,8 +25,6 @@ server_config:
       targets: 8
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -37,8 +35,10 @@ server_config:
         - D_LOG_FILE_APPEND_PID=1
         - COVFILE=/tmp/test.cov
       storage: auto
+
 pool:
   scm_size: 12G
+
 datasize:
   sizes:
     - 20

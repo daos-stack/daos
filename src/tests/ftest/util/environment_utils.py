@@ -10,7 +10,6 @@ import site
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
-from util.host_utils import get_local_host
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
                                 get_common_provider, get_fastest_interfaces)
 from util.run_utils import run_remote
@@ -145,11 +144,6 @@ class TestEnvironment():
         all_hosts = NodeSet()
         all_hosts.update(servers)
         all_hosts.update(clients)
-
-        if logger:
-            logger.debug(
-                "Set default test environment variables: servers=%s, clients=%s, all_hosts=%s",
-                servers, clients, all_hosts)
 
         # Override values if explicitly specified
         if log_dir is not None:
@@ -334,11 +328,11 @@ class TestEnvironment():
         logger.debug(
             "Detecting network devices on %s - %s not set", hosts, self.__ENV_VAR_MAP['interface'])
         try:
-            interfaces = get_fastest_interfaces(logger, hosts | get_local_host())
+            interfaces = get_fastest_interfaces(logger, hosts)
         except NetworkException as error:
             raise TestEnvironmentException("Error obtaining a default interface!") from error
 
-        logger.debug("  Found %s interface(s)", ",".join(interfaces))
+        logger.debug("  Found interface(s): %s", ",".join(interfaces))
         return ",".join(interfaces)
 
     @property
