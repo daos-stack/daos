@@ -1498,7 +1498,7 @@ ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
 	ddb_print(ctx, "Starting DTX entries aggregation of ");
 	itp_print_full(ctx, &itp);
 	ddb_print(ctx, "\n");
-	rc = vos_dtx_aggregate(coh, epoch);
+	rc = vos_dtx_aggregate(coh, epoch, true);
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Aggregation of DTX entries failed: " DF_RC "\n", DP_RC(rc));
 		goto done;

@@ -847,7 +847,7 @@ dtx_18(void **state)
 	assert_int_equal(cnt, 10);
 
 	/* Aggregate the DTXs. */
-	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl, NULL);
+	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl, NULL, true);
 	assert_rc_equal(rc, 0);
 
 	rc = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl, &cnt);

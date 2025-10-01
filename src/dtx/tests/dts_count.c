@@ -58,8 +58,6 @@ test_setup(void **unused)
 		mock_dbds[i]->dbd_prev  = (i == 0) ? UMOFF_NULL : mock_dbds_off[i - 1];
 		mock_dbds[i]->dbd_count = (i + 1) * 2;
 		assert_true(mock_dbds[i]->dbd_count <= DBD_BLOB_DF_CAP);
-
-		mock_dbds_off[i] = umem_ptr2off(&mock_pool.vp_umm, mock_dbds[i]);
 	}
 
 	mock_cont.vc_pool                  = &mock_pool;
