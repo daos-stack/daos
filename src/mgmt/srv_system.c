@@ -384,7 +384,7 @@ ds_mgmt_svc_put(struct mgmt_svc *svc)
  * \retval	-DER_TIMEDOUT	Could not get a response from the MS due to a
  *				potentially retriable error
  * \retval	-DER_PROTO	Encountered an unretriable error such as
- *				marshall/unmarshall errors
+ *				marshal/unmarshal errors
  */
 static int
 ds_mgmt_get_props(Mgmt__SystemGetPropReq *req, Mgmt__SystemGetPropResp **resp_out)

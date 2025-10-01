@@ -67,14 +67,14 @@ func checkSocketDir(sockDir string) error {
 }
 
 type drpcServerSetupReq struct {
-	log        logging.Logger
-	sockDir    string
-	engines    []Engine
-	tc         *security.TransportConfig
-	sysdb      *raft.Database
-	events     *events.PubSub
-	client     *control.Client
-	msReplicas []string
+	log             logging.Logger
+	sockDir         string
+	engines         []Engine
+	transportConfig *security.TransportConfig
+	sysdb           *raft.Database
+	events          *events.PubSub
+	client          *control.Client
+	msReplicas      []string
 }
 
 // drpcServerSetup specifies socket path and starts drpc server.
@@ -94,7 +94,7 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.tc))
+	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.transportConfig))
 	drpcServer.RegisterRPCModule(newMgmtModule())
 	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.sysdb, req.engines, req.events, req.client, req.msReplicas))
 

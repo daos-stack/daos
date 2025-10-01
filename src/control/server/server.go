@@ -511,14 +511,14 @@ func (srv *server) start(ctx context.Context) error {
 		build.DaosVersion, os.Getpid(), srv.ctlAddr)
 
 	drpcSetupReq := &drpcServerSetupReq{
-		log:        srv.log,
-		sockDir:    srv.cfg.SocketDir,
-		engines:    srv.harness.Instances(),
-		tc:         srv.cfg.TransportConfig,
-		sysdb:      srv.sysdb,
-		events:     srv.pubSub,
-		client:     srv.client,
-		msReplicas: srv.cfg.MgmtSvcReplicas,
+		log:             srv.log,
+		sockDir:         srv.cfg.SocketDir,
+		engines:         srv.harness.Instances(),
+		transportConfig: srv.cfg.TransportConfig,
+		sysdb:           srv.sysdb,
+		events:          srv.pubSub,
+		client:          srv.client,
+		msReplicas:      srv.cfg.MgmtSvcReplicas,
 	}
 	// Single daos_server dRPC server to handle all engine requests
 	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
