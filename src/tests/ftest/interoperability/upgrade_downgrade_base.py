@@ -393,38 +393,39 @@ class UpgradeDowngradeBase(IorTestBase):
         self.log.info("Rebuild completed successfully")
 
     def handle_excluded_ranks(self, pool, ranks):
-        """Handle excluded ranks by clearing exclusion, starting the ranks, reintegrating them, and waiting for rebuild.
-    
+        """Handle excluded ranks by clearing exclusion, starting the ranks,
+           reintegrating them, and waiting for rebuild.
+
         Args:
             pool (TestPool): The pool on which to reintegrate the ranks.
             ranks (str): The ranks to handle (comma-separated string of rank IDs).
-    
+
         Raises:
             TestFail: If any of the commands fail or rebuild does not complete successfully.
         """
         self.log.info("Handling excluded ranks: %s", ranks)
-    
+
         # Step 1: Clear exclusion for the specified ranks
         self.log.info("Clearing exclusion for ranks: %s", ranks)
         self.get_dmg_command().system_clear_exclude(ranks=ranks)
-    
+
         # Step 2: Start the specified ranks
         self.log.info("Starting ranks: %s", ranks)
         self.get_dmg_command().system_start(ranks=ranks)
-    
+
         # Step 3: Reintegrate the ranks into the pool
         self.log.info("Reintegrating ranks: %s into pool %s", ranks, pool.identifier)
-        self.get_dmg_command().pool_reintegrate(pool=pool.identifier, ranks=ranks)
-    
+        pool.reintegrate(ranks=ranks)
+
         # Step 4: Wait for rebuild to complete
         self.log.info("Waiting for rebuild to complete after reintegration")
         pool.wait_for_rebuild(False)
-    
+
         self.log.info("Successfully handled excluded ranks: %s and rebuild completed", ranks)
-    
+
     def pool_upgrade(self, pool, with_fault=False):
         """Run and verify dmg pool upgrade.
-    
+
         Args:
             pool (TestPool): pool to be upgraded
             with_fault (bool): whether to use and verify fault injection
@@ -467,7 +468,9 @@ class UpgradeDowngradeBase(IorTestBase):
             self.fail(
                 'Expected pool_layout_ver to increase. '
                 f'pre={pre_pool_layout_ver}, post={post_pool_layout_ver}')
+
         # TODO verify they are EQUAL
+        # TODO also check [rebuild][state]
 
     def verify_write_read(self, clients, container, write=True, read=True):
         """Verify write and/or read with IOR.
@@ -634,8 +637,9 @@ class UpgradeDowngradeBase(IorTestBase):
 
         self.show_daos_version(all_hosts, hosts_client)
 
-        self.log_step("Trigger and wait for rebuild completion")    
-        self.trigger_and_wait_for_rebuild(pool, rank="2")
+        self.log_step("Exclude 1 random rank and wait for rebuild completion")
+        exclude_rank = self.random.choice(list(self.server_managers[0].ranks.keys()))
+        self.trigger_and_wait_for_rebuild(pool, rank=exclude_rank)
 
         self.log_step("Verify client/server communication - new client, new server, old pool")
         self.verify_server_client_comm(pool)
@@ -654,9 +658,8 @@ class UpgradeDowngradeBase(IorTestBase):
         self.verify_write_read(hosts_client, tmp_cont, write=True, read=True)
         tmp_cont.destroy()
 
-        self.log_step("Handle excluded ranks and wait for rebuild")
-        excluded_ranks = "2"  # rank(s) to handle
-        self.handle_excluded_ranks(pool, excluded_ranks)
+        self.log_step("Start and reintegrate excluded ranks and wait for rebuild")
+        self.handle_excluded_ranks(pool, exclude_rank)
 
         if do_test_diff_version_server_client:
             self.log_step(f"Downgrade DAOS clients to version {self.old_version}")
