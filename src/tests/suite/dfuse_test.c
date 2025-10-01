@@ -813,7 +813,7 @@ do_pil4dfscheck(void **state)
 
 	fd_new = FD_LARGE;
 	flag   = O_CLOEXEC;
-	rc = dup3(fd, fd_new, flag);
+	rc     = dup3(fd, fd_new, flag);
 	assert_true(rc == fd_new);
 
 	rc = close(fd_new);
@@ -821,7 +821,7 @@ do_pil4dfscheck(void **state)
 
 	/* flag different from O_CLOEXEC and 0 is not supported */
 	flag = ~flag;
-	rc = dup3(fd, fd_new, flag);
+	rc   = dup3(fd, fd_new, flag);
 	assert_true(rc == -1);
 	assert_true(errno == ENOTSUP);
 
