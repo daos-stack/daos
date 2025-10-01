@@ -457,6 +457,7 @@ def ensure_dir_exists(dirname, dry_run):
 
 # pylint: disable-next=function-redefined
 class PreReqComponent():
+    # pylint: disable=too-many-public-methods
     """A class for defining and managing external components required by a project.
 
     If provided arch is a string to embed in any generated directories
@@ -567,11 +568,11 @@ class PreReqComponent():
 
         build_dir = self.__env['BUILD_DIR']
         main_targets = ['client', 'server']
-        targets = ['benchmark', 'test'] + main_targets
+        targets = ['benchmarks', 'test'] + main_targets
         self.__env.Alias('client', build_dir)
         self.__env.Alias('server', build_dir)
         self.__env.Alias('test', build_dir)
-        self.__env.Alias('benchmark', build_dir)
+        self.__env.Alias('benchmarks', build_dir)
         self._build_targets = []
         check = any(item in BUILD_TARGETS for item in targets)
         if not check:
@@ -586,8 +587,8 @@ class PreReqComponent():
                     print("test target requires client or server")
                     sys.exit(1)
                 self._build_targets.append('test')
-            if 'benchmark' in BUILD_TARGETS:
-                self._build_targets.append('benchmark')
+            if 'benchmarks' in BUILD_TARGETS:
+                self._build_targets.append('benchmarks')
         BUILD_TARGETS.append(build_dir)
 
         env.AddMethod(self.require, 'require')
@@ -826,7 +827,7 @@ class PreReqComponent():
 
     def benchmark_requested(self):
         """Return True if benchmark build is requested"""
-        return "benchmark" in self._build_targets
+        return "benchmarks" in self._build_targets
 
     def _modify_prefix(self, comp_def):
         """Overwrite the prefix in cases where we may be using the default"""

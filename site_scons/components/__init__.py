@@ -268,11 +268,11 @@ def define_ompi(reqs):
 
 
 def define_benchmarks(reqs):
+    # pylint: disable=fixme
     """Define benchmark related components"""
-    # pylint: disable-next=fixme
     reqs.define('e3smio',
                 retriever=GitRepoRetriever(),
-                requires=['hdf5-mpich'],
+                requires=['mpich', 'hdf5-mpich'],
                 progs=['e3sm_io'],
                 build_env={'CC': 'mpicc', 'CXX': 'mpicxx', 'CPPFLAGS': "-fPIC", 'CFLAGS': "-fPIC"},
                 commands=[['autoreconf', '-i'],

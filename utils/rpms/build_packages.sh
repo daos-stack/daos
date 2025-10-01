@@ -15,3 +15,6 @@ fi
 if [[ "${build_type}" =~ daos|all ]]; then
   utils/rpms/daos.sh
 fi
+if [[ "${build_type}" =~ benchmarks|all ]]; then
+  utils/rpms/e3smio.sh
+fi
