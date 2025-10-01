@@ -6315,8 +6315,8 @@ new_dup3(int oldfd, int newfd, int flags)
 	if (d_get_fd_redirected(oldfd) < FD_FILE_BASE && d_get_fd_redirected(newfd) < FD_FILE_BASE)
 		return libc_dup3(oldfd, newfd, flags);
 
-	/* we only support O_CLOEXEC set for the new file descriptor */
-	if (flags != O_CLOEXEC) {
+	/* we only support O_CLOEXEC and 0 set for the new file descriptor */
+	if (flags != O_CLOEXEC && flags != 0) {
 		DS_ERROR(ENOTSUP, "unsupported dup3 flag %d", flags);
 		errno = ENOTSUP;
 		return (-1);
