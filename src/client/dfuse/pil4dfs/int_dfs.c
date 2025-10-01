@@ -468,9 +468,6 @@ static int (*next_munmap)(void *addr, size_t length);
 static void (*next_exit)(int rc);
 static void (*next__exit)(int rc) __attribute__((__noreturn__));
 
-/* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
-/* static org_dup3 real_dup3=NULL; */
-
 static int (*next_execve)(const char *filename, char *const argv[], char *const envp[]);
 static int (*next_execv)(const char *filename, char *const argv[]);
 static int (*next_execvp)(const char *filename, char *const argv[]);
