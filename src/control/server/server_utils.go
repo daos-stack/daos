@@ -753,7 +753,9 @@ func registerLeaderSubscriptions(srv *server) {
 				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation); err != nil {
+				needsGrpUpd, err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank),
+					int64(evt.Incarnation))
+				if err != nil {
 					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
 					if system.IsNotLeader(err) {
 						// If we've lost leadership while processing the event,
@@ -764,7 +766,11 @@ func registerLeaderSubscriptions(srv *server) {
 					}
 					return
 				}
-				srv.mgmtSvc.reqGroupUpdate(ctx, false)
+				if needsGrpUpd {
+					srv.log.Debugf("do group update after marking rank %d dead",
+						evt.Rank)
+					srv.mgmtSvc.reqGroupUpdate(ctx, false)
+				}
 			}
 		}))
 

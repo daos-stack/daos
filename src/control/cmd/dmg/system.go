@@ -771,7 +771,7 @@ func (cmd *systemRebuildStopCmd) Execute(_ []string) error {
 
 // systemSelfHealCmd represents the system self-heal auto recovery subcommand.
 type systemSelfHealCmd struct {
-	Eval systemSelfHealEvalCmd `command:"eval" description:"Trigger updates based on the system self_heal property"`
+	Eval systemSelfHealEvalCmd `command:"eval" description:"Trigger self healing if necessary based on system property self_heal and the current system status"`
 }
 
 type systemSelfHealEvalCmd struct {

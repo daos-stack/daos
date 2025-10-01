@@ -1328,7 +1328,7 @@ func (resp *SystemSelfHealEvalResp) Errors() error {
 	return nil
 }
 
-// SystemSelfHealEval will apply interactive rebuild operation to all pools.
+// SystemSelfHealEval will trigger actions based on the value of the system self_heal property.
 func SystemSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *SystemSelfHealEvalReq) (*SystemSelfHealEvalResp, error) {
 	if req == nil {
 		return nil, errors.Errorf("nil %T request", req)

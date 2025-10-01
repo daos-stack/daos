@@ -1470,13 +1470,18 @@ func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
 	}
 
 	for _, deadRank := range resp.DeadRanks {
-		if member, err := svc.membership.Get(ranklist.Rank(deadRank)); err != nil {
-			// Assume state transition to excluded is legal.
-			member.State = system.MemberStateExcluded
-
-			if err := svc.sysdb.UpdateMember(member); err != nil {
-				return err
-			}
+		// No incarnation to verify here so pass negative to skip it's check.
+		needsGrpUpd, err := svc.membership.MarkRankDead(ranklist.Rank(deadRank), -1)
+		if system.IsMemberNotFound(err) {
+			svc.log.Debugf("MarkRankDead: rank %d not found", deadRank)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if needsGrpUpd {
+			svc.log.Debugf("do group update after marking rank %d dead", deadRank)
+			svc.reqGroupUpdate(ctx, false)
 		}
 	}
 
