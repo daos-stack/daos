@@ -124,6 +124,7 @@ func (m MgmtMethod) String() string {
 		MethodPoolRebuildStart:     "PoolRebuildStart",
 		MethodPoolRebuildStop:      "PoolRebuildStop",
 		MethodGroupStatusGet:       "GroupStatusGet",
+		MethodPoolSelfHealEval:     "PoolSelfHealEval",
 	}[m]; ok {
 		return s
 	}
@@ -220,6 +221,8 @@ const (
 	MethodPoolRebuildStop MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_STOP
 	// MethodGroupStatusGet defines a method for retrieving the group status of a system
 	MethodGroupStatusGet MgmtMethod = C.DRPC_METHOD_MGMT_GROUP_STATUS_GET
+	// MethodPoolSelfHealEval defines a method for evaluating self_heal property on a pool
+	MethodPoolSelfHealEval MgmtMethod = C.DRPC_METHOD_MGMT_POOL_SELF_HEAL_EVAL
 )
 
 type SrvMethod int32

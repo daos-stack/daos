@@ -1444,8 +1444,6 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 }
 
 func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
-	svc.log.Trace("excluding ranks based on self_heal")
-
 	mapVer, err := svc.sysdb.CurMapVersion()
 	if err == nil {
 		return err
@@ -1471,6 +1469,8 @@ func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
 	if resp.GetStatus() != 0 {
 		return daos.Status(resp.GetStatus())
 	}
+
+	svc.log.Tracef("excluding ranks based on self_heal: %T:%+v", resp, resp)
 
 	if len(resp.DeadRanks) > 0 {
 		svc.log.Debugf("dead ranks %s returned from get-group-status drpc",
@@ -1500,7 +1500,7 @@ func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) erro
 	if err != nil {
 		return err
 	}
-	svc.log.Tracef("evaluating self_heal sys-prop on %d pools", len(poolIDs))
+	svc.log.Tracef("evaluating self_heal sys-prop %q on %d pools", propVal, len(poolIDs))
 
 	if len(poolIDs) == 0 {
 		return nil // Successful no-op.
@@ -1523,14 +1523,14 @@ func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) erro
 	}
 
 	if len(successes) > 0 {
-		svc.log.Debugf("PoolSelfHealEval completed on %d %s (%s)", len(successes),
+		svc.log.Debugf("PoolSelfHealEval completed on %s (%s)",
 			english.Plural(len(successes), "pool", "pools"),
 			strings.Join(successes, ", "))
 	}
 	if len(failures) > 0 {
 		return errors.Errorf(
-			"pool self-heal evaluate drpc failed for %d %s (%s), check server log",
-			len(failures), english.Plural(len(failures), "pool", "pools"),
+			"pool self-heal evaluate drpc failed for %s (%s), check server log",
+			english.Plural(len(failures), "pool", "pools"),
 			strings.Join(failures, ", "))
 	}
 
@@ -1553,7 +1553,7 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		return nil, errors.Wrapf(err, "retrieving %s system property", daos.SystemPropertySelfHeal)
 	}
 
-	svc.log.Debugf("system property %s = '%+v'", curVal)
+	svc.log.Debugf("system property self_heal='%+v'", curVal)
 
 	// Exclude engines based on SWIM status if system property bit set.
 	if daos.SystemPropertySelfHealHasFlag(curVal, daos.SelfHealFlagExclude) {
