@@ -391,7 +391,7 @@ the path must include the extent, otherwise, it must not.`,
 		LongHelp:  "Print statistic on the DTX entries",
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
-			a.String("path", "Optional, VOS tree path to query.", grumble.Default(""))
+			a.String("path", "Optional, VOS tree path of a container to query.", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxStat(ctx, c.Args.String("path"))
@@ -406,7 +406,7 @@ the path must include the extent, otherwise, it must not.`,
 		LongHelp:  "Aggregate DTX entries until a given epoch or date",
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
-			a.String("path", "VOS tree path to aggregate.")
+			a.String("path", "Optional, VOS tree path of a container to aggregate.", grumble.Default(""))
 		},
 		Flags: func(f *grumble.Flags) {
 			f.Uint64("e", "epoch", math.MaxUint64, "Max aggregation epoch")

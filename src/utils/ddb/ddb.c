@@ -917,13 +917,11 @@ dtx_aggr_option_parse(struct ddb_ctx *ctx, struct dtx_aggr_options *cmd_args, ui
 		return -DER_INVAL;
 	}
 
-	index = optind;
-	if (argc - index > 0) {
+	index          = optind;
+	cmd_args->path = NULL;
+	if (argc - index > 0 && *argv[index] != '\0') {
 		cmd_args->path = argv[index];
 		index++;
-	} else {
-		ddb_error(ctx, "Expected argument 'path'\n");
-		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
@@ -1486,14 +1484,14 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "dtx_stat [path]\n");
 	ddb_print(ctx, "\tPrint statistic on the DTX entries.\n");
 	ddb_print(ctx, "    [path]\n");
-	ddb_print(ctx, "\tOptional, VOS tree path to query.\n");
+	ddb_print(ctx, "\tOptional, VOS tree path of a container to query.\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: dtx_aggr */
-	ddb_print(ctx, "dtx_aggr <path>\n");
+	ddb_print(ctx, "dtx_aggr [path]\n");
 	ddb_print(ctx, "\tAggregate DTX entries until a given timestamp or duration.\n");
-	ddb_print(ctx, "    <path>\n");
-	ddb_print(ctx, "\tVOS tree path to aggregate.\n");
+	ddb_print(ctx, "    [path]\n");
+	ddb_print(ctx, "\tOptional, VOS tree path of a container to aggregate.\n");
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -e, --epoch\n");
 	ddb_print(ctx, "\tMax aggregation epoch\n");

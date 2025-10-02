@@ -634,6 +634,16 @@ dtx_aggr_tests(void **state)
 	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+0$");
 	assert_int_equal(get_epoch(dvt_fake_print_buffer), epochs->de_epochs[9]);
 
+	/* Test aggregaton of all the containers */
+	opt_aggr.path = NULL;
+	assert_success(ddb_run_dtx_aggr(&ctx, &opt_aggr));
+
+	opt_stat.path = NULL;
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^Number of committed DTX of the pool:[[:blank:]]+0$");
+
 	D_FREE(epochs);
 }
 

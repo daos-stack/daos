@@ -1342,7 +1342,7 @@ struct dtx_stat_args {
 };
 
 static int
-dtx_stat(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint32_t *cnt)
+dtx_stat_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint32_t *cnt)
 {
 	struct dtx_stat stat;
 	daos_handle_t   coh = {0};
@@ -1395,7 +1395,7 @@ dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
 	++(args->cont_seen);
 
-	rc = dtx_stat(ctx, &itp, &cnt);
+	rc = dtx_stat_cont(ctx, &itp, &cnt);
 	if (!SUCCESS(rc))
 		goto done;
 	args->cmt_cnt += cnt;
@@ -1403,6 +1403,28 @@ dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 done:
 	itp_free(&itp);
 
+	return rc;
+}
+
+static int
+dtx_stat_path(struct ddb_ctx *ctx, char *path)
+{
+	struct dv_indexed_tree_path itp = {0};
+	int                         rc;
+
+	rc = init_path(ctx, path, &itp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (!itp_has_cont(&itp)) {
+		ddb_errorf(ctx, "Invalid container path " DF_PATH ".\n", DP_PATH(path));
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	rc = dtx_stat_cont(ctx, &itp, NULL);
+done:
+	itp_free(&itp);
 	return rc;
 }
 
@@ -1416,25 +1438,13 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 
 	if (daos_handle_is_inval(ctx->dc_poh)) {
 		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
-		return -DER_NONEXIST;
+		rc = -DER_NONEXIST;
+		goto done;
 	}
 
 	if (opt->path != NULL && opt->path[0] != '\0') {
-		struct dv_indexed_tree_path itp = {0};
-
-		rc = init_path(ctx, opt->path, &itp);
-		if (!SUCCESS(rc))
-			goto done;
-
-		if (!itp_has_cont(&itp)) {
-			rc = -DER_INVAL;
-			goto done;
-		}
-
-		rc = dtx_stat(ctx, &itp, NULL);
-done:
-		itp_free(&itp);
-		return rc;
+		rc = dtx_stat_path(ctx, opt->path);
+		goto done;
 	}
 
 	args.ctx            = ctx;
@@ -1449,67 +1459,142 @@ done:
 		ddb_printf(ctx, "Number of committed DTX of the pool:\t\t\t%" PRIu32 "\n",
 			   args.cmt_cnt);
 
+done:
+	return rc;
+}
+
+struct dtx_aggr_args {
+	struct ddb_ctx *ctx;
+	uint32_t        cont_seen;
+	uint64_t       *epoch;
+};
+
+static int
+dtx_aggr_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint64_t *epoch)
+{
+	daos_handle_t coh = {0};
+	int           rc;
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &coh);
+	if (!SUCCESS(rc))
+		goto done;
+
+	ddb_print(ctx, "Aggregating DTX entries of container ");
+	itp_print_full(ctx, itp);
+	ddb_print(ctx, "\n");
+	rc = vos_dtx_aggregate(coh, epoch, true);
+	if (!SUCCESS(rc))
+		ddb_errorf(ctx, "Aggregation of DTX entries failed: " DF_RC "\n", DP_RC(rc));
+
+done:
+	dv_cont_close(&coh);
+
+	return rc;
+}
+
+static int
+dtx_aggr_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct dv_indexed_tree_path itp = {0};
+	struct dtx_aggr_args       *args;
+	int                         rc;
+
+	if (type != VOS_ITER_COUUID) {
+		rc = 0;
+		goto done;
+	}
+
+	args = (struct dtx_aggr_args *)cb_arg;
+
+	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
+	++(args->cont_seen);
+
+	rc = dtx_aggr_cont(args->ctx, &itp, args->epoch);
+
+done:
+	itp_free(&itp);
+
+	return rc;
+}
+
+static int
+dtx_aggr_path(struct ddb_ctx *ctx, char *path, uint64_t *epoch)
+{
+	struct dv_indexed_tree_path itp = {0};
+	int                         rc;
+
+	rc = init_path(ctx, path, &itp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (!itp_has_cont(&itp)) {
+		ddb_errorf(ctx, "Invalid container path " DF_PATH ".\n", DP_PATH(path));
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	rc = dtx_aggr_cont(ctx, &itp, epoch);
+
+done:
+	itp_free(&itp);
+
 	return rc;
 }
 
 int
 ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
 {
-	struct dv_indexed_tree_path itp = {0};
-	daos_handle_t               coh = {0};
-	uint64_t                   *epoch;
-	int                         rc;
+	vos_iter_param_t        param   = {0};
+	struct dtx_aggr_args    args    = {0};
+	struct vos_iter_anchors anchors = {0};
+	uint64_t                epoch;
+	int                     rc;
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
-		return -DER_INVAL;
-	}
-
-	rc = init_path(ctx, opt->path, &itp);
-	if (!SUCCESS(rc))
-		goto done;
-
-	if (!itp_has_cont(&itp)) {
 		rc = -DER_INVAL;
 		goto done;
 	}
 
-	rc = dv_cont_open(ctx->dc_poh, itp_cont(&itp), &coh);
-	if (!SUCCESS(rc))
+	if (daos_handle_is_inval(ctx->dc_poh)) {
+		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
+		rc = -DER_NONEXIST;
 		goto done;
+	}
 
 	switch (opt->format) {
 	case DDB_DTX_AGGR_NOW:
-		epoch = NULL;
+		args.epoch = NULL;
 		break;
 	case DDB_DTX_AGGR_DATE:
-		rc = ddb_date2epoch(optarg, &opt->epoch);
+		rc = ddb_date2epoch(optarg, &epoch);
 		if (!SUCCESS(rc)) {
 			ddb_error(ctx, "'--date' option arg date format is invalid\n");
 			goto done;
 		}
+		args.epoch = &epoch;
+		break;
 	case DDB_DTX_AGGR_EPOCH:
-		epoch = &opt->epoch;
+		args.epoch = &opt->epoch;
 		break;
 	default:
 		D_ASSERT(false && "Invalid dtx_aggr options");
 	}
 
-	ddb_print(ctx, "Starting DTX entries aggregation of ");
-	itp_print_full(ctx, &itp);
-	ddb_print(ctx, "\n");
-	rc = vos_dtx_aggregate(coh, epoch, true);
-	if (!SUCCESS(rc)) {
-		ddb_errorf(ctx, "Aggregation of DTX entries failed: " DF_RC "\n", DP_RC(rc));
+	if (opt->path != NULL && opt->path[0] != '\0') {
+		rc = dtx_aggr_path(ctx, opt->path, args.epoch);
 		goto done;
 	}
-	ddb_print(ctx, "Aggregation of DTX is done\n");
 
-	rc = 0;
+	args.ctx            = ctx;
+	param.ip_hdl        = ctx->dc_poh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	do {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_aggr_cb, &args,
+				 NULL);
+	} while (rc > 0);
 
 done:
-	itp_free(&itp);
-	dv_cont_close(&coh);
-
 	return rc;
 }
