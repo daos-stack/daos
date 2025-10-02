@@ -22,7 +22,7 @@ class MemRatioTest(TestWithServers):
         Args:
             error (Exception): the error raised during pool creation
         """
-        pattern = "Insufficient scm size"
+        pattern = "(Insufficient scm size|No space on storage target)"
         self.log.debug("Verifying Pool creation failure: %s", error)
         result = self.server_managers[0].search_engine_logs(pattern)
         if not result.passed:
@@ -70,7 +70,9 @@ class MemRatioTest(TestWithServers):
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
-        pools = add_pools(dmg, kwargs_list)
+        pools = add_pools(dmg, kwargs_list, error_handler=self.check_insufficient_scm_size)
+        if len(kwargs_list) > 1 and len(pools) < 4:
+            self.fail("Test failed to create a minimum of 4 pools with various mem-ratios")
 
         # Collect the pool create output values
         data = {}
@@ -131,6 +133,8 @@ class MemRatioTest(TestWithServers):
                 errors.append(f"{name} - Invalid dmg pool query response: {query}")
 
         # Report the test results
+        if not data:
+            self.fail(f"Error collecting data from {len(pools)} pool(s)")
         _format = "%-60s  %-9s  %-34s  %-16s  %-12s  %-13s  %-44s  %-21s  %s"
         _keys = ["Pool",
                  "mem-ratio",

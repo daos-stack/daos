@@ -22,7 +22,7 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pools(dmg, add_pool_kwargs, error_handler=None):
+def add_pools(dmg, add_pool_kwargs, error_handler=None, query_on_error=True):
     """Add multiple TestPool objects to the test.
 
     Args:
@@ -30,7 +30,10 @@ def add_pools(dmg, add_pool_kwargs, error_handler=None):
             pool and reset it after creating the last pool. Not used if no pools are created.
         add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
             pool. Must at least include the 'test' kwargs. See add_pool() for other options.
-        error_handler (method, None): optional method to call when a pool create fails
+        error_handler (method, optional): optional method to call when a pool create fails. Defaults
+            to None.
+        query_on_error (bool, optional): whether or not to run dmg pool query usage if the pool
+            create fails to provide additional debug. Defaults to True.
 
     Returns:
         list: a list of new pool objects
@@ -50,6 +53,9 @@ def add_pools(dmg, add_pool_kwargs, error_handler=None):
             pools.append(add_pool(**kwargs))
             pools[-1].set_logmasks.value = _restore
         except TestFail as error:
+            if query_on_error:
+                query_kwargs = {"mem_ratio": kwargs.get("mem_ratio")}
+                dmg.storage_query_usage(**query_kwargs)
             if not error_handler:
                 raise
             error_handler(error)
