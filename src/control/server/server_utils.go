@@ -734,6 +734,37 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
+func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
+	ts, err := evt.GetTimestamp()
+	if err != nil {
+		srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
+		return
+	}
+	srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation,
+		ts)
+	if evt.Incarnation == 0 {
+		srv.log.Errorf("invalid zero incarnation value in event %+v", evt)
+	}
+	// Mark the rank as unavailable for membership in new pools, etc.
+	needsGrpUpd, err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation)
+	if err != nil {
+		srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
+		if system.IsNotLeader(err) {
+			// If we've lost leadership while processing the event, attempt to
+			// re-forward it to the new leader.
+			evt = evt.WithForwarded(false).WithForwardable(true)
+			srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank,
+				evt.Incarnation)
+			srv.evtForwarder.OnEvent(ctx, evt)
+		}
+		return
+	}
+	if needsGrpUpd {
+		srv.log.Debugf("do group update after marking rank %d dead", evt.Rank)
+		srv.mgmtSvc.reqGroupUpdate(ctx, false)
+	}
+}
+
 // registerLeaderSubscriptions stops forwarding events to MS and instead starts
 // handling received forwarded (and local) events.
 func registerLeaderSubscriptions(srv *server) {
@@ -745,32 +776,7 @@ func registerLeaderSubscriptions(srv *server) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
-				ts, err := evt.GetTimestamp()
-				if err != nil {
-					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
-					return
-				}
-				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
-				// Mark the rank as unavailable for membership in
-				// new pools, etc. Do group update on success.
-				needsGrpUpd, err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank),
-					int64(evt.Incarnation))
-				if err != nil {
-					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
-					if system.IsNotLeader(err) {
-						// If we've lost leadership while processing the event,
-						// attempt to re-forward it to the new leader.
-						evt = evt.WithForwarded(false).WithForwardable(true)
-						srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank, evt.Incarnation)
-						srv.evtForwarder.OnEvent(ctx, evt)
-					}
-					return
-				}
-				if needsGrpUpd {
-					srv.log.Debugf("do group update after marking rank %d dead",
-						evt.Rank)
-					srv.mgmtSvc.reqGroupUpdate(ctx, false)
-				}
+				handleRankDead(ctx, srv, evt)
 			}
 		}))
 

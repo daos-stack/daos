@@ -1477,8 +1477,8 @@ func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
 			ranklist.RankSetFromRanks(ranklist.RanksFromUint32(resp.DeadRanks)))
 	}
 	for _, deadRank := range resp.DeadRanks {
-		// No incarnation to verify here so pass negative to skip it's check.
-		needsGrpUpd, err := svc.membership.MarkRankDead(ranklist.Rank(deadRank), -1)
+		// No incarnation to verify here so pass zero to skip it's check.
+		needsGrpUpd, err := svc.membership.MarkRankDead(ranklist.Rank(deadRank), 0)
 		if system.IsMemberNotFound(err) {
 			svc.log.Debugf("MarkRankDead: rank %d not found", deadRank)
 			continue

@@ -1216,7 +1216,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 func TestSystem_Membership_MarkDead(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rank           Rank
-		incarnation    int64
+		incarnation    uint64
 		expErr         error
 		expNeedsGrpUpd bool
 	}{
@@ -1242,7 +1242,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			incarnation:    2,
 			expNeedsGrpUpd: true,
 		},
-		// TODO: neg incarnation, bool ret checks
+		// TODO: zero incarnation
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

@@ -1377,7 +1377,6 @@ func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolReb
 		req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 			return mgmtpb.NewMgmtSvcClient(conn).PoolRebuildStart(ctx, pbReq)
 		})
-		rpcClient.Debugf("pool-rebuild request: %s\n", pbUtil.Debug(pbReq))
 	} else if req.OpCode == PoolRebuildOpCodeStop {
 		pbReq := &mgmtpb.PoolRebuildStopReq{
 			Sys:   req.getSystem(rpcClient),
@@ -1387,7 +1386,6 @@ func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolReb
 		req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 			return mgmtpb.NewMgmtSvcClient(conn).PoolRebuildStop(ctx, pbReq)
 		})
-		rpcClient.Debugf("pool-rebuild request: %s\n", pbUtil.Debug(pbReq))
 	} else {
 		return errors.Errorf("invalid pool-rebuild opcode %d", req.OpCode)
 	}
@@ -1407,7 +1405,6 @@ func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolReb
 		return errors.Wrap(err, msg)
 	}
 
-	rpcClient.Debugf("resp: %+v", resp)
 	if s := daos.Status(resp.Status); s != daos.Success {
 		return errors.Wrap(s, msg)
 	}
@@ -1437,7 +1434,6 @@ func PoolSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *PoolSelf
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolSelfHealEval(ctx, pbReq)
 	})
-	rpcClient.Debugf("pool-self-heal-eval request: %s\n", pbUtil.Debug(pbReq))
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
@@ -1454,7 +1450,6 @@ func PoolSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *PoolSelf
 		return errors.Wrap(err, msg)
 	}
 
-	rpcClient.Debugf("resp: %+v", resp)
 	if s := daos.Status(resp.Status); s != daos.Success {
 		return errors.Wrap(s, msg)
 	}

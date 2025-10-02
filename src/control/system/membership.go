@@ -663,10 +663,10 @@ func (m *Membership) IsRankAdminExcluded(rank Rank) bool {
 }
 
 // MarkRankDead is a helper method to mark a rank as dead in response to a swim_rank_dead event.
-// Pass negative value for incarnation to skip comparison with existing member incarnation value.
+// Pass zero value for incarnation to skip comparison with existing member incarnation value.
 // Return bool indicates whether a membership change was made and might indicate a group update is
 // necessary.
-func (m *Membership) MarkRankDead(rank Rank, incarnation int64) (bool, error) {
+func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) (bool, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -691,7 +691,7 @@ func (m *Membership) MarkRankDead(rank Rank, incarnation int64) (bool, error) {
 
 	// Perform check on rank incarnation number if valid value passed and a currently
 	// active/joined rank is going to be excluded.
-	if member.State == MemberStateJoined && incarnation >= 0 &&
+	if member.State == MemberStateJoined && incarnation > 0 &&
 		member.Incarnation > uint64(incarnation) {
 		m.log.Debugf("ignoring rank dead event for previous incarnation of %d (%x < %x)",
 			rank, incarnation, member.Incarnation)
