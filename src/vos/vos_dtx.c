@@ -3065,8 +3065,6 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 	int                     i;
 	int                     rc;
 
-	epoch   = cont_df->cd_newest_aggregated;
-
 	dbd = umem_off2ptr(umm, dbd_off);
 	if (dbd == NULL)
 		return 0;
@@ -3079,6 +3077,7 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 	}
 
 	count = 0;
+	epoch = cont_df->cd_newest_aggregated;
 	for (i = 0; i < dbd->dbd_count; i++) {
 		struct vos_dtx_cmt_ent_df *dce_df;
 		d_iov_t                    kiov;

@@ -92,7 +92,7 @@ tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 	assert_ptr_equal(umm, &mock_pool.vp_umm);
 	assert_null(txd);
 	assert_int_equal(mock_umm_tx.count, 0);
-	rc              = mock();
+	rc                = mock();
 	mock_umm_tx.in_tx = (rc == 0);
 	return rc;
 }
@@ -333,7 +333,7 @@ test_asserts(void **unused)
 static void
 test_tx_begin_error(void **unused)
 {
-	int          rc;
+	int rc;
 
 	prep_dtx_entries();
 
@@ -349,8 +349,8 @@ test_tx_begin_error(void **unused)
 static void
 test_dbtree_delete_error(void **unused)
 {
-	int          i;
-	int          rc;
+	int i;
+	int rc;
 
 	prep_dtx_entries();
 
@@ -370,8 +370,8 @@ test_dbtree_delete_error(void **unused)
 static void
 test_newest_aggregated_error(void **unused)
 {
-	int          i;
-	int          rc;
+	int i;
+	int rc;
 
 	prep_dtx_entries();
 
@@ -393,8 +393,8 @@ test_newest_aggregated_error(void **unused)
 static void
 test_committed_prev_error(void **unused)
 {
-	int          i;
-	int          rc;
+	int i;
+	int rc;
 
 	prep_dtx_entries();
 
@@ -419,8 +419,8 @@ test_committed_prev_error(void **unused)
 static void
 test_committed_head_error(void **unused)
 {
-	int          i;
-	int          rc;
+	int i;
+	int rc;
 
 	prep_dtx_entries();
 
@@ -553,8 +553,8 @@ test_committed_next_error(void **unused)
 static void
 test_umm_free_error(void **unused)
 {
-	int          i;
-	int          rc;
+	int i;
+	int rc;
 
 	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
@@ -952,9 +952,13 @@ test_second_blob(void **unused)
 	assert_int_equal(mock_cont.vc_cmt_dtx_reindex_pos, mock_dbds_off[0]);
 }
 
+/* clang-format off */
 /* compilation unit's entry point */
 #define TEST(name, func, setup_func, teardown_func)                                                \
-	{name ": vos_dtx_aggregate - " #func, func, setup_func, teardown_func}
+	{                                                                                          \
+		name ": vos_dtx_aggregate - " #func, func, setup_func, teardown_func               \
+	}
+/* clang-format on */
 
 static const struct CMUnitTest vos_dtx_aggregate_tests_all[] = {
     TEST("DTX500", test_asserts, test_setup, test_teardown),
