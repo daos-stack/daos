@@ -17,7 +17,6 @@
 #include <ctype.h>
 
 #include "crt_utils.h"
-// #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 #include "test_group_np_common_cli.h"
 
