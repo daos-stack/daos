@@ -698,7 +698,7 @@ ds_mgmt_pool_self_heal_eval(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t
 		DP_UUID(pool_uuid));
 
 	// Shorter deadline used as this is called for each pool and should return quickly.
-	return dsc_pool_svc_eval_self_heal(pool_uuid, svc_ranks, mgmt_ps_call_deadline() / 5,
+	return dsc_pool_svc_eval_self_heal(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
 					   sys_self_heal);
 }
 
