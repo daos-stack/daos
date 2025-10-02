@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize/english"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -1443,6 +1444,8 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 }
 
 func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
+	svc.log.Trace("excluding ranks based on self_heal")
+
 	mapVer, err := svc.sysdb.CurMapVersion()
 	if err == nil {
 		return err
@@ -1469,6 +1472,10 @@ func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
 		return daos.Status(resp.GetStatus())
 	}
 
+	if len(resp.DeadRanks) > 0 {
+		svc.log.Debugf("dead ranks %s returned from get-group-status drpc",
+			ranklist.RankSetFromRanks(ranklist.RanksFromUint32(resp.DeadRanks)))
+	}
 	for _, deadRank := range resp.DeadRanks {
 		// No incarnation to verify here so pass negative to skip it's check.
 		needsGrpUpd, err := svc.membership.MarkRankDead(ranklist.Rank(deadRank), -1)
@@ -1493,10 +1500,13 @@ func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) erro
 	if err != nil {
 		return err
 	}
+	svc.log.Tracef("evaluating self_heal sys-prop on %d pools", len(poolIDs))
+
 	if len(poolIDs) == 0 {
 		return nil // Successful no-op.
 	}
 
+	var successes, failures []string
 	for _, id := range poolIDs {
 		req := &control.PoolSelfHealEvalReq{
 			ID:      id,
@@ -1505,8 +1515,23 @@ func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) erro
 		svc.log.Tracef("%T: %+v", req, req)
 
 		if err := control.PoolSelfHealEval(ctx, svc.rpcClient, req); err != nil {
-			return err
+			failures = append(failures, id)
+			svc.log.Errorf("PoolSelfHealEval: %s", err.Error())
+		} else {
+			successes = append(successes, id)
 		}
+	}
+
+	if len(successes) > 0 {
+		svc.log.Debugf("PoolSelfHealEval completed on %d %s (%s)", len(successes),
+			english.Plural(len(successes), "pool", "pools"),
+			strings.Join(successes, ", "))
+	}
+	if len(failures) > 0 {
+		return errors.Errorf(
+			"pool self-heal evaluate drpc failed for %d %s (%s), check server log",
+			len(failures), english.Plural(len(failures), "pool", "pools"),
+			strings.Join(failures, ", "))
 	}
 
 	return nil
@@ -1528,12 +1553,11 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		return nil, errors.Wrapf(err, "retrieving %s system property", daos.SystemPropertySelfHeal)
 	}
 
-	svc.log.Debugf("System Property %s = '%+v'", curVal)
+	svc.log.Debugf("system property %s = '%+v'", curVal)
 
 	// Exclude engines based on SWIM status if system property bit set.
 	if daos.SystemPropertySelfHealHasFlag(curVal, daos.SelfHealFlagExclude) {
 		if err := svc.selfHealExcludeRanks(ctx); err != nil {
-			// If the exclude ranks operation fails, return an error.
 			return nil, errors.Wrap(err, "excluding ranks based on self_heal.exclude")
 		}
 	}
