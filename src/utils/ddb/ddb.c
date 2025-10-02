@@ -912,6 +912,10 @@ dtx_aggr_option_parse(struct ddb_ctx *ctx, struct dtx_aggr_options *cmd_args, ui
 			return -DER_INVAL;
 		}
 	}
+	if (cmd_args->format == DDB_DTX_AGGR_NOW) {
+		ddb_error(ctx, "'--epoch' or '--date' option has to be defined\n");
+		return -DER_INVAL;
+	}
 
 	index = optind;
 	if (argc - index > 0) {

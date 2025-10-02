@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 /*
@@ -36,7 +37,7 @@ func freeString(s *C.char) {
 }
 
 // InitDdb initializes the ddb context and returns a closure to finalize it.
-func InitDdb() (*DdbContext, func(), error) {
+func InitDdb(log *logging.LeveledLogger) (*DdbContext, func(), error) {
 	// Must lock to OS thread because vos init/fini uses ABT init and finalize which must be called on the same thread
 	runtime.LockOSThread()
 
@@ -47,6 +48,7 @@ func InitDdb() (*DdbContext, func(), error) {
 
 	ctx := &DdbContext{}
 	C.ddb_ctx_init(&ctx.ctx) // Initialize with ctx default values
+	ctx.log = log
 
 	return ctx, func() {
 		C.ddb_fini()
@@ -57,6 +59,7 @@ func InitDdb() (*DdbContext, func(), error) {
 // DdbContext structure for wrapping the C code context structure
 type DdbContext struct {
 	ctx C.struct_ddb_ctx
+	log *logging.LeveledLogger
 }
 
 func ddbPoolIsOpen(ctx *DdbContext) bool {
@@ -303,7 +306,12 @@ func ddbDtxStat(ctx *DdbContext, path string) error {
 
 func ddbDtxAggr(ctx *DdbContext, path string, epoch uint64, date string) error {
 	if epoch != math.MaxUint64 && date != "" {
-		return daosError(C.DER_INVAL)
+		ctx.log.Error("'--epoch' and '--date' options are mutually exclusive")
+		return daosError(-C.DER_INVAL)
+	}
+	if epoch == math.MaxUint64 && date == "" {
+		ctx.log.Error("'--epoch' or '--date' option has to be defined")
+		return daosError(-C.DER_INVAL)
 	}
 
 	/* Set up the options */
