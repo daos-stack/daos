@@ -819,11 +819,11 @@ do_pil4dfscheck(void **state)
 	rc = close(fd_new);
 	assert_return_code(rc, errno);
 
-	/* flag different from O_CLOEXEC and 0 is not supported */
+	/* flag different from O_CLOEXEC is not accepted */
 	flag = ~flag;
 	rc   = dup3(fd, fd_new, flag);
 	assert_true(rc == -1);
-	assert_true(errno == ENOTSUP);
+	assert_true(errno == EINVAL);
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
