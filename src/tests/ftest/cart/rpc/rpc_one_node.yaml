@@ -138,8 +138,12 @@ tests: !mux
     test_servers_arg: "-e test_group_np_srv --name fwd_test_grp"
     test_servers_env: "-x CRT_TIMEOUT=10"
     test_servers_ppn: "2"
-    test_clients_bin: test_group_np_cli
-    test_clients_arg: " --name client_group --attach_to fwd_test_grp --rank=0 --bulk_forward=1 --skip_check_in"
+    test_clients_bin:
+      - test_group_np_cli
+      - test_group_np_cli
+    test_clients_arg:
+      - " --name client_group --attach_to fwd_test_grp --rank=0 --bulk_forward=1 --skip_shutdown --skip_check_in"
+      - " --name client_group --attach_to fwd_test_grp --shut_only"
     test_clients_env: "-x CRT_TIMEOUT=10"
     test_clients_ppn: "1"
 #  threaded:
