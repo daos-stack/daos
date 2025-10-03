@@ -5695,8 +5695,8 @@ fchown(int fd, uid_t uid, gid_t gid)
 	}
 
 	if (fd_directed >= FD_DIR_BASE)
-		/* Let dfuse to handle this case. This function is not commonly used in
-		 * applications. There is no need for further optimization here at this time.
+		/* Let dfuse handle this case. This function is not commonly used in applications.
+		 * There is no need for further optimization here at this time.
 		 */
 		return chown(dir_list[fd_directed - FD_DIR_BASE]->path, uid, gid);
 
