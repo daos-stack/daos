@@ -204,16 +204,12 @@ def define_mercury(reqs):
                      '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
+                     '-DMERCURY_ENABLE_DEBUG:BOOL=ON',
                      '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
                      '../mercury']
-
-    if reqs.target_type == 'debug':
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
-    else:
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever(True),

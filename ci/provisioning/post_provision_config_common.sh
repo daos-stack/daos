@@ -32,7 +32,7 @@ fi
 # shellcheck disable=SC1091
 . /etc/os-release
 # shellcheck disable=SC2034
-EXCLUDE_UPGRADE=mercury,daos,daos-\*
+EXCLUDE_UPGRADE=mercury,mercury-\*,daos,daos-\*
 if rpm -qa | grep mlnx; then
     # packages not to allow upgrading if MLNX OFED is installed
     EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*,\*ucx\*
