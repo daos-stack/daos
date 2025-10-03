@@ -85,7 +85,7 @@ class SparseFile(IorTestBase):
         # ssh.connect(hostname=self.hostlist_clients[0], username=getuser(), key_filename=key_path)
         # sftp = ssh.open_sftp()
 
-        key_path = os.path.expanduser(os.path.join('~', '.ssh', 'ci_key'))
+        key_path = os.path.expanduser(os.path.join('~', '.ssh', 'id_rsa'))
         self.log.info("=does %s exist: %s", key_path, os.path.exists(key_path))
         ssh = paramiko.SSHClient()
         # private_key = paramiko.RSAKey(key_path)
