@@ -36,15 +36,18 @@ list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
+ARCH="${isa}"
+DEPENDS=("${libfabric_lib} >= ${libfabric_full}")
+build_package "mercury"
+DEPENDS=()
+
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ofi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("${libfabric_lib} >= ${libfabric_full}")
-build_package "mercury"
-DEPENDS=()
+build_package "mercury-libfabric"
 
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ucx.so"
