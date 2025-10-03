@@ -2170,7 +2170,7 @@ ds_mgmt_drpc_pool_self_heal_eval(Drpc__Call *drpc_req, Drpc__Response *drpc_resp
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	// Convert string prop value to bitset.
-	D_INFO("self_heal=%s\n", req->prop_val);
+	D_DEBUG(DB_MGMT, "self_heal=%s\n", req->prop_val);
 	if (strcmp(req->prop_val, "none") != 0) {
 		for (p = strtok_r(req->prop_val, sep, &saveptr); p != NULL;
 		     p = strtok_r(NULL, sep, &saveptr)) {

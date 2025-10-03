@@ -331,7 +331,7 @@ func (sp *SystemPropertyKey) FromString(val string) error {
 	return errors.Errorf("unknown system property key %q", val)
 }
 
-// SelfHealFlag defines a type to be used to represent self-heal flags.
+// SelfHealFlag defines a type to be used to represent an individual self-heal flag.
 type SelfHealFlag int
 
 // IsValid returns a boolean indicating whether or not the self-heal flag is valid.
@@ -546,8 +546,8 @@ func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
 		return false
 	}
 
-	flags := strings.Split(value, ";")
-	for _, strFlag := range flags {
+	strFlags := strings.Split(value, ";")
+	for _, strFlag := range strFlags {
 		var f SelfHealFlag
 		if err := f.FromString(strFlag); err == nil && f == flag {
 			return true
@@ -587,10 +587,9 @@ func subsets(strings []string, sep string, empty string) []string {
 // SystemProperties returns the map of standard system properties.
 func SystemProperties() SystemPropertyMap {
 	poolProps := PoolProperties()
-	healFlagStrs := []string{
-		SelfHealFlagExclude.String(),
-		SelfHealFlagPoolExclude.String(),
-		SelfHealFlagPoolRebuild.String(),
+	healFlagStrs := []string{}
+	for i := selfHealFlagUnknown + 1; i < selfHealFlagMax; i++ {
+		healFlagStrs = append(healFlagStrs, i.String())
 	}
 	defSelfHealFlagsStr := strings.Join(healFlagStrs, ";")
 

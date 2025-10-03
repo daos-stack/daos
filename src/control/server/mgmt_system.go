@@ -1398,7 +1398,7 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 		return nil, errors.Errorf("nil %T", pbReq)
 	}
 
-	if err := svc.checkLeaderRequest(wrapCheckerReq(pbReq)); err != nil {
+	if err := svc.checkLeaderRequest(pbReq); err != nil {
 		return nil, err
 	}
 
@@ -1543,7 +1543,7 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		return nil, errors.Errorf("nil %T", pbReq)
 	}
 
-	if err := svc.checkLeaderRequest(wrapCheckerReq(pbReq)); err != nil {
+	if err := svc.checkLeaderRequest(pbReq); err != nil {
 		return nil, err
 	}
 

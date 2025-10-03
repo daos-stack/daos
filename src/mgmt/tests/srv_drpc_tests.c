@@ -2726,10 +2726,10 @@ test_drpc_pool_rebuild_start_mgmt_svc_fails(void **state)
 	Drpc__Response resp = DRPC__RESPONSE__INIT;
 
 	setup_rebuild_start_drpc_call(&call, TEST_UUID, "DaosSys");
-	ds_mgmt_pool_self_heal_eval_return = -DER_MISC;
+	ds_mgmt_pool_rebuild_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_rebuild_start(&call, &resp);
-	expect_drpc_rebuild_start_resp_with_status(&resp, ds_mgmt_pool_self_heal_eval_return);
+	expect_drpc_rebuild_start_resp_with_status(&resp, ds_mgmt_pool_rebuild_return);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -2920,10 +2920,10 @@ test_drpc_pool_self_heal_eval_mgmt_svc_fails(void **state)
 	Drpc__Response resp = DRPC__RESPONSE__INIT;
 
 	setup_self_heal_eval_drpc_call(&call, TEST_UUID, "DaosSys", "exclude;pool_rebuild");
-	ds_mgmt_pool_rebuild_return = -DER_MISC;
+	ds_mgmt_pool_self_heal_eval_return = -DER_MISC;
 
 	ds_mgmt_drpc_pool_self_heal_eval(&call, &resp);
-	expect_drpc_self_heal_eval_resp_with_status(&resp, ds_mgmt_pool_rebuild_return);
+	expect_drpc_self_heal_eval_resp_with_status(&resp, ds_mgmt_pool_self_heal_eval_return);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
