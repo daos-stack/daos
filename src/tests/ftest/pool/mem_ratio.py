@@ -131,8 +131,8 @@ class MemRatioTest(TestWithServers):
                     data[name]["tier_stats(query)"][item["media_type"]] = item["total"]
                 data[name]["mem_file_bytes(query)"] = query["response"]["mem_file_bytes"]
                 _ratio = (
-                    int(data[name]["mem_file_bytes(query)"]) /
-                    int(data[name]["tier_stats(query)"]["scm"]))
+                    int(data[name]["mem_file_bytes(query)"])
+                    / int(data[name]["tier_stats(query)"]["scm"]))
                 data[name]["query_ratio"] = round(_ratio * 100)
                 _difference = abs(data[name]["mem-ratio"] - data[name]["query_ratio"])
                 if data[name]["mem-ratio"] and _difference > 1:
