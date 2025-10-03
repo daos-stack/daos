@@ -252,17 +252,36 @@ dlck_pool_open_safe(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int
 int
 dlck_pool_close_safe(ABT_mutex mtx, daos_handle_t poh);
 
+#define DLCK_XSTREAM_PROGRESS_END UINT_MAX
+
 /**
  * @struct xstream_arg
  *
  * Arguments passed to the main ULT on each of the execution streams.
  */
 struct xstream_arg {
+	/** in */
 	struct dlck_control *ctrl;   /** Control state. */
 	struct dlck_engine  *engine; /** Engine itself. */
 	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
-	int                  rc;     /** [out] return code */
+	/** out */
+	unsigned             progress;
+	ABT_mutex            progress_mutex;
+	int                  rc; /** return code */
 };
+
+static inline void
+dlck_xstream_set_rc(struct xstream_arg *xa, int rc)
+{
+	if (rc == DER_SUCCESS) {
+		return;
+	}
+
+	/** do not overwrite the first error found */
+	if (xa->rc == DER_SUCCESS) {
+		xa->rc = rc;
+	}
+}
 
 /**
  * Allocate arguments for a ULT.
@@ -289,5 +308,85 @@ dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_pt
  */
 int
 dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg);
+
+/**
+ * Mark the end of progress for the given execution stream \p xa.
+ *
+ * \param[in,out]	xa	Execution stream to mark.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_INVAL	Invalid mutex.
+ */
+static inline int
+dlck_xstream_progress_end(struct xstream_arg *xa, struct dlck_print *dp)
+{
+	int rc;
+
+	rc = ABT_mutex_lock(xa->progress_mutex);
+	if (rc == ABT_SUCCESS) {
+		xa->progress = DLCK_XSTREAM_PROGRESS_END;
+		rc           = ABT_mutex_unlock(xa->progress_mutex);
+		if (rc == ABT_SUCCESS) {
+			return DER_SUCCESS;
+		}
+	}
+	rc = dss_abterr2der(rc);
+	DLCK_PRINTF_ERR(&xa->ctrl->print, "[%d] Cannot advance progress: " DF_RC "\n",
+			xa->xs->tgt_id, DP_RC(xa->rc));
+	return rc;
+}
+
+/**
+ * Increment the progress by one for the given execution stream \p xa.
+ *
+ * \param[in,out]	xa	Execution stream to mark.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_INVAL	Invalid mutex.
+ */
+static inline int
+dlck_xstream_progress_inc(struct xstream_arg *xa, struct dlck_print *dp)
+{
+	int rc;
+
+	rc = ABT_mutex_lock(xa->progress_mutex);
+	if (rc == ABT_SUCCESS) {
+		xa->progress += 1;
+		rc = ABT_mutex_unlock(xa->progress_mutex);
+		if (rc == ABT_SUCCESS) {
+			return DER_SUCCESS;
+		}
+	}
+	rc = dss_abterr2der(rc);
+	DLCK_PRINTF_ERR(&xa->ctrl->print, "[%d] Cannot advance progress: " DF_RC "\n",
+			xa->xs->tgt_id, DP_RC(xa->rc));
+	return rc;
+}
+
+/**
+ * Read the progress of the given execution stream \p xa.
+ *
+ * \param[in]	xa		Execution stream.
+ * \param[out]	progress	Progress read from \p xa.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_INVAL	Invalid mutex.
+ */
+static inline int
+dlck_xstream_progress_get(struct xstream_arg *xa, unsigned *progress)
+{
+	int rc;
+
+	rc = ABT_mutex_lock(xa->progress_mutex);
+	if (rc != ABT_SUCCESS) {
+		return dss_abterr2der(rc);
+	}
+	*progress = xa->progress;
+	rc        = ABT_mutex_unlock(xa->progress_mutex);
+	if (rc != ABT_SUCCESS) {
+		return dss_abterr2der(rc);
+	}
+	return DER_SUCCESS;
+}
 
 #endif /** __DLCK_ENGINE__ */
