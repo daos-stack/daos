@@ -375,10 +375,10 @@ static struct argp argp = {NULL, parser, NULL /** usage */, NULL, children};
 static int
 setup(struct dlck_helper_args *args, struct bundle *bundle)
 {
-	struct dlck_file   *file;
 	struct dlck_engine *engine;
 	unsigned int        seed = SRAND_SEED;
 	int                 rc;
+	int                 rc_abt;
 
 	/** prepare pool storage directories */
 	rc = dlck_pool_mkdir_all(args->engine.storage_path, &args->files.list, NULL);
@@ -386,9 +386,16 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 		return rc;
 	}
 
+	rc_abt = ABT_init(0, NULL);
+	if (rc_abt != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc_abt);
+		return rc;
+	}
+
 	/** start an engine */
 	rc = dlck_engine_start(&args->engine, &engine);
 	if (rc != DER_SUCCESS) {
+		(void)ABT_finalize();
 		return rc;
 	}
 
@@ -414,12 +421,14 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 
 fail_engine_stop:
 	(void)dlck_engine_stop(engine);
+	(void)ABT_finalize();
 	return rc;
 }
 
 static int
 teardown(struct bundle *bundle)
 {
+	int rc_abt;
 	int rc;
 
 	dss_unregister_key(dtx_module.sm_key);
@@ -427,6 +436,15 @@ teardown(struct bundle *bundle)
 	D_FREE(bundle->co_uuids);
 
 	rc = dlck_engine_stop(bundle->engine);
+	if (rc != DER_SUCCESS) {
+		(void)ABT_finalize();
+		return rc;
+	}
+
+	rc_abt = ABT_finalize();
+	if (rc_abt != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc_abt);
+	}
 
 	return rc;
 }

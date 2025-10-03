@@ -86,28 +86,6 @@ dlck_engine_xstream_fini(struct dlck_xstream *xs);
 /** dlck_abt.c */
 
 /**
- * Initialize ABT as it is about to be used by the \p engine.
- *
- * \param[out]	engine	Engine for which ABT is initialized for.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_*	Error.
- */
-int
-dlck_abt_init(struct dlck_engine *engine);
-
-/**
- * Finalize ABT for the \p engine.
- *
- * \param[in,out]	engine	Engine for which ABT is finalized for.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_*	Error.
- */
-int
-dlck_abt_fini(struct dlck_engine *engine);
-
-/**
  * Just create an ABT execution stream.
  *
  * \param[out]	xs	Where the created execution stream will be stored.

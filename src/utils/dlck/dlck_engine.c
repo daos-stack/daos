@@ -429,15 +429,16 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 		goto fail_engine_free;
 	}
 
-	rc = dlck_abt_init(engine);
-	if (rc != DER_SUCCESS) {
+	rc = ABT_mutex_create(&engine->open_mtx);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
 		goto fail_engine_free;
 	}
 
 	rc = bio_nvme_init(args->nvme_conf, args->numa_node, args->max_dma_buf_size,
 			   args->nvme_hugepage_size, args->targets, bypass_health_chk);
 	if (rc != DER_SUCCESS) {
-		goto fail_abt_fini;
+		goto fail_mtx_free;
 	}
 
 	dss_register_key(&daos_srv_modkey);
@@ -485,8 +486,8 @@ fail_unregister_keys:
 	dss_unregister_key(&vos_module_key);
 	dss_unregister_key(&daos_srv_modkey);
 	bio_nvme_fini();
-fail_abt_fini:
-	(void)dlck_abt_fini(engine);
+fail_mtx_free:
+	(void)ABT_mutex_free(&engine->open_mtx);
 fail_engine_free:
 	dlck_engine_free(engine);
 
@@ -521,7 +522,10 @@ dlck_engine_stop(struct dlck_engine *engine)
 
 	bio_nvme_fini();
 
-	rc = dlck_abt_fini(engine);
+	rc = ABT_mutex_free(&engine->open_mtx);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+	}
 
 	dlck_engine_free(engine);
 

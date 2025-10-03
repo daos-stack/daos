@@ -21,6 +21,7 @@ def scons():
         'dlck_engine.c',
         'dlck_main.c',
         'dlck_pool.c',
+        'dlck_print.c',
         'dlck_sched.c',
         'dlck_tls.c',
         '../../engine/util.c',
