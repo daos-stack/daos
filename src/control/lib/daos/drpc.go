@@ -236,7 +236,7 @@ func (m SrvMethod) String() string {
 		MethodGetPoolServiceRanks: "get pool service ranks",
 		MethodPoolFindByLabel:     "find pool by label",
 		MethodListPools:           "list pools",
-		MethodGetProps:            "get system properties",
+		MethodGetSysProps:         "get system properties",
 	}[m]; ok {
 		return s
 	}
@@ -263,8 +263,8 @@ const (
 	MethodCheckerReport SrvMethod = C.DRPC_METHOD_CHK_REPORT
 	// MethodListPools requests the list of pools in the system
 	MethodListPools SrvMethod = C.DRPC_METHOD_SRV_LIST_POOLS
-	// MethodGetProps requests system properties from the MS
-	MethodGetProps SrvMethod = C.DRPC_METHOD_SRV_GET_PROPS
+	// MethodGetSysProps requests system properties from the MS
+	MethodGetSysProps SrvMethod = C.DRPC_METHOD_SRV_GET_SYS_PROPS
 )
 
 type securityMethod int32

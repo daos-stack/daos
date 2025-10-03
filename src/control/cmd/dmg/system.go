@@ -690,7 +690,6 @@ func (cmd *systemGetPropCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	prettyPrintSysProps(&bld, resp.Properties)
-	cmd.Infof("%s", bld)
 
 	return nil
 }

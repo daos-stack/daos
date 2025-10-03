@@ -401,7 +401,7 @@ ds_mgmt_get_props(Mgmt__SystemGetPropReq *req, Mgmt__SystemGetPropResp **resp_ou
 		return -DER_NOMEM;
 	mgmt__system_get_prop_req__pack(req, reqb);
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_PROPS, reqb, reqb_size,
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_SYS_PROPS, reqb, reqb_size,
 			   0 /* flags */, &dresp);
 	if (rc != 0)
 		goto out_reqb;

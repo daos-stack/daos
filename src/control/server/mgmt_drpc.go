@@ -109,7 +109,7 @@ func (mod *srvModule) GetMethod(id int32) (drpc.Method, error) {
 		daos.MethodCheckerDeregisterPool.ID(),
 		daos.MethodCheckerReport.ID(),
 		daos.MethodListPools.ID(),
-		daos.MethodGetProps.ID():
+		daos.MethodGetSysProps.ID():
 		return daos.SrvMethod(id), nil
 	default:
 		return nil, fmt.Errorf("invalid method %d for module %s", id, mod.String())
@@ -149,8 +149,8 @@ func (mod *srvModule) HandleCall(ctx context.Context, session *drpc.Session, met
 		return mod.handleCheckerReport(ctx, req)
 	case daos.MethodListPools:
 		return mod.handleListPools(req)
-	case daos.MethodGetProps:
-		return mod.handleGetProps(req)
+	case daos.MethodGetSysProps:
+		return mod.handleGetSysProps(req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
@@ -274,7 +274,7 @@ func (mod *srvModule) handleListPools(reqb []byte) ([]byte, error) {
 	return proto.Marshal(resp)
 }
 
-func (mod *srvModule) handleGetProps(reqb []byte) ([]byte, error) {
+func (mod *srvModule) handleGetSysProps(reqb []byte) ([]byte, error) {
 	req := new(mgmtpb.SystemGetPropReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
@@ -285,7 +285,7 @@ func (mod *srvModule) handleGetProps(reqb []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	ms_req := &control.SystemGetPropReq{
+	msReq := &control.SystemGetPropReq{
 		Keys: make([]daos.SystemPropertyKey, 0, len(req.Keys)),
 	}
 	for _, k := range req.Keys {
@@ -294,19 +294,19 @@ func (mod *srvModule) handleGetProps(reqb []byte) ([]byte, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "invalid system property key %q", k)
 		}
-		ms_req.Keys = append(ms_req.Keys, t)
+		msReq.Keys = append(msReq.Keys, t)
 	}
-	ms_req.SetHostList(mod.msReplicas)
+	msReq.SetHostList(mod.msReplicas)
 
-	ms_resp, err := control.SystemGetProp(ctx, mod.client, ms_req)
+	msResp, err := control.SystemGetProp(ctx, mod.client, msReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get system properties from MS")
 	}
 
 	resp := &mgmtpb.SystemGetPropResp{
-		Properties: make(map[string]string, len(ms_resp.Properties)),
+		Properties: make(map[string]string, len(msResp.Properties)),
 	}
-	for _, p := range ms_resp.Properties {
+	for _, p := range msResp.Properties {
 		resp.Properties[p.Key.String()] = p.Value.String()
 	}
 
