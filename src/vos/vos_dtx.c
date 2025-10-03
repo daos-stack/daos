@@ -3084,7 +3084,8 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 
 		dce_df = &dbd->dbd_committed_data[i];
 		if (ep_max != NULL && *ep_max < dce_df->dce_epoch)
-			break;
+			continue;
+
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);

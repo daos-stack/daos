@@ -1293,7 +1293,6 @@ timespec2str(struct timespec *tspec, char *buf, size_t buf_size)
 	size_t    buf_len;
 	int       rc;
 
-	tzset();
 	if (localtime_r(&(tspec->tv_sec), &date) == NULL)
 		return d_errno2der(errno);
 
