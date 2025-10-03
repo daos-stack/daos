@@ -151,16 +151,16 @@ type server struct {
 	netDevClass []hardware.NetDevClass
 	listener    net.Listener
 
-	harness      *EngineHarness
-	membership   *system.Membership
-	sysdb        *raft.Database
-	pubSub       *events.PubSub
-	evtForwarder *control.EventForwarder
-	evtLogger    *control.EventLogger
-	ctlSvc       *ControlService
-	mgmtSvc      *mgmtSvc
-	grpcServer   *grpc.Server
-	client       *control.Client
+	harness       *EngineHarness
+	membership    *system.Membership
+	sysdb         *raft.Database
+	pubSub        *events.PubSub
+	evtForwarder  *control.EventForwarder
+	evtLogger     *control.EventLogger
+	ctlSvc        *ControlService
+	mgmtSvc       *mgmtSvc
+	grpcServer    *grpc.Server
+	controlClient *control.Client
 
 	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
@@ -244,7 +244,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
-	srv.client = rpcClient
+	srv.controlClient = rpcClient
 
 	// Create event distribution primitives.
 	srv.pubSub = events.NewPubSub(ctx, srv.log)
@@ -517,7 +517,7 @@ func (srv *server) start(ctx context.Context) error {
 		transportConfig: srv.cfg.TransportConfig,
 		sysdb:           srv.sysdb,
 		events:          srv.pubSub,
-		client:          srv.client,
+		client:          srv.controlClient,
 		msReplicas:      srv.cfg.MgmtSvcReplicas,
 	}
 	// Single daos_server dRPC server to handle all engine requests
