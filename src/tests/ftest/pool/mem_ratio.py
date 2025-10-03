@@ -6,7 +6,7 @@
 import json
 
 from apricot import TestWithServers
-from general_utils import dict_to_str, list_to_str, report_errors
+from general_utils import bytes_to_human, list_to_str, report_errors
 from test_utils_pool import add_pools, get_pool_create_percentages
 
 
@@ -16,8 +16,8 @@ class MemRatioTest(TestWithServers):
     :avocado: recursive
     """
 
-    def check_insufficient_scm_size(self, error):
-        """Check for an insufficient SCM size error during pool creation.
+    def check_insufficient_size(self, error):
+        """Check for an insufficient pool size error during pool creation.
 
         Args:
             error (Exception): the error raised during pool creation
@@ -28,6 +28,18 @@ class MemRatioTest(TestWithServers):
         if not result.passed:
             raise error
         self.log.debug("Pool failure expected due to: '%s'", pattern)
+
+    @staticmethod
+    def readable_bytes(size):
+        """Get a display string for a bytes value.
+
+        Args:
+            size (int): the size in bytes
+
+        Returns:
+            str: bytes displayed as human readable with the original value
+        """
+        return f"{bytes_to_human(int(size))} ({size})"
 
     def test_mem_ratio(self):
         """Create multiple pools using different --mem_ratio arguments to define which fraction
@@ -70,7 +82,7 @@ class MemRatioTest(TestWithServers):
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
-        pools = add_pools(dmg, kwargs_list, error_handler=self.check_insufficient_scm_size)
+        pools = add_pools(dmg, kwargs_list, error_handler=self.check_insufficient_size)
         if len(kwargs_list) > 1 and len(pools) < 4:
             self.fail("Test failed to create a minimum of 4 pools with various mem-ratios")
 
@@ -83,6 +95,7 @@ class MemRatioTest(TestWithServers):
             try:
                 data[name] = {
                     "mem-ratio": pool.mem_ratio.value,
+                    "size": pool.size.value,
                     "tier_bytes": _result["response"]["tier_bytes"],
                     "mem_file_bytes": _result["response"]["mem_file_bytes"],
                 }
@@ -113,12 +126,13 @@ class MemRatioTest(TestWithServers):
         for name, query in pool_queries.items():
             try:
                 data[name]["total_engines"] = query["response"]["total_engines"]
-                data[name]["tier_stats"] = {}
+                data[name]["tier_stats(query)"] = {}
                 for item in query["response"]["tier_stats"]:
-                    data[name]["tier_stats"][item["media_type"]] = item["total"]
-                data[name]["mem_file_bytes(total)"] = query["response"]["mem_file_bytes"]
+                    data[name]["tier_stats(query)"][item["media_type"]] = item["total"]
+                data[name]["mem_file_bytes(query)"] = query["response"]["mem_file_bytes"]
                 _ratio = (
-                    int(data[name]["mem_file_bytes(total)"]) / int(data[name]["tier_stats"]["scm"]))
+                    int(data[name]["mem_file_bytes(query)"]) /
+                    int(data[name]["tier_stats(query)"]["scm"]))
                 data[name]["query_ratio"] = round(_ratio * 100)
                 _difference = abs(data[name]["mem-ratio"] - data[name]["query_ratio"])
                 if data[name]["mem-ratio"] and _difference > 1:
@@ -127,35 +141,40 @@ class MemRatioTest(TestWithServers):
                         f"query ({data[name]['query_ratio']}) by {_difference}")
             except (IndexError, KeyError, TypeError, ValueError):
                 data[name]["total_engines"] = "<ERROR>"
-                data[name]["tier_stats"] = "<ERROR>"
-                data[name]["mem_file_bytes(total)"] = "<ERROR>"
+                data[name]["tier_stats(query)"] = "<ERROR>"
+                data[name]["mem_file_bytes(query)"] = "<ERROR>"
                 data[name]["query_ratio"] = 0
                 errors.append(f"{name} - Invalid dmg pool query response: {query}")
 
         # Report the test results
         if not data:
             self.fail(f"Error collecting data from {len(pools)} pool(s)")
-        _format = "%-60s  %-9s  %-34s  %-16s  %-12s  %-13s  %-44s  %-21s  %s"
+        _format = "%-54s  %-9s  %-40s  %-14s  %-12s  %-13s  %-50s  %-21s  %s"
         _keys = ["Pool",
                  "mem-ratio",
                  "tier_bytes",
                  "mem_file_bytes",
                  "create_ratio",
                  "total_engines",
-                 "tier_stats",
-                 "mem_file_bytes(total)",
+                 "tier_stats(query)",
+                 "mem_file_bytes(query)",
                  "query_ratio"]
         self.log.debug(_format, *_keys)
         self.log.debug(
-            _format, "-" * 60, "-" * 9, "-" * 34, "-" * 16, "-" * 12, "-" * 13, "-" * 44, "-" * 21,
+            _format, "-" * 54, "-" * 9, "-" * 40, "-" * 14, "-" * 12, "-" * 13, "-" * 50, "-" * 21,
             "-" * 11)
         for name, info in data.items():
             items = [name]
             for key in _keys[1:]:
                 if isinstance(info[key], list):
-                    items.append(list_to_str(info[key], ", "))
+                    _display = [self.readable_bytes(value) for value in info[key]]
+                    items.append(list_to_str(_display, ", "))
                 elif isinstance(info[key], dict):
-                    items.append(dict_to_str(info[key], ", ", ": "))
+                    _display = [
+                        f"{key}: {self.readable_bytes(value)}" for key, value in info[key].items()]
+                    items.append(list_to_str(_display, ", "))
+                elif "mem_file_bytes" in name:
+                    items.append(self.readable_bytes(info[key]))
                 else:
                     items.append(str(info[key]))
             self.log.debug(_format, *items)
