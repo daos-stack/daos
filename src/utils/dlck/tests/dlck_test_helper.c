@@ -381,9 +381,9 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	int                 rc;
 
 	/** prepare pool storage directories */
-	d_list_for_each_entry(file, &args->files.list, link) {
-		rc = dlck_pool_mkdir(args->engine.storage_path, file->po_uuid);
-		assert_int_equal(rc, DER_SUCCESS);
+	rc = dlck_pool_mkdir_all(args->engine.storage_path, &args->files.list, NULL);
+	if (rc != DER_SUCCESS) {
+		return rc;
 	}
 
 	/** start an engine */
