@@ -211,12 +211,13 @@ dlck_engine_exec_all_async(struct dlck_engine *engine, dlck_ult_func exec_one,
  *
  * \param[in]		engine	Engine to run the created ULTs.
  * \param[in,out]	de	Execution describing object.
+ * \param[out]		rcs	Targets' return codes.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
 int
-dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de);
+dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de, int *rcs);
 
 /**
  * \brief Run the \p exec function as a ULT on an execution stream of the \p engine as indicated by

@@ -604,7 +604,7 @@ dlck_engine_exec_all_async(struct dlck_engine *engine, dlck_ult_func exec_one,
 }
 
 int
-dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de)
+dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de, int *rcs)
 {
 	int rc;
 
@@ -621,10 +621,7 @@ dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de)
 			goto fail_join_and_free;
 		}
 
-		rc = de->arg_free_fn(de->custom, &de->ult_args[i]);
-		if (rc != 0) {
-			goto fail_join_and_free;
-		}
+		rcs[i] = de->arg_free_fn(de->custom, &de->ult_args[i]);
 	}
 
 	D_FREE(de->ult_args);
@@ -642,14 +639,35 @@ dlck_engine_exec_all_sync(struct dlck_engine *engine, dlck_ult_func exec_one,
 			  arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn)
 {
 	struct dlck_exec de = {0};
+	int             *rcs;
 	int              rc;
+
+	D_ALLOC_ARRAY(rcs, engine->targets);
+	if (rcs == NULL) {
+		return -DER_NOMEM;
+	}
 
 	rc = dlck_engine_exec_all_async(engine, exec_one, arg_alloc_fn, custom, arg_free_fn, &de);
 	if (rc != DER_SUCCESS) {
+		D_FREE(rcs);
 		return rc;
 	}
 
-	return dlck_engine_join_all(engine, &de);
+	rc = dlck_engine_join_all(engine, &de, rcs);
+	if (rc != DER_SUCCESS) {
+		D_FREE(rcs);
+		return rc;
+	}
+
+	for (int i = 0; i < engine->targets; ++i) {
+		if (rcs[i] != DER_SUCCESS) {
+			rc = rcs[i];
+			break;
+		}
+	}
+
+	D_FREE(rcs);
+	return rc;
 }
 
 int
