@@ -5736,10 +5736,11 @@ fgetxattr(int fd, char *name, void *value, size_t size)
 
 	if (fd_directed < FD_DIR_BASE)
 		rc = dfs_getxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
-		       d_file_list[fd_directed - FD_FILE_BASE]->file, name, value, &buf_size);
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value,
+				  &buf_size);
 	else
 		rc = dfs_getxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
-		       dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, &buf_size);
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, &buf_size);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -5751,7 +5752,7 @@ fgetxattr(int fd, char *name, void *value, size_t size)
 int
 fsetxattr(int fd, char *name, void *value, size_t size, int flags)
 {
-	int    rc, fd_directed;
+	int rc, fd_directed;
 
 	if (next_fsetxattr == NULL) {
 		next_fsetxattr = dlsym(RTLD_NEXT, "fsetxattr");
@@ -5771,10 +5772,12 @@ fsetxattr(int fd, char *name, void *value, size_t size, int flags)
 
 	if (fd_directed < FD_DIR_BASE)
 		rc = dfs_setxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
-		       d_file_list[fd_directed - FD_FILE_BASE]->file, name, value, size, flags);
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value, size,
+				  flags);
 	else
 		rc = dfs_setxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
-		       dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, size, flags);
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, size,
+				  flags);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -5782,7 +5785,6 @@ fsetxattr(int fd, char *name, void *value, size_t size, int flags)
 
 	return rc;
 }
-
 
 int
 utime(const char *path, const struct utimbuf *times)
