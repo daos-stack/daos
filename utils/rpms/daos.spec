@@ -15,6 +15,11 @@
 %global argobots_version 1.2-1%{?dist}
 %global fuse_version 3.16.2-2%{?dist}
 %global spdk_version 22.01.2-6%{?dist}
+%if (0%{?suse_version} >= 1500)
+%global pmdk_version 2.1.0-3.suse1500
+%else
+%global pmdk_version 2.1.0-3%{?dist}
+%endif
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -60,11 +65,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
-%if (0%{?suse_version} >= 1500)
-BuildRequires: libpmemobj-devel = 2.1.0-3.suse1500
-%else
-BuildRequires: libpmemobj-devel = 2.1.0-3%{?dist}
-%endif
+BuildRequires: libpmemobj-devel = %{pmdk_version}
 %endif
 BuildRequires: fuse3-devel = %{fuse_version}
 %if (0%{?suse_version} >= 1500)
@@ -158,11 +159,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 = 2.1.0-3.suse1500
+Requires: libpmemobj1 = %{pmdk_version}
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj = 2.1.0-3%{?dist}
+Requires: libpmemobj = %{pmdk_version}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury = %{mercury_version}
