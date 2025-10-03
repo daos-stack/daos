@@ -72,13 +72,21 @@ dlck_print_main_get_custom(struct dlck_print *dp)
 /**
  * \brief Init a worker print utility.
  *
- * Prints to \p stream.
+ * Creates and opens a logfile. The created printer utility will direct log into the created file.
  *
- * \param[out]	dp	Initialized utility.
- * \param[in]	stream	Output stream of the worker.
+ * \param[in]	log_dir	Directory where a logfile will be created.
+ * \param[in]	po_uuid	Pool's UUID.
+ * \param[in]	tgt_id	Target's ID.
+ * \param[in]	main_dp	Main print utility. To report errors when they occur.
+ * \param[out]	dp	Created print utility.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other error.
  */
-void
-dlck_print_worker_init(struct dlck_print *dp, FILE *stream);
+int
+dlck_print_worker_init(const char *log_dir, uuid_t po_uuid, int tgt_id, struct dlck_print *main_dp,
+		       struct dlck_print *dp);
 
 /**
  * \brief Finalize the worker print utility.

@@ -12,6 +12,7 @@
 #include <daos_errno.h>
 #include <daos/debug.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/mgmt_tgt_common.h>
 #include <daos_srv/dlck.h>
 #include <gurt/common.h>
 
@@ -147,11 +148,42 @@ dlck_printf_worker(struct dlck_print *dp, const char *fmt, ...)
 	return rc;
 }
 
-void
-dlck_print_worker_init(struct dlck_print *dp, FILE *stream)
+int
+dlck_print_worker_init(const char *log_dir, uuid_t po_uuid, int tgt_id, struct dlck_print *main_dp,
+		       struct dlck_print *dp)
 {
+	char *log_file;
+	FILE *stream;
+	int   rc;
+
+	/** open the logfile */
+	D_ASPRINTF(log_file, "%s/" DF_UUIDF "_%s%d", log_dir, DP_UUID(po_uuid), VOS_FILE, tgt_id);
+	if (log_file == NULL) {
+		rc = -DER_NOMEM;
+		DLCK_PRINTF_ERR(main_dp, "[%d] Log file path allocation failed: " DF_RC "\n",
+				tgt_id, DP_RC(rc));
+		/**
+		 * It is very unlikely we can continue work without an ability to allocate more
+		 * memory.
+		 */
+		return rc;
+	}
+
+	stream = fopen(log_file, "w");
+	if (stream == NULL) {
+		rc = daos_errno2der(errno);
+		DLCK_PRINTF_ERR(main_dp, "[%d] Log file open failed: %s: " DF_RC "\n", tgt_id,
+				log_file, DP_RC(rc));
+		D_FREE(log_file);
+		return rc;
+	}
+	D_FREE(log_file);
+
+	memset(dp, 0, sizeof(*dp));
 	dp->dp_printf     = dlck_printf_worker;
 	dp->printf_custom = stream;
+
+	return DER_SUCCESS;
 }
 
 void
