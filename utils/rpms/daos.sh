@@ -64,7 +64,7 @@ install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 
 EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
-DEPENDS=( "mercury >= ${mercury_full}" "${libfabric_lib} >= ${libfabric_full}" )
+DEPENDS=( "mercury >= ${mercury_version}" )
 build_package "daos"
 
 # Only build server RPMs if we built the server

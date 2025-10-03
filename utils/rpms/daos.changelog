@@ -1,4 +1,8 @@
 %changelog
+* Wed Nov 12 2025  Jerome Soumagne <jerome.soumagne@hpe.com> 2.7.101-18
+- Drop libfabric-devel build requirement
+- Drop libfabric requirement that is already provided by mercury-libfabric
+
 * Wed Nov 05 2025  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.7-101-17
 - Update PMDK to release 2.1.2
 
