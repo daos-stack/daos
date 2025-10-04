@@ -538,7 +538,7 @@ chk_pool_stop_all(struct chk_instance *ins, uint32_t status, int *ret)
 }
 
 int
-chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
+chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts)
 {
 	struct chk_traverse_pools_args	*ctpa = args;
 	char				*uuid_str = key->iov_buf;
@@ -569,7 +569,7 @@ out:
 }
 
 int
-chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
+chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts)
 {
 	struct chk_traverse_pools_args *ctpa     = args;
 	char                           *uuid_str = key->iov_buf;
@@ -581,8 +581,11 @@ chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 		D_GOTO(out, rc = 0);
 
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
-	if (rc == 0)
+	if (rc == 0) {
 		rc = chk_bk_delete_pool(uuid_str);
+		if (rc == 0)
+			*acts |= VOS_ITER_CB_DELETE;
+	}
 
 out:
 	return rc == -DER_NONEXIST ? 0 : rc;
@@ -711,7 +714,7 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 }
 
 int
-chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
+chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts)
 {
 	struct chk_traverse_pools_args	*ctpa = args;
 	struct chk_instance		*ins = ctpa->ctpa_ins;
