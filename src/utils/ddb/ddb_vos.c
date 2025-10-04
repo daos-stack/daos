@@ -1750,7 +1750,7 @@ do_sync_cb(uuid_t pool_id, int tgt_id, uint64_t blob_id, enum smd_dev_type st,
 
 	D_ASSERT(args != NULL);
 
-	rc = smd_dev_add_tgt(info->dsi_dev_id, tgt_id, st);
+	rc = smd_dev_add_tgt(info->dsi_dev_id, tgt_id, st, NULL);
 	smd_dev_set_state(info->dsi_dev_id, SMD_DEV_NORMAL);
 	if (rc == -DER_EXIST)
 		D_INFO("tgt_id(%d) already mapped to dev_id(" DF_UUID ")", tgt_id,
@@ -2097,7 +2097,7 @@ dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid)
 	}
 
 	/* Specify 'roles' as 0 */
-	rc = smd_dev_replace(old_devid, new_devid, 0);
+	rc = smd_dev_replace(old_devid, new_devid, 0, new_dev_info->bdi_ctrlr);
 	if (rc)
 		DL_ERROR(rc, "Failed to replace device in SMD");
 out:

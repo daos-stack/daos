@@ -16,10 +16,44 @@ struct smd_device {
 	uint32_t		sd_tgts[SMD_MAX_TGT_CNT];
 };
 
+#define SMD_MODEL_MAX_LEN  41
+#define SMD_SERIAL_MAX_LEN 21
+
+/* 128 bytes data */
+struct smd_ctrlr_data {
+	char scd_model[SMD_MODEL_MAX_LEN];
+	char scd_serial[SMD_SERIAL_MAX_LEN];
+	char scd_reserve[66];
+};
+
+static int
+set_ctrlr_data(struct d_uuid *id, struct smd_ctrlr_data *ctrlr_data, struct nvme_ctrlr_t *ctrlr)
+{
+	bool need_update = false;
+
+	if (ctrlr == NULL)
+		return 0;
+
+	if (!strlen(ctrlr_data->scd_model) && ctrlr->model != NULL) {
+		strncpy(ctrlr_data->scd_model, ctrlr->model, sizeof(ctrlr_data->scd_model) - 1);
+		need_update = true;
+	}
+	if (!strlen(ctrlr_data->scd_serial) && ctrlr->serial != NULL) {
+		strncpy(ctrlr_data->scd_serial, ctrlr->serial, sizeof(ctrlr_data->scd_serial) - 1);
+		need_update = true;
+	}
+
+	if (!need_update)
+		return 0;
+
+	return smd_db_upsert(TABLE_CTRLR_DATA, id, sizeof(*id), &ctrlr_data, sizeof(ctrlr_data));
+}
+
 int
-smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
+smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st, struct nvme_ctrlr_t *ctrlr)
 {
 	struct smd_device	dev;
+	struct smd_ctrlr_data   ctrlr_data = {0};
 	struct d_uuid		id_org;
 	struct d_uuid		id;
 	int			rc;
@@ -62,6 +96,16 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 		goto out;
 	}
 
+	if (ctrlr != NULL) {
+		rc = smd_db_fetch(TABLE_CTRLR_DATA, &id, sizeof(id), &ctrlr_data,
+				  sizeof(ctrlr_data));
+		if (rc && rc != -DER_NONEXIST) {
+			DL_ERROR(rc, "Fetch ctrlr data for dev " DF_UUID " failed.",
+				 DP_UUID(&id.uuid));
+			goto out;
+		}
+	}
+
 	/* Update device and target tables in same transaction */
 	rc = smd_db_tx_begin();
 	if (rc)
@@ -69,8 +113,7 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 
 	rc = smd_db_upsert(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc) {
-		D_ERROR("Fetch dev "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Update dev " DF_UUID " failed.", DP_UUID(&id.uuid));
 		goto out_tx;
 	}
 
@@ -80,6 +123,13 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 			tgt_id, DP_RC(rc));
 		goto out_tx;
 	}
+
+	rc = set_ctrlr_data(&id, &ctrlr_data, ctrlr);
+	if (rc) {
+		DL_ERROR(rc, "Update ctrlr data for dev " DF_UUID " failed.", DP_UUID(&id.uuid));
+		goto out_tx;
+	}
+
 out_tx:
 	rc = smd_db_tx_end(rc);
 out:
@@ -139,7 +189,7 @@ out:
 }
 
 static struct smd_dev_info *
-smd_dev_alloc_info(struct d_uuid *id, struct smd_device *dev)
+smd_dev_alloc_info(struct d_uuid *id, struct smd_device *dev, struct smd_ctrlr_data *ctrlr_data)
 {
 	struct smd_dev_info	*info;
 	int			 i;
@@ -161,6 +211,21 @@ smd_dev_alloc_info(struct d_uuid *id, struct smd_device *dev)
 	for (i = 0; i < info->sdi_tgt_cnt; i++)
 		info->sdi_tgts[i] = dev->sd_tgts[i];
 
+	if (strlen(ctrlr_data->scd_model) != 0) {
+		D_STRNDUP(info->sdi_model, ctrlr_data->scd_model, strlen(ctrlr_data->scd_model));
+		if (info->sdi_model == NULL) {
+			smd_dev_free_info(info);
+			return NULL;
+		}
+	}
+	if (strlen(ctrlr_data->scd_serial) != 0) {
+		D_STRNDUP(info->sdi_serial, ctrlr_data->scd_serial, strlen(ctrlr_data->scd_serial));
+		if (info->sdi_serial == NULL) {
+			smd_dev_free_info(info);
+			return NULL;
+		}
+	}
+
 	return info;
 }
 
@@ -169,6 +234,7 @@ smd_dev_get_info(struct d_uuid *id, struct smd_dev_info **dev_info)
 {
 	struct smd_dev_info	*info;
 	struct smd_device	 dev;
+	struct smd_ctrlr_data    ctrlr_data = {0};
 	int			 rc;
 
 	rc = smd_db_fetch(TABLE_DEV, id, sizeof(*id), &dev, sizeof(dev));
@@ -178,7 +244,15 @@ smd_dev_get_info(struct d_uuid *id, struct smd_dev_info **dev_info)
 		return rc;
 	}
 
-	info = smd_dev_alloc_info(id, &dev);
+	rc = smd_db_fetch(TABLE_CTRLR_DATA, id, sizeof(*id), &ctrlr_data, sizeof(ctrlr_data));
+	if (rc) {
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT, rc,
+			  "Fetch ctrlr data for dev " DF_UUID " failed.", DP_UUID(&id->uuid));
+		if (rc != -DER_NONEXIST)
+			return rc;
+	}
+
+	info = smd_dev_alloc_info(id, &dev, &ctrlr_data);
 	if (info == NULL)
 		return -DER_NOMEM;
 
@@ -224,6 +298,7 @@ smd_dev_list_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	struct smd_trav_data    *td = args;
 	struct smd_dev_info     *info;
 	struct smd_device        dev;
+	struct smd_ctrlr_data    ctrlr_data = {0};
 	struct d_uuid            id;
 	int                      rc;
 
@@ -233,7 +308,15 @@ smd_dev_list_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	if (rc)
 		return rc;
 
-	info = smd_dev_alloc_info(&id, &dev);
+	rc = smd_db_fetch(TABLE_CTRLR_DATA, &id, sizeof(id), &ctrlr_data, sizeof(ctrlr_data));
+	if (rc) {
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT, rc,
+			  "Fetch ctrlr data for dev " DF_UUID " failed.", DP_UUID(id.uuid));
+		if (rc != -DER_NONEXIST)
+			return rc;
+	}
+
+	info = smd_dev_alloc_info(&id, &dev, &ctrlr_data);
 	if (!info)
 		return -DER_NOMEM;
 
@@ -304,12 +387,13 @@ tgt_need_replace(uuid_t old_id, uint32_t tgt_id, unsigned int old_roles, enum sm
  * 'dmg storage replace' command with same old and new device ID to revive the device.
  */
 int
-smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles)
+smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles, struct nvme_ctrlr_t *ctrlr)
 {
-	struct smd_device	 dev;
-	struct d_uuid		 id;
-	enum smd_dev_type	 st;
-	int			 i, rc;
+	struct smd_device     dev;
+	struct smd_ctrlr_data ctrlr_data = {0};
+	struct d_uuid         id;
+	enum smd_dev_type     st;
+	int                   i, rc;
 
 	D_ASSERT(uuid_compare(old_id, new_id) != 0);
 
@@ -366,6 +450,13 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles)
 		goto tx_end;
 	}
 
+	/* Delete old ctrlr data */
+	rc = smd_db_delete(TABLE_CTRLR_DATA, &id, sizeof(id));
+	if (rc && rc != -DER_NONEXIST) {
+		DL_ERROR(rc, "Failed to delete ctrlr data for dev " DF_UUID ".", DP_UUID(&id.uuid));
+		goto tx_end;
+	}
+
 	/* Insert new device in device table */
 	uuid_copy(id.uuid, new_id);
 	/* The replaced device from 'ddb dev_replace' should start with FAULTY state */
@@ -374,6 +465,12 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles)
 	if (rc) {
 		D_ERROR("Failed to insert new dev "DF_UUID". "DF_RC"\n",
 			DP_UUID(&id.uuid), DP_RC(rc));
+		goto tx_end;
+	}
+
+	rc = set_ctrlr_data(&id, &ctrlr_data, ctrlr);
+	if (rc) {
+		DL_ERROR(rc, "Update ctrlr data for dev " DF_UUID " failed.", DP_UUID(&id.uuid));
 		goto tx_end;
 	}
 
