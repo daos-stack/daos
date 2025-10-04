@@ -22,6 +22,51 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
+def add_pools(dmg, add_pool_kwargs, error_handler=None, query_on_error=True):
+    """Add multiple TestPool objects to the test.
+
+    Args:
+        dmg (DmgCommand): dmg command used to update the server log mask before creating the first
+            pool and reset it after creating the last pool. Not used if no pools are created.
+        add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
+            pool. Must at least include the 'test' kwargs. See add_pool() for other options.
+        error_handler (method, optional): optional method to call when a pool create fails. Defaults
+            to None.
+        query_on_error (bool, optional): whether or not to run dmg pool query usage if the pool
+            create fails to provide additional debug. Defaults to True.
+
+    Returns:
+        list: a list of new pool objects
+    """
+    _any_create = any(kwargs.get("create", True) is True for kwargs in add_pool_kwargs)
+
+    if _any_create:
+        # Set the DEBUG log mask before the first pool create
+        dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
+    # Add the requested pools
+    pools = []
+    for kwargs in add_pool_kwargs:
+        _restore = kwargs.get("set_logmasks", True)
+        kwargs["set_logmasks"] = False
+        try:
+            pools.append(add_pool(**kwargs))
+            pools[-1].set_logmasks.value = _restore
+        except TestFail as error:
+            if query_on_error:
+                query_kwargs = {"mem_ratio": kwargs.get("mem_ratio")}
+                dmg.storage_query_usage(**query_kwargs)
+            if not error_handler:
+                raise
+            error_handler(error)
+
+    if _any_create:
+        # Reset the log mask after the last pool create
+        dmg.server_set_logmasks(raise_exception=False)
+
+    return pools
+
+
 def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
     """Add a new TestPool object to the test.
 
@@ -180,6 +225,23 @@ def time_pool_create(log, number, pool):
     duration = time() - start
     log.info("Pool %s creation: %s seconds", number, duration)
     return duration
+
+
+def get_pool_create_percentages(num_pools, total_percent):
+    """Get a list of percentages for pool create sizes.
+
+    Args:
+        num_pools (int): number of pools to create
+        total_percent (int): total percent of the storage to use
+
+    Returns:
+        list: list of the percentages for each pool create
+    """
+    percentages = []
+    for index in range(num_pools):
+        remaining_pools = num_pools - index
+        percentages.append(f"{round(total_percent / remaining_pools)}%")
+    return percentages
 
 
 class TestPool(TestDaosApiBase):
