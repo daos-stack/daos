@@ -1301,3 +1301,22 @@ func (svc *mgmtSvc) PoolRebuildStop(ctx context.Context, req *mgmtpb.PoolRebuild
 
 	return resp, nil
 }
+
+// PoolSelfHealEval forwards a pool self-heal evaluate request to the I/O Engine.
+func (svc *mgmtSvc) PoolSelfHealEval(ctx context.Context, req *mgmtpb.PoolSelfHealEvalReq) (*mgmtpb.DaosResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, daos.MethodPoolSelfHealEval, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}

@@ -52,6 +52,7 @@ typedef struct _Mgmt__PoolQueryTargetInfo Mgmt__PoolQueryTargetInfo;
 typedef struct _Mgmt__PoolQueryTargetResp Mgmt__PoolQueryTargetResp;
 typedef struct _Mgmt__PoolRebuildStartReq Mgmt__PoolRebuildStartReq;
 typedef struct _Mgmt__PoolRebuildStopReq  Mgmt__PoolRebuildStopReq;
+typedef struct _Mgmt__PoolSelfHealEvalReq Mgmt__PoolSelfHealEvalReq;
 
 /* --- enums --- */
 
@@ -1225,6 +1226,38 @@ struct _Mgmt__PoolRebuildStopReq {
 	 0,                                                                                        \
 	 NULL}
 
+/*
+ * PoolSelfHealEvalReq contains information about a request to evaluate the self_heal system
+ * property value on a given pool.
+ */
+struct _Mgmt__PoolSelfHealEvalReq {
+	ProtobufCMessage base;
+	/*
+	 * DAOS system identifier
+	 */
+	char            *sys;
+	/*
+	 * DAOS pool identifier
+	 */
+	char            *id;
+	/*
+	 * self_heal system property value
+	 */
+	char            *prop_val;
+	/*
+	 * List of pool service ranks
+	 */
+	size_t           n_svc_ranks;
+	uint32_t        *svc_ranks;
+};
+#define MGMT__POOL_SELF_HEAL_EVAL_REQ__INIT                                                        \
+	{PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_self_heal_eval_req__descriptor),                      \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 (char *)protobuf_c_empty_string,                                                          \
+	 0,                                                                                        \
+	 NULL}
+
 /* Mgmt__PoolCreateReq methods */
 void   mgmt__pool_create_req__init
                      (Mgmt__PoolCreateReq         *message);
@@ -1889,6 +1922,22 @@ mgmt__pool_rebuild_stop_req__unpack(ProtobufCAllocator *allocator, size_t len, c
 void
 mgmt__pool_rebuild_stop_req__free_unpacked(Mgmt__PoolRebuildStopReq *message,
 					   ProtobufCAllocator       *allocator);
+/* Mgmt__PoolSelfHealEvalReq methods */
+void
+mgmt__pool_self_heal_eval_req__init(Mgmt__PoolSelfHealEvalReq *message);
+size_t
+mgmt__pool_self_heal_eval_req__get_packed_size(const Mgmt__PoolSelfHealEvalReq *message);
+size_t
+mgmt__pool_self_heal_eval_req__pack(const Mgmt__PoolSelfHealEvalReq *message, uint8_t *out);
+size_t
+mgmt__pool_self_heal_eval_req__pack_to_buffer(const Mgmt__PoolSelfHealEvalReq *message,
+					      ProtobufCBuffer                 *buffer);
+Mgmt__PoolSelfHealEvalReq *
+mgmt__pool_self_heal_eval_req__unpack(ProtobufCAllocator *allocator, size_t len,
+				      const uint8_t *data);
+void
+mgmt__pool_self_heal_eval_req__free_unpacked(Mgmt__PoolSelfHealEvalReq *message,
+					     ProtobufCAllocator        *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__PoolCreateReq_Closure)
@@ -2000,6 +2049,8 @@ typedef void (*Mgmt__PoolRebuildStartReq_Closure)(const Mgmt__PoolRebuildStartRe
 						  void                            *closure_data);
 typedef void (*Mgmt__PoolRebuildStopReq_Closure)(const Mgmt__PoolRebuildStopReq *message,
 						 void                           *closure_data);
+typedef void (*Mgmt__PoolSelfHealEvalReq_Closure)(const Mgmt__PoolSelfHealEvalReq *message,
+						  void                            *closure_data);
 
 /* --- services --- */
 
@@ -2048,6 +2099,7 @@ extern const ProtobufCEnumDescriptor    mgmt__pool_query_target_info__target_sta
 extern const ProtobufCMessageDescriptor mgmt__pool_query_target_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_start_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_stop_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_self_heal_eval_req__descriptor;
 
 PROTOBUF_C__END_DECLS
 
