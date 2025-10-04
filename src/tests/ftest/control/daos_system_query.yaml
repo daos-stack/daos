@@ -11,7 +11,7 @@ server_config:
     0:
       targets: 4
       nr_xs_helpers: 0
-      fabric_iface_port: 31416
+      fabric_iface: eth0
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -23,7 +23,7 @@ server_config:
     1:
       targets: 4
       nr_xs_helpers: 0
-      fabric_iface_port: 31516
+      fabric_iface: eth0
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
