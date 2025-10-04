@@ -39,7 +39,7 @@ class MemRatioTest(TestWithServers):
         Returns:
             str: bytes displayed as human readable with the original value
         """
-        return f"{bytes_to_human(int(size))} ({size})"
+        return f"{bytes_to_human(int(size), width=9)} ({size})"
 
     def test_mem_ratio(self):
         """Create multiple pools using different --mem_ratio arguments to define which fraction
@@ -149,7 +149,7 @@ class MemRatioTest(TestWithServers):
         # Report the test results
         if not data:
             self.fail(f"Error collecting data from {len(pools)} pool(s)")
-        _format = "%-54s  %-9s  %-40s  %-14s  %-12s  %-13s  %-50s  %-21s  %s"
+        _format = "%-54s  %-9s  %-50s  %-14s  %-12s  %-13s  %-60s  %-21s  %s"
         _keys = ["Pool",
                  "mem-ratio",
                  "tier_bytes",
@@ -161,7 +161,7 @@ class MemRatioTest(TestWithServers):
                  "query_ratio"]
         self.log.debug(_format, *_keys)
         self.log.debug(
-            _format, "-" * 54, "-" * 9, "-" * 40, "-" * 14, "-" * 12, "-" * 13, "-" * 50, "-" * 21,
+            _format, "-" * 54, "-" * 9, "-" * 50, "-" * 14, "-" * 12, "-" * 13, "-" * 60, "-" * 21,
             "-" * 11)
         for name, info in data.items():
             items = [name]
