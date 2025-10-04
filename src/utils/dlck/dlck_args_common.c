@@ -19,7 +19,7 @@ static struct argp_option args_common_options[] = {
      "UUID of a container to process. If not provided all containers are processed."},
     OPT_HEADER("Available commands:", GROUP_AVAILABLE_CMDS),
     /** entries below inherits the group number of the header entry */
-    LIST_ENTRY("pool_check", "Validate the integrity of the pool(s) metadata."),
+    LIST_ENTRY("check", "Validate the integrity of the pool(s) metadata."),
     {0}};
 
 static void
