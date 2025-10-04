@@ -141,7 +141,6 @@ void fixup_rpmlintrc() {
     writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
 }
 
-
 void uploadNewRPMs(String target, String stage) {
     buildRpmPost target: target, condition: stage, rpmlint: false, new_rpm: true
 }
@@ -266,7 +265,7 @@ pipeline {
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
         booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
-                     defaultValue: false,
+                     defaultValue: true, /* hack false, */
                      description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
@@ -301,25 +300,25 @@ pipeline {
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on EL 8')
         booleanParam(name: 'CI_el9_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,      /* hack */
                      description: 'Do not build sources and RPMs on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,      /* hack */
                      description: 'Do not build sources and RPMs on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
-                     defaultValue: true,
+                     defaultValue: false,   /* hack */
                      description: 'Run the Unit Test on EL 8 test stage')
         booleanParam(name: 'CI_NLT_TEST',
-                     defaultValue: true,
+                     defaultValue: false,   /* hack */
                      description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
-                     defaultValue: true,
+                     defaultValue: false,   /* hack */
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false,   /* hack true, */
                      description: 'Run the Fault injection testing on EL 8 test stage')
         booleanParam(name: 'CI_TEST_EL8_RPMs',
                      defaultValue: true,
@@ -328,7 +327,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
-                     defaultValue: false,
+                     defaultValue: true,    /* hack */
                      description: 'Skip all functional test stages (Test)')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
@@ -369,7 +368,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
-                     defaultValue: false,
+                     defaultValue: true,  /* hack false, */
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: false,
@@ -390,19 +389,19 @@ pipeline {
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_devops_test5', /* hack 'ci_nvme5', */
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
+               defaultValue: 'ci_devops_test5', /* hack 'ci_ofed5', */
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium VMD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
+               defaultValue: 'ci_devops_test5', /* hack 'ci_ofed5', */
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
-               defaultValue: 'ci_nvme9',
+               defaultValue: 'ci_devops_test9', /* hack 'ci_nvme9', */
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
