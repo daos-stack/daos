@@ -88,6 +88,26 @@ struct dlck_args_files {
 };
 
 /**
+ * Count the number of files in the list.
+ *
+ * \param[in]	files	The list of files to count.
+ *
+ * \return The number of files on the list \p files.
+ */
+static inline unsigned
+dlck_args_files_num(struct dlck_args_files *files)
+{
+	struct dlck_file *file;
+	unsigned          num = 0;
+
+	d_list_for_each_entry(file, &files->list, link) {
+		++num;
+	}
+
+	return num;
+}
+
+/**
  * @struct dlck_control
  *
  * Bundle of input, output, and control arguments.
@@ -99,6 +119,8 @@ struct dlck_control {
 	struct dlck_args_engine engine;
 	/** print */
 	struct dlck_print       print;
+	/** out */
+	char                   *log_dir;
 };
 
 /** helper definitions */

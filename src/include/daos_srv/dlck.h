@@ -46,6 +46,7 @@ struct dlck_print {
 		}                                                                                  \
 	} while (0)
 
+#define DLCK_PRINT_ERR(print, msg)       DLCK_PRINT(print, DLCK_ERROR_INFIX msg)
 #define DLCK_PRINTF_ERR(print, fmt, ...) DLCK_PRINTF(print, DLCK_ERROR_INFIX fmt, __VA_ARGS__)
 
 #define DLCK_PRINT_WO_PREFIX(print, msg)                                                           \

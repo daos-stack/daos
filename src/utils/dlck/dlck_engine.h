@@ -124,6 +124,11 @@ dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *u
 typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom, void **arg);
 typedef int (*arg_free_fn_t)(void *custom, void **arg);
 
+/**
+ * \struct dlck_exec
+ *
+ * Job batch. ULTs + their arguments + the free function to clean it all up.
+ */
 struct dlck_exec {
 	struct dlck_ult *ults;
 	void           **ult_args;

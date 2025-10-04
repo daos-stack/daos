@@ -625,7 +625,9 @@ dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de, int *rcs)
 			goto fail_join_and_free;
 		}
 
-		rcs[i] = de->arg_free_fn(de->custom, &de->ult_args[i]);
+		if (rcs != NULL) {
+			rcs[i] = de->arg_free_fn(de->custom, &de->ult_args[i]);
+		}
 	}
 
 	D_FREE(de->ult_args);
