@@ -21,10 +21,6 @@ if [ -z "$(_git_diff_cached_files "Jenkinsfile")" ] ; then
     exit 0
 fi
 
-echo "Temporary skipping as the old Jenkins instance is not accessible"
-echo "Pre-hook will be restored after new instance of Jenkins will be fully operational"
-exit 0
-
 echo "Checking syntax"
 : "${JENKINS_HOST:=jenkins-3.daos.hpc.amslabs.hpecorp.net}"
 echo "Temporary no access to $JENKINS_HOST. Skipping"
