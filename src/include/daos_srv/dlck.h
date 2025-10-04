@@ -24,8 +24,8 @@
 struct dlck_print {
 	int (*dp_printf)(struct dlck_print *dp, const char *fmt, ...);
 	void *printf_custom;
-	int  level;
-	char prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
+	int   level;
+	char  prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
 };
 
 #define IS_DLCK(dp)     (unlikely((dp) != NULL))

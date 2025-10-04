@@ -233,7 +233,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	struct dlck_print  *dp                 = &ctrl->print;
 	unsigned            file_num           = dlck_args_files_num(&ctrl->files);
 	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
-	struct dlck_engine *engine = NULL;
+	struct dlck_engine *engine             = NULL;
 	struct dlck_exec    de                 = {0};
 	int                *rcs;
 	int                 rc;

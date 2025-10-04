@@ -38,7 +38,7 @@ dlck_cmd_check(struct dlck_control *ctrl);
 
 #define DLCK_CMDS_FUNCS                                                                            \
 	{                                                                                          \
-		dlck_cmd_check                                                                \
+		dlck_cmd_check                                                                     \
 	}
 
 #endif /** __DLCK_CMDS__ */
