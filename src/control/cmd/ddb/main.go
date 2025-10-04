@@ -70,7 +70,7 @@ type ddbCmdStr string
 
 func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
 	// hack to get at command names
-	ctx, cleanup, err := InitDdb()
+	ctx, cleanup, err := InitDdb(nil)
 	if err != nil {
 		return
 	}
@@ -175,7 +175,7 @@ Example Paths:
 		log.Debug("debug output enabled")
 	}
 
-	ctx, cleanup, err := InitDdb()
+	ctx, cleanup, err := InitDdb(log)
 	if err != nil {
 		return errors.Wrap(err, "Error initializing the DDB Context")
 	}
