@@ -468,9 +468,6 @@ static int (*next_munmap)(void *addr, size_t length);
 static void (*next_exit)(int rc);
 static void (*next__exit)(int rc) __attribute__((__noreturn__));
 
-/* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
-/* static org_dup3 real_dup3=NULL; */
-
 static int (*next_execve)(const char *filename, char *const argv[], char *const envp[]);
 static int (*next_execv)(const char *filename, char *const argv[]);
 static int (*next_execvp)(const char *filename, char *const argv[]);
@@ -6315,7 +6312,11 @@ new_dup3(int oldfd, int newfd, int flags)
 	if (d_get_fd_redirected(oldfd) < FD_FILE_BASE && d_get_fd_redirected(newfd) < FD_FILE_BASE)
 		return libc_dup3(oldfd, newfd, flags);
 
-	/* Ignore flags now. Need more work later to handle flags, e.g., O_CLOEXEC */
+	/* only O_CLOEXEC is accepted for flags */
+	if (flags != O_CLOEXEC) {
+		errno = EINVAL;
+		return (-1);
+	}
 	return dup2(oldfd, newfd);
 }
 
