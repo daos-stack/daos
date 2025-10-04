@@ -1,0 +1,15 @@
+diff --git a/src/e3sm_io.c b/src/e3sm_io.c
+index 496a189..8def6c1 100644
+--- a/src/e3sm_io.c
++++ b/src/e3sm_io.c
+@@ -82,8 +82,8 @@ static inline int set_info (e3sm_io_config *cfg, e3sm_io_decom *decom) {
+     /* set MPI-IO hints */
+ 
+     /* collective write */
+-    err = MPI_Info_set (cfg->info, "romio_cb_write", "enable");
+-    CHECK_MPIERR
++//    err = MPI_Info_set (cfg->info, "romio_cb_write", "enable");
++//    CHECK_MPIERR
+ 
+     /* HDF5 may do independent I/O internally */
+ 
