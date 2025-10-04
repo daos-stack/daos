@@ -172,13 +172,13 @@ def check_server_storage(logger, test, test_result, stage):
     status = True
     commands = {
         "scm_list":
-            r"ndctl list -c -v | grep pmem | sed -e 's/.*:\"\(.*\)\"/\/dev\/\1/' | grep -E '{}'",
+            r"ndctl list -c -v | grep pmem | sed -e 's/.*:\"\(.*\)\"/\/dev\/\1/' | grep -Eo '{}'",
         "bdev_list":
             r"lspci -D | grep -E '{}'"
     }
     logger.debug("-" * 80)
     logger.debug(f"Verifying server storage during the {stage.lower()} stage for \'{test}\'")
-    if "check_server_storage" in test.yaml_info and not test.yaml_info["check_server_storage"]:
+    if "check_server_storage" in test.yaml_info and test.yaml_info["check_server_storage"] is False:
         logger.debug(" - Test requested skip via 'check_server_storage' yaml entry")
         return status
     for key, command in commands.items():
@@ -186,18 +186,26 @@ def check_server_storage(logger, test, test_result, stage):
             # No need to check storage w/o a scm/bdev entry
             logger.debug(f" - No {key} storage defined for this test")
             continue
-        if "daos" in test.yaml_info[key]:
+
+        # Convert single engine storage entries into lists
+        test_yaml_info = test.yaml_info[key]
+        if not isinstance(test_yaml_info, (list, tuple)):
+            test_yaml_info = [test_yaml_info]
+
+        if "daos" in test_yaml_info:
             # No need to check ram class storage (using /mnt/daos* scm)
             logger.debug(f" - {key} storage using ram class")
             continue
+
         result = run_remote(
-            logger, test.host_info.servers.hosts, command.format('|'.join(test.yaml_info[key])))
+            logger, test.host_info.servers.hosts, command.format('|'.join(test_yaml_info)))
         if not result.passed:
             message = f"Failure detected attempting to verify {key} storage for '{test}'"
             test_result.fail_test(logger, stage, message)
             status = False
             continue
-        item_set = set(test.yaml_info[key])
+
+        item_set = set(test_yaml_info)
         logger.debug(f" - Expecting the following {key} storage: {item_set}")
         for data in result.output:
             if key == "bdev_list":
@@ -206,10 +214,13 @@ def check_server_storage(logger, test, test_result, stage):
                 result_set = set(data.stdout)
             match = bool(item_set & result_set == item_set)
             if not match:
-                logger.debug(f" - {key} mismatch: expected={item_set}, detected={result_set}")
+                logger.error(
+                    f"Mismatch detected for {key}: expected:{item_set} != detected:{result_set}")
                 message = f"Mismatch detected verifying {key} storage for '{test}'"
                 test_result.fail_test(logger, stage, message)
                 status = False
+            else:
+                logger.debug(f"Storage verified: expected:{item_set} == detected:{result_set}")
     return status
 
 
