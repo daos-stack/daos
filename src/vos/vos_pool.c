@@ -904,9 +904,16 @@ vos_pool_roundup_size(daos_size_t *scm_sz, daos_size_t *meta_sz)
 
 	/* Round up the size such that it is compatible with backend */
 	alignsz  = umempobj_pgsz(rc);
-	*scm_sz  = max(D_ALIGNUP(*scm_sz, alignsz), 1 << 24);
+	*scm_sz  = max(D_ALIGNUP(*scm_sz, alignsz), alignsz);
 	if (*meta_sz)
-		*meta_sz = max(D_ALIGNUP(*meta_sz, alignsz), 1 << 24);
+		*meta_sz = max(D_ALIGNUP(*meta_sz, alignsz), alignsz);
+
+	/*
+	 * If meta_sz is greater than scm_sz then there should be a
+	 * minimum of two memory bucket pages in memory.
+	 */
+	if (*meta_sz > *scm_sz)
+		*scm_sz = max(*scm_sz, 2 * alignsz);
 
 	return 0;
 }
