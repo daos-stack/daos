@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+// (C) Copyright 2025 Vdura Inc.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -73,11 +74,13 @@ func ddbLs(ctx *DdbContext, path string, recursive bool, details bool) error {
 	return daosError(C.ddb_run_ls(&ctx.ctx, &options))
 }
 
-func ddbOpen(ctx *DdbContext, path string, write_mode bool) error {
+func ddbOpen(ctx *DdbContext, path string, db_path string, write_mode bool) error {
 	/* Set up the options */
 	options := C.struct_open_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
 	options.write_mode = C.bool(write_mode)
 	/* Run the c code command */
 	return daosError(C.ddb_run_open(&ctx.ctx, &options))
@@ -225,11 +228,13 @@ func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
 }
 
-func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error {
+func ddbFeature(ctx *DdbContext, path, db_path, enable, disable string, show bool) error {
 	/* Set up the options */
 	options := C.struct_feature_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
 	if enable != "" {
 		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(enable),
 			&options.set_compat_flags, &options.set_incompat_flags))
@@ -298,4 +303,17 @@ func ddbDtxStat(ctx *DdbContext, path string) error {
 	defer freeString(options.path)
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_stat(&ctx.ctx, &options))
+}
+
+func ddbProvMem(ctx *DdbContext, db_path string, tmpfs_mount string, tmpfs_mount_size uint) error {
+	/* Set up the options */
+	options := C.struct_prov_mem_options{}
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
+	options.tmpfs_mount = C.CString(tmpfs_mount)
+	defer freeString(options.tmpfs_mount)
+
+	options.tmpfs_mount_size = C.uint(tmpfs_mount_size)
+	/* Run the c code command */
+	return daosError(C.ddb_run_prov_mem(&ctx.ctx, &options))
 }

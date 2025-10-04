@@ -452,7 +452,7 @@ dcv_suit_setup(void **state)
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0));
 
 	g_ctx.dc_poh = tctx->dvt_poh;
 

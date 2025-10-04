@@ -1,11 +1,14 @@
 /**
  * (C) Copyright 2022-2025 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <sys/mount.h>
 #include <string.h>
+#include <sys/vfs.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <vos_internal.h>
@@ -13,6 +16,7 @@
 #include <bio_wal.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
+#include "ddb_mgmt.h"
 #include "ddb_vos.h"
 #include "ddb_spdk.h"
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
@@ -20,7 +24,7 @@
 						anchors, cb, NULL, args, NULL)
 
 int
-dv_pool_open(const char *path, daos_handle_t *poh, uint32_t flags)
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags)
 {
 	struct vos_file_parts   path_parts = {0};
 	int			rc;
@@ -34,6 +38,11 @@ dv_pool_open(const char *path, daos_handle_t *poh, uint32_t flags)
 	rc = vos_path_parse(path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
+
+	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
+		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
+		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
+	}
 
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
@@ -2106,6 +2115,73 @@ out:
 		bio_free_dev_info(dev_info);
 	}
 
+	vos_self_fini();
+	return rc;
+}
+
+int
+dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs_mount_size)
+{
+	int          rc;
+	bool         md_on_ssd;
+	unsigned int sz = tmpfs_mount_size;
+
+	rc = vos_self_init(db_path, true, 0);
+	if (rc) {
+		D_ERROR("Initialize standalone VOS failed. " DF_RC "", DP_RC(rc));
+		return rc;
+	}
+
+	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
+	if (!md_on_ssd) {
+		D_ERROR("Not in MD-on-SSD mode; skipping memory environment provisioning.");
+		goto out;
+	}
+
+	/* Fetch tmpfs_mount_size */
+	if (sz == 0) {
+		rc = ddb_auto_calculate_tmpfs_mount_size(&sz);
+		if (rc) {
+			D_ERROR("Failed to calculate tmpfs size. " DF_RC "", DP_RC(rc));
+			goto out;
+		}
+		D_INFO("SCM size not specified; automatically calculated as %u GiB.", sz);
+	}
+
+	rc = ddb_is_mountpoint(tmpfs_mount);
+	if (rc < 0) {
+		D_ERROR("Failed to check mountpoint of %s. " DF_RC "", tmpfs_mount, DP_RC(rc));
+		goto out;
+	}
+
+	if (rc == 0) {
+		rc = ddb_mount(tmpfs_mount, sz);
+		if (rc) {
+			goto out;
+		}
+	} else {
+		D_INFO("tmpfs_mount %s is already a mountpoint, refuse to prov_mem.", tmpfs_mount);
+		rc = -DER_BUSY;
+		goto out;
+	}
+
+	/* Create the directory architecture */
+	rc = ddb_dirs_prepare(tmpfs_mount);
+	if (rc != 0) {
+		D_ERROR("Failed to prepare directory " DF_RC "", DP_RC(rc));
+		goto out2;
+	}
+
+	/*  Create VOS files  */
+	rc = ddb_recreate_pooltgts(tmpfs_mount);
+	if (rc != 0) {
+		D_ERROR("Failed to recreate vos files. " DF_RC "", DP_RC(rc));
+	}
+out2:
+	if (rc) {
+		umount(tmpfs_mount);
+	}
+out:
 	vos_self_fini();
 	return rc;
 }
