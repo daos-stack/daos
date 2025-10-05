@@ -780,7 +780,6 @@ do_lowfd(void **state)
 	free(path);
 }
 
-
 #define MAX_LEN_ATTR_VALUE (128)
 
 /* verify miscellaneous fd involved functions that are needed to be intercepted by libpil4dfs */
