@@ -1224,6 +1224,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 				    entry->ae_cur_stripe.as_stripenum,
 				    &full_cell_cnt);
 
+	has_old_replicas = true; /* XXX force full recalculation */
 	if (full_cell_cnt >= k / 2 || cell_cnt == k || has_old_replicas) {
 		stripe_ud.asu_recalc = true;
 		cell_cnt = full_cell_cnt;
