@@ -1472,7 +1472,8 @@ retry_rebuild_task(struct rebuild_task *task, int error, daos_rebuild_opc_t *opc
 
 static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
-			       struct rebuild_global_pool_tracker *rgt, int ret)
+			       struct rebuild_global_pool_tracker *rgt,
+			       uint32_t obj_reclaim_ver, int ret)
 {
 	int rc = 0;
 	int rc1;
@@ -1561,7 +1562,12 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		D_DEBUG(DB_REBUILD, DF_UUID" opc %u/%u, error %d, schedule RECLAIM.\n",
 			DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver,
 			rgt->rgt_status.rs_errno);
-		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_reclaim_epoch,
+
+		D_ASSERTF(task->dst_rebuild_op != RB_OP_REBUILD ||
+			  obj_reclaim_ver > task->dst_map_ver,
+			  "obj_reclaim_ver(%u) should be higher than rebuild_ver(%u)\n",
+			  obj_reclaim_ver, task->dst_map_ver);
+		rc = ds_rebuild_schedule(pool, obj_reclaim_ver, rgt->rgt_reclaim_epoch,
 					 task->dst_new_layout_version,
 					 &task->dst_tgts, RB_OP_RECLAIM, 5);
 		if (rc != 0)
@@ -1596,6 +1602,7 @@ rebuild_task_ult(void *arg)
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	d_rank_t				myrank;
 	uint64_t				cur_ts = 0;
+	uint32_t				obj_reclaim_ver = 0;
 	int					rc;
 
 	cur_ts = daos_gettime_coarse();
@@ -1718,7 +1725,8 @@ done:
 			goto iv_stop;
 
 		if (task->dst_rebuild_op == RB_OP_REBUILD)
-			rc = ds_pool_tgt_finish_rebuild(pool->sp_uuid, &task->dst_tgts);
+			rc = ds_pool_tgt_finish_rebuild(pool->sp_uuid, &task->dst_tgts,
+							&obj_reclaim_ver);
 		D_INFO("finish rebuild %d of " DF_UUID " "DF_RC"\n",
 		       task->dst_tgts.pti_ids[0].pti_id, DP_UUID(task->dst_pool_uuid), DP_RC(rc));
 	}
@@ -1742,7 +1750,7 @@ iv_stop:
 	}
 
 try_reschedule:
-	rebuild_task_complete_schedule(task, pool, rgt, rc);
+	rebuild_task_complete_schedule(task, pool, rgt, obj_reclaim_ver, rc);
 output:
 	rc = rebuild_notify_ras_end(&task->dst_pool_uuid, task->dst_map_ver,
 				    RB_OP_STR(task->dst_rebuild_op),
