@@ -411,6 +411,7 @@ dtx_stat_tests(void **state)
 	struct dt_vos_pool_ctx *tctx = *state;
 	struct ddb_ctx          ctx  = {0};
 	struct dtx_stat_options opt  = {0};
+	int                     i;
 
 	ctx.dc_poh                     = tctx->dvt_poh;
 	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
@@ -419,22 +420,27 @@ dtx_stat_tests(void **state)
 	opt.path                       = "[0]";
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt));
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^DTX entries statistics of container "
+			   "CONT:[[:blank:]]+\\(/\\[0\\]\\)[[:blank:]]+/[[:digit:]-]+$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+1$");
 	assert_regex_match(
 	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
-	assert_regex_match(dvt_fake_print_buffer,
-			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
+	    "^[[:blank:]]+- DTX newest aggregated date:[[:blank:]]+date=NA, epoch=NA$");
 
 	opt.path = "";
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt));
-	assert_regex_match(
-	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
+	for (i = 0; i < DVT_CONT_CNT; i++) {
+		char buf[] = "^DTX entries statistics of container "
+			     "CONT:[[:blank:]]+\\(/\\[0\\]\\)[[:blank:]]+/[[:digit:]-]+$";
+
+		buf[59] += i;
+		assert_regex_match(dvt_fake_print_buffer, buf);
+	}
 	assert_regex_match(dvt_fake_print_buffer,
-			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
-	assert_regex_match(dvt_fake_print_buffer,
-			   "^Number of committed DTX of the pool:[[:blank:]]+1$");
+			   "^DTX entries statistics of the pool \\(null\\)$");
 }
 
 static uint64_t
@@ -446,6 +452,10 @@ get_epoch(const char *buf)
 	uint64_t epoch;
 
 	buf_len = strlen(buf);
+
+	if (strcmp("NA\n", buf + buf_len - 3) == 0)
+		return 0;
+
 	idx     = buf_len - 1;
 	while (idx > 0 && (buf[idx] < '0' || buf[idx] > '9'))
 		--idx;
@@ -459,7 +469,7 @@ get_epoch(const char *buf)
 		--idx;
 	}
 	assert_true(idx > 0);
-	assert_true(buf[idx] == ' ');
+	assert_true(buf[idx] == '=' || buf[idx] == ' ');
 
 	return epoch;
 }
@@ -572,9 +582,8 @@ dtx_aggr_tests(void **state)
 	opt_stat.path = buf;
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
-	assert_regex_match(
-	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+8$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+8$");
 	assert_int_equal(get_epoch(dvt_fake_print_buffer), 0);
 
 	/* Test aggregation without epoch (i.e. all 8 DTX entries) */
@@ -584,9 +593,8 @@ dtx_aggr_tests(void **state)
 
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
-	assert_regex_match(
-	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+0$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+0$");
 	epoch_last = get_epoch(dvt_fake_print_buffer);
 	assert_true(epoch_last > 0);
 
@@ -597,9 +605,8 @@ dtx_aggr_tests(void **state)
 
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
-	assert_regex_match(
-	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+10$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+10$");
 	assert_int_equal(get_epoch(dvt_fake_print_buffer), epoch_last);
 
 	opt_dump.path      = buf;
@@ -617,9 +624,8 @@ dtx_aggr_tests(void **state)
 
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
-	assert_regex_match(
-	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+3$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+3$");
 	assert_int_equal(get_epoch(dvt_fake_print_buffer), epochs->de_epochs[6]);
 	assert_true(get_epoch(dvt_fake_print_buffer) > epoch_last);
 
@@ -629,9 +635,8 @@ dtx_aggr_tests(void **state)
 
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
-	assert_regex_match(
-	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+0$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+0$");
 	assert_int_equal(get_epoch(dvt_fake_print_buffer), epochs->de_epochs[9]);
 
 	/* Test aggregaton of all the containers */
@@ -642,7 +647,7 @@ dtx_aggr_tests(void **state)
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
 	assert_regex_match(dvt_fake_print_buffer,
-			   "^Number of committed DTX of the pool:[[:blank:]]+0$");
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+0$");
 
 	D_FREE(epochs);
 }

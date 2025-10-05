@@ -432,7 +432,7 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Flags: func(f *grumble.Flags) {
 			f.Uint64("e", "epoch", math.MaxUint64, "Max aggregation epoch")
-			f.String("d", "date", "", "Max aggregation date (format '1970-01-01 00:00:00')")
+			f.String("d", "date", "", "Max aggregation date (format '1970-01-01 00:00:00', 'NOW')")
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxAggr(ctx, c.Args.String("path"), c.Flags.Uint64("epoch"), c.Flags.String("date"))

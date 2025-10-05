@@ -341,7 +341,7 @@ func ddbDtxAggr(ctx *DdbContext, path string, epoch uint64, date string) error {
 		options.format = C.DDB_DTX_AGGR_EPOCH
 		options.epoch = C.uint64_t(epoch)
 	}
-	if date != "" {
+	if date != "NOW" && date != "" {
 		options.format = C.DDB_DTX_AGGR_DATE
 		options.date = C.CString(date)
 		defer freeString(options.date)
