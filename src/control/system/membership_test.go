@@ -1215,17 +1215,17 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 func TestSystem_Membership_MarkDead(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rank        Rank
-		incarnation uint64
-		expErr      error
+		rank           Rank
+		incarnation    uint64
+		expErr         error
+		expNeedsGrpUpd bool
 	}{
 		"unknown member": {
 			rank:   42,
 			expErr: ErrMemberRankNotFound(42),
 		},
-		"invalid transition ignored": {
-			rank:   2,
-			expErr: errors.New("illegal member state update"),
+		"invalid transition ignored; no error and no update requested": {
+			rank: 2,
 		},
 		"stale event for joined member": {
 			rank:        0,
@@ -1233,13 +1233,16 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			expErr:      errors.New("incarnation"),
 		},
 		"new event for joined member": {
-			rank:        0,
-			incarnation: 2,
+			rank:           0,
+			incarnation:    2,
+			expNeedsGrpUpd: true,
 		},
 		"event for stopped member": {
-			rank:        1,
-			incarnation: 2,
+			rank:           1,
+			incarnation:    2,
+			expNeedsGrpUpd: true,
 		},
+		// TODO: zero incarnation
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1257,8 +1260,9 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 				mock(2, 2, MemberStateExcluded),
 			)
 
-			gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
+			needsGrpUpd, gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
 			CmpErr(t, tc.expErr, gotErr)
+			test.AssertEqual(t, tc.expNeedsGrpUpd, needsGrpUpd, "unexpected flag")
 		})
 	}
 }

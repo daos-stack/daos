@@ -108,18 +108,15 @@ ddb_str2argv_free(struct argv_parsed *parse_args)
 int
 ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct program_args *pa)
 {
-	struct option	program_options[] = {
-		{ "write_mode", no_argument, NULL,	'w' },
-		{ "run_cmd", required_argument, NULL,	'R' },
-		{ "cmd_file", required_argument, NULL,	'f' },
-		{ "help", required_argument, NULL,	'h' },
-		{ NULL }
-	};
+	struct option program_options[] = {
+	    {"write_mode", no_argument, NULL, 'w'},     {"run_cmd", required_argument, NULL, 'R'},
+	    {"cmd_file", required_argument, NULL, 'f'}, {"db_path", required_argument, NULL, 'p'},
+	    {"help", required_argument, NULL, 'h'},     {NULL}};
 	int		index = 0, opt;
 
 	optind = 0; /* Reinitialize getopt */
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "wR:f:h", program_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "wR:f:p:h", program_options, &index)) != -1) {
 		switch (opt) {
 		case 'w':
 			pa->pa_write_mode = true;
@@ -129,6 +126,9 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 			break;
 		case 'f':
 			pa->pa_cmd_file = optarg;
+			break;
+		case 'p':
+			pa->pa_db_path = optarg;
 			break;
 		case 'h':
 			pa->pa_get_help = true;
