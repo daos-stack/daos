@@ -205,14 +205,31 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 }
 
+static bool
+is_fd_large(int fd)
+{
+	/* normally the fd from Linux kernel should be very small */
+	return (fd > 100000);
+}
+
 extern int __open(const char *pathname, int flags, ...);
 void
 do_open(void **state)
 {
-	int  fd;
-	int  rc;
-	int  len;
-	char path[512];
+	int   fd;
+	int   rc;
+	int   len;
+	char  path[512];
+	char *env_ldpreload;
+	bool  with_pil4dfs = false;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload == NULL)
+		return;
+
+	if (strstr(env_ldpreload, "libpil4dfs.so") != NULL)
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		with_pil4dfs = true;
 
 	len = snprintf(path, sizeof(path) - 1, "%s/open_file", test_dir);
 	assert_true(len < (sizeof(path) - 1));
@@ -223,6 +240,30 @@ do_open(void **state)
 	 */
 	fd = __open(path, O_RDWR | O_CREAT | O_EXCL);
 	assert_return_code(fd, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	/* test creat() */
+	fd = creat(path, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	if (with_pil4dfs)
+		assert_true(is_fd_large(fd));
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	/* test creat64() */
+	fd = creat64(path, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	if (with_pil4dfs)
+		assert_true(is_fd_large(fd));
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
