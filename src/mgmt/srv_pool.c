@@ -687,6 +687,27 @@ ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 }
 
 /**
+ * Calls into the pool svc to request evaluation of self_heal system property.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		svc_ranks		Ranks of pool svc replicas.
+ * \param[in]		sys_self_heal		Value of system property "self_heal"
+ *
+ * \return			0				Success
+ *					Negative value	Error
+ */
+int
+ds_mgmt_pool_self_heal_eval(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t sys_self_heal)
+{
+	D_DEBUG(DB_MGMT,
+		"Sending request to evaluate self_heal system property for pool " DF_UUID "\n",
+		DP_UUID(pool_uuid));
+
+	return dsc_pool_svc_eval_self_heal(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
+					   sys_self_heal);
+}
+
+/**
  * Destroy the specified pool shard on the specified storage rank
  */
 int
