@@ -49,20 +49,24 @@ jobs:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
+            python: 3.11
           - distro: fedora
             base: el.8
             with: fedora:38
+            python: 3.11
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
+            python: 3.11
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
-      PYTHON_VERSION: 3.11
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
@@ -108,11 +112,13 @@ jobs:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: clang
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
@@ -169,20 +175,25 @@ jobs:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
+            python: 3.11
           - distro: fedora
             base: el.8
             with: fedora:38
+            python: 3.11
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
+            python: 3.11
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
@@ -249,18 +260,23 @@ jobs:
           - distro: alma.8
             base: el.8
             with: almalinux:8
+            python: 3.11
           - distro: alma.9
             base: el.9
             with: almalinux:9
+            python: 3.11
           - distro: rocky.8
             base: el.8
             with: rockylinux/rockylinux:8
+            python: 3.11
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:22.04
+            python: 3
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
@@ -347,17 +363,21 @@ jobs:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
           - distro: alma.8
             base: el.8
             with: almalinux:8
+            python: 3.11
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
+            python: 3.11
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
