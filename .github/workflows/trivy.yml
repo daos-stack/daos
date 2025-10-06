@@ -17,9 +17,10 @@ on:
       - src/client/java/**/pom.xml
       - src/control/go.mod
       - src/control/vendor/**
-      - utils/trivy/**
-      - utils/rpms/**
       - utils/build.config
+      - utils/rpms/**
+      - utils/scripts/install-*.sh
+      - utils/trivy/**
 
 # Declare default permissions as nothing.
 permissions: {}
