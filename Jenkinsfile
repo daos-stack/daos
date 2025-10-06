@@ -4,6 +4,7 @@
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
 /* groovylint-disable ParameterName-0, VariableName */
 /* Copyright 2019-2024 Intel Corporation
+/* Copyright 2025 Google LLC
  * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
@@ -21,6 +22,19 @@
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
+
+void get_rpm_relval() {
+    env.DAOS_RELVAL = sh(label: 'get git tag',
+               script: '''if [ -n "$GIT_CHECKOUT_DIR" ] && [ -d "$GIT_CHECKOUT_DIR" ]; then
+                              cd "$GIT_CHECKOUT_DIR"
+                          fi
+                          if git diff-index --name-only HEAD^ | grep -q TAG; then
+                              echo ""
+                          else
+                              echo ".$(git rev-list HEAD --count).g$(git rev-parse --short=8 HEAD)"
+                          fi''',
+                returnStdout: true).trim()
+}
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
 void job_status_update(String name=env.STAGE_NAME, def value=currentBuild.currentResult) {
@@ -52,7 +66,7 @@ Map nlt_test() {
                script: "grep -E '<error( |>)' ${filesList.join(' ')} || true",
                returnStdout: true
         if (rcs) {
-            vfail = 1
+            vgfail = 1
         }
         String suite = sanitizedStageName()
         junitSimpleReport suite: suite,
@@ -127,6 +141,11 @@ void fixup_rpmlintrc() {
     writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
 }
 
+
+void uploadNewRPMs(String target, String stage) {
+    buildRpmPost target: target, condition: stage, rpmlint: false, new_rpm: true
+}
+
 String vm9_label(String distro) {
     return cachedCommitPragma(pragma: distro + '-VM9-label',
                               def_val: cachedCommitPragma(pragma: 'VM9-label',
@@ -165,6 +184,41 @@ Map update_default_commit_pragmas() {
     }
 }
 
+Boolean skip_pragma_set(String name, String def_val='false') {
+    // Return whether or not the skip pragma is set
+    return cachedCommitPragma("Skip-${name}", def_val).toLowerCase() == 'true'
+}
+
+Boolean skip_build_stage(String distro='', String compiler='gcc') {
+    // Skip the stage if the CI_<distro>_NOBUILD parameter is set
+    if (distro) {
+        if (startedByUser() && paramsValue("CI_${distro}_NOBUILD", false)) {
+            println("[${env.STAGE_NAME}] Skipping build stage due to CI_${distro}_NOBUILD")
+            return true
+        }
+    }
+
+    // Skip the stage if any Skip-build-<distro>-<compiler> pragmas are true
+    String pragma_names = ["build"]
+    if (distro && compiler) {
+        pragma_names << "build-${distro}-${compiler}"
+    }
+    def any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
+    if (any_pragma_skip) {
+        println("[${env.STAGE_NAME}] Skipping build stage for due to Skip-[${pragma_names}] pragma")
+        return true
+    }
+
+    // Skip the stage if a specific DAOS RPM version is specified
+    if (rpmTestVersion() != '') {
+        println("[${env.STAGE_NAME}] Skipping build stage for due to specific DAOS RPM version")
+        return true
+    }
+
+    // Otherwise run the build stage
+    return false
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -194,11 +248,6 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
-        // string(name: 'TestNvme',
-        //        defaultValue: '',
-        //        description: 'The launch.py --nvme argument to use for the Functional test ' +
-        //                     'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
-        //                     '0000:81:00.0, etc.).  Does not apply to MD on SSD stages.')
         string(name: 'BuildType',
                defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
@@ -221,7 +270,7 @@ pipeline {
                      description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
-                     description: 'Only build RPM and DEB packages, Skip unit tests.')
+                     description: 'Build RPM and DEB packages, Skip unit tests.')
         string(name: 'CI_SCONS_ARGS',
                defaultValue: '',
                description: 'Arguments for scons when building DAOS')
@@ -248,27 +297,15 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_RPM_el8_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for EL 8')
-        booleanParam(name: 'CI_RPM_el9_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for EL 9')
-        booleanParam(name: 'CI_RPM_leap15_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for Leap 15')
-        booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build DEB packages for Ubuntu 20')
         booleanParam(name: 'CI_el8_NOBUILD',
                      defaultValue: false,
-                     description: 'Do not build on EL 8')
+                     description: 'Do not build sources and RPMs on EL 8')
         booleanParam(name: 'CI_el9_NOBUILD',
                      defaultValue: false,
-                     description: 'Do not build on EL 9')
+                     description: 'Do not build sources and RPMs on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
-                     description: 'Do not build on Leap 15')
+                     description: 'Do not build sources and RPMs on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -397,6 +434,11 @@ pipeline {
                         update_default_commit_pragmas()
                     }
                 }
+                stage('Get RPM relval') {
+                    steps {
+                        get_rpm_relval()
+                    }
+                }
                 stage('Determine Release Branch') {
                     steps {
                         script {
@@ -478,190 +520,48 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !skip_build_stage() }
             }
             parallel {
-                stage('Build RPM on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs() +
-                                '--build-arg FVERSION=37'
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                /* This stage is commented out until it can be replaced
-                with code for building the current Ubuntu release. */
-                stage('Build DEB on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        // expression { !skipStage() }
-                        expression { false }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.ubuntu'
-                            label 'docker_runner'
-                            args '--cap-add=SYS_ADMIN'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
                 stage('Build on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el8_NOBUILD && !skipStage() }
+                        expression { !skip_build_stage('el8') }
                     }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
+                                                                deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                        script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                        stash_files: 'ci/test_files_to_stash.txt',
+                                        build_deps: 'no',
+                                        stash_opt: true,
+                                        scons_args: sconsArgs() +
+                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                            sh label: 'Generate RPMs',
+                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
+                        }
                     }
                     post {
+                        success {
+                            uploadNewRPMs('el8', 'success')
+                        }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
                                       mv config.log config.log-el8-gcc
@@ -670,6 +570,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
+                            uploadNewRPMs('el8', 'cleanup')
                             job_status_update()
                         }
                     }
@@ -677,29 +578,42 @@ pipeline {
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                        expression { !skip_build_stage('el9') }
                     }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
+                                                                deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                        script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_args: sconsArgs() +
+                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                            sh label: 'Generate RPMs',
+                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                        }
                     }
                     post {
+                        success {
+                            uploadNewRPMs('el9', 'success')
+                        }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
                                       mv config.log config.log-el9-gcc
@@ -708,6 +622,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
+                            uploadNewRPMs('el9', 'cleanup')
                             job_status_update()
                         }
                     }
@@ -715,7 +630,7 @@ pipeline {
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { !skip_build_stage('leap15') }
                     }
                     agent {
                         dockerfile {
@@ -723,18 +638,31 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true) +
+                                                                deps_build: false) +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc"
                         }
                     }
                     steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'yes'))
+                        script {
+                            sh label: 'Install RPMs',
+                                script: './ci/rpm/install_deps.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
+                            sh label: 'Build deps',
+                                script: './ci/rpm/build_deps.sh'
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                scons_args: sconsFaultsArgs() +
+                                ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                build_deps: 'yes'))
+                            sh label: 'Generate RPMs',
+                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
+                        }
                     }
                     post {
+                        success {
+                            uploadNewRPMs('leap15', 'success')
+                        }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
                                       mv config.log config.log-leap15-gcc
@@ -743,6 +671,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
+                            uploadNewRPMs('leap15', 'cleanup')
                             job_status_update()
                         }
                     }
@@ -750,7 +679,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { !skip_build_stage('leap15', 'icc') }
                     }
                     agent {
                         dockerfile {
@@ -760,6 +689,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg COMPILER=icc'
                         }
                     }
@@ -803,7 +733,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -825,7 +755,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -846,7 +776,7 @@ pipeline {
                     steps {
                         job_step_update(
                             unitTest(timeout_time: 60,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
@@ -888,7 +818,7 @@ pipeline {
                             unitTest(timeout_time: 160,
                                      unstash_opt: true,
                                      ignore_failure: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
@@ -913,7 +843,7 @@ pipeline {
                             unitTest(timeout_time: 180,
                                      unstash_opt: true,
                                      ignore_failure: true,
-                                     inst_repos: prRepos(),
+                                     inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {

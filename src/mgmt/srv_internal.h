@@ -29,6 +29,7 @@
 #include "check.pb-c.h"
 #include "svc.pb-c.h"
 #include "smd.pb-c.h"
+#include "system.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 
@@ -151,6 +152,10 @@ int
 ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks);
 int
      ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int
+ds_mgmt_pool_self_heal_eval(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t policy);
+int
+     ds_mgmt_check_set_policy(uint32_t policy_nr, Mgmt__CheckInconsistPolicy **policies);
 bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
@@ -194,6 +199,9 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_util.c */
 int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
+int
+     ds_mgmt_get_group_status(uint32_t group_version, d_rank_t **dead_ranks_out,
+			      size_t *n_dead_ranks_out);
 void ds_mgmt_kill_rank(bool force);
 int
 ds_mgmt_pbl_create(void);

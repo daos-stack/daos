@@ -29,7 +29,7 @@ source ci/junit.sh
 # Before running the script, environment variables may be needed for
 # the specific site.
 
-: "${MLNX_VER_NUM:=24.04-0.6.6.0}"
+: "${MLNX_VER_NUM:=3.0.0}"
 
 # This is tangled and needs a better fix as it has DISTRO being passed
 # as EL_8 for EL_9, yet other places expect DISTRO to really be EL_8 and
@@ -139,7 +139,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            REPO_PATH=\"${REPO_PATH:-}\"
            ARTIFACTS_URL=\"${ARTIFACTS_URL:-}\"
            COVFN_DISABLED=\"${COVFN_DISABLED:-true}\"
-           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:-}\"
+           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:?DAOS_CI_INFO_DIR is missing. Can not continue with node(s) provisioning process}\"
            CI_SCONS_ARGS=\"${CI_SCONS_ARGS:-}\"
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)

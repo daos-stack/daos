@@ -49,6 +49,7 @@ type PoolCmd struct {
 	SetProp      poolSetPropCmd      `command:"set-prop" description:"Set pool property"`
 	GetProp      poolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
 	Upgrade      poolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
+	Rebuild      poolRebuildCmd      `command:"rebuild" description:"Manage interactive rebuild process for pools"`
 }
 
 var (
@@ -1053,4 +1054,54 @@ func (cmd *poolDeleteACLCmd) Execute(args []string) error {
 	cmd.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
+}
+
+// poolRebuildCmd represents the pool rebuild subcommand.
+type poolRebuildCmd struct {
+	Start poolRebuildStartCmd `command:"start" description:"Rebuild start request submitted to pool"`
+	Stop  poolRebuildStopCmd  `command:"stop" description:"Rebuild stop request submitted to pool"`
+}
+
+type poolRebuildOpCmd struct {
+	poolCmd
+}
+
+func (cmd *poolRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force bool) (errOut error) {
+	req := &control.PoolRebuildManageReq{
+		ID:     cmd.PoolID().String(),
+		OpCode: opCode,
+		Force:  force,
+	}
+
+	err := control.PoolRebuildManage(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil || cmd.JSONOutputEnabled() {
+		if err != nil {
+			cmd.ctlInvoker.Debug(err.Error())
+		}
+
+		return err
+	}
+
+	msg := fmt.Sprintf("Pool-rebuild %s request succeeded", opCode)
+	cmd.ctlInvoker.Debug(msg)
+	cmd.Info(msg)
+
+	return nil
+}
+
+type poolRebuildStartCmd struct {
+	poolRebuildOpCmd
+}
+
+func (cmd *poolRebuildStartCmd) Execute(_ []string) error {
+	return cmd.execute(control.PoolRebuildOpCodeStart, false)
+}
+
+type poolRebuildStopCmd struct {
+	poolRebuildOpCmd
+	Force bool `short:"f" long:"force" description:"Forcibly stop rebuild"`
+}
+
+func (cmd *poolRebuildStopCmd) Execute(_ []string) error {
+	return cmd.execute(control.PoolRebuildOpCodeStop, cmd.Force)
 }

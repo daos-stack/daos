@@ -48,7 +48,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:noble
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -64,7 +64,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -104,7 +104,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:noble
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -112,7 +112,7 @@ jobs:
       COMPILER: clang
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -164,7 +164,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:noble
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
@@ -181,7 +181,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -255,7 +255,7 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -330,7 +330,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:noble
           - distro: alma.8
             base: el.8
             with: almalinux:8
@@ -344,7 +344,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500

@@ -114,7 +114,17 @@ func (m MgmtMethod) String() string {
 		MethodPoolGetProp:          "PoolGetProp",
 		MethodPoolUpgrade:          "PoolUpgrade",
 		MethodLedManage:            "LedManage",
+		MethodCheckerStart:         "CheckerStart",
+		MethodCheckerStop:          "CheckerStop",
+		MethodCheckerQuery:         "CheckerQuery",
+		MethodCheckerProp:          "CheckerProp",
+		MethodCheckerAction:        "CheckerAction",
 		MethodSetupClientTelemetry: "SetupClientTelemetry",
+		MethodCheckerSetPolicy:     "CheckerSetPolicy",
+		MethodPoolRebuildStart:     "PoolRebuildStart",
+		MethodPoolRebuildStop:      "PoolRebuildStop",
+		MethodGroupStatusGet:       "GroupStatusGet",
+		MethodPoolSelfHealEval:     "PoolSelfHealEval",
 	}[m]; ok {
 		return s
 	}
@@ -187,6 +197,8 @@ const (
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
+	// MethodLedManage defines a method to manage a VMD device LED state
+	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
 	// MethodCheckerStart defines a method for starting the checker
 	MethodCheckerStart MgmtMethod = C.DRPC_METHOD_MGMT_CHK_START
 	// MethodCheckerStop defines a method for stopping the checker
@@ -199,10 +211,18 @@ const (
 	MethodCheckerAction MgmtMethod = C.DRPC_METHOD_MGMT_CHK_ACT
 	// MethodPoolUpgrade defines a method for upgrade pool
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
-	// MethodLedManage defines a method to manage a VMD device LED state
-	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
 	// MethodSetupClientTelemetry defines a method to setup client telemetry
 	MethodSetupClientTelemetry MgmtMethod = C.DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM
+	// MethodCheckerSetPolicy defines a method to set policy for the checker
+	MethodCheckerSetPolicy MgmtMethod = C.DRPC_METHOD_MGMT_CHK_SET_POLICY
+	// MethodPoolRebuildStart defines a method start an interactive pool rebuild
+	MethodPoolRebuildStart MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_START
+	// MethodPoolRebuildStop defines a method stop an interactive pool rebuild
+	MethodPoolRebuildStop MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_STOP
+	// MethodGroupStatusGet defines a method for retrieving the group status of a system
+	MethodGroupStatusGet MgmtMethod = C.DRPC_METHOD_MGMT_GROUP_STATUS_GET
+	// MethodPoolSelfHealEval defines a method for evaluating self_heal property on a pool
+	MethodPoolSelfHealEval MgmtMethod = C.DRPC_METHOD_MGMT_POOL_SELF_HEAL_EVAL
 )
 
 type SrvMethod int32
@@ -217,11 +237,15 @@ func (m SrvMethod) ID() int32 {
 
 func (m SrvMethod) String() string {
 	if s, ok := map[SrvMethod]string{
-		MethodNotifyReady:         "notify ready",
-		MethodClusterEvent:        "cluster event",
-		MethodGetPoolServiceRanks: "get pool service ranks",
-		MethodPoolFindByLabel:     "find pool by label",
-		MethodListPools:           "list pools",
+		MethodNotifyReady:           "notify ready",
+		MethodGetPoolServiceRanks:   "get pool service ranks",
+		MethodPoolFindByLabel:       "find pool by label",
+		MethodClusterEvent:          "cluster event",
+		MethodCheckerListPools:      "checker list pools",
+		MethodCheckerRegisterPool:   "checker register pool",
+		MethodCheckerDeregisterPool: "checker deregister pool",
+		MethodCheckerReport:         "checker report",
+		MethodListPools:             "list pools",
 	}[m]; ok {
 		return s
 	}

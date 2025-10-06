@@ -1206,6 +1206,80 @@ out_json:
 	return rc;
 }
 
+int
+dmg_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char *grp, bool force)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (force) {
+		args = cmd_push_arg(args, &argcount, "--force");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("pool rebuild stop", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg pool rebuild stop failed\n");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_rebuild_start(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("pool rebuild start", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg pool rebuild start failed\n");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
 static int
 parse_device_info(struct json_object *smd_dev, device_list *devices,
 		  char *host, int dev_length, int *disks)
@@ -2127,6 +2201,12 @@ dmg_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *po
 
 	if (flags & TCPF_INTERACT) {
 		args = cmd_push_arg(args, &argcount, " -a");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (policies != NULL) {
+		args = cmd_push_arg(args, &argcount, " %s", policies);
 		if (args == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}

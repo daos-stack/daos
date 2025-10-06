@@ -168,6 +168,11 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_opc;
 	unsigned int                    rgt_abort : 1, /* abort: kill rebuild */
 	    rgt_init_scan : 1, rgt_stop_admin : 1;     /* stop: admin has asked to kill rebuild */
+
+	uint32_t rgt_num_op_rb;            /* count of op:Rebuild attempts */
+	uint32_t rgt_num_op_freclaim;      /* count of op:Fail_reclaim attempts */
+	uint32_t rgt_num_op_rb_fail;       /* count of op:Rebuild failures */
+	uint32_t rgt_num_op_freclaim_fail; /* count of failed op:Fail_reclaim (not good) */
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */
@@ -245,10 +250,23 @@ struct rebuild_task {
 	 */
 	uint32_t			dst_reclaim_ver;
 
+	/* For failed tasks that may be retried after RB_OP_FAIL_RECLAIM, original map ver and opc
+	 */
+	uint32_t                        dst_retry_map_ver;
+	daos_rebuild_opc_t              dst_retry_rebuild_op;
+
 	/* For dst_rebuild_op == RB_OP_FAIL_RECLAIM: If true, rebuild was stopped by admin.
-	 * Then, on fail_reclaim finish, the pool rebuild state will be set to completed.
+	 * Then, on fail_reclaim finish, the pool rebuild state will be set to idle (NOT_STARTED).
 	 */
 	bool                            dst_stop_admin;
+
+	/* Track how many tries for certain daos_rebuild_opc_t */
+	uint32_t                        dst_num_op_rb; /* count of tries to run rebuild */
+	uint32_t                        dst_num_op_reclaim;
+	uint32_t                        dst_num_op_freclaim;
+	uint32_t                        dst_num_op_upgrade;
+	uint32_t                        dst_num_op_rb_fail; /* count of rebuild failures */
+	uint32_t dst_num_op_freclaim_fail;                  /* count of Fail_recliam failures */
 };
 
 /* Per pool structure in TLS to check pool rebuild status

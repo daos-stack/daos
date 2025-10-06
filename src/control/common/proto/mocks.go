@@ -109,6 +109,19 @@ func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
 	return pb.AsProto()
 }
 
+// MockScmNamespaceRamdisk generates specific protobuf SCM namespace message used in tests
+// for multiple packages. Represents ramdisk namespace with associated scm mountpoint info.
+func MockScmNamespaceRamdisk(varIdx ...int32) *ctlpb.ScmNamespace {
+	native := storage.MockScmNamespaceRamdisk(varIdx...)
+	pb := new(ScmNamespace)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
+	}
+
+	return pb.AsProto()
+}
+
 // MockPoolList returns a slice of mock protobuf Pool messages used in tests for
 // multiple packages.
 var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
