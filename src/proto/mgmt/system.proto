@@ -127,6 +127,12 @@ message SystemRebuildManageResp
 	repeated PoolRebuildManageResult results = 1; // Pool-rebuild operation results.
 }
 
+// SystemSelfHealEvalReq supplies system self-heal eval parameters.
+message SystemSelfHealEvalReq
+{
+	string sys = 1; // DAOS system name
+}
+
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
 	string sys = 1; // DAOS system name
