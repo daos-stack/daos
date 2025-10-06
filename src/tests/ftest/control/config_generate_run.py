@@ -74,6 +74,9 @@ class ConfigGenerateRun(TestWithServers):
         for engine in engines:
             engine["log_file"] = os.path.join(
                 self.test_env.log_dir, os.path.basename(engine["log_file"]))
+            if "env_vars" not in engine:
+                engine["env_vars"] = []
+            engine["env_vars"].append("D_LOG_FILE_APPEND_PID=1")
 
         # Stop and restart daos_server. self.start_server_managers() has the
         # server start-up check built into it, so if there's something wrong,
