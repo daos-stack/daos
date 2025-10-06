@@ -368,3 +368,15 @@ message PoolRebuildStopReq
 }
 
 // PoolRebuildStop uses DaosResp
+
+// PoolSelfHealEvalReq contains information about a request to evaluate the self_heal system
+// property value on a given pool.
+message PoolSelfHealEvalReq
+{
+	string          sys       = 1; // DAOS system identifier
+	string          id        = 2; // DAOS pool identifier
+	string          prop_val  = 4; // self_heal system property value
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
+}
+
+// PoolSelfHealEval uses DaosResp

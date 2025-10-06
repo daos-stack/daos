@@ -1312,3 +1312,55 @@ func SystemRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *Syste
 	resp := new(SystemRebuildManageResp)
 	return resp, convertMSResponse(ur, resp)
 }
+
+// SystemSelfHealEvalReq sends a request to evaluate self_heal system property in a DAOS system.
+type SystemSelfHealEvalReq struct {
+	unaryRequest
+	msRequest
+}
+
+// SystemSelfHealEvalResp contains the response.
+type SystemSelfHealEvalResp struct {
+}
+
+// Errors returns collective error for response.
+func (resp *SystemSelfHealEvalResp) Errors() error {
+	return nil
+}
+
+// SystemSelfHealEval will trigger actions based on the value of the system self_heal property.
+func SystemSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *SystemSelfHealEvalReq) (*SystemSelfHealEvalResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemSelfHealEvalReq{
+		Sys: req.getSystem(rpcClient),
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemSelfHealEval(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS system self-heal eval request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := "system self-heal eval failed"
+	msErr := ur.getMSError()
+	if msErr != nil {
+		return nil, errors.Wrap(msErr, msg)
+	}
+	resp := new(mgmtpb.DaosResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, errors.Wrap(err, msg)
+	}
+
+	rpcClient.Debugf("resp: %+v", resp)
+	if s := daos.Status(resp.Status); s != daos.Success {
+		return nil, errors.Wrap(s, msg)
+	}
+
+	return new(SystemSelfHealEvalResp), nil
+}

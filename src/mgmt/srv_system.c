@@ -482,17 +482,19 @@ retry:
 	}
 	D_INFO("%s=%s\n", key, resp->properties[0]->value);
 	*policy = 0;
-	for (p = strtok_r(resp->properties[0]->value, sep, &saveptr); p != NULL;
-	     p = strtok_r(NULL, sep, &saveptr)) {
-		if (strcmp(p, "exclude") == 0) {
-			*policy |= DS_MGMT_SELF_HEAL_EXCLUDE;
-		} else if (strcmp(p, "pool_exclude") == 0) {
-			*policy |= DS_MGMT_SELF_HEAL_POOL_EXCLUDE;
-		} else if (strcmp(p, "pool_rebuild") == 0) {
-			*policy |= DS_MGMT_SELF_HEAL_POOL_REBUILD;
-		} else {
-			D_ERROR("unknown self-heal policy '%s'\n", p);
-			goto out_resp;
+	if (strcmp(resp->properties[0]->value, "none") != 0) {
+		for (p = strtok_r(resp->properties[0]->value, sep, &saveptr); p != NULL;
+		     p = strtok_r(NULL, sep, &saveptr)) {
+			if (strcmp(p, "exclude") == 0) {
+				*policy |= DS_MGMT_SELF_HEAL_EXCLUDE;
+			} else if (strcmp(p, "pool_exclude") == 0) {
+				*policy |= DS_MGMT_SELF_HEAL_POOL_EXCLUDE;
+			} else if (strcmp(p, "pool_rebuild") == 0) {
+				*policy |= DS_MGMT_SELF_HEAL_POOL_REBUILD;
+			} else {
+				D_ERROR("unknown self-heal policy '%s'\n", p);
+				goto out_resp;
+			}
 		}
 	}
 

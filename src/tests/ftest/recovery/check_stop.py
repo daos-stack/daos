@@ -51,7 +51,7 @@ class DMGCheckStopTest(TestWithServers):
         Jira ID: DAOS-17785
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStopTest,test_stop_during_repair
         """
@@ -143,7 +143,7 @@ class DMGCheckStopTest(TestWithServers):
         Jira ID: DAOS-17785
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStopTest,test_disable_during_repair
         """
