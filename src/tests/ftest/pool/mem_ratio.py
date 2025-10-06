@@ -39,7 +39,7 @@ class MemRatioTest(TestWithServers):
         Returns:
             str: bytes displayed as human readable with the original value
         """
-        return f"{bytes_to_human(int(size), width=9)} ({size})"
+        return f"{bytes_to_human(int(size)):>9} ({size})"
 
     def test_mem_ratio(self):
         """Create multiple pools using different --mem_ratio arguments to define which fraction
