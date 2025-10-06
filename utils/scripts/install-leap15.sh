@@ -80,7 +80,7 @@ dnf --nodocs install ${dnf_install_args} \
 dnf install ${dnf_install_args} ruby-devel
 gem install json -v 2.7.6
 gem install dotenv -v 2.8.1
-gem install fpm
+gem install fpm -v 1.16.0
 if [ ! -f /usr/bin/fpm ]; then
     ln -s "$(basename "$(ls -1 /usr/bin/fpm.ruby*)")" /usr/bin/fpm
 fi
