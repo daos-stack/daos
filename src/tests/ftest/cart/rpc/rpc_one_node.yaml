@@ -6,7 +6,7 @@ customENV:
 ENV:
   default:
     # !filter-only : /run/tests/proto_np
-    - D_LOG_MASK: "WARN,RPC=DEBUG,HG=DEBUG"
+    - D_LOG_MASK: "INFO"
     - D_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "16"
     - test_clients_CRT_CTX_NUM: "16"
