@@ -29,10 +29,13 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct dlck_print *dp)
 	}
 
 	rc = mkdir(path, 0777);
-	if (rc != 0 && errno != EEXIST) {
+	if ((rc != 0 && errno != EEXIST) || DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_POOL_DIR)) {
+		if (d_fault_inject_is_enabled()) {
+			errno = daos_fail_value_get();
+		}
 		rc = daos_errno2der(errno);
-		DLCK_PRINTF_ERR(dp, "Cannot create a pool directory: %s: " DF_RC "\n", path,
-				DP_RC(rc));
+		DLCK_PRINTF_ERRL(dp, "Cannot create a pool directory: %s: " DF_RC "\n", path,
+				 DP_RC(rc));
 	} else {
 		rc = DER_SUCCESS;
 	}

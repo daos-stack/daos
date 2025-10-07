@@ -419,6 +419,10 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	int                 tag               = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 	int                 rc;
 
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) {
+		return daos_errno2der(daos_fail_value_get());
+	}
+
 	rc = dlck_engine_alloc(args->targets, &engine);
 	if (rc != DER_SUCCESS) {
 		return rc;
@@ -499,6 +503,10 @@ dlck_engine_stop(struct dlck_engine *engine)
 {
 	int rc;
 
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_STOP)) {
+		return daos_errno2der(daos_fail_value_get());
+	}
+
 	rc = xstream_stop_all(engine);
 	if (rc != DER_SUCCESS) {
 		/** not all execution streams were stopped - can't pull out other resources */
@@ -574,6 +582,10 @@ dlck_engine_exec_all_async(struct dlck_engine *engine, dlck_ult_func exec_one,
 
 	D_ASSERT(de != NULL);
 
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_EXEC)) {
+		return daos_errno2der(daos_fail_value_get());
+	}
+
 	D_ALLOC_ARRAY(de->ults, engine->targets);
 	if (de->ults == NULL) {
 		return -DER_NOMEM;
@@ -611,6 +623,10 @@ int
 dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de, int *rcs)
 {
 	int rc;
+
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_JOIN)) {
+		return daos_errno2der(daos_fail_value_get());
+	}
 
 	for (int i = 0; i < engine->targets; ++i) {
 		rc = ABT_thread_join(de->ults[i].thread);

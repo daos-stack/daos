@@ -1894,10 +1894,13 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 
 	DLCK_PRINT(dp, "NVMe devices (if applicable)... ");
 	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
-	if (rc) {
+	if (rc || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_NVME)) {
+		if (d_fault_inject_is_enabled()) {
+			rc = daos_errno2der(daos_fail_value_get());
+		}
 		DLCK_PRINT_RC(dp, rc);
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
-		goto out;
+		goto err_pool_unprep;
 	}
 	DLCK_PRINT_OK(dp);
 
@@ -1910,7 +1913,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 
 	pool_df = vos_pool_pop2df(ph);
 	DLCK_PRINT(dp, "Magic... ");
-	if (pool_df->pd_magic != POOL_DF_MAGIC) {
+	if (pool_df->pd_magic != POOL_DF_MAGIC || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_MAGIC)) {
 		DLCK_PRINTF_ERR(dp, "invalid (%#x)\n", pool_df->pd_magic);
 		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
 		rc = -DER_DF_INVAL;
@@ -1919,8 +1922,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	DLCK_PRINT_OK(dp);
 
 	DLCK_PRINT(dp, "Version... ");
-	if (pool_df->pd_version > POOL_DF_VERSION ||
-	    pool_df->pd_version < POOL_DF_VER_1) {
+	if (pool_df->pd_version > POOL_DF_VERSION || pool_df->pd_version < POOL_DF_VER_1 ||
+	    DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_VERSION)) {
 		DLCK_PRINTF_ERR(dp, "unsupported (%#x)\n", pool_df->pd_version);
 		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
 		/** Send a RAS notification */
@@ -1933,7 +1936,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	DLCK_PRINT_OK(dp);
 
 	DLCK_PRINT(dp, "UUID... ");
-	if (uuid_compare(uuid, pool_df->pd_id)) {
+	if (uuid_compare(uuid, pool_df->pd_id) || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_UUID)) {
 		DLCK_PRINTF_ERR(dp, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")\n",
 				DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		D_ERROR("Mismatch uuid, user=" DF_UUIDF ", pool=" DF_UUIDF "\n", DP_UUID(uuid),
@@ -1957,6 +1960,14 @@ out:
 	 */
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
+
+	return rc;
+
+err_pool_unprep:
+	D_ASSERT(pool->vp_opened == 0);
+	vos_pool_hash_del(pool);
+	vos_pool_decref(pool);
+
 	return rc;
 }
 

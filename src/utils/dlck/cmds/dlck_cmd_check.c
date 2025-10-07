@@ -41,7 +41,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *
 	rc = ds_mgmt_file(xa->ctrl->engine.storage_path, file->po_uuid, VOS_FILE, &xa->xs->tgt_id,
 			  &path);
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERR(dp, "VOS file path allocation failed: " DF_RC "\n", DP_RC(xa->rc));
+		DLCK_PRINTF_ERRL(dp, "VOS file path allocation failed: " DF_RC "\n", DP_RC(xa->rc));
 		return rc;
 	}
 
@@ -49,7 +49,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *
 	rc_abt = ABT_mutex_lock(xa->engine->open_mtx);
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
-		DLCK_PRINTF_ERR(dp, "Failed to lock the pool open mutex: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERRL(dp, "Failed to lock the pool open mutex: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -71,14 +71,15 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *
 	/** unlock error is an error */
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
-		DLCK_PRINTF_ERR(dp, "Failed to unlock the pool open mutex: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERRL(dp, "Failed to unlock the pool open mutex: " DF_RC "\n",
+				 DP_RC(rc));
 		return rc;
 	}
 
 	return DER_SUCCESS;
 }
 
-#define DLCK_POOL_CHECK_RESULT_PREFIX_FMT "[%d] pool " DF_UUIDF "check result: "
+#define DLCK_POOL_CHECK_RESULT_PREFIX_FMT "[%d] pool " DF_UUIDF " check result: "
 
 /**
  * Target thread (worker).
@@ -131,8 +132,8 @@ exec_one(void *arg)
 		/** report the result */
 		if (rc != DER_SUCCESS) {
 			dlck_xstream_set_rc(xa, rc);
-			DLCK_PRINTF_ERR(main_dp, DLCK_POOL_CHECK_RESULT_PREFIX_FMT DF_RC "\n",
-					xa->xs->tgt_id, DP_UUID(file->po_uuid), DP_RC(rc));
+			DLCK_PRINTF_ERRL(main_dp, DLCK_POOL_CHECK_RESULT_PREFIX_FMT DF_RC "\n",
+					 xa->xs->tgt_id, DP_UUID(file->po_uuid), DP_RC(rc));
 			/** Continue to the next pool regardless of the result. */
 		} else {
 			DLCK_PRINTF(main_dp, DLCK_POOL_CHECK_RESULT_PREFIX_FMT DLCK_OK_SUFFIX "\n",
@@ -186,7 +187,7 @@ wait_all(struct dlck_engine *engine, struct dlck_exec *de, unsigned progress_max
 	D_ALLOC_ARRAY(progress, engine->targets);
 	if (progress == NULL) {
 		rc = -DER_NOMEM;
-		DLCK_PRINTF_ERR(dp, "Failed to allocate a progress array: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERRL(dp, "Failed to allocate a progress array: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -197,8 +198,8 @@ wait_all(struct dlck_engine *engine, struct dlck_exec *de, unsigned progress_max
 		for (int i = 0; i < engine->targets; ++i) {
 			rc = dlck_xstream_progress_get(de->ult_args[i], &progress[i]);
 			if (rc != DER_SUCCESS) {
-				DLCK_PRINTF_ERR(dp, "[%d] Failed to read progress: " DF_RC "\n", i,
-						DP_RC(rc));
+				DLCK_PRINTF_ERRL(dp, "[%d] Failed to read progress: " DF_RC "\n", i,
+						 DP_RC(rc));
 				break;
 			}
 
@@ -241,9 +242,12 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	/** create a log directory */
 	ctrl->log_dir = mkdtemp(log_dir_template);
-	if (ctrl->log_dir == NULL) {
+	if (ctrl->log_dir == NULL || DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) {
+		if (d_fault_inject_is_enabled()) {
+			errno = daos_fail_value_get();
+		}
 		rc = daos_errno2der(errno);
-		DLCK_PRINTF_ERR(dp, "Cannot create log directory: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERRL(dp, "Cannot create log directory: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 	DLCK_PRINTF(dp, "Log directory: %s\n", ctrl->log_dir);
@@ -253,12 +257,15 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
-	DLCK_PRINT(dp, "Pool directories created.");
+	DLCK_PRINT(dp, "Pool directories created.\n");
 
 	/** start the engine */
 	rc = dlck_engine_start(&ctrl->engine, &engine);
-	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERR(dp, "Cannot start the engine: " DF_RC "\n", DP_RC(rc));
+	if (rc != DER_SUCCESS || DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) {
+		if (d_fault_inject_is_enabled()) {
+			rc = daos_errno2der(daos_fail_value_get());
+		}
+		DLCK_PRINTF_ERRL(dp, "Cannot start the engine: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 	DLCK_PRINT(dp, "Engine started.\n");
@@ -266,7 +273,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	rc = dlck_engine_exec_all_async(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
 					dlck_engine_xstream_arg_free, &de);
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERR(dp, "Cannot start targets: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERRL(dp, "Cannot start targets: " DF_RC "\n", DP_RC(rc));
 		(void)dlck_engine_stop(engine);
 		return rc;
 	}
@@ -285,7 +292,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	/** allocate an array of return codes for targets */
 	D_ALLOC_ARRAY(rcs, ctrl->engine.targets);
 	if (rcs == NULL) {
-		DLCK_PRINT_ERR(dp, "Out of memory.\n");
+		DLCK_PRINT_ERRL(dp, "Out of memory.\n");
 		(void)dlck_engine_join_all(engine, &de, NULL);
 		(void)dlck_engine_stop(engine);
 		return -DER_NOMEM;
@@ -294,7 +301,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	/** join target ULTs */
 	rc = dlck_engine_join_all(engine, &de, rcs);
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERR(dp, "Cannot stop targets: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERRL(dp, "Cannot stop targets: " DF_RC "\n", DP_RC(rc));
 		/** Cannot stop the engine in this case. It will probably crash. */
 		return rc;
 	}
@@ -302,15 +309,16 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	rc = dlck_engine_stop(engine);
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERR(dp, "Cannot stop the engine: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTF_ERRL(dp, "Cannot stop the engine: " DF_RC "\n", DP_RC(rc));
 		/** Ignore this error for now in an attempt to print the collected results. */
+	} else {
+		DLCK_PRINT(dp, "Engine stopped.\n");
 	}
-	DLCK_PRINT(dp, "Engine stopped.\n");
 
 	rc2 = dlck_report_results(rcs, ctrl->engine.targets, dp);
 	D_FREE(rcs);
 	if (rc2 != DER_SUCCESS) {
-		DLCK_PRINTF_ERR(dp, "Cannot report results: " DF_RC "\n", DP_RC(rc2));
+		DLCK_PRINTF_ERRL(dp, "Cannot report results: " DF_RC "\n", DP_RC(rc2));
 	}
 
 	/** Return the first encountered error. */

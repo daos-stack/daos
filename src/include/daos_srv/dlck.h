@@ -46,22 +46,26 @@ struct dlck_print {
 		}                                                                                  \
 	} while (0)
 
-#define DLCK_PRINT_ERR(print, msg)       DLCK_PRINT(print, DLCK_ERROR_INFIX msg)
-#define DLCK_PRINTF_ERR(print, fmt, ...) DLCK_PRINTF(print, DLCK_ERROR_INFIX fmt, __VA_ARGS__)
+#define DLCK_PRINT_ERRL(print, msg)       DLCK_PRINT(print, DLCK_ERROR_INFIX msg)
+#define DLCK_PRINTF_ERRL(print, fmt, ...) DLCK_PRINTF(print, DLCK_ERROR_INFIX fmt, __VA_ARGS__)
 
 #define DLCK_PRINT_WO_PREFIX(print, msg)                                                           \
 	do {                                                                                       \
 		if (IS_DLCK(print)) {                                                              \
-			(void)print->dp_printf(print, msg);                                        \
+			(void)(print)->dp_printf(print, msg);                                      \
 		}                                                                                  \
 	} while (0)
 
 #define DLCK_PRINTF_WO_PREFIX(print, fmt, ...)                                                     \
 	do {                                                                                       \
 		if (IS_DLCK(print)) {                                                              \
-			(void)print->dp_printf(print, fmt, __VA_ARGS__);                           \
+			(void)(print)->dp_printf(print, fmt, __VA_ARGS__);                         \
 		}                                                                                  \
 	} while (0)
+
+#define DLCK_PRINT_ERR(print, msg) DLCK_PRINT_WO_PREFIX(print, DLCK_ERROR_INFIX msg)
+#define DLCK_PRINTF_ERR(print, fmt, ...)                                                           \
+	DLCK_PRINTF_WO_PREFIX(print, DLCK_ERROR_INFIX fmt, __VA_ARGS__)
 
 #define DLCK_YES                       true
 #define DLCK_NO                        false

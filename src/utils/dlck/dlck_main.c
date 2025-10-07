@@ -27,6 +27,16 @@ main(int argc, char *argv[])
 	int                 rc_abt;
 	int                 rc;
 
+	rc = d_fault_inject_init();
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	if (d_fault_inject_is_enabled()) {
+		/** an errno value the fault injection will trigger */
+		daos_fail_value_set(EINVAL);
+	}
+
 	dlck_args_parse(argc, argv, &ctrl);
 
 	D_ASSERT(ctrl.common.cmd < ARRAY_SIZE(dlck_cmds));
@@ -61,7 +71,7 @@ main(int argc, char *argv[])
 
 	dlck_args_free(&ctrl);
 
-	return rc;
+	return d_fault_inject_fini();
 
 fail_cmd:
 	(void)dlck_print_main_fini(&ctrl.print);

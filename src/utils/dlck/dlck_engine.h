@@ -336,8 +336,8 @@ dlck_xstream_progress_end(struct xstream_arg *xa, struct dlck_print *dp)
 		}
 	}
 	rc = dss_abterr2der(rc);
-	DLCK_PRINTF_ERR(&xa->ctrl->print, "[%d] Cannot advance progress: " DF_RC "\n",
-			xa->xs->tgt_id, DP_RC(xa->rc));
+	DLCK_PRINTF_ERRL(&xa->ctrl->print, "[%d] Cannot advance progress: " DF_RC "\n",
+			 xa->xs->tgt_id, DP_RC(xa->rc));
 	return rc;
 }
 
@@ -363,8 +363,8 @@ dlck_xstream_progress_inc(struct xstream_arg *xa, struct dlck_print *dp)
 		}
 	}
 	rc = dss_abterr2der(rc);
-	DLCK_PRINTF_ERR(&xa->ctrl->print, "[%d] Cannot advance progress: " DF_RC "\n",
-			xa->xs->tgt_id, DP_RC(xa->rc));
+	DLCK_PRINTF_ERRL(&xa->ctrl->print, "[%d] Cannot advance progress: " DF_RC "\n",
+			 xa->xs->tgt_id, DP_RC(xa->rc));
 	return rc;
 }
 

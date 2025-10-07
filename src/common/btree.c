@@ -4537,6 +4537,10 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 {
 	uint64_t special_feat;
 
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_FEATURES)) {
+		return -DER_PROTO;
+	}
+
 	/* If no hkey callbacks are supplied, only special key types are
 	 * supported.  Rather than flagging an error just set the
 	 * appropriate flag.
@@ -4613,14 +4617,14 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 
 	/* XXX should be multi-thread safe */
 	DLCK_PRINT(dp, "Tree class... ");
-	if (tree_class >= BTR_TYPE_MAX) {
+	if (tree_class >= BTR_TYPE_MAX || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_INV_CLASS)) {
 		DLCK_PRINTF_ERR(dp, INVALID_CLASS_FMT, tree_class);
 		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT, tree_class);
 		return -DER_INVAL;
 	}
 
 	tc = &btr_class_registered[tree_class];
-	if (tc->tc_ops == NULL) {
+	if (tc->tc_ops == NULL || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_UNREG_CLASS)) {
 		DLCK_PRINTF_ERR(dp, UNREGISTERED_CLASS_FMT, tree_class);
 		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT, tree_class);
 		return -DER_NONEXIST;

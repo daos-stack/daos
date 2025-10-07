@@ -1544,14 +1544,14 @@ dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct dlck_pr
 	}
 
 	for (int i = 0; i < VOS_POOL_EXT_DF_PADDING_SIZE; ++i) {
-		if (pd_ext->ped_paddings[i] != 0) {
+		if (pd_ext->ped_paddings[i] != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_PADDING)) {
 			DLCK_PRINTF_ERR(dp, "non-zero padding[%d] (%#" PRIx64 ")\n", i,
 					pd_ext->ped_paddings[i]);
 			return -DER_NOTYPE;
 		}
 	}
 
-	if (pd_ext->ped_reserve != 0) {
+	if (pd_ext->ped_reserve != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_RESERVED)) {
 		DLCK_PRINTF_ERR(dp, "non-zero reserved space (%#" PRIx64 ")\n",
 				pd_ext->ped_reserve);
 		return -DER_NOTYPE;
