@@ -327,6 +327,7 @@ int
 ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt);
 int
 ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt);
+int
 ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt);
 
 void
