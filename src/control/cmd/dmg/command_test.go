@@ -188,6 +188,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		}
 	case *control.SystemRebuildManageReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemRebuildManageResp{})
+	case *control.SystemSelfHealEvalReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckEnableReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckDisableReq:

@@ -3709,3 +3709,82 @@ func TestControl_PoolRebuildManage(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_PoolSelfHealEval(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolSelfHealEvalReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolSelfHealEvalReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolSelfHealEvalReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"-DER_GRPVER is retried": {
+			req: &PoolSelfHealEvalReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+		"-DER_AGAIN is retried": {
+			req: &PoolSelfHealEvalReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.TryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+		"self-heal evaluate": {
+			req: &PoolSelfHealEvalReq{
+				ID:      test.MockUUID(),
+				PropVal: "exclude;pool_rebuild",
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.DaosResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolSelfHealEval(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}

@@ -57,10 +57,12 @@ def scons():
     # vos and mock object files to wrap vos symbols
     vos_obj = tenv.Object(Glob('../../../vos/*.c'))
     mock_obj = tenv.Object(Glob('../../../dtx/tests/*_mock.c'))
+    mgmt_obj = tenv.Object('../../../mgmt/mgmt_common.c')
     # Pylint does not like the exclude keyword below, but it works.
     # pylint: disable=unexpected-keyword-arg
     ddb_obj = tenv.Object(Glob('../*.c', exclude=['../ddb_entry.c']))
-    ddb_ut = tenv.d_program('ddb_ut', src + vos_obj + mock_obj + ddb_obj, LIBS=libs + spdk_libs)
+    ddb_ut = tenv.d_program('ddb_ut', src + vos_obj + mock_obj + mgmt_obj + ddb_obj,
+                            LIBS=libs + spdk_libs)
 
     tenv.Install('$PREFIX/bin/', ddb_ut)
 
