@@ -34,13 +34,14 @@
 #include <sys/wait.h>
 #include <sys/uio.h>
 #include <sys/file.h>
+#include <sys/xattr.h>
 
 #include <dfuse_ioctl.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdlkfec";
+static const char *all_tests = "ismdlkfecx";
 
 static void
 print_usage()
@@ -60,6 +61,7 @@ print_usage()
 	/* verifyenv is only run by exec test. Should not be executed directly */
 	/* print_message("dfuse_test    --verifyenv\n");                       */
 	print_message("dfuse_test -c|--cache\n");
+	print_message("dfuse_test -x|--fdcalls\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -778,6 +780,47 @@ do_lowfd(void **state)
 	free(path);
 }
 
+#define MAX_LEN_ATTR_VALUE (128)
+
+/* verify miscellaneous fd involved functions that are needed to be intercepted by libpil4dfs */
+void
+do_fdcallscheck(void **state)
+{
+	int    root;
+	int    fd;
+	int    rc;
+	char   attr_name[]  = "usr_attr";
+	char   attr_value[] = "test_value";
+	char   attr_value_rd[MAX_LEN_ATTR_VALUE];
+	size_t len;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	fd = openat(root, "test_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	rc = fchown(fd, getuid(), getgid());
+	assert_return_code(rc, errno);
+
+	rc = fsetxattr(fd, attr_name, attr_value, strlen(attr_value), 0);
+	assert_return_code(rc, errno);
+
+	/* retrieve the extended attribute */
+	len = fgetxattr(fd, attr_name, attr_value_rd, MAX_LEN_ATTR_VALUE);
+	assert_true(len == strlen(attr_value));
+	assert_true(memcmp(attr_value_rd, attr_value, strlen(attr_value)) == 0);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "test_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
 /*
  * Verify the behavior of flock() and fcntl().
  */
@@ -1098,6 +1141,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(cache_tests, NULL, NULL);
 			break;
 
+		case 'x':
+			printf("\n\n=================");
+			printf("dfuse more fd involved calls check");
+			printf("=====================\n");
+			const struct CMUnitTest fdcalls_tests[] = {
+			    cmocka_unit_test(do_fdcallscheck),
+			};
+			nr_failed += cmocka_run_group_tests(fdcalls_tests, NULL, NULL);
+			break;
+
 		default:
 			assert_true(0);
 		}
@@ -1128,9 +1181,10 @@ main(int argc, char **argv)
 					       {"exec", no_argument, NULL, 'e'},
 					       {"verifyenv", no_argument, NULL, 't'},
 					       {"cache", no_argument, NULL, 'c'},
+					       {"fdcalls", no_argument, NULL, 'x'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetc", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetcx", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
