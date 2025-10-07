@@ -791,6 +791,7 @@ class DmgCommandBase(YamlCommand):
                     """Create a dmg storage query usage object."""
                     super().__init__("/run/dmg/storage/query/usage/*", "usage")
                     self.mem_ratio = FormattedParameter("--mem-ratio={}", None)
+                    self.show_usable = FormattedParameter("--show-usable", False)
 
         class ScanSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage scan command."""

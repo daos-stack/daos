@@ -54,7 +54,7 @@ def add_pools(dmg, add_pool_kwargs, error_handler=None, query_on_error=True):
             pools[-1].set_logmasks.value = _restore
         except TestFail as error:
             if query_on_error:
-                query_kwargs = {"mem_ratio": kwargs.get("mem_ratio")}
+                query_kwargs = {"show_usable": True, "mem_ratio": kwargs.get("mem_ratio")}
                 dmg.storage_query_usage(**query_kwargs)
             if not error_handler:
                 raise
