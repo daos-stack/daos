@@ -488,10 +488,9 @@ class EngineYamlParameters(YamlParameters):
         # Use environment variables to get default parameters
         try:
             _defaults = os.environ.get("DAOS_TEST_FABRIC_IFACE").split(",")
-            default_interface = list(filter(None, _defaults))[index]
-        except IndexError:
-            # Try to reuse the last interface from the environment variable
-            default_interface = list(filter(None, _defaults))[-1]
+            # Use the index of the engine or repeat the last interface for fewer interfaces
+            int_index = min(len(_defaults) - 1, index)
+            default_interface = list(filter(None, _defaults))[int_index]
         except (AttributeError, IndexError):
             default_interface = f"eth{index}"
         default_port = int(os.environ.get("D_PORT", 31317 + (100 * index)))
