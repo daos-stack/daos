@@ -182,14 +182,14 @@ func TestDaos_SystemPropertyKeys(t *testing.T) {
 func TestDaos_SystemPropertySelfHealHasFlag(t *testing.T) {
 	for name, tc := range map[string]struct {
 		value string
-		flag  string
+		flag  SelfHealFlag
 		exp   bool
 	}{
-		"none":               {value: "none", flag: "exclude", exp: false},
-		"substring":          {value: "pool_exclude", flag: "exclude", exp: false},
-		"multiple flags":     {value: "exclude;pool_rebuild", flag: "pool_rebuild", exp: true},
-		"invalid flag empty": {value: "exclude;pool_rebuild", flag: "", exp: false},
-		"invalid flag none":  {value: "none", flag: "none", exp: false},
+		"none":               {value: "none", flag: SelfHealFlagExclude, exp: false},
+		"substring":          {value: "pool_exclude", flag: SelfHealFlagExclude, exp: false},
+		"multiple flags":     {value: "exclude;pool_rebuild", flag: SelfHealFlagPoolRebuild, exp: true},
+		"invalid flag empty": {value: "exclude;pool_rebuild", flag: selfHealFlagUnknown, exp: false},
+		"invalid flag max":   {value: "exclude;pool_rebuild", flag: selfHealFlagMax, exp: false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got := SystemPropertySelfHealHasFlag(tc.value, tc.flag)

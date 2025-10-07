@@ -2842,6 +2842,108 @@ test_drpc_pool_rebuild_stop_success(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * Pool self heal eval test setup
+ */
+static int
+drpc_self_heal_eval_setup(void **state)
+{
+	mock_ds_mgmt_pool_self_heal_eval_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool self heal eval tests
+ */
+static void
+pack_pool_self_heal_eval_req(Drpc__Call *call, Mgmt__PoolSelfHealEvalReq *req)
+{
+	size_t   len;
+	uint8_t *body;
+
+	len = mgmt__pool_self_heal_eval_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_self_heal_eval_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len  = len;
+}
+
+static void
+setup_self_heal_eval_drpc_call(Drpc__Call *call, char *uuid, char *sys_name, char *prop_val)
+{
+	Mgmt__PoolSelfHealEvalReq req = MGMT__POOL_SELF_HEAL_EVAL_REQ__INIT;
+
+	req.id       = uuid;
+	req.sys      = sys_name;
+	req.prop_val = prop_val;
+	pack_pool_self_heal_eval_req(call, &req);
+}
+
+static void
+expect_drpc_self_heal_eval_resp_with_status(Drpc__Response *resp, int exp_status)
+{
+	Mgmt__DaosResp *pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__daos_resp__unpack(NULL, resp->body.len, resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_status);
+
+	mgmt__daos_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+test_drpc_pool_self_heal_eval_bad_uuid(void **state)
+{
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+
+	setup_self_heal_eval_drpc_call(&call, "BAD", "DaosSys", "exclude;pool_rebuild");
+
+	ds_mgmt_drpc_pool_self_heal_eval(&call, &resp);
+
+	expect_drpc_self_heal_eval_resp_with_status(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_self_heal_eval_mgmt_svc_fails(void **state)
+{
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+
+	setup_self_heal_eval_drpc_call(&call, TEST_UUID, "DaosSys", "exclude;pool_rebuild");
+	ds_mgmt_pool_self_heal_eval_return = -DER_MISC;
+
+	ds_mgmt_drpc_pool_self_heal_eval(&call, &resp);
+	expect_drpc_self_heal_eval_resp_with_status(&resp, ds_mgmt_pool_self_heal_eval_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_self_heal_eval_success(void **state)
+{
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+
+	setup_self_heal_eval_drpc_call(&call, TEST_UUID, "DaosSys", "exclude;pool_rebuild");
+	ds_mgmt_drpc_pool_self_heal_eval(&call, &resp);
+
+	expect_drpc_self_heal_eval_resp_with_status(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 /*/
  * LED manage test setup
  */
@@ -3237,6 +3339,8 @@ test_drpc_check_act_success(void **state)
 
 #define POOL_REBUILD_TEST(x)    cmocka_unit_test_setup(x, drpc_rebuild_setup)
 
+#define POOL_SELF_HEAL_TEST(x)  cmocka_unit_test_setup(x, drpc_self_heal_eval_setup)
+
 #define PING_RANK_TEST(x)	cmocka_unit_test(x)
 
 #define PREP_SHUTDOWN_TEST(x)	cmocka_unit_test(x)
@@ -3335,6 +3439,9 @@ main(void)
 	    POOL_REBUILD_TEST(test_drpc_pool_rebuild_stop_bad_uuid),
 	    POOL_REBUILD_TEST(test_drpc_pool_rebuild_stop_mgmt_svc_fails),
 	    POOL_REBUILD_TEST(test_drpc_pool_rebuild_stop_success),
+	    POOL_SELF_HEAL_TEST(test_drpc_pool_self_heal_eval_bad_uuid),
+	    POOL_SELF_HEAL_TEST(test_drpc_pool_self_heal_eval_mgmt_svc_fails),
+	    POOL_SELF_HEAL_TEST(test_drpc_pool_self_heal_eval_success),
 	    LED_MANAGE_TEST(test_drpc_dev_manage_led_bad_tr_addr),
 	    LED_MANAGE_TEST(test_drpc_dev_manage_led_fails),
 	    LED_MANAGE_TEST(test_drpc_dev_manage_led_success),
