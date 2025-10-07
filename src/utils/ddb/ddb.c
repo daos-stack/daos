@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -46,6 +47,7 @@
 #define COMMAND_NAME_DEV_LIST                "dev_list"
 #define COMMAND_NAME_DEV_REPLACE             "dev_replace"
 #define COMMAND_NAME_DTX_STAT                "dtx_stat"
+#define COMMAND_NAME_PROV_MEM                "prov_mem"
 #define COMMAND_NAME_DTX_AGGR                "dtx_aggr"
 
 /* Parse command line options for the 'ls' command */
@@ -100,12 +102,11 @@ static int
 open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 		  uint32_t argc, char **argv)
 {
-	char		 *options_short = "w";
+	char             *options_short  = "wp";
 	int		  index = 0, opt;
-	struct option	  options_long[] = {
-		{ "write_mode", no_argument, NULL, 'w' },
-		{ NULL }
-	};
+	struct option     options_long[] = {{"write_mode", no_argument, NULL, 'w'},
+					    {"db_path", required_argument, NULL, 'p'},
+					    {NULL}};
 
 	memset(cmd_args, 0, sizeof(*cmd_args));
 
@@ -116,6 +117,9 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 		switch (opt) {
 		case 'w':
 			cmd_args->write_mode = true;
+			break;
+		case 'p':
+			cmd_args->db_path = optarg;
 			break;
 		case '?':
 			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
@@ -643,11 +647,12 @@ static int
 feature_option_parse(struct ddb_ctx *ctx, struct feature_options *cmd_args, uint32_t argc,
 		     char **argv)
 {
-	char         *options_short  = "e:d:s";
+	char         *options_short  = "e:d:p:s";
 	int           index          = 0, opt;
 	int           rc             = 0;
 	struct option options_long[] = {{"enable", required_argument, NULL, 'e'},
 					{"disable", required_argument, NULL, 'd'},
+					{"db_path", required_argument, NULL, 'p'},
 					{"show", no_argument, NULL, 's'},
 					{NULL}};
 
@@ -847,6 +852,63 @@ dtx_stat_option_parse(struct ddb_ctx *ctx, struct dtx_stat_options *cmd_args, ui
 	}
 
 	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+static inline bool
+arg_exists(int64_t argc, int64_t index)
+{
+	return (argc - index > 0);
+}
+
+/* Parse command line options for the 'prov_mem' command */
+static int
+prov_mem_option_parse(struct ddb_ctx *ctx, struct prov_mem_options *cmd_args, uint32_t argc,
+		      char **argv)
+{
+	const char         *options_short  = "s:";
+	int                 index          = 0, opt;
+	const struct option options_long[] = {{"tmpfs_size", required_argument, NULL, 's'}, {NULL}};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+		switch (opt) {
+		case 's':
+			cmd_args->tmpfs_mount_size = (unsigned int)strtoul(optarg, NULL, 10);
+			break;
+		case '?':
+			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+			break;
+		default:
+			return -DER_INVAL;
+		}
+	}
+
+	index = optind;
+	if (arg_exists(argc, index)) {
+		cmd_args->db_path = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'db_path'\n");
+		return -DER_INVAL;
+	}
+	if (arg_exists(argc, index)) {
+		cmd_args->tmpfs_mount = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'tmpfs_mount'\n");
+		return -DER_INVAL;
+	}
+
+	if (arg_exists(argc, index)) {
 		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
@@ -1058,6 +1120,11 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return dtx_stat_option_parse(ctx, &info->dci_cmd_option.dci_dtx_stat, argc, argv);
 	}
 
+	if (same(cmd, COMMAND_NAME_PROV_MEM)) {
+		info->dci_cmd = DDB_CMD_PROV_MEM;
+		return prov_mem_option_parse(ctx, &info->dci_cmd_option.dci_prov_mem, argc, argv);
+	}
+
 	if (same(cmd, COMMAND_NAME_DTX_AGGR)) {
 		info->dci_cmd = DDB_CMD_DTX_AGGR;
 		return dtx_aggr_option_parse(ctx, &info->dci_cmd_option.dci_dtx_aggr, argc, argv);
@@ -1090,6 +1157,7 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		   "'dev_list', "
 		   "'dev_replace', "
 		   "'dtx_stat', "
+		   "'prov_mem', "
 		   "'dtx_aggr'\n",
 		   cmd);
 
@@ -1270,6 +1338,10 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str)
 		rc = ddb_run_dtx_stat(ctx, &info.dci_cmd_option.dci_dtx_stat);
 		break;
 
+	case DDB_CMD_PROV_MEM:
+		rc = ddb_run_prov_mem(ctx, &info.dci_cmd_option.dci_prov_mem);
+		break;
+
 	case DDB_CMD_DTX_AGGR:
 		rc = ddb_run_dtx_aggr(ctx, &info.dci_cmd_option.dci_dtx_aggr);
 		break;
@@ -1320,6 +1392,8 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -w, --write_mode\n");
 	ddb_print(ctx, "\tOpen the vos file in write mode.\n");
+	ddb_print(ctx, "    -p, --db_path\n");
+	ddb_print(ctx, "\tPath to the sys db.\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: version */
@@ -1459,6 +1533,8 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tDisable vos pool features\n");
 	ddb_print(ctx, "    -s, --show\n");
 	ddb_print(ctx, "\tShow current features\n");
+	ddb_print(ctx, "    -p, --db_path\n");
+	ddb_print(ctx, "\tPath to the sys db.\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: dev_list */
@@ -1485,6 +1561,19 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tPrint statistic on the DTX entries.\n");
 	ddb_print(ctx, "    [path]\n");
 	ddb_print(ctx, "\tOptional, VOS tree path of a container to query.\n");
+	ddb_print(ctx, "\n");
+
+	/* Command: prov_mem */
+	ddb_print(ctx, "prov_mem [Options] <db_path> <tmpfs_mount>\n");
+	ddb_print(ctx, "\tPrepare the memory environment for md-on-ssd mode.\n");
+	ddb_print(ctx, "Options:\n");
+	ddb_print(ctx, "    -s, --tmpfs_size\n");
+	ddb_print(ctx, "\tSpecify tmpfs size(GiB) for tmpfs_mount. By default, The total size of "
+		       "all VOS files will be used.\n");
+	ddb_print(ctx, "    <db_path>\n");
+	ddb_print(ctx, "\tPath to the sys db.\n");
+	ddb_print(ctx, "    <tmpfs_mount>\n");
+	ddb_print(ctx, "\tPath to the tmpfs mountpoint.\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: dtx_aggr */
@@ -1534,9 +1623,11 @@ ddb_program_help(struct ddb_ctx *ctx)
 		       "\tcommit_ilog, etc commands.\n");
 	ddb_print(ctx, "   -R, --run_cmd <cmd>\n");
 	ddb_print(ctx, "\tExecute the single command <cmd>, then exit.\n");
-	ddb_print(ctx, "   -f, --file_cmd <path>\n");
+	ddb_print(ctx, "   -f, --cmd_file <path>\n");
 	ddb_print(ctx, "\tPath to a file container a list of ddb commands, one command\n"
 		       "\tper line, then exit.\n");
+	ddb_print(ctx, "   -p, --db_path <path>\n");
+	ddb_print(ctx, "\tPath to the sys db.\n");
 	ddb_print(ctx, "   -h, --help\n");
 	ddb_print(ctx, "\tShow tool usage.\n");
 
@@ -1566,5 +1657,6 @@ ddb_program_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "   dev_list	     List all devices\n");
 	ddb_print(ctx, "   dev_replace	     Replace an old device with a new unused device\n");
 	ddb_print(ctx, "   dtx_stat	     Stat on DTX entries\n");
+	ddb_print(ctx, "   prov_mem	     Prepare memory environment for md-on-ssd mode.\n");
 	ddb_print(ctx, "   dtx_aggr	     Aggregate DTX entries\n");
 }
