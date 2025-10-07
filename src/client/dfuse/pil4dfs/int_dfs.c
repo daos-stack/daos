@@ -479,6 +479,10 @@ static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
 
 static pid_t (*next_fork)(void);
 
+static int (*next_fchown)(int fd, uid_t uid, gid_t gid);
+static ssize_t (*next_fgetxattr)(int fd, char *name, void *value, size_t size);
+static int (*next_fsetxattr)(int fd, char *name, void *value, size_t size, int flags);
+
 /* start NOT supported by DAOS */
 static int (*next_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
 static int (*next_flock)(int fd, int operation);
@@ -5677,6 +5681,119 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 out_err:
 	errno = error;
 	return (-1);
+}
+
+int
+fchown(int fd, uid_t uid, gid_t gid)
+{
+	int rc, fd_directed;
+
+	if (next_fchown == NULL) {
+		next_fchown = dlsym(RTLD_NEXT, "fchown");
+		D_ASSERT(next_fchown != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fchown(fd, uid, gid);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fchown(fd, uid, gid);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed >= FD_DIR_BASE)
+		/* Let dfuse handle this case. This function is not commonly used in applications.
+		 * There is no need for further optimization here at this time.
+		 */
+		return chown(dir_list[fd_directed - FD_DIR_BASE]->path, uid, gid);
+
+	/* regular file */
+	rc = dfs_chown(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+		       drec2obj(d_file_list[fd_directed - FD_FILE_BASE]->parent),
+		       d_file_list[fd_directed - FD_FILE_BASE]->item_name, uid, gid, 0);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return 0;
+}
+
+ssize_t
+fgetxattr(int fd, char *name, void *value, size_t size)
+{
+	int    rc, fd_directed;
+	size_t buf_size = size;
+
+	if (next_fgetxattr == NULL) {
+		next_fgetxattr = dlsym(RTLD_NEXT, "fgetxattr");
+		D_ASSERT(next_fgetxattr != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fgetxattr(fd, name, value, size);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fgetxattr(fd, name, value, size);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed < FD_DIR_BASE)
+		rc = dfs_getxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value,
+				  &buf_size);
+	else
+		rc = dfs_getxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, &buf_size);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return buf_size;
+}
+
+int
+fsetxattr(int fd, char *name, void *value, size_t size, int flags)
+{
+	int rc, fd_directed;
+
+	if (next_fsetxattr == NULL) {
+		next_fsetxattr = dlsym(RTLD_NEXT, "fsetxattr");
+		D_ASSERT(next_fsetxattr != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fsetxattr(fd, name, value, size, flags);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fsetxattr(fd, name, value, size, flags);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed < FD_DIR_BASE)
+		rc = dfs_setxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value, size,
+				  flags);
+	else
+		rc = dfs_setxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, size,
+				  flags);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return rc;
 }
 
 int
