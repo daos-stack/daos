@@ -12,6 +12,18 @@
 #include <daos_types.h>
 #include <daos_prop.h>
 
+/** Constant that represents the size of an authentication method name in the DAOS agent. */
+#define AGENT_AUTH_METHOD_NAME_SIZE 4
+
+/** Constant that represents the name of the Unix authentication method. */
+#define AGENT_AUTH_METHOD_UNIX "unix"
+
+/** Constant that represents the name of the Unix authentication method. */
+#define AGENT_AUTH_METHOD_AM "acma"
+
+/** Constant that represents the upper bound size of a string encoded delegation credential token for the access manager. */
+#define MAX_DELEGATION_TOKEN_SIZE 10000
+
 /** Structure representing a resource's ownership by user and group, respectively. */
 struct d_ownership {
 	char *user;	/** name of the user owner */

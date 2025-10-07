@@ -33,7 +33,7 @@ func TestAgent_SecurityModule_ID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, defaultTestSecurityConfig())
+	mod, _ := NewSecurityModule(log, defaultTestSecurityConfig())
 
 	test.AssertEqual(t, mod.ID(), daos.ModuleSecurityAgent, "wrong drpc module")
 }
@@ -57,7 +57,7 @@ func TestAgent_SecurityModule_GetMethod(t *testing.T) {
 			parent := test.MustLogContext(t)
 			log := logging.FromContext(parent)
 
-			mod := NewSecurityModule(log, defaultTestSecurityConfig())
+			mod, _ := NewSecurityModule(log, defaultTestSecurityConfig())
 
 			method, err := mod.GetMethod(tc.methodID)
 
@@ -134,7 +134,7 @@ func TestAgentSecurityModule_RequestCreds_OK(t *testing.T) {
 	conn, cleanup := setupTestUnixConn(t)
 	defer cleanup()
 
-	mod := NewSecurityModule(log, defaultTestSecurityConfig())
+	mod, _ := NewSecurityModule(log, defaultTestSecurityConfig())
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {
@@ -148,7 +148,7 @@ func TestAgentSecurityModule_RequestCreds_NotUnixConn(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, defaultTestSecurityConfig())
+	mod, _ := NewSecurityModule(log, defaultTestSecurityConfig())
 	respBytes, err := callRequestCreds(mod, t, log, &net.TCPConn{})
 
 	test.CmpErr(t, drpc.NewFailureWithMessage("connection is not a unix socket"), err)
@@ -167,7 +167,7 @@ func TestAgentSecurityModule_RequestCreds_NotConnected(t *testing.T) {
 	defer cleanup()
 	conn.Close() // can't get uid/gid from a closed connection
 
-	mod := NewSecurityModule(log, defaultTestSecurityConfig())
+	mod, _ := NewSecurityModule(log, defaultTestSecurityConfig())
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {
@@ -186,7 +186,7 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 	defer cleanup()
 
 	// Empty TransportConfig is incomplete
-	mod := NewSecurityModule(log, &securityConfig{
+	mod, _ := NewSecurityModule(log, &securityConfig{
 		transport:   &security.TransportConfig{},
 		credentials: &security.CredentialConfig{},
 	})
@@ -207,8 +207,8 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	conn, cleanup := setupTestUnixConn(t)
 	defer cleanup()
 
-	mod := NewSecurityModule(log, defaultTestSecurityConfig())
-	mod.signCredential = func(_ context.Context, _ *auth.CredentialRequest) (*auth.Credential, error) {
+	mod, _ := NewSecurityModule(log, defaultTestSecurityConfig())
+	mod.signCredential = func(_ context.Context, _ logging.Logger, _ auth.CredentialRequest) (*auth.Credential, error) {
 		return nil, errors.New("LookupUserID")
 	}
 	respBytes, err := callRequestCreds(mod, t, log, conn)
@@ -317,19 +317,29 @@ func TestAgent_SecurityRPC_getCredential(t *testing.T) {
 			conn, cleanup := setupTestUnixConn(t)
 			defer cleanup()
 
-			mod := NewSecurityModule(log, tc.secCfg)
-			mod.signCredential = func() credSignerFn {
-				var idx int
-				return func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
-					defer func() {
-						if idx < len(tc.responses)-1 {
-							idx++
-						}
-					}()
-					t.Logf("returning response %d: %+v", idx, tc.responses[idx])
-					return tc.responses[idx].cred, tc.responses[idx].err
+			CredentialRequestGetSignedTesting := func(ctx context.Context, log logging.Logger, req auth.CredentialRequest) (*auth.Credential, error) {
+				r, ok := req.(*auth.CredentialRequestUnix)
+				if !ok {
+					return nil, errors.New("Testing fn used with non-unix credential request")
 				}
-			}()
+				testing_fn := func() auth.GetSignedCredentialInternalFn {
+					var idx int
+					return func(_ context.Context, _ *auth.CredentialRequestUnix) (*auth.Credential, error) {
+						defer func() {
+							if idx < len(tc.responses)-1 {
+								idx++
+							}
+						}()
+						t.Logf("returning response %d: %+v", idx, tc.responses[idx])
+						return tc.responses[idx].cred, tc.responses[idx].err
+					}
+				}()
+				r.GetSignedCredentialInternal = testing_fn
+				return r.GetSignedCredential(log, ctx)
+			}
+
+			mod, _ := NewSecurityModule(log, tc.secCfg)
+			mod.signCredential = CredentialRequestGetSignedTesting
 
 			respBytes, gotErr := callRequestCreds(mod, t, log, conn)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -355,13 +365,13 @@ func TestAgent_SecurityCachedCredentials(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		lifetime  time.Duration
-		req       *auth.CredentialRequest
+		req       auth.CredentialRequest
 		responses []signCredentialResp
 		exp       *auth.Credential
 	}{
 		"cache hit": {
 			lifetime: time.Second,
-			req: &auth.CredentialRequest{
+			req: &auth.CredentialRequestUnix{
 				DomainInfo: security.InitDomainInfo(&syscall.Ucred{Uid: 1234, Gid: 5678}, ""),
 			},
 			responses: []signCredentialResp{
@@ -378,7 +388,7 @@ func TestAgent_SecurityCachedCredentials(t *testing.T) {
 		},
 		"expired entry": {
 			lifetime: time.Nanosecond,
-			req: &auth.CredentialRequest{
+			req: &auth.CredentialRequestUnix{
 				DomainInfo: security.InitDomainInfo(&syscall.Ucred{Uid: 1234, Gid: 5678}, ""),
 			},
 			responses: []signCredentialResp{
@@ -400,10 +410,10 @@ func TestAgent_SecurityCachedCredentials(t *testing.T) {
 
 			cfg := defaultTestSecurityConfig()
 			cfg.credentials.CacheExpiration = tc.lifetime
-			mod := NewSecurityModule(log, cfg)
-			mod.credCache.cacheMissFn = func() func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+			mod, _ := NewSecurityModule(log, cfg)
+			mod.credCache.cacheMissFn = func() func(_ context.Context, _ logging.Logger, req auth.CredentialRequest) (*auth.Credential, error) {
 				var idx int
-				return func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+				return func(_ context.Context, _ logging.Logger, req auth.CredentialRequest) (*auth.Credential, error) {
 					defer func() {
 						if idx < len(tc.responses)-1 {
 							idx++
@@ -415,12 +425,12 @@ func TestAgent_SecurityCachedCredentials(t *testing.T) {
 			}()
 
 			// Prime the cache with a single entry.
-			_, err := mod.credCache.getSignedCredential(test.Context(t), tc.req)
+			_, err := mod.credCache.getSignedCredential(test.Context(t), logging.FromContext(test.Context(t)), tc.req)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			// Request a second time with the same credentials.
-			cred, err := mod.credCache.getSignedCredential(test.Context(t), tc.req)
+			cred, err := mod.credCache.getSignedCredential(test.Context(t), logging.FromContext(test.Context(t)), tc.req)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

@@ -111,7 +111,11 @@ func (cmd *startCmd) Execute(_ []string) error {
 		transport:   cmd.cfg.TransportConfig,
 		credentials: cmd.cfg.CredentialConfig,
 	}
-	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
+	module, err := NewSecurityModule(cmd.Logger, secCfg)
+	if err != nil {
+		return errors.Wrap(err, "failed to initalized security module")
+	}
+	drpcServer.RegisterRPCModule(module)
 	mgmtMod := &mgmtModule{
 		log:           cmd.Logger,
 		sys:           cmd.cfg.SystemName,
