@@ -8,7 +8,6 @@ server_config:
       log_file: daos_server0.log
       targets: 4
       nr_xs_helpers: 0
-      fabric_iface: eth0
       storage:
         0:
           class: ram
@@ -17,7 +16,6 @@ server_config:
       log_file: daos_server1.log
       targets: 4
       nr_xs_helpers: 0
-      fabric_iface: eth0
       storage:
         0:
           class: ram
