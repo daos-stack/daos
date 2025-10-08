@@ -412,6 +412,8 @@ static int (*next_rmdir)(const char *path);
 
 static int (*next_rename)(const char *old_name, const char *new_name);
 
+static int (*next_renameat)(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
+
 static char *(*next_getcwd)(char *buf, size_t size);
 
 static int (*libc_unlink)(const char *path);
@@ -1975,6 +1977,15 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 	int len_str, dirfd_directed;
 
 	*error = 0;
+
+	if (rel_path[0] == '/') {
+		/* an absolute path, dirfd should be ignored */
+		*full_path_out = strdup(rel_path);
+		if (*full_path_out == NULL)
+			goto out_oom;
+		return query_dfs_mount(*full_path_out);
+	}
+
 	*full_path_out = NULL;
 	dirfd_directed = d_get_fd_redirected(dirfd);
 
@@ -5026,6 +5037,53 @@ out_err:
 		drec_decref(dfs_mt2->dcache, parent_new);
 	FREE(parent_dir_new);
 	errno = rc;
+	return (-1);
+}
+
+int
+renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath)
+{
+	int   error = 0;
+	int   rc;
+	char *full_path_old = NULL;
+	char *full_path_new = NULL;
+
+	if (next_renameat == NULL) {
+		next_renameat = dlsym(RTLD_NEXT, "renameat");
+		D_ASSERT(next_renameat != NULL);
+	}
+	if (!d_hook_enabled)
+		return next_renameat(olddirfd, oldpath, newdirfd, newpath);
+
+	if ((oldpath[0] == '/') && (newpath[0] == '/'))
+		/* fd is ignored for absolute path */
+		return rename(oldpath, newpath);
+
+	check_path_with_dirfd(olddirfd, &full_path_old, oldpath, &error);
+	if (error)
+		goto out_err;
+
+	check_path_with_dirfd(newdirfd, &full_path_new, newpath, &error);
+	if (error) {
+		if (full_path_old)
+			free(full_path_old);
+		goto out_err;
+	}
+	rc = rename(full_path_old, full_path_new);
+	/* save errno since free() may affect errno */
+	error = errno;
+	if (full_path_old) {
+		free(full_path_old);
+		errno = error;
+	}
+	if (full_path_new) {
+		free(full_path_new);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
 	return (-1);
 }
 

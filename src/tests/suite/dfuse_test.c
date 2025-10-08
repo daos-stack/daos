@@ -780,6 +780,19 @@ do_lowfd(void **state)
 	free(path);
 }
 
+/* helper function to create a file */
+static void
+create_a_file(const char file_name[])
+{
+	int fd;
+	int rc;
+
+	fd = open(file_name, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+}
+
 #define MAX_LEN_ATTR_VALUE (128)
 
 /* verify miscellaneous fd involved functions that are needed to be intercepted by libpil4dfs */
@@ -793,6 +806,8 @@ do_fdcallscheck(void **state)
 	char   attr_value[] = "test_value";
 	char   attr_value_rd[MAX_LEN_ATTR_VALUE];
 	size_t len;
+	char   path_old[512];
+	char   path_new[512];
 
 	root = open(test_dir, O_PATH | O_DIRECTORY);
 	assert_return_code(root, errno);
@@ -819,6 +834,86 @@ do_fdcallscheck(void **state)
 
 	rc = close(root);
 	assert_return_code(rc, errno);
+
+	/* start testing renameat() */
+
+	/* both with absolute path */
+	len = snprintf(path_old, sizeof(path_old) - 1, "%s/old", test_dir);
+	assert_true(len < (sizeof(path_old) - 1));
+
+	len = snprintf(path_new, sizeof(path_new) - 1, "%s/new", test_dir);
+	assert_true(len < (sizeof(path_new) - 1));
+
+	create_a_file(path_old);
+
+	rc = renameat(0, path_old, 0, path_new);
+	assert_return_code(rc, errno);
+
+	fd = open(path_new, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path_new);
+	assert_return_code(rc, errno);
+
+	/* one with absolute path, one with relative path */
+	create_a_file(path_old);
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	rc = renameat(root, "old", 0, path_new);
+	assert_return_code(rc, errno);
+
+	fd = open(path_new, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path_new);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+
+	/* both with relative path */
+	create_a_file(path_old);
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	rc = renameat(root, "old", root, "new");
+	assert_return_code(rc, errno);
+
+	fd = open(path_new, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path_new);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+
+	/* one is on DAOS and one is not on DAOS */
+	create_a_file(path_old);
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	strncpy(path_new, "/dev/shm/newfile", sizeof(path_new));
+	rc = renameat(root, "old", 0, path_new);
+	assert_true(rc == -1);
+	assert_true(errno == EXDEV);
+
+	rc = unlink(path_old);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+	/* end   testing renameat() */
 }
 
 /*
