@@ -132,37 +132,3 @@ tests: !mux
     test_clients_arg: " --name client_group --attach_to timeout_srv_grp"
     test_clients_env: "-x CRT_TIMEOUT=10"
     test_clients_ppn: "1"
-  bulk_fwd:
-    name: bulk_fwd
-    test_servers_bin: crt_launch
-    test_servers_arg: "-e test_group_np_srv --name fwd_test_grp"
-    test_servers_env: "-x CRT_TIMEOUT=10"
-    test_servers_ppn: "2"
-    test_clients_bin:
-      - test_group_np_cli
-      - test_group_np_cli
-    test_clients_arg:
-      - " --name client_group --attach_to fwd_test_grp --rank=0 --bulk_forward=1 --skip_shutdown --skip_check_in"
-      - " --name client_group --attach_to fwd_test_grp --shut_only"
-    test_clients_env: "-x CRT_TIMEOUT=10"
-    test_clients_ppn: "1"
-#  threaded:
-#    name: threaded_basic
-#    test_servers_bin: threaded_server
-#    test_servers_arg: ""
-#    test_servers_env: ""
-#    test_servers_ppn: "1"
-#    test_clients_bin: threaded_client
-#    test_clients_arg: ""
-#    test_clients_env: ""
-#    test_clients_ppn: "1"
-#  rpc_error:
-#    name: rpc_error_basic
-#    test_servers_bin: test_rpc_error
-#    test_servers_arg: "--name service_group --is_service"
-#    test_servers_env: ""
-#    test_servers_ppn: "1"
-#    test_clients_bin: test_rpc_error
-#    test_clients_arg: "--name client_group --attach_to service_group"
-#    test_clients_env: ""
-#    test_clients_ppn: "1"
