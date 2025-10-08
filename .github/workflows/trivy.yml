@@ -11,6 +11,16 @@ on:
     branches: ["master", "release/**"]
   pull_request:
     branches: ["master", "release/**"]
+    paths:
+      - .github/workflows/trivy.yml
+      - requirements-*.txt
+      - src/client/java/**/pom.xml
+      - src/control/go.mod
+      - src/control/vendor/**
+      - utils/build.config
+      - utils/rpms/**
+      - utils/scripts/install-*.sh
+      - utils/trivy/**
 
 # Declare default permissions as nothing.
 permissions: {}
