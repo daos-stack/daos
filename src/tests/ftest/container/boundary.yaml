@@ -28,7 +28,7 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 200M
+  size: 1%
   label: pool
   set_logmasks: False
 
