@@ -602,7 +602,13 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	int              rc;
 
 	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
-		D_ERROR("invalid property list\n");
+		D_ERROR("no properties in prop list\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (!daos_prop_valid(prop, true, true)) {
+		D_ERROR("invalid properties\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
