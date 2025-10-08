@@ -412,6 +412,7 @@ dtx_stat_tests(void **state)
 	struct ddb_ctx          ctx  = {0};
 	struct dtx_stat_options opt  = {0};
 	int                     i;
+	int                     cont_cnt;
 
 	ctx.dc_poh                     = tctx->dvt_poh;
 	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
@@ -432,7 +433,8 @@ dtx_stat_tests(void **state)
 	opt.path = "";
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt));
-	for (i = 0; i < DVT_CONT_CNT; i++) {
+	cont_cnt = (DAOS_ON_VALGRIND) ? 8 : (DVT_CONT_CNT);
+	for (i = 0; i < cont_cnt; i++) {
 		char buf[] = "^DTX entries statistics of container "
 			     "CONT:[[:blank:]]+\\(/\\[0\\]\\)[[:blank:]]+/[[:digit:]-]+$";
 
