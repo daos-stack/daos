@@ -1320,62 +1320,99 @@ dtx_print_time_stat(struct ddb_ctx *ctx, char *stat_name, uint64_t epoch, char *
 	char            buf[TIMESPEC_FMT_SIZE];
 	int             rc;
 
+	if (epoch == 0 || epoch == DAOS_EPOCH_MAX) {
+		ddb_printf(ctx, "\t- %s date:%sdate=NA, epoch=NA\n", stat_name, align);
+		rc = 0;
+		goto done;
+	}
+
 	rc = d_hlc2timespec(epoch, &tspec);
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Conversion error of the DTX stat %s: " DF_RC "\n", stat_name,
 			   DP_RC(rc));
-		return rc;
+		goto done;
 	}
 	rc = timespec2str(&tspec, buf, TIMESPEC_FMT_SIZE);
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Conversion error of the DTX stat %s: " DF_RC "\n", stat_name,
 			   DP_RC(rc));
-		return rc;
+		goto done;
 	}
-	ddb_printf(ctx, "\t- %s time:%s%s, %" PRIu64 "\n", stat_name, align, buf, epoch);
+	ddb_printf(ctx, "\t- %s date:%sdate=%s, epoch=%" PRIu64 "\n", stat_name, align, buf, epoch);
 
-	return 0;
+done:
+	return rc;
 }
 
-struct dtx_stat_args {
-	struct ddb_ctx          *ctx;
-	struct dtx_stat_options *opt;
-	uint32_t                 cont_seen;
-	uint32_t                 cmt_cnt;
-};
+static int
+dtx_stat_print(struct ddb_ctx *ctx, struct dtx_cmt_stat *cmt_stat, uint64_t aggr_epoch)
+{
+	int rc;
+
+	ddb_printf(ctx, "\t- Committed DTX count:\t\t%" PRIu64 "\n", cmt_stat->dcs_count);
+	rc = dtx_print_time_stat(ctx, "Committed DTX min", cmt_stat->dcs_epoch_min, "\t");
+	if (!SUCCESS(rc))
+		goto done;
+
+	rc = dtx_print_time_stat(ctx, "Committed DTX max", cmt_stat->dcs_epoch_max, "\t");
+	if (!SUCCESS(rc))
+		goto done;
+
+	rc = dtx_print_time_stat(ctx, "Committed DTX mean", (uint64_t)cmt_stat->dcs_epoch_mean,
+				 "\t");
+	if (!SUCCESS(rc))
+		goto done;
+
+	rc = dtx_print_time_stat(ctx, "DTX newest aggregated", aggr_epoch, "\t");
+	if (!SUCCESS(rc))
+		goto done;
+
+done:
+	return rc;
+}
 
 static int
-dtx_stat_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint32_t *cnt)
+dtx_stat_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, struct dtx_cmt_stat *cmt_stat,
+	      uint64_t *aggr_epoch)
 {
-	struct dtx_stat stat;
-	daos_handle_t   coh = {0};
-	uint32_t        cnt_tmp;
+	daos_handle_t       coh = {0};
+	struct dtx_cmt_stat tmp_cmt_stat;
+	struct dtx_stat     aggr_stat;
 	int             rc;
 
 	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &coh);
 	if (!SUCCESS(rc))
 		goto done;
 
-	rc = vos_dtx_get_cmt_cnt(coh, &cnt_tmp);
+	rc = vos_dtx_get_cmt_stat(coh, &tmp_cmt_stat);
 	if (!SUCCESS(rc))
 		goto done;
-	vos_dtx_stat(coh, &stat, 0);
+	vos_dtx_stat(coh, &aggr_stat, 0);
 
-	ddb_print(ctx, "DTX entries statistics of ");
+	ddb_print(ctx, "DTX entries statistics of container ");
 	itp_print_full(ctx, itp);
 	ddb_print(ctx, "\n");
-	ddb_printf(ctx, "\t- Number of committed DTX of the container:\t%" PRIu32 "\n", cnt_tmp);
-	rc =
-	    dtx_print_time_stat(ctx, "DTX newest aggregated", stat.dtx_newest_aggregated, "\t\t\t");
+	rc = dtx_stat_print(ctx, &tmp_cmt_stat, aggr_stat.dtx_newest_aggregated);
 	if (!SUCCESS(rc))
 		goto done;
-	if (cnt != NULL)
-		*cnt = cnt_tmp;
+
+	if (cmt_stat != NULL)
+		memcpy(cmt_stat, &tmp_cmt_stat, sizeof(tmp_cmt_stat));
+	if (aggr_epoch != NULL)
+		*aggr_epoch = aggr_stat.dtx_newest_aggregated;
 done:
 	dv_cont_close(&coh);
 
 	return rc;
 }
+
+struct dtx_stat_args {
+	struct ddb_ctx          *ctx;
+	struct dtx_stat_options *opt;
+	uint32_t                 cont_seen;
+	struct dtx_cmt_stat      cmt_stat;
+	uint64_t                 aggr_epoch;
+};
 
 static int
 dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
@@ -1384,7 +1421,8 @@ dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	struct ddb_ctx             *ctx;
 	struct dv_indexed_tree_path itp = {0};
 	struct dtx_stat_args       *args;
-	uint32_t                    cnt;
+	struct dtx_cmt_stat         cmt_stat;
+	uint64_t                    aggr_epoch;
 	int                         rc;
 
 	if (type != VOS_ITER_COUUID) {
@@ -1398,10 +1436,27 @@ dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
 	++(args->cont_seen);
 
-	rc = dtx_stat_cont(ctx, &itp, &cnt);
+	rc = dtx_stat_cont(ctx, &itp, &cmt_stat, &aggr_epoch);
 	if (!SUCCESS(rc))
 		goto done;
-	args->cmt_cnt += cnt;
+
+	if (args->cmt_stat.dcs_epoch_min > cmt_stat.dcs_epoch_min)
+		args->cmt_stat.dcs_epoch_min = cmt_stat.dcs_epoch_min;
+	if (args->cmt_stat.dcs_epoch_max < cmt_stat.dcs_epoch_max)
+		args->cmt_stat.dcs_epoch_max = cmt_stat.dcs_epoch_max;
+	if (args->cmt_stat.dcs_count == 0)
+		args->cmt_stat.dcs_epoch_mean = cmt_stat.dcs_epoch_mean;
+	else if (cmt_stat.dcs_count != 0) {
+		long double tmp_mean;
+
+		tmp_mean = args->cmt_stat.dcs_epoch_mean * (long double)args->cmt_stat.dcs_count;
+		tmp_mean += cmt_stat.dcs_epoch_mean * (long double)cmt_stat.dcs_count;
+		tmp_mean /= (long double)(args->cmt_stat.dcs_count + cmt_stat.dcs_count);
+		args->cmt_stat.dcs_epoch_mean = tmp_mean;
+	}
+	args->cmt_stat.dcs_count += cmt_stat.dcs_count;
+	if (args->aggr_epoch < aggr_epoch)
+		args->aggr_epoch = aggr_epoch;
 
 done:
 	itp_free(&itp);
@@ -1425,7 +1480,7 @@ dtx_stat_path(struct ddb_ctx *ctx, char *path)
 		goto done;
 	}
 
-	rc = dtx_stat_cont(ctx, &itp, NULL);
+	rc = dtx_stat_cont(ctx, &itp, NULL, NULL);
 done:
 	itp_free(&itp);
 	return rc;
@@ -1450,17 +1505,20 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 		goto done;
 	}
 
-	args.ctx            = ctx;
-	args.opt            = opt;
-	param.ip_hdl        = ctx->dc_poh;
-	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	args.ctx                    = ctx;
+	args.opt                    = opt;
+	args.cmt_stat.dcs_epoch_min = DAOS_EPOCH_MAX;
+	param.ip_hdl                = ctx->dc_poh;
+	param.ip_epr.epr_hi         = DAOS_EPOCH_MAX;
 	do {
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cb, &args,
 				 NULL);
 	} while (rc > 0);
-	if (rc == 0)
-		ddb_printf(ctx, "Number of committed DTX of the pool:\t\t\t%" PRIu32 "\n",
-			   args.cmt_cnt);
+	if (rc != 0)
+		goto done;
+
+	ddb_printf(ctx, "DTX entries statistics of the pool %s\n", ctx->dc_pool_path);
+	rc = dtx_stat_print(ctx, &args.cmt_stat, args.aggr_epoch);
 
 done:
 	return rc;
@@ -1590,6 +1648,7 @@ ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
 		goto done;
 	}
 
+	ddb_printf(ctx, "Aggregating DTX entries of pool %s\n", ctx->dc_pool_path);
 	args.ctx            = ctx;
 	param.ip_hdl        = ctx->dc_poh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;

@@ -978,6 +978,8 @@ dtx_aggr_option_parse(struct ddb_ctx *ctx, struct dtx_aggr_options *cmd_args, ui
 		ddb_error(ctx, "'--epoch' or '--date' option has to be defined\n");
 		return -DER_INVAL;
 	}
+	if (cmd_args->format == DDB_DTX_AGGR_DATE && strcmp("NOW", cmd_args->date))
+		cmd_args->format = DDB_DTX_AGGR_NOW;
 
 	index          = optind;
 	cmd_args->path = NULL;

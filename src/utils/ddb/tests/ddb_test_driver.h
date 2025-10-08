@@ -19,18 +19,20 @@
 #include <libgen.h>
 #include <sys/stat.h>
 
+#define DVT_CONT_CNT 10
+
 extern bool		 g_verbose;
-extern const char	*g_uuids_str[10];
+extern const char       *g_uuids_str[DVT_CONT_CNT];
 extern const char	*g_invalid_uuid_str;
-extern uuid_t		 g_uuids[10];
-extern daos_unit_oid_t	 g_oids[10];
+extern uuid_t            g_uuids[DVT_CONT_CNT];
+extern daos_unit_oid_t   g_oids[DVT_CONT_CNT];
 extern daos_unit_oid_t	 g_invalid_oid;
-extern char		*g_dkeys_str[10];
-extern char		*g_akeys_str[10];
-extern daos_key_t	 g_dkeys[10];
-extern daos_key_t	 g_akeys[10];
+extern char             *g_dkeys_str[DVT_CONT_CNT];
+extern char             *g_akeys_str[DVT_CONT_CNT];
+extern daos_key_t        g_dkeys[DVT_CONT_CNT];
+extern daos_key_t        g_akeys[DVT_CONT_CNT];
 extern daos_key_t	 g_invalid_key;
-extern daos_recx_t	 g_recxs[10];
+extern daos_recx_t       g_recxs[DVT_CONT_CNT];
 extern daos_recx_t	 g_invalid_recx;
 
 struct dt_vos_pool_ctx {
@@ -78,7 +80,7 @@ int ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx);
 
 extern uint32_t dvt_fake_print_called;
 extern bool dvt_fake_print_just_count;
-#define DVT_FAKE_PRINT_BUFFER_SIZE (2048)
+#define DVT_FAKE_PRINT_BUFFER_SIZE (0x20000)
 extern char dvt_fake_print_buffer[DVT_FAKE_PRINT_BUFFER_SIZE];
 int dvt_fake_print(const char *fmt, ...);
 void dvt_fake_print_reset(void);

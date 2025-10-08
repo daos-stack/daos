@@ -1780,6 +1780,18 @@ bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
 /**
+ * The following declarations are for getting statistics of the DTX committed entries thanks to the
+ * vos_dtx_get_cmt_stat() function.
+ */
+struct dtx_cmt_stat {
+	uint64_t    dcs_count;
+	uint64_t    dcs_epoch_min;
+	uint64_t    dcs_epoch_max;
+	/* DAOS-17322: Use of floating point to avoid integer overflow issue */
+	long double dcs_epoch_mean;
+};
+
+/**
  * Return the number of DTX committed entries of a container.
  *
  * \param[in]	coh	container open handle.
@@ -1788,6 +1800,6 @@ vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
  * \return		0 on success, error otherwise.
  */
 int
-vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt);
+vos_dtx_get_cmt_stat(daos_handle_t coh, struct dtx_cmt_stat *stat);
 
 #endif /* __VOS_API_H */

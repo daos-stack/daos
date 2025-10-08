@@ -22,17 +22,44 @@
 /* mocks */
 
 #define DTX_CMT_BLOB_MAGIC 0x2502191c
-#define DBD_COUNT          0x3
+#define DBD_BLOBS_CAP      0x3
 #define DBD_BLOB_DF_CAP    0x8
+#define EPOCH_START        0x1000
+#define EPOCH_END          0x10000
+#define EPOCH_STEP         0x10
 #define CELL_SIZE                                                                                  \
 	sizeof(struct vos_dtx_blob_df) + DBD_BLOB_DF_CAP * sizeof(struct vos_dtx_cmt_ent_df)
 
 static struct vos_pool         mock_pool;
 static struct vos_container    mock_cont;
 static struct vos_cont_df      mock_cont_df;
-static struct vos_dtx_blob_df *mock_dbds[DBD_COUNT];
-static umem_off_t              mock_dbds_off[DBD_COUNT];
+static struct vos_dtx_blob_df *mock_dbds[DBD_BLOBS_CAP];
+static umem_off_t              mock_dbds_off[DBD_BLOBS_CAP];
 static daos_handle_t           mock_coh;
+
+/* Helpers */
+
+static void
+prep_dtx_entries(void)
+{
+	int          i;
+	daos_epoch_t epochs[2] = {EPOCH_START, EPOCH_START * 2};
+
+	for (i = 0; i < DBD_BLOBS_CAP; i++) {
+		int j;
+
+		for (j = 0; j < DBD_BLOB_DF_CAP; j++) {
+			struct vos_dtx_cmt_ent_df *dce_df;
+
+			dce_df            = &mock_dbds[i]->dbd_committed_data[j];
+			dce_df->dce_epoch = epochs[j % 2];
+			epochs[j % 2] += EPOCH_STEP;
+		}
+		mock_dbds[i]->dbd_count = DBD_BLOB_DF_CAP;
+	}
+	mock_cont.vc_dtx_committed_count = DBD_BLOBS_CAP * DBD_BLOB_DF_CAP;
+	mock_pool.vp_dtx_committed_count = DBD_BLOBS_CAP * DBD_BLOB_DF_CAP;
+}
 
 /* setup & teardown */
 
@@ -45,16 +72,17 @@ test_setup(void **unused)
 	memset(&mock_cont, 0, sizeof(mock_cont));
 	memset(&mock_cont_df, 0, sizeof(mock_cont_df));
 
-	for (i = 0; i < DBD_COUNT; i++) {
+	for (i = 0; i < DBD_BLOBS_CAP; i++) {
 		D_ALLOC(mock_dbds[i], CELL_SIZE);
 		assert_non_null(mock_dbds[i]);
 		mock_dbds_off[i] = umem_ptr2off(&mock_pool.vp_umm, mock_dbds[i]);
 	}
 
-	for (i = 0; i < DBD_COUNT; i++) {
+	for (i = 0; i < DBD_BLOBS_CAP; i++) {
 		mock_dbds[i]->dbd_magic = DTX_CMT_BLOB_MAGIC;
 		mock_dbds[i]->dbd_cap   = DBD_BLOB_DF_CAP;
-		mock_dbds[i]->dbd_next  = (i == DBD_COUNT - 1) ? UMOFF_NULL : mock_dbds_off[i + 1];
+		mock_dbds[i]->dbd_next =
+		    (i == DBD_BLOBS_CAP - 1) ? UMOFF_NULL : mock_dbds_off[i + 1];
 		mock_dbds[i]->dbd_prev  = (i == 0) ? UMOFF_NULL : mock_dbds_off[i - 1];
 		mock_dbds[i]->dbd_count = (i + 1) * 2;
 		assert_true(mock_dbds[i]->dbd_count <= DBD_BLOB_DF_CAP);
@@ -63,7 +91,7 @@ test_setup(void **unused)
 	mock_cont.vc_pool                  = &mock_pool;
 	mock_cont.vc_cont_df               = &mock_cont_df;
 	mock_cont_df.cd_dtx_committed_head = mock_dbds_off[0];
-	mock_cont_df.cd_dtx_committed_tail = mock_dbds_off[DBD_COUNT - 1];
+	mock_cont_df.cd_dtx_committed_tail = mock_dbds_off[DBD_BLOBS_CAP - 1];
 	mock_coh.cookie                    = (uint64_t)&mock_cont;
 
 	return 0;
@@ -74,7 +102,7 @@ test_teardown(void **unused)
 {
 	int i;
 
-	for (i = 0; i < DBD_COUNT; i++)
+	for (i = 0; i < DBD_BLOBS_CAP; i++)
 		D_FREE(mock_dbds[i]);
 
 	return 0;
@@ -85,49 +113,60 @@ test_teardown(void **unused)
 static void
 test_asserts(void **unused)
 {
-	daos_handle_t hdl_null = {0};
-	uint32_t      cnt;
-	int           rc;
+	daos_handle_t       hdl_null = {0};
+	struct dtx_cmt_stat stat;
+	int                 rc;
 
 	/* Invalid arguments. */
-	rc = vos_dtx_get_cmt_cnt(hdl_null, &cnt);
+	rc = vos_dtx_get_cmt_stat(hdl_null, &stat);
 	assert_rc_equal(rc, -DER_INVAL);
-	rc = vos_dtx_get_cmt_cnt(mock_coh, NULL);
+	rc = vos_dtx_get_cmt_stat(mock_coh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* Corrupted dbd */
 	mock_dbds[1]->dbd_magic = 42;
-	rc                      = vos_dtx_get_cmt_cnt(mock_coh, &cnt);
+	rc                      = vos_dtx_get_cmt_stat(mock_coh, &stat);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
 static void
-test_count(void **unused)
+test_stat(void **unused)
 {
-	uint32_t cnt;
-	int      rc;
+	struct dtx_cmt_stat stat;
+	uint64_t            tmp;
+	int                 rc;
+
+	prep_dtx_entries();
 
 	/* Container with several DTX entries table */
-	rc = vos_dtx_get_cmt_cnt(mock_coh, &cnt);
+	rc = vos_dtx_get_cmt_stat(mock_coh, &stat);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(cnt, DBD_COUNT * (DBD_COUNT + 1));
+	assert_int_equal(stat.dcs_count, DBD_BLOB_DF_CAP * DBD_BLOBS_CAP);
+	tmp = DBD_BLOB_DF_CAP * DBD_BLOBS_CAP / 2 - 1;
+	tmp *= EPOCH_STEP;
+	tmp += EPOCH_START * 2;
+	assert_int_equal(stat.dcs_epoch_max, tmp);
+	assert_int_equal(stat.dcs_epoch_min, EPOCH_START);
+	assert_int_equal((uint64_t)stat.dcs_epoch_mean, 0x1858);
 }
 
+/* clang-format off */
 /* compilation unit's entry point */
 #define TEST(name, func)                                                                           \
 	{                                                                                          \
-		name ": vos_dtx_get_cmt_cnt - " #func, func, test_setup, test_teardown             \
+		name ": vos_dtx_get_cmt_stat - " #func, func, test_setup, test_teardown            \
 	}
+/* clang-format on */
 
-static const struct CMUnitTest vos_dtx_count_tests_all[] = {
+static const struct CMUnitTest vos_dtx_get_cmt_stat_tests_all[] = {
     TEST("DTX600", test_asserts),
-    TEST("DTX601", test_count),
+    TEST("DTX601", test_stat),
 };
 
 int
-run_dtx_count_tests(void)
+run_dtx_cmt_stat_tests(void)
 {
-	const char *test_name = "vos_dtx_get_cmt_cnt";
+	const char *test_name = "vos_dtx_get_cmt_stat";
 
-	return cmocka_run_group_tests_name(test_name, vos_dtx_count_tests_all, NULL, NULL);
+	return cmocka_run_group_tests_name(test_name, vos_dtx_get_cmt_stat_tests_all, NULL, NULL);
 }
