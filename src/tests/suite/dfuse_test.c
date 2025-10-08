@@ -224,6 +224,12 @@ do_open(void **state)
 	char  path[512];
 	char *env_ldpreload;
 	bool  with_pil4dfs = false;
+	bool  use_dfuse    = true;
+	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
+	char  native_mount_dir[] = "/tmp/dfuse-test";
+
+	if (strstr(test_dir, native_mount_dir))
+		use_dfuse = false;
 
 	env_ldpreload = getenv("LD_PRELOAD");
 	if (env_ldpreload == NULL)
@@ -252,7 +258,7 @@ do_open(void **state)
 	/* test creat() */
 	fd = creat(path, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
-	if (with_pil4dfs)
+	if (with_pil4dfs && use_dfuse)
 		assert_true(is_fd_large(fd));
 
 	rc = close(fd);
@@ -264,7 +270,7 @@ do_open(void **state)
 	/* test creat64() */
 	fd = creat64(path, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
-	if (with_pil4dfs)
+	if (with_pil4dfs && use_dfuse)
 		assert_true(is_fd_large(fd));
 
 	rc = close(fd);
