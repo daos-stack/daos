@@ -5,7 +5,7 @@ ENV:
 env_D_PROVIDER:
   ofi_tcp:
     D_PROVIDER: "ofi+tcp"
-timoeut: 120
+timeout: 120
 hosts:
   hosts_1:
     config: one_node
