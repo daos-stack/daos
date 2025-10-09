@@ -46,7 +46,7 @@ set_ctrlr_data(struct d_uuid *id, struct smd_ctrlr_data *ctrlr_data, struct nvme
 	if (!need_update)
 		return 0;
 
-	return smd_db_upsert(TABLE_CTRLR_DATA, id, sizeof(*id), &ctrlr_data, sizeof(ctrlr_data));
+	return smd_db_upsert(TABLE_CTRLR_DATA, id, sizeof(*id), ctrlr_data, sizeof(*ctrlr_data));
 }
 
 int
