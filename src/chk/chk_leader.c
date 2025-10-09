@@ -3628,6 +3628,9 @@ new_seq:
 		*seq = chk_report_seq_gen(ins);
 	}
 
+	if (ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+		cru->cru_result = CHK__CHECK_RESULT__DRY_RUN;
+
 	D_INFO(DF_LEADER" handle %s report from rank %u with seq "
 	       DF_X64" class %u, action %u, result %d\n", DP_LEADER(ins),
 	       decision != NULL ? "local" : "remote", cru->cru_rank, *seq, cru->cru_cla,
