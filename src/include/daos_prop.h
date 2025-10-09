@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -611,7 +612,7 @@ daos_label_is_valid(const char *label)
 	}
 
 	/** Check to see if it could be a valid UUID */
-	if (maybe_uuid && daos_is_valid_uuid_string(label))
+	if (maybe_uuid && daos_is_valid_uuid_string(label, UUID_SST_NONE))
 		return false;
 
 	return true;

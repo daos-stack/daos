@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -241,7 +242,7 @@ chk_engine_post_repair(struct chk_pool_rec *cpr, int *result, bool update)
 	}
 
 	if (update) {
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(cpr->cpr_ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 	}
 
@@ -1689,7 +1690,7 @@ chk_engine_pool_ult(void *args)
 
 	D_INFO(DF_ENGINE" pool ult enter for "DF_UUIDF"\n", DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid));
 
-	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+	chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 
 	if (cpr->cpr_stop)
 		goto out;
@@ -2127,7 +2128,7 @@ chk_engine_start_post(struct chk_instance *ins)
 		pool_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE -
 						 pool_cbk->cb_phase;
 
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(pool_cbk, uuid_str);
 		if (rc != 0)
 			break;
@@ -2474,7 +2475,7 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	uuid_copy(shard->cqps_uuid, uuid);
 	shard->cqps_rank = dss_self_rank();
 
-	uuid_unparse_lower(uuid, uuid_str);
+	chk_uuid_unparse(cqpa->cqpa_ins, uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc == -DER_NONEXIST) {
 		shard->cqps_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
@@ -2902,7 +2903,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 	if (ins->ci_bk.cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 
-	uuid_unparse_lower(uuid, uuid_str);
+	chk_uuid_unparse(ins, uuid, uuid_str);
 
 	d_iov_set(&riov, NULL, 0);
 	d_iov_set(&kiov, uuid, sizeof(uuid_t));
@@ -3066,7 +3067,7 @@ chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label
 		cbk->cb_phase = phase;
 		/* QUEST: How to estimate the left time? */
 		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0)
 			goto put;
@@ -3514,7 +3515,8 @@ chk_engine_init(void)
 		}
 
 		ctpa.ctpa_gen = cbk->cb_gen;
-		rc = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
+		ctpa.ctpa_ins = chk_engine;
+		rc            = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
 		/*
 		 * Failed to reset pool status will not affect next check start, so it is not fatal,
 		 * but related check query result may be confused for user.
