@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Vdura Inc.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -7,6 +8,12 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <sys/types.h>
+#include <time.h>
+
+#include "daos_errno.h"
+#include "daos_srv/vos_types.h"
+#include "daos_types.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb.h"
@@ -14,6 +21,8 @@
 #include "ddb_printer.h"
 #include "daos.h"
 #include "ddb_tree_path.h"
+#include "gurt/common.h"
+#include "gurt/debug.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 #define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
@@ -58,7 +67,7 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 		return -DER_EXIST;
 	}
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, &ctx->dc_poh, 0);
+	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0);
 }
 
 int
@@ -477,7 +486,7 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 			itp_free(&itp);
 			return rc;
 		}
-		ddb_printf(ctx, "%d Active Entries\n", args.entry_count);
+		ddb_printf(ctx, "%" PRIu32 " Active Entries\n", args.entry_count);
 	}
 	if (both || opt->committed) {
 		args.entry_count = 0;
@@ -487,7 +496,7 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 			itp_free(&itp);
 			return rc;
 		}
-		ddb_printf(ctx, "%d Committed Entries\n", args.entry_count);
+		ddb_printf(ctx, "%" PRIu32 " Committed Entries\n", args.entry_count);
 	}
 
 	dv_cont_close(&coh);
@@ -891,12 +900,12 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	}
 
 	offset = parse_uint32_t(opt->offset);
-	if (offset <= 0) {
+	if (offset == 0) {
 		ddb_errorf(ctx, "'%s' is not a valid offset\n", opt->offset);
 		return -DER_INVAL;
 	}
 	blk_cnt = parse_uint32_t(opt->blk_cnt);
-	if (blk_cnt <= 0) {
+	if (blk_cnt == 0) {
 		ddb_errorf(ctx, "'%s' is not a valid block size\n", opt->blk_cnt);
 		return -DER_INVAL;
 	}
@@ -905,7 +914,7 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	if (!SUCCESS(rc))
 		return rc;
 
-	ddb_printf(ctx, "Adding free region to vea {%lu, %d}\n", offset, blk_cnt);
+	ddb_printf(ctx, "Adding free region to vea {%" PRIu64 ", %" PRIu32 "}\n", offset, blk_cnt);
 	rc = dv_vea_free_region(ctx->dc_poh, offset, blk_cnt);
 	if (!SUCCESS(rc))
 		ddb_errorf(ctx, "Unable to add new free region: "DF_RC"\n", DP_RC(rc));
@@ -1058,7 +1067,10 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
 		opt->path = ctx->dc_pool_path;
 
-	rc = dv_pool_open(opt->path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
+	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
+		opt->db_path = ctx->dc_db_path;
+
+	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
 	if (rc)
 		return rc;
 	close = true;
@@ -1139,7 +1151,7 @@ dtx_active_entry_discard_invalid(struct dv_dtx_active_entry *entry, void *cb_arg
 		ddb_errorf(ctx, "Error: " DF_RC "\n", DP_RC(rc));
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -1272,6 +1284,204 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
 	else
 		ddb_print(ctx, "Device replacing succeeded\n");
+
+	return rc;
+}
+
+enum { TIMESPEC_FMT_SIZE = sizeof("1970-01-01 00:00:00.000000000") };
+
+static int
+timespec2str(struct timespec *tspec, char *buf, size_t buf_size)
+{
+	struct tm date;
+	size_t    buf_len;
+	int       rc;
+
+	tzset();
+	if (localtime_r(&(tspec->tv_sec), &date) == NULL)
+		return d_errno2der(errno);
+
+	buf_len = strftime(buf, buf_size, "%F %T", &date);
+	if (buf_len == 0)
+		return -DER_INVAL;
+
+	rc = snprintf(&buf[buf_len], buf_size - buf_len, ".%09ld", tspec->tv_nsec);
+	if (rc < 0)
+		return -DER_INVAL;
+	if (rc >= buf_size - buf_len)
+		return -DER_TRUNC;
+
+	return 0;
+}
+
+static int
+dtx_print_time_stat(struct ddb_ctx *ctx, char *stat_name, uint64_t epoch, char *align)
+{
+	struct timespec tspec;
+	char            buf[TIMESPEC_FMT_SIZE];
+	int             rc;
+
+	rc = d_hlc2timespec(epoch, &tspec);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Conversion error of the DTX stat %s: " DF_RC "\n", stat_name,
+			   DP_RC(rc));
+		return rc;
+	}
+	rc = timespec2str(&tspec, buf, TIMESPEC_FMT_SIZE);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Conversion error of the DTX stat %s: " DF_RC "\n", stat_name,
+			   DP_RC(rc));
+		return rc;
+	}
+	ddb_printf(ctx, "\t- %s time:%s%s, %" PRIu64 "\n", stat_name, align, buf, epoch);
+
+	return 0;
+}
+
+struct dtx_stat_args {
+	struct ddb_ctx          *ctx;
+	struct dtx_stat_options *opt;
+	uint32_t                 cont_seen;
+	uint32_t                 cmt_cnt;
+};
+
+static int
+dtx_stat(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint32_t *cnt)
+{
+	struct dtx_stat stat;
+	daos_handle_t   coh = {0};
+	uint32_t        cnt_tmp;
+	int             rc;
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &coh);
+	if (!SUCCESS(rc))
+		goto done;
+
+	rc = vos_dtx_get_cmt_cnt(coh, &cnt_tmp);
+	if (!SUCCESS(rc))
+		goto done;
+	vos_dtx_stat(coh, &stat, 0);
+
+	ddb_print(ctx, "DTX entries statistics of ");
+	itp_print_full(ctx, itp);
+	ddb_print(ctx, "\n");
+	ddb_printf(ctx, "\t- Number of committed DTX of the container:\t%" PRIu32 "\n", cnt_tmp);
+	rc =
+	    dtx_print_time_stat(ctx, "DTX newest aggregated", stat.dtx_newest_aggregated, "\t\t\t");
+	if (!SUCCESS(rc))
+		goto done;
+	if (cnt != NULL)
+		*cnt = cnt_tmp;
+done:
+	dv_cont_close(&coh);
+
+	return rc;
+}
+
+static int
+dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct ddb_ctx             *ctx;
+	struct dv_indexed_tree_path itp = {0};
+	struct dtx_stat_args       *args;
+	uint32_t                    cnt;
+	int                         rc;
+
+	if (type != VOS_ITER_COUUID) {
+		rc = 0;
+		goto done;
+	}
+
+	args = (struct dtx_stat_args *)cb_arg;
+	ctx  = args->ctx;
+
+	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
+	++(args->cont_seen);
+
+	rc = dtx_stat(ctx, &itp, &cnt);
+	if (!SUCCESS(rc))
+		goto done;
+	args->cmt_cnt += cnt;
+
+done:
+	itp_free(&itp);
+
+	return rc;
+}
+
+int
+ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
+{
+	vos_iter_param_t        param   = {0};
+	struct dtx_stat_args    args    = {0};
+	struct vos_iter_anchors anchors = {0};
+	int                     rc;
+
+	if (daos_handle_is_inval(ctx->dc_poh)) {
+		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
+		return -DER_NONEXIST;
+	}
+
+	if (opt->path != NULL && opt->path[0] != '\0') {
+		struct dv_indexed_tree_path itp = {0};
+
+		rc = init_path(ctx, opt->path, &itp);
+		if (!SUCCESS(rc))
+			goto done;
+
+		if (!itp_has_cont(&itp)) {
+			rc = -DER_INVAL;
+			goto done;
+		}
+
+		rc = dtx_stat(ctx, &itp, NULL);
+done:
+		itp_free(&itp);
+		return rc;
+	}
+
+	args.ctx            = ctx;
+	args.opt            = opt;
+	param.ip_hdl        = ctx->dc_poh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	do {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cb, &args,
+				 NULL);
+	} while (rc > 0);
+	if (rc == 0)
+		ddb_printf(ctx, "Number of committed DTX of the pool:\t\t\t%" PRIu32 "\n",
+			   args.cmt_cnt);
+
+	return rc;
+}
+
+int
+ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
+{
+	int rc = 0;
+
+	if (opt->db_path == NULL || strlen(opt->db_path) == 0 ||
+	    strlen(opt->db_path) >= DDB_PATH_MAX) {
+		ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
+			   opt->db_path, DDB_PATH_MAX);
+		return -DER_INVAL;
+	}
+
+	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 ||
+	    strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
+		ddb_errorf(ctx, "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
+			   opt->tmpfs_mount, DDB_PATH_MAX);
+		return -DER_INVAL;
+	}
+
+	/** setup tmpfs and prepare the vos file on tmpfs_mount */
+	rc = dv_run_prov_mem(opt->db_path, opt->tmpfs_mount, opt->tmpfs_mount_size);
+	if (rc) {
+		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
+	} else {
+		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", opt->tmpfs_mount);
+	}
 
 	return rc;
 }

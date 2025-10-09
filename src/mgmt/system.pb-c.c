@@ -457,6 +457,173 @@ void   mgmt__system_drain_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__system_drain_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void
+mgmt__system_rebuild_manage_req__init(Mgmt__SystemRebuildManageReq *message)
+{
+	static const Mgmt__SystemRebuildManageReq init_value =
+	    MGMT__SYSTEM_REBUILD_MANAGE_REQ__INIT;
+	*message = init_value;
+}
+size_t
+mgmt__system_rebuild_manage_req__get_packed_size(const Mgmt__SystemRebuildManageReq *message)
+{
+	assert(message->base.descriptor == &mgmt__system_rebuild_manage_req__descriptor);
+	return protobuf_c_message_get_packed_size((const ProtobufCMessage *)(message));
+}
+size_t
+mgmt__system_rebuild_manage_req__pack(const Mgmt__SystemRebuildManageReq *message, uint8_t *out)
+{
+	assert(message->base.descriptor == &mgmt__system_rebuild_manage_req__descriptor);
+	return protobuf_c_message_pack((const ProtobufCMessage *)message, out);
+}
+size_t
+mgmt__system_rebuild_manage_req__pack_to_buffer(const Mgmt__SystemRebuildManageReq *message,
+						ProtobufCBuffer                    *buffer)
+{
+	assert(message->base.descriptor == &mgmt__system_rebuild_manage_req__descriptor);
+	return protobuf_c_message_pack_to_buffer((const ProtobufCMessage *)message, buffer);
+}
+Mgmt__SystemRebuildManageReq *
+mgmt__system_rebuild_manage_req__unpack(ProtobufCAllocator *allocator, size_t len,
+					const uint8_t *data)
+{
+	return (Mgmt__SystemRebuildManageReq *)protobuf_c_message_unpack(
+	    &mgmt__system_rebuild_manage_req__descriptor, allocator, len, data);
+}
+void
+mgmt__system_rebuild_manage_req__free_unpacked(Mgmt__SystemRebuildManageReq *message,
+					       ProtobufCAllocator           *allocator)
+{
+	if (!message)
+		return;
+	assert(message->base.descriptor == &mgmt__system_rebuild_manage_req__descriptor);
+	protobuf_c_message_free_unpacked((ProtobufCMessage *)message, allocator);
+}
+void
+mgmt__pool_rebuild_manage_result__init(Mgmt__PoolRebuildManageResult *message)
+{
+	static const Mgmt__PoolRebuildManageResult init_value =
+	    MGMT__POOL_REBUILD_MANAGE_RESULT__INIT;
+	*message = init_value;
+}
+size_t
+mgmt__pool_rebuild_manage_result__get_packed_size(const Mgmt__PoolRebuildManageResult *message)
+{
+	assert(message->base.descriptor == &mgmt__pool_rebuild_manage_result__descriptor);
+	return protobuf_c_message_get_packed_size((const ProtobufCMessage *)(message));
+}
+size_t
+mgmt__pool_rebuild_manage_result__pack(const Mgmt__PoolRebuildManageResult *message, uint8_t *out)
+{
+	assert(message->base.descriptor == &mgmt__pool_rebuild_manage_result__descriptor);
+	return protobuf_c_message_pack((const ProtobufCMessage *)message, out);
+}
+size_t
+mgmt__pool_rebuild_manage_result__pack_to_buffer(const Mgmt__PoolRebuildManageResult *message,
+						 ProtobufCBuffer                     *buffer)
+{
+	assert(message->base.descriptor == &mgmt__pool_rebuild_manage_result__descriptor);
+	return protobuf_c_message_pack_to_buffer((const ProtobufCMessage *)message, buffer);
+}
+Mgmt__PoolRebuildManageResult *
+mgmt__pool_rebuild_manage_result__unpack(ProtobufCAllocator *allocator, size_t len,
+					 const uint8_t *data)
+{
+	return (Mgmt__PoolRebuildManageResult *)protobuf_c_message_unpack(
+	    &mgmt__pool_rebuild_manage_result__descriptor, allocator, len, data);
+}
+void
+mgmt__pool_rebuild_manage_result__free_unpacked(Mgmt__PoolRebuildManageResult *message,
+						ProtobufCAllocator            *allocator)
+{
+	if (!message)
+		return;
+	assert(message->base.descriptor == &mgmt__pool_rebuild_manage_result__descriptor);
+	protobuf_c_message_free_unpacked((ProtobufCMessage *)message, allocator);
+}
+void
+mgmt__system_rebuild_manage_resp__init(Mgmt__SystemRebuildManageResp *message)
+{
+	static const Mgmt__SystemRebuildManageResp init_value =
+	    MGMT__SYSTEM_REBUILD_MANAGE_RESP__INIT;
+	*message = init_value;
+}
+size_t
+mgmt__system_rebuild_manage_resp__get_packed_size(const Mgmt__SystemRebuildManageResp *message)
+{
+	assert(message->base.descriptor == &mgmt__system_rebuild_manage_resp__descriptor);
+	return protobuf_c_message_get_packed_size((const ProtobufCMessage *)(message));
+}
+size_t
+mgmt__system_rebuild_manage_resp__pack(const Mgmt__SystemRebuildManageResp *message, uint8_t *out)
+{
+	assert(message->base.descriptor == &mgmt__system_rebuild_manage_resp__descriptor);
+	return protobuf_c_message_pack((const ProtobufCMessage *)message, out);
+}
+size_t
+mgmt__system_rebuild_manage_resp__pack_to_buffer(const Mgmt__SystemRebuildManageResp *message,
+						 ProtobufCBuffer                     *buffer)
+{
+	assert(message->base.descriptor == &mgmt__system_rebuild_manage_resp__descriptor);
+	return protobuf_c_message_pack_to_buffer((const ProtobufCMessage *)message, buffer);
+}
+Mgmt__SystemRebuildManageResp *
+mgmt__system_rebuild_manage_resp__unpack(ProtobufCAllocator *allocator, size_t len,
+					 const uint8_t *data)
+{
+	return (Mgmt__SystemRebuildManageResp *)protobuf_c_message_unpack(
+	    &mgmt__system_rebuild_manage_resp__descriptor, allocator, len, data);
+}
+void
+mgmt__system_rebuild_manage_resp__free_unpacked(Mgmt__SystemRebuildManageResp *message,
+						ProtobufCAllocator            *allocator)
+{
+	if (!message)
+		return;
+	assert(message->base.descriptor == &mgmt__system_rebuild_manage_resp__descriptor);
+	protobuf_c_message_free_unpacked((ProtobufCMessage *)message, allocator);
+}
+void
+mgmt__system_self_heal_eval_req__init(Mgmt__SystemSelfHealEvalReq *message)
+{
+	static const Mgmt__SystemSelfHealEvalReq init_value = MGMT__SYSTEM_SELF_HEAL_EVAL_REQ__INIT;
+	*message                                            = init_value;
+}
+size_t
+mgmt__system_self_heal_eval_req__get_packed_size(const Mgmt__SystemSelfHealEvalReq *message)
+{
+	assert(message->base.descriptor == &mgmt__system_self_heal_eval_req__descriptor);
+	return protobuf_c_message_get_packed_size((const ProtobufCMessage *)(message));
+}
+size_t
+mgmt__system_self_heal_eval_req__pack(const Mgmt__SystemSelfHealEvalReq *message, uint8_t *out)
+{
+	assert(message->base.descriptor == &mgmt__system_self_heal_eval_req__descriptor);
+	return protobuf_c_message_pack((const ProtobufCMessage *)message, out);
+}
+size_t
+mgmt__system_self_heal_eval_req__pack_to_buffer(const Mgmt__SystemSelfHealEvalReq *message,
+						ProtobufCBuffer                   *buffer)
+{
+	assert(message->base.descriptor == &mgmt__system_self_heal_eval_req__descriptor);
+	return protobuf_c_message_pack_to_buffer((const ProtobufCMessage *)message, buffer);
+}
+Mgmt__SystemSelfHealEvalReq *
+mgmt__system_self_heal_eval_req__unpack(ProtobufCAllocator *allocator, size_t len,
+					const uint8_t *data)
+{
+	return (Mgmt__SystemSelfHealEvalReq *)protobuf_c_message_unpack(
+	    &mgmt__system_self_heal_eval_req__descriptor, allocator, len, data);
+}
+void
+mgmt__system_self_heal_eval_req__free_unpacked(Mgmt__SystemSelfHealEvalReq *message,
+					       ProtobufCAllocator          *allocator)
+{
+	if (!message)
+		return;
+	assert(message->base.descriptor == &mgmt__system_self_heal_eval_req__descriptor);
+	protobuf_c_message_free_unpacked((ProtobufCMessage *)message, allocator);
+}
 void   mgmt__system_query_req__init
                      (Mgmt__SystemQueryReq         *message)
 {
@@ -1822,6 +1989,154 @@ const ProtobufCMessageDescriptor mgmt__system_drain_resp__descriptor =
   1,  mgmt__system_drain_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__system_drain_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__system_rebuild_manage_req__field_descriptors[3] = {
+    {
+	"sys", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__SystemRebuildManageReq, sys), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"op_code", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__SystemRebuildManageReq, op_code), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"force", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0,   /* quantifier_offset */
+	offsetof(Mgmt__SystemRebuildManageReq, force), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
+    },
+};
+static const unsigned mgmt__system_rebuild_manage_req__field_indices_by_name[] = {
+    2, /* field[2] = force */
+    1, /* field[1] = op_code */
+    0, /* field[0] = sys */
+};
+static const ProtobufCIntRange   mgmt__system_rebuild_manage_req__number_ranges[1 + 1] = {{1, 0},
+											  {0, 3}};
+const ProtobufCMessageDescriptor mgmt__system_rebuild_manage_req__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.SystemRebuildManageReq",
+    "SystemRebuildManageReq",
+    "Mgmt__SystemRebuildManageReq",
+    "mgmt",
+    sizeof(Mgmt__SystemRebuildManageReq),
+    3,
+    mgmt__system_rebuild_manage_req__field_descriptors,
+    mgmt__system_rebuild_manage_req__field_indices_by_name,
+    1,
+    mgmt__system_rebuild_manage_req__number_ranges,
+    (ProtobufCMessageInit)mgmt__system_rebuild_manage_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_rebuild_manage_result__field_descriptors[4] = {
+    {
+	"id", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolRebuildManageResult, id), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"op_code", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0,  /* quantifier_offset */
+	offsetof(Mgmt__PoolRebuildManageResult, op_code), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"errored", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0,    /* quantifier_offset */
+	offsetof(Mgmt__PoolRebuildManageResult, errored), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"msg", 4, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolRebuildManageResult, msg), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+};
+static const unsigned mgmt__pool_rebuild_manage_result__field_indices_by_name[] = {
+    2, /* field[2] = errored */
+    0, /* field[0] = id */
+    3, /* field[3] = msg */
+    1, /* field[1] = op_code */
+};
+static const ProtobufCIntRange   mgmt__pool_rebuild_manage_result__number_ranges[1 + 1] = {{1, 0},
+											   {0, 4}};
+const ProtobufCMessageDescriptor mgmt__pool_rebuild_manage_result__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.PoolRebuildManageResult",
+    "PoolRebuildManageResult",
+    "Mgmt__PoolRebuildManageResult",
+    "mgmt",
+    sizeof(Mgmt__PoolRebuildManageResult),
+    4,
+    mgmt__pool_rebuild_manage_result__field_descriptors,
+    mgmt__pool_rebuild_manage_result__field_indices_by_name,
+    1,
+    mgmt__pool_rebuild_manage_result__number_ranges,
+    (ProtobufCMessageInit)mgmt__pool_rebuild_manage_result__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__system_rebuild_manage_resp__field_descriptors[1] = {
+    {
+	"results", 1, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_MESSAGE,
+	offsetof(Mgmt__SystemRebuildManageResp, n_results),
+	offsetof(Mgmt__SystemRebuildManageResp, results),
+	&mgmt__pool_rebuild_manage_result__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL                                           /* reserved1,reserved2, etc */
+    },
+};
+static const unsigned mgmt__system_rebuild_manage_resp__field_indices_by_name[] = {
+    0, /* field[0] = results */
+};
+static const ProtobufCIntRange   mgmt__system_rebuild_manage_resp__number_ranges[1 + 1] = {{1, 0},
+											   {0, 1}};
+const ProtobufCMessageDescriptor mgmt__system_rebuild_manage_resp__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.SystemRebuildManageResp",
+    "SystemRebuildManageResp",
+    "Mgmt__SystemRebuildManageResp",
+    "mgmt",
+    sizeof(Mgmt__SystemRebuildManageResp),
+    1,
+    mgmt__system_rebuild_manage_resp__field_descriptors,
+    mgmt__system_rebuild_manage_resp__field_indices_by_name,
+    1,
+    mgmt__system_rebuild_manage_resp__number_ranges,
+    (ProtobufCMessageInit)mgmt__system_rebuild_manage_resp__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__system_self_heal_eval_req__field_descriptors[1] = {
+    {
+	"sys", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__SystemSelfHealEvalReq, sys), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+};
+static const unsigned mgmt__system_self_heal_eval_req__field_indices_by_name[] = {
+    0, /* field[0] = sys */
+};
+static const ProtobufCIntRange   mgmt__system_self_heal_eval_req__number_ranges[1 + 1] = {{1, 0},
+											  {0, 1}};
+const ProtobufCMessageDescriptor mgmt__system_self_heal_eval_req__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.SystemSelfHealEvalReq",
+    "SystemSelfHealEvalReq",
+    "Mgmt__SystemSelfHealEvalReq",
+    "mgmt",
+    sizeof(Mgmt__SystemSelfHealEvalReq),
+    1,
+    mgmt__system_self_heal_eval_req__field_descriptors,
+    mgmt__system_self_heal_eval_req__field_indices_by_name,
+    1,
+    mgmt__system_self_heal_eval_req__number_ranges,
+    (ProtobufCMessageInit)mgmt__system_self_heal_eval_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__system_query_req__field_descriptors[4] =
 {

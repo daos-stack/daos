@@ -502,13 +502,7 @@ again:
 					struct daos_prop_entry	*prop_entry;
 					struct daos_co_status	stat = { 0 };
 
-					if (uuid_is_null(chdl.ch_cont)) {
-						/* Skip for container server handler */
-						iv_entry.iv_capa.sec_capas =
-							ds_sec_get_rebuild_cont_capabilities();
-						iv_entry.iv_capa.flags = 0;
-						D_GOTO(out, rc = 0);
-					}
+					D_ASSERT(!uuid_is_null(chdl.ch_cont));
 					rc = ds_cont_get_prop(entry->ns->iv_pool_uuid,
 							      chdl.ch_cont, &prop);
 					if (rc) {
@@ -980,6 +974,11 @@ cont_iv_capa_refresh_ult(void *data)
 		D_GOTO(out, rc);
 
 	D_ASSERT(pool != NULL);
+	/* Trying to fetch server handle through IV_CONT_CAPA indicates a BUG */
+	D_ASSERTF(uuid_compare(pool->sp_srv_cont_hdl, arg->cont_hdl_uuid) != 0,
+		  "srv_hdl:" DF_UUID ", hdl:" DF_UUID "", DP_UUID(pool->sp_srv_cont_hdl),
+		  DP_UUID(arg->cont_hdl_uuid));
+
 	if (arg->invalidate_current) {
 		rc = cont_iv_capability_invalidate(pool->sp_iv_ns,
 						   arg->cont_hdl_uuid,
@@ -1662,9 +1661,68 @@ ds_cont_fetch_prop(uuid_t po_uuid, uuid_t co_uuid, daos_prop_t *cont_prop)
 	return cont_iv_prop_fetch(po_uuid, co_uuid, cont_prop);
 }
 
+struct copy_hdl_arg {
+	struct ds_pool *pool;
+	uuid_t          srv_cont_hdl;
+};
+
+static int
+copy_srv_cont_hdl(void *arg)
+{
+	struct copy_hdl_arg *copy_arg = arg;
+	struct ds_pool      *pool     = copy_arg->pool;
+
+	if (!uuid_is_null(pool->sp_srv_cont_hdl)) {
+		uuid_copy(copy_arg->srv_cont_hdl, pool->sp_srv_cont_hdl);
+		return 0;
+	}
+	return -DER_NO_HDL;
+}
+
 int
 ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 {
+	struct ds_pool_child *pool_child;
+	struct ds_cont_hdl   *hdl;
+
+	pool_child = ds_pool_child_lookup(po_uuid);
+	if (pool_child == NULL) {
+		D_ERROR(DF_UUID ": Failed to find pool child.", DP_UUID(po_uuid));
+		return -DER_NO_HDL;
+	}
+
+	/* Return a retry-able error when the srv handle not propagated */
+	if (d_list_empty(&pool_child->spc_srv_cont_hdl)) {
+		struct copy_hdl_arg arg;
+		int                 rc;
+
+		/*
+		 * Sometimes the srv container handle failed to be propagated to the pool
+		 * child when it's target is in DOWN state. Let's fix it here.
+		 */
+		rc = dss_ult_execute(copy_srv_cont_hdl, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+		if (!rc) {
+			rc = ds_cont_srv_open(po_uuid, arg.srv_cont_hdl);
+			if (!rc) {
+				D_ASSERT(!d_list_empty(&pool_child->spc_srv_cont_hdl));
+				goto srv_hdl_ready;
+			}
+		}
+		ds_pool_child_put(pool_child);
+		D_INFO(DF_UUID ": Server handle isn't propagated yet.\n", DP_UUID(po_uuid));
+		return -DER_STALE;
+	}
+
+srv_hdl_ready:
+	hdl = d_list_entry(pool_child->spc_srv_cont_hdl.next, struct ds_cont_hdl, sch_link);
+	D_ASSERT(!uuid_is_null(hdl->sch_uuid));
+
+	ds_pool_child_put(pool_child);
+	if (uuid_compare(hdl->sch_uuid, coh_uuid) == 0) {
+		*coh_p = hdl;
+		return 0;
+	}
+
 	/* NB: it can be called from any xstream */
 	return cont_iv_hdl_fetch(coh_uuid, po_uuid, coh_p);
 }

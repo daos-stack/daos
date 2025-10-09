@@ -1584,6 +1584,47 @@ mgmt__pool_rebuild_stop_req__free_unpacked(Mgmt__PoolRebuildStopReq *message,
 	assert(message->base.descriptor == &mgmt__pool_rebuild_stop_req__descriptor);
 	protobuf_c_message_free_unpacked((ProtobufCMessage *)message, allocator);
 }
+void
+mgmt__pool_self_heal_eval_req__init(Mgmt__PoolSelfHealEvalReq *message)
+{
+	static const Mgmt__PoolSelfHealEvalReq init_value = MGMT__POOL_SELF_HEAL_EVAL_REQ__INIT;
+	*message                                          = init_value;
+}
+size_t
+mgmt__pool_self_heal_eval_req__get_packed_size(const Mgmt__PoolSelfHealEvalReq *message)
+{
+	assert(message->base.descriptor == &mgmt__pool_self_heal_eval_req__descriptor);
+	return protobuf_c_message_get_packed_size((const ProtobufCMessage *)(message));
+}
+size_t
+mgmt__pool_self_heal_eval_req__pack(const Mgmt__PoolSelfHealEvalReq *message, uint8_t *out)
+{
+	assert(message->base.descriptor == &mgmt__pool_self_heal_eval_req__descriptor);
+	return protobuf_c_message_pack((const ProtobufCMessage *)message, out);
+}
+size_t
+mgmt__pool_self_heal_eval_req__pack_to_buffer(const Mgmt__PoolSelfHealEvalReq *message,
+					      ProtobufCBuffer                 *buffer)
+{
+	assert(message->base.descriptor == &mgmt__pool_self_heal_eval_req__descriptor);
+	return protobuf_c_message_pack_to_buffer((const ProtobufCMessage *)message, buffer);
+}
+Mgmt__PoolSelfHealEvalReq *
+mgmt__pool_self_heal_eval_req__unpack(ProtobufCAllocator *allocator, size_t len,
+				      const uint8_t *data)
+{
+	return (Mgmt__PoolSelfHealEvalReq *)protobuf_c_message_unpack(
+	    &mgmt__pool_self_heal_eval_req__descriptor, allocator, len, data);
+}
+void
+mgmt__pool_self_heal_eval_req__free_unpacked(Mgmt__PoolSelfHealEvalReq *message,
+					     ProtobufCAllocator        *allocator)
+{
+	if (!message)
+		return;
+	assert(message->base.descriptor == &mgmt__pool_self_heal_eval_req__descriptor);
+	protobuf_c_message_free_unpacked((ProtobufCMessage *)message, allocator);
+}
 static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[14] = {
     {
 	"uuid", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
@@ -1891,33 +1932,31 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[7]
     },
 };
 static const unsigned mgmt__pool_evict_req__field_indices_by_name[] = {
-  4,   /* field[4] = destroy */
-  5,   /* field[5] = force_destroy */
-  3,   /* field[3] = handles */
-  1,   /* field[1] = id */
-  6,   /* field[6] = machine */
-  2,   /* field[2] = svc_ranks */
-  0,   /* field[0] = sys */
+    4, /* field[4] = destroy */
+    5, /* field[5] = force_destroy */
+    3, /* field[3] = handles */
+    1, /* field[1] = id */
+    6, /* field[6] = machine */
+    2, /* field[2] = svc_ranks */
+    0, /* field[0] = sys */
 };
-static const ProtobufCIntRange mgmt__pool_evict_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 7 }
-};
-const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.PoolEvictReq",
-  "PoolEvictReq",
-  "Mgmt__PoolEvictReq",
-  "mgmt",
-  sizeof(Mgmt__PoolEvictReq),
-  7,
-  mgmt__pool_evict_req__field_descriptors,
-  mgmt__pool_evict_req__field_indices_by_name,
-  1,  mgmt__pool_evict_req__number_ranges,
-  (ProtobufCMessageInit) mgmt__pool_evict_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCIntRange   mgmt__pool_evict_req__number_ranges[1 + 1] = {{1, 0}, {0, 7}};
+const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.PoolEvictReq",
+    "PoolEvictReq",
+    "Mgmt__PoolEvictReq",
+    "mgmt",
+    sizeof(Mgmt__PoolEvictReq),
+    7,
+    mgmt__pool_evict_req__field_descriptors,
+    mgmt__pool_evict_req__field_indices_by_name,
+    1,
+    mgmt__pool_evict_req__number_ranges,
+    (ProtobufCMessageInit)mgmt__pool_evict_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__pool_evict_resp__field_descriptors[2] = {
     {
@@ -3649,6 +3688,56 @@ const ProtobufCMessageDescriptor mgmt__pool_rebuild_stop_req__descriptor        
     1,
     mgmt__pool_rebuild_stop_req__number_ranges,
     (ProtobufCMessageInit)mgmt__pool_rebuild_stop_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_self_heal_eval_req__field_descriptors[4] = {
+    {
+	"sys", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolSelfHealEvalReq, sys), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"id", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolSelfHealEvalReq, id), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"prop_val", 4, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolSelfHealEvalReq, prop_val), NULL, &protobuf_c_empty_string,
+	0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"svc_ranks", 5, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__PoolSelfHealEvalReq, n_svc_ranks),
+	offsetof(Mgmt__PoolSelfHealEvalReq, svc_ranks), NULL, NULL,
+	0 | PROTOBUF_C_FIELD_FLAG_PACKED, /* flags */
+	0, NULL, NULL                     /* reserved1,reserved2, etc */
+    },
+};
+static const unsigned mgmt__pool_self_heal_eval_req__field_indices_by_name[] = {
+    1, /* field[1] = id */
+    2, /* field[2] = prop_val */
+    3, /* field[3] = svc_ranks */
+    0, /* field[0] = sys */
+};
+static const ProtobufCIntRange mgmt__pool_self_heal_eval_req__number_ranges[2 + 1] = {
+    {1, 0}, {4, 2}, {0, 4}};
+const ProtobufCMessageDescriptor mgmt__pool_self_heal_eval_req__descriptor = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "mgmt.PoolSelfHealEvalReq",
+    "PoolSelfHealEvalReq",
+    "Mgmt__PoolSelfHealEvalReq",
+    "mgmt",
+    sizeof(Mgmt__PoolSelfHealEvalReq),
+    4,
+    mgmt__pool_self_heal_eval_req__field_descriptors,
+    mgmt__pool_self_heal_eval_req__field_indices_by_name,
+    2,
+    mgmt__pool_self_heal_eval_req__number_ranges,
+    (ProtobufCMessageInit)mgmt__pool_self_heal_eval_req__init,
     NULL,
     NULL,
     NULL /* reserved[123] */
