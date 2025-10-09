@@ -4599,8 +4599,8 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	if (rc != 0)
 		return rc;
 
-	tins->ti_priv = priv;
-	tins->ti_coh = coh;
+	tins->ti_priv     = priv;
+	tins->ti_coh      = coh;
 	tins->ti_root_off = UMOFF_NULL;
 
 	if (!UMOFF_IS_NULL(root_off)) {
@@ -4611,7 +4611,7 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	tins->ti_root = root;
 
 	if (root != NULL && root->tr_class != 0) {
-		tree_class = root->tr_class;
+		tree_class  = root->tr_class;
 		*tree_feats = root->tr_feats;
 	}
 
