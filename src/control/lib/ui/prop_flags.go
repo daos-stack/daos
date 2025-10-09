@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -157,6 +158,9 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 		}
 		if len(value) == 0 {
 			return propError("value must not be empty")
+		}
+		if _, set := f.ParsedProps[key]; set {
+			return propError("%q: same key was specified more than once", key)
 		}
 
 		f.ParsedProps[key] = value
