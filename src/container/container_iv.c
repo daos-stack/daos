@@ -450,6 +450,7 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		  d_sg_list_t *dst, void **priv)
 {
 	struct cont_iv_entry	*src_iv;
+	struct cont_iv_entry     iv_entry = {0};
 	daos_handle_t		root_hdl;
 	d_iov_t			key_iov;
 	d_iov_t			val_iov;
@@ -497,7 +498,6 @@ again:
 				rc1 = ds_cont_hdl_rdb_lookup(entry->ns->iv_pool_uuid,
 							     civ_key->cont_uuid, &chdl);
 				if (rc1 == 0) {
-					struct cont_iv_entry	iv_entry = { 0 };
 					daos_prop_t		*prop = NULL;
 					struct daos_prop_entry	*prop_entry;
 					struct daos_co_status	stat = { 0 };
@@ -541,8 +541,40 @@ again:
 				} else {
 					rc = -DER_NONEXIST;
 				}
+			} else if (class_id == IV_CONT_TRACK_EPOCH) {
+				uint64_t ec_agg_eph;
+
+				rc = ds_cont_ec_agg_eph_rdb_lookup(entry->ns->iv_pool_uuid,
+								   civ_key->cont_uuid, &ec_agg_eph);
+				if (rc == 0) {
+					uuid_copy(iv_entry.cont_uuid, civ_key->cont_uuid);
+					iv_entry.iv_track_eph.ite_ec_agg_eph  = ec_agg_eph;
+					iv_entry.iv_track_eph.ite_rank = dss_self_rank();
+					d_iov_set(&val_iov, &iv_entry, sizeof(iv_entry));
+					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+					DL_CDEBUG(
+					    rc != 0, DLOG_ERR, DB_MD, rc,
+					    DF_CONT ": dbtree_update ec_agg_eph " DF_X64,
+					    DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid),
+					    ec_agg_eph);
+					if (rc)
+						goto failed;
+					/* on master node will not trigger on_refresh callback,
+					 * so need to explicitly refresh its own cont child's
+					 * sc_ec_agg_eph_boundary especially for the case of
+					 * restart that the value is zero.
+					 * pass zero stable epoch that won't refresh it, only to
+					 * fetch+refresh EC aggregation epoch.
+					 */
+					rc = ds_cont_tgt_refresh_track_eph(entry->ns->iv_pool_uuid,
+									   civ_key->cont_uuid,
+									   ec_agg_eph, 0);
+					if (rc == 0)
+						goto again;
+				}
 			}
 		}
+failed:
 		D_DEBUG(DB_MGMT, DF_CONT "lookup cont: rc " DF_RC "\n",
 			DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
@@ -647,8 +679,15 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_TRACK_EPOCH) {
 			rc = cont_iv_ent_track_eph_refresh(entry, key, src);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(
+					    rc, DF_CONT " cont_iv_ent_agg_eph_refresh ignore",
+					    DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
+					rc = 0;
+				}
 				D_GOTO(out, rc);
+			}
 		}
 	}
 
@@ -1117,9 +1156,8 @@ int
 cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 			  daos_epoch_t stable_eph)
 {
-	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
-						 0, CRT_IV_SYNC_LAZY,
-						 IV_CONT_TRACK_EPOCH);
+	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph, 0,
+						 CRT_IV_SYNC_EAGER, IV_CONT_TRACK_EPOCH);
 }
 
 int
