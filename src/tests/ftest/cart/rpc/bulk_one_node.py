@@ -22,13 +22,7 @@ class CartBulkOneNodeTest(CartTest):
         :avocado: tags=CartBulkOneNodeTest,test_cart_bulk_one_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
-
-        try:
-            srv_rtn = self.launch_cmd_bg(srvcmd)
-        # pylint: disable=broad-except
-        except Exception as my_except:
-            self.print("Exception in launching server : {}".format(my_except))
-            self.fail("Test failed.\n")
+        srv_rtn = self.launch_cmd_bg(srvcmd)
 
         # Verify the server is still running.
         if not self.check_process(srv_rtn):
