@@ -99,7 +99,7 @@ function mount_nvme_drive {
 nvme_class="/sys/class/nvme/"
 function nvme_limit {
     set +x
-    if [ ! -d /sys/class/nvme ]; then
+    if [ ! -d "${nvme_class}" ] || [ -z "$(ls -A "${nvme_class}")" ]; then
         echo "No NVMe devices found"
         return
     fi
