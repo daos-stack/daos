@@ -188,7 +188,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
-					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
 				},
 			},
 		},
@@ -199,7 +199,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TryAgain, nil),
-					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
 				},
 			},
 		},
@@ -208,9 +208,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 				ID: test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolUpgradeResp{},
-				),
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
 			},
 		},
 	} {
@@ -3758,8 +3756,8 @@ func TestControl_PoolSelfHealEval(t *testing.T) {
 		},
 		"self-heal evaluate": {
 			req: &PoolSelfHealEvalReq{
-				ID:      test.MockUUID(),
-				PropVal: "exclude;pool_rebuild",
+				ID:         test.MockUUID(),
+				SysPropVal: "exclude;pool_rebuild",
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
