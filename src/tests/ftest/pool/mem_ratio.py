@@ -22,7 +22,11 @@ class MemRatioTest(TestWithServers):
         Args:
             error (Exception): the error raised during pool creation
         """
-        pattern = "(Insufficient scm size|No space on storage target)"
+        allowed_errors = [
+            "Insufficient scm size",
+            "No space on storage target",
+            "requested NVMe capacity too small"]
+        pattern = f"({'|'.join(allowed_errors)})"
         self.log.debug("Verifying Pool creation failure: %s", error)
         result = self.server_managers[0].search_engine_logs(pattern)
         if not result.passed:
