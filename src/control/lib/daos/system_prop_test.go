@@ -180,19 +180,22 @@ func TestDaos_SystemPropertyKeys(t *testing.T) {
 }
 
 func TestDaos_SystemPropertySelfHealHasFlag(t *testing.T) {
-	if SystemPropertySelfHealHasFlag("none", "exclude") {
+	if SystemPropertySelfHealHasFlag("none", SelfHealFlagExclude) {
 		t.Fatal("value \"none\" should not have flag \"exclude\"")
 	}
-	if SystemPropertySelfHealHasFlag("pool_exclude", "exclude") {
+	if SystemPropertySelfHealHasFlag("pool_exclude", SelfHealFlagExclude) {
 		t.Fatal("value \"pool_exclude\" should not have flag \"exclude\"")
 	}
-	if !SystemPropertySelfHealHasFlag("exclude;pool_rebuild", "pool_rebuild") {
+	if !SystemPropertySelfHealHasFlag("exclude;pool_exclude", SelfHealFlagPoolExclude) {
+		t.Fatal("value \"exclude;pool_exclude\" should have flag \"pool_exclude\"")
+	}
+	if !SystemPropertySelfHealHasFlag("exclude;pool_rebuild", SelfHealFlagPoolRebuild) {
 		t.Fatal("value \"exclude;pool_rebuild\" should have flag \"pool_rebuild\"")
 	}
-	if SystemPropertySelfHealHasFlag("exclude;pool_rebuild", "") {
+	if SystemPropertySelfHealHasFlag("exclude;pool_rebuild", selfHealFlagUnknown) {
 		t.Fatal("value \"exclude;pool_rebuild\" should not have (invalid) flag \"\"")
 	}
-	if SystemPropertySelfHealHasFlag("none", "none") {
-		t.Fatal("value \"none\" should not have (invalid) flag \"none\"")
+	if SystemPropertySelfHealHasFlag("none", selfHealFlagMax) {
+		t.Fatal("value \"none\" should not have (invalid) flag \"max\"")
 	}
 }

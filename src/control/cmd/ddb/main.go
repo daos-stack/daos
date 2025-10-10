@@ -44,6 +44,7 @@ type cliOptions struct {
 	Debug     bool   `long:"debug" description:"enable debug output"`
 	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
+	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
 	Args      struct {
 		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
@@ -188,7 +189,7 @@ Example Paths:
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
 			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-			if err := ddbOpen(ctx, string(opts.Args.VosPath), opts.WriteMode); err != nil {
+			if err := ddbOpen(ctx, string(opts.Args.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
 				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
 			}
 		}

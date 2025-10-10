@@ -160,12 +160,20 @@ extern uuid_t	ds_mgmt_pool_upgrade_uuid;
 void mock_ds_mgmt_pool_upgrade_setup(void);
 
 /*
- * Mock ds_mgmt_rebuild
+ * Mock ds_mgmt_pool_rebuild_X
  */
 extern int                               ds_mgmt_pool_rebuild_return;
 extern uuid_t                            ds_mgmt_pool_rebuild_uuid;
 void
-		mock_ds_mgmt_pool_rebuild_setup(void);
+	      mock_ds_mgmt_pool_rebuild_setup(void);
+
+/*
+ * Mock ds_mgmt_pool_self_heal_eval
+ */
+extern int    ds_mgmt_pool_self_heal_eval_return;
+extern uuid_t ds_mgmt_pool_self_heal_eval_uuid;
+void
+		mock_ds_mgmt_pool_self_heal_eval_setup(void);
 
 /*
  * Mock ds_mgmt_dev_manage_led
