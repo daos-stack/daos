@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -101,6 +102,19 @@ func MockScmNamespace(varIdx ...int32) *ctlpb.ScmNamespace {
 func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
 	native := storage.MockScmMountPoint(varIdx...)
 	pb := new(ScmMountPoint)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
+	}
+
+	return pb.AsProto()
+}
+
+// MockScmNamespaceRamdisk generates specific protobuf SCM namespace message used in tests
+// for multiple packages. Represents ramdisk namespace with associated scm mountpoint info.
+func MockScmNamespaceRamdisk(varIdx ...int32) *ctlpb.ScmNamespace {
+	native := storage.MockScmNamespaceRamdisk(varIdx...)
+	pb := new(ScmNamespace)
 
 	if err := pb.FromNative(native); err != nil {
 		panic(err)
