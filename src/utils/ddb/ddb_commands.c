@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -886,6 +887,7 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 struct dtx_modify_args {
 	struct dv_indexed_tree_path	 itp;
 	struct dtx_id			 dti;
+	bool                             dti_all;
 	daos_handle_t			 coh;
 };
 
@@ -914,10 +916,12 @@ dtx_modify_init(struct ddb_ctx *ctx, char *path, char *dtx_id_str, struct dtx_mo
 		D_GOTO(error, rc);
 	}
 
-	rc = ddb_parse_dtx_id(dtx_id_str, &args->dti);
-	if (!SUCCESS(rc)) {
-		ddb_errorf(ctx, "Invalid dtx_id: %s\n", dtx_id_str);
-		D_GOTO(error, rc);
+	if (!args->dti_all) {
+		rc = ddb_parse_dtx_id(dtx_id_str, &args->dti);
+		if (!SUCCESS(rc)) {
+			ddb_errorf(ctx, "Invalid dtx_id: %s\n", dtx_id_str);
+			D_GOTO(error, rc);
+		}
 	}
 	return 0;
 
@@ -935,7 +939,7 @@ dtx_modify_fini(struct dtx_modify_args *args)
 }
 
 int
-ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_commit_options *opt)
+ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
@@ -964,7 +968,8 @@ ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_commit_options *opt)
 	return rc;
 }
 
-int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt)
+int
+ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
@@ -1074,4 +1079,70 @@ ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
 	}
 
 	return dv_pool_destroy(opt->path);
+}
+
+#define DTI_ALL "all"
+
+struct dtx_active_entry_discard_invalid_cb_arg {
+	struct ddb_ctx         *ctx;
+	struct dtx_modify_args *args;
+};
+
+static int
+dtx_active_entry_discard_invalid(struct dv_dtx_active_entry *entry, void *cb_arg)
+{
+	struct dtx_active_entry_discard_invalid_cb_arg *bundle    = cb_arg;
+	struct ddb_ctx                                 *ctx       = bundle->ctx;
+	struct dtx_modify_args                         *args      = bundle->args;
+	int                                             discarded = 0;
+	int                                             rc;
+
+	ddb_printf(ctx, "ID: " DF_DTIF "\n", DP_DTI(&entry->ddtx_id));
+
+	rc = dv_dtx_active_entry_discard_invalid(args->coh, &entry->ddtx_id, &discarded);
+	if (SUCCESS(rc)) {
+		ddb_printf(ctx, "Entry's record(s) discarded: %d\n", discarded);
+	} else if (rc == -DER_NONEXIST) {
+		ddb_print(ctx, "No entry found\n");
+		rc = 0;
+	} else {
+		ddb_errorf(ctx, "Error: " DF_RC "\n", DP_RC(rc));
+	}
+
+	return 0;
+}
+
+int
+ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt)
+{
+	struct dtx_modify_args                         args   = {0};
+	struct dtx_active_entry_discard_invalid_cb_arg bundle = {.ctx = ctx, .args = &args};
+	int                                            rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
+	if (opt->dtx_id != NULL && strcmp(opt->dtx_id, DTI_ALL) == 0) {
+		args.dti_all = true;
+	}
+
+	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
+	if (!SUCCESS(rc)) {
+		return rc;
+	}
+
+	if (args.dti_all) {
+		rc = dv_dtx_get_act_table(args.coh, dtx_active_entry_discard_invalid, &bundle);
+		if (!SUCCESS(rc)) {
+			return rc;
+		}
+	} else {
+		struct dv_dtx_active_entry entry = {.ddtx_id = args.dti};
+		dtx_active_entry_discard_invalid(&entry, &bundle);
+	}
+
+	dtx_modify_fini(&args);
+	return rc;
 }
