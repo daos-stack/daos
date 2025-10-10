@@ -989,7 +989,7 @@ do_fdcallscheck(void **state)
 
 	fd_new = 10000;
 	flag   = O_CLOEXEC;
-	rc = dup3(fd, fd_new, flag);
+	rc     = dup3(fd, fd_new, flag);
 	assert_true(rc == fd_new);
 
 	rc = close(fd_new);
@@ -997,7 +997,7 @@ do_fdcallscheck(void **state)
 
 	/* flag different from O_CLOEXEC is not supported */
 	flag = ~flag;
-	rc = dup3(fd, fd_new, flag);
+	rc   = dup3(fd, fd_new, flag);
 	assert_true(rc == -1);
 	assert_true(errno == EINVAL);
 
