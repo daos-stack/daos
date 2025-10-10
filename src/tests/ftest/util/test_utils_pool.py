@@ -22,7 +22,7 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pools(dmg, add_pool_kwargs, error_handler=None, query_on_error=True):
+def add_pools(dmg, add_pool_kwargs, error_handler=None):
     """Add multiple TestPool objects to the test.
 
     Args:
@@ -32,8 +32,6 @@ def add_pools(dmg, add_pool_kwargs, error_handler=None, query_on_error=True):
             pool. Must at least include the 'test' kwargs. See add_pool() for other options.
         error_handler (method, optional): optional method to call when a pool create fails. Defaults
             to None.
-        query_on_error (bool, optional): whether or not to run dmg pool query usage if the pool
-            create fails to provide additional debug. Defaults to True.
 
     Returns:
         list: a list of new pool objects
@@ -46,23 +44,22 @@ def add_pools(dmg, add_pool_kwargs, error_handler=None, query_on_error=True):
 
     # Add the requested pools
     pools = []
-    for kwargs in add_pool_kwargs:
-        _restore = kwargs.get("set_logmasks", True)
-        kwargs["set_logmasks"] = False
-        try:
-            pools.append(add_pool(**kwargs))
-            pools[-1].set_logmasks.value = _restore
-        except TestFail as error:
-            if query_on_error:
-                query_kwargs = {"show_usable": True, "mem_ratio": kwargs.get("mem_ratio")}
-                dmg.storage_query_usage(**query_kwargs)
-            if not error_handler:
-                raise
-            error_handler(error)
-
-    if _any_create:
-        # Reset the log mask after the last pool create
-        dmg.server_set_logmasks(raise_exception=False)
+    try:
+        for kwargs in add_pool_kwargs:
+            # Disable setting/resetting log masks for each individual pool create
+            _restore = kwargs.get("set_logmasks", True)
+            kwargs["set_logmasks"] = False
+            try:
+                pools.append(add_pool(**kwargs))
+                pools[-1].set_logmasks.value = _restore
+            except TestFail as error:
+                if not error_handler:
+                    raise
+                error_handler(error)
+    finally:
+        if _any_create:
+            # Reset the log mask after the last pool create
+            dmg.server_set_logmasks(raise_exception=False)
 
     return pools
 
@@ -303,6 +300,9 @@ class TestPool(TestDaosApiBase):
         # Parameter to control log mask enable/disable for pool create/destroy
         self.set_logmasks = BasicParameter(None, True)
 
+        # Parameter to control running 'dmg storage query usage --show_usable' if pool create fails
+        self.query_on_create_error = BasicParameter(None, False)
+
         self.pool = None
         self.info = None
         self.svc_ranks = None
@@ -488,6 +488,9 @@ class TestPool(TestDaosApiBase):
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
         finally:
+            if self.query_on_create_error.value is True:
+                query_kwargs = {"show_usable": True, "mem_ratio": kwargs.get("mem_ratio")}
+                self.dmg.storage_query_usage(**query_kwargs)
             if self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
 

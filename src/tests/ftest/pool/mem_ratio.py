@@ -82,7 +82,8 @@ class MemRatioTest(TestWithServers):
                     "test": self,
                     "dmg": dmg.copy(),
                     "size": _sizes[index],
-                    "mem_ratio": _ratios[index]})
+                    "mem_ratio": _ratios[index],
+                    "query_on_create_error": True})
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
@@ -118,7 +119,7 @@ class MemRatioTest(TestWithServers):
                     "mem_file_bytes": "<ERROR>",
                     "create_ratio": 0
                 }
-                errors.append(f"{name} - Invalid dmg pool create response: {_result}")
+                errors.append(f"{name} - Unexpected dmg pool create response: {_result}")
 
         # Verify the pool blob and memory file sizes align with the requested mem ratio
         self.log_step(f"Query the {len(pools)} pool(s)")
@@ -148,7 +149,7 @@ class MemRatioTest(TestWithServers):
                 data[name]["tier_stats(query)"] = "<ERROR>"
                 data[name]["mem_file_bytes(query)"] = "<ERROR>"
                 data[name]["query_ratio"] = 0
-                errors.append(f"{name} - Invalid dmg pool query response: {query}")
+                errors.append(f"{name} - Unexpected dmg pool query response: {query}")
 
         # Report the test results
         if not data:
