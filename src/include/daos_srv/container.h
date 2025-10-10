@@ -37,6 +37,8 @@ void ds_cont_svc_step_down(struct cont_svc *svc);
 int
     ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
+int
+    ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid);
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
@@ -78,7 +80,9 @@ struct ds_cont_child {
 	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_props_fetched : 1, sc_stopping : 1,
 	    sc_destroying : 1, sc_vos_agg_active : 1, sc_ec_agg_active : 1,
 	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
-	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1;
+	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1,
+	    /* flag of sc_ec_agg_eph_boundary valid */
+	    sc_ec_agg_eph_valid : 1;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 

@@ -2,7 +2,7 @@
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
-/* groovylint-disable ParameterName-0, VariableName */
+/* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
  * Copyright 2025 Hewlett Packard Enterprise Development LP
@@ -141,7 +141,6 @@ void fixup_rpmlintrc() {
     writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
 }
 
-
 void uploadNewRPMs(String target, String stage) {
     buildRpmPost target: target, condition: stage, rpmlint: false, new_rpm: true
 }
@@ -199,11 +198,11 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     }
 
     // Skip the stage if any Skip-build-<distro>-<compiler> pragmas are true
-    String pragma_names = ["build"]
+    String pragma_names = ['build']
     if (distro && compiler) {
         pragma_names << "build-${distro}-${compiler}"
     }
-    def any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
+    Boolean any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
     if (any_pragma_skip) {
         println("[${env.STAGE_NAME}] Skipping build stage for due to Skip-[${pragma_names}] pragma")
         return true

@@ -2407,6 +2407,16 @@ new_open_pthread(const char *pathname, int oflags, ...)
 	return rc;
 }
 
+int
+creat(const char *path, mode_t mode)
+{
+	/* https://linux.die.net/man/3/creat */
+	return new_open_libc(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
+}
+
+int
+creat64(const char *path, mode_t mode) __attribute__((alias("creat")));
+
 /* Search a fd in fd hash table. Remove it in case it is found. Also free the fake fd.
  * Return true if fd is found. Return false if fd is not found.
  */
