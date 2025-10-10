@@ -6497,8 +6497,8 @@ new_dup3(int oldfd, int newfd, int flags)
 	if (d_get_fd_redirected(oldfd) < FD_FILE_BASE && d_get_fd_redirected(newfd) < FD_FILE_BASE)
 		return libc_dup3(oldfd, newfd, flags);
 
-	/* only O_CLOEXEC is accepted for flags */
-	if (flags != O_CLOEXEC) {
+	/* only O_CLOEXEC and 0 are accepted for flags in glibc */
+	if (flags != O_CLOEXEC && flags != 0) {
 		errno = EINVAL;
 		return (-1);
 	}
