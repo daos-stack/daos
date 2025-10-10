@@ -132,6 +132,7 @@ struct ec_agg_param {
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
+	struct ds_cont_child	*ap_cont;
 	uint32_t		 ap_credits_max; /* # of tight loops to yield */
 	uint32_t		 ap_credits;     /* # of tight loops          */
 	uint32_t		 ap_initialized:1; /* initialized flag */
@@ -787,11 +788,11 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 	daos_recx_t		 recx = { 0 };
 	daos_epoch_range_t	 epoch_range = { 0 };
 	struct ec_agg_param	*ap;
-	struct ec_agg_extent	*ext;
 	uint32_t		 len = ec_age2cs(entry);
 	uint32_t		 pidx = ec_age2pidx(entry);
 	struct daos_csummer	*csummer;
 	struct dcs_iod_csums	*iod_csums = NULL;
+	int			 err;
 	int			 rc = 0;
 
 	ap = container_of(entry, struct ec_agg_param, ap_agg_entry);
@@ -837,21 +838,16 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 		}
 	}
 
-	d_list_for_each_entry(ext, &entry->ae_cur_stripe.as_dextents, ae_link) {
-		int err;
-
-		epoch_range.epr_lo = epoch_range.epr_hi = ext->ae_epoch;
-		err = vos_obj_array_remove(ap->ap_cont_handle,
-					   entry->ae_oid,
-					   &epoch_range,
-					   &entry->ae_dkey,
-					   &entry->ae_akey,
-					   &ext->ae_recx);
-		if (err)
-			D_ERROR("array_remove fails: "DF_RC"\n", DP_RC(err));
-		if (!rc && err)
-			rc = err;
-	}
+	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * ec_age2ss(entry);
+	recx.rx_nr  = ec_age2ss(entry);
+	epoch_range.epr_lo = ap->ap_epr.epr_lo;
+	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+	err = vos_obj_array_remove(ap->ap_cont_handle, entry->ae_oid, &epoch_range,
+				   &entry->ae_dkey, &entry->ae_akey, &recx);
+	if (err)
+		D_ERROR("array_remove fails: "DF_RC"\n", DP_RC(err));
+	if (!rc && err)
+		rc = err;
 out:
 	return rc;
 }
@@ -1761,11 +1757,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
 	 * (see obj_inflight_io_check()).
 	 */
-	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
-		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
-		return -1;
-	}
-
 	D_ALLOC_ARRAY(stripe_ud.asu_recxs,
 		      entry->ae_cur_stripe.as_extent_cnt + 1);
 	if (stripe_ud.asu_recxs == NULL) {
@@ -1789,6 +1780,8 @@ agg_process_holes(struct ec_agg_entry *entry)
 		goto out;
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
+
+	agg_param->ap_cont->sc_ec_agg_updates++;
 	rc = dss_ult_create(agg_process_holes_ult, &stripe_ud,
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
@@ -1839,6 +1832,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	}
 
 ev_out:
+	agg_param->ap_cont->sc_ec_agg_updates--;
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 
@@ -1931,6 +1925,14 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 		goto out;
 	}
 
+	if (agg_param->ap_cont->sc_pool->spc_pool->sp_rebuilding > 0 ||
+	    agg_param->ap_cont->sc_pool->spc_remote_scan) {
+		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		update_vos = false;
+		rc = -1;
+		goto out;
+	}
+
 	/* With parity and some newer partial replicas, possibly holes.
 	 * Case 1: with valid hole (hole epoch >= parity epoch), can be handled by
 	 *         agg_process_holes().
@@ -1948,6 +1950,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 
 out:
 	if (update_vos && rc == 0) {
+		agg_param->ap_cont->sc_ec_agg_updates++;
 		if (ec_age2p(entry) > 1)  {
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
@@ -1962,6 +1965,7 @@ out:
 				DL_ERROR(rc, "agg_update_vos failed, write_parity %d",
 					 write_parity);
 		}
+		agg_param->ap_cont->sc_ec_agg_updates--;
 	}
 
 clear_exts:
@@ -2648,6 +2652,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	uuid_copy(info->api_cont_uuid, cont->sc_uuid);
 	info->api_pool = cont->sc_pool->spc_pool;
 
+	agg_param->ap_cont		= cont;
 	agg_param->ap_cont_handle	= cont->sc_hdl;
 	agg_param->ap_yield_func	= agg_rate_ctl;
 	agg_param->ap_yield_arg		= param;

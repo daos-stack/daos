@@ -136,6 +136,7 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_batched_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
+	int			 sc_ec_agg_updates;
 };
 
 struct agg_param {

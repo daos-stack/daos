@@ -2865,6 +2865,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	uint32_t		 minimum_nr;
 	uint32_t		 enum_flags;
 	uint32_t		 num;
+	int			 waited = 0;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
@@ -3007,6 +3008,14 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 				break;
 			}
 			continue;
+
+		} else if (rc == -DER_FETCH_AGAIN) {
+			waited++;
+			dss_sleep(5000);
+			D_DEBUG(DB_REBUILD,
+				"waited %d seconds for suspending EC aggregation\n", waited * 5);
+			continue;
+
 		} else if (rc && rc != -DER_SHUTDOWN &&
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {

@@ -2539,6 +2539,14 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	D_ASSERT(ioc.ioc_coc != NULL);
+	if (ioc.ioc_coc->sc_pool->spc_pool->sp_rebuilding ||
+	    ioc.ioc_coc->sc_pool->spc_remote_scan) {
+		rc = -DER_UPDATE_AGAIN;
+		goto out;
+	}
+	ioc.ioc_coc->sc_ec_agg_updates++;
+
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
 	if (iod->iod_nr == 0) /* nothing to replicate, directly remove parity */
@@ -2549,7 +2557,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
-		goto out;
+		goto out_agg;
 	}
 	biod = vos_ioh2desc(ioh);
 	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx, CRT_BULK_RW);
@@ -2573,13 +2581,15 @@ end:
 	if (rc) {
 		D_ERROR(DF_UOID " vos_update_end failed: " DF_RC "\n", DP_UOID(oer->er_oid),
 			DP_RC(rc));
-		goto out;
+		goto out_agg;
 	}
 remove_parity:
 	recx.rx_nr = obj_ioc2ec_cs(&ioc);
 	recx.rx_idx = (oer->er_stripenum * recx.rx_nr) | PARITY_INDICATOR;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
 				  &iod->iod_name, &recx);
+out_agg:
+	ioc.ioc_coc->sc_ec_agg_updates--;
 out:
 	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -2619,6 +2629,14 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	if (ioc.ioc_coc->sc_pool->spc_pool->sp_rebuilding ||
+	    ioc.ioc_coc->sc_pool->spc_remote_scan) {
+		rc = -DER_UPDATE_AGAIN;
+		goto out;
+	}
+
+	ioc.ioc_coc->sc_ec_agg_updates++;
+
 	dkey = (daos_key_t *)&oea->ea_dkey;
 	if (parity_bulk != CRT_BULK_NULL) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid, oea->ea_epoch_range.epr_hi,
@@ -2626,7 +2644,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
-			goto out;
+			goto out_agg;
 		}
 		biod = vos_ioh2desc(ioh);
 		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx,
@@ -2659,7 +2677,7 @@ end:
 			} else {
 				D_ERROR(DF_UOID " vos_update_end failed: " DF_RC "\n",
 					DP_UOID(oea->ea_oid), DP_RC(rc));
-				D_GOTO(out, rc);
+				D_GOTO(out_agg, rc);
 			}
 		}
 	}
@@ -2676,6 +2694,8 @@ end:
 	if (rc1)
 		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 			DP_RC(rc1));
+out_agg:
+	ioc.ioc_coc->sc_ec_agg_updates--;
 out:
 	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -3363,8 +3383,21 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 	}
 
-	if (oei->oei_flags & ORF_FOR_MIGRATION)
+	if (oei->oei_flags & ORF_FOR_MIGRATION) {
+		/* EC aggregation is still inflight, rebuild should wait until it's paused */
+		if (ioc->ioc_coc->sc_ec_agg_active || ioc->ioc_coc->sc_ec_agg_updates > 0) {
+			rc = -DER_FETCH_AGAIN;
+			goto failed;
+		}
+
+		/* just in case ds_pool::sp_rebuilding is not set, pause my local EC aggregation
+		 * by setting this bit..
+		 */
+		if (!ioc->ioc_coc->sc_pool->spc_remote_scan)
+			ioc->ioc_coc->sc_pool->spc_remote_scan = 1;
+
 		flags = DTX_FOR_MIGRATION;
+	}
 
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
