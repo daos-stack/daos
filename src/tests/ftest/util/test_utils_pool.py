@@ -487,10 +487,12 @@ class TestPool(TestDaosApiBase):
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
-        finally:
+        except Exception as error:                      # pylint: disable=broad-except
             if self.query_on_create_error.value is True:
                 query_kwargs = {"show_usable": True, "mem_ratio": kwargs.get("mem_ratio")}
                 self.dmg.storage_query_usage(**query_kwargs)
+            raise error
+        finally:
             if self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
 
