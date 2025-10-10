@@ -1102,6 +1102,14 @@ dss_xstreams_init(void)
 		D_INFO("CPU relax interval is set to %u msecs\n",
 		       sched_relax_intvl);
 	}
+	d_getenv_uint("DAOS_SCHED_REQ_NUM_MAX", &sched_max_req_num);
+	if (sched_max_req_num == 0) {
+		D_WARN("Invalid sched max req num %u, set to default %u\n", sched_max_req_num,
+		       SCHED_REQ_NUM_MAX_DEFAULT);
+		sched_max_req_num = SCHED_REQ_NUM_MAX_DEFAULT;
+	} else {
+		D_INFO("max sched req num is set to %u\n", sched_max_req_num);
+	}
 
 	d_agetenv_str(&env, "DAOS_SCHED_RELAX_MODE");
 	if (env) {
