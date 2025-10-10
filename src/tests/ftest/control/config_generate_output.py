@@ -12,7 +12,7 @@ from exception_utils import CommandFailure
 
 
 class ConfigGenerateOutput(TestWithServers):
-    """Test ID: DAOS-7274
+    """Test ID: DAOS-7274.
 
     Verify dmg config generate output.
 
