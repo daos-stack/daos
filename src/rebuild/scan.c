@@ -1280,6 +1280,7 @@ tls_lookup:
 	}
 
 	rpt->rt_pool->sp_rebuilding++; /* reset in rebuild_tgt_fini */
+	dss_sleep(10 * 1000); /* XXX: time window for EC aggregation to pause */
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
