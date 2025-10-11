@@ -1416,8 +1416,8 @@ func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolReb
 // operation should be run.
 type PoolSelfHealEvalReq struct {
 	poolRequest
-	ID      string
-	PropVal string
+	ID         string
+	SysPropVal string
 }
 
 // PoolSelfHealEval sends a pool-self-heal-eval request to the pool service leader.
@@ -1427,9 +1427,9 @@ func PoolSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *PoolSelf
 	}
 
 	pbReq := &mgmtpb.PoolSelfHealEvalReq{
-		Sys:     req.getSystem(rpcClient),
-		Id:      req.ID,
-		PropVal: req.PropVal,
+		Sys:        req.getSystem(rpcClient),
+		Id:         req.ID,
+		SysPropVal: req.SysPropVal,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolSelfHealEval(ctx, pbReq)

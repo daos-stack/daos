@@ -2589,17 +2589,16 @@ setup_upgrade_drpc_call(Drpc__Call *call, char *uuid, char *sys_name)
 static void
 expect_drpc_upgrade_resp_with_status(Drpc__Response *resp, int exp_status)
 {
-	Mgmt__PoolUpgradeResp	*pc_resp = NULL;
+	Mgmt__DaosResp *pc_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__pool_upgrade_resp__unpack(NULL, resp->body.len,
-						 resp->body.data);
+	pc_resp = mgmt__daos_resp__unpack(NULL, resp->body.len, resp->body.data);
 	assert_non_null(pc_resp);
 	assert_int_equal(pc_resp->status, exp_status);
 
-	mgmt__pool_upgrade_resp__free_unpacked(pc_resp, NULL);
+	mgmt__daos_resp__free_unpacked(pc_resp, NULL);
 }
 
 static void
@@ -2878,7 +2877,7 @@ setup_self_heal_eval_drpc_call(Drpc__Call *call, char *uuid, char *sys_name, cha
 
 	req.id       = uuid;
 	req.sys      = sys_name;
-	req.prop_val = prop_val;
+	req.sys_prop_val = prop_val;
 	pack_pool_self_heal_eval_req(call, &req);
 }
 

@@ -192,10 +192,7 @@ func TestDaos_SystemPropertySelfHealHasFlag(t *testing.T) {
 	if !SystemPropertySelfHealHasFlag("exclude;pool_rebuild", SelfHealFlagPoolRebuild) {
 		t.Fatal("value \"exclude;pool_rebuild\" should have flag \"pool_rebuild\"")
 	}
-	if SystemPropertySelfHealHasFlag("exclude;pool_rebuild", selfHealFlagUnknown) {
+	if SystemPropertySelfHealHasFlag("exclude;pool_rebuild", SelfHealFlag("")) {
 		t.Fatal("value \"exclude;pool_rebuild\" should not have (invalid) flag \"\"")
-	}
-	if SystemPropertySelfHealHasFlag("none", selfHealFlagMax) {
-		t.Fatal("value \"none\" should not have (invalid) flag \"max\"")
 	}
 }
