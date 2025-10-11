@@ -22,7 +22,8 @@
 #include <daos/sys_db.h>
 
 #define SMD_STORAGE_PATH	"/mnt/daos"
-#define DB_LIST_NR		(SMD_DEV_TYPE_MAX * 2 + 2)
+/* See db_name2list() */
+#define DB_LIST_NR              (SMD_DEV_TYPE_MAX * 2 + 3)
 
 struct ut_db {
 	struct sys_db	ud_db;
@@ -49,12 +50,14 @@ db_name2list(struct sys_db *db, char *name)
 		return &ud->ud_lists[0];
 	if (!strcmp(name, TABLE_POOLS_EX[SMD_DEV_TYPE_META]))
 		return &ud->ud_lists[1];
+	if (!strcmp(name, TABLE_CTRLR_DATA))
+		return &ud->ud_lists[2];
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		if (!strcmp(name, TABLE_TGTS[st]))
-			return &ud->ud_lists[st + 2];
+			return &ud->ud_lists[st + 3];
 		if (!strcmp(name, TABLE_POOLS[st]))
-			return &ud->ud_lists[st + SMD_DEV_TYPE_MAX + 2];
+			return &ud->ud_lists[st + SMD_DEV_TYPE_MAX + 3];
 	}
 	D_ASSERT(0);
 	return NULL;
@@ -267,23 +270,23 @@ ut_device(void **state)
 	uuid_generate(id3);
 
 	/* Assigned dev1 to target 0, 1, 2, dev2 to target 3. 4. 5 */
-	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA);
+	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA);
+	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA, NULL);
 	assert_rc_equal(rc, -DER_EXIST);
 
 	for (i = 1; i < 3; i++) {
-		rc = smd_dev_add_tgt(dev_id1, i, SMD_DEV_TYPE_DATA);
+		rc = smd_dev_add_tgt(dev_id1, i, SMD_DEV_TYPE_DATA, NULL);
 		assert_rc_equal(rc, 0);
 	}
 
-	rc = smd_dev_add_tgt(dev_id2, 1, SMD_DEV_TYPE_DATA);
+	rc = smd_dev_add_tgt(dev_id2, 1, SMD_DEV_TYPE_DATA, NULL);
 	assert_rc_equal(rc, -DER_EXIST);
 
 	for (i = 3; i < 6; i++) {
 		st = (i < 4) ? SMD_DEV_TYPE_DATA : SMD_DEV_TYPE_DATA + i - 3;
-		rc = smd_dev_add_tgt(dev_id2, i, st);
+		rc = smd_dev_add_tgt(dev_id2, i, st, NULL);
 		assert_rc_equal(rc, 0);
 	}
 
@@ -467,18 +470,18 @@ ut_dev_replace(void **state)
 	uuid_generate(dev_id3);
 
 	/* Replace dev1 with dev3 without marking dev1 as faulty */
-	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA));
+	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA), NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = smd_dev_set_state(dev_id1, SMD_DEV_FAULTY);
 	assert_rc_equal(rc, 0);
 
 	/* Replace dev1 with dev2 */
-	rc = smd_dev_replace(dev_id1, dev_id2, smd_dev_type2role(SMD_DEV_TYPE_DATA));
+	rc = smd_dev_replace(dev_id1, dev_id2, smd_dev_type2role(SMD_DEV_TYPE_DATA), NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* Replace dev1 with dev3 */
-	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA));
+	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA), NULL);
 	assert_rc_equal(rc, 0);
 
 	/* Verify device after replace */
