@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -176,6 +177,10 @@ test_run()
 
 			if (test.tg_test_mode == TEST_MODE_SYNC)
 				crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
+
+			/* corresponding d_sgl_init() is done above */
+			if (test.tg_force_rank == -1)
+				d_sgl_fini(&sgl, false);
 		}
 
 		if (test.tg_test_mode == TEST_MODE_ASYNC) {
