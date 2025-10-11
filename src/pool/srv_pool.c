@@ -2435,7 +2435,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct pool_iv_conns   *iv_hdls            = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	d_rank_t		rank = dss_self_rank();
+	d_rank_t                rank               = dss_self_rank();
 	int			rc;
 
 	D_ASSERTF(svc->ps_error == 0, "ps_error: " DF_RC "\n", DP_RC(svc->ps_error));
@@ -2555,7 +2555,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, 0);
 	if (rc != 0)
 		goto out;
 

@@ -207,14 +207,37 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 }
 
+static bool
+is_fd_large(int fd)
+{
+	/* normally the fd from Linux kernel should be very small */
+	return (fd > 100000);
+}
+
 extern int __open(const char *pathname, int flags, ...);
 void
 do_open(void **state)
 {
-	int  fd;
-	int  rc;
-	int  len;
-	char path[512];
+	int   fd;
+	int   rc;
+	int   len;
+	char  path[512];
+	char *env_ldpreload;
+	bool  with_pil4dfs = false;
+	bool  use_dfuse    = true;
+	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
+	char  native_mount_dir[] = "/tmp/dfuse-test";
+
+	if (strstr(test_dir, native_mount_dir))
+		use_dfuse = false;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload == NULL)
+		return;
+
+	if (strstr(env_ldpreload, "libpil4dfs.so") != NULL)
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		with_pil4dfs = true;
 
 	len = snprintf(path, sizeof(path) - 1, "%s/open_file", test_dir);
 	assert_true(len < (sizeof(path) - 1));
@@ -225,6 +248,30 @@ do_open(void **state)
 	 */
 	fd = __open(path, O_RDWR | O_CREAT | O_EXCL);
 	assert_return_code(fd, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	/* test creat() */
+	fd = creat(path, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	if (with_pil4dfs && use_dfuse)
+		assert_true(is_fd_large(fd));
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	/* test creat64() */
+	fd = creat64(path, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	if (with_pil4dfs && use_dfuse)
+		assert_true(is_fd_large(fd));
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
@@ -1086,6 +1133,7 @@ do_cachingcheck(void **state)
 	int   fd;
 	int   rc;
 	int   pid;
+	int   status;
 	char  dir_name[256];
 	char  file_name[256];
 	char  exe_name[] = "/usr/bin/cat";
@@ -1125,6 +1173,11 @@ do_cachingcheck(void **state)
 		/* Run command "cat test_file" in a new process */
 		execv(exe_name, argv);
 	}
+	/* wait until the child process finishes, then remove the file */
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
 	rc = unlink(file_name);
 	assert_return_code(rc, errno);
 
