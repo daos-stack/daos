@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -236,8 +237,17 @@ typedef struct {
 
 #define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
 
+#define UUID_SST_UPPER     1
+#define UUID_SST_LOWER     -1
+#define UUID_SST_NONE      0
+
+/*
+ * \param sensitive	positive: expect uppercase character.
+ *			negative: expect lowercase character.
+ *			zero: no care uppercase or lowercase.
+ */
 static inline bool
-daos_is_valid_uuid_string(const char *uuid)
+daos_is_valid_uuid_string(const char *uuid, int sensitive)
 {
 	const char	*p;
 	int		 len = DAOS_UUID_STR_SIZE - 1; /* Not include the terminated '\0' */
@@ -250,13 +260,22 @@ daos_is_valid_uuid_string(const char *uuid)
 		if (i == 8 || i == 13 || i == 18 || i == 23) {
 			if (*p != '-')
 				return false;
-		} else if (!isxdigit(*p)) {
-			return false;
+		} else {
+			if (sensitive >= UUID_SST_UPPER) {
+				if (!isxdigit(*p) || islower(*p))
+					return false;
+			} else if (sensitive <= UUID_SST_LOWER) {
+				if (!isxdigit(*p) || isupper(*p))
+					return false;
+			} else if (!isxdigit(*p)) {
+				return false;
+			}
 		}
 	}
 
 	return true;
 }
+
 /**
  * Corresponding rank and URI for a DAOS engine
  */
