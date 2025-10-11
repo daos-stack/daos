@@ -93,7 +93,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin, ComponentServer},
 	"/RaftTransport/AppendEntries":           {ComponentServer},
 	"/RaftTransport/AppendEntriesPipeline":   {ComponentServer},
 	"/RaftTransport/RequestVote":             {ComponentServer},

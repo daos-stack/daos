@@ -3070,8 +3070,7 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 		return;
 	}
 
-	D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n", DP_DB(db),
-		term);
+	D_INFO(DF_DB ": resigning from term " DF_U64 "\n", DP_DB(db), term);
 	rdb_raft_save_state(db, &state);
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);

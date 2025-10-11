@@ -1159,7 +1159,7 @@ eph_report_ult(void *data)
 			D_INFO(DF_UUID ": Fetching connection handles.\n", DP_UUID(pool->sp_uuid));
 			rc = ds_pool_iv_conn_hdl_fetch(pool);
 			if (rc) {
-				D_INFO(DF_UUID ": Failed to fetch connection handles. " DF_RC "",
+				D_INFO(DF_UUID ": Failed to fetch connection handles. " DF_RC "\n",
 				       DP_UUID(pool->sp_uuid), DP_RC(rc));
 				sleep_intvl = EPH_REPORT_RETRY_INTVL;
 			} else {
@@ -1176,8 +1176,8 @@ eph_report_ult(void *data)
 			rc = ds_pool_iv_srv_hdl_fetch(pool, &pool->sp_srv_pool_hdl,
 						      &pool->sp_srv_cont_hdl);
 			if (rc) {
-				DL_ERROR(rc, DF_UUID ": Failed to fetch srv open handles.",
-					 DP_UUID(pool->sp_uuid));
+				D_INFO(DF_UUID ": Failed to fetch srv open handles. " DF_RC "\n",
+				       DP_UUID(pool->sp_uuid), DP_RC(rc));
 				sleep_intvl = EPH_REPORT_RETRY_INTVL;
 			} else if (uuid_is_null(pool->sp_srv_pool_hdl) ||
 				   uuid_is_null(pool->sp_srv_cont_hdl)) {
