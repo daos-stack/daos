@@ -23,6 +23,7 @@
 #include <daos_srv/dtx_srv.h>
 
 #include "../dlck_args.h"
+#include "../dlck_bitmap.h"
 #include "../dlck_engine.h"
 #include "../dlck_pool.h"
 
@@ -264,7 +265,7 @@ exec_one(void *arg)
 
 	d_list_for_each_entry(file, &xst->args_files->list, link) {
 		/** do not process the given file if the target is excluded */
-		if ((file->targets_bitmap & (1 << xst->xs->tgt_id)) == 0) {
+		if (dlck_bitmap_isclr32(file->targets_bitmap, xst->xs->tgt_id)) {
 			continue;
 		}
 
@@ -374,20 +375,27 @@ static struct argp argp = {NULL, parser, NULL /** usage */, NULL, children};
 static int
 setup(struct dlck_helper_args *args, struct bundle *bundle)
 {
-	struct dlck_file   *file;
 	struct dlck_engine *engine;
 	unsigned int        seed = SRAND_SEED;
 	int                 rc;
+	int                 rc_abt;
 
 	/** prepare pool storage directories */
-	d_list_for_each_entry(file, &args->files.list, link) {
-		rc = dlck_pool_mkdir(args->engine.storage_path, file->po_uuid);
-		assert_int_equal(rc, DER_SUCCESS);
+	rc = dlck_pool_mkdir_all(args->engine.storage_path, &args->files.list, NULL);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	rc_abt = ABT_init(0, NULL);
+	if (rc_abt != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc_abt);
+		return rc;
 	}
 
 	/** start an engine */
 	rc = dlck_engine_start(&args->engine, &engine);
 	if (rc != DER_SUCCESS) {
+		(void)ABT_finalize();
 		return rc;
 	}
 
@@ -413,12 +421,14 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 
 fail_engine_stop:
 	(void)dlck_engine_stop(engine);
+	(void)ABT_finalize();
 	return rc;
 }
 
 static int
 teardown(struct bundle *bundle)
 {
+	int rc_abt;
 	int rc;
 
 	dss_unregister_key(dtx_module.sm_key);
@@ -426,6 +436,15 @@ teardown(struct bundle *bundle)
 	D_FREE(bundle->co_uuids);
 
 	rc = dlck_engine_stop(bundle->engine);
+	if (rc != DER_SUCCESS) {
+		(void)ABT_finalize();
+		return rc;
+	}
+
+	rc_abt = ABT_finalize();
+	if (rc_abt != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc_abt);
+	}
 
 	return rc;
 }
@@ -445,7 +464,7 @@ main(int argc, char **argv)
 		goto fail_args_free;
 	}
 
-	rc = dlck_engine_exec_all(bundle.engine, exec_one, arg_alloc, &bundle, arg_free);
+	rc = dlck_engine_exec_all_sync(bundle.engine, exec_one, arg_alloc, &bundle, arg_free);
 	if (rc != DER_SUCCESS) {
 		goto fail_teardown;
 	}

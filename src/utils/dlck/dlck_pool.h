@@ -11,21 +11,39 @@
 
 #include "dlck_args.h"
 
+#define DLCK_POOL_OPEN_FLAGS (VOS_POF_EXCL | VOS_POF_FOR_FEATURE_FLAG)
+
 /**
  * Create a directory for the pool.
  *
  * \param[in]	storage_path	Storage path.
  * \param[in]	po_uuid		Pool UUID.
+ * \param[in]	dp		Print utility.
  *
  * \retval DER_SUCCESS		Success.
  * \retval -DER_NOMEM		Out of memory.
  * \retval -DER_NO_PERM		Permission problem. Please see mkdir(2).
- * \retval -DER_EXIST		Directory already exists.
  * \retval -DER_NONEXIST	A component of the \p storage_path does not exist.
  * \retval -DER_*		Possibly other errors.
  */
 int
-dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid);
+dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct dlck_print *dp);
+
+/**
+ * Create pool directories for all \p files provided.
+ *
+ * \param[in]	storage_path	Engine the ULT is about to be run in.
+ * \param[in]	files		List of files.
+ * \param[in]	dp		Print utility.
+ *
+ * \retval DER_SUCCESS		Success.
+ * \retval -DER_NOMEM		Out of memory.
+ * \retval -DER_NO_PERM		Permission problem. Please see mkdir(2).
+ * \retval -DER_NONEXIST	A component of the \p storage_path does not exist.
+ * \retval -DER_*		Possibly other errors but not -DER_EXIST.
+ */
+int
+dlck_pool_mkdir_all(const char *storage_path, d_list_t *files, struct dlck_print *dp);
 
 /**
  * Open a pool.

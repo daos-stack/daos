@@ -13,6 +13,8 @@
 #include <uuid/uuid.h>
 #include <gurt/list.h>
 
+#include <daos_srv/dlck.h>
+
 #include "dlck_cmds.h"
 
 #define _STRINGIFY(x)                   #x
@@ -85,10 +87,31 @@ struct dlck_args_files {
 	d_list_t list;
 };
 
-struct dlck_print {
-	int (*dp_printf)(const char *fmt, ...);
-};
+/**
+ * Count the number of files in the list.
+ *
+ * \param[in]	files	The list of files to count.
+ *
+ * \return The number of files on the list \p files.
+ */
+static inline unsigned
+dlck_args_files_num(struct dlck_args_files *files)
+{
+	struct dlck_file *file;
+	unsigned          num = 0;
 
+	d_list_for_each_entry(file, &files->list, link) {
+		++num;
+	}
+
+	return num;
+}
+
+/**
+ * @struct dlck_control
+ *
+ * Bundle of input, output, and control arguments.
+ */
 struct dlck_control {
 	/** in */
 	struct dlck_args_common common;
@@ -96,6 +119,8 @@ struct dlck_control {
 	struct dlck_args_engine engine;
 	/** print */
 	struct dlck_print       print;
+	/** out */
+	char                   *log_dir;
 };
 
 /** helper definitions */
@@ -121,10 +146,6 @@ struct dlck_control {
 		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
 		return ERRNUM;                                                                     \
 	} while (0)
-
-#define DLCK_PRINT(ctrl, fmt)       (void)ctrl->print.dp_printf(fmt)
-
-#define DLCK_PRINTF(ctrl, fmt, ...) (void)ctrl->print.dp_printf(fmt, __VA_ARGS__)
 
 /** dlck_args_parse.c */
 
