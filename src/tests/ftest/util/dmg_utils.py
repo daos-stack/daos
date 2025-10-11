@@ -375,7 +375,7 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("storage", "scan"), nvme_health=True)
 
-    def storage_query_usage(self):
+    def storage_query_usage(self, **kwargs):
         """Get the result of the 'dmg storage query usage' command.
 
         Raises:
@@ -476,7 +476,7 @@ class DmgCommand(DmgCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        return self._get_json_result(("storage", "query", "usage"))
+        return self._get_json_result(("storage", "query", "usage"), **kwargs)
 
     def server_set_logmasks(self, masks=None, streams=None, subsystems=None, raise_exception=None):
         """Set engine log-masks at runtime.
