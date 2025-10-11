@@ -1,4 +1,4 @@
 deps/**
-**/*.pb-c.c
-**/*.pb-c.h
+src/**/*.pb-c.c
+src/**/*.pb-c.h
 
