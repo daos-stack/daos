@@ -154,7 +154,7 @@ class MemRatioTest(TestWithServers):
         # Report the test results
         if not data:
             self.fail(f"Error collecting data from {len(pools)} pool(s)")
-        _format = "%-54s  %-9s  %-50s  %-14s  %-12s  %-13s  %-60s  %-21s  %s"
+        _format = "%-54s  %-9s  %-52s  %-14s  %-12s  %-13s  %-64s  %-21s  %s"
         _keys = ["Pool",
                  "mem-ratio",
                  "tier_bytes",
@@ -166,7 +166,7 @@ class MemRatioTest(TestWithServers):
                  "query_ratio"]
         self.log.debug(_format, *_keys)
         self.log.debug(
-            _format, "-" * 54, "-" * 9, "-" * 50, "-" * 14, "-" * 12, "-" * 13, "-" * 60, "-" * 21,
+            _format, "-" * 54, "-" * 9, "-" * 52, "-" * 14, "-" * 12, "-" * 13, "-" * 64, "-" * 21,
             "-" * 11)
         for name, info in data.items():
             items = [name]
