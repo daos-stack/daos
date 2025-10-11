@@ -125,6 +125,7 @@ enum ddb_cmd {
 	DDB_CMD_DEV_REPLACE             = 25,
 	DDB_CMD_DTX_STAT                = 26,
 	DDB_CMD_PROV_MEM                = 27,
+	DDB_CMD_DTX_AGGR                = 28,
 };
 
 /* option and argument structures for commands that need them */
@@ -225,6 +226,15 @@ struct prov_mem_options {
 	unsigned int tmpfs_mount_size;
 };
 
+enum dtx_aggr_format { DDB_DTX_AGGR_NOW = 0, DDB_DTX_AGGR_EPOCH = 1, DDB_DTX_AGGR_DATE = 2 };
+
+struct dtx_aggr_options {
+	char                *path;
+	enum dtx_aggr_format format;
+	uint64_t             epoch;
+	char                *date;
+};
+
 struct ddb_cmd_info {
 	enum ddb_cmd dci_cmd;
 	union {
@@ -247,6 +257,7 @@ struct ddb_cmd_info {
 		struct dev_replace_options   dci_dev_replace;
 		struct dtx_stat_options      dci_dtx_stat;
 		struct prov_mem_options      dci_prov_mem;
+		struct dtx_aggr_options      dci_dtx_aggr;
 	} dci_cmd_option;
 };
 
@@ -316,6 +327,8 @@ int
 ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt);
 int
 ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt);
+int
+ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt);
 
 void
 ddb_program_help(struct ddb_ctx *ctx);
