@@ -1249,7 +1249,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
  * Called via dss_collective() to destroy the ds_cont object as well as the vos
  * container.
  */
-int
+static int
 cont_child_destroy_one(void *vin)
 {
 	struct dsm_tls		       *tls = dsm_tls_get();
@@ -1379,11 +1379,16 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
+	/* Hold sp_recov_lock to control the race with recovering container for pool. */
+	ABT_rwlock_rdlock(pool->sp_recov_lock);
 	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
-	ds_pool_put(pool);
 
 	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, cont_child_destroy_one, &in, 0);
+
+	ABT_rwlock_unlock(pool->sp_recov_lock);
+	ds_pool_put(pool);
+
 	if (rc)
 		D_ERROR(DF_UUID"/"DF_UUID" container child destroy failed: %d\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid), rc);
@@ -1448,7 +1453,7 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
  * it will return 1, otherwise return 0 or error code.
  **/
 static int
-cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
+cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, bool locked,
 			bool *started, struct ds_cont_child **cont_out)
 {
 	struct ds_pool_child	*pool_child;
@@ -1464,12 +1469,18 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 	rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0) {
-			D_ASSERT(*cont_out != NULL);
-			(*cont_out)->sc_status_pm_ver = pm_ver;
+			if (cont_out != NULL) {
+				D_ASSERT(*cont_out != NULL);
+				(*cont_out)->sc_status_pm_ver = pm_ver;
+			}
 		}
 		ds_pool_child_put(pool_child);
 		return rc;
 	}
+
+	/* Hold sp_recov_lock to control the race with recovering container for pool. */
+	if (!locked)
+		ABT_rwlock_rdlock(pool_child->spc_pool->sp_recov_lock);
 
 	D_DEBUG(DB_MD, DF_CONT": creating new vos container\n",
 		DP_CONT(pool_uuid, cont_uuid));
@@ -1478,7 +1489,14 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 	if (!rc) {
 		rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 		if (rc == 0) {
-			(*cont_out)->sc_status_pm_ver = pm_ver;
+			if (cont_out != NULL)
+				(*cont_out)->sc_status_pm_ver = pm_ver;
+			else
+				D_DEBUG(DB_REBUILD,
+					"Re-create container " DF_UUID " in the pool " DF_UUID
+					" on the target %u/%u\n",
+					DP_UUID(cont_uuid), DP_UUID(pool_uuid), dss_self_rank(),
+					dss_get_module_info()->dmi_tgt_id);
 		} else {
 			int rc_tmp;
 
@@ -1488,6 +1506,9 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 					DP_UUID(cont_uuid), rc_tmp);
 		}
 	}
+
+	if (!locked)
+		ABT_rwlock_unlock(pool_child->spc_pool->sp_recov_lock);
 
 	ds_pool_child_put(pool_child);
 	return rc == 0 ? 1 : rc;
@@ -1540,13 +1561,13 @@ ds_dtx_resync(void *arg)
 }
 
 int
-ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
+ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid, bool locked,
 			  struct ds_cont_child **cont)
 {
 	int rc;
 
 	/* status_pm_ver has no sense for rebuild container */
-	rc = cont_child_create_start(pool_uuid, cont_uuid, 0, NULL, cont);
+	rc = cont_child_create_start(pool_uuid, cont_uuid, 0, locked, NULL, cont);
 	if (rc == 1)
 		rc = 0;
 
@@ -1664,7 +1685,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (hdl == NULL)
 		return -DER_NOMEM;
 
-	rc = cont_child_create_start(pool_uuid, cont_uuid, status_pm_ver, started, &cont);
+	rc = cont_child_create_start(pool_uuid, cont_uuid, status_pm_ver, true, started, &cont);
 	if (rc < 0)
 		D_GOTO(err_hdl, rc);
 
@@ -1826,9 +1847,18 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		 uint32_t status_pm_ver)
 {
 	struct cont_tgt_open_arg arg = {0};
-	int			rc;
+	struct ds_pool          *pool;
+	int                      rc;
 
 	D_ASSERT(cont_uuid != NULL && !uuid_is_null(cont_uuid));
+
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_ERROR("Failed to lookup pool " DF_UUID ": " DF_RC "\n", DP_UUID(pool_uuid),
+			DP_RC(rc));
+		return -DER_NO_HDL;
+	}
+
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
@@ -1839,9 +1869,12 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
+	/* Hold sp_recov_lock to control the race with recovering container for pool. */
+	ABT_rwlock_rdlock(pool->sp_recov_lock);
 	rc = ds_pool_thread_collective(pool_uuid,
 				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 				       cont_open_one, &arg, DSS_ULT_DEEP_STACK);
+	ABT_rwlock_unlock(pool->sp_recov_lock);
 	if (rc != 0) {
 		/* Once it exclude the target from the pool, since the target
 		 * might still in the cart group, so IV cont open might still
@@ -1854,6 +1887,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 			DP_UUID(cont_hdl_uuid), DP_RC(rc));
 	}
 
+	ds_pool_put(pool);
 	return rc;
 }
 
@@ -2090,7 +2124,7 @@ cont_snap_update_one(void *vin)
 	 * it should be the case of reintegrate the container was destroyed ahead, so just
 	 * open_create the container here.
 	 */
-	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, &cont);
+	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, false, &cont);
 	if (rc != 0)
 		return rc;
 

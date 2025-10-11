@@ -1762,11 +1762,12 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		return 0;
 	}
 
-	if (create) {
+	/* For incremental reintegration, the container has already been (re)-created. */
+	if (create && !tls->mpt_reintegrating) {
 		/* Since the shard might be moved different location for any pool operation,
 		 * so it may need create the container in all cases.
 		 */
-		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont_child);
+		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, false, &cont_child);
 		if (rc != 0) {
 			if (rc == -DER_SHUTDOWN || (cont_child && cont_child->sc_stopping)) {
 				D_DEBUG(DB_REBUILD,

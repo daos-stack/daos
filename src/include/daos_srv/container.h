@@ -225,8 +225,9 @@ int ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
 
-int ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
-			      struct ds_cont_child **cont);
+int
+ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid, bool locked,
+			  struct ds_cont_child **cont);
 
 typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
