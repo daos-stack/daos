@@ -6,9 +6,10 @@
 """
 import os
 from logging import getLogger
-from sys import version_info
+from sys import executable
 
 import yaml
+
 from exception_utils import CommandFailure
 
 
@@ -503,7 +504,7 @@ class CommandWithParameters(ObjectWithParameters):
         self._python = None
         if self.command.endswith('.py'):
             # Run python scripts with the python command
-            self._python = f'python{version_info.major}.{version_info.minor}'
+            self._python = f'{os.path.abspath(executable)}'
 
     @property
     def command(self):

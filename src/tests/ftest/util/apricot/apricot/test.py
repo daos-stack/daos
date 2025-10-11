@@ -13,12 +13,15 @@ import sys
 from ast import literal_eval
 from time import time
 
+from ClusterShell.NodeSet import NodeSet
+from pydaos.raw import DaosApiError, DaosContext
+
 from agent_utils import DaosAgentManager, include_local_host
 from avocado import Test as avocadoTest
 from avocado import TestFail, fail_on, skip
 from avocado.core import exceptions
+from avocado.core.teststatus import STATUSES_NOT_OK
 from cart_ctl_utils import CartCtl
-from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
 from daos_utils import DaosCommand
 from distro_utils import detect
@@ -29,8 +32,8 @@ from fault_config_utils import FaultInjection
 from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
                            get_avocado_config_value, nodeset_append_suffix,
                            set_avocado_config_value)
-from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
-from pydaos.raw import DaosApiError, DaosContext
+from host_utils import (HostException, HostInfo, HostRole, get_host_parameters,
+                        get_local_host)
 from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
@@ -1381,17 +1384,6 @@ class TestWithServers(TestWithoutServers):
             # dump engines ULT stacks upon test timeout
             self.__dump_engines_stacks("Test has timed-out")
 
-    def fail(self, message=None):
-        """Dump engines ULT stacks upon test failure."""
-        self.__dump_engines_stacks("Test has failed")
-        super().fail(message)
-
-    def error(self, message=None):
-        # pylint: disable=arguments-renamed
-        """Dump engines ULT stacks upon test error."""
-        self.__dump_engines_stacks("Test has errored")
-        super().error(message)
-
     def tearDown(self):
         """Tear down after each test case."""
 
@@ -1401,7 +1393,7 @@ class TestWithServers(TestWithoutServers):
         # error() method above, to overload the methods of Avocado base Test
         # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
         # associated PR-5224)
-        if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
+        if self.status is not None and self.status in STATUSES_NOT_OK:
             self.__dump_engines_stacks(f"Test status is {self.status}")
 
         # Report whether or not the timeout has expired
