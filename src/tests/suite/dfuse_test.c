@@ -848,6 +848,8 @@ do_fdcallscheck(void **state)
 {
 	int    root;
 	int    fd;
+	int    fd_new;
+	int    flag;
 	int    rc;
 	char   attr_name[]  = "usr_attr";
 	char   attr_value[] = "test_value";
@@ -855,6 +857,19 @@ do_fdcallscheck(void **state)
 	size_t len;
 	char   path_old[512];
 	char   path_new[512];
+	char  *env_ldpreload;
+	bool   use_dfuse    = true;
+	bool   with_pil4dfs = false;
+	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
+	char   native_mount_dir[] = "/tmp/dfuse-test";
+
+	if (strstr(test_dir, native_mount_dir))
+		use_dfuse = false;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (strstr(env_ldpreload, "libpil4dfs.so") != NULL)
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		with_pil4dfs = true;
 
 	root = open(test_dir, O_PATH | O_DIRECTORY);
 	assert_return_code(root, errno);
@@ -961,6 +976,40 @@ do_fdcallscheck(void **state)
 	rc = close(root);
 	assert_return_code(rc, errno);
 	/* end   testing renameat() */
+
+	/* start testing dup3() */
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	fd = openat(root, "test_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	if (with_pil4dfs && use_dfuse)
+		assert_true(is_fd_large(fd));
+
+	fd_new = 10000;
+	flag   = O_CLOEXEC;
+	rc     = dup3(fd, fd_new, flag);
+	assert_true(rc == fd_new);
+
+	rc = close(fd_new);
+	assert_return_code(rc, errno);
+
+	/* flag different from O_CLOEXEC and 0 is not supported */
+	flag = ~flag;
+	rc   = dup3(fd, fd_new, flag);
+	assert_true(rc == -1);
+	assert_true(errno == EINVAL);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "test_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+	/* end   testing dup3() */
 }
 
 /*
