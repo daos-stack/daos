@@ -146,3 +146,37 @@ func TestControl_SystemCheckReport_IsDryRun(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_SystemCheckReport_IsInteractive(t *testing.T) {
+	expInteractive := chkpb.CheckInconsistAction_CIA_INTERACT
+
+	for name, actVal := range chkpb.CheckInconsistAction_value {
+		t.Run(name, func(t *testing.T) {
+			action := chkpb.CheckInconsistAction(actVal)
+			report := &SystemCheckReport{
+				chkpb.CheckReport{
+					Action: action,
+				},
+			}
+
+			test.AssertEqual(t, action == expInteractive, report.IsInteractive(), "")
+		})
+	}
+}
+
+func TestControl_SystemCheckReport_IsStale(t *testing.T) {
+	expStaleAction := chkpb.CheckInconsistAction_CIA_STALE
+
+	for name, actVal := range chkpb.CheckInconsistAction_value {
+		t.Run(name, func(t *testing.T) {
+			action := chkpb.CheckInconsistAction(actVal)
+			report := &SystemCheckReport{
+				chkpb.CheckReport{
+					Action: action,
+				},
+			}
+
+			test.AssertEqual(t, action == expStaleAction, report.IsStale(), "")
+		})
+	}
+}

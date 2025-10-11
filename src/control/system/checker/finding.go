@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -73,9 +74,9 @@ func NewFinding(report *chkpb.CheckReport) *Finding {
 	return f
 }
 
-// descAction attempts to generate a human-readable description of the
+// GetActionMsg attempts to generate a human-readable description of the
 // action that may be taken for the given finding.
-func descAction(class chkpb.CheckInconsistClass, action chkpb.CheckInconsistAction, details ...string) string {
+func GetActionMsg(class chkpb.CheckInconsistClass, action chkpb.CheckInconsistAction, details ...string) string {
 	var ro reportObject
 	switch {
 	case class >= chkpb.CheckInconsistClass_CIC_POOL_LESS_SVC_WITH_QUORUM && class <= chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL:
@@ -151,6 +152,8 @@ func descAction(class chkpb.CheckInconsistClass, action chkpb.CheckInconsistActi
 		return fmt.Sprintf("Trust the parity of the %s results", ro)
 	case chkpb.CheckInconsistAction_CIA_TRUST_EC_DATA:
 		return fmt.Sprintf("Trust the data of the %s results", ro)
+	case chkpb.CheckInconsistAction_CIA_STALE:
+		return "Current checker instance cannot act on this finding. Re-run the checker."
 	default:
 		return fmt.Sprintf("%s: %s (details: %+v)", ro, action, details)
 	}
@@ -174,6 +177,7 @@ func trimProtoSpaces(pm proto.Message) {
 	})
 }
 
+// AnnotateFinding updates human-readable action messages.
 func AnnotateFinding(f *Finding) *Finding {
 	if f == nil {
 		return nil
@@ -195,11 +199,11 @@ func AnnotateFinding(f *Finding) *Finding {
 		if len(f.ActChoices) > 0 {
 			f.ActMsgs = make([]string, len(f.ActChoices))
 			for i, act := range f.ActChoices {
-				f.ActMsgs[i] = descAction(f.Class, act, append([]string{f.PoolUuid, f.ContUuid}, f.ActDetails...)...)
+				f.ActMsgs[i] = GetActionMsg(f.Class, act, append([]string{f.PoolUuid, f.ContUuid}, f.ActDetails...)...)
 			}
 		} else {
 			f.ActMsgs = make([]string, 1)
-			f.ActMsgs[0] = descAction(f.Class, f.Action, append([]string{f.PoolUuid, f.ContUuid}, f.ActDetails...)...)
+			f.ActMsgs[0] = GetActionMsg(f.Class, f.Action, append([]string{f.PoolUuid, f.ContUuid}, f.ActDetails...)...)
 		}
 	}
 	if len(f.Msg) == 0 {

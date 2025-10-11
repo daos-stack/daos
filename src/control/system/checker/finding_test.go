@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -435,6 +436,30 @@ func TestChecker_AnnotateFinding(t *testing.T) {
 						"Trust the information recorded in PS DB.",
 						"Ignore but log the inconsistency.",
 						"Trust the information recorded by target(s).",
+					},
+				}),
+		},
+		"stale": {
+			rpt: &chkpb.CheckReport{
+				Seq:       972775323717861377,
+				Class:     chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+				Action:    chkpb.CheckInconsistAction_CIA_STALE,
+				PoolUuid:  "9614ebfb-cbad-4250-a4e4-d24b7b70d85e",
+				ContUuid:  "18b9b418-211c-455f-aa42-0cc13dedcff9",
+				Timestamp: "Mon Dec  5 16:27:56 2022\n",
+				Msg:       "Check engine detects inconsistent container label: new-label (CS) vs foo (property).\n",
+			},
+			expFinding: checker.NewFinding(
+				&chkpb.CheckReport{
+					Seq:       972775323717861377,
+					Class:     chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+					Action:    chkpb.CheckInconsistAction_CIA_STALE,
+					PoolUuid:  "9614ebfb-cbad-4250-a4e4-d24b7b70d85e",
+					ContUuid:  "18b9b418-211c-455f-aa42-0cc13dedcff9",
+					Timestamp: "Mon Dec  5 16:27:56 2022",
+					Msg:       "Check engine detects inconsistent container label: new-label (CS) vs foo (property).",
+					ActMsgs: []string{
+						"Current checker instance cannot act on this finding. Re-run the checker.",
 					},
 				}),
 		},

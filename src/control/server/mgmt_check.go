@@ -263,22 +263,68 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	}
 
 	if resp.Status > 0 {
-		if len(req.Uuids) == 0 {
-			svc.log.Debug("resetting checker findings DB")
-			if err := svc.sysdb.ResetCheckerData(); err != nil {
-				return nil, errors.Wrap(err, "failed to reset checker finding database")
-			}
-		} else {
-			pools := strings.Join(req.Uuids, ", ")
-			svc.log.Debugf("removing old checker findings for pools: %s", pools)
-			if err := svc.sysdb.RemoveCheckerFindingsForPools(req.Uuids...); err != nil {
-				return nil, errors.Wrapf(err, "failed to remove old findings for pools: %s", pools)
-			}
+		// Checker instance was reset. We can safely clear all findings related to any pools
+		// requested.
+		if err := svc.resetFindings(req.Uuids); err != nil {
+			return nil, err
 		}
 		resp.Status = 0 // reset status to indicate success
 	}
 
+	if resp.Status == 0 {
+		svc.handleUnresolvedInteractions(req.Uuids)
+	}
+
 	return resp, nil
+}
+
+func (svc *mgmtSvc) resetFindings(uuids []string) error {
+	if len(uuids) == 0 {
+		svc.log.Debug("resetting checker findings DB")
+		if err := svc.sysdb.ResetCheckerData(); err != nil {
+			return errors.Wrap(err, "failed to reset checker finding database")
+		}
+	} else {
+		pools := strings.Join(uuids, ", ")
+		svc.log.Debugf("removing old checker findings for pools: %s", pools)
+		if err := svc.sysdb.RemoveCheckerFindingsForPools(uuids...); err != nil {
+			return errors.Wrapf(err, "failed to remove old findings for pools: %s", pools)
+		}
+	}
+	return nil
+}
+
+// handleUnresolvedInteractions goes through all unresolved (INTERACT) findings in the database.
+// Those that will be rediscovered in the next run can be removed. All others must be marked stale
+// as the user will be unable to act on them after the new check instance started. To fix the
+// inconsistency, they'll need to re-run the checker on the affected pool.
+func (svc *mgmtSvc) handleUnresolvedInteractions(uuids []string) {
+	findings, err := svc.sysdb.GetCheckerFindings()
+	if err != nil {
+		svc.log.Errorf("unable to fetch old checker findings: %s", err.Error())
+		return
+	}
+
+	uuidSet := common.NewStringSet(uuids...)
+	for _, f := range findings {
+		switch f.Action {
+		case chkpb.CheckInconsistAction_CIA_INTERACT, chkpb.CheckInconsistAction_CIA_STALE:
+			if len(uuids) == 0 || uuidSet.Has(f.PoolUuid) {
+				// Unresolved interactive and stale findings for pools that will be scanned will be re-discovered.
+				svc.log.Debugf("removing unresolved %s finding %d for pool %s", f.Action, f.Seq, f.PoolUuid)
+				if err := svc.sysdb.RemoveCheckerFinding(f); err != nil {
+					svc.log.Errorf("unable to remove stale checker finding %s: %s", f, err.Error())
+				}
+			} else if f.Action != chkpb.CheckInconsistAction_CIA_STALE { // No need to re-mark stale interactions
+				// If the pool isn't being re-checked, we should keep the interactive finding, but the user
+				// won't be able to act on it anymore.
+				svc.log.Debugf("marking unresolved interaction %d stale for pool %s", f.Seq, f.PoolUuid)
+				if err := svc.sysdb.SetCheckerFindingAction(f.Seq, int32(chkpb.CheckInconsistAction_CIA_STALE)); err != nil {
+					svc.log.Errorf("unable to mark interactive finding %s stale: %s", f, err.Error())
+				}
+			}
+		}
+	}
 }
 
 func (svc *mgmtSvc) mergePoliciesWithCurrent(policies []*mgmtpb.CheckInconsistPolicy) ([]*mgmtpb.CheckInconsistPolicy, error) {

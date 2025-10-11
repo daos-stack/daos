@@ -196,7 +196,11 @@ typedef enum _Chk__CheckInconsistAction {
   /*
    * Trust EC data shard.
    */
-  CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_EC_DATA = 12
+  CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_EC_DATA = 12,
+  /*
+   * Stale unresolved interaction. The checker can no longer address this report without re-running on affected pool.
+   */
+  CHK__CHECK_INCONSIST_ACTION__CIA_STALE = 65535
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CHK__CHECK_INCONSIST_ACTION)
 } Chk__CheckInconsistAction;
 /*

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -161,15 +162,35 @@ func (db *Database) SetCheckerFindingAction(seq uint64, action int32) error {
 		return err
 	}
 
-	for i, d := range f.ActChoices {
-		if d != chkAction {
-			continue
-		}
+	if chkAction == chk.CheckInconsistAction_CIA_STALE {
 		f.Action = chkAction
-		if len(f.ActMsgs) > i {
-			f.ActMsgs = []string{f.ActMsgs[i]}
-		}
+
+		// Clear old choices and re-annotate
 		f.ActChoices = nil
+		f.ActDetails = nil
+		f.ActMsgs = nil
+		f = checker.AnnotateFinding(f)
+	} else {
+		found := false
+
+		for i, d := range f.ActChoices {
+			if d != chkAction {
+				continue
+			}
+			f.Action = chkAction
+			if len(f.ActMsgs) > i {
+				f.ActMsgs = []string{f.ActMsgs[i]}
+			}
+			if len(f.ActDetails) > i {
+				f.ActDetails = []string{f.ActDetails[i]}
+			}
+			f.ActChoices = nil
+			found = true
+		}
+
+		if !found {
+			return errors.Errorf("action not available for this finding: %s", chk.CheckInconsistAction_name[action])
+		}
 	}
 
 	return db.submitCheckerUpdate(raftOpUpdateCheckerFinding, f)
