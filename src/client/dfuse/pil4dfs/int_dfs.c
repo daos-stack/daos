@@ -1658,6 +1658,7 @@ find_next_available_map(int *idx)
 	return 0;
 }
 
+
 /* May need to support duplicated fd as duplicated dirfd too. */
 static void
 free_fd(int idx, bool closing_dup_fd)
