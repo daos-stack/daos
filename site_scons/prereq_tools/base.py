@@ -457,6 +457,7 @@ def ensure_dir_exists(dirname, dry_run):
 
 # pylint: disable-next=function-redefined
 class PreReqComponent():
+    # pylint: disable=too-many-public-methods
     """A class for defining and managing external components required by a project.
 
     If provided arch is a string to embed in any generated directories
@@ -567,10 +568,11 @@ class PreReqComponent():
 
         build_dir = self.__env['BUILD_DIR']
         main_targets = ['client', 'server']
-        targets = ['test'] + main_targets
+        targets = ['benchmarks', 'test'] + main_targets
         self.__env.Alias('client', build_dir)
         self.__env.Alias('server', build_dir)
         self.__env.Alias('test', build_dir)
+        self.__env.Alias('benchmarks', build_dir)
         self._build_targets = []
         check = any(item in BUILD_TARGETS for item in targets)
         if not check:
@@ -585,6 +587,8 @@ class PreReqComponent():
                     print("test target requires client or server")
                     sys.exit(1)
                 self._build_targets.append('test')
+            if 'benchmarks' in BUILD_TARGETS:
+                self._build_targets.append('benchmarks')
         BUILD_TARGETS.append(build_dir)
 
         env.AddMethod(self.require, 'require')
@@ -596,6 +600,7 @@ class PreReqComponent():
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
         server_reqs = ['pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
+        benchmark_reqs = ['e3smio']
 
         reqs = []
         reqs = common_reqs
@@ -605,6 +610,8 @@ class PreReqComponent():
             reqs.extend(server_reqs)
         if self.client_requested():
             reqs.extend(client_reqs)
+        if self.benchmark_requested():
+            reqs.extend(benchmark_reqs)
         opts.Add(ListVariable('DEPS', "Dependencies to build by default", 'all', reqs))
         opts.Update(self.__env)
         if GetOption('build_deps') == 'only':
@@ -817,6 +824,10 @@ class PreReqComponent():
     def test_requested(self):
         """Return True if test build is requested"""
         return "test" in self._build_targets
+
+    def benchmark_requested(self):
+        """Return True if benchmark build is requested"""
+        return "benchmarks" in self._build_targets
 
     def _modify_prefix(self, comp_def):
         """Overwrite the prefix in cases where we may be using the default"""
