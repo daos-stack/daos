@@ -1803,12 +1803,8 @@ cont_refresh_vos_agg_eph_one(void *data)
 		cont_child->sc_ec_agg_eph_boundary < arg->min_eph ? "update" : "ignore",
 		cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
 
-	if (!cont_child->sc_ec_agg_eph_valid ||
-	    !cont_child->sc_pool->spc_pool->sp_rebuilding) {
-		/* don't refresh the boundary during rebuild */
-		if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
-			cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
-	}
+	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
+		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
 
 	cont_child->sc_ec_agg_eph_valid = 1;
 	ds_cont_child_put(cont_child);

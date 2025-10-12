@@ -2423,7 +2423,8 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		      uint32_t rpc_map_ver, uint32_t flags)
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
-		if (child->sc_ec_agg_active) {
+		/* EC aggregation is still inflight, rebuild should wait until it's paused */
+		if (ds_cont_child_ec_aggregating(child)) {
 			D_ERROR(DF_CONT" ec aggregate still active, rebuilding %d\n",
 				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
 				child->sc_pool->spc_pool->sp_rebuilding);
@@ -2539,12 +2540,6 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
-	D_ASSERT(ioc.ioc_coc != NULL);
-	if (ioc.ioc_coc->sc_pool->spc_pool->sp_rebuilding ||
-	    ioc.ioc_coc->sc_pool->spc_remote_scan) {
-		rc = -DER_UPDATE_AGAIN;
-		goto out;
-	}
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oer->er_dkey;
@@ -2629,12 +2624,6 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
-	if (ioc.ioc_coc->sc_pool->spc_pool->sp_rebuilding ||
-	    ioc.ioc_coc->sc_pool->spc_remote_scan) {
-		rc = -DER_UPDATE_AGAIN;
-		goto out;
-	}
-
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oea->ea_dkey;
@@ -2664,7 +2653,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		if (rc)
 			D_ERROR(DF_UOID " bio_iod_post failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 				DP_RC(rc));
-end:
+	end:
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, &ioc.ioc_io_size, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM) {
@@ -3384,18 +3373,11 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	}
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION) {
-		/* EC aggregation is still inflight, rebuild should wait until it's paused */
-		if (ioc->ioc_coc->sc_ec_agg_active || ioc->ioc_coc->sc_ec_agg_updates > 0) {
-			rc = -DER_FETCH_AGAIN;
-			goto failed;
-		}
-
 		/* just in case ds_pool::sp_rebuilding is not set, pause my local EC aggregation
-		 * by setting this bit..
+		 * by setting this flag.
+		 * NB: it's a lockess write to shared data structure and it's harmless.
 		 */
-		if (!ioc->ioc_coc->sc_pool->spc_remote_scan)
-			ioc->ioc_coc->sc_pool->spc_remote_scan = 1;
-
+		ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_scan = 1;
 		flags = DTX_FOR_MIGRATION;
 	}
 

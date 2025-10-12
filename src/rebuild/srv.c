@@ -2285,9 +2285,7 @@ rebuild_fini_one(void *arg)
 			rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
 	}
 
-	dpc->spc_remote_scan = 0;
 	ds_pool_child_put(dpc);
-
 	return 0;
 }
 
@@ -2302,6 +2300,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	D_ASSERT(rpt->rt_pool->sp_rebuilding > 0);
 	rpt->rt_pool->sp_rebuilding--;
+	rpt->rt_pool->sp_rebuild_scan = 0;
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);

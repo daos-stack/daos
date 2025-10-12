@@ -91,8 +91,12 @@ struct ds_pool {
 	 * rebuild job.
 	 */
 	uint32_t		sp_rebuild_gen;
-
 	int			sp_rebuilding;
+	/**
+	 * someone has already messaged this pool to for rebuild scan,
+	 * NB: all xstreams can do lockless-write on it but it's OK
+	 */
+	int			sp_rebuild_scan;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -182,8 +186,7 @@ struct ds_pool_child {
 	ABT_eventual	spc_ref_eventual;
 
 	uint64_t	spc_discard_done:1,
-			spc_no_storage:1, /* The pool shard has no storage. */
-			spc_remote_scan:1; /* remote servers started scan for rebuild */
+			spc_no_storage:1; /* The pool shard has no storage. */
 
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */

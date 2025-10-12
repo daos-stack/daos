@@ -3008,14 +3008,6 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 				break;
 			}
 			continue;
-
-		} else if (rc == -DER_FETCH_AGAIN) {
-			waited++;
-			dss_sleep(5000);
-			D_DEBUG(DB_REBUILD,
-				"waited %d seconds for suspending EC aggregation\n", waited * 5);
-			continue;
-
 		} else if (rc && rc != -DER_SHUTDOWN &&
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {
@@ -3037,6 +3029,8 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
 			 * aggregation yet, so let's retry.
 			 */
+			waited++;
+			dss_sleep(5000);
 			D_DEBUG(DB_REBUILD, DF_UOID "retry with %d \n", DP_UOID(arg->oid), rc);
 			rc = 0;
 			continue;

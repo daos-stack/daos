@@ -985,7 +985,7 @@ rebuild_scanner(void *data)
 {
 	struct rebuild_scan_arg		arg = { 0 };
 	struct rebuild_tgt_pool_tracker *rpt = data;
-	struct ds_pool_child		*child;
+	struct ds_pool_child		*child = NULL;
 	struct rebuild_pool_tls		*tls;
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
@@ -997,6 +997,12 @@ rebuild_scanner(void *data)
 				      rpt->rt_rebuild_gen);
 	if (tls == NULL)
 		return 0;
+
+	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	if (child == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	ds_cont_child_wait_ec_agg_pause(child);
 
 	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
 	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
@@ -1038,9 +1044,6 @@ rebuild_scanner(void *data)
 		}
 	}
 
-	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	if (child == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
 
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
@@ -1049,11 +1052,11 @@ rebuild_scanner(void *data)
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 rebuild_container_scan_cb, NULL, &arg, NULL);
 	if (rc < 0)
-		D_GOTO(put, rc);
+		D_GOTO(out, rc);
 	rc = 0; /* rc might be 1 if rebuild is aborted */
-put:
-	ds_pool_child_put(child);
 out:
+	if (child)
+		ds_pool_child_put(child);
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_free(&ult_send);
@@ -1280,7 +1283,6 @@ tls_lookup:
 	}
 
 	rpt->rt_pool->sp_rebuilding++; /* reset in rebuild_tgt_fini */
-	dss_sleep(10 * 1000); /* XXX: time window for EC aggregation to pause */
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
