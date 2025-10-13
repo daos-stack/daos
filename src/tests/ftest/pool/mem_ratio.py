@@ -99,7 +99,7 @@ class MemRatioTest(TestWithServers):
             data[name] = {"mem-ratio": pool.mem_ratio.value, "size": pool.size.value}
             try:
                 data[name]["tier_bytes"] = _result["response"]["tier_bytes"]
-                data[name]["mem_file_bytes"] = _result["response"]["mem_file_bytes"],
+                data[name]["mem_file_bytes"] = _result["response"]["mem_file_bytes"]
                 data[name]["create_ratio"] = round(
                     int(data[name]["mem_file_bytes"]) / int(data[name]["tier_bytes"][0]) * 100)
                 if data[name]["mem-ratio"]:
