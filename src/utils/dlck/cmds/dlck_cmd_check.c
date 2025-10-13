@@ -82,7 +82,7 @@ exec_one(void *arg)
 	}
 
 	d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
-		/** do not process the given file if the target is excluded */
+		/** do not process the given file if the target is not requested */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xa->xs->tgt_id)) {
 			/** report the progress to the main thread */
 			++xa->progress;
