@@ -183,6 +183,8 @@ wait_all(struct dlck_engine *engine, struct dlck_exec *de, unsigned progress_max
 	return rc;
 }
 
+#define STOP_TGT_STR "Stop targets... "
+
 /**
  * The main thread spawns and waits for other threads to complete their tasks.
  */
@@ -202,42 +204,60 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	/** create a log directory */
 	ctrl->log_dir = mkdtemp(log_dir_template);
-	if (ctrl->log_dir == NULL || DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) {
-		if (d_fault_inject_is_enabled()) {
-			errno = daos_fail_value_get();
-		}
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) {
+		D_ASSERT(ctrl->log_dir != NULL);
+		ctrl->log_dir = NULL;
+		errno         = daos_fail_value_get();
+	}
+	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
 		DLCK_PRINTF_ERRL(dp, "Cannot create log directory: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 	DLCK_PRINTF(dp, "Log directory: %s\n", ctrl->log_dir);
 
-	/** create pools directories */
+	DLCK_PRINT(dp, "Start the engine... ");
+	rc = dlck_engine_start(&ctrl->engine, &engine);
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) {
+		D_ASSERT(rc == DER_SUCCESS);
+		rc = daos_errno2der(daos_fail_value_get());
+	}
+	if (rc != DER_SUCCESS) {
+		DLCK_PRINT_RC(dp, rc);
+		return rc;
+	}
+	DLCK_PRINT_OK(dp);
+
+	if (d_list_empty(&ctrl->files.list)) {
+		/** no files specified means all files are requested */
+		DLCK_PRINT(dp, "Read the list of pools... ");
+		rc = dlck_pool_list(&ctrl->files.list);
+		if (rc != DER_SUCCESS) {
+			DLCK_PRINT_RC(dp, rc);
+			(void)dlck_engine_stop(engine);
+			return rc;
+		}
+		DLCK_PRINT_OK(dp);
+	}
+
+	DLCK_PRINT(dp, "Create pools directories... ");
 	rc = dlck_pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list, dp);
 	if (rc != DER_SUCCESS) {
-		return rc;
-	}
-	DLCK_PRINT(dp, "Pool directories created.\n");
-
-	/** start the engine */
-	rc = dlck_engine_start(&ctrl->engine, &engine);
-	if (rc != DER_SUCCESS || DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) {
-		if (d_fault_inject_is_enabled()) {
-			rc = daos_errno2der(daos_fail_value_get());
-		}
-		DLCK_PRINTF_ERRL(dp, "Cannot start the engine: " DF_RC "\n", DP_RC(rc));
-		return rc;
-	}
-	DLCK_PRINT(dp, "Engine started.\n");
-
-	rc = dlck_engine_exec_all_async(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
-					dlck_engine_xstream_arg_free, &de);
-	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERRL(dp, "Cannot start targets: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINT_RC(dp, rc);
 		(void)dlck_engine_stop(engine);
 		return rc;
 	}
-	DLCK_PRINT(dp, "Targets started.\n");
+	DLCK_PRINT_OK(dp);
+
+	DLCK_PRINT(dp, "Start targets... ");
+	rc = dlck_engine_exec_all_async(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
+					dlck_engine_xstream_arg_free, &de);
+	if (rc != DER_SUCCESS) {
+		DLCK_PRINT_RC(dp, rc);
+		(void)dlck_engine_stop(engine);
+		return rc;
+	}
+	DLCK_PRINT_OK(dp);
 
 	/** wait for all targets to report the job done */
 	rc = wait_all(engine, &de, file_num, dp);
@@ -258,21 +278,22 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		return -DER_NOMEM;
 	}
 
-	/** join target ULTs */
+	DLCK_PRINT(dp, STOP_TGT_STR "\n");
 	rc = dlck_engine_join_all(engine, &de, rcs);
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERRL(dp, "Cannot stop targets: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINT_MSG_RC(dp, STOP_TGT_STR, rc);
 		/** Cannot stop the engine in this case. It will probably crash. */
 		return rc;
 	}
-	DLCK_PRINT(dp, "Targets stopped.\n");
+	DLCK_PRINT_MSG_OK(dp, STOP_TGT_STR);
 
+	DLCK_PRINT(dp, "Stop the engine... ");
 	rc = dlck_engine_stop(engine);
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERRL(dp, "Cannot stop the engine: " DF_RC "\n", DP_RC(rc));
+		DLCK_PRINT_RC(dp, rc);
 		/** Ignore this error for now in an attempt to print the collected results. */
 	} else {
-		DLCK_PRINT(dp, "Engine stopped.\n");
+		DLCK_PRINT_OK(dp);
 	}
 
 	rc2 = dlck_report_results(rcs, ctrl->engine.targets, dp);

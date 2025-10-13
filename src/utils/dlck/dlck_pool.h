@@ -84,4 +84,16 @@ struct co_uuid_list_elem {
 int
 dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids);
 
+/**
+ * Add all files (pool UUIDs + all targets bitmap) to \p file_list.
+ *
+ * \param[out]	file_list	List of all files belonging to the given DAOS engine.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Possibly other errors.
+ */
+int
+dlck_pool_list(d_list_t *file_list);
+
 #endif /** __DLCK_POOL__ */

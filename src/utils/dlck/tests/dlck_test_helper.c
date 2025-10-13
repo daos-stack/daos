@@ -380,12 +380,6 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	int                 rc;
 	int                 rc_abt;
 
-	/** prepare pool storage directories */
-	rc = dlck_pool_mkdir_all(args->engine.storage_path, &args->files.list, NULL);
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
-
 	rc_abt = ABT_init(0, NULL);
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
@@ -397,6 +391,20 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	if (rc != DER_SUCCESS) {
 		(void)ABT_finalize();
 		return rc;
+	}
+
+	if (d_list_empty(&args->files.list)) {
+		/** no files specified means all files are requested */
+		rc = dlck_pool_list(&args->files.list);
+		if (rc != DER_SUCCESS) {
+			goto fail_engine_stop;
+		}
+	}
+
+	/** prepare pool storage directories */
+	rc = dlck_pool_mkdir_all(args->engine.storage_path, &args->files.list, NULL);
+	if (rc != DER_SUCCESS) {
+		goto fail_engine_stop;
 	}
 
 	D_ALLOC_ARRAY(bundle->co_uuids, args->engine.targets);

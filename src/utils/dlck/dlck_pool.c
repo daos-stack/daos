@@ -144,3 +144,61 @@ dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids)
 	return vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_list_append, NULL,
 			   co_uuids, NULL);
 }
+
+int
+dlck_pool_list(d_list_t *file_list)
+{
+	D_LIST_HEAD(pool_list);
+	int                   pool_cnt  = 0;
+	struct smd_pool_info *pool_info = NULL;
+	struct smd_pool_info *tmp;
+	struct dlck_file     *file = NULL;
+	struct dlck_file     *file_tmp;
+	int                   rc;
+
+	D_ASSERT(d_list_empty(file_list));
+
+	/** get the list of pools */
+	rc = smd_pool_list(&pool_list, &pool_cnt);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		/** allocate a new file */
+		D_ALLOC_PTR(file);
+		if (file == NULL) {
+			rc = -DER_NOMEM;
+			goto err;
+		}
+
+		/** populate and append the file */
+		uuid_copy(file->po_uuid, pool_info->spi_id);
+		file->targets_bitmap = -1; /** all targets by default */
+		d_list_add(&file->link, file_list);
+
+		/** remove the pool from the list and free it */
+		d_list_del(&pool_info->spi_link);
+		smd_pool_free_info(pool_info);
+		pool_info = NULL;
+	}
+
+	return DER_SUCCESS;
+
+err:
+	/** free the list of files */
+	d_list_for_each_entry_safe(file, file_tmp, file_list, link) {
+		d_list_del(&file->link);
+		D_FREE(file);
+	}
+	D_ASSERT(d_list_empty(file_list));
+
+	/** free the list of pools */
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		d_list_del(&pool_info->spi_link);
+		smd_pool_free_info(pool_info);
+		pool_info = NULL;
+	}
+
+	return rc;
+}

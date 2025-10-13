@@ -50,8 +50,6 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
 		RETURN_FAIL(state, ENOMEM, "Out of memory");
 	}
 
-	file->desc = arg;
-
 	D_STRNDUP(arg_copy, arg, FILE_STR_MAX);
 	if (arg_copy == NULL) {
 		FAIL(state, rc, ENOMEM, "Out of memory");
