@@ -4615,8 +4615,8 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 		*tree_feats = root->tr_feats;
 	}
 
-	/* XXX should be multi-thread safe */
 	DLCK_PRINT(dp, "Tree class... ");
+	/* XXX should be multi-thread safe */
 	if (tree_class >= BTR_TYPE_MAX || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_INV_CLASS)) {
 		DLCK_PRINTF_ERR(dp, INVALID_CLASS_FMT, tree_class);
 		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT, tree_class);
