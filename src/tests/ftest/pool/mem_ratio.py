@@ -31,7 +31,7 @@ class MemRatioTest(TestWithServers):
         result = self.server_managers[0].search_engine_logs(pattern)
         if not result.passed:
             raise error
-        self.log.debug("Pool failure expected due to: '%s'", pattern)
+        self.log.debug("Pool create failure expected due to: '%s'", pattern)
 
     @staticmethod
     def readable_bytes(size):
@@ -96,58 +96,50 @@ class MemRatioTest(TestWithServers):
         for pool in pools:
             name = str(pool)
             _result = json.loads(pool.dmg.result.stdout)
+            data[name] = {"mem-ratio": pool.mem_ratio.value, "size": pool.size.value}
             try:
-                data[name] = {
-                    "mem-ratio": pool.mem_ratio.value,
-                    "size": pool.size.value,
-                    "tier_bytes": _result["response"]["tier_bytes"],
-                    "mem_file_bytes": _result["response"]["mem_file_bytes"],
-                }
+                data[name]["tier_bytes"] = _result["response"]["tier_bytes"]
+                data[name]["mem_file_bytes"] = _result["response"]["mem_file_bytes"],
                 data[name]["create_ratio"] = round(
                     int(data[name]["mem_file_bytes"]) / int(data[name]["tier_bytes"][0]) * 100)
-                _difference = abs(data[name]["mem-ratio"] - data[name]["create_ratio"])
-                if data[name]["mem-ratio"] and _difference > 1:
-                    errors.append(
-                        f"{name} - Mem ratio ({data[name]['mem-ratio']}) differs from pool "
-                        f"create ({data[name]['create_ratio']}) by {_difference}")
-            except (IndexError, KeyError, TypeError, ValueError):
+                if data[name]["mem-ratio"]:
+                    _difference = abs(data[name]["mem-ratio"] - data[name]["create_ratio"])
+                    if _difference > 1:
+                        errors.append(
+                            f"{name} - Mem ratio ({data[name]['mem-ratio']}) differs from pool "
+                            f"create ({data[name]['create_ratio']}) by {_difference}")
+            except (IndexError, KeyError, TypeError, ValueError) as error:
                 # Unexpected response from pool create
-                data[name] = {
-                    "mem-ratio": pool.mem_ratio.value,
-                    "tier_bytes": "<ERROR>",
-                    "mem_file_bytes": "<ERROR>",
-                    "create_ratio": 0
-                }
-                errors.append(f"{name} - Unexpected dmg pool create response: {_result}")
+                data[name]["tier_bytes"] = "<ERROR>"
+                data[name]["mem_file_bytes"] = "<ERROR>"
+                data[name]["create_ratio"] = 0
+                errors.append(f"{name} - Unexpected dmg pool create response: {error} / {_result}")
 
         # Verify the pool blob and memory file sizes align with the requested mem ratio
         self.log_step(f"Query the {len(pools)} pool(s)")
-        pool_queries = {}
         for pool in pools:
-            pool_queries[str(pool)] = dmg.pool_query(pool.identifier)
-
-        # Collect the pool query output values
-        for name, query in pool_queries.items():
+            _query = dmg.pool_query(pool.identifier)
             try:
-                data[name]["total_engines"] = query["response"]["total_engines"]
+                data[name]["total_engines"] = _query["response"]["total_engines"]
                 data[name]["tier_stats(query)"] = {}
-                for item in query["response"]["tier_stats"]:
+                for item in _query["response"]["tier_stats"]:
                     data[name]["tier_stats(query)"][item["media_type"]] = item["total"]
-                data[name]["mem_file_bytes(query)"] = query["response"]["mem_file_bytes"]
+                data[name]["mem_file_bytes(query)"] = _query["response"]["mem_file_bytes"]
                 data[name]["query_ratio"] = round(
                     int(data[name]["mem_file_bytes(query)"])
                     / int(data[name]["tier_stats(query)"]["scm"]) * 100)
-                _difference = abs(data[name]["mem-ratio"] - data[name]["query_ratio"])
-                if data[name]["mem-ratio"] and _difference > 1:
-                    errors.append(
-                        f"{name} - Mem ratio ({data[name]['mem-ratio']}) differs from pool "
-                        f"query ({data[name]['query_ratio']}) by {_difference}")
-            except (IndexError, KeyError, TypeError, ValueError):
+                if data[name]["mem-ratio"]
+                    _difference = abs(data[name]["mem-ratio"] - data[name]["query_ratio"])
+                    if _difference > 1:
+                        errors.append(
+                            f"{name} - Mem ratio ({data[name]['mem-ratio']}) differs from pool "
+                            f"query ({data[name]['query_ratio']}) by {_difference}")
+            except (IndexError, KeyError, TypeError, ValueError) as error:
                 data[name]["total_engines"] = "<ERROR>"
                 data[name]["tier_stats(query)"] = "<ERROR>"
                 data[name]["mem_file_bytes(query)"] = "<ERROR>"
                 data[name]["query_ratio"] = 0
-                errors.append(f"{name} - Unexpected dmg pool query response: {query}")
+                errors.append(f"{name} - Unexpected dmg pool query response: {error} / {_query}")
 
         # Report the test results
         if not data:
