@@ -77,7 +77,7 @@ exec_one(void *arg)
 	rc = dlck_engine_xstream_init(xa->xs);
 	if (rc != DER_SUCCESS) {
 		xa->rc = rc;
-		(void)dlck_xstream_progress_end(xa, main_dp);
+		xa->progress = DLCK_XSTREAM_PROGRESS_END;
 		return;
 	}
 
@@ -85,15 +85,7 @@ exec_one(void *arg)
 		/** do not process the given file if the target is excluded */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xa->xs->tgt_id)) {
 			/** report the progress to the main thread */
-			rc = dlck_xstream_progress_inc(xa, main_dp);
-			if (rc != DER_SUCCESS) {
-				/**
-				 * Since advancing the progress failed, DLCK may end up in an
-				 * infinite loop.
-				 */
-				dlck_xstream_set_rc(xa, rc);
-				break;
-			}
+			++xa->progress;
 			continue;
 		}
 
@@ -103,7 +95,7 @@ exec_one(void *arg)
 		if (rc != DER_SUCCESS) {
 			/** There is no point continuing without a logfile. */
 			dlck_xstream_set_rc(xa, rc);
-			(void)dlck_xstream_progress_end(xa, main_dp);
+			xa->progress = DLCK_XSTREAM_PROGRESS_END;
 			break;
 		}
 
@@ -124,14 +116,7 @@ exec_one(void *arg)
 		dlck_print_worker_fini(&dp);
 
 		/** report the progress to the main thread */
-		rc = dlck_xstream_progress_inc(xa, main_dp);
-		if (rc != DER_SUCCESS) {
-			/**
-			 * Since advancing the progress failed, DLCK may end up in an infinite loop.
-			 */
-			dlck_xstream_set_rc(xa, rc);
-			break;
-		}
+		++xa->progress;
 	}
 
 	if (xa->rc != DER_SUCCESS) {
@@ -176,12 +161,7 @@ wait_all(struct dlck_engine *engine, struct dlck_exec *de, unsigned progress_max
 		all_concluded = true;
 
 		for (int i = 0; i < engine->targets; ++i) {
-			rc = dlck_xstream_progress_get(de->ult_args[i], &progress[i]);
-			if (rc != DER_SUCCESS) {
-				DLCK_PRINTF_ERRL(dp, "[%d] Failed to read progress: " DF_RC "\n", i,
-						 DP_RC(rc));
-				break;
-			}
+			dlck_xstream_progress_get(de->ult_args[i], &progress[i]);
 
 			/** at least one of the threads did not conclude means we have to keep
 			 * waiting */

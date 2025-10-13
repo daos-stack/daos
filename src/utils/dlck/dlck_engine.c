@@ -744,8 +744,6 @@ dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_pt
 	xa->xs     = &engine->xss[idx];
 	xa->rc     = DER_SUCCESS;
 
-	ABT_mutex_create(&xa->progress_mutex);
-
 	*output_arg = xa;
 
 	return DER_SUCCESS;
@@ -762,8 +760,6 @@ dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg)
 	}
 
 	rc = xa->rc;
-
-	ABT_mutex_free(&xa->progress_mutex);
 
 	D_FREE(*arg);
 	*arg = NULL;
