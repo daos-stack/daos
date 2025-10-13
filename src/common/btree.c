@@ -4537,7 +4537,7 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 {
 	uint64_t special_feat;
 
-	if (DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_FEATURES)) {
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_FEATURES)) { /** fault injection */
 		return -DER_PROTO;
 	}
 

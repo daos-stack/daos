@@ -905,7 +905,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 
 	D_ASSERT(xs_ctxt != NULL);
 
-	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_BIO)) {
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_BIO)) { /** fault injection */
 		return daos_errno2der(daos_fail_value_get());
 	}
 

@@ -125,7 +125,7 @@ dlck_report_results(int *rcs, unsigned targets, struct dlck_print *dp)
 	struct dlck_print_main *dpm = dlck_print_main_get_custom(dp);
 	int                     rc;
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_REPORT)) {
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_REPORT)) { /** fault injection */
 		return daos_errno2der(daos_fail_value_get());
 	}
 

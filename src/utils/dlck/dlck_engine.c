@@ -495,7 +495,7 @@ dlck_engine_stop(struct dlck_engine *engine)
 {
 	int rc;
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_STOP)) {
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_STOP)) { /** fault injection */
 		return daos_errno2der(daos_fail_value_get());
 	}
 
@@ -569,7 +569,7 @@ dlck_engine_exec_all_async(struct dlck_engine *engine, dlck_ult_func exec_one,
 
 	D_ASSERT(de != NULL);
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_EXEC)) {
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_EXEC)) { /** fault injection */
 		return daos_errno2der(daos_fail_value_get());
 	}
 
