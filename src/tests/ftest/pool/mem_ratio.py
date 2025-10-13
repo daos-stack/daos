@@ -7,7 +7,7 @@ import json
 
 from apricot import TestWithServers
 from general_utils import bytes_to_human, list_to_str, report_errors
-from test_utils_pool import add_pools, get_pool_create_percentages, POOL_NAMESPACE
+from test_utils_pool import POOL_NAMESPACE, add_pools, get_pool_create_percentages
 
 
 class MemRatioTest(TestWithServers):
