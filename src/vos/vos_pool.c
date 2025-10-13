@@ -1033,14 +1033,11 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		goto umem_open;
 	}
 
-	DLCK_PRINT(dp, "PMEM pool... ");
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL) {
-		DLCK_PRINT_YES_NO(dp, DLCK_YES);
 		store.store_type = DAOS_MD_PMEM;
 		goto umem_open;
 	}
-	DLCK_PRINT_YES_NO(dp, DLCK_NO);
 
 	DLCK_PRINT(dp, "Open BIO meta context... ");
 	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:" DF_UUID "\n", xs_ctxt,

@@ -1506,23 +1506,17 @@ gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_pri
 	rc = dbtree_open_inplace_dp(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL, NULL, dp,
 				    &gc_info->gi_bins_btr);
 	if (rc) {
-		dlck_print_indent_dec(dp);
-		DLCK_PRINT_MSG_RC(dp, DLCK_GC_TREE_STR, rc);
 		DL_ERROR(rc, "Failed to open GC bin tree.");
-		return rc;
+		goto err_exit;
 	}
 
 	if (IS_DLCK(dp)) {
 		rc = dlck_dbtree_check(gc_info->gi_bins_btr);
-		if (rc != DER_SUCCESS) {
-			dlck_print_indent_dec(dp);
-			DLCK_PRINT_MSG_RC(dp, DLCK_GC_TREE_STR, rc);
-			return rc;
-		}
 	}
 
+err_exit:
 	dlck_print_indent_dec(dp);
-	DLCK_PRINT_MSG_OK(dp, DLCK_GC_TREE_STR);
+	DLCK_PRINT_MSG_RC(dp, DLCK_GC_TREE_STR, rc);
 
 	return rc;
 }

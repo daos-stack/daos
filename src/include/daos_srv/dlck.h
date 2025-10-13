@@ -80,7 +80,13 @@ struct dlck_print {
 #define DLCK_PRINT_MSG_OK(print, msg) DLCK_PRINT(print, msg DLCK_OK_SUFFIX "\n")
 
 #define DLCK_PRINT_MSG_RC(print, msg, rc)                                                          \
-	DLCK_PRINTF(print, msg DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc))
+	do {                                                                                       \
+		if (rc == DER_SUCCESS) {                                                           \
+			DLCK_PRINT_MSG_OK(print, msg);                                             \
+		} else {                                                                           \
+			DLCK_PRINTF(print, msg DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc));            \
+		}                                                                                  \
+	} while (0)
 
 static inline void
 dlck_print_indent_set(struct dlck_print *dp)
