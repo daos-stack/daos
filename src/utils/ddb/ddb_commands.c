@@ -1378,8 +1378,8 @@ done:
 }
 
 static int
-dtx_stat_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+dtx_stat_cont_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		 vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
 	struct ddb_ctx             *ctx;
 	struct dv_indexed_tree_path itp = {0};
@@ -1410,7 +1410,7 @@ done:
 }
 
 static int
-dtx_stat_path(struct ddb_ctx *ctx, char *path)
+dtx_stat_cont_warp(struct ddb_ctx *ctx, char *path)
 {
 	struct dv_indexed_tree_path itp = {0};
 	int                         rc;
@@ -1446,7 +1446,7 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 	}
 
 	if (opt->path != NULL && opt->path[0] != '\0') {
-		rc = dtx_stat_path(ctx, opt->path);
+		rc = dtx_stat_cont_warp(ctx, opt->path);
 		goto done;
 	}
 
@@ -1455,8 +1455,8 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 	param.ip_hdl        = ctx->dc_poh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	do {
-		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cb, &args,
-				 NULL);
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cont_cb,
+				 &args, NULL);
 	} while (rc > 0);
 	if (rc == 0)
 		ddb_printf(ctx, "Number of committed DTX of the pool:\t\t\t%" PRIu32 "\n",
@@ -1496,8 +1496,8 @@ done:
 }
 
 static int
-dtx_aggr_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+dtx_aggr_cont_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		 vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
 	struct dv_indexed_tree_path itp = {0};
 	struct dtx_aggr_args       *args;
@@ -1522,7 +1522,7 @@ done:
 }
 
 static int
-dtx_aggr_path(struct ddb_ctx *ctx, char *path, uint64_t *epoch)
+dtx_aggr_cont_warp(struct ddb_ctx *ctx, char *path, uint64_t *epoch)
 {
 	struct dv_indexed_tree_path itp = {0};
 	int                         rc;
@@ -1586,7 +1586,7 @@ ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
 	}
 
 	if (opt->path != NULL && opt->path[0] != '\0') {
-		rc = dtx_aggr_path(ctx, opt->path, args.epoch);
+		rc = dtx_aggr_cont_warp(ctx, opt->path, args.epoch);
 		goto done;
 	}
 
@@ -1594,8 +1594,8 @@ ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
 	param.ip_hdl        = ctx->dc_poh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	do {
-		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_aggr_cb, &args,
-				 NULL);
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_aggr_cont_cb,
+				 &args, NULL);
 	} while (rc > 0);
 
 done:

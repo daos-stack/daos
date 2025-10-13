@@ -336,7 +336,6 @@ func ddbDtxAggr(ctx *DdbContext, path string, epoch uint64, date string) error {
 	options := C.struct_dtx_aggr_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.format = C.DDB_DTX_AGGR_NOW
 	if epoch != math.MaxUint64 {
 		options.format = C.DDB_DTX_AGGR_EPOCH
 		options.epoch = C.uint64_t(epoch)
