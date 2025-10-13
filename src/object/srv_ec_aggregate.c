@@ -1352,17 +1352,18 @@ agg_peer_update_ult(void *arg)
 	uint32_t		 peer, peer_shard;
 	struct dc_object	*obj = NULL;
 	crt_rpc_t		*rpc = NULL;
-	int			 ult_rc = 0, rc = 0;
+	int			 peer_rc = 0, rc = 0;
+	int			 peer_updated = 0;
 	uint64_t		 enqueue_id;
 	uint32_t		 max_delay = 0;
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
-		D_GOTO(out, ult_rc = -DER_TIMEDOUT);
+		D_GOTO(out, rc = -DER_TIMEDOUT);
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	ult_rc = agg_peer_check_avail(agg_param, entry);
-	if (ult_rc != 0)
-		D_GOTO(out, ult_rc);
+	rc = agg_peer_check_avail(agg_param, entry);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	csummer = ec_agg_param2csummer(agg_param);
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -1383,7 +1384,7 @@ agg_peer_update_ult(void *arg)
 			D_ERROR(DF_UOID" pidx %d to peer %d, rank %d tag %d obj_req_create "
 				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
 				tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
-			ult_rc = ult_rc ?: rc;
+			peer_rc = peer_rc ?: rc;
 			/* XXX no way to rollback parity writes today, so just continue */
 			continue;
 		}
@@ -1459,6 +1460,7 @@ agg_peer_update_ult(void *arg)
 			D_CDEBUG(rc == 0, DB_TRACE, DLOG_ERR,
 				 "update parity[%d] to %d:%d, status = "DF_RC"\n",
 				 peer, tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
+			peer_updated += rc == 0;
 		}
 	next:
 		if (bulk_hdl)
@@ -1474,12 +1476,16 @@ agg_peer_update_ult(void *arg)
 			dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 			goto retry;
 		}
-		ult_rc = ult_rc ?: rc;
+		peer_rc = peer_rc ?: rc;
 	}
 out:
 	if (obj)
 		obj_decref(obj);
-	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&ult_rc, sizeof(ult_rc));
+	/* XXX: before switching to DTX, any successful parity write is deemed as
+	 * success of all parity shards.
+	 */
+	rc = peer_updated > 0 ? 0 : peer_rc;
+	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
 /* Invokes helper function to send the generated parity and the stripe number
@@ -1552,7 +1558,8 @@ agg_process_holes_ult(void *arg)
 	uint64_t		 ext_tot_len = 0;
 	uint32_t		 pidx = ec_age2pidx(entry);
 	uint32_t		 peer;
-	int			 rc = 0, ult_rc = 0;
+	int			 rc = 0, peer_rc = 0;
+	int			 peer_updated = 0;
 	uint32_t		 max_delay = 0;
 	uint64_t		 enqueue_id;
 
@@ -1581,8 +1588,8 @@ agg_process_holes_ult(void *arg)
 		goto out;
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	ult_rc = agg_peer_check_avail(agg_param, entry);
-	if (ult_rc != 0)
+	rc = agg_peer_check_avail(agg_param, entry);
+	if (rc != 0)
 		goto out;
 
 	obj = obj_hdl2ptr(entry->ae_obj_hdl);
@@ -1610,7 +1617,7 @@ agg_process_holes_ult(void *arg)
 				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, ult_rc = rc);
+			D_GOTO(out, rc);
 			goto out;
 		}
 
@@ -1619,7 +1626,7 @@ agg_process_holes_ult(void *arg)
 					    NULL, -1, &stripe_ud->asu_iod_csums);
 		if (rc != 0) {
 			D_ERROR("setting up iods csums failed: "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, ult_rc = rc);
+			D_GOTO(out, rc);
 			goto out;
 		}
 	}
@@ -1633,7 +1640,7 @@ agg_process_holes_ult(void *arg)
 		if (rc) {
 			D_ERROR(DF_UOID" crt_bulk_create returned: "DF_RC"\n",
 				DP_UOID(entry->ae_oid), DP_RC(rc));
-			D_GOTO(out, ult_rc = rc);
+			D_GOTO(out, rc);
 			goto out;
 		}
 	}
@@ -1655,7 +1662,7 @@ agg_process_holes_ult(void *arg)
 		if (rc) {
 			D_ERROR(DF_UOID" obj_req_create failed: "DF_RC"\n",
 				DP_UOID(entry->ae_oid), DP_RC(rc));
-			ult_rc = ult_rc ?: rc;
+			peer_rc = peer_rc ?: rc;
 			continue;
 		}
 		ec_rep_in = crt_req_get(rpc);
@@ -1693,6 +1700,7 @@ agg_process_holes_ult(void *arg)
 			D_CDEBUG(rc == 0, DB_TRACE, DLOG_ERR,
 				 DF_UOID" parity[%d] er_status = "DF_RC"\n",
 				 DP_UOID(entry->ae_oid), peer, DP_RC(rc));
+			peer_updated += rc == 0;
 		}
 		crt_req_decref(rpc);
 		rpc = NULL;
@@ -1700,7 +1708,7 @@ agg_process_holes_ult(void *arg)
 			dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 			goto retry;
 		}
-		ult_rc = ult_rc ?: rc;
+		peer_rc = peer_rc ?: rc;
 	}
 
 out:
@@ -1709,7 +1717,11 @@ out:
 	if (obj)
 		obj_decref(obj);
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
-	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&ult_rc, sizeof(ult_rc));
+	/* XXX: before switching to DTX, any successful parity write is deemed as
+	 * success of all parity shards.
+	 */
+	rc = peer_updated > 0 ? 0 : peer_rc;
+	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
 static int
