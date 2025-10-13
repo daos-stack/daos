@@ -921,16 +921,18 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						 orwo->orw_rels.ca_arrays,
 						 orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR(DF_UOID " obj_ec_parity_check failed, " DF_RC "\n",
-					DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_ERROR(rc, DF_CONT ", " DF_UOID " obj_ec_parity_check failed",
+					 DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+					 DP_UOID(orw->orw_oid));
 				goto out;
 			}
 		}
 
 		rc = dc_shard_update_size(rw_args, 0);
 		if (rc) {
-			D_ERROR(DF_UOID " dc_shard_update_size failed, " DF_RC "\n",
-				DP_UOID(orw->orw_oid), DP_RC(rc));
+			DL_ERROR(rc, DF_CONT ", " DF_UOID " dc_shard_update_size failed",
+				 DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+				 DP_UOID(orw->orw_oid));
 			goto out;
 		}
 
@@ -1180,6 +1182,16 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_api_flags = api_args->flags;
 	orw->orw_epoch = auxi->epoch.oe_value;
 	orw->orw_epoch_first = auxi->epoch.oe_first;
+	if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
+		D_ASSERTF(auxi->epoch.oe_value == auxi->epoch.oe_first,
+			  "bad epoch.oe_value " DF_X64 ", epoch.oe_first " DF_X64 "\n",
+			  auxi->epoch.oe_value, auxi->epoch.oe_first);
+		D_ASSERT(api_args->extra_arg != NULL);
+		orw->orw_epoch_first = (uintptr_t)api_args->extra_arg;
+		D_ASSERTF(orw->orw_epoch <= orw->orw_epoch_first,
+			  "bad orw_epoch " DF_X64 ", orw_epoch_first " DF_X64 "\n", orw->orw_epoch,
+			  orw->orw_epoch_first);
+	}
 	orw->orw_dkey_hash = auxi->obj_auxi->dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;

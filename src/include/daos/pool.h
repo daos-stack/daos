@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,6 +85,16 @@
  * Version 3 corresponds to 2.6 (root embedded values, pool service operations tracking KVS)
  */
 #define DAOS_POOL_GLOBAL_VERSION 3
+
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+enum {
+	DAOS_POOL_OBJ_VERSION_1 = 1,
+	DAOS_POOL_OBJ_VERSION_2 = 2,
+	DAOS_POOL_OBJ_VERSION   = DAOS_POOL_OBJ_VERSION_2,
+};
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -197,5 +208,8 @@ int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
 int dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version,
 				    tse_sched_t *sched, tse_task_t **task);
 void dc_pool_abandon_map_refresh_task(tse_task_t *task);
+
+int
+dc_pool_mark_all_slave(void);
 
 #endif /* __DD_POOL_H__ */

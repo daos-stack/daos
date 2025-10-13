@@ -580,6 +580,9 @@ int  d_hhash_key_type(uint64_t key);
 bool d_hhash_key_isptr(uint64_t key);
 int  d_hhash_set_ptrtype(struct d_hhash *hhash);
 bool d_hhash_is_ptrtype(struct d_hhash *hhash);
+typedef int (*d_hhash_traverse_cb_t)(struct d_hlink *link, void *arg);
+int
+d_hhash_traverse(struct d_hhash *hhash, int type, d_hhash_traverse_cb_t cb, void *arg);
 
 /******************************************************************************
  * UUID Hash Table Wrapper

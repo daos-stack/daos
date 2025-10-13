@@ -487,8 +487,12 @@ migrate_pool_tls_create_one(void *data)
 
 	pool_child = ds_pool_child_lookup(arg->pool_uuid);
 	if (pool_child == NULL) {
-		D_ASSERTF(dss_get_module_info()->dmi_xs_id == 0,
-			  "Cannot find the pool "DF_UUIDF"\n", DP_UUID(arg->pool_uuid));
+		/* Local ds_pool_child isn't started yet, return a retry-able error */
+		if (dss_get_module_info()->dmi_xs_id != 0) {
+			D_INFO(DF_UUID ": Local VOS pool isn't ready yet.\n",
+			       DP_UUID(arg->pool_uuid));
+			return -DER_STALE;
+		}
 	} else if (unlikely(pool_child->spc_no_storage)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" "DF_UUID" lost pool shard, ver %d, skip.\n",
 			DP_UUID(arg->pool_uuid), DP_UUID(arg->pool_hdl_uuid), arg->version);
@@ -747,12 +751,20 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			 daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
 			 d_iov_t *csum_iov_fetch, struct migrate_pool_tls *tls)
 {
-	int rc;
+	uint32_t *extra_arg = NULL;
+	int       rc;
+
+	/* pass rebuild epoch by extra_arg */
+	if (flags & DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
+		D_ASSERTF(eph <= mrone->mo_epoch, "bad eph " DF_X64 ", mo_epoch " DF_X64 "\n", eph,
+			  mrone->mo_epoch);
+		extra_arg = (uint32_t *)mrone->mo_epoch;
+	}
 
 retry:
-	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls,
-			   NULL, flags, NULL, csum_iov_fetch);
-	if (rc == -DER_TIMEDOUT &&
+	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
+			   csum_iov_fetch);
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -1082,10 +1094,9 @@ out:
 }
 
 static int
-__migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
-			      daos_iod_t *iods, daos_epoch_t fetch_eph,
-			      daos_epoch_t **ephs, uint32_t iods_num,
-			      struct ds_cont_child *ds_cont, bool encode)
+__migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_iod_t *iods,
+			      daos_epoch_t fetch_eph, daos_epoch_t **ephs, uint32_t iods_num,
+			      struct ds_cont_child *ds_cont, uint32_t flags, bool encode)
 {
 	d_sg_list_t	 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
 	d_iov_t		 iov[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
@@ -1115,8 +1126,7 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	D_DEBUG(DB_REBUILD, DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64"\n",
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey), iods_num, mrone->mo_epoch);
 
-	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iods_num, fetch_eph, DIOF_FOR_MIGRATION,
-			     NULL);
+	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iods_num, fetch_eph, flags, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed: "DF_RC"\n",
 			DP_KEY(&mrone->mo_dkey), DP_RC(rc));
@@ -1220,8 +1230,9 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 
 			update_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
 			update_eph_p = &update_eph;
-			rc = __migrate_fetch_update_parity(mrone, oh, &iod, fetch_eph,
-							   &update_eph_p, 1, ds_cont, true);
+			rc           = __migrate_fetch_update_parity(
+                            mrone, oh, &iod, fetch_eph, &update_eph_p, 1, ds_cont,
+                            DIOF_FOR_MIGRATION | DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY, true);
 			if (rc)
 				return rc;
 		}
@@ -1230,8 +1241,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	/* Otherwise, keep it as replicate recx */
 	if (mrone->mo_iod_num > 0) {
 		rc = __migrate_fetch_update_parity(mrone, oh, mrone->mo_iods, mrone->mo_epoch,
-						   mrone->mo_iods_update_ephs,
-						   mrone->mo_iod_num, ds_cont, false);
+						   mrone->mo_iods_update_ephs, mrone->mo_iod_num,
+						   ds_cont, DIOF_FOR_MIGRATION, false);
 	}
 
 	return rc;
@@ -1566,13 +1577,15 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			 */
 			if (ds_cont->sc_ec_agg_eph_boundary >
 			    mrone->mo_iods_update_ephs_from_parity[i][j])
-				fetch_eph = mrone->mo_epoch;
+				fetch_eph = min(ds_cont->sc_ec_agg_eph_boundary, mrone->mo_epoch);
 			else
 				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
-			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph,
-						mrone->mo_iods_update_ephs_from_parity[i][j],
-						DIOF_EC_RECOV_FROM_PARITY | DIOF_FOR_MIGRATION,
-						ds_cont);
+			rc = __migrate_fetch_update_bulk(
+			    mrone, oh, &iod, 1, fetch_eph,
+			    mrone->mo_iods_update_ephs_from_parity[i][j],
+			    DIOF_EC_RECOV_FROM_PARITY | DIOF_FOR_MIGRATION |
+				DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY,
+			    ds_cont);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -1908,9 +1921,7 @@ migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx, bool *yielded)
 		D_DEBUG(DB_REBUILD, "tgt%d:%u max %u\n",
 			tgt_idx, tgt_cnt, tls->mpt_inflight_max_ult / dss_tgt_nr);
 		*yielded = true;
-		ABT_mutex_lock(tls->mpt_inflight_mutex);
-		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
-		ABT_mutex_unlock(tls->mpt_inflight_mutex);
+		dss_sleep(0);
 		if (tls->mpt_fini)
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 
@@ -1950,29 +1961,6 @@ out:
 }
 
 static void
-migrate_system_try_wakeup(struct migrate_pool_tls *tls)
-{
-	bool wakeup = false;
-	int i;
-
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	for (i = 0; i < dss_tgt_nr; i++) {
-		uint32_t total_cnt;
-
-		total_cnt = atomic_load(&tls->mpt_obj_ult_cnts[i]) +
-			    atomic_load(&tls->mpt_dkey_ult_cnts[i]);
-		if (tls->mpt_inflight_max_ult / dss_tgt_nr > total_cnt)
-			wakeup = true;
-	}
-
-	if (wakeup) {
-		ABT_mutex_lock(tls->mpt_inflight_mutex);
-		ABT_cond_broadcast(tls->mpt_inflight_cond);
-		ABT_mutex_unlock(tls->mpt_inflight_mutex);
-	}
-}
-
-static void
 migrate_system_exit(struct migrate_pool_tls *tls, unsigned int tgt_idx)
 {
 	/* NB: this will only be called during errr handling. In normal case
@@ -1980,7 +1968,6 @@ migrate_system_exit(struct migrate_pool_tls *tls, unsigned int tgt_idx)
 	 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	atomic_fetch_sub(&tls->mpt_obj_ult_cnts[tgt_idx], 1);
-	migrate_system_try_wakeup(tls);
 }
 
 static void
@@ -3930,7 +3917,6 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	if (dms != NULL)
 		*dms = arg.dms;
 
-	migrate_system_try_wakeup(tls);
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u migrating=%s,"
 		" obj_count="DF_U64", rec_count="DF_U64
 		" size="DF_U64" ult cnt %u status %d\n",

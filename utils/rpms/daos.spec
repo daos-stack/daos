@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       1%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -151,6 +151,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: spdk-tools >= 22.01.2
+Conflicts: daos-spdk
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -632,6 +633,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-3
+- Ensure daos-server installs spdk
+
+* Tue Aug 05 2025 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-2
+- Second release candidate for 2.6.4
+
 * Tue Jun 17 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.4-1
 - First release candidate for 2.6.4
 
