@@ -1710,6 +1710,7 @@ copy_srv_cont_hdl(void *arg)
 	struct copy_hdl_arg *copy_arg = arg;
 	struct ds_pool      *pool     = copy_arg->pool;
 
+	D_ASSERT(pool != NULL);
 	if (!uuid_is_null(pool->sp_srv_cont_hdl)) {
 		uuid_copy(copy_arg->srv_cont_hdl, pool->sp_srv_cont_hdl);
 		return 0;
@@ -1738,6 +1739,7 @@ ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 		 * Sometimes the srv container handle failed to be propagated to the pool
 		 * child when it's target is in DOWN state. Let's fix it here.
 		 */
+		arg.pool = pool_child->spc_pool;
 		rc = dss_ult_execute(copy_srv_cont_hdl, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
 		if (!rc) {
 			rc = ds_cont_srv_open(po_uuid, arg.srv_cont_hdl);
