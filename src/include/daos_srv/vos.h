@@ -237,12 +237,11 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
  *
  * \param coh		[IN]	Container open handle.
  * \param ep_max	[IN]	The upper epoch to aggregate.
- * \param all_blobs	[IN]	Aggregate all DTX blob entries or just one.
  *
  * \return			Zero on success, negative value if error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max, bool all_blobs);
+vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max, umem_off_t *blob);
 
 /**
  * Query the container's DTXs statistics information.

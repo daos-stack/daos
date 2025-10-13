@@ -317,16 +317,16 @@ test_asserts(void **unused)
 	daos_handle_t hdl_null = {0};
 
 	/* Missing argument. */
-	expect_assert_failure(vos_dtx_aggregate(hdl_null, NULL, true));
+	expect_assert_failure(vos_dtx_aggregate(hdl_null, NULL, NULL));
 
 	/* Invalid Telemetry global variable. */
 	will_return(__wrap_vos_tls_get, NULL);
-	expect_assert_failure(vos_dtx_aggregate(mock_coh, NULL, true));
+	expect_assert_failure(vos_dtx_aggregate(mock_coh, NULL, NULL));
 
 	/* Invalid pool type. */
 	will_return(__wrap_vos_tls_get, &mock_tls);
 	mock_pool.vp_sysdb = true;
-	expect_assert_failure(vos_dtx_aggregate(mock_coh, NULL, true));
+	expect_assert_failure(vos_dtx_aggregate(mock_coh, NULL, NULL));
 }
 
 /* Can not start a PMEM transtation */
@@ -340,7 +340,7 @@ test_tx_begin_error(void **unused)
 	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, -DER_UNKNOWN);
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, true);
+	rc = vos_dtx_aggregate(mock_coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -361,7 +361,7 @@ test_dbtree_delete_error(void **unused)
 	will_return(__wrap_dbtree_delete, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, true);
+	rc = vos_dtx_aggregate(mock_coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -384,7 +384,7 @@ test_newest_aggregated_error(void **unused)
 	will_return(tx_add_ptr, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, true);
+	rc = vos_dtx_aggregate(mock_coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -410,7 +410,7 @@ test_committed_prev_error(void **unused)
 	will_return(tx_add_ptr, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, true);
+	rc = vos_dtx_aggregate(mock_coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -439,7 +439,7 @@ test_committed_head_error(void **unused)
 	will_return(tx_add_ptr, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, false);
+	rc = vos_dtx_aggregate(mock_coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -448,16 +448,17 @@ test_committed_head_error(void **unused)
 static void
 test_committed_tail_error(void **unused)
 {
+	daos_epoch_t epoch;
+	umem_off_t   dbd_off;
 	int          i;
 	int          rc;
-	daos_epoch_t epoch;
 
 	prep_dtx_entries();
 
-	will_return(__wrap_vos_tls_get, &mock_tls);
 	for (i = 0; i < DBD_BLOBS_CAP - 1; i++) {
 		int j;
 
+		will_return(__wrap_vos_tls_get, &mock_tls);
 		will_return(tx_begin, 0);
 		for (j = 0; j < DBD_BLOB_DF_CAP; j++)
 			mock_dbds[i]->dbd_committed_data[j].dce_epoch += EPOCH_END;
@@ -472,6 +473,8 @@ test_committed_tail_error(void **unused)
 		expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
 		expect_value(__wrap_d_tm_dec_gauge, value, 0);
 	}
+
+	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
 	for (i = 0; i < DBD_BLOB_DF_CAP; i++)
 		will_return(__wrap_dbtree_delete, 0);
@@ -484,7 +487,12 @@ test_committed_tail_error(void **unused)
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
 	epoch = EPOCH_END;
-	rc    = vos_dtx_aggregate(mock_coh, &epoch, true);
+	dbd_off = UMOFF_NULL;
+	for (i = 0; i < DBD_BLOBS_CAP - 1; i++) {
+		rc = vos_dtx_aggregate(mock_coh, &epoch, &dbd_off);
+		assert_rc_equal(rc, 0);
+	}
+	rc = vos_dtx_aggregate(mock_coh, &epoch, &dbd_off);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	for (i = 0; i < DBD_BLOBS_CAP - 1; i++) {
 		int j;
@@ -499,16 +507,17 @@ test_committed_tail_error(void **unused)
 static void
 test_committed_next_error(void **unused)
 {
+	daos_epoch_t epoch;
+	umem_off_t   dbd_off;
 	int          i;
 	int          rc;
-	daos_epoch_t epoch;
 
 	prep_dtx_entries();
 
-	will_return(__wrap_vos_tls_get, &mock_tls);
 	for (i = 0; i < DBD_BLOBS_CAP - 1; i++) {
 		int j;
 
+		will_return(__wrap_vos_tls_get, &mock_tls);
 		will_return(tx_begin, 0);
 		for (j = 0; j < DBD_BLOB_DF_CAP; j++)
 			mock_dbds[i]->dbd_committed_data[j].dce_epoch += EPOCH_END;
@@ -523,6 +532,8 @@ test_committed_next_error(void **unused)
 		expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
 		expect_value(__wrap_d_tm_dec_gauge, value, 0);
 	}
+
+	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
 	for (i = 0; i < DBD_BLOB_DF_CAP; i++)
 		will_return(__wrap_dbtree_delete, 0);
@@ -538,7 +549,12 @@ test_committed_next_error(void **unused)
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
 	epoch = EPOCH_END;
-	rc    = vos_dtx_aggregate(mock_coh, &epoch, true);
+	dbd_off = UMOFF_NULL;
+	for (i = 0; i < DBD_BLOBS_CAP - 1; i++) {
+		rc = vos_dtx_aggregate(mock_coh, &epoch, &dbd_off);
+		assert_rc_equal(rc, 0);
+	}
+	rc = vos_dtx_aggregate(mock_coh, &epoch, &dbd_off);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	for (i = 0; i < DBD_BLOBS_CAP - 1; i++) {
 		int j;
@@ -575,7 +591,7 @@ test_umm_free_error(void **unused)
 	will_return(tx_free, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, true);
+	rc = vos_dtx_aggregate(mock_coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -604,7 +620,7 @@ test_committed_data_error(void **unused)
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
 	epoch = EPOCH_START + (dtx_count - 1) * EPOCH_STEP;
-	rc    = vos_dtx_aggregate(mock_coh, &epoch, true);
+	rc    = vos_dtx_aggregate(mock_coh, &epoch, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -636,7 +652,7 @@ test_dbd_count_error(void **unused)
 	expect_value(tx_abort, error, -DER_UNKNOWN);
 
 	epoch = EPOCH_START + (dtx_count - 1) * EPOCH_STEP;
-	rc    = vos_dtx_aggregate(mock_coh, &epoch, true);
+	rc    = vos_dtx_aggregate(mock_coh, &epoch, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -668,7 +684,7 @@ test_umm_commit_error(void **unused)
 	will_return(tx_commit, -DER_UNKNOWN);
 
 	epoch = EPOCH_START + (dtx_count - 1) * EPOCH_STEP;
-	rc    = vos_dtx_aggregate(mock_coh, &epoch, true);
+	rc    = vos_dtx_aggregate(mock_coh, &epoch, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
 	check_rollback();
 }
@@ -681,7 +697,7 @@ test_empty(void **unused)
 
 	will_return(__wrap_vos_tls_get, &mock_tls);
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, false);
+	rc = vos_dtx_aggregate(mock_coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(mock_cont_df.cd_newest_aggregated, 0);
 	assert_int_equal(mock_cont_df.cd_dtx_committed_head, UMOFF_NULL);
@@ -696,10 +712,10 @@ static void
 test_empty_blob(void **unused)
 {
 	int i;
-	int rc;
+	umem_off_t dbd_off;
 
-	will_return(__wrap_vos_tls_get, &mock_tls);
 	for (i = 0; i < DBD_BLOBS_CAP; i++) {
+		will_return(__wrap_vos_tls_get, &mock_tls);
 		will_return(tx_begin, 0);
 		if (i == DBD_BLOBS_CAP - 1)
 			expect_value(tx_add_ptr, ptr, &mock_cont_df.cd_dtx_committed_tail);
@@ -717,8 +733,12 @@ test_empty_blob(void **unused)
 		expect_value(__wrap_d_tm_dec_gauge, value, 0);
 	}
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, true);
-	assert_rc_equal(rc, 0);
+	dbd_off = UMOFF_NULL;
+	do {
+		int rc;
+		rc = vos_dtx_aggregate(mock_coh, NULL, &dbd_off);
+		assert_rc_equal(rc, 0);
+	} while (!UMOFF_IS_NULL(dbd_off));
 	assert_int_equal(mock_cont_df.cd_newest_aggregated, 0);
 	assert_int_equal(mock_cont_df.cd_dtx_committed_head, UMOFF_NULL);
 	assert_int_equal(mock_cont_df.cd_dtx_committed_tail, UMOFF_NULL);
@@ -731,14 +751,14 @@ test_empty_blob(void **unused)
 static void
 test_10_entries(void **unused)
 {
-	int          i;
-	int          rc;
 	daos_epoch_t epoch;
+	umem_off_t   dbd_off;
+	int          i;
 
 	prep_dtx_entries();
 
-	will_return(__wrap_vos_tls_get, &mock_tls);
 	/* First DTX entries blob */
+	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
 	for (i = 0; i < DBD_BLOB_DF_CAP; i++)
 		will_return(__wrap_dbtree_delete, 0);
@@ -756,7 +776,9 @@ test_10_entries(void **unused)
 	will_return(tx_commit, 0);
 	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
 	expect_value(__wrap_d_tm_dec_gauge, value, DBD_BLOB_DF_CAP);
+
 	/* Second DTX entries blob */
+	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
 	for (i = 0; i < 3; i++)
 		will_return(__wrap_dbtree_delete, 0);
@@ -773,7 +795,9 @@ test_10_entries(void **unused)
 	will_return(tx_commit, 0);
 	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
 	expect_value(__wrap_d_tm_dec_gauge, value, 3);
+
 	/* Third DTX entries blob */
+	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
 	expect_value(tx_add_ptr, ptr, &mock_dbds[2]->dbd_committed_data[0]);
 	expect_value(tx_add_ptr, ptr_size,
@@ -787,8 +811,12 @@ test_10_entries(void **unused)
 	expect_value(__wrap_d_tm_dec_gauge, value, 0);
 
 	epoch = EPOCH_START + (DBD_BLOB_DF_CAP + 2) * EPOCH_STEP;
-	rc    = vos_dtx_aggregate(mock_coh, &epoch, true);
-	assert_rc_equal(rc, 0);
+	dbd_off = UMOFF_NULL;
+	do {
+		int rc;
+		rc = vos_dtx_aggregate(mock_coh, &epoch, &dbd_off);
+		assert_rc_equal(rc, 0);
+	} while (!UMOFF_IS_NULL(dbd_off));
 	assert_int_equal(mock_cont_df.cd_newest_aggregated, epoch);
 	assert_int_equal(mock_cont_df.cd_dtx_committed_head, mock_dbds_off[1]);
 	assert_int_equal(mock_cont_df.cd_dtx_committed_tail, mock_dbds_off[DBD_BLOBS_CAP - 1]);
@@ -801,15 +829,15 @@ test_10_entries(void **unused)
 static void
 test_all_entries(void **unused)
 {
-	int i;
-	int rc;
+	umem_off_t dbd_off;
+	int        i;
 
 	prep_dtx_entries();
 
-	will_return(__wrap_vos_tls_get, &mock_tls);
 	for (i = 0; i < DBD_BLOBS_CAP; i++) {
 		int j;
 
+		will_return(__wrap_vos_tls_get, &mock_tls);
 		will_return(tx_begin, 0);
 		for (j = 0; j < DBD_BLOB_DF_CAP; j++)
 			will_return(__wrap_dbtree_delete, 0);
@@ -832,8 +860,12 @@ test_all_entries(void **unused)
 		expect_value(__wrap_d_tm_dec_gauge, value, DBD_BLOB_DF_CAP);
 	}
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, true);
-	assert_rc_equal(rc, 0);
+	dbd_off = UMOFF_NULL;
+	do {
+		int rc;
+		rc = vos_dtx_aggregate(mock_coh, NULL, &dbd_off);
+		assert_rc_equal(rc, 0);
+	} while (!UMOFF_IS_NULL(dbd_off));
 	assert_int_equal(mock_cont_df.cd_newest_aggregated,
 			 EPOCH_START + (3 * DBD_BLOB_DF_CAP - 1) * EPOCH_STEP);
 	assert_int_equal(mock_cont_df.cd_dtx_committed_head, UMOFF_NULL);
@@ -871,7 +903,7 @@ test_one_blob(void **unused)
 	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
 	expect_value(__wrap_d_tm_dec_gauge, value, DBD_BLOB_DF_CAP);
 
-	rc = vos_dtx_aggregate(mock_coh, NULL, false);
+	rc = vos_dtx_aggregate(mock_coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(mock_cont_df.cd_newest_aggregated,
 			 EPOCH_START + (DBD_BLOB_DF_CAP - 1) * EPOCH_STEP);
@@ -886,9 +918,9 @@ test_one_blob(void **unused)
 static void
 test_second_blob(void **unused)
 {
-	int          i;
+	umem_off_t   dbd_off;
 	daos_epoch_t epoch;
-	int          rc;
+	int          i;
 
 	prep_dtx_entries();
 	for (i = 0; i < DBD_BLOB_DF_CAP; i++) {
@@ -896,8 +928,8 @@ test_second_blob(void **unused)
 		mock_dbds[2]->dbd_committed_data[i].dce_epoch += EPOCH_END;
 	}
 
-	will_return(__wrap_vos_tls_get, &mock_tls);
 	/* First DTX entries blob */
+	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
 	expect_value(tx_add_ptr, ptr, &mock_dbds[0]->dbd_committed_data[0]);
 	expect_value(tx_add_ptr, ptr_size,
@@ -909,7 +941,9 @@ test_second_blob(void **unused)
 	will_return(tx_commit, 0);
 	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
 	expect_value(__wrap_d_tm_dec_gauge, value, 0);
+
 	/* Second DTX entries blob */
+	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
 	for (i = 0; i < DBD_BLOB_DF_CAP; i++)
 		will_return(__wrap_dbtree_delete, 0);
@@ -927,7 +961,9 @@ test_second_blob(void **unused)
 	will_return(tx_commit, 0);
 	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
 	expect_value(__wrap_d_tm_dec_gauge, value, DBD_BLOB_DF_CAP);
+
 	/* Third DTX entries blob */
+	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
 	expect_value(tx_add_ptr, ptr, &mock_dbds[2]->dbd_committed_data[0]);
 	expect_value(tx_add_ptr, ptr_size,
@@ -941,8 +977,12 @@ test_second_blob(void **unused)
 	expect_value(__wrap_d_tm_dec_gauge, value, 0);
 
 	epoch = EPOCH_START + (DBD_BLOB_DF_CAP * 2) * EPOCH_STEP;
-	rc    = vos_dtx_aggregate(mock_coh, &epoch, true);
-	assert_rc_equal(rc, 0);
+	dbd_off = UMOFF_NULL;
+	do {
+		int rc;
+		rc = vos_dtx_aggregate(mock_coh, &epoch, &dbd_off);
+		assert_rc_equal(rc, 0);
+	} while (!UMOFF_IS_NULL(dbd_off));
 	assert_int_equal(mock_cont_df.cd_newest_aggregated,
 			 EPOCH_START + (2 * DBD_BLOB_DF_CAP - 1) * EPOCH_STEP);
 	assert_int_equal(mock_cont_df.cd_dtx_committed_head, mock_dbds_off[0]);
@@ -955,9 +995,9 @@ test_second_blob(void **unused)
 /* clang-format off */
 /* compilation unit's entry point */
 #define TEST(name, func, setup_func, teardown_func)                                                \
-	{                                                                                          \
-		name ": vos_dtx_aggregate - " #func, func, setup_func, teardown_func               \
-	}
+{                                                                                          \
+	name ": vos_dtx_aggregate - " #func, func, setup_func, teardown_func               \
+}
 /* clang-format on */
 
 static const struct CMUnitTest vos_dtx_aggregate_tests_all[] = {

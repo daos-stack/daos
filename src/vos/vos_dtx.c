@@ -3217,14 +3217,14 @@ out:
 }
 
 int
-vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max, bool all_blobs)
+vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max, umem_off_t *blob)
 {
 	struct vos_container   *cont;
 	struct vos_tls         *tls;
 	struct umem_instance   *umm;
 	struct vos_cont_df     *cont_df;
-	struct vos_dtx_blob_df *dbd;
 	umem_off_t              dbd_off;
+	umem_off_t              dbd_next_off;
 	int                     rc;
 
 	cont = vos_hdl2cont(coh);
@@ -3236,30 +3236,28 @@ vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max, bool all_blobs)
 	umm     = vos_cont2umm(cont);
 	cont_df = cont->vc_cont_df;
 	dbd_off = cont_df->cd_dtx_committed_head;
+	if (UMOFF_IS_NULL(dbd_off)) {
+		rc = 0;
+		goto done;
+	}
+
+	if (blob != NULL) {
+		struct vos_dtx_blob_df *dbd;
+
+		if (!UMOFF_IS_NULL(*blob))
+			dbd_off = *blob;
+		dbd          = umem_off2ptr(umm, dbd_off);
+		dbd_next_off = dbd->dbd_next;
+	}
 
 	D_ASSERT(cont->vc_pool->vp_sysdb == false);
 	/* Take the opportunity to free some memory if we can */
 	lrua_array_aggregate(cont->vc_dtx_array);
-	if (!all_blobs) {
-		rc = dtx_blob_aggregate(umm, tls, cont, cont_df, dbd_off, ep_max);
-		goto out;
-	}
+	rc = dtx_blob_aggregate(umm, tls, cont, cont_df, dbd_off, ep_max);
+	if (rc == 0 && blob != NULL)
+		*blob = dbd_next_off;
 
-	rc  = 0;
-	dbd = umem_off2ptr(umm, dbd_off);
-	while (dbd != NULL) {
-		umem_off_t dbd_next_off;
-
-		dbd_next_off = dbd->dbd_next;
-		rc           = dtx_blob_aggregate(umm, tls, cont, cont_df, dbd_off, ep_max);
-		if (rc != 0)
-			goto out;
-
-		dbd_off = dbd_next_off;
-		dbd     = umem_off2ptr(umm, dbd_off);
-	}
-
-out:
+done:
 	return rc;
 }
 

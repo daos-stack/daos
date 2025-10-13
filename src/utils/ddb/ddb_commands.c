@@ -1476,6 +1476,7 @@ static int
 dtx_aggr_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint64_t *epoch)
 {
 	daos_handle_t coh = {0};
+	umem_off_t    dbd_off;
 	int           rc;
 
 	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &coh);
@@ -1485,9 +1486,15 @@ dtx_aggr_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint64_t *e
 	ddb_print(ctx, "Aggregating DTX entries of container ");
 	itp_print_full(ctx, itp);
 	ddb_print(ctx, "\n");
-	rc = vos_dtx_aggregate(coh, epoch, true);
-	if (!SUCCESS(rc))
-		ddb_errorf(ctx, "Aggregation of DTX entries failed: " DF_RC "\n", DP_RC(rc));
+	dbd_off = UMOFF_NULL;
+	do {
+		rc = vos_dtx_aggregate(coh, epoch, &dbd_off);
+		if (!SUCCESS(rc)) {
+			ddb_errorf(ctx, "Aggregation of DTX entries failed: " DF_RC "\n",
+				   DP_RC(rc));
+			goto done;
+		}
+	} while (!UMOFF_IS_NULL(dbd_off));
 
 done:
 	dv_cont_close(&coh);
