@@ -128,62 +128,7 @@ exec_one(void *arg)
 	dlck_xstream_set_rc(xa, rc);
 }
 
-/**
- * Main thread. Loop waiting for the target threads.
- *
- * \param[in]	engine		Engine.
- * \param[in]	de		Job batch.
- * \param[in]	progress_max	Target progress value.
- * \param[in]	dp		Print utility.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_NOMEM	Out of memory.
- * \retval -DER_INVAL	ABT issue.
- */
-static int
-wait_all(struct dlck_engine *engine, struct dlck_exec *de, unsigned progress_max,
-	 struct dlck_print *dp)
-{
-	unsigned *progress;
-	bool      all_concluded;
-	int       rc = DER_SUCCESS;
-
-	/** allocate an array of progress values for all targets */
-	D_ALLOC_ARRAY(progress, engine->targets);
-	if (progress == NULL) {
-		rc = -DER_NOMEM;
-		DLCK_PRINTF_ERRL(dp, "Failed to allocate a progress array: " DF_RC "\n", DP_RC(rc));
-		return rc;
-	}
-
-	/** waiting loop */
-	do {
-		all_concluded = true;
-
-		for (int i = 0; i < engine->targets; ++i) {
-			dlck_xstream_progress_get(de->ult_args[i], &progress[i]);
-
-			/** at least one of the threads did not conclude means we have to keep
-			 * waiting */
-			if (progress[i] < progress_max) {
-				all_concluded = false;
-			}
-		}
-
-		if (rc != DER_SUCCESS) {
-			break;
-		}
-
-		sleep(1);
-
-	} while (!all_concluded);
-
-	D_FREE(progress);
-
-	return rc;
-}
-
-#define STOP_TGT_STR "Stop targets... "
+#define STOP_TGT_STR "Wait for targets to stop... "
 
 /**
  * The main thread spawns and waits for other threads to complete their tasks.
@@ -194,7 +139,6 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	D_ASSERT(ctrl != NULL);
 
 	struct dlck_print  *dp                 = &ctrl->print;
-	unsigned            file_num           = dlck_args_files_num(&ctrl->files);
 	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
 	struct dlck_engine *engine             = NULL;
 	struct dlck_exec    de                 = {0};
@@ -258,16 +202,6 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		return rc;
 	}
 	DLCK_PRINT_OK(dp);
-
-	/** wait for all targets to report the job done */
-	rc = wait_all(engine, &de, file_num, dp);
-	if (rc != DER_SUCCESS) {
-		/**
-		 * Waiting for targets failed. Cannot join them. Cannot stop the engine neither.
-		 * It will probably crash.
-		 */
-		return rc;
-	}
 
 	/** allocate an array of return codes for targets */
 	D_ALLOC_ARRAY(rcs, ctrl->engine.targets);
