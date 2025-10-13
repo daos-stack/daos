@@ -7,7 +7,7 @@ import json
 
 from apricot import TestWithServers
 from general_utils import bytes_to_human, list_to_str, report_errors
-from test_utils_pool import add_pools, get_pool_create_percentages
+from test_utils_pool import add_pools, get_pool_create_percentages, POOL_NAMESPACE
 
 
 class MemRatioTest(TestWithServers):
@@ -63,19 +63,18 @@ class MemRatioTest(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=MemRatioTest,test_mem_ratio
         """
-        _pool_size_percent = self.params.get("pool_size_percent", "/run/*")
-        _sizes = get_pool_create_percentages(5, _pool_size_percent)
-
         dmg = self.get_dmg_command()
-        kwargs_list = [{"test": self, "dmg": dmg.copy(), "size": _sizes[0]}]
+        kwargs_list = [{"test": self, "dmg": dmg.copy()}]
         if self.server_managers[0].manager.job.using_control_metadata:
             # Additional pools for MD on SSD
+            _sizes = get_pool_create_percentages(5, self.params.get("size", POOL_NAMESPACE))
             _ratios = [
                 100,
                 self.random.randint(76, 99),
                 self.random.randint(51, 75),
                 self.random.randint(26, 50),
-                self.random.randint(10, 25)]     # Limit smallest mem-ratio sizes due to DAOS-18004
+                self.random.randint(1, 25)]
+            kwargs_list[0]["size"] = _sizes[0]
             kwargs_list[0]["mem_ratio"] = _ratios[0]
             for index in range(1, 5):
                 kwargs_list.append({
@@ -135,10 +134,9 @@ class MemRatioTest(TestWithServers):
                 for item in query["response"]["tier_stats"]:
                     data[name]["tier_stats(query)"][item["media_type"]] = item["total"]
                 data[name]["mem_file_bytes(query)"] = query["response"]["mem_file_bytes"]
-                _ratio = (
+                data[name]["query_ratio"] = round(
                     int(data[name]["mem_file_bytes(query)"])
-                    / int(data[name]["tier_stats(query)"]["scm"]))
-                data[name]["query_ratio"] = round(_ratio * 100)
+                    / int(data[name]["tier_stats(query)"]["scm"]) * 100)
                 _difference = abs(data[name]["mem-ratio"] - data[name]["query_ratio"])
                 if data[name]["mem-ratio"] and _difference > 1:
                     errors.append(
@@ -154,8 +152,9 @@ class MemRatioTest(TestWithServers):
         # Report the test results
         if not data:
             self.fail(f"Error collecting data from {len(pools)} pool(s)")
-        _format = "%-54s  %-9s  %-52s  %-14s  %-12s  %-13s  %-64s  %-21s  %s"
+        _format = "%-54s  %-4s  %-9s  %-52s  %-14s  %-12s  %-13s  %-64s  %-21s  %s"
         _keys = ["Pool",
+                 "size",
                  "mem-ratio",
                  "tier_bytes",
                  "mem_file_bytes",
@@ -166,8 +165,8 @@ class MemRatioTest(TestWithServers):
                  "query_ratio"]
         self.log.debug(_format, *_keys)
         self.log.debug(
-            _format, "-" * 54, "-" * 9, "-" * 52, "-" * 14, "-" * 12, "-" * 13, "-" * 64, "-" * 21,
-            "-" * 11)
+            _format, "-" * 54, "-" * 4, "-" * 9, "-" * 52, "-" * 14, "-" * 12, "-" * 13, "-" * 64,
+            "-" * 21, "-" * 11)
         for name, info in data.items():
             items = [name]
             for key in _keys[1:]:

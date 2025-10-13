@@ -229,11 +229,13 @@ def get_pool_create_percentages(num_pools, total_percent):
 
     Args:
         num_pools (int): number of pools to create
-        total_percent (int): total percent of the storage to use
+        total_percent (int, str): total percent of the storage to use
 
     Returns:
         list: list of the percentages for each pool create
     """
+    if isinstance(total_percent, str):
+        total_percent = int(total_percent.replace("%", ""))
     percentages = []
     for index in range(num_pools):
         remaining_pools = num_pools - index

@@ -24,4 +24,5 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 
-pool_size_percent: 100
+pool:
+  size: 100%
