@@ -128,7 +128,7 @@ class MemRatioTest(TestWithServers):
                 data[name]["query_ratio"] = round(
                     int(data[name]["mem_file_bytes(query)"])
                     / int(data[name]["tier_stats(query)"]["scm"]) * 100)
-                if data[name]["mem-ratio"]
+                if data[name]["mem-ratio"]:
                     _difference = abs(data[name]["mem-ratio"] - data[name]["query_ratio"])
                     if _difference > 1:
                         errors.append(
