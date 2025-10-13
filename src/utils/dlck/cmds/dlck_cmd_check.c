@@ -178,8 +178,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		rc = dlck_pool_list(&ctrl->files.list);
 		if (rc != DER_SUCCESS) {
 			DLCK_PRINT_RC(dp, rc);
-			(void)dlck_engine_stop(engine);
-			return rc;
+			goto err_stop_engine;
 		}
 		DLCK_PRINT_OK(dp);
 	}
@@ -188,18 +187,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	rc = dlck_pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list, dp);
 	if (rc != DER_SUCCESS) {
 		DLCK_PRINT_RC(dp, rc);
-		(void)dlck_engine_stop(engine);
-		return rc;
-	}
-	DLCK_PRINT_OK(dp);
-
-	DLCK_PRINT(dp, "Start targets... ");
-	rc = dlck_engine_exec_all_async(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
-					dlck_engine_xstream_arg_free, &de);
-	if (rc != DER_SUCCESS) {
-		DLCK_PRINT_RC(dp, rc);
-		(void)dlck_engine_stop(engine);
-		return rc;
+		goto err_stop_engine;
 	}
 	DLCK_PRINT_OK(dp);
 
@@ -207,15 +195,24 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	D_ALLOC_ARRAY(rcs, ctrl->engine.targets);
 	if (rcs == NULL) {
 		DLCK_PRINT_ERRL(dp, "Out of memory.\n");
-		(void)dlck_engine_join_all(engine, &de, NULL);
-		(void)dlck_engine_stop(engine);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto err_stop_engine;
 	}
+
+	DLCK_PRINT(dp, "Start targets... ");
+	rc = dlck_engine_exec_all_async(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
+					dlck_engine_xstream_arg_free, &de);
+	if (rc != DER_SUCCESS) {
+		DLCK_PRINT_RC(dp, rc);
+		goto err_free_rcs;
+	}
+	DLCK_PRINT_OK(dp);
 
 	DLCK_PRINT(dp, STOP_TGT_STR "\n");
 	rc = dlck_engine_join_all(engine, &de, rcs);
 	if (rc != DER_SUCCESS) {
 		DLCK_PRINT_MSG_RC(dp, STOP_TGT_STR, rc);
+		D_FREE(rcs);
 		/** Cannot stop the engine in this case. It will probably crash. */
 		return rc;
 	}
@@ -238,4 +235,11 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	/** Return the first encountered error. */
 	return rc != DER_SUCCESS ? rc : rc2;
+
+err_free_rcs:
+	D_FREE(rcs);
+err_stop_engine:
+	(void)dlck_engine_stop(engine);
+
+	return rc;
 }

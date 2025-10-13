@@ -28,7 +28,7 @@ main(int argc, char *argv[])
 	int                 rc;
 
 	rc = d_fault_inject_init();
-	if (rc != DER_SUCCESS) {
+	if (rc != DER_SUCCESS && rc != -DER_NOSYS) {
 		return rc;
 	}
 
@@ -45,40 +45,46 @@ main(int argc, char *argv[])
 	rc_abt = ABT_init(0, NULL);
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
-		goto fail_abt;
+		goto err_args_free;
 	}
 
 	rc = dlck_print_main_init(&ctrl.print);
 	if (rc != DER_SUCCESS) {
-		goto fail_print_main;
+		goto err_abt_fini;
 	}
 
 	rc = dlck_cmds[ctrl.common.cmd](&ctrl);
 	if (rc != DER_SUCCESS) {
-		goto fail_cmd;
+		goto err_print_main_fini;
 	}
 
 	rc = dlck_print_main_fini(&ctrl.print);
 	if (rc != DER_SUCCESS) {
-		goto fail_print_main;
+		goto err_abt_fini;
 	}
 
 	rc_abt = ABT_finalize();
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
-		goto fail_abt;
+		goto err_args_free;
 	}
 
 	dlck_args_free(&ctrl);
 
-	return d_fault_inject_fini();
+	rc = d_fault_inject_fini();
+	if (rc == -DER_NOSYS) {
+		rc = DER_SUCCESS;
+	}
 
-fail_cmd:
+	return rc;
+
+err_print_main_fini:
 	(void)dlck_print_main_fini(&ctrl.print);
-fail_print_main:
+err_abt_fini:
 	(void)ABT_finalize();
-fail_abt:
+err_args_free:
 	dlck_args_free(&ctrl);
+	(void)d_fault_inject_fini();
 
 	return rc;
 }

@@ -551,8 +551,9 @@ dlck_engine_join_all_no_error(struct dlck_engine *engine, struct dlck_exec *de)
 				 */
 				continue;
 			}
+
+			(void)ABT_thread_free(&de->ults[i].thread);
 		}
-		(void)ABT_thread_free(&de->ults[i].thread);
 		(void)de->arg_free_fn(de->custom, &de->ult_args[i]);
 	}
 
@@ -611,7 +612,9 @@ dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de, int *rcs)
 {
 	int rc;
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_JOIN)) {
+	D_ASSERT(rcs != NULL);
+
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_JOIN)) { /** fault injection */
 		return daos_errno2der(daos_fail_value_get());
 	}
 
@@ -628,9 +631,7 @@ dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de, int *rcs)
 			goto fail_join_and_free;
 		}
 
-		if (rcs != NULL) {
-			rcs[i] = de->arg_free_fn(de->custom, &de->ult_args[i]);
-		}
+		rcs[i] = de->arg_free_fn(de->custom, &de->ult_args[i]);
 	}
 
 	D_FREE(de->ult_args);
@@ -721,8 +722,9 @@ fail_join_and_free:
 			/** the ULT did not join - can't free the thread nor free the arguments */
 			return rc;
 		}
+
+		(void)ABT_thread_free(&ult.thread);
 	}
-	(void)ABT_thread_free(&ult.thread);
 	(void)arg_free_fn(custom, &ult_args);
 
 	return rc;

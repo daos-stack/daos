@@ -22,7 +22,6 @@ struct dlck_print_main {
 	uint64_t  magic;
 	FILE     *stream;
 	ABT_mutex stream_mutex;
-	uint64_t  call_count;
 };
 
 #define DLCK_PRINT_MAIN_LOCK_FAIL_FMT                                                              \

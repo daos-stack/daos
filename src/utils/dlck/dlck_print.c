@@ -66,8 +66,6 @@ dlck_printf_main(struct dlck_print *dp, const char *fmt, ...)
 	rc = dlck_vprintf_internal(dpm->stream, fmt, args);
 	va_end(args);
 
-	++dpm->call_count;
-
 	if (rc != DER_SUCCESS) {
 		(void)ABT_mutex_unlock(dpm->stream_mutex);
 		return rc;

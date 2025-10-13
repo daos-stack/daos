@@ -52,10 +52,6 @@ dlck_pool_mkdir_all(const char *storage_path, d_list_t *files, struct dlck_print
 	struct dlck_file *file;
 	int               rc;
 
-	if (d_list_empty(files)) {
-		return DER_SUCCESS;
-	}
-
 	d_list_for_each_entry(file, files, link) {
 		rc = dlck_pool_mkdir(storage_path, file->po_uuid, dp);
 		if (rc != DER_SUCCESS) {
