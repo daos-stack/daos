@@ -3031,7 +3031,8 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			 */
 			waited++;
 			dss_sleep(5000);
-			D_DEBUG(DB_REBUILD, DF_UOID "retry with %d \n", DP_UOID(arg->oid), rc);
+			D_DEBUG(DB_REBUILD, DF_UOID "retry %d secs with %d \n",
+				DP_UOID(arg->oid), waited * 5, rc);
 			rc = 0;
 			continue;
 		} else if (rc) {

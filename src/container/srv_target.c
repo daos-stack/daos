@@ -61,7 +61,7 @@ agg_rate_ctl(void *arg)
 	 * XXX temporary workaround: EC aggregation needs to be paused during rebuilding
 	 * to avoid the race between EC rebuild and EC aggregation.
 	 **/
-	if (pool->sp_rebuilding && cont->sc_ec_agg_active && !param->ap_vos_agg)
+	if (ds_pool_is_rebuilding(pool) && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
 
 	/* When system is idle or under space pressure, let aggregation run in tight mode */
@@ -181,10 +181,10 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (pool->sp_rebuilding && !vos_agg) {
-		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d.\n",
+	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
+		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d, %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			pool->sp_rebuilding);
+			pool->sp_rebuilding, pool->sp_rebuild_scan);
 		return false;
 	}
 
@@ -499,7 +499,8 @@ next:
 		/* sleep 18 seconds for EC aggregation ULT if the pool is in rebuilding,
 		 * if no space pressure.
 		 */
-		if (cont->sc_pool->spc_pool->sp_rebuilding && !param->ap_vos_agg && msecs != 200)
+		if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool) &&
+		    !param->ap_vos_agg && msecs != 200)
 			msecs = 18000;
 
 		sched_req_sleep(req, msecs);
