@@ -34,7 +34,6 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *
 {
 	char         *path;
 	daos_handle_t poh;
-	int           rc_abt;
 	int           rc;
 
 	/** generate a VOS file path */
@@ -45,34 +44,15 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *
 		return rc;
 	}
 
-	/** cannot concurrently ask sys_db for details required to open a pool - lock first */
-	rc_abt = ABT_mutex_lock(xa->engine->open_mtx);
-	if (rc_abt != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc_abt);
-		DLCK_PRINTF_ERRL(dp, "Failed to lock the pool open mutex: " DF_RC "\n", DP_RC(rc));
-		return rc;
-	}
-
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, dp, &poh);
 	if (rc == DER_SUCCESS) {
 		(void)vos_pool_close(poh);
 	}
 	D_FREE(path);
 
-	/** unlock ASAP */
-	rc_abt = ABT_mutex_unlock(xa->engine->open_mtx);
-
 	/** check  */
 	if (rc != DER_SUCCESS) {
 		/** ignore a possible error from the unlock */
-		return rc;
-	}
-
-	/** unlock error is an error */
-	if (rc_abt != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc_abt);
-		DLCK_PRINTF_ERRL(dp, "Failed to unlock the pool open mutex: " DF_RC "\n",
-				 DP_RC(rc));
 		return rc;
 	}
 

@@ -433,16 +433,10 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 		goto fail_engine_free;
 	}
 
-	rc = ABT_mutex_create(&engine->open_mtx);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto fail_engine_free;
-	}
-
 	rc = bio_nvme_init(args->nvme_conf, args->numa_node, args->max_dma_buf_size,
 			   args->nvme_hugepage_size, args->targets, bypass_health_chk);
 	if (rc != DER_SUCCESS) {
-		goto fail_mtx_free;
+		goto fail_engine_free;
 	}
 
 	dss_register_key(&daos_srv_modkey);
@@ -490,8 +484,6 @@ fail_unregister_keys:
 	dss_unregister_key(&vos_module_key);
 	dss_unregister_key(&daos_srv_modkey);
 	bio_nvme_fini();
-fail_mtx_free:
-	(void)ABT_mutex_free(&engine->open_mtx);
 fail_engine_free:
 	dlck_engine_free(engine);
 
@@ -529,11 +521,6 @@ dlck_engine_stop(struct dlck_engine *engine)
 	dss_unregister_key(&daos_srv_modkey);
 
 	bio_nvme_fini();
-
-	rc = ABT_mutex_free(&engine->open_mtx);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-	}
 
 	dlck_engine_free(engine);
 
@@ -739,65 +726,6 @@ fail_join_and_free:
 	(void)arg_free_fn(custom, &ult_args);
 
 	return rc;
-}
-
-int
-dlck_pool_open_safe(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
-		    daos_handle_t *poh)
-{
-	int rc;
-	int rc_abt;
-
-	rc_abt = ABT_mutex_lock(mtx);
-	if (rc_abt != ABT_SUCCESS) {
-		return dss_abterr2der(rc_abt);
-	}
-
-	rc = dlck_pool_open(storage_path, po_uuid, tgt_id, poh);
-
-	/** unlock ASAP */
-	rc_abt = ABT_mutex_unlock(mtx);
-
-	/** code returned from the open operation takes precedence */
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
-
-	/** unlock error is an error */
-	if (rc_abt != ABT_SUCCESS) {
-		return dss_abterr2der(rc_abt);
-	}
-
-	return DER_SUCCESS;
-}
-
-int
-dlck_pool_close_safe(ABT_mutex mtx, daos_handle_t poh)
-{
-	int rc;
-	int rc_abt;
-
-	rc_abt = ABT_mutex_lock(mtx);
-	if (rc_abt != ABT_SUCCESS) {
-		return dss_abterr2der(rc_abt);
-	}
-
-	rc = vos_pool_close(poh);
-
-	/** unlock ASAP */
-	rc_abt = ABT_mutex_unlock(mtx);
-
-	/** code returned from the close operation takes precedence */
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
-
-	/** unlock error is an error */
-	if (rc_abt != ABT_SUCCESS) {
-		return dss_abterr2der(rc_abt);
-	}
-
-	return DER_SUCCESS;
 }
 
 int

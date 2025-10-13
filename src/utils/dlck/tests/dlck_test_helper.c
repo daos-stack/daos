@@ -269,8 +269,8 @@ exec_one(void *arg)
 			continue;
 		}
 
-		rc = dlck_pool_open_safe(xst->engine->open_mtx, xst->args_engine->storage_path,
-					 file->po_uuid, xst->xs->tgt_id, &xst->poh);
+		rc = dlck_pool_open(xst->args_engine->storage_path, file->po_uuid, xst->xs->tgt_id,
+				    &xst->poh);
 		if (rc != DER_SUCCESS) {
 			xst->rc = rc;
 			break;
@@ -278,7 +278,7 @@ exec_one(void *arg)
 
 		cont_process(xst, xst->co_uuid);
 
-		rc = dlck_pool_close_safe(xst->engine->open_mtx, xst->poh);
+		rc = vos_pool_close(xst->poh);
 		if (rc != DER_SUCCESS) {
 			xst->rc = rc;
 			break;

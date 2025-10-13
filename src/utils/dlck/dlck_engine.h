@@ -31,7 +31,6 @@ struct dlck_xstream {
 struct dlck_engine {
 	unsigned             targets;
 	struct dlck_xstream *xss;
-	ABT_mutex            open_mtx;
 };
 
 typedef void (*dlck_ult_func)(void *arg);
@@ -223,39 +222,6 @@ dlck_engine_join_all(struct dlck_engine *engine, struct dlck_exec *de, int *rcs)
 int
 dlck_engine_exec(struct dlck_engine *engine, int idx, dlck_ult_func exec,
 		 arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn);
-
-/**
- * Open a pool but lock the \p mtx mutex first and unlock it after. Thread-safe.
- *
- * \param[in]	mtx		Mutex.
- * \param[in]	storage_path	Storage path.
- * \param[in]	po_uuid		Pool UUID.
- * \param[in]	tgt_id		Target ID.
- * \param[out]	poh		Pool handle.
- *
- * \retval DER_SUCCESS		Success.
- * \retval -DER_NOMEM		Out of memory.
- * \retval -DER_NO_PERM		Permission problem. Please see open(3) and fallocate(2).
- * \retval -DER_EXIST		The file already exists. Please see open(3).
- * \retval -DER_NONEXIST	The file does not exist. Please see open(3).
- * \retval -DER_NOSPACE		There is not enough space left on the device.
- * \retval -DER_*		Possibly other errors.
- */
-int
-dlck_pool_open_safe(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
-		    daos_handle_t *poh);
-
-/**
- * Close a pool but lock the \p mtx mutex first and unlock it after. Thread-safe.
- *
- * \param[in]	mtx		Mutex.
- * \param[in]	poh		Pool handle.
- *
- * \retval DER_SUCCESS		Success.
- * \retval -DER_INVAL		Issues with \p mtx.
- */
-int
-dlck_pool_close_safe(ABT_mutex mtx, daos_handle_t poh);
 
 #define DLCK_XSTREAM_PROGRESS_END UINT_MAX
 
