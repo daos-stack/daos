@@ -800,7 +800,7 @@ dtx_18(void **state)
 	daos_key_t           akey;
 	d_iov_t              val_iov;
 	uint64_t             epoch;
-	uint32_t             cnt;
+	struct dtx_cmt_stat  cmt_stat;
 	char                 dkey_buf[UPDATE_DKEY_SIZE];
 	char                 akey_buf[UPDATE_AKEY_SIZE];
 	char                 update_buf[UPDATE_BUF_SIZE];
@@ -842,17 +842,17 @@ dtx_18(void **state)
 
 	sleep(3);
 
-	rc = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl, &cnt);
+	rc = vos_dtx_get_cmt_stat(args->ctx.tc_co_hdl, &cmt_stat);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(cnt, 10);
+	assert_int_equal(cmt_stat.dcs_count, 10);
 
 	/* Aggregate the DTXs. */
 	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl, NULL, true);
 	assert_rc_equal(rc, 0);
 
-	rc = vos_dtx_get_cmt_cnt(args->ctx.tc_co_hdl, &cnt);
+	rc = vos_dtx_get_cmt_stat(args->ctx.tc_co_hdl, &cmt_stat);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(cnt, 0);
+	assert_int_equal(cmt_stat.dcs_count, 0);
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, false);
