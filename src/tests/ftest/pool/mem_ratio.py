@@ -118,6 +118,7 @@ class MemRatioTest(TestWithServers):
         # Verify the pool blob and memory file sizes align with the requested mem ratio
         self.log_step(f"Query the {len(pools)} pool(s)")
         for pool in pools:
+            name = str(pool)
             _query = dmg.pool_query(pool.identifier)
             try:
                 data[name]["total_engines"] = _query["response"]["total_engines"]
