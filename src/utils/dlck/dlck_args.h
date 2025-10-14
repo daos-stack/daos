@@ -27,8 +27,7 @@
 #define GROUP_AUTOMAGIC                 (-1) /** yes, -1 is the last group */
 
 /** all short options */
-#define KEY_COMMON_CMD                  'c'
-#define KEY_COMMON_CO_UUID              'q'
+#define KEY_COMMON_OPTIONS              'o'
 #define KEY_COMMON_WRITE_MODE           'w'
 #define KEY_FILES                       'f'
 /** the options below follow the daos_engine options */
@@ -46,9 +45,27 @@
 
 #define DLCK_TARGET_MAX                 31
 
+enum dlck_event {
+	DLCK_EVENT_INVALID = -1,
+	DLCK_EVENT_ERROR   = 0,
+	DLCK_EVENT_WARNING,
+};
+
+#define DLCK_EVENT_ERROR_STR   "error"
+#define DLCK_EVENT_WARNING_STR "warning"
+
+struct dlck_args_options {
+	uuid_t          co_uuid;
+	enum dlck_event non_zero_padding;
+};
+
+#define DLCK_OPT_CO_UUID_STR          "co_uuid"
+#define DLCK_OPT_NON_ZERO_PADDING_STR "non_zero_padding"
+
+#define MISSING_ARG_FMT               "Missing argument for the '%s' option"
+
 struct dlck_args_common {
-	enum dlck_cmd cmd;
-	uuid_t        co_uuid;    /** Container UUID. */
+	struct dlck_args_options options;
 	bool          write_mode; /** false by default (dry run) */
 };
 
@@ -137,7 +154,7 @@ struct dlck_control {
 #define FAIL(STATE, RC, ERRNUM, ...)                                                               \
 	do {                                                                                       \
 		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
-		RC = ERRNUM;                                                                       \
+		(RC) = ERRNUM;                                                                     \
 	} while (0)
 
 #define RETURN_FAIL(STATE, ERRNUM, ...)                                                            \
@@ -180,15 +197,18 @@ int
 parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_ptr);
 
 /**
- * Extract a command from \p arg.
+ * Extract an event from \p arg.
  *
- * \param[in]	arg	String value.
+ * \param[in]	option	Name of the option.
+ * \param[in]	value	String value.
+ * \param[out]	state	State of the parser.
+ * \param[out]	rc	Return code.
  *
- * \retval DLCK_CMD_UNKNOWN	The provided command is unknown.
- * \retval DLCK_CMD_*		DLCK command.
+ * \retval DLCK_EVENT_INVALID	The provided event is invalid.
+ * \retval DLCK_EVENT_*		DLCK event.
  */
-enum dlck_cmd
-parse_command(const char *arg);
+enum dlck_event
+parse_event(const char *option, const char *value, struct argp_state *state, int *rc);
 
 /** dlck_args_files.c */
 

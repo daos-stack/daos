@@ -14,7 +14,7 @@
 #include "dlck_args.h"
 
 static struct argp_option args_files_options[] = {
-    {"file", KEY_FILES, "UUID,TARGET", 0,
+    {"file", KEY_FILES, "UUID[,TARGET]", 0,
      "Pool UUID and a set of targets. If no TARGET is provided, all targets are used. This option "
      "can be specified multiple times. By default all pools are used.",
      GROUP_OPTIONS},

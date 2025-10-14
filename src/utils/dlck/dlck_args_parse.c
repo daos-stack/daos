@@ -98,12 +98,20 @@ free_file:
 	return rc;
 }
 
-enum dlck_cmd
-parse_command(const char *arg)
+enum dlck_event
+parse_event(const char *option, const char *value, struct argp_state *state, int *rc)
 {
-	if (strcmp(arg, DLCK_CMD_CHECK_STR) == 0) {
-		return DLCK_CMD_CHECK;
+	if (value != NULL) {
+		if (strcmp(value, DLCK_EVENT_ERROR_STR) == 0) {
+			return DLCK_EVENT_ERROR;
+		} else if (strcmp(value, DLCK_EVENT_WARNING_STR) == 0) {
+			return DLCK_EVENT_WARNING;
+		}
+
+		FAIL(state, *rc, EINVAL, "Invalid event '%s' for the '%s' option", value, option);
+	} else {
+		FAIL(state, *rc, EINVAL, MISSING_ARG_FMT, option);
 	}
 
-	return DLCK_CMD_UNKNOWN;
+	return DLCK_EVENT_INVALID;
 }

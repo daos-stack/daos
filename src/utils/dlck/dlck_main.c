@@ -39,9 +39,6 @@ main(int argc, char *argv[])
 
 	dlck_args_parse(argc, argv, &ctrl);
 
-	D_ASSERT(ctrl.common.cmd < ARRAY_SIZE(dlck_cmds));
-	D_ASSERT(ctrl.common.cmd >= 0);
-
 	rc_abt = ABT_init(0, NULL);
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
@@ -53,7 +50,7 @@ main(int argc, char *argv[])
 		goto err_abt_fini;
 	}
 
-	rc = dlck_cmds[ctrl.common.cmd](&ctrl);
+	rc = dlck_cmds[DLCK_CMD_CHECK](&ctrl);
 	if (rc != DER_SUCCESS) {
 		goto err_print_main_fini;
 	}
