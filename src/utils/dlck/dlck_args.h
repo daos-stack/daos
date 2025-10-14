@@ -13,7 +13,7 @@
 #include <uuid/uuid.h>
 #include <gurt/list.h>
 
-#include <daos_srv/dlck.h>
+#include <daos/dlck.h>
 
 #include "dlck_cmds.h"
 

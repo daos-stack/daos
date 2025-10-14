@@ -11,9 +11,9 @@
 
 #include <daos_errno.h>
 #include <daos/debug.h>
+#include <daos/dlck.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/mgmt_tgt_common.h>
-#include <daos_srv/dlck.h>
 #include <gurt/common.h>
 
 #include "dlck_print.h"

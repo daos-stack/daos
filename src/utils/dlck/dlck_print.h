@@ -9,7 +9,7 @@
 
 #include <stdio.h>
 
-#include <daos_srv/dlck.h>
+#include <daos/dlck.h>
 
 #define DLCK_PRINT_MAIN_MAGIC 0x17A28DC5626110A5
 

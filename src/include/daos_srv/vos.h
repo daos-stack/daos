@@ -16,9 +16,9 @@
 #define __VOS_API_H__
 
 #include <daos/common.h>
+#include <daos/dlck.h>
 #include <daos_types.h>
 #include <daos/placement.h>
-#include <daos_srv/dlck.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 

@@ -9,7 +9,7 @@
 
 #include <abt.h>
 
-#include <daos_srv/dlck.h>
+#include <daos/dlck.h>
 
 #include "dlck_args.h"
 

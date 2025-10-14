@@ -14,9 +14,9 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/dlck.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
-#include <daos_srv/dlck.h>
 #include <daos_errno.h>
 #include <gurt/hash.h>
 #include <sys/stat.h>

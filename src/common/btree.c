@@ -15,8 +15,8 @@
 
 #include <daos_errno.h>
 #include <daos/btree.h>
+#include <daos/dlck.h>
 #include <daos/dtx.h>
-#include <daos_srv/dlck.h>
 
 #define BTR_EXT_FEAT_MASK (BTR_FEAT_MASK ^ BTR_FEAT_EMBEDDED)
 
