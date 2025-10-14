@@ -1481,10 +1481,11 @@ agg_peer_update_ult(void *arg)
 out:
 	if (obj)
 		obj_decref(obj);
-	/* XXX: before switching to DTX, any successful parity write is deemed as
-	 * success of all parity shards.
+	/* NB: before switching to DTX, any successful parity write is deemed as success
+	 * of all parity shards.
+	 * NB: it's OK if the only remote parity peer failed.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = (peer_updated > 0 || p == 2) ? 0 : peer_rc;
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1717,10 +1718,11 @@ out:
 	if (obj)
 		obj_decref(obj);
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
-	/* XXX: before switching to DTX, any successful parity write is deemed as
-	 * success of all parity shards.
+	/* NB: before switching to DTX, any successful parity write is deemed as success
+	 * of all parity shards.
+	 * NB: it's OK if the only remote parity peer failed.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = (peer_updated > 0 || p == 2) ? 0 : peer_rc;
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -2771,11 +2773,6 @@ retry:
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
-
-	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
-		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);
-		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
-	}
 
 	if (rc == -DER_BUSY && !ds_pool_is_rebuilding(cont->sc_pool->spc_pool)) {
 		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
