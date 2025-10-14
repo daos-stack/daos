@@ -1692,28 +1692,30 @@ dlck_btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct dlck_print *d
 
 	unknown_flags = nd->tn_flags & ~(BTR_NODE_LEAF | BTR_NODE_ROOT);
 	if (unknown_flags != 0) {
-		DLCK_PRINTF_ERR(dp, DLCK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")\n",
-				unknown_flags);
+		DLCK_APPENDFL_ERR(dp, DLCK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")",
+				  unknown_flags);
 		return -DER_NOTYPE;
 	}
 
 	if (nd->tn_pad_32 != 0) {
-		DLCK_PRINTF_ERR(dp,
-				DLCK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")\n",
-				nd->tn_pad_32);
+		DLCK_APPENDFL_ERR(dp,
+				  DLCK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")",
+				  nd->tn_pad_32);
 		return -DER_NOTYPE;
 	}
 
 	if (nd->tn_gen != 0) {
-		DLCK_PRINTF_ERR(dp, DLCK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")\n",
-				nd->tn_gen);
+		DLCK_APPENDFL_ERR(dp, DLCK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")",
+				  nd->tn_gen);
 		return -DER_NOTYPE;
 	}
 
-	DLCK_PRINT_OK(dp);
+	DLCK_APPENDL_OK(dp);
 
 	return DER_SUCCESS;
 }
+
+#define EMPTY_TREE_STR "Empty tree\n"
 
 /**
  * Try to find \a key within a btree, it will store the searching path in
@@ -1752,7 +1754,8 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
 
 	if (btr_root_empty(tcx)) { /* empty tree */
-		DLCK_DEBUG(tcx->tc_dlck_print, DB_TRACE, "%s", "Empty tree\n");
+		DLCK_PRINT(tcx->tc_dlck_print, EMPTY_TREE_STR);
+		D_DEBUG(DB_TRACE, EMPTY_TREE_STR);
 		rc = PROBE_RC_NONE;
 		goto out;
 	}
@@ -3777,6 +3780,9 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 }
 
 static int
+dlck_dbtree_check(daos_handle_t toh);
+
+static int
 dbtree_open_inplace_ex_internal(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh,
 				void *priv, struct dlck_print *dp, daos_handle_t *toh)
 {
@@ -3793,7 +3799,17 @@ dbtree_open_inplace_ex_internal(struct btr_root *root, struct umem_attr *uma, da
 		return rc;
 
 	*toh = btr_tcx2hdl(tcx);
-	return 0;
+
+	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
+	if (IS_DLCK(dp)) {
+		DLCK_PRINT(dp, "Nodes:\n");
+		DLCK_INDENT(dp, rc = dlck_dbtree_check(*toh));
+		if (rc != DER_SUCCESS) {
+			dbtree_close(*toh);
+		}
+	}
+
+	return rc;
 }
 
 /**
@@ -4579,9 +4595,9 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 	return DER_SUCCESS;
 }
 
-#define INVALID_CLASS_FMT        "Invalid class id: %d\n"
-#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d\n"
-#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64 "\n"
+#define INVALID_CLASS_FMT        "Invalid class id: %d"
+#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d"
+#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64
 
 /**
  * Initialize a tree instance from a registered tree class.
@@ -4618,27 +4634,27 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	DLCK_PRINT(dp, "Tree class... ");
 	/* XXX should be multi-thread safe */
 	if (tree_class >= BTR_TYPE_MAX || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_INV_CLASS)) {
-		DLCK_PRINTF_ERR(dp, INVALID_CLASS_FMT, tree_class);
-		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT, tree_class);
+		DLCK_APPENDFL_ERR(dp, INVALID_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT "\n", tree_class);
 		return -DER_INVAL;
 	}
 
 	tc = &btr_class_registered[tree_class];
 	if (tc->tc_ops == NULL || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_UNREG_CLASS)) {
-		DLCK_PRINTF_ERR(dp, UNREGISTERED_CLASS_FMT, tree_class);
-		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT, tree_class);
+		DLCK_APPENDFL_ERR(dp, UNREGISTERED_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT "\n", tree_class);
 		return -DER_NONEXIST;
 	}
-	DLCK_PRINT_OK(dp);
+	DLCK_APPENDL_OK(dp);
 
 	DLCK_PRINT(dp, "Tree features... ");
 	rc = btr_class_feats_init(tree_class, tree_feats, tc);
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERR(dp, UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
-		D_ERROR(UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
+		DLCK_APPENDFL_ERR(dp, UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
+		D_ERROR(UNSUPPORTED_FEATURES_FMT "\n", *tree_feats, tc->tc_feats);
 		return rc;
 	}
-	DLCK_PRINT_OK(dp);
+	DLCK_APPENDL_OK(dp);
 
 	tins->ti_ops = tc->tc_ops;
 	return rc;
@@ -4753,7 +4769,17 @@ done:
 	return 0;
 }
 
-int
+/**
+ * Validate the integrity of a btree.
+ *
+ * \param[in]	toh	Tree handle.
+ *
+ * \retval DER_SUCCESS		The tree is correct.
+ * \retval -DER_NOTYPE		The tree is malformed.
+ * \retval -DER_NONEXIST	The tree is malformed.
+ * \retval -DER_*		Possibly other errors.
+ */
+static int
 dlck_dbtree_check(daos_handle_t toh)
 {
 	struct btr_context *tcx = btr_hdl2tcx(toh);
@@ -4763,25 +4789,20 @@ dlck_dbtree_check(daos_handle_t toh)
 
 	D_ASSERT(dp != NULL);
 
-	DLCK_PRINT(dp, "Nodes:\n");
-	dlck_print_indent_inc(dp);
-
 	rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED, &ih);
 	if (rc != 0) {
-		DLCK_PRINTF_ERR(dp, "failed to prepare tree iterator: " DF_RC "\n", DP_RC(rc));
-		dlck_print_indent_dec(dp);
+		DLCK_PRINTL_RC(dp, rc, "failed to prepare tree iterator");
 		return rc;
 	}
 
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_CHECK, NULL /** key */,
 			       NULL /** anchor */);
 	if (rc == -DER_NONEXIST) {
-		(void)dbtree_iter_finish(ih);
-		dlck_print_indent_dec(dp);
-		return DER_SUCCESS;
+		rc = DER_SUCCESS;
+		goto err_iter_finish;
 	}
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTF_ERR(dp, "failed to initialize tree iterator" DF_RC "\n", DP_RC(rc));
+		DLCK_PRINTL_RC(dp, rc, "failed to initialize tree iterator");
 	}
 
 	while (rc == DER_SUCCESS) {
@@ -4790,13 +4811,13 @@ dlck_dbtree_check(daos_handle_t toh)
 			rc = 0;
 			break;
 		} else if (rc != DER_SUCCESS) {
-			DLCK_PRINTF_ERR(dp, "failed to move tree iterator: " DF_RC "\n", DP_RC(rc));
+			DLCK_PRINTL_RC(dp, rc, "failed to move tree iterator");
 			break;
 		}
 	}
 
-	dbtree_iter_finish(ih);
-	dlck_print_indent_dec(dp);
+err_iter_finish:
+	(void)dbtree_iter_finish(ih);
 
 	return rc;
 }

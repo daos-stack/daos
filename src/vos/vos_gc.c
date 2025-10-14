@@ -1501,22 +1501,12 @@ gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_pri
 	int rc;
 
 	DLCK_PRINT(dp, DLCK_GC_TREE_STR "\n");
-	dlck_print_indent_inc(dp);
-
-	rc = dbtree_open_inplace_dp(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL, NULL, dp,
-				    &gc_info->gi_bins_btr);
+	DLCK_INDENT(dp, rc = dbtree_open_inplace_dp(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL,
+						    NULL, dp, &gc_info->gi_bins_btr));
+	DLCK_PRINTL_RC(dp, rc, DLCK_GC_TREE_STR);
 	if (rc) {
 		DL_ERROR(rc, "Failed to open GC bin tree.");
-		goto err_exit;
 	}
-
-	if (IS_DLCK(dp)) {
-		rc = dlck_dbtree_check(gc_info->gi_bins_btr);
-	}
-
-err_exit:
-	dlck_print_indent_dec(dp);
-	DLCK_PRINT_MSG_RC(dp, DLCK_GC_TREE_STR, rc);
 
 	return rc;
 }
@@ -1533,25 +1523,25 @@ dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct dlck_pr
 	DLCK_PRINTF(dp, "Pool extension (off=%#x)... ", off);
 
 	if (pd_ext == NULL) {
-		DLCK_PRINT_OK(dp);
+		DLCK_APPENDL_OK(dp);
 		return DER_SUCCESS;
 	}
 
 	for (int i = 0; i < VOS_POOL_EXT_DF_PADDING_SIZE; ++i) {
 		if (pd_ext->ped_paddings[i] != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_PADDING)) {
-			DLCK_PRINTF_ERR(dp, "non-zero padding[%d] (%#" PRIx64 ")\n", i,
-					pd_ext->ped_paddings[i]);
+			DLCK_APPENDFL_ERR(dp, "non-zero padding[%d] (%#" PRIx64 ")", i,
+					  pd_ext->ped_paddings[i]);
 			return -DER_NOTYPE;
 		}
 	}
 
 	if (pd_ext->ped_reserve != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_RESERVED)) {
-		DLCK_PRINTF_ERR(dp, "non-zero reserved space (%#" PRIx64 ")\n",
-				pd_ext->ped_reserve);
+		DLCK_APPENDFL_ERR(dp, "non-zero reserved space (%#" PRIx64 ")",
+				  pd_ext->ped_reserve);
 		return -DER_NOTYPE;
 	}
 
-	DLCK_PRINT_OK(dp);
+	DLCK_APPENDL_OK(dp);
 
 	return DER_SUCCESS;
 }

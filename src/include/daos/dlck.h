@@ -28,65 +28,98 @@ struct dlck_print {
 	char  prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
 };
 
+/** basic tests and helpers */
+
 #define IS_DLCK(dp)     (unlikely((dp) != NULL))
 
 #define IS_NOT_DLCK(dp) (likely((dp) == NULL))
 
-#define DLCK_PRINT(print, msg)                                                                     \
+#define YES_NO_STR(cond) ((cond) ? "yes" : "no")
+
+/** direct print(f) macros with and without prefix */
+
+#define DLCK_PRINT(dp, msg)                                                                        \
 	do {                                                                                       \
-		if (IS_DLCK(print)) {                                                              \
-			(void)(print)->dp_printf(print, "%s" msg, (print)->prefix);                \
+		if (IS_DLCK(dp)) {                                                                 \
+			(void)(dp)->dp_printf(dp, "%s" msg, (dp)->prefix);                         \
 		}                                                                                  \
 	} while (0)
 
-#define DLCK_PRINTF(print, fmt, ...)                                                               \
+#define DLCK_PRINTF(dp, fmt, ...)                                                                  \
 	do {                                                                                       \
-		if (IS_DLCK(print)) {                                                              \
-			(void)(print)->dp_printf(print, "%s" fmt, (print)->prefix, __VA_ARGS__);   \
+		if (IS_DLCK(dp)) {                                                                 \
+			(void)(dp)->dp_printf(dp, "%s" fmt, (dp)->prefix, __VA_ARGS__);            \
 		}                                                                                  \
 	} while (0)
 
-#define DLCK_PRINT_ERRL(print, msg)       DLCK_PRINT(print, DLCK_ERROR_INFIX msg)
-#define DLCK_PRINTF_ERRL(print, fmt, ...) DLCK_PRINTF(print, DLCK_ERROR_INFIX fmt, __VA_ARGS__)
-
-#define DLCK_PRINT_WO_PREFIX(print, msg)                                                           \
+#define DLCK_PRINT_WO_PREFIX(dp, msg)                                                              \
 	do {                                                                                       \
-		if (IS_DLCK(print)) {                                                              \
-			(void)(print)->dp_printf(print, msg);                                      \
+		if (IS_DLCK(dp)) {                                                                 \
+			(void)(dp)->dp_printf(dp, msg);                                            \
 		}                                                                                  \
 	} while (0)
 
-#define DLCK_PRINTF_WO_PREFIX(print, fmt, ...)                                                     \
+#define DLCK_PRINTF_WO_PREFIX(dp, fmt, ...)                                                        \
 	do {                                                                                       \
-		if (IS_DLCK(print)) {                                                              \
-			(void)(print)->dp_printf(print, fmt, __VA_ARGS__);                         \
+		if (IS_DLCK(dp)) {                                                                 \
+			(void)(dp)->dp_printf(dp, fmt, __VA_ARGS__);                               \
 		}                                                                                  \
 	} while (0)
 
-#define DLCK_PRINT_ERR(print, msg) DLCK_PRINT_WO_PREFIX(print, DLCK_ERROR_INFIX msg)
-#define DLCK_PRINTF_ERR(print, fmt, ...)                                                           \
-	DLCK_PRINTF_WO_PREFIX(print, DLCK_ERROR_INFIX fmt, __VA_ARGS__)
+/** append + new line shortcuts */
 
-#define DLCK_YES                       true
-#define DLCK_NO                        false
+#define DLCK_APPENDL_OK(dp) DLCK_PRINT_WO_PREFIX(dp, DLCK_OK_SUFFIX "\n")
 
-#define DLCK_PRINT_YES_NO(print, cond) DLCK_PRINTF_WO_PREFIX(print, "%s.\n", (cond) ? "yes" : "no")
-
-#define DLCK_PRINT_OK(print)           DLCK_PRINT_WO_PREFIX(print, DLCK_OK_SUFFIX "\n")
-
-#define DLCK_PRINT_RC(print, rc)                                                                   \
-	DLCK_PRINTF_WO_PREFIX(print, DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc))
-
-#define DLCK_PRINT_MSG_OK(print, msg) DLCK_PRINT(print, msg DLCK_OK_SUFFIX "\n")
-
-#define DLCK_PRINT_MSG_RC(print, msg, rc)                                                          \
+#define DLCK_APPENDL_RC(dp, rc)                                                                    \
 	do {                                                                                       \
 		if (rc == DER_SUCCESS) {                                                           \
-			DLCK_PRINT_MSG_OK(print, msg);                                             \
+			DLCK_APPENDL_OK(dp);                                                       \
 		} else {                                                                           \
-			DLCK_PRINTF(print, msg DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc));            \
+			DLCK_PRINTF_WO_PREFIX(dp, DLCK_ERROR_INFIX DF_RC "\n", DP_RC(rc));         \
 		}                                                                                  \
 	} while (0)
+
+#define DLCK_APPENDFL_ERR(dp, fmt, ...)                                                            \
+	DLCK_PRINTF_WO_PREFIX(dp, DLCK_ERROR_INFIX fmt "\n", __VA_ARGS__)
+
+/** print(f) + return code  + new line shortcuts */
+
+#define DLCK_PRINTL_RC(dp, rc, msg)                                                                \
+	do {                                                                                       \
+		if (rc == DER_SUCCESS) {                                                           \
+			DLCK_PRINT(dp, msg DLCK_OK_SUFFIX "\n");                                   \
+		} else {                                                                           \
+			DLCK_PRINTF(dp, DLCK_ERROR_INFIX msg ": " DF_RC "\n", DP_RC(rc));          \
+		}                                                                                  \
+	} while (0)
+
+#define DLCK_PRINTFL_RC(dp, rc, fmt, ...)                                                          \
+	do {                                                                                       \
+		if (rc == DER_SUCCESS) {                                                           \
+			DLCK_PRINTF(dp, fmt DLCK_OK_SUFFIX "\n", __VA_ARGS__);                     \
+		} else {                                                                           \
+			DLCK_PRINTF(dp, DLCK_ERROR_INFIX fmt ": " DF_RC "\n", __VA_ARGS__,         \
+				    DP_RC(rc));                                                    \
+		}                                                                                  \
+	} while (0)
+
+/**
+ * An assert while run without DLCK. A DLCK message otherwise.
+ *
+ * \param[in] dp	DLCK print utility.
+ * \param[in] msg	Message to print.
+ * \param[in] cond	Condition to assert (without DLCK) or condition to check (with DLCK).
+ */
+#define DLCK_ASSERT(dp, msg, cond)                                                                 \
+	do {                                                                                       \
+		if (IS_DLCK(dp)) {                                                                 \
+			DLCK_PRINTF(dp, msg "%s\n", YES_NO_STR(cond));                             \
+		} else {                                                                           \
+			D_ASSERT(cond);                                                            \
+		}                                                                                  \
+	} while (0)
+
+/** manage DLCK print's indentation */
 
 static inline void
 dlck_print_indent_set(struct dlck_print *dp)
@@ -132,52 +165,11 @@ dlck_print_indent_dec(struct dlck_print *dp)
 	dlck_print_indent_set(dp);
 }
 
-#define DLCK_DEBUG(dp, flag, fmt, ...)                                                             \
+#define DLCK_INDENT(print, exp)                                                                    \
 	do {                                                                                       \
-		if (IS_DLCK(dp)) {                                                                 \
-			DLCK_PRINTF(dp, fmt, __VA_ARGS__);                                         \
-		} else {                                                                           \
-			D_DEBUG(flag, fmt, __VA_ARGS__);                                           \
-		}                                                                                  \
+		dlck_print_indent_inc(dp);                                                         \
+		exp;                                                                               \
+		dlck_print_indent_dec(dp);                                                         \
 	} while (0)
-
-#define DLCK_LOG(dp, level, fmt, ...)                                                              \
-	do {                                                                                       \
-		if (IS_DLCK(dp)) {                                                                 \
-			DLCK_PRINTF(dp, fmt, __VA_ARGS__);                                         \
-		} else {                                                                           \
-			D_##level(fmt, __VA_ARGS__);                                               \
-		}                                                                                  \
-	} while (0)
-
-/**
- * An assert while run without DLCK. A DLCK message otherwise.
- *
- * \param[in] dp	DLCK print utility.
- * \param[in] msg	Message to print.
- * \param[in] cond	Condition to assert (without DLCK) or condition to check (with DLCK).
- */
-#define DLCK_ASSERT(dp, msg, cond)                                                                 \
-	do {                                                                                       \
-		if (IS_DLCK(dp)) {                                                                 \
-			DLCK_PRINT(dp, msg);                                                       \
-			DLCK_PRINT_YES_NO(dp, cond);                                               \
-		} else {                                                                           \
-			D_ASSERT(cond);                                                            \
-		}                                                                                  \
-	} while (0)
-
-/**
- * Validate the integrity of a btree.
- *
- * \param[in]	toh	Tree handle.
- *
- * \retval DER_SUCCESS		The tree is correct.
- * \retval -DER_NOTYPE		The tree is malformed.
- * \retval -DER_NONEXIST	The tree is malformed.
- * \retval -DER_*		Possibly other errors.
- */
-int
-dlck_dbtree_check(daos_handle_t toh);
 
 #endif /** __DAOS_DLCK_H__ */

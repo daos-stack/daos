@@ -158,8 +158,7 @@ dlck_print_worker_init(const char *log_dir, uuid_t po_uuid, int tgt_id, struct d
 	D_ASPRINTF(log_file, "%s/" DF_UUIDF "_%s%d", log_dir, DP_UUID(po_uuid), VOS_FILE, tgt_id);
 	if (log_file == NULL) {
 		rc = -DER_NOMEM;
-		DLCK_PRINTF_ERRL(main_dp, "[%d] Log file path allocation failed: " DF_RC "\n",
-				 tgt_id, DP_RC(rc));
+		DLCK_PRINTFL_RC(main_dp, rc, "[%d] Log file path allocation failed", tgt_id);
 		/**
 		 * It is very unlikely we can continue work without an ability to allocate more
 		 * memory.
@@ -170,8 +169,7 @@ dlck_print_worker_init(const char *log_dir, uuid_t po_uuid, int tgt_id, struct d
 	stream = fopen(log_file, "w");
 	if (stream == NULL) {
 		rc = daos_errno2der(errno);
-		DLCK_PRINTF_ERRL(main_dp, "[%d] Log file open failed: %s: " DF_RC "\n", tgt_id,
-				 log_file, DP_RC(rc));
+		DLCK_PRINTFL_RC(main_dp, rc, "[%d] Log file open failed: %s", tgt_id, log_file);
 		D_FREE(log_file);
 		return rc;
 	}
