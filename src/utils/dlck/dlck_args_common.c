@@ -10,7 +10,6 @@
 
 #include "dlck_args.h"
 
-#define DLCK_OPT_CO_UUID_STR          "co_uuid"
 #define DLCK_OPT_NON_ZERO_PADDING_STR "non_zero_padding"
 
 static struct argp_option args_common_options[] = {
@@ -22,17 +21,14 @@ static struct argp_option args_common_options[] = {
      "('='). Please see available options below."},
     OPT_HEADER("Available options:", GROUP_AVAILABLE_CMDS),
     /** entries below inherits the group number of the header entry */
-    LIST_ENTRY(DLCK_OPT_CO_UUID_STR "=UUID",
-	       "UUID of a container to process. If not provided all containers are processed."),
     LIST_ENTRY(DLCK_OPT_NON_ZERO_PADDING_STR "=EVENT",
 	       "Action to take when non-zero padding or reserved fields are detected. EVENT can be "
 	       "either 'error' or 'warning'. It is 'error' by default."),
     {0}};
 
-enum dlck_options_values { DLCK_OPT_CO_UUID, DLCK_OPT_NON_ZERO_PADDING };
+enum dlck_options_values { DLCK_OPT_NON_ZERO_PADDING };
 
 static char *options_tokens[] = {
-    [DLCK_OPT_CO_UUID]          = DLCK_OPT_CO_UUID_STR,
     [DLCK_OPT_NON_ZERO_PADDING] = DLCK_OPT_NON_ZERO_PADDING_STR,
 };
 
@@ -43,29 +39,17 @@ args_common_init(struct dlck_args_common *args)
 	/** set defaults */
 	args->write_mode = false; /** dry run */
 	args->options.non_zero_padding = DLCK_EVENT_ERROR;
-	uuid_clear(args->options.co_uuid);
 }
 
 static int
 args_common_options_parse(char *options_str, struct dlck_options *opts, struct argp_state *state)
 {
 	char           *value;
-	uuid_t          tmp_uuid;
 	enum dlck_event tmp_event;
 	int             rc;
 
 	while (*options_str != '\0') {
 		switch (getsubopt(&options_str, options_tokens, &value)) {
-		case DLCK_OPT_CO_UUID:
-			if (value == NULL) {
-				RETURN_FAIL(state, EINVAL, MISSING_ARG_FMT, DLCK_OPT_CO_UUID_STR);
-			}
-			rc = uuid_parse(value, tmp_uuid);
-			if (rc != 0) {
-				RETURN_FAIL(state, EINVAL, "Malformed uuid: %s", value);
-			}
-			uuid_copy(opts->co_uuid, tmp_uuid);
-			break;
 		case DLCK_OPT_NON_ZERO_PADDING:
 			tmp_event = parse_event(DLCK_OPT_NON_ZERO_PADDING_STR, value, state, &rc);
 			if (tmp_event == DLCK_EVENT_INVALID) {

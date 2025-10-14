@@ -30,7 +30,6 @@ enum dlck_event {
  * DLCK control options.
  */
 struct dlck_options {
-	uuid_t          co_uuid;
 	enum dlck_event non_zero_padding;
 };
 
