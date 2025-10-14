@@ -1472,8 +1472,8 @@ retry_rebuild_task(struct rebuild_task *task, int error, daos_rebuild_opc_t *opc
 
 static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
-			       struct rebuild_global_pool_tracker *rgt,
-			       uint32_t obj_reclaim_ver, int ret)
+			       struct rebuild_global_pool_tracker *rgt, uint32_t obj_reclaim_ver,
+			       int ret)
 {
 	int rc = 0;
 	int rc1;
@@ -1564,8 +1564,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			rgt->rgt_status.rs_errno);
 
 		rc = ds_rebuild_schedule(pool, obj_reclaim_ver, rgt->rgt_reclaim_epoch,
-					 task->dst_new_layout_version,
-					 &task->dst_tgts, RB_OP_RECLAIM, 5);
+					 task->dst_new_layout_version, &task->dst_tgts,
+					 RB_OP_RECLAIM, 5);
 		if (rc != 0)
 			D_ERROR("reschedule reclaim, "DF_UUID" failed: "DF_RC"\n",
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
@@ -1598,7 +1598,7 @@ rebuild_task_ult(void *arg)
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	d_rank_t				myrank;
 	uint64_t				cur_ts = 0;
-	uint32_t				obj_reclaim_ver = 0;
+	uint32_t                                 obj_reclaim_ver = 0;
 	int					rc;
 
 	cur_ts = daos_gettime_coarse();

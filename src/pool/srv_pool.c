@@ -7309,8 +7309,8 @@ int
 ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
 			   uint32_t *reclaim_ver)
 {
-	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list,
-					NULL, NULL, NULL, NULL, reclaim_ver, NULL);
+	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list, NULL, NULL,
+					NULL, NULL, reclaim_ver, NULL);
 }
 
 int

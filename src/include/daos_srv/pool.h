@@ -90,13 +90,13 @@ struct ds_pool {
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
-	uint32_t		sp_rebuild_gen;
+	uint32_t                 sp_rebuild_gen;
 	int			sp_rebuilding;
 	/**
 	 * someone has already messaged this pool to for rebuild scan,
 	 * NB: all xstreams can do lockless-write on it but it's OK
 	 */
-	int			sp_rebuild_scan;
+	int                      sp_rebuild_scan;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -283,8 +283,9 @@ int
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
 int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
-int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
-			       uint32_t *reclaim_ver);
+int
+     ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
+				uint32_t *reclaim_ver);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 

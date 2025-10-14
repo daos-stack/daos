@@ -182,9 +182,9 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	}
 
 	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
-		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d, %d.\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			pool->sp_rebuilding, pool->sp_rebuild_scan);
+		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), pool->sp_rebuilding,
+			pool->sp_rebuild_scan);
 		return false;
 	}
 
@@ -499,8 +499,8 @@ next:
 		/* sleep 18 seconds for EC aggregation ULT if the pool is in rebuilding,
 		 * if no space pressure.
 		 */
-		if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool) &&
-		    !param->ap_vos_agg && msecs != 200)
+		if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool) && !param->ap_vos_agg &&
+		    msecs != 200)
 			msecs = 18000;
 
 		sched_req_sleep(req, msecs);
@@ -921,14 +921,14 @@ ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
 void
 ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child)
 {
-	uint64_t	start_time = daos_wallclock_secs();
+	uint64_t start_time = daos_wallclock_secs();
 
-	D_DEBUG(DB_MD, DF_UUID"[%d]: wait for pausing EC aggregation\n",
+	D_DEBUG(DB_MD, DF_UUID "[%d]: wait for pausing EC aggregation\n",
 		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
 	while (1) {
 		struct ds_cont_child *coc;
-		bool wait = false;
-		int  waited;
+		bool                  wait = false;
+		int                   waited;
 
 		/* Wait for pausing aggregation
 		 * XXX: There is no global barrier so we always wait for at least 10 seconds to
@@ -947,7 +947,7 @@ ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child)
 
 		waited = daos_wallclock_secs() - start_time;
 		if (waited % 60 == 0) {
-			D_WARN(DF_UUID"[%d]: waited %d secs for EC aggregation to pause\n",
+			D_WARN(DF_UUID "[%d]: waited %d secs for EC aggregation to pause\n",
 			       DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id,
 			       waited);
 		}

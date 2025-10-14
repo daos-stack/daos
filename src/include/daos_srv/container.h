@@ -136,7 +136,7 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_batched_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
-	int			 sc_ec_agg_updates;
+	int                      sc_ec_agg_updates;
 };
 
 struct agg_param {
@@ -208,7 +208,7 @@ ds_cont_child_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
 void
 ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child);
 void
-ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child);
+     ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child);
 
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
