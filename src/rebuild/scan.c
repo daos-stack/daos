@@ -985,7 +985,7 @@ rebuild_scanner(void *data)
 {
 	struct rebuild_scan_arg		arg = { 0 };
 	struct rebuild_tgt_pool_tracker *rpt = data;
-	struct ds_pool_child		*child = NULL;
+	struct ds_pool_child            *child = NULL;
 	struct rebuild_pool_tls		*tls;
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
@@ -1043,7 +1043,6 @@ rebuild_scanner(void *data)
 			D_GOTO(out, rc);
 		}
 	}
-
 
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;

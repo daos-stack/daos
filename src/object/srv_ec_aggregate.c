@@ -132,7 +132,7 @@ struct ec_agg_param {
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
-	struct ds_cont_child	*ap_cont;
+	struct ds_cont_child    *ap_cont;
 	uint32_t		 ap_credits_max; /* # of tight loops to yield */
 	uint32_t		 ap_credits;     /* # of tight loops          */
 	uint32_t		 ap_initialized:1; /* initialized flag */
@@ -787,12 +787,12 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 {
 	daos_recx_t		 recx = { 0 };
 	daos_epoch_range_t	 epoch_range = { 0 };
-	struct ec_agg_param	*ap;
+	struct ec_agg_param     *ap;
 	uint32_t		 len = ec_age2cs(entry);
 	uint32_t		 pidx = ec_age2pidx(entry);
 	struct daos_csummer	*csummer;
 	struct dcs_iod_csums	*iod_csums = NULL;
-	int			 err;
+	int                      err;
 	int			 rc = 0;
 
 	ap = container_of(entry, struct ec_agg_param, ap_agg_entry);
@@ -838,14 +838,14 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 		}
 	}
 
-	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * ec_age2ss(entry);
-	recx.rx_nr  = ec_age2ss(entry);
+	recx.rx_idx        = entry->ae_cur_stripe.as_stripenum * ec_age2ss(entry);
+	recx.rx_nr         = ec_age2ss(entry);
 	epoch_range.epr_lo = ap->ap_epr.epr_lo;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
-	err = vos_obj_array_remove(ap->ap_cont_handle, entry->ae_oid, &epoch_range,
-				   &entry->ae_dkey, &entry->ae_akey, &recx);
+	err = vos_obj_array_remove(ap->ap_cont_handle, entry->ae_oid, &epoch_range, &entry->ae_dkey,
+				   &entry->ae_akey, &recx);
 	if (err)
-		D_ERROR("array_remove fails: "DF_RC"\n", DP_RC(err));
+		D_ERROR("array_remove fails: " DF_RC "\n", DP_RC(err));
 	if (!rc && err)
 		rc = err;
 out:
@@ -1282,19 +1282,19 @@ out:
 int
 agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 {
-	struct pool_target	*targets = NULL;
-	struct daos_shard_loc	*peer_loc;
-	uint32_t		 failed_tgts_cnt = 0;
-	uint32_t		 p = ec_age2p(entry);
-	uint32_t		 pidx = ec_age2pidx(entry);
-	int			 peer;
-	int			 i;
-	int			 rc;
+	struct pool_target    *targets = NULL;
+	struct daos_shard_loc *peer_loc;
+	uint32_t               failed_tgts_cnt = 0;
+	uint32_t               p               = ec_age2p(entry);
+	uint32_t               pidx            = ec_age2pidx(entry);
+	int                    peer;
+	int                    i;
+	int                    rc;
 
-	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
-				       &targets, &failed_tgts_cnt);
+	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map, &targets,
+				       &failed_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UOID" pool_map_find_failed_tgts failed: "DF_RC"\n",
+		D_ERROR(DF_UOID " pool_map_find_failed_tgts failed: " DF_RC "\n",
 			DP_UOID(entry->ae_oid), DP_RC(rc));
 		return rc;
 	}
@@ -1311,9 +1311,11 @@ agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 			if (peer_loc->sd_rank == DAOS_TGT_IGNORE ||
 			    (targets[i].ta_comp.co_rank == peer_loc->sd_rank &&
 			     targets[i].ta_comp.co_index == peer_loc->sd_tgt_idx)) {
-				D_DEBUG(DB_EPC, DF_UOID" peer parity tgt failed rank %d, "
-					"tgt_idx %d.\n", DP_UOID(entry->ae_oid),
-					peer_loc->sd_rank, peer_loc->sd_tgt_idx);
+				D_DEBUG(DB_EPC,
+					DF_UOID " peer parity tgt failed rank %d, "
+						"tgt_idx %d.\n",
+					DP_UOID(entry->ae_oid), peer_loc->sd_rank,
+					peer_loc->sd_tgt_idx);
 				D_GOTO(out, rc = -DER_UNREACH);
 			}
 		}
@@ -1340,7 +1342,7 @@ agg_peer_update_ult(void *arg)
 	crt_endpoint_t		 tgt_ep = { 0 };
 	unsigned char		*buf = NULL;
 	struct obj_ec_agg_in	*ec_agg_in = NULL;
-	struct obj_ec_agg_out	*ec_agg_out = NULL;
+	struct obj_ec_agg_out   *ec_agg_out = NULL;
 	struct ec_agg_param	*agg_param;
 	crt_bulk_t		 bulk_hdl = NULL;
 	struct daos_csummer	*csummer = NULL;
@@ -1352,8 +1354,8 @@ agg_peer_update_ult(void *arg)
 	uint32_t		 peer, peer_shard;
 	struct dc_object	*obj = NULL;
 	crt_rpc_t		*rpc = NULL;
-	int			 peer_rc = 0, rc = 0;
-	int			 peer_updated = 0;
+	int                      peer_rc = 0, rc = 0;
+	int                      peer_updated = 0;
 	uint64_t		 enqueue_id;
 	uint32_t		 max_delay = 0;
 
@@ -1361,7 +1363,7 @@ agg_peer_update_ult(void *arg)
 		D_GOTO(out, rc = -DER_TIMEDOUT);
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	rc = agg_peer_check_avail(agg_param, entry);
+	rc        = agg_peer_check_avail(agg_param, entry);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1377,7 +1379,7 @@ agg_peer_update_ult(void *arg)
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
 		enqueue_id = 0;
-	retry:
+retry:
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
@@ -1427,7 +1429,7 @@ agg_peer_update_ult(void *arg)
 			rc = crt_bulk_create(dss_get_module_info()->dmi_ctx,
 					     &sgl, CRT_BULK_RW, &bulk_hdl);
 			if (rc) {
-				D_ERROR(DF_UOID" pidx %d to peer %d, crt_bulk_create "DF_RC"\n",
+				D_ERROR(DF_UOID " pidx %d to peer %d, crt_bulk_create " DF_RC "\n",
 					DP_UOID(entry->ae_oid), pidx, peer, DP_RC(rc));
 				goto next;
 			}
@@ -1437,7 +1439,7 @@ agg_peer_update_ult(void *arg)
 				rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false,
 							    NULL, 0, &iod_csums);
 				if (rc) {
-					D_ERROR("daos_csummer_calc_iods failed: "DF_RC"\n",
+					D_ERROR("daos_csummer_calc_iods failed: " DF_RC "\n",
 						DP_RC(rc));
 					goto next;
 				}
@@ -1450,19 +1452,19 @@ agg_peer_update_ult(void *arg)
 
 		rc = dss_rpc_send(rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" pidx %d to parity[%d], dss_rpc_send "
-				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer, DP_RC(rc));
+			D_ERROR(DF_UOID " pidx %d to parity[%d], dss_rpc_send " DF_RC "\n",
+				DP_UOID(entry->ae_oid), pidx, peer, DP_RC(rc));
 		} else {
 			crt_req_get_timeout(rpc, &max_delay);
 			ec_agg_out = crt_reply_get(rpc);
-			rc = ec_agg_out->ea_status;
+			rc         = ec_agg_out->ea_status;
 			enqueue_id = ec_agg_out->ea_comm_out.req_out_enqueue_id;
 			D_CDEBUG(rc == 0, DB_TRACE, DLOG_ERR,
-				 "update parity[%d] to %d:%d, status = "DF_RC"\n",
-				 peer, tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
+				 "update parity[%d] to %d:%d, status = " DF_RC "\n", peer,
+				 tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
 			peer_updated += rc == 0;
 		}
-	next:
+next:
 		if (bulk_hdl)
 			crt_bulk_free(bulk_hdl);
 		if (rpc)
@@ -1470,7 +1472,7 @@ agg_peer_update_ult(void *arg)
 		if (iod_csums != NULL)
 			daos_csummer_free_ic(csummer, &iod_csums);
 		rpc = NULL;
-		bulk_hdl = NULL;
+		bulk_hdl  = NULL;
 		iod_csums = NULL;
 		if (rc == -DER_OVERLOAD_RETRY) {
 			dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
@@ -1495,12 +1497,11 @@ out:
 static int
 agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 {
-	struct ec_agg_stripe_ud	 stripe_ud = { 0 };
+	struct ec_agg_stripe_ud  stripe_ud = {0};
 	int			*status;
-	int			 tid, rc = 0;
+	int                      tid, rc = 0;
 
-	D_ASSERT(!write_parity ||
-		 entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf);
+	D_ASSERT(!write_parity || entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf);
 
 	rc = agg_get_obj_handle(entry, false);
 	if (rc) {
@@ -1541,7 +1542,7 @@ agg_process_holes_ult(void *arg)
 	struct ec_agg_stripe_ud	*stripe_ud = (struct ec_agg_stripe_ud *)arg;
 	daos_iod_t		*iod = &stripe_ud->asu_iod;
 	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
-	struct ec_agg_extent	*agg_extent;
+	struct ec_agg_extent    *agg_extent;
 	struct ec_agg_param	*agg_param;
 	struct obj_ec_rep_in	*ec_rep_in = NULL;
 	struct obj_ec_rep_out	*ec_rep_out = NULL;
@@ -1556,11 +1557,11 @@ agg_process_holes_ult(void *arg)
 					k * len;
 	uint64_t		 last_ext_end = 0;
 	uint64_t		 ext_cnt = 0;
-	uint64_t		 ext_tot_len = 0;
+	uint64_t                 ext_tot_len  = 0;
 	uint32_t		 pidx = ec_age2pidx(entry);
 	uint32_t		 peer;
-	int			 rc = 0, peer_rc = 0;
-	int			 peer_updated = 0;
+	int                      rc = 0, peer_rc = 0;
+	int                      peer_updated = 0;
 	uint32_t		 max_delay = 0;
 	uint64_t		 enqueue_id;
 
@@ -1575,8 +1576,8 @@ agg_process_holes_ult(void *arg)
 			stripe_ud->asu_valid_hole = true;
 		if (agg_extent->ae_recx.rx_idx - ss > last_ext_end) {
 			stripe_ud->asu_recxs[ext_cnt].rx_idx = ss + last_ext_end;
-			stripe_ud->asu_recxs[ext_cnt].rx_nr = agg_extent->ae_recx.rx_idx -
-							      ss - last_ext_end;
+			stripe_ud->asu_recxs[ext_cnt].rx_nr =
+			    agg_extent->ae_recx.rx_idx - ss - last_ext_end;
 			ext_tot_len += stripe_ud->asu_recxs[ext_cnt++].rx_nr;
 		}
 		last_ext_end = agg_extent->ae_recx.rx_idx +
@@ -1589,7 +1590,7 @@ agg_process_holes_ult(void *arg)
 		goto out;
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	rc = agg_peer_check_avail(agg_param, entry);
+	rc        = agg_peer_check_avail(agg_param, entry);
 	if (rc != 0)
 		goto out;
 
@@ -1654,7 +1655,7 @@ agg_process_holes_ult(void *arg)
 			continue;
 
 		enqueue_id = 0;
-	retry:
+retry:
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
@@ -1696,10 +1697,10 @@ agg_process_holes_ult(void *arg)
 		} else {
 			crt_req_get_timeout(rpc, &max_delay);
 			ec_rep_out = crt_reply_get(rpc);
-			rc = ec_rep_out->er_status;
+			rc         = ec_rep_out->er_status;
 			enqueue_id = ec_rep_out->er_comm_out.req_out_enqueue_id;
 			D_CDEBUG(rc == 0, DB_TRACE, DLOG_ERR,
-				 DF_UOID" parity[%d] er_status = "DF_RC"\n",
+				 DF_UOID " parity[%d] er_status = " DF_RC "\n",
 				 DP_UOID(entry->ae_oid), peer, DP_RC(rc));
 			peer_updated += rc == 0;
 		}
@@ -1842,9 +1843,9 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	/* avoid race between EC aggregation and rebuild scanner */
 	agg_param->ap_cont->sc_ec_agg_updates++;
 	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
-		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		D_DEBUG(DB_EPC, DF_UOID " abort as rebuild started\n", DP_UOID(entry->ae_oid));
 		update_vos = false;
-		rc = -1;
+		rc         = -1;
 		goto out;
 	}
 
@@ -2633,7 +2634,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	uuid_copy(info->api_cont_uuid, cont->sc_uuid);
 	info->api_pool = cont->sc_pool->spc_pool;
 
-	agg_param->ap_cont		= cont;
+	agg_param->ap_cont              = cont;
 	agg_param->ap_cont_handle	= cont->sc_hdl;
 	agg_param->ap_yield_func	= agg_rate_ctl;
 	agg_param->ap_yield_arg		= param;

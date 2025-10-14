@@ -2653,7 +2653,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		if (rc)
 			D_ERROR(DF_UOID " bio_iod_post failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 				DP_RC(rc));
-	end:
+end:
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, &ioc.ioc_io_size, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM) {
