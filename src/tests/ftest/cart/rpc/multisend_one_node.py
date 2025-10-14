@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -28,7 +29,7 @@ class CartMultisendOneNodeTest(CartTest):
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
         except Exception as my_except:
-            self.print("Exception in launching server : {}".format(my_except))
+            self.log.info("Exception in launching server : %s", my_except)
             self.fail("Test failed.\n")
 
         # Verify the server is still running.

@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -88,18 +89,18 @@ class CartIvOneNodeTest(CartTest):
     def _verify_action(self, action):
         """Verify the action."""
         if (('operation' not in action) or ('rank' not in action) or ('key' not in action)):
-            self.print("Error happened during action check")
+            self.log.info("Error happened during action check")
             raise ValueError(
                 "Each action must contain an operation, rank, and key")
 
         if len(action['key']) != 2:
-            self.print("Error key should be tuple of (rank, idx)")
+            self.log.info("Error key should be tuple of (rank, idx)")
             raise ValueError("key should be a tuple of (rank, idx)")
 
     def _verify_fetch_operation(self, action):
         """Verify the fetch operation."""
         if (('return_code' not in action) or ('expected_value' not in action)):
-            self.print("Error: fetch operation was malformed")
+            self.log.info("Error: fetch operation was malformed")
             raise ValueError("Fetch operation malformed")
 
     def _iv_test_actions(self, cmd, actions):
@@ -135,7 +136,7 @@ class CartIvOneNodeTest(CartTest):
                             log_path)
                 clicmd += command
 
-                self.print("\nClient cmd : %s\n" % clicmd)
+                self.log.info("Client cmd : %s", clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -153,11 +154,11 @@ class CartIvOneNodeTest(CartTest):
                 # codecs.open(log_file, "w", "unicode").write('')
 
                 # DEBUGGING: dump contents of JSON file to screen
-                with open(log_path, 'r') as file:
-                    print(file.read())
+                with open(log_path, 'r', encoding='utf-8') as file:
+                    self.log.info(file.read())
 
                 # Read the result into test_result and remove the temp file
-                with open(log_path, 'r') as log_file:
+                with open(log_path, 'r', encoding='utf-8') as log_file:
                     test_result = json.load(log_file)
 
                 os.close(log_fd)
@@ -197,7 +198,7 @@ class CartIvOneNodeTest(CartTest):
 
                 clicmd += command
 
-                self.print("\nClient cmd : %s\n" % clicmd)
+                self.log.info("Client cmd : %s", clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -214,7 +215,7 @@ class CartIvOneNodeTest(CartTest):
                     command = "{!s} -s '{!s}'".format(command, "none")
                 clicmd += command
 
-                self.print("\nClient cmd : %s\n" % clicmd)
+                self.log.info("Client cmd : %s", clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -234,7 +235,7 @@ class CartIvOneNodeTest(CartTest):
                         .format(command, 0)
                 clicmd += command
 
-                self.print("\nClient cmd : %s\n" % clicmd)
+                self.log.info("Client cmd : %s", clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -246,7 +247,7 @@ class CartIvOneNodeTest(CartTest):
                 command = " {!s} -o '{!s}' -r '{!s}' ".format(command, operation, rank)
                 clicmd += command
 
-                self.print("\nClient cmd : %s\n" % clicmd)
+                self.log.info("Client cmd : %s", clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -268,7 +269,7 @@ class CartIvOneNodeTest(CartTest):
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
         except Exception as error:
-            self.print("Exception in launching server : {}".format(error))
+            self.log.info("Exception in launching server : %s", error)
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
@@ -481,7 +482,7 @@ class CartIvOneNodeTest(CartTest):
         except ValueError as exception:
             failed = True
             traceback.print_stack()
-            self.print("TEST FAILED: %s" % str(exception))
+            self.log.info("TEST FAILED: %s", exception)
 
         # Shutdown Servers
 
@@ -493,25 +494,25 @@ class CartIvOneNodeTest(CartTest):
         # Request each server shut down gracefully
         for rank in reversed(list(range(1, int(srv_ppn) * num_servers))):
             clicmdt = clicmd + " -o shutdown -r " + str(rank)
-            self.print("\nClient cmd : {}\n".format(clicmdt))
+            self.log.info("Client cmd : %s", clicmdt)
             try:
                 subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
             except Exception as error:
                 failed = True
-                self.print("Exception in launching client : {}".format(error))
+                self.log.info("Exception in launching client : %s", error)
 
         time.sleep(1)
 
         # Shutdown rank 0 separately
         clicmd += " -o shutdown -r 0"
-        self.print("\nClient cmd : {}\n".format(clicmd))
+        self.log.info("Client cmd : %s", clicmd)
         try:
             subprocess.call(shlex.split(clicmd))
         # pylint: disable=broad-except
         except Exception as error:
             failed = True
-            self.print("Exception in launching client : {}".format(error))
+            self.log.info("Exception in launching client : %s", error)
 
         # wait for servers to finish shutting down
         time.sleep(2)

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -81,6 +82,8 @@ class AvocadoInfo():
                 "[sysinfo.collectibles]\n",
                 f"files = {sysinfo_files_file}\n",
                 f"commands = {sysinfo_commands_file}\n",
+                "[run]\n",
+                "max_parallel_tasks = 1\n",
             ]
 
             try:
