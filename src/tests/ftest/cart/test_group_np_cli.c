@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +17,6 @@
 #include <ctype.h>
 
 #include "crt_utils.h"
-#include "test_group_rpc.h"
 #include "test_group_np_common.h"
 #include "test_group_np_common_cli.h"
 
@@ -75,6 +75,108 @@ send_rpc_disable_swim(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
 	crtu_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+}
+
+int
+bulk_forward_test(crt_group_t *grp, d_rank_list_t *rank_list)
+{
+	crt_rpc_t                *rpc;
+	struct test_bulk_fwd_in  *input;
+	struct test_bulk_fwd_out *output;
+	int                       bulk_size;
+	char                     *buff;
+	crt_endpoint_t            ep;
+	d_sg_list_t               sgl;
+	crt_bulk_t                local_bulk;
+	int                       y;
+	int                       rc;
+	int                       i;
+	d_rank_t                  rank;
+
+	rc = 0;
+
+	bulk_size = test_g.t_bulk_size;
+
+	DBG_PRINT("Forward bulk test. forward_rank=%d size=%d repetiations=%d num_ranks=%d\n",
+		  test_g.t_fwd_rank, test_g.t_bulk_size, test_g.t_repetitions, rank_list->rl_nr);
+
+	D_ALLOC_ARRAY(buff, bulk_size);
+	if (!buff) {
+		D_ERROR("Failed to allocate mem of size=%d\n", bulk_size);
+		D_GOTO(clean_up, rc = -DER_NOMEM);
+	}
+
+	memset(buff, 'a', bulk_size);
+
+	rc = d_sgl_init(&sgl, 1);
+
+	for (y = 0; y < test_g.t_repetitions; y++) {
+		DBG_PRINT("repetition %d\n", y);
+		for (i = 0; i < rank_list->rl_nr; i++) {
+			rank = rank_list->rl_ranks[i];
+
+			ep.ep_rank = rank;
+			ep.ep_tag  = 0;
+			ep.ep_grp  = grp;
+			rc = crt_req_create(test_g.t_crt_ctx[0], &ep, TEST_OPC_FWD_BULK, &rpc);
+			if (rc != 0) {
+				D_ERROR("crt_req_create() failed; rc=%d\n", rc);
+				D_GOTO(clean_up, rc);
+			}
+
+			input  = crt_req_get(rpc);
+			output = crt_reply_get(rpc);
+
+			local_bulk = CRT_BULK_NULL;
+
+			if (bulk_size > 0) {
+				sgl.sg_iovs[0].iov_buf     = buff;
+				sgl.sg_iovs[0].iov_buf_len = bulk_size;
+				sgl.sg_iovs[0].iov_len     = bulk_size;
+
+				rc = crt_bulk_create(test_g.t_crt_ctx[0], &sgl, CRT_BULK_RW,
+						     &local_bulk);
+				if (rc != 0) {
+					D_ERROR("crt_bulk_create() failed; rc=%d\n", rc);
+					D_GOTO(clean_up, rc);
+				}
+
+				rc = crt_bulk_bind(local_bulk, test_g.t_crt_ctx[0]);
+				if (rc != 0) {
+					D_ERROR("crt_bulk_bind() failed; rc=%d\n", rc);
+					D_GOTO(clean_up, rc);
+				}
+			}
+
+			input->bulk_size = bulk_size;
+			input->bulk_hdl  = local_bulk;
+			input->fwd_rank  = test_g.t_fwd_rank;
+			input->do_put    = 0;
+
+			RPC_PUB_ADDREF(rpc); /* keep rpc valid after sem_timedwait */
+			rc = crt_req_send(rpc, client_cb_common, NULL);
+			if (rc != 0) {
+				D_ERROR("crt_req_send() failed; rc=%d\n", rc);
+				D_GOTO(clean_up, rc);
+			}
+
+			crtu_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+
+			rc = output->rc;
+			RPC_PUB_DECREF(rpc); /* output no longer valid after this */
+			crt_bulk_free(local_bulk);
+
+			if (rc != 0) {
+				D_ERROR("fwd bulk failed\n");
+				D_GOTO(clean_up, rc);
+			}
+		}
+	}
+	d_sgl_fini(&sgl, false);
+	D_FREE(buff);
+
+clean_up:
+	return rc;
 }
 
 void
@@ -148,6 +250,11 @@ test_run(void)
 
 	test_g.t_fault_attr_1000 = d_fault_attr_lookup(1000);
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
+
+	if (test_g.t_do_bulk_fwd) {
+		rc = bulk_forward_test(grp, rank_list);
+		D_ASSERTF(rc == 0, "bulk_forward_test() failed with rc: %d\n", rc);
+	}
 
 	if (!test_g.t_shut_only && !test_g.t_skip_check_in &&
 	    (rank_list != NULL)) {
