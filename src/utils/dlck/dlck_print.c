@@ -147,8 +147,8 @@ dlck_printf_worker(struct dlck_print *dp, const char *fmt, ...)
 }
 
 int
-dlck_print_worker_init(const char *log_dir, uuid_t po_uuid, int tgt_id, struct dlck_print *main_dp,
-		       struct dlck_print *dp)
+dlck_print_worker_init(struct dlck_options *options, const char *log_dir, uuid_t po_uuid,
+		       int tgt_id, struct dlck_print *main_dp, struct dlck_print *dp)
 {
 	char *log_file;
 	FILE *stream;
@@ -176,6 +176,7 @@ dlck_print_worker_init(const char *log_dir, uuid_t po_uuid, int tgt_id, struct d
 	D_FREE(log_file);
 
 	memset(dp, 0, sizeof(*dp));
+	dp->options       = options;
 	dp->dp_printf     = dlck_printf_worker;
 	dp->printf_custom = stream;
 

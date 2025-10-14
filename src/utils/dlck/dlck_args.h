@@ -45,27 +45,10 @@
 
 #define DLCK_TARGET_MAX                 31
 
-enum dlck_event {
-	DLCK_EVENT_INVALID = -1,
-	DLCK_EVENT_ERROR   = 0,
-	DLCK_EVENT_WARNING,
-};
-
-#define DLCK_EVENT_ERROR_STR   "error"
-#define DLCK_EVENT_WARNING_STR "warning"
-
-struct dlck_args_options {
-	uuid_t          co_uuid;
-	enum dlck_event non_zero_padding;
-};
-
-#define DLCK_OPT_CO_UUID_STR          "co_uuid"
-#define DLCK_OPT_NON_ZERO_PADDING_STR "non_zero_padding"
-
 #define MISSING_ARG_FMT               "Missing argument for the '%s' option"
 
 struct dlck_args_common {
-	struct dlck_args_options options;
+	struct dlck_options options;
 	bool          write_mode; /** false by default (dry run) */
 };
 

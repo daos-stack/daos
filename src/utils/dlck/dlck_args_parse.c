@@ -98,6 +98,9 @@ free_file:
 	return rc;
 }
 
+#define DLCK_EVENT_ERROR_STR   "error"
+#define DLCK_EVENT_WARNING_STR "warning"
+
 enum dlck_event
 parse_event(const char *option, const char *value, struct argp_state *state, int *rc)
 {

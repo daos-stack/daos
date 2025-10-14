@@ -90,8 +90,8 @@ exec_one(void *arg)
 		}
 
 		/** initialize the logfile and its print utility */
-		rc = dlck_print_worker_init(xa->ctrl->log_dir, file->po_uuid, xa->xs->tgt_id,
-					    main_dp, &dp);
+		rc = dlck_print_worker_init(&xa->ctrl->common.options, xa->ctrl->log_dir,
+					    file->po_uuid, xa->xs->tgt_id, main_dp, &dp);
 		if (rc != DER_SUCCESS) {
 			/** There is no point continuing without a logfile. */
 			dlck_xstream_set_rc(xa, rc);

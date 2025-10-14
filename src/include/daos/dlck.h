@@ -13,8 +13,26 @@
 #define DLCK_PRINT_INDENT_MAX 10
 #define DLCK_PRINT_INDENT     '-'
 
-#define DLCK_ERROR_INFIX      "error: "
-#define DLCK_OK_SUFFIX        "ok."
+/**
+ * @enum dlck_event
+ *
+ * DLCK event types.
+ */
+enum dlck_event {
+	DLCK_EVENT_INVALID = -1,
+	DLCK_EVENT_ERROR   = 0,
+	DLCK_EVENT_WARNING,
+};
+
+/**
+ * @struct dlck_options
+ *
+ * DLCK control options.
+ */
+struct dlck_options {
+	uuid_t          co_uuid;
+	enum dlck_event non_zero_padding;
+};
 
 /**
  * @struct dlck_print
@@ -22,11 +40,16 @@
  * Printer for DLCK purposes.
  */
 struct dlck_print {
+	struct dlck_options *options;
+	/** printer fields */
 	int (*dp_printf)(struct dlck_print *dp, const char *fmt, ...);
 	void *printf_custom;
 	int   level;
 	char  prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
 };
+
+#define DLCK_ERROR_INFIX "error: "
+#define DLCK_OK_SUFFIX   "ok."
 
 /** basic tests and helpers */
 

@@ -10,6 +10,9 @@
 
 #include "dlck_args.h"
 
+#define DLCK_OPT_CO_UUID_STR          "co_uuid"
+#define DLCK_OPT_NON_ZERO_PADDING_STR "non_zero_padding"
+
 static struct argp_option args_common_options[] = {
     OPT_HEADER("Options:", GROUP_OPTIONS),
     /** entries below inherits the group number of the header entry */
@@ -44,8 +47,7 @@ args_common_init(struct dlck_args_common *args)
 }
 
 static int
-args_common_options_parse(char *options_str, struct dlck_args_options *opts,
-			  struct argp_state *state)
+args_common_options_parse(char *options_str, struct dlck_options *opts, struct argp_state *state)
 {
 	char           *value;
 	uuid_t          tmp_uuid;

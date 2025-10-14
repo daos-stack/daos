@@ -75,6 +75,7 @@ dlck_print_main_get_custom(struct dlck_print *dp)
  *
  * Creates and opens a logfile. The created printer utility will direct log into the created file.
  *
+ * \param[in]	options	Control options.
  * \param[in]	log_dir	Directory where a logfile will be created.
  * \param[in]	po_uuid	Pool's UUID.
  * \param[in]	tgt_id	Target's ID.
@@ -86,8 +87,8 @@ dlck_print_main_get_custom(struct dlck_print *dp)
  * \retval -DER_*	Other error.
  */
 int
-dlck_print_worker_init(const char *log_dir, uuid_t po_uuid, int tgt_id, struct dlck_print *main_dp,
-		       struct dlck_print *dp);
+dlck_print_worker_init(struct dlck_options *options, const char *log_dir, uuid_t po_uuid,
+		       int tgt_id, struct dlck_print *main_dp, struct dlck_print *dp);
 
 /**
  * \brief Finalize the worker print utility.
