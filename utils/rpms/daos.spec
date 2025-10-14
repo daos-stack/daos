@@ -12,6 +12,8 @@
 %endif
 %global mercury_version   2.4.0-7%{?dist}
 %global libfabric_version 1.15.1-1
+%global libisal 2.30.0-2%{?dist}
+%global libisal_crypto 2.24.0-1%{?dist}
 %global argobots_version 1.2-1%{?dist}
 %global fuse_version 3.16.2-2%{?dist}
 %global spdk_version 22.01.2-6%{?dist}
@@ -84,10 +86,10 @@ BuildRequires: spdk-devel = %{spdk_version}
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
-BuildRequires: libisa-l_crypto-devel
+BuildRequires: libisa-l_crypto-devel = %{libisal_crypto}
 %else
-BuildRequires: libisal-devel
-BuildRequires: libisal_crypto-devel
+BuildRequires: libisal-devel = %{libisal}
+BuildRequires: libisal_crypto-devel = %{libisal_crypto}
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -632,7 +634,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Sep 30 2025 Ryon Jensen <ryon.jensen@hpe.com> 2.6.4-4
+* Mon Oct 13 2025 Ryon Jensen <ryon.jensen@hpe.com> 2.6.4-4
 - Pin versions of mercury, fuse, spdk, pmem, argobots for 2.6.4
 
 * Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-3
