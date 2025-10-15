@@ -101,7 +101,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 				/* Decreased in pre_read_complete_cb() */
 				preread = true;
 				atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-				oh->doh_readahead_inflight = 1;
+				ie->ie_readahead_inflight = 1;
 			}
 			D_SPIN_UNLOCK(&ie->ie_active->lock);
 		}
@@ -140,12 +140,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * release from completing which also holds open the inode.
 	 */
 	if (preread)
-		dfuse_pre_read(dfuse_info, oh, ev);
+		dfuse_pre_read(dfuse_info, ie, ev);
 
 	return;
 preread_abort:
 	if (preread)
-		dfuse_pre_read_abort(dfuse_info, oh, ev, rc);
+		dfuse_pre_read_abort(dfuse_info, ie, ev, rc);
 decref:
 	active_ie_decref(dfuse_info, ie);
 err:
@@ -215,7 +215,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (oh->doh_ie->ie_active != NULL) {
 wait_readahead:
 		D_SPIN_LOCK(&oh->doh_ie->ie_active->lock);
-		if (oh->doh_readahead_inflight) {
+		if (oh->doh_ie->ie_readahead_inflight) {
 			D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
 			goto wait_readahead;
 		}
