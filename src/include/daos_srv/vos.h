@@ -238,10 +238,12 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
  * \param coh		[IN]	Container open handle.
  * \param ep_max	[IN]	The upper epoch to aggregate.
  *
- * \return			Zero on success, negative value if error.
+ * \return			Negative value if error, zero if all DTX entries with an epoch lower
+ * 				or equal to ep_max have been aggregated, one if all the targeted DTX
+ * 				entries may not have been aggregated.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max, umem_off_t *blob);
+vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max);
 
 /**
  * Query the container's DTXs statistics information.
@@ -1778,15 +1780,22 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
+/* Timing statistic of DTX entries */
+struct dtx_time_stat {
+	daos_epoch_t dts_epoch[3];
+	uint64_t     dts_cmt_time[3];
+};
+
 /**
- * Return the number of DTX committed entries of a container.
+ * Return statistics on the DTX committed entries of a container.
  *
  * \param[in]	coh	container open handle.
- * \param[out]	cnt	number of DTX committed entries.
+ * \param[out]	cmt_cnt	number of DTX committed entries.
+ * \param[out]	dts	Timing statistics on the DTX committed entries.
  *
  * \return		0 on success, error otherwise.
  */
 int
-vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt);
+vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat *dts);
 
 #endif /* __VOS_API_H */

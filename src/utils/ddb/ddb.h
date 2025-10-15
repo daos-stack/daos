@@ -218,6 +218,7 @@ struct dev_replace_options {
 
 struct dtx_stat_options {
 	char *path;
+	bool  details;
 };
 
 struct prov_mem_options {
@@ -226,13 +227,13 @@ struct prov_mem_options {
 	unsigned int tmpfs_mount_size;
 };
 
-enum dtx_aggr_format { DDB_DTX_AGGR_NOW = 0, DDB_DTX_AGGR_EPOCH = 1, DDB_DTX_AGGR_DATE = 2 };
+enum dtx_aggr_format { DDB_DTX_AGGR_NOW = 0, DDB_DTX_AGGR_CMT_TIME = 1, DDB_DTX_AGGR_CMT_DATE = 2 };
 
 struct dtx_aggr_options {
 	char                *path;
 	enum dtx_aggr_format format;
-	uint64_t             epoch;
-	char                *date;
+	uint64_t             cmt_time;
+	char                *cmt_date;
 };
 
 struct ddb_cmd_info {

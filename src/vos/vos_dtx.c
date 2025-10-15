@@ -3055,35 +3055,37 @@ out:
 
 static int
 dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_container *cont,
-		   struct vos_cont_df *cont_df, umem_off_t dbd_off, const daos_epoch_t *ep_max)
+		   struct vos_cont_df *cont_df, umem_off_t dbd_off, const uint64_t *ts_max)
 {
 	struct vos_dtx_blob_df *dbd;
-	umem_off_t              dbd_next_off;
+	umem_off_t              dbd_next_off = UMOFF_NULL;
 	uint64_t                epoch;
-	int                     count;
-	bool                    is_freed = false;
+	int                     dtx_aggr_count;
+	bool                    is_dbd_freed = false;
 	int                     i;
 	int                     rc;
 
 	dbd = umem_off2ptr(umm, dbd_off);
-	if (dbd == NULL)
-		return 0;
+	if (dbd == NULL) {
+		rc = 0;
+		goto out;
+	}
 
 	rc = umem_tx_begin(umm, NULL);
 	if (unlikely(rc != 0)) {
 		D_ERROR("Failed to TX begin for DTX aggregation " UMOFF_PF ": " DF_RC "\n",
 			UMOFF_P(dbd_off), DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
-	count = 0;
+	dtx_aggr_count = 0;
 	epoch = cont_df->cd_newest_aggregated;
 	for (i = 0; i < dbd->dbd_count; i++) {
 		struct vos_dtx_cmt_ent_df *dce_df;
 		d_iov_t                    kiov;
 
 		dce_df = &dbd->dbd_committed_data[i];
-		if (ep_max != NULL && *ep_max < dce_df->dce_epoch)
+		if (ts_max != NULL && *ts_max < dce_df->dce_cmt_time)
 			break;
 
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
@@ -3091,14 +3093,14 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 				   &kiov, NULL);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
-		if (rc != 0) {
+		if (unlikely(rc != 0)) {
 			D_ERROR("Failed to remove entry for DTX aggregation "
 				UMOFF_PF": "DF_RC"\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
-			goto out;
+			goto out_tx_end;
 		}
 
-		count++;
+		dtx_aggr_count++;
 		if (epoch < dce_df->dce_epoch)
 			epoch = dce_df->dce_epoch;
 	}
@@ -3110,12 +3112,12 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 			D_ERROR("Failed to refresh epoch for DTX aggregation " UMOFF_PF ": " DF_RC
 				"\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
-			goto out;
+			goto out_tx_end;
 		}
 		cont_df->cd_newest_aggregated = epoch;
 	}
 
-	if (count < dbd->dbd_count) {
+	if (dbd->dbd_count - dtx_aggr_count > 0) {
 		size_t buf_len;
 
 		rc = umem_tx_add_ptr(umm, &dbd->dbd_committed_data[0],
@@ -3123,27 +3125,38 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 		if (unlikely(rc != 0)) {
 			D_ERROR("Failed update committed DTX blob " UMOFF_PF ": " DF_RC "\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
-			goto out;
+			goto out_tx_end;
 		}
-		buf_len = (dbd->dbd_count - count) * sizeof(dbd->dbd_committed_data[0]);
-		memmove(&dbd->dbd_committed_data[0], &dbd->dbd_committed_data[count], buf_len);
+		buf_len = (dbd->dbd_count - dtx_aggr_count) * sizeof(dbd->dbd_committed_data[0]);
+		memmove(&dbd->dbd_committed_data[0], &dbd->dbd_committed_data[dtx_aggr_count],
+			buf_len);
 
 		rc = umem_tx_add_ptr(umm, &dbd->dbd_count, sizeof(dbd->dbd_count));
 		if (unlikely(rc != 0)) {
 			D_ERROR("Failed update committed DTX count " UMOFF_PF ": " DF_RC "\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
-			goto out;
+			goto out_tx_end;
 		}
-		dbd->dbd_count -= count;
+		dbd->dbd_count -= dtx_aggr_count;
 	} else {
 		struct vos_dtx_blob_df *dbd_next;
-		struct vos_dtx_blob_df *dbd_prev;
 		umem_off_t              dbd_prev_off;
 
 		dbd_next_off = dbd->dbd_next;
 		dbd_next     = umem_off2ptr(umm, dbd_next_off);
 		dbd_prev_off = dbd->dbd_prev;
-		dbd_prev     = umem_off2ptr(umm, dbd_prev_off);
+
+		D_ASSERT(UMOFF_IS_NULL(dbd_prev_off));
+		D_ASSERT(dbd_off == cont_df->cd_dtx_committed_head);
+		rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_head,
+				     sizeof(cont_df->cd_dtx_committed_head));
+		if (unlikely(rc != 0)) {
+			D_ERROR("Failed to update head for DTX aggregation " UMOFF_PF ": " DF_RC
+				"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out_tx_end;
+		}
+		cont_df->cd_dtx_committed_head = dbd_next_off;
 
 		if (dbd_next == NULL) {
 			D_ASSERT(dbd_off == cont_df->cd_dtx_committed_tail);
@@ -3153,7 +3166,7 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 				D_ERROR("Failed to update tail for DTX aggregation " UMOFF_PF
 					": " DF_RC "\n",
 					UMOFF_P(dbd_off), DP_RC(rc));
-				goto out;
+				goto out_tx_end;
 			}
 			cont_df->cd_dtx_committed_tail = dbd_prev_off;
 		} else {
@@ -3162,102 +3175,80 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 				D_ERROR("Failed to update previous DTXs blob for DTX "
 					"aggregation " UMOFF_PF ": " DF_RC "\n",
 					UMOFF_P(dbd_off), DP_RC(rc));
-				goto out;
+				goto out_tx_end;
 			}
 			dbd_next->dbd_prev = dbd_prev_off;
-		}
-
-		if (dbd_prev == NULL) {
-			D_ASSERT(dbd_off == cont_df->cd_dtx_committed_head);
-			rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_head,
-					     sizeof(cont_df->cd_dtx_committed_head));
-			if (unlikely(rc != 0)) {
-				D_ERROR("Failed to update head for DTX aggregation " UMOFF_PF
-					": " DF_RC "\n",
-					UMOFF_P(dbd_off), DP_RC(rc));
-				goto out;
-			}
-			cont_df->cd_dtx_committed_head = dbd_next_off;
-		} else {
-			rc = umem_tx_add_ptr(umm, &dbd_prev->dbd_next, sizeof(dbd_prev->dbd_next));
-			if (unlikely(rc != 0)) {
-				D_ERROR(
-				    "Failed to update next DTXs blob for DTX aggregation " UMOFF_PF
-				    ": " DF_RC "\n",
-				    UMOFF_P(dbd_off), DP_RC(rc));
-				goto out;
-			}
-			dbd_prev->dbd_next = dbd_next_off;
 		}
 
 		rc = umem_free(umm, dbd_off);
 		if (unlikely(rc != 0)) {
 			D_ERROR("Failed to free DTXs blob " UMOFF_PF ": " DF_RC "\n",
 				UMOFF_P(dbd_off), DP_RC(rc));
-			goto out;
+			goto out_tx_end;
 		}
-		is_freed = true;
+		is_dbd_freed = true;
+	}
+
+out_tx_end:
+	rc = umem_tx_end(umm, rc);
+	if (likely(rc != 0)) {
+		DL_ERROR(rc,
+			 "Failed to commit DTX commit aggregation of blob %p (" UMOFF_PF
+			 ") of cont " DF_UUID,
+			 dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
+		goto out;
+	}
+
+	if (dtx_aggr_count > 0) {
+		cont->vc_dtx_committed_count -= dtx_aggr_count;
+		cont->vc_pool->vp_dtx_committed_count -= dtx_aggr_count;
+		d_tm_dec_gauge(tls->vtl_committed, dtx_aggr_count);
+
+		D_DEBUG(DB_IO,
+			"Release %i DTX committed entries of blob %p (" UMOFF_PF
+			") of cont " DF_UUID,
+			dtx_aggr_count, dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
+	}
+
+	if (is_dbd_freed) {
+		cont->vc_cmt_dtx_reindex_pos = dbd_next_off;
+		D_DEBUG(DB_IO,
+			"Removed blob of DTX committed entries %p (" UMOFF_PF ") of cont " DF_UUID,
+			dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
+		rc = 1;
 	}
 
 out:
-	rc = umem_tx_end(umm, rc);
-	if (likely(rc == 0)) {
-		if (is_freed && cont->vc_cmt_dtx_reindex_pos == dbd_off)
-			cont->vc_cmt_dtx_reindex_pos = dbd_next_off;
-		cont->vc_dtx_committed_count -= count;
-		cont->vc_pool->vp_dtx_committed_count -= count;
-		d_tm_dec_gauge(tls->vtl_committed, count);
-	}
-
-	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
-		  "Release DTX committed blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
-		  UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
-
 	return rc;
 }
 
 int
-vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max, umem_off_t *blob)
+vos_dtx_aggregate(daos_handle_t coh, const uint64_t *ts_max)
 {
 	struct vos_container   *cont;
 	struct vos_tls         *tls;
 	struct umem_instance   *umm;
 	struct vos_cont_df     *cont_df;
 	umem_off_t              dbd_off;
-	umem_off_t              dbd_next_off;
 	int                     rc;
-
-	cont = vos_hdl2cont(coh);
-	D_ASSERT(cont != NULL);
 
 	tls = vos_tls_get(false);
 	D_ASSERT(tls != NULL);
 
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool->vp_sysdb == false);
+
 	umm     = vos_cont2umm(cont);
 	cont_df = cont->vc_cont_df;
 	dbd_off = cont_df->cd_dtx_committed_head;
-	if (UMOFF_IS_NULL(dbd_off)) {
-		rc = 0;
-		goto done;
-	}
 
-	if (blob != NULL) {
-		struct vos_dtx_blob_df *dbd;
-
-		if (!UMOFF_IS_NULL(*blob))
-			dbd_off = *blob;
-		dbd          = umem_off2ptr(umm, dbd_off);
-		dbd_next_off = dbd->dbd_next;
-	}
-
-	D_ASSERT(cont->vc_pool->vp_sysdb == false);
 	/* Take the opportunity to free some memory if we can */
 	lrua_array_aggregate(cont->vc_dtx_array);
-	rc = dtx_blob_aggregate(umm, tls, cont, cont_df, dbd_off, ep_max);
-	if (rc == 0 && blob != NULL)
-		*blob = dbd_next_off;
+	rc = dtx_blob_aggregate(umm, tls, cont, cont_df, dbd_off, ts_max);
+	if (rc == 1 && UMOFF_IS_NULL(cont_df->cd_dtx_committed_head))
+		rc = 0;
 
-done:
 	return rc;
 }
 
@@ -4087,13 +4078,20 @@ vos_dtx_local_end(struct dtx_handle *dth, int result)
 	return result;
 }
 
+struct dtx_time_stat_priv {
+	struct dtx_time_stat dts_pub;
+	/* DAOS-17322: Use of floating point to avoid integer overflow issue */
+	long double          dts_mean[2];
+};
+
 int
-vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt)
+vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat *dts)
 {
 	struct umem_instance   *umm;
 	struct vos_container   *cont;
 	struct vos_dtx_blob_df *dbd;
-	uint32_t                tmp;
+	uint64_t                  cmt_cnt_tmp;
+	struct dtx_time_stat_priv dts_tmp = {0};
 	int                     rc;
 
 	cont = vos_hdl2cont(coh);
@@ -4101,14 +4099,16 @@ vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt)
 		rc = -DER_INVAL;
 		goto out;
 	}
-	if (cnt == NULL) {
+	if (cmt_cnt == NULL) {
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	tmp = 0;
+	cmt_cnt_tmp                     = 0;
 	umm = vos_cont2umm(cont);
 	dbd = umem_off2ptr(umm, cont->vc_cont_df->cd_dtx_committed_head);
+	dts_tmp.dts_pub.dts_epoch[0]    = DAOS_EPOCH_MAX;
+	dts_tmp.dts_pub.dts_cmt_time[0] = UINT64_MAX;
 	while (dbd != NULL) {
 		if (dbd->dbd_magic != DTX_CMT_BLOB_MAGIC) {
 			D_ERROR("Committed DTX blob with bad magic: container=" DF_UUID
@@ -4117,12 +4117,47 @@ vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt)
 			rc = -DER_INVAL;
 			goto out;
 		}
-		tmp += dbd->dbd_count;
+
+		cmt_cnt_tmp += dbd->dbd_count;
+		if (dts != NULL) {
+			int i;
+
+			for (i = 0; i < dbd->dbd_count; i++) {
+				struct vos_dtx_cmt_ent_df *dce_df;
+
+				dce_df = &dbd->dbd_committed_data[i];
+
+				if (dts_tmp.dts_pub.dts_epoch[0] > dce_df->dce_epoch)
+					dts_tmp.dts_pub.dts_epoch[0] = dce_df->dce_epoch;
+				if (dts_tmp.dts_pub.dts_epoch[1] < dce_df->dce_epoch)
+					dts_tmp.dts_pub.dts_epoch[1] = dce_df->dce_epoch;
+				dts_tmp.dts_mean[0] += dce_df->dce_epoch;
+
+				if (dts_tmp.dts_pub.dts_cmt_time[0] > dce_df->dce_cmt_time)
+					dts_tmp.dts_pub.dts_cmt_time[0] = dce_df->dce_cmt_time;
+				if (dts_tmp.dts_pub.dts_cmt_time[1] < dce_df->dce_cmt_time)
+					dts_tmp.dts_pub.dts_cmt_time[1] = dce_df->dce_cmt_time;
+				dts_tmp.dts_mean[1] += dce_df->dce_cmt_time;
+			}
+		}
 
 		dbd = umem_off2ptr(umm, dbd->dbd_next);
 	}
 
-	*cnt = tmp;
+	*cmt_cnt = cmt_cnt_tmp;
+
+	if (dts != NULL) {
+		if (cmt_cnt_tmp != 0) {
+			dts_tmp.dts_mean[0] /= (long double)cmt_cnt_tmp;
+			dts_tmp.dts_pub.dts_epoch[2] = (daos_epoch_t)dts_tmp.dts_mean[0];
+
+			dts_tmp.dts_mean[1] /= (long double)cmt_cnt_tmp;
+			dts_tmp.dts_pub.dts_cmt_time[2] = (uint64_t)dts_tmp.dts_mean[1];
+		}
+
+		memcpy(dts, &dts_tmp, sizeof(struct dtx_time_stat));
+	}
+
 	rc   = 0;
 
 out:

@@ -300,10 +300,11 @@ func ddbDevReplace(ctx *DdbContext, db_path string, old_devid string, new_devid 
 	return daosError(C.ddb_run_dev_replace(&ctx.ctx, &options))
 }
 
-func ddbDtxStat(ctx *DdbContext, path string) error {
+func ddbDtxStat(ctx *DdbContext, path string, details bool) error {
 	/* Set up the options */
 	options := C.struct_dtx_stat_options{}
 	options.path = C.CString(path)
+	options.details = C.bool(details)
 	defer freeString(options.path)
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_stat(&ctx.ctx, &options))
@@ -322,13 +323,13 @@ func ddbProvMem(ctx *DdbContext, db_path string, tmpfs_mount string, tmpfs_mount
 	return daosError(C.ddb_run_prov_mem(&ctx.ctx, &options))
 }
 
-func ddbDtxAggr(ctx *DdbContext, path string, epoch uint64, date string) error {
-	if epoch != math.MaxUint64 && date != "" {
-		ctx.log.Error("'--epoch' and '--date' options are mutually exclusive")
+func ddbDtxAggr(ctx *DdbContext, path string, cmt_time uint64, cmt_date string) error {
+	if cmt_time != math.MaxUint64 && cmt_date != "" {
+		ctx.log.Error("'--cmt_time' and '--cmt_date' options are mutually exclusive")
 		return daosError(-C.DER_INVAL)
 	}
-	if epoch == math.MaxUint64 && date == "" {
-		ctx.log.Error("'--epoch' or '--date' option has to be defined")
+	if cmt_time == math.MaxUint64 && cmt_date == "" {
+		ctx.log.Error("'--cmt_time' or '--cmt_date' option has to be defined")
 		return daosError(-C.DER_INVAL)
 	}
 
@@ -336,14 +337,14 @@ func ddbDtxAggr(ctx *DdbContext, path string, epoch uint64, date string) error {
 	options := C.struct_dtx_aggr_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	if epoch != math.MaxUint64 {
-		options.format = C.DDB_DTX_AGGR_EPOCH
-		options.epoch = C.uint64_t(epoch)
+	if cmt_time != math.MaxUint64 {
+		options.format = C.DDB_DTX_AGGR_CMT_TIME
+		options.cmt_time = C.uint64_t(cmt_time)
 	}
-	if date != "" {
-		options.format = C.DDB_DTX_AGGR_DATE
-		options.date = C.CString(date)
-		defer freeString(options.date)
+	if cmt_date != "" {
+		options.format = C.DDB_DTX_AGGR_CMT_DATE
+		options.cmt_date = C.CString(cmt_date)
+		defer freeString(options.cmt_date)
 	}
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_aggr(&ctx.ctx, &options))

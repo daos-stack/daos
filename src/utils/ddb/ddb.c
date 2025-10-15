@@ -922,11 +922,11 @@ dtx_aggr_option_parse(struct ddb_ctx *ctx, struct dtx_aggr_options *cmd_args, ui
 		      char **argv)
 {
 	int           opt;
-	char         *options_short = "e:d:";
+	char         *options_short = "t:d:";
 	int           index         = 0;
 	char         *endptr;
-	struct option options_long[] = {{"epoch", required_argument, NULL, 'e'},
-					{"date", required_argument, NULL, 'd'},
+	struct option options_long[] = {{"cmt_time", required_argument, NULL, 't'},
+					{"cmt_date", required_argument, NULL, 'd'},
 					{NULL}};
 
 	memset(cmd_args, 0, sizeof(*cmd_args));
@@ -936,36 +936,38 @@ dtx_aggr_option_parse(struct ddb_ctx *ctx, struct dtx_aggr_options *cmd_args, ui
 	cmd_args->format = DDB_DTX_AGGR_NOW;
 	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
 		switch (opt) {
-		case 'e':
-			if (cmd_args->format == DDB_DTX_AGGR_DATE) {
-				ddb_error(
-				    ctx, "'--epoch' and '--date' options are mutually exclusive\n");
+		case 't':
+			if (cmd_args->format == DDB_DTX_AGGR_CMT_DATE) {
+				ddb_error(ctx, "'--cmt_time' and '--cmt_date' options are mutually "
+					       "exclusive\n");
 				return -DER_INVAL;
 			}
-			if (cmd_args->format == DDB_DTX_AGGR_EPOCH) {
-				ddb_error(ctx, "'--epoch' option can not be used multiple time\n");
+			if (cmd_args->format == DDB_DTX_AGGR_CMT_TIME) {
+				ddb_error(ctx,
+					  "'--cmt_time' option can not be used multiple time\n");
 				return -DER_INVAL;
 			}
 			errno           = 0;
-			cmd_args->epoch = strtoull(optarg, &endptr, 10);
+			cmd_args->cmt_time = strtoull(optarg, &endptr, 10);
 			if (errno != 0 || endptr == optarg || *endptr != '\0') {
-				ddb_error(ctx, "'--epoch' option arg epoch format is invalid\n");
+				ddb_error(ctx, "'--cmt_time' option arg format is invalid\n");
 				return -DER_INVAL;
 			}
-			cmd_args->format = DDB_DTX_AGGR_EPOCH;
+			cmd_args->format = DDB_DTX_AGGR_CMT_TIME;
 			break;
 		case 'd':
-			if (cmd_args->format == DDB_DTX_AGGR_EPOCH) {
-				ddb_error(
-				    ctx, "'--epoch' and '--date' options are mutually exclusive\n");
+			if (cmd_args->format == DDB_DTX_AGGR_CMT_TIME) {
+				ddb_error(ctx, "'--cmt_time' and '--cmt_date' options are mutually "
+					       "exclusive\n");
 				return -DER_INVAL;
 			}
-			if (cmd_args->format == DDB_DTX_AGGR_DATE) {
-				ddb_error(ctx, "'--date' option can not be used multiple time\n");
+			if (cmd_args->format == DDB_DTX_AGGR_CMT_DATE) {
+				ddb_error(ctx,
+					  "'--cmt_date' option can not be used multiple time\n");
 				return -DER_INVAL;
 			}
-			cmd_args->date   = optarg;
-			cmd_args->format = DDB_DTX_AGGR_DATE;
+			cmd_args->cmt_date = optarg;
+			cmd_args->format   = DDB_DTX_AGGR_CMT_DATE;
 			break;
 		case '?':
 			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
@@ -975,7 +977,7 @@ dtx_aggr_option_parse(struct ddb_ctx *ctx, struct dtx_aggr_options *cmd_args, ui
 		}
 	}
 	if (cmd_args->format == DDB_DTX_AGGR_NOW) {
-		ddb_error(ctx, "'--epoch' or '--date' option has to be defined\n");
+		ddb_error(ctx, "'--cmt_time' or '--cmt_date' option has to be defined\n");
 		return -DER_INVAL;
 	}
 
@@ -1582,10 +1584,10 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "    [path]\n");
 	ddb_print(ctx, "\tOptional, VOS tree path of a container to aggregate.\n");
 	ddb_print(ctx, "Options:\n");
-	ddb_print(ctx, "    -e, --epoch\n");
-	ddb_print(ctx, "\tMax aggregation epoch\n");
-	ddb_print(ctx, "    -d, --date\n");
-	ddb_print(ctx, "\tMax aggregation date (format '1970-01-01 00:00:00')\n");
+	ddb_print(ctx, "    -t, --cmt_time\n");
+	ddb_print(ctx, "\tMax aggregation commit time\n");
+	ddb_print(ctx, "    -d, --cmt_date\n");
+	ddb_print(ctx, "\tMax aggregation commit date (format '1970-01-01 00:00:00')\n");
 	ddb_print(ctx, "\n");
 }
 

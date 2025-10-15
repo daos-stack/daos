@@ -336,23 +336,23 @@ dtx_aggr_parsing(void **state)
 	/* test all options and arguments */
 	test_run_cmd(&info, "dtx_aggr", "-e", "42");
 	assert_null(options->path);
-	assert_non_null(options->epoch);
-	assert_null(options->date);
+	assert_non_null(options->cmt_time);
+	assert_null(options->cmt_date);
 
 	test_run_cmd(&info, "dtx_aggr", "-d", "1970-01-01 00:00:00");
 	assert_null(options->path);
-	assert_null(options->epoch);
-	assert_non_null(options->date);
+	assert_null(options->cmt_time);
+	assert_non_null(options->cmt_date);
 
 	test_run_cmd(&info, "dtx_aggr", "-e", "42", "path");
 	assert_non_null(options->path);
-	assert_non_null(options->epoch);
-	assert_null(options->date);
+	assert_non_null(options->cmt_time);
+	assert_null(options->cmt_date);
 
 	test_run_cmd(&info, "dtx_aggr", "-d", "1970-01-01 00:00:00", "path");
 	assert_non_null(options->path);
-	assert_null(options->epoch);
-	assert_non_null(options->date);
+	assert_null(options->cmt_time);
+	assert_non_null(options->cmt_date);
 }
 
 /*
