@@ -258,7 +258,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (% size nranks)",
 			"pool create label --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --nranks"),
+			errors.New("--size=% may not be mixed with --nranks"),
 		},
 		{
 			"Create pool with incompatible arguments (% size tier-ratio)",
@@ -602,9 +602,9 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
 						propWithVal("scrub", "timed"),
 						propWithVal("scrub_freq", "1"),
-						propWithVal("label", "label"),
 					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
@@ -613,6 +613,30 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Create pool with properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub_freq:1", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+						propWithVal("scrub", "timed"),
+						propWithVal("scrub_freq", "1"),
+					},
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with duplicate properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub:timed,scrub_freq:1", testSizeStr),
+			"",
+			errors.New("more than once"),
 		},
 		// Exclude testing with multiple ranks is verified at the control API layer.
 		{
@@ -820,6 +844,34 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set pool properties with semi-colon separated self_heal value",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:exclude;rebuild,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "exclude;rebuild"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set pool properties with self_heal value 'none'",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:none,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "none"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool properties with pool flag",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:foo,space_rb:42",
 			strings.Join([]string{
@@ -890,6 +942,20 @@ func TestPoolCommands(t *testing.T) {
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", ""),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Get pool properties",
+			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label,self_heal",
+			strings.Join([]string{
+				printRequest(t, &control.PoolGetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", ""),
+						propWithVal("self_heal", ""),
 					},
 				}),
 			}, " "),
@@ -1145,7 +1211,7 @@ func TestPoolCommands(t *testing.T) {
 			"Query pool with empty ID",
 			"pool query \"\"",
 			"",
-			fmt.Errorf("invalid label"),
+			errors.New("invalid label"),
 		},
 		{
 			"Upgrade pool with pool ID",
@@ -1158,10 +1224,90 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Interactive rebuild with no operation specified",
+			"pool rebuild",
+			"",
+			errors.New("specify one command"),
+		},
+		{
+			"Interactive rebuild with no operation specified but label",
+			"pool rebuild test_label",
+			"",
+			errors.New("specify one command"),
+		},
+		{
+			"Start interactive rebuild on pool with no ID or label",
+			"pool rebuild start",
+			"",
+			errors.New("not provided"),
+		},
+		{
+			"Start interactive rebuild on pool with empty ID or label",
+			"pool rebuild start \"\"",
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Start interactive rebuild on pool with ID",
+			"pool rebuild start 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Start interactive rebuild on pool with label",
+			"pool rebuild start test_label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "test_label",
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Stop interactive rebuild on pool with no ID or label",
+			"pool rebuild stop",
+			"",
+			errors.New("not provided"),
+		},
+		{
+			"Stop interactive rebuild on pool with empty ID or label",
+			"pool rebuild stop \"\"",
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Stop interactive rebuild on pool with ID",
+			"pool rebuild stop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Stop interactive rebuild on pool with label",
+			"pool rebuild stop test_label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "test_label",
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
-			fmt.Errorf("Unknown command"),
+			errors.New("Unknown command"),
 		},
 	})
 }

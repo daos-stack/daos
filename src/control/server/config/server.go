@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 
 	"github.com/dustin/go-humanize"
@@ -34,6 +35,12 @@ const (
 	defaultConfigPath   = "../etc/daos_server.yml"
 	ConfigOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
+
+	// ScanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
+	// SPDK memory requirements when performing a NVMe device scan.
+	ScanMinHugepageCount = 128
+
+	msgAPsMSReps = "access_points is deprecated; please use mgmt_svc_replicas instead"
 )
 
 // SupportConfig is defined here to avoid a import cycle
@@ -42,33 +49,35 @@ type SupportConfig struct {
 }
 
 type deprecatedParams struct {
-	AccessPoints []string `yaml:"access_points,omitempty"` // deprecated in 2.8
+	AccessPoints  []string `yaml:"access_points,omitempty"`  // deprecated in 2.8
+	EnableHotplug *bool    `yaml:"enable_hotplug,omitempty"` // deprecated in 2.8
 }
 
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort       int                       `yaml:"port"`
-	TransportConfig   *security.TransportConfig `yaml:"transport_config"`
-	Engines           []*engine.Config          `yaml:"engines"`
-	BdevExclude       []string                  `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO       bool                      `yaml:"disable_vfio"`
-	DisableVMD        *bool                     `yaml:"disable_vmd"`
-	EnableHotplug     bool                      `yaml:"enable_hotplug"`
-	NrHugepages       int                       `yaml:"nr_hugepages"`        // total for all engines
-	SystemRamReserved int                       `yaml:"system_ram_reserved"` // total for all engines
-	DisableHugepages  bool                      `yaml:"disable_hugepages"`
-	ControlLogMask    common.ControlLogLevel    `yaml:"control_log_mask"`
-	ControlLogFile    string                    `yaml:"control_log_file,omitempty"`
-	ControlLogJSON    bool                      `yaml:"control_log_json,omitempty"`
-	HelperLogFile     string                    `yaml:"helper_log_file,omitempty"`
-	FWHelperLogFile   string                    `yaml:"firmware_helper_log_file,omitempty"`
-	FaultPath         string                    `yaml:"fault_path,omitempty"`
-	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
-	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
-	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
-	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
+	ControlPort        int                       `yaml:"port"`
+	TransportConfig    *security.TransportConfig `yaml:"transport_config"`
+	Engines            []*engine.Config          `yaml:"engines"`
+	BdevExclude        []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO        bool                      `yaml:"disable_vfio"`
+	DisableVMD         *bool                     `yaml:"disable_vmd"`
+	DisableHotplug     *bool                     `yaml:"disable_hotplug"`
+	NrHugepages        int                       `yaml:"nr_hugepages"`        // total for all engines
+	SystemRamReserved  int                       `yaml:"system_ram_reserved"` // total for all engines
+	DisableHugepages   bool                      `yaml:"disable_hugepages"`
+	AllowNumaImbalance bool                      `yaml:"allow_numa_imbalance"`
+	ControlLogMask     common.ControlLogLevel    `yaml:"control_log_mask"`
+	ControlLogFile     string                    `yaml:"control_log_file,omitempty"`
+	ControlLogJSON     bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile      string                    `yaml:"helper_log_file,omitempty"`
+	FWHelperLogFile    string                    `yaml:"firmware_helper_log_file,omitempty"`
+	FaultPath          string                    `yaml:"fault_path,omitempty"`
+	TelemetryPort      int                       `yaml:"telemetry_port,omitempty"`
+	CoreDumpFilter     uint8                     `yaml:"core_dump_filter,omitempty"`
+	ClientEnvVars      []string                  `yaml:"client_env_vars,omitempty"`
+	SupportConfig      SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -194,7 +203,10 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	engineCfg.SystemName = cfg.SystemName
 	engineCfg.SocketDir = cfg.SocketDir
 	engineCfg.Modules = cfg.Modules
-	engineCfg.Storage.EnableHotplug = cfg.EnableHotplug
+	engineCfg.Storage.EnableHotplug = true
+	if cfg.DisableHotplug != nil && *cfg.DisableHotplug {
+		engineCfg.Storage.EnableHotplug = false
+	}
 }
 
 // WithEngines sets the list of engine configurations.
@@ -257,9 +269,9 @@ func (cfg *Server) WithDisableVMD(disabled bool) *Server {
 	return cfg
 }
 
-// WithEnableHotplug can be used to enable hotplug
-func (cfg *Server) WithEnableHotplug(enabled bool) *Server {
-	cfg.EnableHotplug = enabled
+// WithDisableHotplug can be used to disable hotplug.
+func (cfg *Server) WithDisableHotplug(disabled bool) *Server {
+	cfg.DisableHotplug = &disabled
 	return cfg
 }
 
@@ -278,6 +290,12 @@ func (cfg *Server) WithNrHugepages(nr int) *Server {
 // WithDisableHugepages disables the use of huge pages.
 func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 	cfg.DisableHugepages = disabled
+	return cfg
+}
+
+// WithAllowNumaImbalance allows engine count mismatch between NUMA-nodes.
+func (cfg *Server) WithAllowNumaImbalance(allowed bool) *Server {
+	cfg.AllowNumaImbalance = allowed
 	return cfg
 }
 
@@ -330,14 +348,12 @@ func DefaultServer() *Server {
 	return &Server{
 		SystemName:        build.DefaultSystemName,
 		SocketDir:         defaultRuntimeDir,
-		MgmtSvcReplicas:   []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:       build.DefaultControlPort,
 		TransportConfig:   security.DefaultServerTransportConfig(),
 		Hyperthreads:      false,
 		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
 		Path:              defaultConfigPath,
 		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
-		EnableHotplug:     false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}
@@ -379,9 +395,15 @@ func (cfg *Server) Load(log logging.Logger) error {
 	}
 
 	if len(cfg.deprecatedParams.AccessPoints) > 0 {
-		log.Notice("access_points is deprecated; please use mgmt_svc_replicas instead")
+		if len(cfg.MgmtSvcReplicas) > 0 {
+			return errors.New(msgAPsMSReps)
+		}
+		log.Notice(msgAPsMSReps)
 		cfg.MgmtSvcReplicas = cfg.deprecatedParams.AccessPoints
 		cfg.deprecatedParams.AccessPoints = nil
+	}
+	if len(cfg.MgmtSvcReplicas) == 0 {
+		cfg.MgmtSvcReplicas = []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)}
 	}
 
 	return nil
@@ -479,15 +501,13 @@ func hugePageBytes(hpNr, hpSz int) uint64 {
 	return uint64(hpNr*hpSz) * humanize.KiByte
 }
 
-// SetNrHugepages calculates minimum based on total target count if using nvme.
-func (cfg *Server) SetNrHugepages(log logging.Logger, smi *common.SysMemInfo) error {
-	var cfgTargetCount int
-	var sysXSCount int
+// getTgtCounts returns target count totals for a server config file.
+func (cfg *Server) getTgtCounts(log logging.Logger) (cfgTargetCount, sysXSCount int) {
 	for idx, ec := range cfg.Engines {
 		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
 			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
 
-		// Calculate overall target count if NVMe is enabled.
+		// Calculate overall target count if bdevs exist in config.
 		if ec.Storage.Tiers.HaveBdevs() {
 			cfgTargetCount += ec.TargetCount
 			if ec.Storage.Tiers.HasBdevRoleMeta() {
@@ -503,40 +523,130 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, smi *common.SysMemInfo) er
 		log.Debug(msg)
 	}
 
-	if cfgTargetCount <= 0 {
-		return nil // no nvme, no hugepages required
-	}
+	return
+}
 
-	if cfg.DisableHugepages {
-		return FaultConfigHugepagesDisabledWithBdevs
+func (cfg *Server) getMinNrHugepages(log logging.Logger, hpSizeKiB int) (int, error) {
+	cfgTargetCount, sysXSCount := cfg.getTgtCounts(log)
+
+	if cfgTargetCount == 0 {
+		return 0, nil
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
-	minHugepages, err := storage.CalcMinHugepages(smi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
+	minHugepages, err := storage.CalcMinHugepages(hpSizeKiB, cfgTargetCount+sysXSCount)
+	if err != nil {
+		return 0, err
+	}
+
+	var msgSysXS string
+	if sysXSCount > 0 {
+		msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+	}
+	log.Tracef("calculated min %d nr_hugepages based on %d targets%s",
+		minHugepages, cfgTargetCount, msgSysXS)
+
+	return minHugepages, nil
+}
+
+// SetNrHugepages calculates minimum based on total target count if using nvme. Handle scenarios for
+// disabling hugepages and no configured bdevs by setting config request value (NrHugepages)
+// appropriately. Hugepage allocation requests will be validated in prepBdevStorage().
+func (cfg *Server) SetNrHugepages(log logging.Logger, hugepageSizeKiB int) error {
+	minHugepages, err := cfg.getMinNrHugepages(log, hugepageSizeKiB)
 	if err != nil {
 		return err
 	}
 
-	// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
-	// that the configured amount is sufficient.
-	if cfg.NrHugepages == 0 {
-		var msgSysXS string
-		if sysXSCount > 0 {
-			msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+	// Allow emulated NVMe configurations either with or without hugepages enabled.
+
+	if cfg.DisableHugepages {
+		if cfg.NrHugepages != 0 {
+			// Number of hugepages set in config and hugepages disabled.
+			return FaultConfigHugepagesDisabledWithNrSet
 		}
-		log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugepages,
-			cfgTargetCount, msgSysXS)
+		if cfg.GetBdevConfigs().HaveRealNVMe() {
+			// Real NVMe SSDs assigned in config but hugepages disabled.
+			return FaultConfigHugepagesDisabledWithNvmeBdevs
+		}
+		if minHugepages != 0 {
+			log.Notice("Hugepages have been disabled but DAOS targets will still be " +
+				"assigned to bdevs. This usage model is experimental so caution " +
+				"is advised!")
+		} else {
+			log.Noticef("Hugepages have been disabled, NVMe operations may not succeed")
+		}
+
+		// Hugepages disabled and so zero nr_hugepages requested in config.
+		return nil
+	} else if minHugepages == 0 {
+		if cfg.NrHugepages < ScanMinHugepageCount {
+			log.Infof("No hugepages required as zero configured engine targets, setting "+
+				"minimum (%d) in config to enable NVMe device discovery",
+				ScanMinHugepageCount)
+			cfg.NrHugepages = ScanMinHugepageCount
+		} else {
+			log.Infof("No hugepages required as zero configured engine targets, "+
+				"configured value (%d) will be used to enable NVMe device discovery",
+				cfg.NrHugepages)
+		}
+
+		// Zero tgts on bdevs and min allocation for discovery mode requested in cfg.
+		return nil
+	}
+
+	// Create a target request number in config based on calculated requirements or verify that
+	// a preset value meets the calculated requirement.
+
+	if cfg.NrHugepages == 0 {
 		cfg.NrHugepages = minHugepages
-		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
-			humanize.IBytes(hugePageBytes(minHugepages, smi.HugepageSizeKiB)))
-	} else if cfg.NrHugepages < minHugepages {
-		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
-			"if this is not intentional update the 'nr_hugepages' config "+
-			"parameter or remove and it will be automatically calculated",
-			cfg.NrHugepages, minHugepages)
+		log.Debugf("nr_hugepages auto-set to %d (%s)", cfg.NrHugepages,
+			humanize.IBytes(hugePageBytes(cfg.NrHugepages, hugepageSizeKiB)))
+	} else {
+		log.Debugf("nr_hugepages has been set in server config to %d (%s)", cfg.NrHugepages,
+			humanize.IBytes(hugePageBytes(cfg.NrHugepages, hugepageSizeKiB)))
+		if cfg.NrHugepages < minHugepages {
+			log.Noticef("%d nr_hugepages (set in config file) is less than recommended "+
+				"%d, if this is not intentional update the 'nr_hugepages' config "+
+				"parameter or remove and it will be automatically calculated",
+				cfg.NrHugepages, minHugepages)
+		}
 	}
 
 	return nil
+}
+
+// GetNumaNodes returns in use NUMA nodes based on engine configurations. Detects the number of
+// engine configs assigned to each NUMA node and return error if engines are distributed unevenly
+// across NUMA nodes. Otherwise return sorted list of NUMA nodes in use. Configurations where all
+// engines are on a single NUMA node will be allowed.
+func (cfg *Server) GetNumaNodes() ([]int, error) {
+	hasBdevs := cfg.GetBdevConfigs().HaveBdevs()
+
+	// If engine configs have no bdevs configured then return early with NUMA-0 only.
+	if !hasBdevs {
+		return []int{0}, nil
+	}
+
+	nodeMap := make(map[int]int)
+	for _, ec := range cfg.Engines {
+		nodeMap[int(ec.Storage.NumaNodeIndex)] += 1
+	}
+
+	var lastCount int
+	nodes := make([]int, 0, len(cfg.Engines))
+	for k, v := range nodeMap {
+		if !cfg.AllowNumaImbalance {
+			if lastCount != 0 && v != lastCount {
+				return nil, FaultConfigEngineNUMAImbalance(nodeMap)
+			}
+			lastCount = v
+		}
+		nodes = append(nodes, k)
+	}
+	sort.Ints(nodes)
+
+	return nodes, nil
 }
 
 // calcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
@@ -657,13 +767,36 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
+	if cfg.deprecatedParams.EnableHotplug != nil {
+		// Fail if conflicting EnableHotplug and DisableHotplug both set.
+		if cfg.DisableHotplug != nil {
+			return FaultConfigEnableHotplugDeprecated
+		}
+		log.Notice("enable_hotplug is deprecated; please use disable_hotplug instead " +
+			"(false by default)")
+
+		// Apply deprecated parameter updates.
+		eh := !*cfg.deprecatedParams.EnableHotplug
+		cfg.DisableHotplug = &eh
+		log.Debugf("deprecated param update: enable_hotplug: %v -> disable_hotplug: %v",
+			*cfg.deprecatedParams.EnableHotplug, *cfg.DisableHotplug)
+	}
+	// Set DisableHotplug reference if unset in config file.
+	if cfg.DisableHotplug == nil {
+		cfg.WithDisableHotplug(false)
+	}
+
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
 	}
 
+	for i := range cfg.Engines {
+		cfg.updateServerConfig(&cfg.Engines[i])
+	}
+
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
-		cfg.EnableHotplug, !(*cfg.DisableVMD))
+		!(*cfg.DisableHotplug), !(*cfg.DisableVMD))
 
 	// Update MS replica addresses with control port if port is not supplied.
 	newReps := make([]string, 0, len(cfg.MgmtSvcReplicas))
@@ -950,4 +1083,21 @@ func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
 	}
 
 	return
+}
+
+// HasPMem returns true if any engine storage config contains a DCPM-class SCM-tier.
+func (cfg *Server) HasPMem() bool {
+	if cfg == nil {
+		return false
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		for _, scmCfg := range engineCfg.Storage.Tiers.ScmConfigs() {
+			if scmCfg.Class == storage.ClassDcpm {
+				return true
+			}
+		}
+	}
+
+	return false
 }

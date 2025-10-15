@@ -265,6 +265,8 @@ func PoolProperties() PoolPropertyMap {
 						return "not set"
 					}
 					switch n {
+					case 0:
+						return "none"
 					case PoolSelfHealingAutoExclude:
 						return "exclude"
 					case PoolSelfHealingAutoRebuild:
@@ -272,22 +274,23 @@ func PoolProperties() PoolPropertyMap {
 					case PoolSelfHealingDelayRebuild:
 						return "delay_rebuild"
 					case PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild:
-						return "exclude,rebuild"
+						return "exclude;rebuild"
 					case PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild:
-						return "exclude,delay_rebuild"
+						return "exclude;delay_rebuild"
 					default:
 						return "unknown"
 					}
 				},
 			},
 			values: map[string]uint64{
+				"none":                  0,
 				"exclude":               PoolSelfHealingAutoExclude,
 				"rebuild":               PoolSelfHealingAutoRebuild,
 				"delay_rebuild":         PoolSelfHealingDelayRebuild,
-				"exclude,rebuild":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
-				"rebuild,exclude":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
-				"delay_rebuild,exclude": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
-				"exclude,delay_rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
+				"exclude;rebuild":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"rebuild;exclude":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"delay_rebuild;exclude": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
+				"exclude;delay_rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
 			},
 		},
 		"space_rb": {

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1073,7 +1074,7 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 	buf  = entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
 	diff = entry->ae_sgl.sg_iovs[AGG_IOV_DIFF].iov_buf;
 
-	for (i = 0, j = 0; i < cell_cnt; i++) {
+	for (i = 0, j = 0; i < cell_cnt; i++, j++) {
 		old = &obuf[i * cell_bytes];
 		new = &buf[i * cell_bytes];
 		vects[0] = old;
@@ -1084,6 +1085,7 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 			goto out;
 		while (!isset(bit_map, j))
 			j++;
+		D_ASSERTF(j < k, "bad cell_idx %d, number of data shards %d\n", j, k);
 		agg_diff_preprocess(entry, diff, j);
 		ec_encode_data_update(cell_bytes, k, p, j,
 				      entry->ae_codec->ec_gftbls, diff,
@@ -1330,12 +1332,13 @@ agg_peer_update_ult(void *arg)
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
 		enqueue_id = 0;
 retry:
-		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
-				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
+		rc = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
+				       DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" pidx %d to peer %d, rank %d tag %d obj_req_create "
-				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
-				tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
+			D_ERROR(DF_UOID
+				" pidx %d to peer %d, rank %d tag %d ds_obj_req_create " DF_RC "\n",
+				DP_UOID(entry->ae_oid), pidx, peer, tgt_ep.ep_rank, tgt_ep.ep_tag,
+				DP_RC(rc));
 			goto out;
 		}
 		ec_agg_in = crt_req_get(rpc);
@@ -1678,10 +1681,10 @@ retry:
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
-		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
-				    DAOS_OBJ_RPC_EC_REPLICATE, &rpc);
+		rc             = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
+						   DAOS_OBJ_RPC_EC_REPLICATE, &rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" obj_req_create failed: "DF_RC"\n",
+			D_ERROR(DF_UOID " ds_obj_req_create failed: " DF_RC "\n",
 				DP_UOID(entry->ae_oid), DP_RC(rc));
 			goto out;
 		}
@@ -1949,15 +1952,15 @@ out:
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
 			if (rc)
-				D_ERROR("agg_peer_update fail: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "agg_peer_update failed, write_parity %d",
+					 write_parity);
 		}
 
 		if (rc == 0) {
 			rc = agg_update_vos(agg_param, entry, write_parity);
 			if (rc)
-				D_ERROR("agg_update_vos failed: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "agg_update_vos failed, write_parity %d",
+					 write_parity);
 		}
 	}
 
@@ -2469,6 +2472,9 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 			  &agg_entry->ae_obj_layout);
 
 out:
+	if (map != NULL)
+		pl_map_decref(map);
+
 	return rc;
 }
 
@@ -2724,8 +2730,8 @@ retry:
 	if (rc != 0)
 		goto update_hae;
 
-	rc = vos_iterate_obj(&iter_param, true, &anchors, agg_iterate_pre_cb,
-			     agg_iterate_post_cb, ec_agg_param, dth);
+	rc = vos_iterate_obj(&iter_param, &anchors, agg_iterate_pre_cb, agg_iterate_post_cb,
+			     ec_agg_param, dth);
 	if (rc == -DER_INPROGRESS && !d_list_empty(&dth->dth_share_tbd_list)) {
 		uint64_t	now = daos_gettime_coarse();
 

@@ -121,6 +121,7 @@ class BoundaryTest(TestWithServers):
 
     def test_container_boundary(self):
         """JIRA ID: DAOS-8464 Test lots of pools and containers in parallel.
+
         Test Description:
             Testcase 1: Test 1 pool with containers boundary condition in parallel.
             Testcase 2: Test large number of pools and containers in parallel.
@@ -133,7 +134,7 @@ class BoundaryTest(TestWithServers):
             3. Launch io and sync-up each container.
             4. Close container.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=container,pool,boundary_test
         :avocado: tags=BoundaryTest,test_container_boundary
         """

@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -44,6 +45,8 @@ type SystemCmd struct {
 	DelAttr      systemDelAttrCmd      `command:"del-attr" description:"Delete system attributes"`
 	SetProp      systemSetPropCmd      `command:"set-prop" description:"Set system properties"`
 	GetProp      systemGetPropCmd      `command:"get-prop" description:"Get system properties"`
+	Rebuild      systemRebuildCmd      `command:"rebuild" description:"Interactive rebuild commands"`
+	SelfHeal     systemSelfHealCmd     `command:"self-heal" description:"Self-heal commands for auto recovery"`
 }
 
 type baseCtlCmd struct {
@@ -494,7 +497,7 @@ func (cmd *systemGetAttrCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	prettyPrintAttrs(&bld, resp.Attributes)
-	cmd.Infof("%s", bld.String())
+	cmd.Infof("%s", bld)
 
 	return nil
 }
@@ -688,7 +691,117 @@ func (cmd *systemGetPropCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	prettyPrintSysProps(&bld, resp.Properties)
-	cmd.Infof("%s", bld.String())
+	cmd.Infof("%s", bld)
 
+	return nil
+}
+
+// systemRebuildCmd represents the system rebuild subcommand.
+type systemRebuildCmd struct {
+	Start systemRebuildStartCmd `command:"start" description:"System rebuild start requests submitted to pools"`
+	Stop  systemRebuildStopCmd  `command:"stop" description:"System rebuild stop requests submitted to pools"`
+}
+
+type systemRebuildOpCmd struct {
+	baseCtlCmd
+	Verbose bool `short:"v" long:"verbose" description:"Print pool identifiers"`
+}
+
+func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force bool) (errOut error) {
+	defer func() {
+		errOut = errors.Wrapf(errOut, "system rebuild %s failed", opCode)
+	}()
+
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
+	req := &control.SystemRebuildManageReq{
+		OpCode: opCode,
+		Force:  force,
+	}
+
+	resp, err := control.SystemRebuildManage(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	// Print successful results before returning any error.
+	respPoolsSuccess := []string{}
+	for _, res := range resp.Results {
+		if !res.Errored {
+			respPoolsSuccess = append(respPoolsSuccess, res.ID)
+		}
+	}
+	msg := fmt.Sprintf("System-rebuild %s request succeeded", opCode)
+	pStr := common.Pluralise("pool", len(respPoolsSuccess))
+	if cmd.Verbose {
+		cmd.Infof("%s on %d %s %v", msg, len(respPoolsSuccess), pStr, respPoolsSuccess)
+	} else {
+		cmd.Infof("%s on %d %s", msg, len(respPoolsSuccess), pStr)
+	}
+
+	if resp.Errors() != nil {
+		return resp.Errors()
+	}
+
+	return nil
+}
+
+type systemRebuildStartCmd struct {
+	systemRebuildOpCmd
+}
+
+func (cmd *systemRebuildStartCmd) Execute(_ []string) error {
+	return cmd.execute(control.PoolRebuildOpCodeStart, false)
+}
+
+type systemRebuildStopCmd struct {
+	systemRebuildOpCmd
+	Force bool `short:"f" long:"force" description:"Forcibly stop interactive rebuild"`
+}
+
+func (cmd *systemRebuildStopCmd) Execute(_ []string) error {
+	return cmd.execute(control.PoolRebuildOpCodeStop, cmd.Force)
+}
+
+// systemSelfHealCmd represents the system self-heal auto recovery subcommand.
+type systemSelfHealCmd struct {
+	Eval systemSelfHealEvalCmd `command:"eval" description:"Trigger self healing if necessary based on system property self_heal and the current system status"`
+}
+
+type systemSelfHealEvalCmd struct {
+	baseCtlCmd
+}
+
+func (cmd *systemSelfHealEvalCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system self-heal eval failed")
+	}()
+
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
+	req := &control.SystemSelfHealEvalReq{}
+
+	resp, err := control.SystemSelfHealEval(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	if resp.Errors() != nil {
+		return resp.Errors()
+	}
+
+	cmd.Info("System self-heal eval request succeeded")
 	return nil
 }

@@ -23,11 +23,12 @@ timeouts:
   test_daos_epoch_recovery: 104
   test_daos_md_replication: 104
   test_daos_rebuild_simple: 1800
+  test_daos_rebuild_simple_interactive: 2000
   test_daos_drain_simple: 3600
   test_daos_extend_simple: 3600
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
-  test_daos_rebuild_ec: 7200
+  test_daos_rebuild_ec: 9000
   test_daos_aggregate_ec: 200
   test_daos_degraded_ec: 1900
   test_daos_dedup: 220
@@ -100,6 +101,7 @@ daos_tests:
     test_daos_epoch_recovery: 1
     test_daos_md_replication: 2
     test_daos_rebuild_simple: 1
+    test_daos_rebuild_simple_interactive: 1
     test_daos_drain_simple: 1
     test_daos_extend_simple: 1
     test_daos_oid_allocator: 1
@@ -129,6 +131,7 @@ daos_tests:
     test_daos_epoch_recovery: DAOS_Epoch_Recovery
     test_daos_md_replication: DAOS_MD_Replication
     test_daos_rebuild_simple: DAOS_Rebuild_Simple
+    test_daos_rebuild_simple_interactive: DAOS_Rebuild_Simple_Interactive
     test_daos_drain_simple: DAOS_Drain_Simple
     test_daos_oid_allocator: DAOS_OID_Allocator
     test_daos_checksum: DAOS_Checksum
@@ -158,6 +161,7 @@ daos_tests:
     test_daos_epoch_recovery: o
     test_daos_md_replication: R
     test_daos_rebuild_simple: v
+    test_daos_rebuild_simple_interactive: v
     test_daos_drain_simple: b
     test_daos_extend_simple: B
     test_daos_oid_allocator: O
@@ -173,6 +177,8 @@ daos_tests:
     test_daos_rebuild_ec: -s5
     test_daos_md_replication: -s5
     test_daos_degraded_mode: -s7
+    test_daos_rebuild_simple: -s3
+    test_daos_rebuild_simple_interactive: -s3 --rebuild_interactive
     test_daos_drain_simple: -s3
     test_daos_extend_simple: -s3
     test_daos_oid_allocator: -s5

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -69,11 +70,11 @@ func printPoolHealth(out io.Writer, pi *daos.PoolInfo, verbose bool) {
 		healthStrings = append(healthStrings, deadStr)
 	}
 	if pi.DisabledTargets > 0 {
-		degStr := "Degraded"
+		teStr := "TargetsExcluded"
 		if verbose {
-			degStr += fmt.Sprintf(" (%d/%d targets disabled)", pi.DisabledTargets, pi.TotalTargets)
+			teStr += fmt.Sprintf(" (%d/%d targets disabled)", pi.DisabledTargets, pi.TotalTargets)
 		}
-		healthStrings = append(healthStrings, degStr)
+		healthStrings = append(healthStrings, teStr)
 	}
 	if pi.Rebuild != nil {
 		rbi := pi.Rebuild
@@ -139,7 +140,7 @@ func printContainerHealth(out io.Writer, pi *daos.PoolInfo, ci *daos.ContainerIn
 
 	healthStr := txtfmt.Title(ci.Health)
 	if pi != nil && pi.DisabledTargets > 0 {
-		healthStr += " (Pool Degraded)"
+		healthStr += " (Pool TargetsExcluded)"
 	}
 	fmt.Fprintf(out, "%s: %s\n", ci.Name(), healthStr)
 }

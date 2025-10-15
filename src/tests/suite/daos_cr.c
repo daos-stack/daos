@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -341,11 +342,11 @@ cr_check_query(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 }
 
 static inline int
-cr_check_repair(uint64_t seq, uint32_t opt, bool for_all)
+cr_check_repair(uint64_t seq, uint32_t opt)
 {
 	print_message("CR: handle check interaction for seq %lu, option %u ...\n",
 		      (unsigned long)seq, opt);
-	return dmg_check_repair(dmg_config_file, seq, opt, for_all);
+	return dmg_check_repair(dmg_config_file, seq, opt);
 }
 
 static inline int
@@ -380,78 +381,6 @@ cr_locate_dcri(struct daos_check_info *dci, struct daos_check_report_info *base,
 	D_ASSERTF(found, "Cannot found inconsistency report for "DF_UUIDF"\n", DP_UUID(uuid));
 
 	return dcri;
-}
-
-static int
-cr_pool_fail_result(struct daos_check_info *dci, uuid_t uuid, uint32_t cla, uint32_t act, int *ret)
-{
-	struct daos_check_pool_info	*dcpi;
-	struct daos_check_report_info	*dcri;
-	int				 i;
-
-	if (dci->dci_pool_nr != 1) {
-		print_message("CR pool count %d (pool " DF_UUID ") is not 1\n",
-			      dci->dci_pool_nr, DP_UUID(uuid));
-		return -DER_INVAL;
-	}
-
-	dcpi = &dci->dci_pools[0];
-	D_ASSERTF(uuid_compare(dcpi->dcpi_uuid, uuid) == 0,
-		  "Unmatched pool UUID (1): " DF_UUID " vs " DF_UUID "\n",
-		  DP_UUID(dcpi->dcpi_uuid), DP_UUID(uuid));
-
-	if (!cr_pool_status_failed(dcpi->dcpi_status)) {
-		print_message("CR pool " DF_UUID " status %s is not failed\n",
-			      DP_UUID(uuid), dcpi->dcpi_status);
-		return -DER_INVAL;
-	}
-
-	if (cr_pool_phase_is_done(dcpi->dcpi_phase)) {
-		print_message("CR pool " DF_UUID " phase should not be done\n",
-			      DP_UUID(uuid));
-		return -DER_INVAL;
-	}
-
-#ifdef CR_ACCURATE_QUERY_RESULT
-	if (dci->dci_report_nr != 1) {
-		print_message("CR (failed) pool " DF_UUID " has unexpected reports: %d\n",
-			      DP_UUID(uuid), dci->dci_report_nr);
-		return -DER_INVAL;
-	}
-#endif
-
-	for (i = 0; i < dci->dci_report_nr; i++) {
-		dcri = &dci->dci_reports[i];
-		if (uuid_compare(dcri->dcri_uuid, uuid) != 0) {
-#ifdef CR_ACCURATE_QUERY_RESULT
-			print_message("Detect unrelated inconsistency report: "
-				      DF_UUID " vs " DF_UUID "\n",
-				      DP_UUID(dcpi->dcpi_uuid), DP_UUID(uuid));
-			return -DER_INVAL;
-#else
-			continue;
-#endif
-		}
-
-		if (dcri->dcri_class != cla) {
-			print_message("CR (failed) pool " DF_UUID " reports unexpected "
-				      "inconsistency at %d: %u vs %u\n",
-				      DP_UUID(uuid), i, dcri->dcri_class, cla);
-			return -DER_INVAL;
-		}
-
-		if (dcri->dcri_act != act) {
-			print_message("CR (failed) pool " DF_UUID " reports unexpected "
-				      "solution at %d: %u vs %u\n",
-				      DP_UUID(uuid), i, dcri->dcri_act, act);
-			return -DER_INVAL;
-		}
-
-		*ret = dcri->dcri_result;
-		return 0;
-	}
-
-	return -DER_INVAL;
 }
 
 static void
@@ -1199,7 +1128,7 @@ cr_leader_interaction(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1290,7 +1219,7 @@ cr_engine_interaction(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1336,6 +1265,7 @@ cr_engine_interaction(void **state)
 static void
 cr_repair_forall_leader(void **state)
 {
+#if 0
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct daos_check_info		 dci = { 0 };
@@ -1347,7 +1277,13 @@ cr_repair_forall_leader(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+#endif
 
+	/* Skip for DAOS-17422. */
+	print_message("Skip obsolete test\n");
+	skip();
+
+#if 0
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR4: check repair option - for-all, on leader\n");
@@ -1381,7 +1317,7 @@ cr_repair_forall_leader(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1426,6 +1362,7 @@ cr_repair_forall_leader(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+#endif
 }
 
 /*
@@ -1441,6 +1378,7 @@ cr_repair_forall_leader(void **state)
 static void
 cr_repair_forall_engine(void **state)
 {
+#if 0
 	test_arg_t			*arg = *state;
 	struct test_pool		 pools[2] = { 0 };
 	struct test_cont		 conts[2] = { 0 };
@@ -1453,7 +1391,13 @@ cr_repair_forall_engine(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+#endif
 
+	/* Skip for DAOS-17422. */
+	print_message("Skip obsolete test\n");
+	skip();
+
+#if 0
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR5: check repair option - for-all, on engine\n");
@@ -1490,7 +1434,7 @@ cr_repair_forall_engine(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1532,6 +1476,7 @@ cr_repair_forall_engine(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+#endif
 }
 
 /*
@@ -1776,7 +1721,7 @@ cr_stop_specified(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -1889,7 +1834,7 @@ cr_auto_reset(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -2260,8 +2205,8 @@ cr_engine_resume(void **state)
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) != 0,
-			  "Pool (" DF_UUID ") label should not be repaired: %s\n",
-			  DP_UUID(pool.pool_uuid), label);
+		  "Pool (" DF_UUID ") label should not be repaired: %s\n", DP_UUID(pool.pool_uuid),
+		  label);
 
 	D_FREE(label);
 	cr_dci_fini(&dci);
@@ -2472,8 +2417,8 @@ cr_failout(void **state)
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) != 0,
-			  "Pool (" DF_UUID ") label should not be repaired: %s\n",
-			  DP_UUID(pool.pool_uuid), label);
+		  "Pool (" DF_UUID ") label should not be repaired: %s\n", DP_UUID(pool.pool_uuid),
+		  label);
 
 	D_FREE(label);
 	cr_dci_fini(&dci);
@@ -2843,7 +2788,7 @@ cr_engine_death(void **state)
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
 			/* Repair the pool label with the lost rank. */
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -2872,9 +2817,9 @@ cr_engine_death(void **state)
 	rc = dmg_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
 	assert_rc_equal(rc, 0);
 
-	D_ASSERTF(strcmp(label, pool.label) != 0,
-			  "Pool (" DF_UUID ") label should not be repaired: %s\n",
-			  DP_UUID(pool.pool_uuid), label);
+	D_ASSERTF(strcmp(label, pool.label) == 0,
+		  "Pool (" DF_UUID ") label is not repaired: %s vs %s\n", DP_UUID(pool.pool_uuid),
+		  label, pool.label);
 
 	D_FREE(label);
 	cr_dci_fini(&dci);
@@ -2959,7 +2904,7 @@ cr_engine_rejoin_succ(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3003,9 +2948,9 @@ cleanup:
  * 3. Start checker with option "-p POOL_NONEXIST_ON_MS:CIA_INTERACT".
  * 4. Query checker, it should show the interaction.
  * 5. Stop some rank in the system.
- * 6. Check repair with destroying the orphan pool, that should fail since we lost some pool shards
- *    during the check.
- * 7. Query checker, the instance should be completed, the pool should be failed.
+ * 6. Check repair with destroying the orphan pool, that should succeed even if some pool shards
+ *    is dead during the check.
+ * 7. Query checker, the instance should be completed, the pool should has been checked.
  * 8. Start the rank that is stopped just now - rejoin failed since the former checker instance has
  *    already completed.
  * 9. Restart checker with option "--reset" and
@@ -3022,8 +2967,7 @@ cr_engine_rejoin_fail(void **state)
 	struct daos_check_report_info	*dcri;
 	uint32_t			 class = TCC_POOL_NONEXIST_ON_MS;
 	uint32_t			 action;
-	int				 rank = -1;
-	int				 result = 0;
+	int                              rank = -1;
 	int				 rc;
 	int				 i;
 
@@ -3065,7 +3009,7 @@ cr_engine_rejoin_fail(void **state)
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
 			/* Repair the inconsistency with the lost rank. */
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3076,12 +3020,8 @@ cr_engine_rejoin_fail(void **state)
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_pool_fail_result(&dci, pool.pool_uuid, class, action, &result);
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
-
-	/* The check on the pool will fail because of -DER_HG or -DER_TIMEDOUT or -DER_OOG. */
-	D_ASSERTF(result == -DER_HG || result == -DER_TIMEDOUT || result == -DER_OOG,
-		  "Unexpected pool " DF_UUID " fail result: %d\n", DP_UUID(pool.pool_uuid), result);
 
 	/* Reint the rank, rejoin will fail but not affect the rank start. */
 	rc = cr_rank_reint(rank, true);
@@ -3214,7 +3154,7 @@ cr_multiple_pools(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == actions[1]) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3271,7 +3211,7 @@ again:
 		dcri = cr_locate_dcri(&dci, dcri, uuids[i]);
 		for (j = 0; j < dcri->dcri_option_nr; j++) {
 			if (dcri->dcri_options[j] == actions[0]) {
-				rc = cr_check_repair(dcri->dcri_seq, j, false);
+				rc = cr_check_repair(dcri->dcri_seq, j);
 				break;
 			}
 		}
@@ -3312,7 +3252,7 @@ again:
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == actions[1]) {
-			rc = cr_check_repair(dcri->dcri_seq, i, false);
+			rc = cr_check_repair(dcri->dcri_seq, i);
 			break;
 		}
 	}
@@ -3399,29 +3339,28 @@ cr_fail_sync_orphan(void **state)
  * 2. Fault injection to make inconsistent label for both of them.
  * 3. Start checker on pool1 and pool2 with POOL_BAD_LABEL:CIA_INTERACT
  * 4. Query checker, should show interaction for both pool1 and pool2.
- * 5. Check repair pool2's label with trust PS (trust MS is the default) and "for-all" option.
+ * 5. Check set-policy with POOL_BAD_LABEL:CIA_TRUST_PS.
  * 6. Query checker, both pool1's and pool2's label should be fixed with trust PS.
  * 7. Switch to normal mode and verify pools' labels.
  * 8. Cleanup.
  */
 static void
-cr_inherit_policy(void **state)
+cr_set_policy_after(void **state)
 {
-	test_arg_t			*arg = *state;
-	struct test_pool		 pools[2] = { 0 };
-	struct daos_check_info		 dci = { 0 };
-	struct daos_check_report_info	*dcri;
-	char				*ps_label = NULL;
-	char				*ptr;
-	char				 ms_label[DAOS_PROP_LABEL_MAX_LEN];
-	uint32_t			 class = TCC_POOL_BAD_LABEL;
-	uint32_t			 action;
-	int				 rc;
-	int				 i;
+	test_arg_t            *arg      = *state;
+	struct test_pool       pools[2] = {0};
+	struct daos_check_info dci      = {0};
+	char                  *ps_label = NULL;
+	char                  *ptr;
+	char                   ms_label[DAOS_PROP_LABEL_MAX_LEN];
+	uint32_t class = TCC_POOL_BAD_LABEL;
+	uint32_t action;
+	int      rc;
+	int      i;
 
 	FAULT_INJECTION_REQUIRED();
 
-	print_message("CR25: inherit check policy from former check repair\n");
+	print_message("CR25: set policy after checker start\n");
 
 	for (i = 0; i < 2; i++) {
 		rc = cr_pool_create(state, &pools[i], false, class);
@@ -3437,28 +3376,38 @@ cr_inherit_policy(void **state)
 	rc = cr_check_start(TCSF_RESET, 0, NULL, "POOL_BAD_LABEL:CIA_INTERACT");
 	assert_rc_equal(rc, 0);
 
+	action = TCA_INTERACT;
+
 	for (i = 0; i < 2; i++) {
 		cr_pool_wait(1, &pools[i].pool_uuid, &dci);
 
 		rc = cr_ins_verify(&dci, TCIS_RUNNING);
 		assert_rc_equal(rc, 0);
 
-		action = TCA_INTERACT;
 		rc = cr_pool_verify(&dci, pools[i].pool_uuid, TCPS_PENDING, 1, &class, &action,
 				    NULL);
 		assert_rc_equal(rc, 0);
 	}
 
-	dcri = cr_locate_dcri(&dci, NULL, pools[1].pool_uuid);
-	action = TCA_TRUST_PS;
-	rc = -DER_MISC;
+	/* Set irrelevant policy will not affect the interaction. */
+	rc = cr_check_set_policy(TCPF_NONE, "POOL_BAD_LABEL:CIA_TRUST_OLDEST");
+	assert_rc_equal(rc, 0);
 
-	for (i = 0; i < dcri->dcri_option_nr; i++) {
-		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i, true);
-			break;
-		}
+	for (i = 0; i < 2; i++) {
+		cr_pool_wait(1, &pools[i].pool_uuid, &dci);
+
+		rc = cr_ins_verify(&dci, TCIS_RUNNING);
+		assert_rc_equal(rc, 0);
+
+		rc = cr_pool_verify(&dci, pools[i].pool_uuid, TCPS_PENDING, 1, &class, &action,
+				    NULL);
+		assert_rc_equal(rc, 0);
 	}
+
+	action = TCA_TRUST_PS;
+
+	/* Set valid policy will resolve related interaction. */
+	rc = cr_check_set_policy(TCPF_NONE, "POOL_BAD_LABEL:CIA_TRUST_PS");
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
@@ -3785,6 +3734,7 @@ cr_maintenance_mode(void **state)
 	cr_cleanup(arg, &pool, 1);
 }
 
+/* clang-format off */
 static const struct CMUnitTest cr_tests[] = {
 	{ "CR1: start checker for specified pools",
 	  cr_start_specified, async_disable, test_case_teardown},
@@ -3834,8 +3784,8 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_multiple_pools, async_disable, test_case_teardown},
 	{ "CR24: check leader failed to notify check engine about orphan process",
 	  cr_fail_sync_orphan, async_disable, test_case_teardown},
-	{ "CR25: inherit check policy from former check repair",
-	  cr_inherit_policy, async_disable, test_case_teardown},
+	{ "CR25: set policy after checker start",
+	  cr_set_policy_after, async_disable, test_case_teardown},
 	{ "CR26: skip the pool if some engine failed to report some pool shard",
 	  cr_handle_fail_pool1, async_disable, test_case_teardown},
 	{ "CR27: handle the pool if some engine failed to report some pool service",
@@ -3843,6 +3793,7 @@ static const struct CMUnitTest cr_tests[] = {
 	{ "CR28: maintenance mode after dry-run check",
 	  cr_maintenance_mode, async_disable, test_case_teardown},
 };
+/* clang-format on */
 
 static int
 cr_setup(void **state)

@@ -34,13 +34,14 @@
 #include <sys/wait.h>
 #include <sys/uio.h>
 #include <sys/file.h>
+#include <sys/xattr.h>
 
 #include <dfuse_ioctl.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdlkfec";
+static const char *all_tests = "ismdlkfecx";
 
 static void
 print_usage()
@@ -60,6 +61,7 @@ print_usage()
 	/* verifyenv is only run by exec test. Should not be executed directly */
 	/* print_message("dfuse_test    --verifyenv\n");                       */
 	print_message("dfuse_test -c|--cache\n");
+	print_message("dfuse_test -x|--fdcalls\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -205,14 +207,37 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 }
 
+static bool
+is_fd_large(int fd)
+{
+	/* normally the fd from Linux kernel should be very small */
+	return (fd > 100000);
+}
+
 extern int __open(const char *pathname, int flags, ...);
 void
 do_open(void **state)
 {
-	int  fd;
-	int  rc;
-	int  len;
-	char path[512];
+	int   fd;
+	int   rc;
+	int   len;
+	char  path[512];
+	char *env_ldpreload;
+	bool  with_pil4dfs = false;
+	bool  use_dfuse    = true;
+	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
+	char  native_mount_dir[] = "/tmp/dfuse-test";
+
+	if (strstr(test_dir, native_mount_dir))
+		use_dfuse = false;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload == NULL)
+		return;
+
+	if (strstr(env_ldpreload, "libpil4dfs.so") != NULL)
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		with_pil4dfs = true;
 
 	len = snprintf(path, sizeof(path) - 1, "%s/open_file", test_dir);
 	assert_true(len < (sizeof(path) - 1));
@@ -223,6 +248,30 @@ do_open(void **state)
 	 */
 	fd = __open(path, O_RDWR | O_CREAT | O_EXCL);
 	assert_return_code(fd, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	/* test creat() */
+	fd = creat(path, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	if (with_pil4dfs && use_dfuse)
+		assert_true(is_fd_large(fd));
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	/* test creat64() */
+	fd = creat64(path, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	if (with_pil4dfs && use_dfuse)
+		assert_true(is_fd_large(fd));
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
@@ -460,6 +509,7 @@ do_mtime(void **state)
 	/* Open a file and sanity check the mtime */
 	fd = openat(root, "mtime_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
+	usleep(10000);
 
 	rc = fstatfs(root, &fs);
 	assert_return_code(fd, errno);
@@ -479,6 +529,7 @@ do_mtime(void **state)
 	}
 
 	/* Write to the file and verify mtime is newer */
+	usleep(10000);
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
@@ -495,6 +546,7 @@ do_mtime(void **state)
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/* Truncate the file and verify mtime is newer */
+	usleep(10000);
 	rc = ftruncate(fd, 0);
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
@@ -510,6 +562,7 @@ do_mtime(void **state)
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/* Set and verify mtime set in the past */
+	usleep(10000);
 	times[0]         = now;
 	times[1].tv_sec  = now.tv_sec - 10;
 	times[1].tv_nsec = 20;
@@ -523,6 +576,7 @@ do_mtime(void **state)
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/* Repeat the write test again */
+	usleep(10000);
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
@@ -773,6 +827,191 @@ do_lowfd(void **state)
 	free(path);
 }
 
+/* helper function to create a file */
+static void
+create_a_file(const char file_name[])
+{
+	int fd;
+	int rc;
+
+	fd = open(file_name, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+}
+
+#define MAX_LEN_ATTR_VALUE (128)
+
+/* verify miscellaneous fd involved functions that are needed to be intercepted by libpil4dfs */
+void
+do_fdcallscheck(void **state)
+{
+	int    root;
+	int    fd;
+	int    fd_new;
+	int    flag;
+	int    rc;
+	char   attr_name[]  = "usr_attr";
+	char   attr_value[] = "test_value";
+	char   attr_value_rd[MAX_LEN_ATTR_VALUE];
+	size_t len;
+	char   path_old[512];
+	char   path_new[512];
+	char  *env_ldpreload;
+	bool   use_dfuse    = true;
+	bool   with_pil4dfs = false;
+	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
+	char   native_mount_dir[] = "/tmp/dfuse-test";
+
+	if (strstr(test_dir, native_mount_dir))
+		use_dfuse = false;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (strstr(env_ldpreload, "libpil4dfs.so") != NULL)
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		with_pil4dfs = true;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	fd = openat(root, "test_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	rc = fchown(fd, getuid(), getgid());
+	assert_return_code(rc, errno);
+
+	rc = fsetxattr(fd, attr_name, attr_value, strlen(attr_value), 0);
+	assert_return_code(rc, errno);
+
+	/* retrieve the extended attribute */
+	len = fgetxattr(fd, attr_name, attr_value_rd, MAX_LEN_ATTR_VALUE);
+	assert_true(len == strlen(attr_value));
+	assert_true(memcmp(attr_value_rd, attr_value, strlen(attr_value)) == 0);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "test_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+
+	/* start testing renameat() */
+
+	/* both with absolute path */
+	len = snprintf(path_old, sizeof(path_old) - 1, "%s/old", test_dir);
+	assert_true(len < (sizeof(path_old) - 1));
+
+	len = snprintf(path_new, sizeof(path_new) - 1, "%s/new", test_dir);
+	assert_true(len < (sizeof(path_new) - 1));
+
+	create_a_file(path_old);
+
+	rc = renameat(0, path_old, 0, path_new);
+	assert_return_code(rc, errno);
+
+	fd = open(path_new, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path_new);
+	assert_return_code(rc, errno);
+
+	/* one with absolute path, one with relative path */
+	create_a_file(path_old);
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	rc = renameat(root, "old", 0, path_new);
+	assert_return_code(rc, errno);
+
+	fd = open(path_new, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path_new);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+
+	/* both with relative path */
+	create_a_file(path_old);
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	rc = renameat(root, "old", root, "new");
+	assert_return_code(rc, errno);
+
+	fd = open(path_new, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path_new);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+
+	/* one is on DAOS and one is not on DAOS */
+	create_a_file(path_old);
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	strncpy(path_new, "/dev/shm/newfile", sizeof(path_new));
+	rc = renameat(root, "old", 0, path_new);
+	assert_true(rc == -1);
+	assert_true(errno == EXDEV);
+
+	rc = unlink(path_old);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+	/* end   testing renameat() */
+
+	/* start testing dup3() */
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	fd = openat(root, "test_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	if (with_pil4dfs && use_dfuse)
+		assert_true(is_fd_large(fd));
+
+	fd_new = 10000;
+	flag   = O_CLOEXEC;
+	rc     = dup3(fd, fd_new, flag);
+	assert_true(rc == fd_new);
+
+	rc = close(fd_new);
+	assert_return_code(rc, errno);
+
+	/* flag different from O_CLOEXEC and 0 is not supported */
+	flag = ~flag;
+	rc   = dup3(fd, fd_new, flag);
+	assert_true(rc == -1);
+	assert_true(errno == EINVAL);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "test_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+	/* end   testing dup3() */
+}
+
 /*
  * Verify the behavior of flock() and fcntl().
  */
@@ -983,9 +1222,11 @@ do_cachingcheck(void **state)
 		/* Run command "cat test_file" in a new process */
 		execv(exe_name, argv);
 	}
+	/* wait until the child process finishes, then remove the file */
 	waitpid(pid, &status, 0);
 	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
+
 	rc = unlink(file_name);
 	assert_return_code(rc, errno);
 
@@ -1097,6 +1338,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(cache_tests, NULL, NULL);
 			break;
 
+		case 'x':
+			printf("\n\n=================");
+			printf("dfuse more fd involved calls check");
+			printf("=====================\n");
+			const struct CMUnitTest fdcalls_tests[] = {
+			    cmocka_unit_test(do_fdcallscheck),
+			};
+			nr_failed += cmocka_run_group_tests(fdcalls_tests, NULL, NULL);
+			break;
+
 		default:
 			assert_true(0);
 		}
@@ -1127,9 +1378,10 @@ main(int argc, char **argv)
 					       {"exec", no_argument, NULL, 'e'},
 					       {"verifyenv", no_argument, NULL, 't'},
 					       {"cache", no_argument, NULL, 'c'},
+					       {"fdcalls", no_argument, NULL, 'x'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetc", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetcx", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

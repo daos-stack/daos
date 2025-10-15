@@ -412,6 +412,8 @@ static int (*next_rmdir)(const char *path);
 
 static int (*next_rename)(const char *old_name, const char *new_name);
 
+static int (*next_renameat)(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
+
 static char *(*libc_getcwd)(char *buf, size_t size);
 
 static int (*libc_unlink)(const char *path);
@@ -468,9 +470,6 @@ static int (*next_munmap)(void *addr, size_t length);
 static void (*next_exit)(int rc);
 static void (*next__exit)(int rc) __attribute__((__noreturn__));
 
-/* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
-/* static org_dup3 real_dup3=NULL; */
-
 static int (*next_execve)(const char *filename, char *const argv[], char *const envp[]);
 static int (*next_execv)(const char *filename, char *const argv[]);
 static int (*next_execvp)(const char *filename, char *const argv[]);
@@ -478,6 +477,10 @@ static int (*next_execvpe)(const char *filename, char *const argv[], char *const
 static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
 
 static pid_t (*next_fork)(void);
+
+static int (*next_fchown)(int fd, uid_t uid, gid_t gid);
+static ssize_t (*next_fgetxattr)(int fd, char *name, void *value, size_t size);
+static int (*next_fsetxattr)(int fd, char *name, void *value, size_t size, int flags);
 
 /* start NOT supported by DAOS */
 static int (*next_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
@@ -1667,7 +1670,7 @@ free_fd(int idx, bool closing_dup_fd)
 	d_file_list[idx]->ref_count--;
 	if (d_file_list[idx]->ref_count == 0)
 		saved_obj = d_file_list[idx];
-	if (dup_ref_count[idx] > 0) {
+	if (dup_ref_count[idx] > 0 || ((d_file_list[idx]->ref_count > 0) && !d_compatible_mode)) {
 		D_MUTEX_UNLOCK(&lock_fd);
 		return;
 	}
@@ -1965,6 +1968,15 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 	int len_str, dirfd_directed;
 
 	*error = 0;
+
+	if (rel_path[0] == '/') {
+		/* an absolute path, dirfd should be ignored */
+		*full_path_out = strdup(rel_path);
+		if (*full_path_out == NULL)
+			goto out_oom;
+		return query_dfs_mount(*full_path_out);
+	}
+
 	*full_path_out = NULL;
 	dirfd_directed = d_get_fd_redirected(dirfd);
 
@@ -2385,6 +2397,16 @@ new_open_pthread(const char *pathname, int oflags, ...)
 
 	return rc;
 }
+
+int
+creat(const char *path, mode_t mode)
+{
+	/* https://linux.die.net/man/3/creat */
+	return new_open_libc(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
+}
+
+int
+creat64(const char *path, mode_t mode) __attribute__((alias("creat")));
 
 /* Search a fd in fd hash table. Remove it in case it is found. Also free the fake fd.
  * Return true if fd is found. Return false if fd is not found.
@@ -5019,11 +5041,58 @@ out_err:
 	return (-1);
 }
 
+int
+renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath)
+{
+	int   error = 0;
+	int   rc;
+	char *full_path_old = NULL;
+	char *full_path_new = NULL;
+
+	if (next_renameat == NULL) {
+		next_renameat = dlsym(RTLD_NEXT, "renameat");
+		D_ASSERT(next_renameat != NULL);
+	}
+	if (!d_hook_enabled)
+		return next_renameat(olddirfd, oldpath, newdirfd, newpath);
+
+	if ((oldpath[0] == '/') && (newpath[0] == '/'))
+		/* fd is ignored for absolute path */
+		return rename(oldpath, newpath);
+
+	check_path_with_dirfd(olddirfd, &full_path_old, oldpath, &error);
+	if (error)
+		goto out_err;
+
+	check_path_with_dirfd(newdirfd, &full_path_new, newpath, &error);
+	if (error) {
+		if (full_path_old)
+			free(full_path_old);
+		goto out_err;
+	}
+	rc = rename(full_path_old, full_path_new);
+	/* save errno since free() may affect errno */
+	error = errno;
+	if (full_path_old) {
+		free(full_path_old);
+		errno = error;
+	}
+	if (full_path_new) {
+		free(full_path_new);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
+}
+
 char *
 new_getcwd(char *buf, size_t size)
 {
-	char *rc;
-	int   len;
+	char  *rc;
+	size_t len;
 
 	if (!d_hook_enabled)
 		return libc_getcwd(buf, size);
@@ -5661,6 +5730,119 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 out_err:
 	errno = error;
 	return (-1);
+}
+
+int
+fchown(int fd, uid_t uid, gid_t gid)
+{
+	int rc, fd_directed;
+
+	if (next_fchown == NULL) {
+		next_fchown = dlsym(RTLD_NEXT, "fchown");
+		D_ASSERT(next_fchown != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fchown(fd, uid, gid);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fchown(fd, uid, gid);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed >= FD_DIR_BASE)
+		/* Let dfuse handle this case. This function is not commonly used in applications.
+		 * There is no need for further optimization here at this time.
+		 */
+		return chown(dir_list[fd_directed - FD_DIR_BASE]->path, uid, gid);
+
+	/* regular file */
+	rc = dfs_chown(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+		       drec2obj(d_file_list[fd_directed - FD_FILE_BASE]->parent),
+		       d_file_list[fd_directed - FD_FILE_BASE]->item_name, uid, gid, 0);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return 0;
+}
+
+ssize_t
+fgetxattr(int fd, char *name, void *value, size_t size)
+{
+	int    rc, fd_directed;
+	size_t buf_size = size;
+
+	if (next_fgetxattr == NULL) {
+		next_fgetxattr = dlsym(RTLD_NEXT, "fgetxattr");
+		D_ASSERT(next_fgetxattr != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fgetxattr(fd, name, value, size);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fgetxattr(fd, name, value, size);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed < FD_DIR_BASE)
+		rc = dfs_getxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value,
+				  &buf_size);
+	else
+		rc = dfs_getxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, &buf_size);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return buf_size;
+}
+
+int
+fsetxattr(int fd, char *name, void *value, size_t size, int flags)
+{
+	int rc, fd_directed;
+
+	if (next_fsetxattr == NULL) {
+		next_fsetxattr = dlsym(RTLD_NEXT, "fsetxattr");
+		D_ASSERT(next_fsetxattr != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fsetxattr(fd, name, value, size, flags);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fsetxattr(fd, name, value, size, flags);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed < FD_DIR_BASE)
+		rc = dfs_setxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value, size,
+				  flags);
+	else
+		rc = dfs_setxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, size,
+				  flags);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return rc;
 }
 
 int
@@ -6309,7 +6491,11 @@ new_dup3(int oldfd, int newfd, int flags)
 	if (d_get_fd_redirected(oldfd) < FD_FILE_BASE && d_get_fd_redirected(newfd) < FD_FILE_BASE)
 		return libc_dup3(oldfd, newfd, flags);
 
-	/* Ignore flags now. Need more work later to handle flags, e.g., O_CLOEXEC */
+	/* only O_CLOEXEC and 0 are accepted for flags in glibc */
+	if (flags != O_CLOEXEC && flags != 0) {
+		errno = EINVAL;
+		return (-1);
+	}
 	return dup2(oldfd, newfd);
 }
 

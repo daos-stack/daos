@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package drpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -16,22 +18,51 @@ import (
 	"github.com/pkg/errors"
 )
 
+type mockMethod struct {
+	id     int32
+	module int32
+}
+
+func (mm *mockMethod) ID() int32 {
+	return mm.id
+}
+
+func (mm *mockMethod) Module() int32 {
+	return mm.module
+}
+
+func (mm *mockMethod) String() string {
+	return fmt.Sprintf("mock method %d", mm.id)
+}
+
 // mockModule is a mock of the Module interface
 type mockModule struct {
 	HandleCallResponse []byte
 	HandleCallErr      error
-	IDValue            ModuleID
+	GetMethodErr       error
+	IDValue            int32
 }
 
 func (m *mockModule) HandleCall(_ context.Context, session *Session, method Method, input []byte) ([]byte, error) {
 	return m.HandleCallResponse, m.HandleCallErr
 }
 
-func (m *mockModule) ID() ModuleID {
+func (m *mockModule) ID() int32 {
 	return m.IDValue
 }
 
-func newTestModule(ID ModuleID) *mockModule {
+func (m *mockModule) String() string {
+	return "mock module"
+}
+
+func (m *mockModule) GetMethod(id int32) (Method, error) {
+	return &mockMethod{
+		id:     id,
+		module: m.IDValue,
+	}, m.GetMethodErr
+}
+
+func newTestModule(ID int32) *mockModule {
 	return &mockModule{
 		IDValue: ID,
 	}
@@ -40,34 +71,40 @@ func newTestModule(ID ModuleID) *mockModule {
 // mockConn is a mock of the net.Conn interface
 type mockConn struct {
 	sync.Mutex
-	ReadCallCount       int
-	ReadInputBytes      []byte
-	ReadOutputNumBytes  int
-	ReadOutputError     error
-	ReadOutputBytes     []byte // Bytes copied into buffer
-	WriteCallCount      int
-	WriteOutputNumBytes int
-	WriteOutputError    error
-	WriteInputBytes     []byte
-	CloseCallCount      int // Number of times called
-	CloseOutputError    error
+	ReadCallCount    int
+	ReadInputBytes   [][]byte
+	ReadOutputError  error
+	ReadOutputBytes  [][]byte // Bytes copied into buffer
+	WriteCallCount   int
+	WriteOutputError error
+	WriteInputBytes  [][]byte
+	CloseCallCount   int // Number of times called
+	CloseOutputError error
 }
 
 func (m *mockConn) Read(b []byte) (n int, err error) {
 	m.Lock()
 	defer m.Unlock()
+	var bytes int
+	if len(m.ReadOutputBytes) > 0 {
+		idx := m.ReadCallCount
+		if idx >= len(m.ReadOutputBytes) {
+			idx = len(m.ReadOutputBytes) - 1
+		}
+		copy(b, m.ReadOutputBytes[idx])
+		bytes = len(m.ReadOutputBytes[idx])
+	}
 	m.ReadCallCount++
-	m.ReadInputBytes = b
-	copy(b, m.ReadOutputBytes)
-	return m.ReadOutputNumBytes, m.ReadOutputError
+	m.ReadInputBytes = append(m.ReadInputBytes, b)
+	return bytes, m.ReadOutputError
 }
 
-func (m *mockConn) Write(b []byte) (n int, err error) {
+func (m *mockConn) Write(b []byte) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 	m.WriteCallCount++
-	m.WriteInputBytes = b
-	return m.WriteOutputNumBytes, m.WriteOutputError
+	m.WriteInputBytes = append(m.WriteInputBytes, b)
+	return len(b), m.WriteOutputError
 }
 
 func (m *mockConn) Close() error {
@@ -113,20 +150,19 @@ func (m *mockConn) SetReadOutputBytesToResponse(t *testing.T, resp *Response) {
 	t.Helper()
 
 	rawRespBytes := marshallResponseToBytes(t, resp)
-	m.ReadOutputNumBytes = len(rawRespBytes)
+	numChunks := getNumChunks(len(rawRespBytes))
+	start := 0
+	for i := 0; i < numChunks; i++ {
+		size := maxDataSize
+		if start+size >= len(rawRespBytes) {
+			size = len(rawRespBytes) - start
+		}
 
-	// The result from Read() will be MaxMsgSize since we have no way to
-	// know the size of a read before we read it
-	m.ReadOutputBytes = make([]byte, MaxMsgSize)
-	copy(m.ReadOutputBytes, rawRespBytes)
-}
+		buf := genTestBuf(uint(i), uint(numChunks), uint(len(rawRespBytes)), rawRespBytes[start:start+size])
 
-func (m *mockConn) SetWriteOutputBytesForCall(t *testing.T, call *Call) []byte {
-	t.Helper()
-
-	callBytes := marshallCallToBytes(t, call)
-
-	return callBytes
+		m.ReadOutputBytes = append(m.ReadOutputBytes, buf)
+		start += size
+	}
 }
 
 // mockListener is a mock of the net.Listener interface

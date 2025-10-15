@@ -450,7 +450,7 @@ engines:
 - targets: 16
   nr_xs_helpers: 4
   first_core: 0
-  log_file: /tmp/daos_engine.0.log
+  log_file: /var/log/daos/daos_engine.0.log
   storage:
   - class: ram
     scm_mount: /mnt/daos0
@@ -472,7 +472,7 @@ engines:
 - targets: 16
   nr_xs_helpers: 4
   first_core: 0
-  log_file: /tmp/daos_engine.1.log
+  log_file: /var/log/daos/daos_engine.1.log
   storage:
   - class: ram
     scm_mount: /mnt/daos1
@@ -497,7 +497,7 @@ enable_hotplug: false
 nr_hugepages: 16384
 disable_hugepages: false
 control_log_mask: INFO
-control_log_file: /tmp/daos_server.log
+control_log_file: /var/log/daos/daos_server.log
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
@@ -1324,13 +1324,13 @@ mgmt_svc_replicas: ["wolf-71"] # <----- updated
 <snip>
 engines:
 -
-  pinned_numa_node: 0         # run 1st engine on CPU 0
-  targets: 16                 # number of I/O service threads per-engine
-  nr_xs_helpers: 4            # count of I/O offload threads
-  fabric_iface: eth0          # network interface to use for this engine
-  fabric_iface_port: 31416    # network port
-  log_mask: ERR               # debug level to start with the engine with
-  log_file: /tmp/server1.log  # where to store engine logs
+  pinned_numa_node: 0                             # run 1st engine on CPU 0
+  targets: 16                                     # number of I/O service threads per-engine
+  nr_xs_helpers: 4                                # count of I/O offload threads
+  fabric_iface: eth0                              # network interface to use for this engine
+  fabric_iface_port: 31416                        # network port
+  log_mask: ERR                                   # debug level to start with the engine with
+  log_file: /var/log/daos/daos_engine0.log # where to store engine logs
   storage:
   -
     class: dcpm               # type of first storage tier (SCM)
@@ -1346,7 +1346,7 @@ engines:
   fabric_iface: eth0
   fabric_iface_port: 32416
   log_mask: ERR
-  log_file: /tmp/server2.log
+  log_file: /var/log/daos/daos_engine1.log
   storage:
   -
     class: dcpm               # type of first storage tier (SCM)
@@ -1471,9 +1471,7 @@ This configuration yields the fastest access to that network device.
 Information about the network configuration is stored as metadata on the DAOS
 storage.
 
-If, after initial deployment, the provider must be changed, it is necessary to
-reformat the storage devices using `dmg storage format` after the configuration
-file has been updated with the new provider.
+If, after initial deployment, the provider must be changed, please follow the directions to [`change fabric provider`](https://github.com/daos-stack/daos/blob/master/docs/admin/common_tasks.md#change-fabric-provider-on-a-daos-system).
 
 #### Provider Testing
 

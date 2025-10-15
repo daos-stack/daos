@@ -385,6 +385,7 @@ struct bio_xs_context {
 	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
 	unsigned int		 bxc_self_polling:1;	/* for standalone VOS */
+	unsigned int             bxc_skip_draining : 1;
 };
 
 /* Per VOS instance I/O context */
@@ -655,6 +656,8 @@ void trigger_faulty_reaction(struct bio_blobstore *bbs);
 
 /* bio_device.c */
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
+struct bio_dev_info *
+alloc_dev_info(uuid_t dev_id, struct bio_bdev *d_bdev, struct smd_dev_info *s_info);
 
 /* bio_config.c */
 int

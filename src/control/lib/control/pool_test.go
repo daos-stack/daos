@@ -188,7 +188,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
-					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
 				},
 			},
 		},
@@ -199,7 +199,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TryAgain, nil),
-					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
 				},
 			},
 		},
@@ -208,9 +208,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 				ID: test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolUpgradeResp{},
-				),
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
 			},
 		},
 	} {
@@ -1244,24 +1242,28 @@ func TestControl_UpdateState(t *testing.T) {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
-					UUID:            poolUUID,
-					TotalTargets:    1,
-					DisabledTargets: 0,
+					UUID:         poolUUID,
+					TotalTargets: 1,
 				},
 			},
 			expState: daos.PoolServiceStateReady.String(),
 		},
-		"Pool state as Degraded": {
+		"Pool state as TargetsExcluded": {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
 					UUID:            poolUUID,
-					TotalTargets:    1,
-					DisabledTargets: 4,
+					TotalTargets:    2,
+					DisabledTargets: 1,
 					State:           daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
+						Objects: 1,
+						Records: 2,
+					},
 				},
 			},
-			expState: daos.PoolServiceStateDegraded.String(),
+			expState: daos.PoolServiceStateTargetsExcluded.String(),
 		},
 		"Pool state as Unknown": {
 			pqr: &PoolQueryResp{
@@ -1487,7 +1489,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            mgmtpb.PoolServiceState_Degraded,
+						State:            mgmtpb.PoolServiceState_TargetsExcluded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -1522,7 +1524,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					Rebuild: &daos.PoolRebuildStatus{
 						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
@@ -1559,7 +1561,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            mgmtpb.PoolServiceState_Degraded,
+						State:            mgmtpb.PoolServiceState_TargetsExcluded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -1595,7 +1597,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					Rebuild: &daos.PoolRebuildStatus{
 						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
@@ -1633,7 +1635,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            mgmtpb.PoolServiceState_Degraded,
+						State:            mgmtpb.PoolServiceState_TargetsExcluded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -1669,7 +1671,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					Rebuild: &daos.PoolRebuildStatus{
 						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
@@ -1707,7 +1709,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            mgmtpb.PoolServiceState_Degraded,
+						State:            mgmtpb.PoolServiceState_TargetsExcluded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -1743,7 +1745,7 @@ func TestControl_PoolQuery(t *testing.T) {
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					Rebuild: &daos.PoolRebuildStatus{
 						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
@@ -2462,7 +2464,7 @@ func TestControl_ListPools(t *testing.T) {
 						TierStats:       expTierStats,
 					},
 					{
-						State:           daos.PoolServiceStateDegraded,
+						State:           daos.PoolServiceStateTargetsExcluded,
 						UUID:            test.MockPoolUUID(2),
 						TotalTargets:    42,
 						ActiveTargets:   16,
@@ -2506,7 +2508,7 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 					},
 					{
-						State:           daos.PoolServiceStateDegraded,
+						State:           daos.PoolServiceStateTargetsExcluded,
 						UUID:            test.MockPoolUUID(2),
 						TotalTargets:    42,
 						ActiveTargets:   16,
@@ -2556,7 +2558,7 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 					},
 					{
-						State:           daos.PoolServiceStateDegraded,
+						State:           daos.PoolServiceStateTargetsExcluded,
 						UUID:            test.MockPoolUUID(2),
 						TotalTargets:    42,
 						ActiveTargets:   16,
@@ -3593,6 +3595,194 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 			test.AssertTrue(t,
 				poolCreateRequest.TierRatio == nil,
 				"Invalid size of TierRatio attribute: disabled with manual allocation")
+		})
+	}
+}
+
+func TestControl_PoolRebuildManage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolRebuildManageReq
+		expErr error
+	}{
+		"no opcode": {
+			req: &PoolRebuildManageReq{
+				ID: test.MockUUID(),
+			},
+			expErr: errors.New("invalid pool-rebuild opcode"),
+		},
+		"local failure": {
+			req: &PoolRebuildManageReq{
+				ID:     test.MockUUID(),
+				OpCode: PoolRebuildOpCodeStart,
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolRebuildManageReq{
+				ID:     test.MockUUID(),
+				OpCode: PoolRebuildOpCodeStart,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"-DER_GRPVER is retried": {
+			req: &PoolRebuildManageReq{
+				ID:     test.MockUUID(),
+				OpCode: PoolRebuildOpCodeStart,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+		"-DER_AGAIN is retried": {
+			req: &PoolRebuildManageReq{
+				ID:     test.MockUUID(),
+				OpCode: PoolRebuildOpCodeStop,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.TryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+		"start rebuild": {
+			req: &PoolRebuildManageReq{
+				ID:     test.MockUUID(),
+				OpCode: PoolRebuildOpCodeStart,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.DaosResp{},
+				),
+			},
+		},
+		"start rebuild; with force flag": {
+			req: &PoolRebuildManageReq{
+				ID:     test.MockUUID(),
+				OpCode: PoolRebuildOpCodeStart,
+				Force:  true,
+			},
+			expErr: errors.New("force flag not supported"),
+		},
+		"stop rebuild; with force flag": {
+			req: &PoolRebuildManageReq{
+				ID:     test.MockUUID(),
+				OpCode: PoolRebuildOpCodeStop,
+				Force:  true,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.DaosResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolRebuildManage(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
+func TestControl_PoolSelfHealEval(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolSelfHealEvalReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolSelfHealEvalReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolSelfHealEvalReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"-DER_GRPVER is retried": {
+			req: &PoolSelfHealEvalReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+		"-DER_AGAIN is retried": {
+			req: &PoolSelfHealEvalReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.TryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+		"self-heal evaluate": {
+			req: &PoolSelfHealEvalReq{
+				ID:         test.MockUUID(),
+				SysPropVal: "exclude;pool_rebuild",
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.DaosResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolSelfHealEval(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
 		})
 	}
 }

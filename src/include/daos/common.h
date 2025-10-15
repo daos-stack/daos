@@ -387,7 +387,10 @@ int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgls_alloc(d_sg_list_t *dst, d_sg_list_t *src, int nr);
 int daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src);
-daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
+daos_size_t
+daos_sgl_data_len(d_sg_list_t *sgl, bool out);
+daos_size_t
+	    daos_sgl_out_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
@@ -819,6 +822,7 @@ enum {
  */
 #define DAOS_FAIL_PARITY_EPOCH_DIFF	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x29)
 #define DAOS_FAIL_SHARD_NONEXIST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2a)
+#define DAOS_REBUILD_ADMIN_STOP_RECLAIM   (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2b)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,8 +15,8 @@
 #include <getopt.h>
 #include <semaphore.h>
 
+#include <daos/dpar.h>
 #include "crt_utils.h"
-#include "test_group_rpc.h"
 #include "test_group_np_common.h"
 
 /* Callback to process a SWIM message */
@@ -23,7 +24,7 @@ static void
 swim_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		  enum crt_event_type type, void *arg)
 {
-	int maxlen;
+	int  maxlen;
 	char swim_state_str[2];
 
 	/* Example output for SWIM CRT_EVT_DEAD on rank #2:
@@ -39,11 +40,7 @@ swim_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 	 *		};
 	 */
 
-	D_DEBUG(DB_TEST, "Cart callback event: "
-		"rank = %d, "
-		"crt_event_source = %d, "
-		"crt_event_type = %d\n",
-		rank, src, type);
+	DBG_PRINT("swim_cb: rank=%d src=%d, event=%d\n", rank, src, type);
 
 	swim_state_str[0] = type + '0';
 	swim_state_str[1] = 0;
@@ -61,8 +58,8 @@ test_run(d_rank_t my_rank)
 	int			 i;
 	int			 rc = 0;
 
-	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
-				  &test_g.t_tid[0], &grp, &grp_size, NULL);
+	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0], &test_g.t_tid[0],
+				  &grp, &grp_size, NULL, NULL);
 	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	/* Register event callback after CaRT has initialized */
@@ -79,8 +76,7 @@ test_run(d_rank_t my_rank)
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
 
 	rc = crt_proto_register(&my_proto_fmt_test_group1);
-	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
-			rc);
+	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
 
 	/* Do not delay shutdown for this server */
 	crtu_set_shutdown_delay(test_g.t_shutdown_delay);
@@ -98,23 +94,21 @@ test_run(d_rank_t my_rank)
 	}
 	DBG_PRINT("Contexts created %d\n", test_g.t_srv_ctx_num);
 
+	/* wait for all test servers in this group to initialize */
+	if (grp_size > 1)
+		par_barrier(PAR_COMM_WORLD);
+
+	/* rank=0 saves group config file for clients to use */
 	if (my_rank == 0) {
 		rc = crt_group_config_save(NULL, true);
-		D_ASSERTF(rc == 0,
-			  "crt_group_config_save() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n", rc);
 		DBG_PRINT("Group config file saved\n");
 	}
 
-
-	if (test_g.t_hold)
-		sleep(test_g.t_hold_time);
-
 	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
-
 		rc = pthread_join(test_g.t_tid[i], NULL);
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-		D_DEBUG(DB_TEST, "joined progress thread.\n");
 	}
 
 	if (test_g.t_write_completion_file)
@@ -126,16 +120,13 @@ test_run(d_rank_t my_rank)
 
 	if (my_rank == 0) {
 		rc = crt_group_config_remove(NULL);
-		D_ASSERTF(rc == 0,
-			  "crt_group_config_remove() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_group_config_remove() failed. rc: %d\n", rc);
 	}
 
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	d_log_fini();
-
-	D_DEBUG(DB_TEST, "exiting.\n");
 }
 
 int main(int argc, char **argv)
