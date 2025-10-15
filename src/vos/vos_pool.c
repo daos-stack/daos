@@ -1880,7 +1880,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	DLCK_PRINTL_RC(dp, rc, "NVMe devices (if applicable)... ");
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
-		goto err_pool_unprep;
+		goto out;
 	}
 
 	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, dp, &ph);
@@ -1939,13 +1939,6 @@ out:
 	 */
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
-
-	return rc;
-
-err_pool_unprep:
-	D_ASSERT(pool->vp_opened == 0);
-	vos_pool_hash_del(pool);
-	vos_pool_decref(pool);
 
 	return rc;
 }
