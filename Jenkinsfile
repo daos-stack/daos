@@ -158,6 +158,9 @@ pipeline {
         booleanParam(name: 'CI_medium_vmd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium VMD test stage')
+        booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
@@ -176,6 +179,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium VMD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_ofed5',
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider MD on SSD stages')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large tests')
@@ -367,6 +373,21 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
+                            default_tags: isPr() ? 'always_passes' : 'full_regression',
+                            nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
