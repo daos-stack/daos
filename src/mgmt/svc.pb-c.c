@@ -2599,23 +2599,15 @@ const ProtobufCMessageDescriptor mgmt__client_telemetry_resp__descriptor =
   (ProtobufCMessageInit) mgmt__client_telemetry_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_group_status_req__field_descriptors[1] =
-{
-  {
-    "group_version",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetGroupStatusReq, group_version),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor mgmt__get_group_status_req__field_descriptors[1] = {
+    {
+	"map_version", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__GetGroupStatusReq, map_version), NULL, NULL, 0,      /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__get_group_status_req__field_indices_by_name[] = {
-  0,   /* field[0] = group_version */
+    0, /* field[0] = map_version */
 };
 static const ProtobufCIntRange mgmt__get_group_status_req__number_ranges[1 + 1] =
 {

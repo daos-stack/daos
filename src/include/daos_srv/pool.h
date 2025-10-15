@@ -31,12 +31,6 @@
 /* Pool service (opaque) */
 struct ds_pool_svc;
 
-/**
- * Each individual object layout format, like oid layout, dkey to group,
- * dkey to EC group start.
- */
-#define DS_POOL_OBJ_VERSION		1
-
 /* age of an entry in svc_ops KVS before it may be evicted */
 #define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
 
@@ -76,12 +70,11 @@ struct ds_pool {
 	uint32_t		sp_data_thresh;
 	uint64_t                 sp_self_heal;
 	ABT_mutex		sp_mutex;
-	ABT_cond		sp_fetch_hdls_cond;
-	ABT_cond		sp_fetch_hdls_done_cond;
+	ABT_cond                 sp_fetch_hdls_cond;
 	struct ds_iv_ns		*sp_iv_ns;
 	uint32_t		*sp_states;	/* pool child state array */
 
-	/* structure related to EC aggregate epoch query */
+	/* Used for EC aggregation epoch reporting */
 	d_list_t		sp_ec_ephs_list;
 	struct sched_request	*sp_ec_ephs_req;
 
@@ -93,14 +86,8 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t		sp_stopping:1,
-				sp_cr_checked:1,
-				sp_immutable:1,
-				sp_fetch_hdls:1,
-				sp_need_discard:1,
-				sp_disable_rebuild:1,
-				sp_disable_dtx_resync:1,
-				sp_incr_reint:1;
+	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_need_discard : 1,
+	    sp_disable_rebuild : 1, sp_disable_dtx_resync : 1, sp_incr_reint : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -180,6 +167,7 @@ struct ds_pool_child {
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
+	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
 	 * vos aggregation can not cross this epoch during rebuild to avoid

@@ -178,7 +178,7 @@ message ClientTelemetryResp
 }
 
 message GetGroupStatusReq {
-	uint32 group_version = 1; // System map version
+	uint32 map_version = 1; // System map version
 }
 
 message GetGroupStatusResp {

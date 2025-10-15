@@ -122,7 +122,7 @@ extern "C" {
 	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)                                  \
 	/** Quota limit reached on the requested resource */                                       \
 	ACTION(DER_QUOTA_LIMIT, Quota limit reached)											   \
-	/** Client has indicated it's behind a firewall. Client must establish a connection. */     \
+	/** Client has indicated it's behind a firewall. Client must establish a connection. */    \
 	ACTION(DER_RECONNECT, Client was unreachable on bulk transfer)
 	/** TODO: add more error numbers */
 

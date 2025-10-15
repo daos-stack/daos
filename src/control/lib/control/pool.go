@@ -1322,3 +1322,137 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 
 	return metaBytes, nvmeBytes, nil
 }
+
+// PoolRebuildOpCode indicates the type of interactive rebuild operation to be triggered.
+type PoolRebuildOpCode int32
+
+// PoolRebuildOpCode definitions for supported interactive rebuild operations.
+const (
+	PoolRebuildOpCodeUnknown PoolRebuildOpCode = iota
+	PoolRebuildOpCodeStart
+	PoolRebuildOpCodeStop
+)
+
+func (op PoolRebuildOpCode) String() string {
+	return map[PoolRebuildOpCode]string{
+		PoolRebuildOpCodeUnknown: "unknown",
+		PoolRebuildOpCodeStart:   "start",
+		PoolRebuildOpCodeStop:    "stop",
+	}[op]
+}
+
+func (op PoolRebuildOpCode) IsValid() bool {
+	return map[PoolRebuildOpCode]bool{
+		PoolRebuildOpCodeStart: true,
+		PoolRebuildOpCodeStop:  true,
+	}[op]
+}
+
+// PoolRebuildManageReq contains pool-rebuild operation parameters. ID identifies the pool on which the
+// rebuild operation (specified by the opcode) should be run.
+type PoolRebuildManageReq struct {
+	poolRequest
+	ID     string
+	OpCode PoolRebuildOpCode
+	Force  bool
+}
+
+// PoolRebuildManage sends a pool rebuild request relating to the requested opcode to the pool service
+// leader.
+func PoolRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *PoolRebuildManageReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T in PoolRebuildManage()", req)
+	}
+
+	if req.OpCode == PoolRebuildOpCodeStart {
+		if req.Force {
+			return errors.Errorf("force flag not supported with pool-rebuild opcode %s",
+				req.OpCode)
+		}
+
+		pbReq := &mgmtpb.PoolRebuildStartReq{
+			Sys: req.getSystem(rpcClient),
+			Id:  req.ID,
+		}
+		req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+			return mgmtpb.NewMgmtSvcClient(conn).PoolRebuildStart(ctx, pbReq)
+		})
+	} else if req.OpCode == PoolRebuildOpCodeStop {
+		pbReq := &mgmtpb.PoolRebuildStopReq{
+			Sys:   req.getSystem(rpcClient),
+			Id:    req.ID,
+			Force: req.Force,
+		}
+		req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+			return mgmtpb.NewMgmtSvcClient(conn).PoolRebuildStop(ctx, pbReq)
+		})
+	} else {
+		return errors.Errorf("invalid pool-rebuild opcode %d", req.OpCode)
+	}
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msg := fmt.Sprintf("pool-rebuild %s failed", req.OpCode)
+	msErr := ur.getMSError()
+	if msErr != nil {
+		return errors.Wrap(msErr, msg)
+	}
+	resp := new(mgmtpb.DaosResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return errors.Wrap(err, msg)
+	}
+
+	if s := daos.Status(resp.Status); s != daos.Success {
+		return errors.Wrap(s, msg)
+	}
+
+	return nil
+}
+
+// PoolSelfHealEvalReq contains pool-self-heal-eval operation parameters. ID identifies the pool on which the
+// operation should be run.
+type PoolSelfHealEvalReq struct {
+	poolRequest
+	ID         string
+	SysPropVal string
+}
+
+// PoolSelfHealEval sends a pool-self-heal-eval request to the pool service leader.
+func PoolSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *PoolSelfHealEvalReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T in PoolSelfHealEval()", req)
+	}
+
+	pbReq := &mgmtpb.PoolSelfHealEvalReq{
+		Sys:        req.getSystem(rpcClient),
+		Id:         req.ID,
+		SysPropVal: req.SysPropVal,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolSelfHealEval(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msg := "pool-self-heal-eval failed"
+	msErr := ur.getMSError()
+	if msErr != nil {
+		return errors.Wrap(msErr, msg)
+	}
+	resp := new(mgmtpb.DaosResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return errors.Wrap(err, msg)
+	}
+
+	if s := daos.Status(resp.Status); s != daos.Success {
+		return errors.Wrap(s, msg)
+	}
+
+	return nil
+}

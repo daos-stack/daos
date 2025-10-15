@@ -88,6 +88,16 @@
  */
 #define DAOS_POOL_GLOBAL_VERSION 4
 
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+enum {
+	DAOS_POOL_OBJ_VERSION_1 = 1,
+	DAOS_POOL_OBJ_VERSION_2 = 2,
+	DAOS_POOL_OBJ_VERSION   = DAOS_POOL_OBJ_VERSION_2,
+};
+
 int dc_pool_init(void);
 void dc_pool_fini(void);
 

@@ -710,10 +710,12 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 			}
 			break;
 		case DAOS_PROP_CO_GLOBAL_VERSION:
-		case DAOS_PROP_CO_OBJ_VERSION:
-			D_ERROR("container global/obj %u version could be not set\n",
-				entry->dpe_type);
+			D_ERROR("container global %u version could be not set\n", entry->dpe_type);
 			return -DER_INVAL;
+		case DAOS_PROP_CO_OBJ_VERSION:
+			/* this is a walkaround for 2.6 only */
+			entry_def->dpe_val = entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -768,8 +770,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 
 	/* inherit object version from pool*/
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_OBJ_VERSION);
-	if (entry_def)
+	if (entry_def && entry_def->dpe_val == 0)
 		entry_def->dpe_val = pool_hdl->sph_obj_ver;
+
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);
@@ -1696,6 +1699,7 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	uuid_copy(eph_ldr->cte_cont_uuid, cont_uuid);
 	eph_ldr->cte_servers_num = rank_nr;
 	eph_ldr->cte_current_ec_agg_eph = 0;
+	eph_ldr->cte_rdb_ec_agg_eph     = 0;
 	for (i = 0; i < rank_nr; i++) {
 		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
 		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
@@ -1821,6 +1825,8 @@ cont_refresh_track_eph_one(void *data)
 	if (cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph)
 		cont_child->sc_ec_agg_eph_boundary = arg->min_ec_agg_eph;
 
+	cont_child->sc_ec_agg_eph_valid = 1;
+
 	/* Only should update local stable epoch if the target is in UPIN status */
 	if (cont_child->sc_global_stable_eph < arg->min_stable_eph &&
 	    (arg->tgt_status[idx] & PO_COMP_ST_UPIN)) {
@@ -1873,6 +1879,10 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = ds_pool_thread_collective(
 	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
+	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, rc,
+		  DF_CONT ": refresh ec_agg_eph " DF_X64 ", "
+			  "stable_eph " DF_X64,
+		  DP_CONT(pool_uuid, cont_uuid), ec_agg_eph, stable_eph);
 
 out:
 	if (arg.tgt_status != NULL && arg.tgt_status != arg.tgt_status_inline)
@@ -1880,127 +1890,290 @@ out:
 	return rc;
 }
 
-#define TRACK_EPH_INTV	 (5ULL * 1000)	/* seconds interval to check*/
-static void
-cont_track_eph_leader_ult(void *arg)
+static int
+cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 {
-	struct cont_svc			*svc = arg;
-	struct ds_pool			*pool = svc->cs_pool;
+	struct rdb_tx tx;
+	struct cont  *cont = NULL;
+	uint64_t      agg_eph;
+	d_iov_t       value;
+	int           rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0) {
+		DL_CDEBUG(rc != -DER_NOTLEADER, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to start rdb tx.",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		return rc;
+	}
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT ": Failed to look container: %d\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		D_GOTO(out_lock, rc);
+	}
+
+	d_iov_set(&value, &agg_eph, sizeof(agg_eph));
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
+	DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST && rc != -DER_NOTLEADER, DLOG_ERR, DB_MD, rc,
+		  DF_CONT ": rdb_tx_lookup ec_agg_eph " DF_X64,
+		  DP_CONT(svc->cs_pool_uuid, cont_uuid), agg_eph);
+	if (rc == -DER_NONEXIST) {
+		agg_eph = 0;
+		rc      = 0;
+	}
+	if (rc == 0)
+		*ec_agg_eph = agg_eph;
+	cont_put(cont);
+
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+	return rc;
+}
+
+int
+ds_cont_ec_agg_eph_rdb_lookup(uuid_t pool_uuid, uuid_t cont_uuid, uint64_t *ec_agg_eph)
+{
+	struct cont_svc *svc;
+	int              rc;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": find leader failed.", DP_CONT(pool_uuid, cont_uuid));
+		return rc;
+	}
+
+	rc = cont_agg_eph_load(svc, cont_uuid, ec_agg_eph);
+	cont_svc_put_leader(svc);
+	if (rc)
+		DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.", DP_CONT(pool_uuid, cont_uuid));
+	return rc;
+}
+
+static int
+cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph, uint64_t *rdb_eph)
+{
+	struct rdb_tx tx;
+	struct cont  *cont = NULL;
+	d_iov_t       value;
+	uint64_t      old_eph;
+	int           rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0) {
+		DL_CDEBUG(rc != -DER_NOTLEADER, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to start rdb tx.",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		return rc;
+	}
+
+	ABT_rwlock_wrlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT ": Failed to look container: %d\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		D_GOTO(out_lock, rc);
+	}
+
+	d_iov_set(&value, &old_eph, sizeof(old_eph));
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
+	if (rc == -DER_NONEXIST) {
+		rc      = 0;
+		old_eph = 0;
+	}
+	if (rc != 0)
+		goto out;
+
+	*rdb_eph = old_eph;
+	if (ec_agg_eph > old_eph) {
+		d_iov_set(&value, &ec_agg_eph, sizeof(ec_agg_eph));
+		rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_ec_agg_eph, &value);
+		if (rc == 0)
+			rc = rdb_tx_commit(&tx);
+		if (rc == 0)
+			*rdb_eph = ec_agg_eph;
+	} else {
+		D_DEBUG(DB_MD,
+			DF_CONT ": bypass rdb update ec_agg_eph " DF_X64 ", in rdb eph " DF_X64,
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), ec_agg_eph, old_eph);
+	}
+
+out:
+	DL_CDEBUG(rc != 0 && rc != -DER_NOTLEADER, DLOG_ERR, DB_MD, rc,
+		  DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64,
+		  DP_CONT(svc->cs_pool_uuid, cont_uuid), ec_agg_eph);
+	cont_put(cont);
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+	return rc;
+}
+
+static void
+cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
+{
+	d_rank_list_t                    fail_ranks = {0};
 	struct cont_track_eph_leader	*eph_ldr;
 	struct cont_track_eph_leader	*tmp;
 	uint64_t			 cur_eph, new_eph;
+	daos_epoch_t			 min_ec_agg_eph;
+	daos_epoch_t			 min_stable_eph;
+	int				 i;
 	int				 rc = 0;
+
+	rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN, &fail_ranks);
+	if (rc) {
+		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
+		return;
+	}
+
+	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
+		if (eph_ldr->cte_deleted) {
+			d_list_del(&eph_ldr->cte_list);
+			D_FREE(eph_ldr->cte_server_ephs);
+			D_FREE(eph_ldr);
+			continue;
+		}
+
+		if (eph_ldr->cte_rdb_ec_agg_eph == 0) {
+			rc = cont_agg_eph_load(svc, eph_ldr->cte_cont_uuid,
+					       &eph_ldr->cte_rdb_ec_agg_eph);
+			if (rc)
+				DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.",
+					 DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+		}
+
+		min_ec_agg_eph = DAOS_EPOCH_MAX;
+		min_stable_eph = DAOS_EPOCH_MAX;
+		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
+			d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
+
+			if (d_rank_in_rank_list(&fail_ranks, rank)) {
+				D_DEBUG(DB_MD, DF_CONT " skip %u\n",
+					DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank);
+				continue;
+			}
+
+			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
+				min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
+			if (eph_ldr->cte_server_ephs[i].re_stable_eph < min_stable_eph)
+				min_stable_eph = eph_ldr->cte_server_ephs[i].re_stable_eph;
+		}
+
+		/* for reboot case the ea_rdb_eph possibly higher than min_eph */
+		if (min_ec_agg_eph < eph_ldr->cte_rdb_ec_agg_eph)
+			min_ec_agg_eph = eph_ldr->cte_rdb_ec_agg_eph;
+
+		if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
+		    min_stable_eph == eph_ldr->cte_current_stable_eph)
+			continue;
+
+		/**
+		 * NB: during extending or reintegration, the new
+		 * server might cause the minimum epoch is less than
+		 * cte_current_ec_agg_eph.
+		 */
+		D_DEBUG(DB_MD,
+			DF_CONT " min_ec_agg_eph " DF_X64 " current " DF_X64
+				", min_stable_eph " DF_X64 " current " DF_X64 ".\n",
+			DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), min_ec_agg_eph,
+			eph_ldr->cte_current_ec_agg_eph, min_stable_eph,
+			eph_ldr->cte_current_stable_eph);
+
+		cur_eph = d_hlc2sec(eph_ldr->cte_current_ec_agg_eph);
+		new_eph = d_hlc2sec(min_ec_agg_eph);
+		if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
+				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
+			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
+			       new_eph - cur_eph);
+
+		cur_eph = d_hlc2sec(eph_ldr->cte_current_stable_eph);
+		new_eph = d_hlc2sec(min_stable_eph);
+		if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+			D_WARN(DF_CONT ": Sluggish stable epoch reporting. "
+				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
+			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
+			       new_eph - cur_eph);
+
+		if (min_ec_agg_eph > eph_ldr->cte_rdb_ec_agg_eph) {
+			rc = cont_agg_eph_store(svc, eph_ldr->cte_cont_uuid, min_ec_agg_eph,
+						&eph_ldr->cte_rdb_ec_agg_eph);
+			if (rc)
+				DL_ERROR(rc,
+					 DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64 " failed.",
+					 DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
+					 min_ec_agg_eph);
+		}
+
+		rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->cte_cont_uuid,
+					       min_ec_agg_eph, min_stable_eph);
+		if (rc) {
+			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
+				  DF_CONT ": refresh failed",
+				  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+
+			/* If there are network error or pool map inconsistency,
+			 * let's skip the following eph sync, which will fail
+			 * anyway.
+			 */
+			if (daos_crt_network_error(rc) || rc == -DER_GRPVER) {
+				D_INFO(DF_UUID ": skip refresh due to: " DF_RC "\n",
+				       DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+				break;
+			}
+
+			continue;
+		}
+		eph_ldr->cte_current_ec_agg_eph = min_ec_agg_eph;
+		eph_ldr->cte_current_stable_eph = min_stable_eph;
+		if (pool->sp_rebuilding)
+			break;
+	}
+
+	map_ranks_fini(&fail_ranks);
+}
+
+int
+ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid)
+{
+	struct cont_svc *svc;
+	int              rc;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint */);
+	if (rc != 0)
+		return rc;
+
+	cont_agg_eph_sync(svc->cs_pool, svc);
+
+	cont_svc_put_leader(svc);
+	return 0;
+}
+
+#define TRACK_EPH_INTV (5ULL * 1000) /* seconds interval to check*/
+static void
+cont_track_eph_leader_ult(void *arg)
+{
+	struct cont_svc              *svc  = arg;
+	struct ds_pool               *pool = svc->cs_pool;
+	struct cont_track_eph_leader *eph_ldr;
+	struct cont_track_eph_leader *tmp;
+	int                           rc = 0;
 
 	if (svc->cs_cont_ephs_leader_req == NULL)
 		goto out;
 
 	while (!dss_ult_exiting(svc->cs_cont_ephs_leader_req)) {
-		d_rank_list_t		fail_ranks = { 0 };
-
-		if (pool->sp_rebuilding) {
-			D_DEBUG(DB_MD, DF_UUID "skip during rebuilding.\n",
-				DP_UUID(pool->sp_uuid));
-			goto yield;
-		}
-
-		rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN,
-				    &fail_ranks);
-		if (rc) {
-			D_ERROR(DF_UUID": ranks init failed: %d\n",
-				DP_UUID(pool->sp_uuid), rc);
-			goto yield;
-		}
-
-		d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
-			daos_epoch_t min_ec_agg_eph = DAOS_EPOCH_MAX;
-			daos_epoch_t min_stable_eph = DAOS_EPOCH_MAX;
-			int	     i;
-
-			if (eph_ldr->cte_deleted) {
-				d_list_del(&eph_ldr->cte_list);
-				D_FREE(eph_ldr->cte_server_ephs);
-				D_FREE(eph_ldr);
-				continue;
-			}
-
-			for (i = 0; i < eph_ldr->cte_servers_num; i++) {
-				d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
-
-				if (d_rank_in_rank_list(&fail_ranks, rank)) {
-					D_DEBUG(DB_MD, DF_CONT" skip %u\n",
-						DP_CONT(svc->cs_pool_uuid,
-							eph_ldr->cte_cont_uuid),
-						rank);
-					continue;
-				}
-
-				if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
-					min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
-				if (eph_ldr->cte_server_ephs[i].re_stable_eph < min_stable_eph)
-					min_stable_eph = eph_ldr->cte_server_ephs[i].re_stable_eph;
-			}
-
-			if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
-			    min_stable_eph == eph_ldr->cte_current_stable_eph)
-				continue;
-
-			/**
-			 * NB: during extending or reintegration, the new
-			 * server might cause the minimum epoch is less than
-			 * cte_current_ec_agg_eph.
-			 */
-			D_DEBUG(DB_MD, DF_CONT" min_ec_agg_eph "DF_X64" current "DF_X64
-				", min_stable_eph "DF_X64" current "DF_X64".\n",
-				DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
-				min_ec_agg_eph, eph_ldr->cte_current_ec_agg_eph,
-				min_stable_eph, eph_ldr->cte_current_stable_eph);
-
-			cur_eph = d_hlc2sec(eph_ldr->cte_current_ec_agg_eph);
-			new_eph = d_hlc2sec(min_ec_agg_eph);
-			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
-				D_WARN(DF_CONT": Sluggish EC boundary reporting. "
-				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
-				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
-				       cur_eph, new_eph, new_eph - cur_eph);
-
-			cur_eph = d_hlc2sec(eph_ldr->cte_current_stable_eph);
-			new_eph = d_hlc2sec(min_stable_eph);
-			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
-				D_WARN(DF_CONT": Sluggish stable epoch reporting. "
-				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
-				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
-				       cur_eph, new_eph, new_eph - cur_eph);
-
-			rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->cte_cont_uuid,
-						       min_ec_agg_eph, min_stable_eph);
-			if (rc) {
-				DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
-					  DF_CONT ": refresh failed",
-					  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
-
-				/* If there are network error or pool map inconsistency,
-				 * let's skip the following eph sync, which will fail
-				 * anyway.
-				 */
-				if (daos_crt_network_error(rc) || rc == -DER_GRPVER) {
-					D_INFO(DF_UUID": skip refresh due to: "DF_RC"\n",
-					       DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
-					break;
-				}
-
-				continue;
-			}
-			eph_ldr->cte_current_ec_agg_eph = min_ec_agg_eph;
-			eph_ldr->cte_current_stable_eph = min_stable_eph;
-			if (pool->sp_rebuilding)
-				break;
-		}
-
-		map_ranks_fini(&fail_ranks);
+		cont_agg_eph_sync(pool, svc);
 
 		if (dss_ult_exiting(svc->cs_cont_ephs_leader_req))
 			break;
-yield:
+
 		sched_req_sleep(svc->cs_cont_ephs_leader_req, TRACK_EPH_INTV);
 	}
 
@@ -2341,6 +2514,17 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
 	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
+	if (!(flags & DAOS_COO_NEW_LAYOUT)) {
+		struct daos_prop_entry *entry;
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION);
+		if (entry && entry->dpe_val >= DAOS_POOL_OBJ_VERSION_2) {
+			D_ERROR(DF_CONT ": refusing attempt to open with new layout: " DF_X64 "\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), entry->dpe_val);
+			rc = -DER_NOTSUPPORTED;
+			D_GOTO(out, rc);
+		}
+	}
 
 	get_cont_prop_access_info(prop, &owner, &acl);
 
@@ -4686,7 +4870,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
-		obj_ver = DS_POOL_OBJ_VERSION;
+		obj_ver = DAOS_POOL_OBJ_VERSION;
 		d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 		rc = rdb_tx_update(ap->tx, &cont->c_prop,
 				   &ds_cont_prop_cont_obj_version, &value);
@@ -4781,9 +4965,9 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION);
 	D_ASSERT(entry != NULL);
-	entry->dpe_val = DS_POOL_OBJ_VERSION;
+	entry->dpe_val = DAOS_POOL_OBJ_VERSION;
 	entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
-	obj_ver = DS_POOL_OBJ_VERSION;
+	obj_ver = DAOS_POOL_OBJ_VERSION;
 	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 	rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_cont_obj_version, &value);
 	if (rc) {
@@ -6000,14 +6184,14 @@ ds_cont_hdl_rdb_lookup(uuid_t pool_uuid, uuid_t cont_hdl_uuid, struct container_
 
 	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": find leader: %d\n",
-			DP_CONT(pool_uuid, cont_hdl_uuid), rc);
+		D_ERROR(DF_UUID ": find leader: %d\n", DP_UUID(pool_uuid), rc);
 		return rc;
 	}
 
-	/* check if it is server container hdl */
-	if (uuid_compare(cont_hdl_uuid, svc->cs_pool->sp_srv_cont_hdl) == 0)
-		D_GOTO(put, rc);
+	/* Lookup server handle in container open handle DB indicates a BUG */
+	D_ASSERTF(uuid_compare(cont_hdl_uuid, svc->cs_pool->sp_srv_cont_hdl) != 0,
+		  "srv hdl:" DF_UUID ", hdl:" DF_UUID "\n", DP_UUID(svc->cs_pool->sp_srv_cont_hdl),
+		  DP_UUID(cont_hdl_uuid));
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
