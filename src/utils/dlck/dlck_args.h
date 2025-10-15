@@ -45,7 +45,7 @@
 
 #define DLCK_TARGET_MAX                 31
 
-#define MISSING_ARG_FMT               "Missing argument for the '%s' option"
+#define MISSING_ARG_FMT                 "Missing argument for the '%s' option"
 
 struct dlck_args_common {
 	struct dlck_options options;

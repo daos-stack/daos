@@ -3796,7 +3796,7 @@ dbtree_open_inplace_ex_internal(struct btr_root *root, struct umem_attr *uma, da
 				void *priv, struct dlck_print *dp, daos_handle_t *toh)
 {
 	struct btr_context *tcx;
-	int		    rc;
+	int                 rc;
 
 	if (root->tr_order == 0) {
 		D_DEBUG(DB_TRACE, "Nonexistent tree\n");

@@ -77,7 +77,7 @@ exec_one(void *arg)
 	/** initialize the daos_io_* thread */
 	rc = dlck_engine_xstream_init(xa->xs);
 	if (rc != DER_SUCCESS) {
-		xa->rc = rc;
+		xa->rc       = rc;
 		xa->progress = DLCK_XSTREAM_PROGRESS_END;
 		return;
 	}

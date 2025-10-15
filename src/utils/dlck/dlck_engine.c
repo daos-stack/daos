@@ -755,8 +755,8 @@ int
 dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg)
 {
 	struct dlck_control *ctrl = ctrl_ptr;
-	struct xstream_arg *xa = *arg;
-	int                 rc;
+	struct xstream_arg  *xa   = *arg;
+	int                  rc;
 
 	if (xa == NULL) {
 		return DER_SUCCESS;

@@ -43,9 +43,9 @@ struct dlck_print {
 	struct dlck_options *options;
 	/** printer fields */
 	int (*dp_printf)(struct dlck_print *dp, const char *fmt, ...);
-	void *printf_custom;
-	int   level;
-	char  prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
+	void    *printf_custom;
+	int      level;
+	char     prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
 	/** output */
 	unsigned warnings_num;
 };
@@ -56,11 +56,11 @@ struct dlck_print {
 
 /** basic tests and helpers */
 
-#define IS_DLCK(dp)     (unlikely((dp) != NULL))
+#define IS_DLCK(dp)        (unlikely((dp) != NULL))
 
-#define IS_NOT_DLCK(dp) (likely((dp) == NULL))
+#define IS_NOT_DLCK(dp)    (likely((dp) == NULL))
 
-#define YES_NO_STR(cond) ((cond) ? "yes" : "no")
+#define YES_NO_STR(cond)   ((cond) ? "yes" : "no")
 
 /** direct print(f) macros with and without prefix */
 
