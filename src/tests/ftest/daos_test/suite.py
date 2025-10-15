@@ -311,7 +311,7 @@ class DaosCoreTest(DaosCoreBase):
         Use cases:
             Core tests for daos_test
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_rebuild_simple_interactive
