@@ -337,7 +337,7 @@ func (cmd *poolCreateCmd) Execute(args []string) error {
 		User:       cmd.UserName.String(),
 		UserGroup:  cmd.GroupName.String(),
 		NumSvcReps: cmd.NumSvcReps,
-		Properties: cmd.Properties.ToSet,
+		Properties: cmd.Properties.ToSet.Slice(),
 		Ranks:      cmd.RankList.Ranks(),
 	}
 
@@ -832,7 +832,7 @@ func (cmd *poolSetPropCmd) Execute(_ []string) error {
 
 	req := &control.PoolSetPropReq{
 		ID:         cmd.PoolID().String(),
-		Properties: cmd.Args.Props.ToSet,
+		Properties: cmd.Args.Props.ToSet.Slice(),
 	}
 
 	err := control.PoolSetProp(cmd.MustLogCtx(), cmd.ctlInvoker, req)
@@ -1067,13 +1067,13 @@ type poolRebuildOpCmd struct {
 }
 
 func (cmd *poolRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force bool) (errOut error) {
-	req := &control.PoolRebuildReq{
-		ID:    cmd.PoolID().String(),
-		Op:    opCode,
-		Force: force,
+	req := &control.PoolRebuildManageReq{
+		ID:     cmd.PoolID().String(),
+		OpCode: opCode,
+		Force:  force,
 	}
 
-	err := control.PoolRebuild(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	err := control.PoolRebuildManage(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil || cmd.JSONOutputEnabled() {
 		if err != nil {
 			cmd.ctlInvoker.Debug(err.Error())
@@ -1082,7 +1082,7 @@ func (cmd *poolRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force boo
 		return err
 	}
 
-	msg := fmt.Sprintf("Pool-rebuild %s request succeeded", opCode.String())
+	msg := fmt.Sprintf("Pool-rebuild %s request succeeded", opCode)
 	cmd.ctlInvoker.Debug(msg)
 	cmd.Info(msg)
 

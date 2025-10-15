@@ -602,9 +602,9 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
 						propWithVal("scrub", "timed"),
 						propWithVal("scrub_freq", "1"),
-						propWithVal("label", "label"),
 					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
@@ -613,6 +613,30 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Create pool with properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub_freq:1", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+						propWithVal("scrub", "timed"),
+						propWithVal("scrub_freq", "1"),
+					},
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with duplicate properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub:timed,scrub_freq:1", testSizeStr),
+			"",
+			errors.New("more than once"),
 		},
 		// Exclude testing with multiple ranks is verified at the control API layer.
 		{
@@ -827,6 +851,20 @@ func TestPoolCommands(t *testing.T) {
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
 						propWithVal("self_heal", "exclude;rebuild"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set pool properties with self_heal value 'none'",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:none,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "none"),
 						propWithVal("space_rb", "42"),
 					},
 				}),
@@ -1213,9 +1251,9 @@ func TestPoolCommands(t *testing.T) {
 			"Start interactive rebuild on pool with ID",
 			"pool rebuild start 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
-				printRequest(t, &control.PoolRebuildReq{
-					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Op: control.PoolRebuildOpCodeStart,
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					OpCode: control.PoolRebuildOpCodeStart,
 				}),
 			}, " "),
 			nil,
@@ -1224,9 +1262,9 @@ func TestPoolCommands(t *testing.T) {
 			"Start interactive rebuild on pool with label",
 			"pool rebuild start test_label",
 			strings.Join([]string{
-				printRequest(t, &control.PoolRebuildReq{
-					ID: "test_label",
-					Op: control.PoolRebuildOpCodeStart,
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "test_label",
+					OpCode: control.PoolRebuildOpCodeStart,
 				}),
 			}, " "),
 			nil,
@@ -1247,9 +1285,9 @@ func TestPoolCommands(t *testing.T) {
 			"Stop interactive rebuild on pool with ID",
 			"pool rebuild stop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
-				printRequest(t, &control.PoolRebuildReq{
-					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Op: control.PoolRebuildOpCodeStop,
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					OpCode: control.PoolRebuildOpCodeStop,
 				}),
 			}, " "),
 			nil,
@@ -1258,9 +1296,9 @@ func TestPoolCommands(t *testing.T) {
 			"Stop interactive rebuild on pool with label",
 			"pool rebuild stop test_label",
 			strings.Join([]string{
-				printRequest(t, &control.PoolRebuildReq{
-					ID: "test_label",
-					Op: control.PoolRebuildOpCodeStop,
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "test_label",
+					OpCode: control.PoolRebuildOpCodeStop,
 				}),
 			}, " "),
 			nil,

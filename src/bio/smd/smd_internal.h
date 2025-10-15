@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +23,7 @@
 
 #define TABLE_DEV		"device"
 #define SMD_DEV_NAME_MAX	16
+#define TABLE_CTRLR_DATA        "ctrlr_data"
 
 extern char TABLE_TGTS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX];
 

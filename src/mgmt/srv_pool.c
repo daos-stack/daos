@@ -600,7 +600,13 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	int              rc;
 
 	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
-		D_ERROR("invalid property list\n");
+		D_ERROR("no properties in prop list\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (!daos_prop_valid(prop, true, true)) {
+		D_ERROR("invalid properties\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -678,6 +684,27 @@ ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 		DP_UUID(pool_uuid));
 
 	return dsc_pool_svc_rebuild_start(pool_uuid, svc_ranks, mgmt_ps_call_deadline());
+}
+
+/**
+ * Calls into the pool svc to request evaluation of self_heal system property.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		svc_ranks		Ranks of pool svc replicas.
+ * \param[in]		sys_self_heal		Value of system property "self_heal"
+ *
+ * \return			0				Success
+ *					Negative value	Error
+ */
+int
+ds_mgmt_pool_self_heal_eval(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t sys_self_heal)
+{
+	D_DEBUG(DB_MGMT,
+		"Sending request to evaluate self_heal system property for pool " DF_UUID "\n",
+		DP_UUID(pool_uuid));
+
+	return dsc_pool_svc_eval_self_heal(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
+					   sys_self_heal);
 }
 
 /**

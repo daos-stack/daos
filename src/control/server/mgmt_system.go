@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize/english"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -1207,19 +1208,10 @@ func (svc *mgmtSvc) queryPool(ctx context.Context, id string, getEnabled bool) (
 	return ranklist.MustCreateRankSet(rankStr), nil
 }
 
-type poolRanksMap map[string]*ranklist.RankSet
-
-// Build mappings of pools to any ranks that match the input filter by iterating through the pool
-// service list. Identify pools by label if possible.
-func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.RankSet, getEnabled bool) ([]string, poolRanksMap, error) {
+func (svc *mgmtSvc) getPoolIDs() ([]string, error) {
 	psList, err := svc.sysdb.PoolServiceList(false)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	filterRanksMap := make(map[ranklist.Rank]struct{})
-	for _, r := range filterRanks.Ranks() {
-		filterRanksMap[r] = struct{}{}
+		return nil, err
 	}
 
 	var poolIDs []string
@@ -1232,6 +1224,24 @@ func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.Rank
 		poolIDs = append(poolIDs, poolID)
 	}
 	sort.Strings(poolIDs)
+
+	return poolIDs, err
+}
+
+type poolRanksMap map[string]*ranklist.RankSet
+
+// Build mappings of pools to any ranks that match the input filter by iterating through the pool
+// service list. Identify pools by label if possible.
+func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.RankSet, getEnabled bool) ([]string, poolRanksMap, error) {
+	filterRanksMap := make(map[ranklist.Rank]struct{})
+	for _, r := range filterRanks.Ranks() {
+		filterRanksMap[r] = struct{}{}
+	}
+
+	poolIDs, err := svc.getPoolIDs()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	var outPoolIDs []string
 	poolRanks := make(poolRanksMap)
@@ -1380,6 +1390,196 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainRe
 	pbResp.Reint = pbReq.Reint
 
 	return pbResp, nil
+}
+
+// SystemRebuildManage triggers pool-rebuild operations on all pools in system.
+func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.SystemRebuildManageReq) (*mgmtpb.SystemRebuildManageResp, error) {
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T", pbReq)
+	}
+
+	if err := svc.checkLeaderRequest(pbReq); err != nil {
+		return nil, err
+	}
+
+	poolIDs, err := svc.getPoolIDs()
+	if err != nil {
+		return nil, err
+	}
+	if len(poolIDs) == 0 {
+		return &mgmtpb.SystemRebuildManageResp{}, nil // Successful no-op.
+	}
+
+	var results []*control.PoolRebuildManageResult
+	for _, id := range poolIDs {
+		opCode := control.PoolRebuildOpCode(pbReq.OpCode)
+
+		req := &control.PoolRebuildManageReq{
+			ID:     id,
+			OpCode: opCode,
+			Force:  pbReq.Force,
+		}
+		svc.log.Tracef("%T: %+v", req, req)
+
+		result := &control.PoolRebuildManageResult{
+			ID:     id,
+			OpCode: opCode,
+		}
+
+		if err := control.PoolRebuildManage(ctx, svc.rpcClient, req); err != nil {
+			result.Errored = true
+			result.Msg = err.Error()
+		}
+
+		svc.log.Tracef("%T: %+v", result, result)
+		results = append(results, result)
+	}
+
+	pbResp := &mgmtpb.SystemRebuildManageResp{}
+	if err := convert.Types(results, &pbResp.Results); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", results, pbResp.Results)
+	}
+
+	return pbResp, nil
+}
+
+// selfHealExcludeRanks fetches a list of detected dead ranks from the leader's engine and updates
+// states within the control-plane membership appropriately.
+func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
+	mapVer, err := svc.sysdb.CurMapVersion()
+	if err == nil {
+		return err
+	}
+	req := &mgmtpb.GetGroupStatusReq{
+		MapVersion: mapVer,
+	}
+
+	// Fetch dead rank list from leader's engine with group status dRPC call.
+	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodGroupStatusGet, req)
+	if err != nil {
+		if err == errEngineNotReady {
+			return err
+		}
+		svc.log.Errorf("dRPC GroupStatusGet call failed: %s", err)
+		return err
+	}
+
+	resp := new(mgmtpb.GetGroupStatusResp)
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return err
+	}
+	if resp.GetStatus() != 0 {
+		return daos.Status(resp.GetStatus())
+	}
+
+	svc.log.Tracef("excluding ranks based on self_heal: %T:%+v", resp, resp)
+
+	if len(resp.DeadRanks) > 0 {
+		svc.log.Debugf("dead ranks %s returned from get-group-status drpc",
+			ranklist.RankSetFromRanks(ranklist.RanksFromUint32(resp.DeadRanks)))
+	}
+	for _, deadRank := range resp.DeadRanks {
+		// No incarnation to verify here so pass zero to skip it's check.
+		needsGrpUpd, err := svc.membership.MarkRankDead(ranklist.Rank(deadRank), 0)
+		if system.IsMemberNotFound(err) {
+			svc.log.Debugf("MarkRankDead: rank %d not found", deadRank)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if needsGrpUpd {
+			svc.log.Debugf("do group update after marking rank %d dead", deadRank)
+			svc.reqGroupUpdate(ctx, false)
+		}
+	}
+
+	return nil
+}
+
+// selfHealNotifyPSes calls into each pool service with the current value of self_heal system
+// property so that the appropriate actions can be performed across the pool (e.g. rebuild or
+// exclude).
+func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) error {
+	poolIDs, err := svc.getPoolIDs()
+	if err != nil {
+		return err
+	}
+	svc.log.Tracef("evaluating self_heal sys-prop %q on %d pools", propVal, len(poolIDs))
+
+	if len(poolIDs) == 0 {
+		return nil // Successful no-op.
+	}
+
+	var successes, failures []string
+	for _, id := range poolIDs {
+		req := &control.PoolSelfHealEvalReq{
+			ID:         id,
+			SysPropVal: propVal,
+		}
+		svc.log.Tracef("%T: %+v", req, req)
+
+		if err := control.PoolSelfHealEval(ctx, svc.rpcClient, req); err != nil {
+			failures = append(failures, id)
+			svc.log.Errorf("PoolSelfHealEval: %s", err.Error())
+		} else {
+			successes = append(successes, id)
+		}
+	}
+
+	if len(successes) > 0 {
+		svc.log.Debugf("PoolSelfHealEval completed on %s (%s)",
+			english.Plural(len(successes), "pool", "pools"),
+			strings.Join(successes, ", "))
+	}
+	if len(failures) > 0 {
+		return errors.Errorf(
+			"pool self-heal evaluate drpc failed for %s (%s), check server log",
+			english.Plural(len(failures), "pool", "pools"),
+			strings.Join(failures, ", "))
+	}
+
+	return nil
+}
+
+// SystemSelfHealEval triggers actions based on self_heal system property values.
+func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.SystemSelfHealEvalReq) (*mgmtpb.DaosResp, error) {
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T", pbReq)
+	}
+
+	if err := svc.checkLeaderRequest(pbReq); err != nil {
+		return nil, err
+	}
+
+	// Retrieve system self-heal property.
+	selfHeal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, daos.SystemPropertySelfHeal.String())
+	if err != nil {
+		return nil, errors.Wrapf(err, "retrieving %s system property", daos.SystemPropertySelfHeal)
+	}
+
+	svc.log.Debugf("system property self_heal='%+v'", selfHeal)
+
+	// Exclude engines based on SWIM status if system property bit set.
+	if daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagExclude) {
+		if err := svc.selfHealExcludeRanks(ctx); err != nil {
+			return nil, errors.Wrap(err, "excluding ranks based on self_heal.exclude")
+		}
+	}
+
+	// If pool_exclude or pool_rebuild is set, send the latest self_heal value to all PSs, who
+	// will handle the reevaluation. This involves calling into the leader engine with self_heal
+	// value for each pool and calling dsc_pool_svc_eval_self_heal() in dRPC handler.
+	if !daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagPoolRebuild) &&
+		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagPoolExclude) {
+		return new(mgmtpb.DaosResp), nil
+	}
+
+	if err := svc.selfHealNotifyPSes(ctx, selfHeal); err != nil {
+		return nil, errors.Wrapf(err, "notify pool services of self_heal=%q", selfHeal)
+	}
+
+	return new(mgmtpb.DaosResp), nil
 }
 
 // ClusterEvent management service gRPC handler receives ClusterEvent requests

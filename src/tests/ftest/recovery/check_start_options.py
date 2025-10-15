@@ -47,7 +47,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
         Jira ID: DAOS-17623
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_reset
         """
@@ -161,7 +161,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
         Jira ID: DAOS-17818
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_failout
         """
@@ -259,7 +259,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
         Jira ID: DAOS-17819
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_find_orphans
         """

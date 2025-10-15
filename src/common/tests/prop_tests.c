@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -374,18 +375,153 @@ test_daos_prop_from_str(void **state)
 	daos_prop_free(prop);
 }
 
+static void
+test_daos_prop_valid_null(void **state)
+{
+	assert_false(daos_prop_valid(NULL, false, false));
+}
+
+static void
+test_daos_prop_valid_too_many(void **state)
+{
+	daos_prop_t *prop = daos_prop_alloc(0);
+	uint32_t     nr   = prop->dpp_nr;
+
+	prop->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR + 1;
+
+	assert_false(daos_prop_valid(prop, true, false));
+
+	prop->dpp_nr = nr;
+	daos_prop_free(prop);
+}
+
+static void
+test_daos_prop_valid_inconsistent_nr_entries(void **state)
+{
+	const int               nr      = 2;
+	daos_prop_t            *prop    = daos_prop_alloc(nr);
+	struct daos_prop_entry *entries = prop->dpp_entries;
+
+	D_PRINT("zero entries, but non-null array\n");
+	prop->dpp_nr = 0;
+	assert_false(daos_prop_valid(prop, false, false));
+
+	D_PRINT("non-zero entries, but null array\n");
+	prop->dpp_nr      = nr;
+	prop->dpp_entries = NULL;
+	assert_false(daos_prop_valid(prop, false, false));
+
+	/* cleanup */
+	prop->dpp_entries = entries;
+	daos_prop_free(prop);
+}
+
+static daos_prop_t *
+get_prop_with_duplicates(int total_nr, bool pool)
+{
+	daos_prop_t *prop = daos_prop_alloc(total_nr);
+	int          i;
+	uint32_t     prop_min;
+
+	assert_true(total_nr >= 2);
+
+	if (pool)
+		prop_min = DAOS_PROP_PO_MIN;
+	else
+		prop_min = DAOS_PROP_CO_MIN;
+
+	for (i = 0; i < total_nr; i++)
+		prop->dpp_entries[i].dpe_type = prop_min + i + 1;
+
+	/* last one is a duplicate type */
+	prop->dpp_entries[total_nr - 1].dpe_type = prop->dpp_entries[total_nr - 2].dpe_type;
+
+	return prop;
+}
+
+static void
+check_daos_prop_valid_duplicate_types(bool pool)
+{
+	daos_prop_t *prop;
+
+	prop = get_prop_with_duplicates(5, pool);
+
+	assert_false(daos_prop_valid(prop, pool, false));
+
+	daos_prop_free(prop);
+}
+
+static void
+test_daos_prop_valid_duplicate_types(void **state)
+{
+	D_PRINT("check pool prop with duplicate types\n");
+	check_daos_prop_valid_duplicate_types(true);
+
+	D_PRINT("check container prop with duplicate types\n");
+	check_daos_prop_valid_duplicate_types(false);
+}
+
+static void
+test_daos_prop_valid_pool_success_no_val_check(void **state)
+{
+	const int    nr   = DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1;
+	daos_prop_t *prop = daos_prop_alloc(nr);
+	int          i;
+
+	for (i = 0; i < nr; i++)
+		prop->dpp_entries[i].dpe_type = DAOS_PROP_PO_MIN + i + 1;
+
+	assert_true(daos_prop_valid(prop, true, false));
+
+	daos_prop_free(prop);
+}
+
+static void
+test_daos_prop_valid_cont_success_no_val_check(void **state)
+{
+	const int    nr   = DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1;
+	daos_prop_t *prop = daos_prop_alloc(nr);
+	int          i;
+
+	for (i = 0; i < nr; i++)
+		prop->dpp_entries[i].dpe_type = DAOS_PROP_CO_MIN + i + 1;
+
+	assert_true(daos_prop_valid(prop, false, false));
+
+	daos_prop_free(prop);
+}
+
+static int
+suite_setup(void **state)
+{
+	return d_log_init();
+}
+
+static int
+suite_teardown(void **state)
+{
+	d_log_fini();
+	return 0;
+}
+
 int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test_daos_prop_merge_null),
-		cmocka_unit_test(test_daos_prop_merge_empty),
-		cmocka_unit_test(test_daos_prop_merge_add_only),
-		cmocka_unit_test(test_daos_prop_merge_total_update),
-		cmocka_unit_test(test_daos_prop_merge_subset_update),
-		cmocka_unit_test(test_daos_prop_merge_add_and_update),
-		cmocka_unit_test(test_daos_prop_from_str),
+	    cmocka_unit_test(test_daos_prop_merge_null),
+	    cmocka_unit_test(test_daos_prop_merge_empty),
+	    cmocka_unit_test(test_daos_prop_merge_add_only),
+	    cmocka_unit_test(test_daos_prop_merge_total_update),
+	    cmocka_unit_test(test_daos_prop_merge_subset_update),
+	    cmocka_unit_test(test_daos_prop_merge_add_and_update),
+	    cmocka_unit_test(test_daos_prop_from_str),
+	    cmocka_unit_test(test_daos_prop_valid_null),
+	    cmocka_unit_test(test_daos_prop_valid_too_many),
+	    cmocka_unit_test(test_daos_prop_valid_inconsistent_nr_entries),
+	    cmocka_unit_test(test_daos_prop_valid_duplicate_types),
+	    cmocka_unit_test(test_daos_prop_valid_pool_success_no_val_check),
+	    cmocka_unit_test(test_daos_prop_valid_cont_success_no_val_check),
 	};
 
-	return cmocka_run_group_tests_name("common_prop", tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_prop", tests, suite_setup, suite_teardown);
 }
