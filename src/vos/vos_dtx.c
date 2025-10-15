@@ -3079,7 +3079,7 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 	}
 
 	dtx_aggr_count = 0;
-	epoch = cont_df->cd_newest_aggregated;
+	epoch          = cont_df->cd_newest_aggregated;
 	for (i = 0; i < dbd->dbd_count; i++) {
 		struct vos_dtx_cmt_ent_df *dce_df;
 		d_iov_t                    kiov;
@@ -3225,12 +3225,12 @@ out:
 int
 vos_dtx_aggregate(daos_handle_t coh, const uint64_t *ts_max)
 {
-	struct vos_container   *cont;
-	struct vos_tls         *tls;
-	struct umem_instance   *umm;
-	struct vos_cont_df     *cont_df;
-	umem_off_t              dbd_off;
-	int                     rc;
+	struct vos_container *cont;
+	struct vos_tls       *tls;
+	struct umem_instance *umm;
+	struct vos_cont_df   *cont_df;
+	umem_off_t            dbd_off;
+	int                   rc;
 
 	tls = vos_tls_get(false);
 	D_ASSERT(tls != NULL);

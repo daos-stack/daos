@@ -1593,8 +1593,8 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 	args.time_stat.dts_cmt_time[0] = UINT64_MAX;
 	args.time_stat.dts_epoch[0]    = DAOS_EPOCH_MAX;
 	args.aggr_epoch                = DAOS_EPOCH_MAX;
-	param.ip_hdl        = ctx->dc_poh;
-	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_hdl                   = ctx->dc_poh;
+	param.ip_epr.epr_hi            = DAOS_EPOCH_MAX;
 	do {
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cont_cb,
 				 &args, NULL);

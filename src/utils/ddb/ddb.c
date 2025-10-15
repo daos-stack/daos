@@ -947,7 +947,7 @@ dtx_aggr_option_parse(struct ddb_ctx *ctx, struct dtx_aggr_options *cmd_args, ui
 					  "'--cmt_time' option can not be used multiple time\n");
 				return -DER_INVAL;
 			}
-			errno           = 0;
+			errno              = 0;
 			cmd_args->cmt_time = strtoull(optarg, &endptr, 10);
 			if (errno != 0 || endptr == optarg || *endptr != '\0') {
 				ddb_error(ctx, "'--cmt_time' option arg format is invalid\n");

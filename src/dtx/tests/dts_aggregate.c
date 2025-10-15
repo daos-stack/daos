@@ -169,8 +169,8 @@ tx_free(struct umem_instance *umm, umem_off_t umoff)
 static void
 prep_dtx_entries(void)
 {
-	int          i;
-	uint64_t     cmt_time;
+	int      i;
+	uint64_t cmt_time;
 
 	cmt_time = CMT_TIME_START;
 	for (i = 0; i < DBD_BLOBS_CAP; i++) {
@@ -179,7 +179,7 @@ prep_dtx_entries(void)
 		for (j = 0; j < DBD_BLOB_DF_CAP; j++) {
 			struct vos_dtx_cmt_ent_df *dce_df;
 
-			dce_df            = &mock_dbds[i]->dbd_committed_data[j];
+			dce_df               = &mock_dbds[i]->dbd_committed_data[j];
 			dce_df->dce_cmt_time = cmt_time;
 			dce_df->dce_epoch    = cmt_time + EPOCH_OFFSET;
 			cmt_time += CMT_TIME_STEP;
@@ -193,8 +193,8 @@ prep_dtx_entries(void)
 static void
 check_rollback(void)
 {
-	int          i;
-	uint64_t     cmt_time;
+	int      i;
+	uint64_t cmt_time;
 
 	cmt_time = CMT_TIME_START;
 	for (i = 0; i < DBD_BLOBS_CAP; i++) {
@@ -485,10 +485,10 @@ test_umm_free_error(void **unused)
 static void
 test_committed_data_error(void **unused)
 {
-	uint64_t     cmt_time;
-	int          i;
-	int          rc;
-	const int    dtx_count = 3;
+	uint64_t  cmt_time;
+	int       i;
+	int       rc;
+	const int dtx_count = 3;
 
 	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
@@ -514,10 +514,10 @@ test_committed_data_error(void **unused)
 static void
 test_dbd_count_error(void **unused)
 {
-	uint64_t     cmt_time;
-	int          i;
-	int          rc;
-	const int    dtx_count = 3;
+	uint64_t  cmt_time;
+	int       i;
+	int       rc;
+	const int dtx_count = 3;
 
 	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
@@ -546,10 +546,10 @@ test_dbd_count_error(void **unused)
 static void
 test_umm_commit_error(void **unused)
 {
-	uint64_t     cmt_time;
-	int          i;
-	int          rc;
-	const int    dtx_count = 3;
+	uint64_t  cmt_time;
+	int       i;
+	int       rc;
+	const int dtx_count = 3;
 
 	will_return(__wrap_vos_tls_get, &mock_tls);
 	will_return(tx_begin, 0);
@@ -671,9 +671,9 @@ test_one_blob(void **unused)
 static void
 test_10_entries(void **unused)
 {
-	uint64_t     cmt_time;
-	int          i;
-	int          rc;
+	uint64_t cmt_time;
+	int      i;
+	int      rc;
 
 	prep_dtx_entries();
 
