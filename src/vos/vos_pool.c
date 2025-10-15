@@ -1039,13 +1039,13 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		goto umem_open;
 	}
 
-	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:" DF_UUID "\n", xs_ctxt,
-		DP_UUID(pool_id));
+	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:"DF_UUID"\n",
+		xs_ctxt, DP_UUID(pool_id));
 
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
 	DLCK_PRINTL_RC(dp, rc, "Open BIO meta context... ");
 	if (rc) {
-		D_ERROR("Failed to open BIO meta context for xs:%p pool:" DF_UUID ", " DF_RC "\n",
+		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID", "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
 		return rc;
 	}
@@ -1841,7 +1841,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	DLCK_PRINTF(dp, "\tuuid: " DF_UUIDF "\n", DP_UUID(uuid));
 	dlck_print_indent_inc(dp);
 
-	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: " DF_UUID "\n", path, DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
+		DP_UUID(uuid));
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -1852,7 +1853,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	if (rc == 0) {
 		DLCK_ASSERT(dp, "Pool is not NULL... ", pool != NULL);
 		DLCK_PRINT(dp, "Pool is already opened.\n");
-		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n", pool->vp_opened, pool);
+		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
+			pool->vp_opened, pool);
 		if (pool->vp_dying) {
 			D_ERROR("Found dying pool : %p\n", pool);
 			vos_pool_decref(pool);

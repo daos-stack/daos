@@ -4577,11 +4577,10 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 	 */
 	special_feat = tc->tc_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY);
 	if (!(special_feat & *tree_feats) &&
-	    (tc->tc_ops->to_hkey_gen == NULL || tc->tc_ops->to_hkey_size == NULL)) {
-		D_DEBUG(DB_TRACE,
-			"Setting feature " DF_X64 " required"
-			" by tree class %d",
-			special_feat, tree_class);
+	    (tc->tc_ops->to_hkey_gen == NULL ||
+	     tc->tc_ops->to_hkey_size == NULL)) {
+		D_DEBUG(DB_TRACE, "Setting feature "DF_X64" required"
+			" by tree class %d", special_feat, tree_class);
 		*tree_feats |= special_feat;
 	}
 
