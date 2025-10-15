@@ -119,7 +119,7 @@ struct dlck_print {
 #define DLCK_PRINTL_RC(dp, rc, msg)                                                                \
 	do {                                                                                       \
 		if (rc == DER_SUCCESS) {                                                           \
-			DLCK_PRINT(dp, msg DLCK_OK_INFIX ".\n");                                   \
+			DLCK_PRINT(dp, msg ": " DLCK_OK_INFIX ".\n");                              \
 		} else {                                                                           \
 			DLCK_PRINTF(dp, DLCK_ERROR_INFIX msg ": " DF_RC "\n", DP_RC(rc));          \
 		}                                                                                  \
@@ -128,7 +128,7 @@ struct dlck_print {
 #define DLCK_PRINTFL_RC(dp, rc, fmt, ...)                                                          \
 	do {                                                                                       \
 		if (rc == DER_SUCCESS) {                                                           \
-			DLCK_PRINTF(dp, fmt DLCK_OK_INFIX ".\n", __VA_ARGS__);                     \
+			DLCK_PRINTF(dp, fmt ": " DLCK_OK_INFIX ".\n", __VA_ARGS__);                \
 		} else {                                                                           \
 			DLCK_PRINTF(dp, DLCK_ERROR_INFIX fmt ": " DF_RC "\n", __VA_ARGS__,         \
 				    DP_RC(rc));                                                    \

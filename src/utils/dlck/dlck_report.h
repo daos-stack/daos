@@ -19,7 +19,7 @@
  * \retval -DER_MISC	Printing error.
  * \retval -DER_*	Other errors.
  */
-int
+void
 dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct dlck_print *dp);
 
 #endif /** __DLCK_REPORT__ */

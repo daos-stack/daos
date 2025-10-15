@@ -6,7 +6,6 @@ fault_config:
   # - id: 131331 # DLCK_FAULT_ENGINE_EXEC
   # - id: 131332 # DLCK_FAULT_ENGINE_JOIN
   # - id: 131333 # DLCK_FAULT_ENGINE_STOP
-  # - id: 131334 # DLCK_FAULT_REPORT
   # - id: 131584 # DAOS_FAULT_POOL_OPEN_NVME
   #   interval: 2 # skip sys_db
   # - id: 131585 # DAOS_FAULT_POOL_OPEN_BIO

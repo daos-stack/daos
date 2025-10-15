@@ -59,7 +59,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *
 	return DER_SUCCESS;
 }
 
-#define DLCK_POOL_CHECK_RESULT_PREFIX_FMT "[%d] pool " DF_UUIDF " check result: "
+#define DLCK_POOL_CHECK_RESULT_PREFIX_FMT "[%d] pool " DF_UUIDF " check result"
 #define DLCK_WARNINGS_NUM_FMT             " (%u warning(s))"
 
 /**
@@ -149,7 +149,6 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	struct dlck_exec    de                 = {0};
 	int                *rcs;
 	int                 rc;
-	int                 rc2;
 
 	/** create a log directory */
 	ctrl->log_dir = mkdtemp(log_dir_template);
@@ -221,16 +220,13 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	DLCK_PRINT(dp, "Stop the engine... ");
 	rc = dlck_engine_stop(engine);
 	DLCK_APPENDL_RC(dp, rc);
-	/** Ignore an error for now in an attempt to print the collected results. */
 
-	rc2 = dlck_report_results(rcs, ctrl->engine.targets, ctrl->warnings_num, dp);
+	/** Ignore an error for now to print the collected results. */
+	dlck_report_results(rcs, ctrl->engine.targets, ctrl->warnings_num, dp);
 	D_FREE(rcs);
-	if (rc2 != DER_SUCCESS) {
-		DLCK_PRINTL_RC(dp, rc2, "Cannot report results");
-	}
 
 	/** Return the first encountered error. */
-	return rc != DER_SUCCESS ? rc : rc2;
+	return rc;
 
 err_free_rcs:
 	D_FREE(rcs);
