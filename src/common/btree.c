@@ -1671,6 +1671,9 @@ out:
 }
 
 #define DLCK_BTREE_NODE_MALFORMED_STR "malformed - "
+#define DLCK_BTREE_NON_ZERO_PADDING_FMT                                                            \
+	DLCK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")"
+#define DLCK_BTREE_NON_ZERO_GEN_FMT DLCK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")"
 
 /**
  * Validate the integrity of the btree node.
@@ -1698,16 +1701,21 @@ dlck_btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct dlck_print *d
 	}
 
 	if (nd->tn_pad_32 != 0) {
-		DLCK_APPENDFL_ERR(dp,
-				  DLCK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")",
-				  nd->tn_pad_32);
-		return -DER_NOTYPE;
+		if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
+			DLCK_APPENDFL_ERR(dp, DLCK_BTREE_NON_ZERO_PADDING_FMT, nd->tn_pad_32);
+			return -DER_NOTYPE;
+		} else {
+			DLCK_APPENDFL_WARN(dp, DLCK_BTREE_NON_ZERO_PADDING_FMT, nd->tn_pad_32);
+		}
 	}
 
 	if (nd->tn_gen != 0) {
-		DLCK_APPENDFL_ERR(dp, DLCK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")",
-				  nd->tn_gen);
-		return -DER_NOTYPE;
+		if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
+			DLCK_APPENDFL_ERR(dp, DLCK_BTREE_NON_ZERO_GEN_FMT, nd->tn_gen);
+			return -DER_NOTYPE;
+		} else {
+			DLCK_APPENDFL_WARN(dp, DLCK_BTREE_NON_ZERO_GEN_FMT, nd->tn_gen);
+		}
 	}
 
 	DLCK_APPENDL_OK(dp);
@@ -1777,6 +1785,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			if (IS_DLCK(tcx->tc_dlck_print)) {
 				rc = dlck_btr_node_check(nd, nd_off, tcx->tc_dlck_print);
 				if (rc != DER_SUCCESS) {
+					rc = PROBE_RC_DATA_LOSS;
 					goto out;
 				}
 			}

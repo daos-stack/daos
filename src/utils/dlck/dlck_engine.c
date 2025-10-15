@@ -754,6 +754,7 @@ dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_pt
 int
 dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg)
 {
+	struct dlck_control *ctrl = ctrl_ptr;
 	struct xstream_arg *xa = *arg;
 	int                 rc;
 
@@ -762,6 +763,7 @@ dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg)
 	}
 
 	rc = xa->rc;
+	dlck_uadd_no_overflow(ctrl->warnings_num, xa->warnings_num, &ctrl->warnings_num);
 
 	D_FREE(*arg);
 	*arg = NULL;

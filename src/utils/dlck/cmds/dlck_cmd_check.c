@@ -60,6 +60,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *
 }
 
 #define DLCK_POOL_CHECK_RESULT_PREFIX_FMT "[%d] pool " DF_UUIDF " check result: "
+#define DLCK_WARNINGS_NUM_FMT             " (%u warning(s))"
 
 /**
  * Target thread (worker).
@@ -102,9 +103,18 @@ exec_one(void *arg)
 		/** check the pool */
 		rc = pool_process(xa, file, main_dp, &dp);
 		/** report the result */
-		DLCK_PRINTFL_RC(main_dp, rc, DLCK_POOL_CHECK_RESULT_PREFIX_FMT, xa->xs->tgt_id,
-				DP_UUID(file->po_uuid));
+		if (rc == DER_SUCCESS && dp.warnings_num > 0) {
+			DLCK_PRINTF(
+			    main_dp,
+			    DLCK_POOL_CHECK_RESULT_PREFIX_FMT DLCK_OK_INFIX DLCK_WARNINGS_NUM_FMT
+			    ".\n",
+			    xa->xs->tgt_id, DP_UUID(file->po_uuid), dp.warnings_num);
+		} else {
+			DLCK_PRINTFL_RC(main_dp, rc, DLCK_POOL_CHECK_RESULT_PREFIX_FMT,
+					xa->xs->tgt_id, DP_UUID(file->po_uuid));
+		}
 		dlck_xstream_set_rc(xa, rc);
+		dlck_uadd_no_overflow(xa->warnings_num, dp.warnings_num, &xa->warnings_num);
 		/** Continue to the next pool regardless of the result. */
 
 		/** close the logfile */
@@ -213,7 +223,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	DLCK_APPENDL_RC(dp, rc);
 	/** Ignore an error for now in an attempt to print the collected results. */
 
-	rc2 = dlck_report_results(rcs, ctrl->engine.targets, dp);
+	rc2 = dlck_report_results(rcs, ctrl->engine.targets, ctrl->warnings_num, dp);
 	D_FREE(rcs);
 	if (rc2 != DER_SUCCESS) {
 		DLCK_PRINTL_RC(dp, rc2, "Cannot report results");

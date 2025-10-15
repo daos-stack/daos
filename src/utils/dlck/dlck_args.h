@@ -120,6 +120,7 @@ struct dlck_control {
 	struct dlck_print       print;
 	/** out */
 	char                   *log_dir;
+	unsigned                warnings_num;
 };
 
 /** helper definitions */

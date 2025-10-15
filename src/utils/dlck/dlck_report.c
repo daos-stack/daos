@@ -32,7 +32,7 @@ report_target_result(struct dlck_print_main *dpm, int tgt_id, int tgt_rc)
 	int rc;
 
 	if (tgt_rc == DER_SUCCESS) {
-		rc = fprintf(dpm->stream, DLCK_RESULT_FMT DLCK_OK_SUFFIX "\n", tgt_id);
+		rc = fprintf(dpm->stream, DLCK_RESULT_FMT DLCK_OK_INFIX ".\n", tgt_id);
 	} else {
 		rc = fprintf(dpm->stream, DLCK_RESULT_FMT DF_RC "\n", tgt_id, DP_RC(tgt_rc));
 	}
@@ -120,7 +120,7 @@ report_footer(struct dlck_print_main *dpm)
  * necessary.
  */
 int
-dlck_report_results(int *rcs, unsigned targets, struct dlck_print *dp)
+dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct dlck_print *dp)
 {
 	struct dlck_print_main *dpm = dlck_print_main_get_custom(dp);
 	int                     rc;
@@ -141,6 +141,17 @@ dlck_report_results(int *rcs, unsigned targets, struct dlck_print *dp)
 		if (rc != DER_SUCCESS) {
 			return rc;
 		}
+	}
+
+	rc = report_footer(dpm);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	if (warnings_num > 0) {
+		DLCK_PRINTF(dp, "Total: %u warning(s).\n", warnings_num);
+	} else {
+		DLCK_PRINT(dp, "No warnings.\n");
 	}
 
 	/** print footer */

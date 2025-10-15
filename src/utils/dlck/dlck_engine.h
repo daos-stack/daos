@@ -246,6 +246,7 @@ struct xstream_arg {
 	/** out */
 	volatile unsigned    progress __attribute__((__aligned__(CACHELINE_SIZE)));
 	int                  rc; /** return code */
+	unsigned             warnings_num;
 };
 
 static inline void
@@ -258,6 +259,15 @@ dlck_xstream_set_rc(struct xstream_arg *xa, int rc)
 	/** do not overwrite the first error found */
 	if (xa->rc == DER_SUCCESS) {
 		xa->rc = rc;
+	}
+}
+
+static inline void
+dlck_uadd_no_overflow(unsigned a, unsigned b, unsigned *result)
+{
+	/** safeguard against integer overflow */
+	if (__builtin_uadd_overflow(a, b, result)) {
+		*result = UINT_MAX;
 	}
 }
 

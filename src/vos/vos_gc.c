@@ -1517,6 +1517,9 @@ gc_close_pool(struct vos_pool *pool)
 	return gc_close_bkt(&pool->vp_gc_info);
 }
 
+#define DLCK_NON_ZERO_PADDING_FMT  "non-zero padding[%d] (%#" PRIx64 ")"
+#define DLCK_NON_ZERO_RESERVED_FMT "non-zero reserved space (%#" PRIx64 ")"
+
 static int
 dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct dlck_print *dp)
 {
@@ -1529,16 +1532,24 @@ dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct dlck_pr
 
 	for (int i = 0; i < VOS_POOL_EXT_DF_PADDING_SIZE; ++i) {
 		if (pd_ext->ped_paddings[i] != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_PADDING)) {
-			DLCK_APPENDFL_ERR(dp, "non-zero padding[%d] (%#" PRIx64 ")", i,
-					  pd_ext->ped_paddings[i]);
-			return -DER_NOTYPE;
+			if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
+				DLCK_APPENDFL_ERR(dp, DLCK_NON_ZERO_PADDING_FMT, i,
+						  pd_ext->ped_paddings[i]);
+				return -DER_NOTYPE;
+			} else {
+				DLCK_APPENDFL_WARN(dp, DLCK_NON_ZERO_PADDING_FMT, i,
+						   pd_ext->ped_paddings[i]);
+			}
 		}
 	}
 
 	if (pd_ext->ped_reserve != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_RESERVED)) {
-		DLCK_APPENDFL_ERR(dp, "non-zero reserved space (%#" PRIx64 ")",
-				  pd_ext->ped_reserve);
-		return -DER_NOTYPE;
+		if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
+			DLCK_APPENDFL_ERR(dp, DLCK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
+			return -DER_NOTYPE;
+		} else {
+			DLCK_APPENDFL_WARN(dp, DLCK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
+		}
 	}
 
 	DLCK_APPENDL_OK(dp);

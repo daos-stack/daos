@@ -39,16 +39,20 @@ struct dlck_options {
  * Printer for DLCK purposes.
  */
 struct dlck_print {
+	/** input */
 	struct dlck_options *options;
 	/** printer fields */
 	int (*dp_printf)(struct dlck_print *dp, const char *fmt, ...);
 	void *printf_custom;
 	int   level;
 	char  prefix[DLCK_PRINT_INDENT_MAX + 2]; /** ' ' and '\0' hence 2 characters */
+	/** output */
+	unsigned warnings_num;
 };
 
-#define DLCK_ERROR_INFIX "error: "
-#define DLCK_OK_SUFFIX   "ok."
+#define DLCK_ERROR_INFIX   "error: "
+#define DLCK_WARNING_INFIX "warning: "
+#define DLCK_OK_INFIX      "ok"
 
 /** basic tests and helpers */
 
@@ -90,7 +94,7 @@ struct dlck_print {
 
 /** append + new line shortcuts */
 
-#define DLCK_APPENDL_OK(dp) DLCK_PRINT_WO_PREFIX(dp, DLCK_OK_SUFFIX "\n")
+#define DLCK_APPENDL_OK(dp) DLCK_PRINT_WO_PREFIX(dp, DLCK_OK_INFIX ".\n")
 
 #define DLCK_APPENDL_RC(dp, rc)                                                                    \
 	do {                                                                                       \
@@ -104,12 +108,18 @@ struct dlck_print {
 #define DLCK_APPENDFL_ERR(dp, fmt, ...)                                                            \
 	DLCK_PRINTF_WO_PREFIX(dp, DLCK_ERROR_INFIX fmt "\n", __VA_ARGS__)
 
+#define DLCK_APPENDFL_WARN(dp, fmt, ...)                                                           \
+	do {                                                                                       \
+		DLCK_PRINTF_WO_PREFIX(dp, DLCK_WARNING_INFIX fmt "\n", __VA_ARGS__);               \
+		++(dp)->warnings_num;                                                              \
+	} while (0)
+
 /** print(f) + return code  + new line shortcuts */
 
 #define DLCK_PRINTL_RC(dp, rc, msg)                                                                \
 	do {                                                                                       \
 		if (rc == DER_SUCCESS) {                                                           \
-			DLCK_PRINT(dp, msg DLCK_OK_SUFFIX "\n");                                   \
+			DLCK_PRINT(dp, msg DLCK_OK_INFIX ".\n");                                   \
 		} else {                                                                           \
 			DLCK_PRINTF(dp, DLCK_ERROR_INFIX msg ": " DF_RC "\n", DP_RC(rc));          \
 		}                                                                                  \
@@ -118,7 +128,7 @@ struct dlck_print {
 #define DLCK_PRINTFL_RC(dp, rc, fmt, ...)                                                          \
 	do {                                                                                       \
 		if (rc == DER_SUCCESS) {                                                           \
-			DLCK_PRINTF(dp, fmt DLCK_OK_SUFFIX "\n", __VA_ARGS__);                     \
+			DLCK_PRINTF(dp, fmt DLCK_OK_INFIX ".\n", __VA_ARGS__);                     \
 		} else {                                                                           \
 			DLCK_PRINTF(dp, DLCK_ERROR_INFIX fmt ": " DF_RC "\n", __VA_ARGS__,         \
 				    DP_RC(rc));                                                    \
