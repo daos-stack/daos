@@ -1039,12 +1039,11 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		goto umem_open;
 	}
 
-	DLCK_PRINT(dp, "Open BIO meta context... ");
 	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:" DF_UUID "\n", xs_ctxt,
 		DP_UUID(pool_id));
 
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
-	DLCK_APPENDL_RC(dp, rc);
+	DLCK_PRINTL_RC(dp, rc, "Open BIO meta context... ");
 	if (rc) {
 		D_ERROR("Failed to open BIO meta context for xs:%p pool:" DF_UUID ", " DF_RC "\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
@@ -1873,13 +1872,12 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	if (rc != 0)
 		return rc;
 
-	DLCK_PRINT(dp, "NVMe devices (if applicable)... ");
 	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
 	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_NVME)) { /** fault injection */
 		D_ASSERT(rc == 0);
 		rc = daos_errno2der(daos_fail_value_get());
 	}
-	DLCK_APPENDL_RC(dp, rc);
+	DLCK_PRINTL_RC(dp, rc, "NVMe devices (if applicable)... ");
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		goto err_pool_unprep;
