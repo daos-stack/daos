@@ -1443,6 +1443,8 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 	return pbResp, nil
 }
 
+// selfHealExcludeRanks fetches a list of detected dead ranks from the leader's engine and updates
+// states within the control-plane membership appropriately.
 func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
 	mapVer, err := svc.sysdb.CurMapVersion()
 	if err == nil {
@@ -1495,6 +1497,9 @@ func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
 	return nil
 }
 
+// selfHealNotifyPSes calls into each pool service with the current value of self_heal system
+// property so that the appropriate actions can be performed across the pool (e.g. rebuild or
+// exclude).
 func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) error {
 	poolIDs, err := svc.getPoolIDs()
 	if err != nil {
@@ -1509,8 +1514,8 @@ func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) erro
 	var successes, failures []string
 	for _, id := range poolIDs {
 		req := &control.PoolSelfHealEvalReq{
-			ID:      id,
-			PropVal: propVal,
+			ID:         id,
+			SysPropVal: propVal,
 		}
 		svc.log.Tracef("%T: %+v", req, req)
 
@@ -1548,15 +1553,15 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 	}
 
 	// Retrieve system self-heal property.
-	curVal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, daos.SystemPropertySelfHeal.String())
+	selfHeal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, daos.SystemPropertySelfHeal.String())
 	if err != nil {
 		return nil, errors.Wrapf(err, "retrieving %s system property", daos.SystemPropertySelfHeal)
 	}
 
-	svc.log.Debugf("system property self_heal='%+v'", curVal)
+	svc.log.Debugf("system property self_heal='%+v'", selfHeal)
 
 	// Exclude engines based on SWIM status if system property bit set.
-	if daos.SystemPropertySelfHealHasFlag(curVal, daos.SelfHealFlagExclude) {
+	if daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagExclude) {
 		if err := svc.selfHealExcludeRanks(ctx); err != nil {
 			return nil, errors.Wrap(err, "excluding ranks based on self_heal.exclude")
 		}
@@ -1565,13 +1570,13 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 	// If pool_exclude or pool_rebuild is set, send the latest self_heal value to all PSs, who
 	// will handle the reevaluation. This involves calling into the leader engine with self_heal
 	// value for each pool and calling dsc_pool_svc_eval_self_heal() in dRPC handler.
-	if !daos.SystemPropertySelfHealHasFlag(curVal, daos.SelfHealFlagPoolRebuild) &&
-		!daos.SystemPropertySelfHealHasFlag(curVal, daos.SelfHealFlagPoolExclude) {
+	if !daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagPoolRebuild) &&
+		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagPoolExclude) {
 		return new(mgmtpb.DaosResp), nil
 	}
 
-	if err := svc.selfHealNotifyPSes(ctx, curVal); err != nil {
-		return nil, errors.Wrapf(err, "notify pool services of self_heal=%q", curVal)
+	if err := svc.selfHealNotifyPSes(ctx, selfHeal); err != nil {
+		return nil, errors.Wrapf(err, "notify pool services of self_heal=%q", selfHeal)
 	}
 
 	return new(mgmtpb.DaosResp), nil
