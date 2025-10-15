@@ -1337,7 +1337,8 @@ out_task:
 struct dc_pool_glob {
 	/* magic number, DC_POOL_GLOB_MAGIC */
 	uint32_t	dpg_magic;
-	uint32_t	dpg_padding;
+	uint16_t        dpg_max_supported_layout_ver;
+	uint16_t        dpg_padding;
 	/* pool UUID, pool handle UUID, and capas */
 	uuid_t		dpg_pool;
 	uuid_t		dpg_pool_hdl;
@@ -1392,6 +1393,7 @@ swap_pool_glob(struct dc_pool_glob *pool_glob)
 
 	D_SWAP32S(&pool_glob->dpg_magic);
 	/* skip pool_glob->dpg_padding */
+	D_SWAP16S(&pool_glob->dpg_max_supported_layout_ver);
 	/* skip pool_glob->dpg_pool (uuid_t) */
 	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
 	D_SWAP64S(&pool_glob->dpg_capas);
@@ -1459,6 +1461,7 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	/* init pool global handle */
 	pool_glob = (struct dc_pool_glob *)glob->iov_buf;
 	pool_glob->dpg_magic = DC_POOL_GLOB_MAGIC;
+	pool_glob->dpg_max_supported_layout_ver = pool->dp_max_supported_layout_ver;
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
@@ -1529,6 +1532,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	pool->dp_max_supported_layout_ver = pool_glob->dpg_max_supported_layout_ver;
 	uuid_copy(pool->dp_pool, pool_glob->dpg_pool);
 	uuid_copy(pool->dp_pool_hdl, pool_glob->dpg_pool_hdl);
 	pool->dp_capas = pool_glob->dpg_capas;
