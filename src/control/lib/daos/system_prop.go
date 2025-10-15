@@ -289,7 +289,7 @@ func (sp *SystemProperty) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// SystemProperty defines a type to be used to represent DAOS system property keys.
+// SystemPropertyKey defines a type to be used to represent DAOS system property keys.
 type SystemPropertyKey int
 
 // IsValid returns a boolean indicating whether or not the system property key
@@ -335,7 +335,6 @@ func (sp *SystemPropertyKey) FromString(val string) error {
 // here for consistency.
 const (
 	systemPropertyUnknown SystemPropertyKey = iota
-
 	// SystemPropertyDaosVersion retrieves the DAOS version.
 	SystemPropertyDaosVersion
 	// SystemPropertyDaosSystem retrieves the DAOS system name.
@@ -348,6 +347,29 @@ const (
 	SystemPropertySelfHeal
 	// NB: This must be the last entry.
 	systemPropertyMax
+)
+
+// SelfHealFlag defines a type to be used to represent an individual self-heal flag.
+type SelfHealFlag string
+
+// IsValid returns a boolean indicating whether or not the self-heal flag is valid.
+func (shf SelfHealFlag) IsValid() bool {
+	return map[SelfHealFlag]bool{
+		SelfHealFlagExclude:     true,
+		SelfHealFlagPoolExclude: true,
+		SelfHealFlagPoolRebuild: true,
+	}[shf]
+}
+
+const (
+	propValSep = ";"
+
+	// SelfHealFlagExclude indicates system-level exclusion is enabled.
+	SelfHealFlagExclude SelfHealFlag = "exclude"
+	// SelfHealFlagPoolExclude indicates pool-level exclusion is enabled.
+	SelfHealFlagPoolExclude SelfHealFlag = "pool_exclude"
+	// SelfHealFlagPoolRebuild indicates pool rebuild is enabled.
+	SelfHealFlagPoolRebuild SelfHealFlag = "pool_rebuild"
 )
 
 type (
@@ -493,14 +515,13 @@ func pph2sp(key SystemPropertyKey, pph *PoolPropHandler, def string) SystemPrope
 
 // SystemPropertySelfHealHasFlag returns true if the given self-heal property
 // value contains the specified flag.
-func SystemPropertySelfHealHasFlag(value string, flag string) bool {
+func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
 	if value == "none" {
 		return false
 	}
 
-	flags := strings.Split(value, ";")
-	for _, f := range flags {
-		if f == flag {
+	for _, strFlag := range strings.Split(value, propValSep) {
+		if SelfHealFlag(strFlag) == flag {
 			return true
 		}
 	}
@@ -538,23 +559,33 @@ func subsets(strings []string, sep string, empty string) []string {
 // SystemProperties returns the map of standard system properties.
 func SystemProperties() SystemPropertyMap {
 	poolProps := PoolProperties()
+	defSelfHealFlagsStr := fmt.Sprintf("%s;%s;%s", SelfHealFlagExclude, SelfHealFlagPoolExclude,
+		SelfHealFlagPoolRebuild)
 
 	return SystemPropertyMap{
 		SystemPropertyDaosVersion: SystemProperty{
-			Key:         SystemPropertyDaosVersion,
-			Value:       &CompPropVal{ValueSource: func() string { return build.DaosVersion }},
+			Key: SystemPropertyDaosVersion,
+			Value: &CompPropVal{ValueSource: func() string {
+				return build.DaosVersion
+			}},
 			Description: "DAOS version",
 		},
 		SystemPropertyDaosSystem: SystemProperty{
-			Key:         SystemPropertyDaosSystem,
-			Value:       &CompPropVal{ValueSource: func() string { return build.DefaultSystemName }},
+			Key: SystemPropertyDaosSystem,
+			Value: &CompPropVal{ValueSource: func() string {
+				return build.DefaultSystemName
+			}},
 			Description: "DAOS system name",
 		},
-		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub_thresh"], "0"),
-		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"], "off"),
+		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh,
+			poolProps["scrub_thresh"], "0"),
+		SystemPropertyPoolScrubMode: pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"],
+			"off"),
 		SystemPropertySelfHeal: SystemProperty{
-			Key:         SystemPropertySelfHeal,
-			Value:       NewStringPropVal("exclude;pool_exclude;pool_rebuild", subsets([]string{"exclude", "pool_exclude", "pool_rebuild"}, ";", "none")...),
+			Key: SystemPropertySelfHeal,
+			Value: NewStringPropVal(defSelfHealFlagsStr,
+				subsets(strings.Split(defSelfHealFlagsStr, propValSep), propValSep,
+					"none")...),
 			Description: "Self-heal policy for the system",
 		},
 	}

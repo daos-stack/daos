@@ -387,7 +387,10 @@ int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgls_alloc(d_sg_list_t *dst, d_sg_list_t *src, int nr);
 int daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src);
-daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
+daos_size_t
+daos_sgl_data_len(d_sg_list_t *sgl, bool out);
+daos_size_t
+	    daos_sgl_out_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
@@ -788,9 +791,6 @@ enum {
 
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 #define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
-
-#define DAOS_REBUILD_ADMIN_STOP           (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1c)
-#define DAOS_REBUILD_ADMIN_START          (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1d)
 
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 #define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)

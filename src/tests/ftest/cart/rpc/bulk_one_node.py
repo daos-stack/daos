@@ -1,5 +1,4 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
   (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -7,21 +6,20 @@
 from cart_utils import CartTest
 
 
-class CartMultisendOneNodeTest(CartTest):
+class CartBulkOneNodeTest(CartTest):
     # pylint: disable=too-few-public-methods
-    """Run multi-send test that launches 16 servers and splits bulk
-       transfers among them using different parameters.
+    """Run Cart bulk tests.
 
     :avocado: recursive
     """
 
-    def test_cart_multisend(self):
-        """Test multi-send
+    def test_cart_bulk_one_node(self):
+        """Test bulks
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=cart,rpc,one_node,memcheck,multisend,bulk
-        :avocado: tags=CartMultisendOneNodeTest,test_cart_multisend
+        :avocado: tags=cart,rpc,bulk,one_node,memcheck
+        :avocado: tags=CartBulkOneNodeTest,test_cart_bulk_one_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
         srv_rtn = self.launch_cmd_bg(srvcmd)
