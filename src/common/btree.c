@@ -3809,16 +3809,7 @@ dbtree_open_inplace_ex_internal(struct btr_root *root, struct umem_attr *uma, da
 
 	*toh = btr_tcx2hdl(tcx);
 
-	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
-	if (IS_DLCK(dp)) {
-		DLCK_PRINT(dp, "Nodes:\n");
-		DLCK_INDENT(dp, rc = dlck_dbtree_check(*toh));
-		if (rc != DER_SUCCESS) {
-			dbtree_close(*toh);
-		}
-	}
-
-	return rc;
+	return 0;
 }
 
 /**
@@ -3851,7 +3842,21 @@ int
 dbtree_open_inplace_dp(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
 		       struct dlck_print *dp, daos_handle_t *toh)
 {
-	return dbtree_open_inplace_ex_internal(root, uma, coh, priv, dp, toh);
+	int rc = dbtree_open_inplace_ex_internal(root, uma, coh, priv, dp, toh);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
+	if (IS_DLCK(dp)) {
+		DLCK_PRINT(dp, "Nodes:\n");
+		DLCK_INDENT(dp, rc = dlck_dbtree_check(*toh));
+		if (rc != DER_SUCCESS) {
+			dbtree_close(*toh);
+		}
+	}
+
+	return rc;
 }
 
 /**
