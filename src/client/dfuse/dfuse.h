@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,6 +29,12 @@ struct dfuse_info {
 	struct fuse_session *di_session;
 	char                *di_group;
 	char                *di_mountpoint;
+	char                *di_handles_file;
+	bool                 di_dump_handles;
+	bool                 di_read_handles;
+	daos_handle_t        di_poh;
+	daos_handle_t        di_coh;
+	dfs_t               *di_dfs;
 	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
 	bool                 di_foreground;

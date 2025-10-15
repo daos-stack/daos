@@ -500,14 +500,24 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 	if (label) {
 		daos_pool_info_t p_info = {};
 
-		rc = daos_pool_connect(label, dfuse_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
-				       &p_info, NULL);
-		if (rc) {
-			if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
-				DHL_INFO(dfp, rc, "daos_pool_connect() failed");
-			else
-				DHL_ERROR(dfp, rc, "daos_pool_connect() failed");
-			D_GOTO(err_free, rc = daos_der2errno(rc));
+		/** if we read the pool handle, query for the info */
+		if (dfuse_info->di_read_handles) {
+			dfp->dfp_poh = dfuse_info->di_poh;
+			rc           = daos_pool_query(dfp->dfp_poh, NULL, &p_info, NULL, NULL);
+			if (rc) {
+				DHL_ERROR(dfp, rc, "daos_pool_query() failed");
+				D_GOTO(err_free, rc = daos_der2errno(rc));
+			}
+		} else {
+			rc = daos_pool_connect(label, dfuse_info->di_group, DAOS_PC_RO,
+					       &dfp->dfp_poh, &p_info, NULL);
+			if (rc) {
+				if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
+					DHL_INFO(dfp, rc, "daos_pool_connect() failed");
+				else
+					DHL_ERROR(dfp, rc, "daos_pool_connect() failed");
+				D_GOTO(err_free, rc = daos_der2errno(rc));
+			}
 		}
 
 		uuid_copy(dfp->dfp_uuid, p_info.pi_uuid);
@@ -848,17 +858,23 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		int                     dfs_flags = O_RDWR;
 
 		dfc->dfs_ops = &dfuse_dfs_ops;
-		if (dfuse_info->di_read_only) {
-			dfs_flags = O_RDONLY;
-			rc        = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh,
-						   &c_info, NULL);
+
+		if (dfuse_info->di_read_handles) {
+			dfc->dfs_coh = dfuse_info->di_coh;
+			rc           = daos_cont_query(dfc->dfs_coh, &c_info, NULL, NULL);
 		} else {
-			rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh,
-					    &c_info, NULL);
-			if (rc == -DER_NO_PERM) {
+			if (dfuse_info->di_read_only) {
 				dfs_flags = O_RDONLY;
 				rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh,
 						    &c_info, NULL);
+			} else {
+				rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh,
+						    &c_info, NULL);
+				if (rc == -DER_NO_PERM) {
+					dfs_flags = O_RDONLY;
+					rc        = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO,
+								   &dfc->dfs_coh, &c_info, NULL);
+				}
 			}
 		}
 		if (rc != -DER_SUCCESS) {
@@ -869,10 +885,14 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 
-		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
-		if (rc) {
-			DHS_ERROR(dfc, rc, "dfs mount() failed");
-			D_GOTO(err_close, rc);
+		if (dfuse_info->di_read_handles)
+			dfc->dfs_ns = dfuse_info->di_dfs;
+		else {
+			rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
+			if (rc) {
+				DHS_ERROR(dfc, rc, "dfs mount() failed");
+				D_GOTO(err_close, rc);
+			}
 		}
 
 		uuid_copy(dfc->dfc_uuid, c_info.ci_uuid);

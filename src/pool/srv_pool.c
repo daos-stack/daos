@@ -666,7 +666,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_redun_fac, &value);
 			break;
 		case DAOS_PROP_PO_OBJ_VERSION:
-			if (entry->dpe_val > DS_POOL_OBJ_VERSION) {
+			if (entry->dpe_val > DAOS_POOL_OBJ_VERSION) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -2352,7 +2352,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct pool_iv_conns   *iv_hdls            = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	d_rank_t		rank = dss_self_rank();
+	d_rank_t                rank               = dss_self_rank();
 	int			rc;
 
 	D_ASSERTF(svc->ps_error == 0, "ps_error: " DF_RC "\n", DP_RC(svc->ps_error));
@@ -2461,7 +2461,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, 0);
 	if (rc != 0)
 		goto out;
 
@@ -6126,7 +6126,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 
 			obj_version = (uint32_t)fail_val;
 		} else {
-			obj_version = DS_POOL_OBJ_VERSION;
+			obj_version = DAOS_POOL_OBJ_VERSION;
 		}
 
 		d_iov_set(&value, &obj_version, sizeof(obj_version));
@@ -6187,10 +6187,9 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 	else if (rc == -DER_NONEXIST)
 		current_layout_ver = 0;
 
-	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
-		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
-					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
-					 RB_OP_UPGRADE, 0);
+	if (current_layout_ver < DAOS_POOL_OBJ_VERSION) {
+		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
+					 DAOS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE, 0);
 		if (rc == 0)
 			*scheduled_layout_upgrade = true;
 	}

@@ -1389,6 +1389,25 @@ obj_rw_recx_list_post(struct obj_rw_in *orw, struct obj_rw_out *orwo, uint8_t *s
 	return rc;
 }
 
+struct ec_agg_boundary_arg {
+	struct ds_pool *eab_pool;
+	uuid_t          eab_co_uuid;
+};
+
+static int
+obj_fetch_ec_agg_boundary(void *data)
+{
+	struct ec_agg_boundary_arg *arg = data;
+	int                         rc;
+
+	rc = ds_cont_fetch_ec_agg_boundary(arg->eab_pool->sp_iv_ns, arg->eab_co_uuid);
+	if (rc)
+		DL_ERROR(rc, DF_CONT ", ds_cont_fetch_ec_agg_boundary failed.",
+			 DP_CONT(arg->eab_pool->sp_uuid, arg->eab_co_uuid));
+
+	return rc;
+}
+
 static int
 obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *iods,
 		      struct dcs_iod_csums *iod_csums, uint64_t *offs, uint8_t *skips,
@@ -1508,6 +1527,32 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			is_parity_shard = is_ec_parity_shard_by_tgt_off(tgt_off, &ioc->ioc_oca);
 			get_parity_list = ec_recov && is_parity_shard &&
 					  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		}
+		if ((ec_deg_fetch || (ec_recov && get_parity_list)) &&
+		    ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
+			struct ec_agg_boundary_arg arg;
+
+			arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
+			uuid_copy(arg.eab_co_uuid, ioc->ioc_coc->sc_uuid);
+			rc = dss_ult_execute(obj_fetch_ec_agg_boundary, &arg, NULL, NULL,
+					     DSS_XS_SYS, 0, 0);
+			if (rc) {
+				DL_ERROR(rc, DF_CONT ", " DF_UOID " fetch ec_agg_boundary failed.",
+					 DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
+					 DP_UOID(orw->orw_oid));
+				goto out;
+			}
+			if (ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
+				rc = -DER_FETCH_AGAIN;
+				DL_INFO(rc, DF_CONT ", " DF_UOID " zero ec_agg_boundary.",
+					DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
+					DP_UOID(orw->orw_oid));
+				goto out;
+			}
+			D_DEBUG(DB_IO,
+				DF_CONT ", " DF_UOID " fetched ec_agg_eph_boundary " DF_X64 "\n",
+				DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
+				DP_UOID(orw->orw_oid), ioc->ioc_coc->sc_ec_agg_eph_boundary);
 		}
 		if (get_parity_list) {
 			D_ASSERT(!ec_deg_fetch);
