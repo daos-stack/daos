@@ -1030,7 +1030,7 @@ class TestPool(TestDaosApiBase):
         return False
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_state=None, rs_padding32=None,
+                             rs_errno=None, rs_state=None, rs_padding16=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -1047,7 +1047,7 @@ class TestPool(TestDaosApiBase):
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
             rs_state (int, optional): rebuild state flag. Defaults to None.
-            rs_padding32 (int, optional): padding. Defaults to None.
+            rs_padding16 (int, optional): padding. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
                 Defaults to None.
