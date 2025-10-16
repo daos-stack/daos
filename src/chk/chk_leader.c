@@ -3622,6 +3622,9 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	if (cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
+	if (cru->cru_result == 0 && ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+		cru->cru_result = CHK__CHECK_RESULT__DRY_RUN;
+
 	if (*seq == 0) {
 
 new_seq:

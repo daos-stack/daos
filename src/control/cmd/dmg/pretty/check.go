@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -168,6 +169,9 @@ func printInconsistencyReportsTable(out io.Writer, resp *control.SystemCheckQuer
 		} else {
 			if res := report.Resolution(); res != "" {
 				tr[resLabel] = res
+				if report.IsDryRun() {
+					tr[resLabel] += " (dry run)"
+				}
 			}
 			resolvedTable = append(resolvedTable, tr)
 		}
@@ -238,7 +242,11 @@ func printInconsistencyReportsVerbose(out io.Writer, resp *control.SystemCheckQu
 			}
 			fmt.Fprintln(iw)
 		} else if res := report.Resolution(); res != "" {
-			fmt.Fprintf(iw, "Resolution: %s\n\n", res)
+			var dryRunMsg string
+			if report.IsDryRun() {
+				dryRunMsg = " (dry run - not applied)"
+			}
+			fmt.Fprintf(iw, "Resolution: %s%s\n\n", res, dryRunMsg)
 		} else {
 			fmt.Fprintf(iw, "No resolutions available\n\n")
 			continue
