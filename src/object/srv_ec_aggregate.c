@@ -147,7 +147,6 @@ struct ec_agg_stripe_ud {
 	unsigned int		 asu_cell_cnt;  /* Count of cells        */
 	bool			 asu_recalc;    /* Should recalc parity  */
 	bool			 asu_write_par; /* Should write parity   */
-	struct daos_csummer	*asu_csummer;
 	daos_iod_t		 asu_iod;
 	d_iov_t			 asu_csum_iov;
 	struct dcs_iod_csums	*asu_iod_csums; /* iod csums */
@@ -1291,6 +1290,16 @@ agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	int                    i;
 	int                    rc;
 
+	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
+		/* We currently pause EC aggregation for rebuild, so just cancel the
+		 * aggregation for the current stripe. It means the following peer status
+		 * check may not be checked at all, but let's keep the code because it could
+		 * be useful in the future.
+		 */
+		D_ERROR(DF_UOID " pauses EC aggregation for rebuild\n", DP_UOID(entry->ae_oid));
+		return -DER_OP_CANCELED;
+	}
+
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map, &targets,
 				       &failed_tgts_cnt);
 	if (rc) {
@@ -1316,7 +1325,7 @@ agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 						"tgt_idx %d.\n",
 					DP_UOID(entry->ae_oid), peer_loc->sd_rank,
 					peer_loc->sd_tgt_idx);
-				D_GOTO(out, rc = -DER_UNREACH);
+				D_GOTO(out, rc = -DER_OP_CANCELED);
 			}
 		}
 	}
@@ -1833,11 +1842,9 @@ ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 
 out:
-	D_FREE(stripe_ud.asu_recxs);
-	daos_csummer_free_ic(stripe_ud.asu_csummer, &stripe_ud.asu_iod_csums);
+	daos_csummer_free_ic(ec_agg_param2csummer(agg_param), &stripe_ud.asu_iod_csums);
 	D_FREE(stripe_ud.asu_csum_iov.iov_buf);
-	daos_csummer_destroy(&stripe_ud.asu_csummer);
-
+	D_FREE(stripe_ud.asu_recxs);
 	return rc;
 }
 

@@ -16,6 +16,7 @@
 
 #define REBUILD_ENV            "DAOS_REBUILD"
 #define REBUILD_ENV_DISABLED   "no"
+#define REBUILD_WAIT_EC_PAUSE_ENV	"DAOS_REBUILD_WAIT_EC_PAUSE"
 
 /**
  * Enum values to indicate the rebuild operation that should be applied to the

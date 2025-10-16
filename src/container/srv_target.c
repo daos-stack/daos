@@ -918,42 +918,53 @@ ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
 		cont_child->sc_ec_agg_eph = cont_child->sc_ec_agg_eph_boundary;
 }
 
+#define WAIT_EC_PAUSE_MAX		600
+
 void
-ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child)
+ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeout)
 {
 	uint64_t start_time = daos_wallclock_secs();
+	int	 wait_intv  = 10;
+	int	 waited = 0;
 
 	D_DEBUG(DB_MD, DF_UUID "[%d]: wait for pausing EC aggregation\n",
 		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	if (wait_timeout == 0 || wait_timeout > WAIT_EC_PAUSE_MAX)
+		wait_timeout = WAIT_EC_PAUSE_MAX; /* 10 minutes by default */
+
 	while (1) {
 		struct ds_cont_child *coc;
-		bool                  wait = false;
-		int                   waited;
+		bool                  paused = true;
 
 		/* Wait for pausing aggregation
 		 * XXX: There is no global barrier so we always wait for at least 10 seconds to
 		 * lower the chance that remote targets are still running EC aggregation.
 		 */
-		dss_sleep(10 * 1000);
+		if (wait_intv > wait_timeout - waited)
+			wait_intv = wait_timeout - waited;
+
+		dss_sleep(wait_intv * 1000);
 		d_list_for_each_entry(coc, &pool_child->spc_cont_list, sc_link) {
 			if (ds_cont_child_ec_aggregating(coc)) {
 				/* Aggregation is active on this container */
-				wait = true;
+				paused = false;
 				break;
 			}
 		}
-		if (!wait)
+		if (paused)
 			return;
 
 		waited = daos_wallclock_secs() - start_time;
+		if (waited >= wait_timeout) {
+			D_WARN("can't pause EC aggregation after %d seconds\n", waited);
+			return; /* XXX what can I do? */
+		}
+
 		if (waited % 60 == 0) {
 			D_WARN(DF_UUID "[%d]: waited %d secs for EC aggregation to pause\n",
 			       DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id,
 			       waited);
-		}
-		if (waited > 600) {
-			D_ERROR("Waited for 10 minutes for EC aggregation to pause!\n");
-			return; /* XXX what can I do? */
 		}
 	}
 }

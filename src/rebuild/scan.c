@@ -1002,7 +1002,7 @@ rebuild_scanner(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	ds_cont_child_wait_ec_agg_pause(child);
+	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
 
 	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
 	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
