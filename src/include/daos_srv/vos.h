@@ -236,14 +236,14 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
  * Aggregate the committed DTXs.
  *
  * \param coh		[IN]	Container open handle.
- * \param ep_max	[IN]	The upper epoch to aggregate.
+ * \param cmt_time	[IN]	The upper commit time to aggregate, or NULL.
  *
- * \return			Negative value if error, zero if all DTX entries with an epoch lower
- * 				or equal to ep_max have been aggregated, one if all the targeted DTX
- * 				entries may not have been aggregated.
+ * \return			Negative value if error, zero if all DTX entries with a commit time
+ * 				lower or equal to cmt_time have been aggregated, one if all the
+ * 				targeted DTX entries may not have been aggregated.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh, const daos_epoch_t *ep_max);
+vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time);
 
 /**
  * Query the container's DTXs statistics information.
