@@ -3055,7 +3055,7 @@ out:
 
 static int
 dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_container *cont,
-		   struct vos_cont_df *cont_df, umem_off_t dbd_off, const uint64_t *ts_max)
+		   struct vos_cont_df *cont_df, umem_off_t dbd_off, const uint64_t *cmt_time)
 {
 	struct vos_dtx_blob_df *dbd;
 	umem_off_t              dbd_next_off = UMOFF_NULL;
@@ -3085,7 +3085,7 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 		d_iov_t                    kiov;
 
 		dce_df = &dbd->dbd_committed_data[i];
-		if (ts_max != NULL && *ts_max < dce_df->dce_cmt_time)
+		if (cmt_time != NULL && *cmt_time < dce_df->dce_cmt_time)
 			break;
 
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
@@ -3223,7 +3223,7 @@ out:
 }
 
 int
-vos_dtx_aggregate(daos_handle_t coh, const uint64_t *ts_max)
+vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time)
 {
 	struct vos_container *cont;
 	struct vos_tls       *tls;
@@ -3245,7 +3245,7 @@ vos_dtx_aggregate(daos_handle_t coh, const uint64_t *ts_max)
 
 	/* Take the opportunity to free some memory if we can */
 	lrua_array_aggregate(cont->vc_dtx_array);
-	rc = dtx_blob_aggregate(umm, tls, cont, cont_df, dbd_off, ts_max);
+	rc = dtx_blob_aggregate(umm, tls, cont, cont_df, dbd_off, cmt_time);
 	if (rc == 1 && UMOFF_IS_NULL(cont_df->cd_dtx_committed_head))
 		rc = 0;
 
