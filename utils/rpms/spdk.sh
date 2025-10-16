@@ -52,7 +52,7 @@ EOF
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_server")
 
 ARCH="${isa}"
-CONFLICTS=("spdk")
+CONFLICTS=("spdk" "dpdk")
 build_package "daos-spdk"
 
 TARGET_PATH="${libdir}/daos_srv"
