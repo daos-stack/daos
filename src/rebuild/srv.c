@@ -25,7 +25,7 @@
 
 #define RBLD_CHECK_INTV	 2000	/* milliseconds interval to check*/
 struct rebuild_global	rebuild_gst;
-unsigned int		rebuild_wait_ec_pause = 0;
+unsigned int            rebuild_wait_ec_pause = 0;
 
 struct pool_map *
 rebuild_pool_map_get(struct ds_pool *pool)

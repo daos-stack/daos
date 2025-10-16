@@ -146,7 +146,7 @@ struct ec_agg_stripe_ud {
 	daos_recx_t		*asu_recxs;     /* For re-replicate      */
 	unsigned int		 asu_cell_cnt;  /* Count of cells        */
 	bool			 asu_recalc;    /* Should recalc parity  */
-	bool			 asu_write_par; /* Should write parity   */
+	bool                     asu_write_par; /* Should write parity   */
 	daos_iod_t		 asu_iod;
 	d_iov_t			 asu_csum_iov;
 	struct dcs_iod_csums	*asu_iod_csums; /* iod csums */
@@ -1381,14 +1381,14 @@ agg_peer_update_ult(void *arg)
 	iod.iod_size = entry->ae_rsize;
 	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	for (peer = 0; peer < p; peer++) {
-		uint64_t	enqueue_id = 0;
-		bool		overloaded;
+		uint64_t enqueue_id = 0;
+		bool     overloaded;
 
 		if (peer == pidx)
 			continue;
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
-		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
+		tgt_ep.ep_tag  = entry->ae_peer_pshards[peer].sd_tgt_idx;
 retry:
 		overloaded = false;
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
@@ -1577,7 +1577,7 @@ agg_process_holes_ult(void *arg)
 	uint32_t		 peer;
 	int                      rc = 0, peer_rc = 0;
 	int                      peer_updated = 0;
-	uint32_t		 max_delay = 0;
+	uint32_t                 max_delay    = 0;
 
 	stripe_ud->asu_valid_hole = false;
 	/* Process extent list to find what to re-replicate -- build recx array
@@ -1663,9 +1663,9 @@ agg_process_holes_ult(void *arg)
 
 	/* Invoke peer re-replicate */
 	for (peer = 0; peer < p; peer++) {
-		uint64_t	enqueue_id = 0;
-		uint32_t	peer_shard;
-		bool		overloaded;
+		uint64_t enqueue_id = 0;
+		uint32_t peer_shard;
+		bool     overloaded;
 
 		if (pidx == peer)
 			continue;

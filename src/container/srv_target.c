@@ -918,14 +918,14 @@ ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
 		cont_child->sc_ec_agg_eph = cont_child->sc_ec_agg_eph_boundary;
 }
 
-#define WAIT_EC_PAUSE_MAX		600
+#define WAIT_EC_PAUSE_MAX 600
 
 void
 ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeout)
 {
 	uint64_t start_time = daos_wallclock_secs();
-	int	 wait_intv  = 10;
-	int	 waited = 0;
+	int      wait_intv  = 10;
+	int      waited     = 0;
 
 	D_DEBUG(DB_MD, DF_UUID "[%d]: wait for pausing EC aggregation\n",
 		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
