@@ -929,8 +929,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 
 	rs = &pco->pco_rebuild_st;
 	rc = process_query_reply(tpriv->pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_op.po_hint.sh_rank, &pco->pco_space, rs,
-				 NULL /* tgts */, info, NULL, NULL, true);
+				 pco->pco_op.po_hint.sh_rank, &pco->pco_space, rs, NULL /* tgts */,
+				 info, NULL, NULL, true);
 	tpriv->pool->dp_max_supported_layout_ver = rs->rs_max_supported_layout_ver
 						       ? rs->rs_max_supported_layout_ver
 						       : DAOS_POOL_OBJ_VERSION_1;
