@@ -248,9 +248,10 @@ func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
-	sysResponse `json:"-"`
-	Members     system.Members `json:"members"`
-	Providers   []string       `json:"providers"`
+	sysResponse       `json:"-"`
+	Members           system.Members `json:"members"`
+	Providers         []string       `json:"providers"`
+	SysSelfHealPolicy string         `json:"sys_self_heal_policy"`
 }
 
 // Wrap sysResponse handling of absent hosts and ranks in a helper to be called from response

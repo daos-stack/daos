@@ -362,7 +362,8 @@ func (shf SelfHealFlag) IsValid() bool {
 }
 
 const (
-	propValSep = ";"
+	propValSep         = ";"
+	selfHealFlagsEmpty = "none"
 
 	// SelfHealFlagExclude indicates system-level exclusion is enabled.
 	SelfHealFlagExclude SelfHealFlag = "exclude"
@@ -370,6 +371,22 @@ const (
 	SelfHealFlagPoolExclude SelfHealFlag = "pool_exclude"
 	// SelfHealFlagPoolRebuild indicates pool rebuild is enabled.
 	SelfHealFlagPoolRebuild SelfHealFlag = "pool_rebuild"
+)
+
+var (
+	allSelfHealFlags = []SelfHealFlag{
+		SelfHealFlagExclude, SelfHealFlagPoolExclude, SelfHealFlagPoolRebuild,
+	}
+
+	// DefaultSelfHealFlagsStr will be used as self-heal system property default value and includes all
+	// possible flags set.
+	DefaultSelfHealFlagsStr = func() string {
+		var strs []string
+		for _, f := range allSelfHealFlags {
+			strs = append(strs, string(f))
+		}
+		return strings.Join(strs, propValSep)
+	}()
 )
 
 type (
@@ -516,10 +533,6 @@ func pph2sp(key SystemPropertyKey, pph *PoolPropHandler, def string) SystemPrope
 // SystemPropertySelfHealHasFlag returns true if the given self-heal property
 // value contains the specified flag.
 func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
-	if value == "none" {
-		return false
-	}
-
 	for _, strFlag := range strings.Split(value, propValSep) {
 		if SelfHealFlag(strFlag) == flag {
 			return true
@@ -527,6 +540,19 @@ func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
 	}
 
 	return false
+}
+
+// SystemPropertySelfHealUnsetFlags returns disabled flags in the self-heal system property as a
+// SelfHealFlag slice.
+func SystemPropertySelfHealUnsetFlags(value string) []string {
+	offFlags := []string{}
+	for _, flag := range allSelfHealFlags {
+		if !SystemPropertySelfHealHasFlag(value, flag) {
+			offFlags = append(offFlags, string(flag))
+		}
+	}
+
+	return offFlags
 }
 
 // subsets returns a slice of all subsets of strings, including the empty set
@@ -559,8 +585,6 @@ func subsets(strings []string, sep string, empty string) []string {
 // SystemProperties returns the map of standard system properties.
 func SystemProperties() SystemPropertyMap {
 	poolProps := PoolProperties()
-	defSelfHealFlagsStr := fmt.Sprintf("%s;%s;%s", SelfHealFlagExclude, SelfHealFlagPoolExclude,
-		SelfHealFlagPoolRebuild)
 
 	return SystemPropertyMap{
 		SystemPropertyDaosVersion: SystemProperty{
@@ -583,9 +607,9 @@ func SystemProperties() SystemPropertyMap {
 			"off"),
 		SystemPropertySelfHeal: SystemProperty{
 			Key: SystemPropertySelfHeal,
-			Value: NewStringPropVal(defSelfHealFlagsStr,
-				subsets(strings.Split(defSelfHealFlagsStr, propValSep), propValSep,
-					"none")...),
+			Value: NewStringPropVal(DefaultSelfHealFlagsStr,
+				subsets(strings.Split(DefaultSelfHealFlagsStr, propValSep),
+					propValSep, selfHealFlagsEmpty)...),
 			Description: "Self-heal policy for the system",
 		},
 	}

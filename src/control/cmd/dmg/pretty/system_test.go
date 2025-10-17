@@ -17,8 +17,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	. "github.com/daos-stack/daos/src/control/system"
 )
@@ -112,22 +112,25 @@ Ranks Action Result
 
 func TestPretty_PrintSystemQueryResp(t *testing.T) {
 	for name, tc := range map[string]struct {
-		resp        *control.SystemQueryResp
-		absentHosts string
-		absentRanks string
-		verbose     bool
-		expPrintStr string
+		resp           *control.SystemQueryResp
+		absentHosts    string
+		absentRanks    string
+		selfHealPolicy string
+		verbose        bool
+		expPrintStr    string
 	}{
 		"empty response": {
-			resp: &control.SystemQueryResp{},
+			resp:           &control.SystemQueryResp{},
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
 			expPrintStr: `
 Query matches no ranks in system
 `,
 		},
 		"response with missing hosts and ranks": {
-			resp:        &control.SystemQueryResp{},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
+			resp:           &control.SystemQueryResp{},
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
 			expPrintStr: `
 Query matches no ranks in system
 Unknown 3 hosts: foo[7-9]
@@ -140,6 +143,7 @@ Unknown 3 ranks: 7-9
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
 			expPrintStr: `
 Rank State  
 ---- -----  
@@ -153,8 +157,9 @@ Rank State
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
 			expPrintStr: `
 Rank  State        
 ----  -----        
@@ -170,7 +175,8 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
-			verbose: true,
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State  Reason 
 ---- ----                                 --------------- ------------ -----  ------ 
@@ -184,9 +190,10 @@ Rank UUID                                 Control Address Fault Domain State  Re
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
-			verbose:     true,
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State  Reason 
 ---- ----                                 --------------- ------------ -----  ------ 
@@ -208,6 +215,7 @@ Unknown 3 ranks: 7-9
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State    
 ----      -----    
@@ -217,7 +225,7 @@ Rank      State
 
 `,
 		},
-		"missing hosts": {
+		"normal response; empty self_heal system property": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
 					MockMember(t, 0, MemberStateJoined),
@@ -229,7 +237,76 @@ Rank      State
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
+			expPrintStr: `
+Rank      State    
+----      -----    
+[0-1,5-6] Joined   
+[2,4]     Stopped  
+3         Excluded 
+
+System property self_heal flags disabled: exclude, pool_exclude, pool_rebuild
+`,
+		},
+		"normal response; missing exclude and pool_exclude in self_heal system property": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 1, MemberStateJoined),
+					MockMember(t, 2, MemberStateStopped),
+					MockMember(t, 3, MemberStateExcluded),
+					MockMember(t, 4, MemberStateStopped),
+					MockMember(t, 5, MemberStateJoined),
+					MockMember(t, 6, MemberStateJoined),
+				},
+			},
+			selfHealPolicy: "pool_rebuild",
+			expPrintStr: `
+Rank      State    
+----      -----    
+[0-1,5-6] Joined   
+[2,4]     Stopped  
+3         Excluded 
+
+System property self_heal flags disabled: exclude, pool_exclude
+`,
+		},
+		"normal response; missing exclude self_heal system property": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 1, MemberStateJoined),
+					MockMember(t, 2, MemberStateStopped),
+					MockMember(t, 3, MemberStateExcluded),
+					MockMember(t, 4, MemberStateStopped),
+					MockMember(t, 5, MemberStateJoined),
+					MockMember(t, 6, MemberStateJoined),
+				},
+			},
+			selfHealPolicy: "pool_exclude;pool_rebuild",
+			expPrintStr: `
+Rank      State    
+----      -----    
+[0-1,5-6] Joined   
+[2,4]     Stopped  
+3         Excluded 
+
+System property self_heal flag disabled: exclude
+`,
+		},
+		"missing hosts; none-value self_heal system property": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 1, MemberStateJoined),
+					MockMember(t, 2, MemberStateStopped),
+					MockMember(t, 3, MemberStateExcluded),
+					MockMember(t, 4, MemberStateStopped),
+					MockMember(t, 5, MemberStateJoined),
+					MockMember(t, 6, MemberStateJoined),
+				},
+			},
+			absentHosts:    "foo[7,8,9]",
+			selfHealPolicy: "none",
 			expPrintStr: `
 Rank      State    
 ----      -----    
@@ -238,6 +315,7 @@ Rank      State
 3         Excluded 
 
 Unknown 3 hosts: foo[7-9]
+System property self_heal flags disabled: exclude, pool_exclude, pool_rebuild
 `,
 		},
 		"missing ranks": {
@@ -252,7 +330,8 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			absentRanks: "7-9",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State        
 ----      -----        
@@ -275,8 +354,9 @@ Rank      State
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State        
 ----      -----        
@@ -300,7 +380,8 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			verbose: true,
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State    Reason 
 ---- ----                                 --------------- ------------ -----    ------ 
@@ -326,9 +407,10 @@ Rank UUID                                 Control Address Fault Domain State    
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
-			verbose:     true,
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State    Reason 
 ---- ----                                 --------------- ------------ -----    ------ 
@@ -348,6 +430,7 @@ Unknown 3 ranks: 7-9
 		t.Run(name, func(t *testing.T) {
 			tc.resp.AbsentRanks = *MustCreateRankSet(tc.absentRanks)
 			tc.resp.AbsentHosts = *hostlist.MustCreateSet(tc.absentHosts)
+			tc.resp.SysSelfHealPolicy = tc.selfHealPolicy
 
 			var bld strings.Builder
 			// pass the same io writer to standard and error stream
@@ -497,7 +580,7 @@ Rank Operation Result
 			var bld, bldErr strings.Builder
 
 			gotErr := printSystemResults(&bld, &bldErr, tc.results, new(hostlist.HostSet),
-				new(ranklist.RankSet))
+				new(RankSet))
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
