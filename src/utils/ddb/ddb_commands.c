@@ -1339,7 +1339,7 @@ dtx_print_epoch_stat(struct ddb_ctx *ctx, const char *prefix, const daos_epoch_t
 	ddb_printf(ctx, "\t- %s%s", prefix, align);
 
 	rc = 0;
-	for (i = 0; i < 3; i++) {
+	for (i = 0; i < DTX_TIME_STAT_COUNT; i++) {
 		if (epoch_stats[i] == 0 || epoch_stats[i] == DAOS_EPOCH_MAX) {
 			ddb_printf(ctx, "%s=NA (NA)", stat_names[i]);
 		} else {
@@ -1348,7 +1348,7 @@ dtx_print_epoch_stat(struct ddb_ctx *ctx, const char *prefix, const daos_epoch_t
 			if (!SUCCESS(rc))
 				goto out;
 		}
-		if (i < 2)
+		if (i < DTX_TIME_STAT_COUNT - 1)
 			ddb_print(ctx, ", ");
 	}
 	ddb_print(ctx, "\n");
@@ -1367,7 +1367,7 @@ dtx_print_time_stat(struct ddb_ctx *ctx, const char *prefix, const uint64_t cmt_
 	ddb_printf(ctx, "\t- %s%s", prefix, align);
 
 	rc = 0;
-	for (i = 0; i < 3; i++) {
+	for (i = 0; i < DTX_TIME_STAT_COUNT; i++) {
 		if (cmt_time_stats[i] == 0 || cmt_time_stats[i] == UINT64_MAX) {
 			ddb_printf(ctx, "%s=NA (NA)", stat_names[i]);
 		} else {
@@ -1386,7 +1386,7 @@ dtx_print_time_stat(struct ddb_ctx *ctx, const char *prefix, const uint64_t cmt_
 			ddb_printf(ctx, "%s=%s (%" PRIu64 ")", stat_names[i], buf,
 				   cmt_time_stats[i]);
 		}
-		if (i < 2)
+		if (i < DTX_TIME_STAT_COUNT - 1)
 			ddb_print(ctx, ", ");
 	}
 	ddb_print(ctx, "\n");
@@ -1503,42 +1503,42 @@ dtx_stat_cont_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type
 	if (!SUCCESS(rc))
 		goto done;
 
+	if (args->opt->details) {
+		if (args->aggr_epoch < args_tmp.aggr_epoch)
+			args->aggr_epoch = args_tmp.aggr_epoch;
+		if (args->time_stat.dts_cmt_time[0] > args_tmp.time_stat.dts_cmt_time[0])
+			args->time_stat.dts_cmt_time[0] = args_tmp.time_stat.dts_cmt_time[0];
+		if (args->time_stat.dts_cmt_time[1] < args_tmp.time_stat.dts_cmt_time[1])
+			args->time_stat.dts_cmt_time[1] = args_tmp.time_stat.dts_cmt_time[1];
+		if (args->time_stat.dts_cmt_time[2] == 0)
+			args->time_stat.dts_cmt_time[2] = args_tmp.time_stat.dts_cmt_time[2];
+		else {
+			long double tmp_mean;
+
+			tmp_mean = args->time_stat.dts_cmt_time[2] * (long double)args->cmt_cnt;
+			tmp_mean += (long double)args_tmp.time_stat.dts_cmt_time[2] *
+				    (long double)args_tmp.cmt_cnt;
+			tmp_mean /= (long double)(args->cmt_cnt + args_tmp.cmt_cnt);
+			args->time_stat.dts_cmt_time[2] = tmp_mean;
+		}
+		if (args->time_stat.dts_epoch[0] > args_tmp.time_stat.dts_epoch[0])
+			args->time_stat.dts_epoch[0] = args_tmp.time_stat.dts_epoch[0];
+		if (args->time_stat.dts_epoch[1] < args_tmp.time_stat.dts_epoch[1])
+			args->time_stat.dts_epoch[1] = args_tmp.time_stat.dts_epoch[1];
+		if (args->time_stat.dts_epoch[2] == 0)
+			args->time_stat.dts_epoch[2] = args_tmp.time_stat.dts_epoch[2];
+		else {
+			long double tmp_mean;
+
+			tmp_mean = args->time_stat.dts_epoch[2] * (long double)args->cmt_cnt;
+			tmp_mean += (long double)args_tmp.time_stat.dts_epoch[2] *
+				    (long double)args_tmp.cmt_cnt;
+			tmp_mean /= (long double)(args->cmt_cnt + args_tmp.cmt_cnt);
+			args->time_stat.dts_epoch[2] = tmp_mean;
+		}
+	}
+
 	args->cmt_cnt += args_tmp.cmt_cnt;
-
-	if (!args->opt->details)
-		goto done;
-	if (args->aggr_epoch < args_tmp.aggr_epoch)
-		args->aggr_epoch = args_tmp.aggr_epoch;
-	if (args->time_stat.dts_cmt_time[0] > args_tmp.time_stat.dts_cmt_time[0])
-		args->time_stat.dts_cmt_time[0] = args_tmp.time_stat.dts_cmt_time[0];
-	if (args->time_stat.dts_cmt_time[1] < args_tmp.time_stat.dts_cmt_time[1])
-		args->time_stat.dts_cmt_time[1] = args_tmp.time_stat.dts_cmt_time[1];
-	if (args->time_stat.dts_cmt_time[2] == 0)
-		args->time_stat.dts_cmt_time[2] = args_tmp.time_stat.dts_cmt_time[2];
-	else {
-		long double tmp_mean;
-
-		tmp_mean = args->time_stat.dts_cmt_time[2] * (long double)args->cmt_cnt;
-		tmp_mean +=
-		    (long double)args_tmp.time_stat.dts_cmt_time[2] * (long double)args_tmp.cmt_cnt;
-		tmp_mean /= (long double)(args->cmt_cnt + args_tmp.cmt_cnt);
-		args->time_stat.dts_cmt_time[2] = tmp_mean;
-	}
-	if (args->time_stat.dts_epoch[0] > args_tmp.time_stat.dts_epoch[0])
-		args->time_stat.dts_epoch[0] = args_tmp.time_stat.dts_epoch[0];
-	if (args->time_stat.dts_epoch[1] < args_tmp.time_stat.dts_epoch[1])
-		args->time_stat.dts_epoch[1] = args_tmp.time_stat.dts_epoch[1];
-	if (args->time_stat.dts_epoch[2] == 0)
-		args->time_stat.dts_epoch[2] = args_tmp.time_stat.dts_epoch[2];
-	else {
-		long double tmp_mean;
-
-		tmp_mean = args->time_stat.dts_epoch[2] * (long double)args->cmt_cnt;
-		tmp_mean +=
-		    (long double)args_tmp.time_stat.dts_epoch[2] * (long double)args_tmp.cmt_cnt;
-		tmp_mean /= (long double)(args->cmt_cnt + args_tmp.cmt_cnt);
-		args->time_stat.dts_epoch[2] = tmp_mean;
-	}
 
 done:
 	itp_free(&itp);
@@ -1646,7 +1646,6 @@ dtx_aggr_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint64_t *c
 		ddb_error(ctx, "Failed to close container ");
 		itp_print_full(ctx, itp);
 		ddb_errorf(ctx, ": " DF_RC "\n", DP_RC(rc));
-		return rc;
 	}
 
 	return rc;

@@ -238,9 +238,9 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
  * \param coh		[IN]	Container open handle.
  * \param cmt_time	[IN]	The upper commit time to aggregate, or NULL.
  *
- * \return			Negative value if error, zero if all DTX entries with a commit time
- * 				lower or equal to cmt_time have been aggregated, one if all the
- * 				targeted DTX entries may not have been aggregated.
+ * \return			Zero if all qualified DTX entries have been removed.
+ * 				Positive value if more DTX entries can be eventually aggregated.
+ * 				Negative value for error.
  */
 int
 vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time);
@@ -1781,9 +1781,10 @@ bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
 /* Timing statistic of DTX entries */
+#define DTX_TIME_STAT_COUNT 3
 struct dtx_time_stat {
-	daos_epoch_t dts_epoch[3];
-	uint64_t     dts_cmt_time[3];
+	daos_epoch_t dts_epoch[DTX_TIME_STAT_COUNT];
+	uint64_t     dts_cmt_time[DTX_TIME_STAT_COUNT];
 };
 
 /**
