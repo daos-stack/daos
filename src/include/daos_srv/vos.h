@@ -16,6 +16,7 @@
 #define __VOS_API_H__
 
 #include <daos/common.h>
+#include <daos/dlck.h>
 #include <daos_types.h>
 #include <daos/placement.h>
 #include <daos_srv/dtx_srv.h>
@@ -488,7 +489,7 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version);
  */
 int
 vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
-		      daos_handle_t *poh);
+		      struct dlck_print *dp, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
