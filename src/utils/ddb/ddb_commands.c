@@ -1539,6 +1539,8 @@ dtx_stat_cont_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type
 	}
 
 	args->cmt_cnt += args_tmp.cmt_cnt;
+	if (args->aggr_epoch < args_tmp.aggr_epoch)
+		args->aggr_epoch = args_tmp.aggr_epoch;
 
 done:
 	itp_free(&itp);
@@ -1592,7 +1594,6 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 	args.cmt_cnt                   = 0;
 	args.time_stat.dts_cmt_time[0] = UINT64_MAX;
 	args.time_stat.dts_epoch[0]    = DAOS_EPOCH_MAX;
-	args.aggr_epoch                = DAOS_EPOCH_MAX;
 	param.ip_hdl                   = ctx->dc_poh;
 	param.ip_epr.epr_hi            = DAOS_EPOCH_MAX;
 	do {
