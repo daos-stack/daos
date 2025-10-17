@@ -792,6 +792,16 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	return resp, req.Ranks, nil
 }
 
+func (svc *mgmtSvc) getSysSelfHeal() (string, error) {
+	if sh, err := system.GetUserProperty(svc.sysdb, svc.systemProps,
+		daos.SystemPropertySelfHeal.String()); err != nil {
+		return "", errors.Wrapf(err, "retrieving %s system property",
+			daos.SystemPropertySelfHeal)
+	} else {
+		return sh, nil
+	}
+}
+
 // SystemQuery implements the method defined for the Management Service.
 //
 // Retrieve the state of DAOS ranks in the system by returning details stored in
@@ -815,6 +825,14 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		Absentranks: missRanks.String(),
 		Absenthosts: missHosts.String(),
 	}
+
+	// Retrieve system self-heal property.
+	selfHeal, err := svc.getSysSelfHeal()
+	if err != nil {
+		return nil, err
+	}
+	resp.SysSelfHealPolicy = selfHeal
+
 	if hitRanks.Count() == 0 {
 		// If the membership is empty, this replica is likely waiting
 		// for logs from peers, so we should indicate to the client
@@ -1553,9 +1571,9 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 	}
 
 	// Retrieve system self-heal property.
-	selfHeal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, daos.SystemPropertySelfHeal.String())
+	selfHeal, err := svc.getSysSelfHeal()
 	if err != nil {
-		return nil, errors.Wrapf(err, "retrieving %s system property", daos.SystemPropertySelfHeal)
+		return nil, err
 	}
 
 	svc.log.Debugf("system property self_heal='%+v'", selfHeal)
