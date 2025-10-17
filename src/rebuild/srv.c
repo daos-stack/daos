@@ -1566,9 +1566,9 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 
 		/* NB: if pool map remains unchanged, ds_pool_tgt_finish_rebuild sets it to 0 */
 		obj_reclaim_ver = obj_reclaim_ver > 0 ? obj_reclaim_ver : task->dst_map_ver;
-		rc = ds_rebuild_schedule(pool, obj_reclaim_ver, rgt->rgt_reclaim_epoch,
-					 task->dst_new_layout_version, &task->dst_tgts,
-					 RB_OP_RECLAIM, 5);
+		rc              = ds_rebuild_schedule(pool, obj_reclaim_ver, rgt->rgt_reclaim_epoch,
+						      task->dst_new_layout_version, &task->dst_tgts,
+						      RB_OP_RECLAIM, 5);
 		if (rc != 0)
 			D_ERROR("reschedule reclaim, "DF_UUID" failed: "DF_RC"\n",
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
