@@ -158,6 +158,7 @@ daos_init(void)
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
+
 	if (module_initialized > 0) {
 		/** already initialized, report success */
 		module_initialized++;
