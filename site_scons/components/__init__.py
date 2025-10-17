@@ -32,9 +32,7 @@ from SCons.Script import Dir, GetOption
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
 ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
-ARM_PLATFORM = False
-if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
-    ARM_PLATFORM = True
+ARM_PLATFORM = PROCESSOR.lower() in [x.lower() for x in ARM_LIST]
 
 
 class InstalledComps():
