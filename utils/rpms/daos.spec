@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -633,6 +633,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Oct 17 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-4
+- Third release candidate for 2.6.4
+
 * Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-3
 - Ensure daos-server installs spdk
 
