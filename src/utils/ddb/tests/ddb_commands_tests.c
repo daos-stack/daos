@@ -539,9 +539,8 @@ dtx_aggr_tests(void **state)
 			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+10$");
 
 	/* Test aggregation with an epoch (i.e. aggregate 3 first DTX entries) */
-	opt_aggr.format = DDB_DTX_AGGR_CMT_TIME;
-	opt_aggr.cmt_time = dtx_get_cmt_time(dvt_fake_print_buffer);
-	opt_aggr.cmt_time += 1;
+	opt_aggr.format   = DDB_DTX_AGGR_CMT_TIME;
+	opt_aggr.cmt_time = dtx_get_cmt_time(dvt_fake_print_buffer) + 1;
 	assert_success(ddb_run_dtx_aggr(&ctx, &opt_aggr));
 
 	dvt_fake_print_reset();
