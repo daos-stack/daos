@@ -52,8 +52,8 @@ int ddb_parse_key(const char *input, daos_key_t *key);
  */
 int ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id);
 
-/* Parse a string representing a date into an epoch */
+/* Parse a string representing a date into a DTX commit time */
 int
-ddb_date2epoch(const char *date, uint64_t *epoch);
+ddb_date2cmt_time(const char *date, uint64_t *cmt_time);
 
 #endif /** __DAOS_DDB_PARSE_H */

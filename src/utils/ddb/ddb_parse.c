@@ -481,22 +481,23 @@ ddb_parse_key(const char *input, daos_key_t *key)
 }
 
 int
-ddb_date2epoch(const char *date, uint64_t *epoch)
+ddb_date2cmt_time(const char *date, uint64_t *cmt_time)
 {
-	struct tm       date_tm    = {0};
-	struct timespec date_tspec = {0};
+	struct tm       date_tm = {0};
 	char           *endptr;
+	time_t          cmt_time_tmp;
 
-	if (date == NULL || epoch == NULL)
+	if (date == NULL || cmt_time == NULL)
 		return -DER_INVAL;
 
 	endptr = strptime(date, "%Y-%m-%d %H:%M:%S", &date_tm);
 	if (endptr == NULL || *endptr != '\0')
 		return -DER_INVAL;
 
-	date_tspec.tv_sec = mktime(&date_tm);
-	if (date_tspec.tv_sec == (time_t)-1)
+	cmt_time_tmp = mktime(&date_tm);
+	if (cmt_time_tmp == (time_t)-1)
 		return daos_errno2der(errno);
+	*cmt_time = cmt_time_tmp;
 
-	return d_timespec2hlc(date_tspec, epoch);
+	return 0;
 }

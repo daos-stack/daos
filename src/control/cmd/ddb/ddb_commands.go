@@ -9,6 +9,8 @@
 package main
 
 import (
+	"math"
+
 	"github.com/desertbit/grumble"
 )
 
@@ -391,11 +393,14 @@ the path must include the extent, otherwise, it must not.`,
 		Help:      "Stat on DTX entries",
 		LongHelp:  "Print statistic on the DTX entries",
 		HelpGroup: "vos",
+		Flags: func(a *grumble.Flags) {
+			a.Bool("d", "details", false, "Show detailed time related stats.")
+		},
 		Args: func(a *grumble.Args) {
-			a.String("path", "Optional, VOS tree path to query.", grumble.Default(""))
+			a.String("path", "Optional, VOS tree path of a container to query.", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbDtxStat(ctx, c.Args.String("path"))
+			return ddbDtxStat(ctx, c.Args.String("path"), c.Flags.Bool("details"))
 		},
 		Completer: nil,
 	})
@@ -415,6 +420,25 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbProvMem(ctx, c.Args.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_size"))
+		},
+		Completer: nil,
+	})
+	// Command dtx_aggr
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_aggr",
+		Aliases:   nil,
+		Help:      "Aggregate DTX entries",
+		LongHelp:  "Aggregate DTX entries until a given aggregation commit time or date",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, VOS tree path of a container to aggregate.", grumble.Default(""))
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("t", "cmt_time", math.MaxUint64, "Max aggregfation committed time in seconds")
+			f.String("d", "cmt_date", "", "Max aggregation committed date (format '1970-01-01 00:00:00')")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxAggr(ctx, c.Args.String("path"), c.Flags.Uint64("cmt_time"), c.Flags.String("cmt_date"))
 		},
 		Completer: nil,
 	})
