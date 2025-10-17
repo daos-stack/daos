@@ -1403,7 +1403,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	if (!DAOS_FAIL_CHECK(DAOS_CHK_CONT_ORPHAN))
 		rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
 
-	out->tdo_rc = (rc == 0 ? 0 : 1);
+	out->tdo_rc = rc;
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
@@ -1415,7 +1415,8 @@ ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	struct cont_tgt_destroy_out    *out_source = crt_reply_get(source);
 	struct cont_tgt_destroy_out    *out_result = crt_reply_get(result);
 
-	out_result->tdo_rc += out_source->tdo_rc;
+	if (out_result->tdo_rc == 0)
+		out_result->tdo_rc = out_source->tdo_rc;
 	return 0;
 }
 

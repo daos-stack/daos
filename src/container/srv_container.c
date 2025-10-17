@@ -1291,10 +1291,18 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to destroy %d targets\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
-		rc = -DER_IO;
+	if (rc == -DER_BUSY) {
+		D_INFO(DF_CONT ": some target busy\n", DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		/*
+		 * Must return an error that ds_pool_svc_ops_save considers
+		 * retryable. Otherwise, when it is retried, this container
+		 * destroy operation would always get its result from svc_ops
+		 * without being executed.
+		 */
+		rc = -DER_TIMEDOUT;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to destroy targets",
+			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	}
 
 out_rpc:
