@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -685,12 +686,11 @@ int dmg_check_query(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[
  *			[IN]	DMG config file.
  * \param seq		[IN]	The sequence# of the inconsistency to be repaired.
  * \param opt		[IN]	The option for what action to handle the inconsistency.
- * \param for_all	[IN]	Whether the repair decision is applicable for the other issues
- *				with the same inconsistency class or not.
  *
  * \return		Zero on success, negative value if error.
  */
-int dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt, bool for_all);
+int
+    dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt);
 
 /**
  * Set inconsistency handle policy for DAOS checker.

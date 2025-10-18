@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2637,12 +2638,12 @@ out:
 }
 
 static int
-chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bool locked)
+chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act)
 {
 	struct chk_pending_rec	*cpr = NULL;
 	int			 rc;
 
-	rc = chk_pending_del(ins, seq, locked, &cpr);
+	rc = chk_pending_del(ins, seq, false, &cpr);
 	if (rc == 0) {
 		/* The cpr will be destroyed by the waiter via chk_engine_report(). */
 		D_ASSERT(cpr->cpr_busy);
@@ -2666,72 +2667,28 @@ chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bo
 }
 
 int
-chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t flags)
+chk_engine_act(uint64_t gen, uint64_t seq, uint32_t act)
 {
-	struct chk_instance	*ins = chk_engine;
-	struct chk_property	*prop = &ins->ci_prop;
-	struct chk_pool_rec	*pool = NULL;
-	struct chk_pool_rec	*pool_tmp = NULL;
-	struct chk_pending_rec	*cpr = NULL;
-	struct chk_pending_rec	*cpr_tmp = NULL;
-	int			 rc;
+	struct chk_instance *ins = chk_engine;
+	int                  rc;
 
 	if (ins->ci_bk.cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
-	if (unlikely(cla >= CHK_POLICY_MAX)) {
-		D_ERROR("Invalid DAOS inconsistency class %u\n", cla);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
 	/* The admin may input the wrong option, not acceptable. */
 	if (unlikely(act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)) {
-		D_ERROR("%u is not acceptable for interaction decision.\n", cla);
+		D_ERROR("%u is not acceptable for interaction decision.\n", act);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = chk_engine_act_internal(ins, seq, act, false);
+	rc = chk_engine_act_internal(ins, seq, act);
 	if (rc == -DER_NONEXIST || rc == -DER_NO_HDL)
 		rc = 0;
 
-	if (rc != 0 || !(flags & CAF_FOR_ALL))
-		goto out;
-
-	if (likely(prop->cp_policies[cla] != act)) {
-		prop->cp_policies[cla] = act;
-		chk_prop_update(prop, NULL);
-	}
-
-	/*
-	 * Hold reference on each to guarantee that the next 'tmp' will not be unlinked from the
-	 * pool list during current pool process.
-	 */
-	d_list_for_each_entry(pool, &ins->ci_pool_list, cpr_link)
-		chk_pool_get(pool);
-
-	d_list_for_each_entry_safe(pool, pool_tmp, &ins->ci_pool_list, cpr_link) {
-		if (rc == 0) {
-			ABT_rwlock_wrlock(ins->ci_abt_lock);
-			d_list_for_each_entry_safe(cpr, cpr_tmp, &pool->cpr_pending_list,
-						   cpr_pool_link) {
-				if (cpr->cpr_class != cla ||
-				    cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)
-					continue;
-
-				rc = chk_engine_act_internal(ins, cpr->cpr_seq, act, true);
-				if (rc != 0)
-					break;
-			}
-			ABT_rwlock_unlock(ins->ci_abt_lock);
-		}
-		chk_pool_put(pool);
-	}
-
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" on rank %u takes action for seq "
-		 DF_X64" with gen "DF_X64", class %u, action %u, flags %x: "DF_RC"\n",
-		 DP_ENGINE(ins), dss_self_rank(), seq, gen, cla, act, flags, DP_RC(rc));
+		 DF_ENGINE " on rank %u takes act %u, seq " DF_X64 ", gen " DF_X64 ": " DF_RC "\n",
+		 DP_ENGINE(ins), dss_self_rank(), act, seq, gen, DP_RC(rc));
 
 	return rc;
 }
