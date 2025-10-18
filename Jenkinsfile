@@ -546,6 +546,8 @@ pipeline {
                                 script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
+                            sh label: 'Build benchmarks',
+                                script: './ci/rpm/build_benchmarks.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                         stash_files: 'ci/test_files_to_stash.txt',
@@ -598,6 +600,8 @@ pipeline {
                                 script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
+                            sh label: 'Build benchmarks',
+                                script: './ci/rpm/build_benchmarks.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -649,6 +653,8 @@ pipeline {
                                 script: './ci/rpm/install_deps.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
+                            sh label: 'Build benchmarks',
+                                script: './ci/rpm/build_benchmarks.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                 scons_args: sconsFaultsArgs() +
