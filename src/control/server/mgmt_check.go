@@ -271,6 +271,8 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		resp.Status = 0 // reset status to indicate success
 	}
 
+	// If either the checker was not reset, or it was only reset against specified pools above,
+	// there may still be unresolved findings in the DB that need to be marked stale or removed.
 	if resp.Status == 0 {
 		svc.handleUnresolvedInteractions(req.Uuids)
 	}
@@ -294,7 +296,7 @@ func (svc *mgmtSvc) resetFindings(uuids []string) error {
 	return nil
 }
 
-// handleUnresolvedInteractions goes through all unresolved (INTERACT) findings in the database.
+// handleUnresolvedInteractions goes through all unresolved (INTERACT/STALE) findings in the database.
 // Those that will be rediscovered in the next run can be removed. All others must be marked stale
 // as the user will be unable to act on them after the new check instance started. To fix the
 // inconsistency, they'll need to re-run the checker on the affected pool.
@@ -316,7 +318,7 @@ func (svc *mgmtSvc) handleUnresolvedInteractions(uuids []string) {
 					svc.log.Errorf("unable to remove stale checker finding %s: %s", f, err.Error())
 				}
 			} else if f.Action != chkpb.CheckInconsistAction_CIA_STALE { // No need to re-mark stale interactions
-				// If the pool isn't being re-checked, we should keep the interactive finding, but the user
+				// If the pool isn't being re-checked, we should keep the unresolved finding, but the user
 				// won't be able to act on it anymore.
 				svc.log.Debugf("marking unresolved interaction %d stale for pool %s", f.Seq, f.PoolUuid)
 				if err := svc.sysdb.SetCheckerFindingAction(f.Seq, int32(chkpb.CheckInconsistAction_CIA_STALE)); err != nil {

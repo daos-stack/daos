@@ -153,7 +153,7 @@ func GetActionMsg(class chkpb.CheckInconsistClass, action chkpb.CheckInconsistAc
 	case chkpb.CheckInconsistAction_CIA_TRUST_EC_DATA:
 		return fmt.Sprintf("Trust the data of the %s results", ro)
 	case chkpb.CheckInconsistAction_CIA_STALE:
-		return "Current checker instance cannot act on this finding. Re-run the checker."
+		return "Current checker instance cannot act on this finding. Restart checker against the pool to handle the interaction."
 	default:
 		return fmt.Sprintf("%s: %s (details: %+v)", ro, action, details)
 	}

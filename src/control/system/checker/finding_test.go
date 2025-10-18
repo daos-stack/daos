@@ -459,7 +459,7 @@ func TestChecker_AnnotateFinding(t *testing.T) {
 					Timestamp: "Mon Dec  5 16:27:56 2022",
 					Msg:       "Check engine detects inconsistent container label: new-label (CS) vs foo (property).",
 					ActMsgs: []string{
-						"Current checker instance cannot act on this finding. Re-run the checker.",
+						"Current checker instance cannot act on this finding. Restart checker against the pool to handle the interaction.",
 					},
 				}),
 		},
