@@ -46,7 +46,6 @@ fio:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -71,7 +70,6 @@ fio:
   test:
     numjobs: 1
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
   thread_count: 8
   eq_count: 2
   cores: '0-3'
