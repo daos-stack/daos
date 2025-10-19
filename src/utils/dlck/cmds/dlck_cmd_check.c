@@ -133,7 +133,7 @@ exec_one(void *arg)
 	dlck_xstream_set_rc(xa, rc);
 }
 
-#define STOP_TGT_STR "Wait for targets to stop... "
+#define STOP_TGT_STR "Wait for targets to stop"
 
 /**
  * The main thread spawns and waits for other threads to complete their tasks.
@@ -179,6 +179,11 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		if (rc != DER_SUCCESS) {
 			goto err_stop_engine;
 		}
+		/** no files exist */
+		if (d_list_empty(&ctrl->files.list)) {
+			DLCK_PRINT(dp, "No pools exist. Exiting...\n");
+			goto err_stop_engine;
+		}
 	}
 
 	DLCK_PRINT(dp, "Create pools directories... ");
@@ -204,7 +209,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		goto err_free_rcs;
 	}
 
-	DLCK_PRINT(dp, STOP_TGT_STR "\n");
+	DLCK_PRINT(dp, STOP_TGT_STR "...\n");
 	rc = dlck_engine_join_all(engine, &de, rcs);
 	DLCK_PRINTL_RC(dp, rc, STOP_TGT_STR);
 	if (rc != DER_SUCCESS) {

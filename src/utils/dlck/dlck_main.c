@@ -18,8 +18,6 @@
 #include "dlck_cmds.h"
 #include "dlck_print.h"
 
-static const dlck_cmd_func dlck_cmds[] = DLCK_CMDS_FUNCS;
-
 int
 main(int argc, char *argv[])
 {
@@ -50,7 +48,7 @@ main(int argc, char *argv[])
 		goto err_abt_fini;
 	}
 
-	rc = dlck_cmds[DLCK_CMD_CHECK](&ctrl);
+	rc = dlck_cmd_check(&ctrl);
 	if (rc != DER_SUCCESS) {
 		goto err_print_main_fini;
 	}

@@ -15,8 +15,6 @@
 
 #include <daos/dlck.h>
 
-#include "dlck_cmds.h"
-
 #define _STRINGIFY(x)                   #x
 #define STRINGIFY(x)                    _STRINGIFY(x)
 

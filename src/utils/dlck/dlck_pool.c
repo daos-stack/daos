@@ -177,7 +177,6 @@ dlck_pool_list(d_list_t *file_list)
 		/** remove the pool from the list and free it */
 		d_list_del(&pool_info->spi_link);
 		smd_pool_free_info(pool_info);
-		pool_info = NULL;
 	}
 
 	return DER_SUCCESS;

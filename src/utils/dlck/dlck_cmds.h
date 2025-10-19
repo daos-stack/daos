@@ -7,17 +7,7 @@
 #ifndef __DLCK_CMDS__
 #define __DLCK_CMDS__
 
-enum dlck_cmd {
-	DLCK_CMD_NOT_SET = -2,
-	DLCK_CMD_UNKNOWN = -1,
-	DLCK_CMD_CHECK,
-};
-
-#define DLCK_CMD_CHECK_STR "check"
-
-struct dlck_control;
-
-typedef int (*dlck_cmd_func)(struct dlck_control *ctrl);
+#include "dlck_args.h"
 
 /**
  * \brief Validate the integrity of the pool(s) metadata.
@@ -35,10 +25,5 @@ typedef int (*dlck_cmd_func)(struct dlck_control *ctrl);
  */
 int
 dlck_cmd_check(struct dlck_control *ctrl);
-
-#define DLCK_CMDS_FUNCS                                                                            \
-	{                                                                                          \
-		dlck_cmd_check                                                                     \
-	}
 
 #endif /** __DLCK_CMDS__ */

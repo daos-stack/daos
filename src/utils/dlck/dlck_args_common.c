@@ -38,7 +38,7 @@ args_common_init(struct dlck_args_common *args)
 	memset(args, 0, sizeof(*args));
 	/** set defaults */
 	args->write_mode = false; /** dry run */
-	args->options.non_zero_padding = DLCK_EVENT_ERROR;
+	args->options.non_zero_padding = DLCK_EVENT_WARNING;
 }
 
 static int

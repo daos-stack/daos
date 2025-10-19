@@ -1492,7 +1492,7 @@ gc_close_bkt(struct vos_gc_info *gc_info)
 	gc_info->gi_last_pinned = UMEM_DEFAULT_MBKT_ID;
 }
 
-#define DLCK_GC_TREE_STR "Garbage collector's tree... "
+#define DLCK_GC_TREE_STR "Garbage collector's tree"
 
 static inline int
 gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_print *dp,
@@ -1500,7 +1500,7 @@ gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_pri
 {
 	int rc;
 
-	DLCK_PRINT(dp, DLCK_GC_TREE_STR "\n");
+	DLCK_PRINT(dp, DLCK_GC_TREE_STR "...\n");
 	DLCK_INDENT(dp, rc = dbtree_open_inplace_dp(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL,
 						    NULL, dp, &gc_info->gi_bins_btr));
 	DLCK_PRINTL_RC(dp, rc, DLCK_GC_TREE_STR);

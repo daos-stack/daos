@@ -56,10 +56,6 @@ dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct dl
 
 	/** print footer */
 	DLCK_PRINT_SEPARATOR(dp);
-	if (warnings_num > 0) {
-		DLCK_PRINTF(dp, "Total: %u warning(s).\n", warnings_num);
-	} else {
-		DLCK_PRINT(dp, "No warnings.\n");
-	}
+	DLCK_PRINTF(dp, "Total: %u warning(s).\n", warnings_num);
 	DLCK_PRINT_SEPARATOR(dp);
 }

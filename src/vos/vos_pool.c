@@ -1043,7 +1043,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		xs_ctxt, DP_UUID(pool_id));
 
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
-	DLCK_PRINTL_RC(dp, rc, "Open BIO meta context... ");
+	DLCK_PRINTL_RC(dp, rc, "Open BIO meta context");
 	if (rc) {
 		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID", "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
@@ -1056,7 +1056,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 umem_open:
 	pop = umempobj_open(path, layout, UMEMPOBJ_ENABLE_STATS, &store);
 	rc  = (pop == NULL) ? daos_errno2der(errno) : DER_SUCCESS;
-	DLCK_PRINTL_RC(dp, rc, "Open the pool... ");
+	DLCK_PRINTL_RC(dp, rc, "Open the pool");
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
@@ -1702,7 +1702,7 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	return rc;
 }
 
-#define DLCK_CONT_TREE_STR "Containers tree... "
+#define DLCK_CONT_TREE_STR "Containers tree"
 
 static int
 pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned int flags,
@@ -1744,7 +1744,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 		goto out;
 	}
 
-	DLCK_PRINT(dp, DLCK_CONT_TREE_STR "\n");
+	DLCK_PRINT(dp, DLCK_CONT_TREE_STR "...\n");
 	/* Cache container table btree hdl */
 	DLCK_INDENT(dp, rc = dbtree_open_inplace_dp(&pool_df->pd_cont_root, &pool->vp_uma,
 						    DAOS_HDL_INVAL, pool, dp, &pool->vp_cont_th));
@@ -1836,9 +1836,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 
 	/** header with parameters */
-	DLCK_PRINT(dp, "Check pool:\n");
-	DLCK_PRINTF(dp, "\tpath: %s\n", path);
-	DLCK_PRINTF(dp, "\tuuid: " DF_UUIDF "\n", DP_UUID(uuid));
+	DLCK_PRINTF(dp, "Check pool:\n\tpath: %s\n\tuuid: " DF_UUIDF "\n", path, DP_UUID(uuid));
 	dlck_print_indent_inc(dp);
 
 	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
@@ -1929,7 +1927,7 @@ out:
 		*poh = vos_pool2hdl(pool);
 
 		dlck_print_indent_dec(dp);
-		DLCK_PRINTL_RC(dp, rc, "Check pool... ");
+		DLCK_PRINTL_RC(dp, rc, "Check pool");
 	}
 
 	/* Close this local handle, if it hasn't been consumed nor already
