@@ -28,11 +28,11 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct dlck_print *dp)
 		return -DER_NOMEM;
 	}
 
-	rc = mkdir(path, 0777);
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_POOL_DIR)) {
-		D_ASSERT(rc == 0);
 		errno = daos_fail_value_get();
 		rc    = -1;
+	} else {
+		rc = mkdir(path, 0777);
 	}
 	if (rc != 0 && errno != EEXIST) {
 		rc = daos_errno2der(errno);

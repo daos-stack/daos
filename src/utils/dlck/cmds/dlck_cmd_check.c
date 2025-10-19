@@ -151,11 +151,11 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	int                 rc;
 
 	/** create a log directory */
-	ctrl->log_dir = mkdtemp(log_dir_template);
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) { /** fault injection */
-		D_ASSERT(ctrl->log_dir != NULL);
 		ctrl->log_dir = NULL;
 		errno         = daos_fail_value_get();
+	} else {
+		ctrl->log_dir = mkdtemp(log_dir_template);
 	}
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
@@ -166,10 +166,6 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	DLCK_PRINT(dp, "Start the engine... ");
 	rc = dlck_engine_start(&ctrl->engine, &engine);
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) { /** fault injection */
-		D_ASSERT(rc == DER_SUCCESS);
-		rc = daos_errno2der(daos_fail_value_get());
-	}
 	DLCK_APPENDL_RC(dp, rc);
 	if (rc != DER_SUCCESS) {
 		return rc;

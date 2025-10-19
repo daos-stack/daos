@@ -419,7 +419,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	int                 tag               = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 	int                 rc;
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) {
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) { /** fault injection */
 		return daos_errno2der(daos_fail_value_get());
 	}
 

@@ -1875,11 +1875,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		return rc;
 
 	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
-	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_NVME)) { /** fault injection */
-		D_ASSERT(rc == 0);
-		rc = daos_errno2der(daos_fail_value_get());
-	}
-	DLCK_PRINTL_RC(dp, rc, "NVMe devices (if applicable)... ");
+	DLCK_PRINTL_RC(dp, rc, "NVMe devices (if applicable)");
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		goto out;
