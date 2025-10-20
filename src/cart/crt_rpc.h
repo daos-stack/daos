@@ -191,7 +191,6 @@ struct crt_rpc_priv {
 	 * match with crp_req_hdr.cch_flags.
 	 */
 	uint32_t		crp_flags;
-	/* clang-format off */
 	uint32_t                 crp_srv : 1, /* flag of server received request */
 	    crp_output_got : 1, crp_input_got : 1,
 	    /* flag of collective RPC request */
@@ -204,8 +203,6 @@ struct crt_rpc_priv {
 	    crp_in_binheap          : 1,
 	    /* set if a call to crt_req_reply pending */
 	    crp_reply_pending       : 1,
-	    /* set when RPC reply is sent successfully. */
-	    crp_reply_sent          : 1,
 	    /* set to 1 if target ep is set */
 	    crp_have_ep             : 1,
 	    /* RPC is tracked by the context */
@@ -220,7 +217,6 @@ struct crt_rpc_priv {
 	    crp_release_input_early : 1,
 	    /* rpc expired */
 	    crp_expired             : 1;
-	/* clang-format on */
 
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
