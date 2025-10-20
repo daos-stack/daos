@@ -486,8 +486,9 @@ again:
 				/* convert to more specific errno */
 				if (rc == -DER_NONEXIST)
 					rc = -DER_CONT_NONEXIST;
-				DL_ERROR(rc, DF_CONT " create IV_CONT_PROP iv entry failed",
-					 DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
+				DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
+					  DF_CONT " create IV_CONT_PROP iv entry failed",
+					  DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_CAPA) {
 				struct container_hdl	chdl = { 0 };
 				int			rc1;
