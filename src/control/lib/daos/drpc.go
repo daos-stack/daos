@@ -66,6 +66,8 @@ func (m securityAgentMethod) String() string {
 const (
 	// MethodRequestCredentials is a ModuleSecurityAgent method
 	MethodRequestCredentials securityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
+	// MethodRequestCredentials is a ModuleSecurityAgent method
+	MethodRequestValidFlavors securityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_VALID_AUTH
 )
 
 type MgmtMethod int32

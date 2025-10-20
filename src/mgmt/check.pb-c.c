@@ -1069,7 +1069,7 @@ static const ProtobufCFieldDescriptor mgmt__check_start_req__field_descriptors[5
     offsetof(Mgmt__CheckStartReq, ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1298,7 +1298,7 @@ static const ProtobufCFieldDescriptor mgmt__check_query_req__field_descriptors[4
     offsetof(Mgmt__CheckQueryReq, seqs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1954,7 +1954,7 @@ static const ProtobufCFieldDescriptor mgmt__check_get_policy_req__field_descript
     offsetof(Mgmt__CheckGetPolicyReq, classes),
     &chk__check_inconsist_class__descriptor,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {

@@ -129,6 +129,8 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		}
 	}
 
+	resp.ValidAuthFlavors = svc.validAuthFlavors
+
 	return resp, nil
 }
 

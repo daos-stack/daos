@@ -241,6 +241,7 @@ type (
 		ClientNetHint           ClientNetworkHint     `json:"client_net_hint"`
 		AlternateClientNetHints []ClientNetworkHint   `json:"secondary_client_net_hints"`
 		BuildInfo               BuildInfo             `json:"build_info"`
+		ValidAuthFlavors		[]uint32			  `json:"valid_auth_flavors"`
 	}
 )
 

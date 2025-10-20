@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -24,16 +25,23 @@ import (
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
-	log    logging.Logger
-	config *security.TransportConfig
+	log              logging.Logger
+	config           *security.TransportConfig
+	validAuthFlavors []uint32
 }
 
 // NewSecurityModule creates a new security module with a transport config
-func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *SecurityModule {
-	return &SecurityModule{
-		log:    log,
-		config: tc,
+func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) (*SecurityModule, error) {
+	validAuthFlavors, err := auth.ParseValidAuthFlavors(tc.AuthenticationConfig.ValidAuth)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get valid authentication flavors")
 	}
+
+	return &SecurityModule{
+		log:              log,
+		config:           tc,
+		validAuthFlavors: validAuthFlavors,
+	}, nil
 }
 
 func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error) {
@@ -64,7 +72,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	}
 
 	// Check our verifier
-	err = auth.VerifyToken(key, cred.GetToken(), cred.GetVerifier().GetData())
+	err = auth.VerifyToken(key, cred.GetToken(), cred.GetVerifier().GetData(), m.validAuthFlavors)
 	if err != nil {
 		m.log.Errorf("cred verification failed: %v", err)
 		return m.validateRespWithStatus(daos.NoPermission)

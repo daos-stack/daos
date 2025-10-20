@@ -94,8 +94,16 @@ func (cm ClientUserMap) Lookup(uid uint32) *MappedClientUser {
 // CredentialConfig contains configuration details for managing user
 // credentials.
 type CredentialConfig struct {
-	CacheExpiration time.Duration `yaml:"cache_expiration,omitempty"`
-	ClientUserMap   ClientUserMap `yaml:"client_user_map,omitempty"`
+	CacheExpiration  time.Duration       `yaml:"cache_expiration,omitempty"`
+	ClientUserMap    ClientUserMap       `yaml:"client_user_map,omitempty"`
+	ValidAuthMethods []string            `yaml:"valid_auth_methods,omitempty"`
+	AMConfig         AccessManagerConfig `yaml:"access_manager_config,omitempty"`
+}
+
+// AccessManagerConfig contains configuration details for managing access manager
+type AccessManagerConfig struct {
+	CallerID string `yaml:"caller_id,omitempty"`
+	BaseURL  string `yaml:"base_url,omitempty"`
 }
 
 // TransportConfig contains all the information on whether or not to use
@@ -103,6 +111,19 @@ type CredentialConfig struct {
 type TransportConfig struct {
 	AllowInsecure     bool `yaml:"allow_insecure"`
 	CertificateConfig `yaml:",inline"`
+	// authentication
+	AuthenticationConfig *AuthenticationConfig `yaml:"auth_config"`
+}
+
+// AuthenticationConfig contains configuation details for valid authentication
+type AuthenticationConfig struct {
+	ValidAuth []string `yaml:"valid_auth"`
+}
+
+func DefaultAuthenticationConfig() *AuthenticationConfig {
+	return &AuthenticationConfig{
+		ValidAuth: []string{"SYS"},
+	}
 }
 
 func (tc *TransportConfig) String() string {
@@ -177,6 +198,7 @@ func DefaultServerTransportConfig() *TransportConfig {
 			caPool:          nil,
 			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
+		AuthenticationConfig: DefaultAuthenticationConfig(),
 	}
 }
 

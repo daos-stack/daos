@@ -789,7 +789,7 @@ static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[9
     offsetof(Srv__NotifyReadyReq, secondarynctxs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -897,7 +897,7 @@ static const ProtobufCFieldDescriptor srv__get_pool_svc_resp__field_descriptors[
     offsetof(Srv__GetPoolSvcResp, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -998,7 +998,7 @@ static const ProtobufCFieldDescriptor srv__pool_find_by_label_resp__field_descri
     offsetof(Srv__PoolFindByLabelResp, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1080,7 +1080,7 @@ static const ProtobufCFieldDescriptor srv__check_list_pool_resp__one_pool__field
     offsetof(Srv__CheckListPoolResp__OnePool, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1207,7 +1207,7 @@ static const ProtobufCFieldDescriptor srv__check_reg_pool_req__field_descriptors
     offsetof(Srv__CheckRegPoolReq, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1513,7 +1513,7 @@ static const ProtobufCFieldDescriptor srv__list_pools_resp__pool__field_descript
     offsetof(Srv__ListPoolsResp__Pool, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

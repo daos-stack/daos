@@ -83,9 +83,10 @@ type mgmtSvc struct {
 	serialReqs        batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
+	validAuthFlavors  []uint32
 }
 
-func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
+func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub, v []uint32) *mgmtSvc {
 	return &mgmtSvc{
 		log:               h.log,
 		harness:           h,
@@ -99,6 +100,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		batchReqs:         make(batchReqChan),
 		serialReqs:        make(batchReqChan),
 		groupUpdateReqs:   make(chan bool),
+		validAuthFlavors:  v,
 	}
 }
 

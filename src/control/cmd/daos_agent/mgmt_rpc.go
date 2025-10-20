@@ -49,6 +49,8 @@ type mgmtModule struct {
 
 	numaGetter  hardware.ProcessNUMAProvider
 	providerIdx uint
+
+	validAuthFlavors []uint32
 }
 
 func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {

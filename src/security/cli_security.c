@@ -48,16 +48,43 @@ dc_sec_request_creds(d_iov_t *creds)
 	return rc;
 }
 
+static int 
+get_delegation_token(const char *delegation_token_filename, Auth__AuthArgs *args)
+{
+	FILE *token_fptr = fopen(delegation_token_filename, "r");
+
+	if(token_fptr == NULL) {
+		D_ERROR("AM path is not a valid file. Please specify a valid path in $AM_PATH\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC(args->data.data, MAX_DELEGATION_TOKEN_SIZE);
+	if (args == NULL) {
+		D_ERROR("Failed to allocate buffer for delegation token.\n");
+		return -DER_NOMEM;
+	}
+
+	args->data.len = fread(args->data.data, 1, MAX_DELEGATION_TOKEN_SIZE, token_fptr);
+	if (args->data.len == 0) {
+		D_ERROR("Found an empty file.\n");
+		return -DER_INVAL;
+	}
+
+	fclose(token_fptr);
+	return -DER_SUCCESS;
+}
+
 static int
 request_credentials_via_drpc(Drpc__Response **response)
 {
 	Drpc__Call	*request;
 	struct drpc	*agent_socket;
 	int		rc;
+	char *delegation_token_path = getenv("TOKEN_PATH");
+	int use_access_manager = delegation_token_path != NULL && strcmp(delegation_token_path, "");
 
 	if (dc_agent_sockpath == NULL) {
-		D_ERROR("DAOS Socket Path is Uninitialized\n");
-		return -DER_UNINIT;
+		dc_agent_sockpath = DEFAULT_DAOS_AGENT_DRPC_SOCK;
 	}
 
 	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
@@ -65,7 +92,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 		D_ERROR("Can't connect to agent socket "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
-
+	
 	rc = drpc_call_create(agent_socket,
 			      DRPC_MODULE_SEC_AGENT,
 			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
@@ -74,6 +101,20 @@ request_credentials_via_drpc(Drpc__Response **response)
 		D_ERROR("Couldn't allocate dRPC call "DF_RC"\n", DP_RC(rc));
 		drpc_close(agent_socket);
 		return rc;
+	}
+
+	if (use_access_manager) {
+		Auth__AuthArgs args;
+		auth__auth_args__init(&args);
+		args.flavor = AUTH__FLAVOR__AUTH_AM;
+
+		rc = get_delegation_token(delegation_token_path, &args);
+		if (rc != -DER_SUCCESS) {
+			D_ERROR("Error in retrieving delegation token\n");
+			return rc;
+		}
+		D_ALLOC(request->body.data, MAX_DELEGATION_TOKEN_SIZE);
+		request->body.len = auth__auth_args__pack(&args, request->body.data);
 	}
 
 	rc = drpc_call(agent_socket, R_SYNC, request, response);

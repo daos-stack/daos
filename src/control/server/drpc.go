@@ -90,8 +90,13 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 		return errors.Wrap(err, "unable to create socket server")
 	}
 
+	securityModule, err := NewSecurityModule(req.log, req.tc)
+	if err != nil {
+		return errors.Wrap(err, "unable to create security module")
+	}
+
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.tc))
+	drpcServer.RegisterRPCModule(securityModule)
 	drpcServer.RegisterRPCModule(newMgmtModule())
 	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.sysdb, req.engines, req.events))
 

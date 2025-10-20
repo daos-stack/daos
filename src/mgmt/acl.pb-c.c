@@ -382,7 +382,7 @@ static const ProtobufCFieldDescriptor mgmt__get_aclreq__field_descriptors[3] =
     offsetof(Mgmt__GetACLReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -458,7 +458,7 @@ static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[4] 
     offsetof(Mgmt__ModifyACLReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -535,7 +535,7 @@ static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[4] 
     offsetof(Mgmt__DeleteACLReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

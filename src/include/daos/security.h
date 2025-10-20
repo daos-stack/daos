@@ -12,6 +12,9 @@
 #include <daos_types.h>
 #include <daos_prop.h>
 
+/** Constant that represents the upper bound size of a string encoded delegation credential token for the access manager. */
+#define MAX_DELEGATION_TOKEN_SIZE 10000
+
 /** Structure representing a resource's ownership by user and group, respectively. */
 struct d_ownership {
 	char *user;	/** name of the user owner */
