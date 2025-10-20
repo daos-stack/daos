@@ -1446,13 +1446,8 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 // selfHealExcludeRanks fetches a list of detected dead ranks from the leader's engine and updates
 // states within the control-plane membership appropriately.
 func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
-	mapVer, err := svc.sysdb.CurMapVersion()
-	if err == nil {
-		return err
-	}
-	req := &mgmtpb.GetGroupStatusReq{
-		MapVersion: mapVer,
-	}
+	// TODO: Pass a real, nonzero map version.
+	req := &mgmtpb.GetGroupStatusReq{}
 
 	// Fetch dead rank list from leader's engine with group status dRPC call.
 	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodGroupStatusGet, req)
