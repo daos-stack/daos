@@ -1,9 +1,11 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
+from time import sleep
 
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
@@ -81,6 +83,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
+        pool_free_space = {"initial": {}, "after_exclude": {}, "after_reintegrate": {}}
+
         # Exclude ranks 0 and 3 from a random pool
         ranks = [0, 3]
         self.pool = random.choice(pools)  # nosec
@@ -88,12 +92,20 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             self.log.info(
                 "==> (Loop %s/%s) Excluding ranks %s from %s",
                 loop + 1, self.loop_test_cnt, ranks, str(self.pool))
+
+            loop_key = f"loop_{loop + 1}"
+            pool_free_space["initial"][loop_key] = {}
+            pool_free_space["after_exclude"][loop_key] = {}
+            pool_free_space["after_reintegrate"][loop_key] = {}
+
             for index, rank in enumerate(ranks):
+                rank_key = f"rank_{rank}"
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.pool.get_version(True)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 # Get initial total free space (scm+nvme)
                 initial_free_space = self.pool.get_total_free_space(refresh=True)
+                pool_free_space["initial"][loop_key][rank_key] = initial_free_space
                 if server_boot is False:
                     if (self.test_during_rebuild is True and index == 0):
                         # Exclude rank 5
@@ -125,6 +137,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 pver_exclude = self.pool.get_version(True)
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 free_space_after_exclude = self.pool.get_total_free_space(refresh=True)
+                pool_free_space["after_exclude"][loop_key][rank_key] = free_space_after_exclude
                 # Check pool version incremented after pool exclude
                 # pver_exclude should be greater than
                 # pver_begin + 1 (1 target + exclude)
@@ -138,6 +151,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 "==> (Loop %s/%s) Reintegrating ranks %s into %s",
                 loop + 1, self.loop_test_cnt, ranks, str(self.pool))
             for index, rank in enumerate(ranks):
+                rank_key = f"rank_{rank}"
                 if self.test_with_blank_node is True:
                     ip_addr, p_num = self.get_ipaddr_for_rank(rank)
                     self.remove_pool_dir(ip_addr, p_num)
@@ -152,16 +166,40 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                         continue
                     output = self.pool.reintegrate(rank)
                 self.print_and_assert_on_rebuild_failure(output, timeout=15)
-                free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
+
+                # Check pool version incremented after pool reintegrate
                 pver_reint = self.pool.get_version(True)
                 self.log.info("Pool Version after reintegrate %d", pver_reint)
-                # Check pool version incremented after pool reintegrate
-                self.assertTrue(pver_reint > pver_exclude, "Pool Version Error:  After reintegrate")
-                self.assertTrue(free_space_after_reintegration > free_space_after_exclude,
-                                "Expected free space after reintegration is less than exclude")
+                self.assertGreater(
+                    pver_reint, pver_exclude, "Pool version did not increase after reintegration")
 
-            display_string = "{} space at the End".format(str(self.pool))
-            self.pool.display_pool_daos_space(display_string)
+                # Check pool free space after reintegration
+                self.log.info(
+                    "Total %s free space after last exclude: %s",
+                    self.pool, free_space_after_exclude)
+                pool_free_space["after_reintegrate"][loop_key][rank_key] = []
+                for _ in range(10):
+                    free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
+                    pool_free_space["after_reintegrate"][loop_key][rank_key].append(
+                        free_space_after_reintegration)
+                    if free_space_after_reintegration > free_space_after_exclude:
+                        break
+                    sleep(1)
+
+                self.log.info(
+                    "%s total free space summary for loop %s, rank %s",
+                    self.pool, loop_key, rank_key)
+                self.log.info(
+                    "  initial:           %s", pool_free_space["initial"][loop_key][rank_key])
+                self.log.info(
+                    "  after exclude:     %s", pool_free_space["after_exclude"][loop_key][rank_key])
+                for item in pool_free_space["after_reintegrate"][loop_key][rank_key]:
+                    self.log.info("  after reintegrate: %s", item)
+
+                self.assertGreater(free_space_after_reintegration, free_space_after_exclude,
+                                   "Expected free space after reintegration is less than exclude")
+
+            self.pool.display_pool_daos_space(f"{str(self.pool)} space at the End")
 
         # Finally check whether the written data can be accessed.
         # Also, run the daos cont check (for object integrity)
