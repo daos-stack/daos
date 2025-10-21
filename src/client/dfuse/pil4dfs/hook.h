@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,7 +81,7 @@ query_libc_version(void);
  *				otherwise	fail
  */
 int
-query_func_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const char *var_name,
-			 size_t *var_size, char **var_addr);
+query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const char *var_name,
+		    size_t *var_size, char **var_addr);
 
 #endif

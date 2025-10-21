@@ -1095,8 +1095,8 @@ ucs_init(void)
 		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
 		D_ASSERT(next_ucs_init != NULL);
 	}
-	rc = query_func_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
-				      &ucs_global_var_size, &ucs_global_var_addr);
+	rc = query_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
+				 &ucs_global_var_size, &ucs_global_var_addr);
 	if (rc == 0)
 		pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
 
