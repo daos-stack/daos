@@ -2435,7 +2435,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct pool_iv_conns   *iv_hdls            = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	d_rank_t		rank = dss_self_rank();
+	d_rank_t                rank               = dss_self_rank();
 	int			rc;
 
 	D_ASSERTF(svc->ps_error == 0, "ps_error: " DF_RC "\n", DP_RC(svc->ps_error));
@@ -2555,7 +2555,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, 0);
 	if (rc != 0)
 		goto out;
 
@@ -4202,6 +4202,8 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
 	}
+	if (query_bits & DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER)
+		out->pco_rebuild_st.rs_max_supported_layout_ver = DAOS_POOL_OBJ_VERSION;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -7694,6 +7696,12 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
 				 DP_UUID(svc->ps_uuid));
+			/*
+			 * Another PS replica might be able reach the MS. If I'm
+			 * not the PS leader of the specified term, this
+			 * rdb_resign call does nothing.
+			 */
+			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
 			goto out;
 		}
 		if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE)) {
