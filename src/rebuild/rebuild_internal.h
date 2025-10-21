@@ -282,8 +282,8 @@ struct rebuild_pool_tls {
 	uint32_t	rebuild_pool_gen;
 	uint64_t	rebuild_pool_leader_term;
 	int		rebuild_pool_status;
-	unsigned int	rebuild_pool_scanning:1,
-			rebuild_pool_scan_done:1;
+	unsigned int    rebuild_pool_scan_prepping : 1, /* preparing scanner on each target */
+	    rebuild_pool_scan_running              : 1; /* scanner is running */
 };
 
 /* per thread structure to track rebuild status for all pools */
