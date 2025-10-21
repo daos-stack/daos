@@ -475,6 +475,8 @@ static int (*next_mpi_init)(int *argc, char ***argv);
 static int (*next_pmpi_init)(int *argc, char ***argv);
 static void *(*next_dlopen)(const char *filename, int flags);
 
+static void (*next_ucs_init)(void);
+
 /* to do!! */
 /**
  * static char * (*org_realpath)(const char *pathname, char *resolved_path);
@@ -1072,6 +1074,33 @@ new_dlopen(const char *filename, int flags)
 	rc = next_dlopen(filename, flags);
 	atomic_fetch_add_relaxed(&dlopen_count, -1);
 	return rc;
+}
+
+static size_t ucs_global_var_size;
+static char  *ucs_global_var_addr;
+
+static void
+reset_ucs_global_variable_after_fork(void)
+{
+	if (ucs_global_var_addr && ucs_global_var_size)
+		memset(ucs_global_var_addr, 0, ucs_global_var_size);
+}
+
+void
+ucs_init(void)
+{
+	int rc;
+
+	if (next_ucs_init == NULL) {
+		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
+		D_ASSERT(next_ucs_init != NULL);
+	}
+	rc = query_func_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
+				      &ucs_global_var_size, &ucs_global_var_addr);
+	if (rc == 0)
+		pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
+
+	next_ucs_init();
 }
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,

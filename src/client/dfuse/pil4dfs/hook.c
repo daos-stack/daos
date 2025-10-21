@@ -1180,3 +1180,94 @@ query_all_org_func_addr(void)
 		}
 	}
 }
+
+int
+query_func_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const char *var_name,
+			 size_t *var_size, char **var_addr)
+{
+	int         fd, i, j, rc;
+	struct stat file_stat;
+	void       *map_start;
+	Elf64_Ehdr *header;
+	Elf64_Shdr *sections;
+	int         strtab_offset  = 0;
+	void       *symb_base_addr = NULL;
+	int         num_sym = 0, sym_rec_size = 0, sym_offset, rec_addr;
+	char       *sym_name;
+	long int    addr_fun = 0;
+	long int    addr_var = 0;
+	Dl_info     dl_info;
+
+	if (ref_func_addr == NULL || ref_func_name == NULL || var_size == NULL || var_addr == NULL)
+		return EINVAL;
+
+	rc = dladdr(ref_func_addr, &dl_info);
+	if (rc == 0)
+		return ENODATA;
+
+	rc = stat(dl_info.dli_fname, &file_stat);
+	if (rc == -1) {
+		D_DEBUG(DB_ANY, "Fail to query stat of file %s", dl_info.dli_fname);
+		return errno;
+	}
+
+	fd = open(dl_info.dli_fname, O_RDONLY);
+	if (fd == -1) {
+		D_DEBUG(DB_ANY, "Fail to open file %s", dl_info.dli_fname);
+		return errno;
+	}
+
+	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
+	if ((long int)map_start == -1) {
+		close(fd);
+		D_DEBUG(DB_ANY, "Fail to mmap file %s", dl_info.dli_fname);
+		return errno;
+	}
+
+	header   = (Elf64_Ehdr *)map_start;
+	sections = (Elf64_Shdr *)((char *)map_start + header->e_shoff);
+
+	for (i = 0; i < header->e_shnum; i++) {
+		if (sections[i].sh_type == SHT_SYMTAB) {
+			symb_base_addr = (void *)(sections[i].sh_offset + map_start);
+			sym_rec_size   = sections[i].sh_entsize;
+			if (sections[i].sh_entsize == 0) {
+				D_DEBUG(DB_ANY, "unexpected entry size in ELF file");
+				munmap(map_start, file_stat.st_size);
+				close(fd);
+				return ENODATA;
+			}
+			num_sym = sections[i].sh_size / sections[i].sh_entsize;
+
+			for (j = i - 1; j < i + 2; j++) {
+				if (sections[j].sh_type == SHT_STRTAB)
+					strtab_offset = (int)(sections[j].sh_offset);
+			}
+
+			for (j = 0; j < num_sym; j++) {
+				rec_addr   = sym_rec_size * j;
+				sym_offset = *((int *)(symb_base_addr + rec_addr)) & 0xFFFFFFFF;
+				sym_name   = (char *)(map_start + strtab_offset + sym_offset);
+				if (strcmp(sym_name, var_name) == 0) {
+					*var_size = *((size_t *)(symb_base_addr + rec_addr + 16));
+					addr_var  = *((long int *)(symb_base_addr + rec_addr + 8));
+				}
+				if (strcmp(sym_name, ref_func_name) == 0)
+					addr_fun = *((long int *)(symb_base_addr + rec_addr + 8));
+				if (addr_fun && addr_var)
+					break;
+			}
+		}
+	}
+
+	munmap(map_start, file_stat.st_size);
+	close(fd);
+
+	if (!addr_fun || !addr_var)
+		/* the address of the variable or reference function is not found */
+		return ENODATA;
+
+	*var_addr = (char *)((long int)ref_func_addr + addr_var - addr_fun);
+
+	return 0;
+}

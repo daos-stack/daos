@@ -66,4 +66,21 @@ query_pil4dfs_path(void);
 float
 query_libc_version(void);
 
+/**
+ * query the size of a variable and the relative offset of the variable to a reference function
+ *
+ * \param[in]	ref_func_addr	The address of a reference function
+ * \param[in]	ref_func_name	The name of a reference function
+ * \param[in]	var_name	The variable name
+ *
+ * \param[out]	var_size	The size of this variable
+ * \param[out]	var_addr	The address of the variable
+ *
+ * \return			0		success
+ *				otherwise	fail
+ */
+int
+query_func_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const char *var_name,
+			 size_t *var_size, char **var_addr);
+
 #endif
