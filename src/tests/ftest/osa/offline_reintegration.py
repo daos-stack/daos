@@ -35,6 +35,42 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
 
+    def _add_query_data(self, query_data, key):
+        """Add query data for a specific key.
+
+        Args:
+            query_data (dict): The query data dictionary to update.
+            key (str): The key for the specific query data.
+        """
+        try:
+            query_data[key] = {"version": self.pool.query_data["response"]["version"]}
+            for tier in self.pool.query_data["response"]["tier_stats"]:
+                _media = tier["media_type"]
+                query_data[key][f"{_media} total"] = tier["total"]
+                query_data[key][f"{_media} free"] = tier["free"]
+        except Exception:       # pylint: disable=broad-except
+            query_data[key] = {"version": "error"}
+
+    def _display_query_data(self, query_data):
+        """Display the query data in a readable format.
+
+        Args:
+            query_data (dict): The query data dictionary to display.
+        """
+        _header = []
+        _format = ""
+        self.log.info("")
+        for key, value in query_data.items():
+            if not _header:
+                _header = ["Action"] + list(value.keys())
+                _format = "%-50s  " + "%-10s  " * len(list(value.keys()))
+                _dashes = ["-" * 50] + ["-" * 10] * len(list(value.keys()))
+                self.log.info(_format, *_header)
+                self.log.info(_format, *_dashes)
+            _entries = [key] + list(value.values())
+            self.log.info(_format, *_entries)
+        self.log.info("")
+
     def run_offline_reintegration_test(self, num_pool, data=False, server_boot=False, oclass=None,
                                        pool_fillup=0):
         # pylint: disable=too-many-branches
@@ -84,6 +120,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.run_ior_thread("Write", oclass, test_seq)
 
         pool_free_space = {"initial": {}, "after_exclude": {}, "after_reintegrate": {}}
+        query_data = {}
 
         # Exclude ranks 0 and 3 from a random pool
         ranks = [0, 3]
@@ -111,6 +148,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                         # Exclude rank 5
                         output = self.pool.exclude("5")
                         self.print_and_assert_on_rebuild_failure(output)
+                        self._add_query_data(
+                            query_data,
+                            f"Rebuild completion after excluding {rank_key} ({loop_key})")
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
                         self.simple_osa_reintegrate_loop(rank)
@@ -127,12 +167,16 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 else:
                     output = self.dmg_command.system_stop(ranks=rank, force=True)
                     self.print_and_assert_on_rebuild_failure(output)
+                    self._add_query_data(
+                        query_data, f"Rebuild completion after stopping {rank_key} ({loop_key})")
                     output = self.dmg_command.system_start(ranks=rank)
                 # Just try to reintegrate rank 5
                 if (self.test_during_rebuild is True and index == 2):
                     # Reintegrate rank 5
                     output = self.pool.reintegrate("5")
                 self.print_and_assert_on_rebuild_failure(output)
+                self._add_query_data(
+                    query_data, f"Rebuild completion after ?? {rank_key} ({loop_key})")
 
                 pver_exclude = self.pool.get_version(True)
                 self.log.info("Pool Version after exclude %s", pver_exclude)
@@ -166,6 +210,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                         continue
                     output = self.pool.reintegrate(rank)
                 self.print_and_assert_on_rebuild_failure(output, timeout=15)
+                self._add_query_data(
+                    query_data, f"Rebuild completion after reintegrating {rank_key} ({loop_key})")
 
                 # Check pool version incremented after pool reintegrate
                 pver_reint = self.pool.get_version(True)
@@ -195,6 +241,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     "  after exclude:     %s", pool_free_space["after_exclude"][loop_key][rank_key])
                 for item in pool_free_space["after_reintegrate"][loop_key][rank_key]:
                     self.log.info("  after reintegrate: %s", item)
+
+                self._display_query_data(query_data)
 
                 self.assertGreater(free_space_after_reintegration, free_space_after_exclude,
                                    "Expected free space after reintegration is less than exclude")
