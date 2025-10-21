@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       16%{?relval}%{?dist}
+Release:       17%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -659,10 +659,14 @@ fi
 %endif
 
 %changelog
-* Tue Sep 16 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-16
-  Update to spdk 24
+* Tue Oct 21 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-17
+- Update to spdk 24
+- Sync isa-l and isa-l_crypto options with rpm builders
 
-* Fri Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
+* Thu Oct 16 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-16
+- Make daos-spdk conflict with spdk
+
+* Thu Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
 - Fix leap package name
 
 * Thu Sep 11 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14

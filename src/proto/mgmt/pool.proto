@@ -291,10 +291,7 @@ message PoolUpgradeReq {
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
-// PoolUpgradeResp returns resultant state of upgrade operation.
-message PoolUpgradeResp {
-	int32 status = 1; // DAOS error code
-}
+// PoolUpgrade returns a DaosResp.
 
 // PoolQueryTargetReq represents a pool query target(s) request.
 message PoolQueryTargetReq {
@@ -375,7 +372,7 @@ message PoolSelfHealEvalReq
 {
 	string          sys       = 1; // DAOS system identifier
 	string          id        = 2; // DAOS pool identifier
-	string          prop_val  = 4; // self_heal system property value
+	string          sys_prop_val = 4; // self_heal system property value
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 

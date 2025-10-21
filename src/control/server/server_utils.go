@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -734,17 +735,43 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
+func isSelfHealExcludeSet(svc *mgmtSvc) bool {
+	// Retrieve system self-heal property.
+	selfHeal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, daos.SystemPropertySelfHeal.String())
+	if system.IsErrSystemAttrNotFound(err) {
+		return true // Assume default value where all flags are set.
+	}
+	if err != nil {
+		svc.log.Errorf("retrieving %s system property: %s", daos.SystemPropertySelfHeal,
+			err.Error())
+		return true // Assume default values if system property cannot be accessed.
+	}
+
+	svc.log.Tracef("system property self_heal='%+v'", selfHeal)
+
+	return daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagExclude)
+}
+
 func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
 	ts, err := evt.GetTimestamp()
 	if err != nil {
 		srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
 		return
 	}
-	srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation,
+
+	msg := fmt.Sprintf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation,
 		ts)
+	if !isSelfHealExcludeSet(srv.mgmtSvc) {
+		srv.log.Tracef("skipping ms state update, sys-prop-self_heal.exclude unset (%s)",
+			msg)
+		return
+	}
+	srv.log.Debug(msg)
+
 	if evt.Incarnation == 0 {
 		srv.log.Errorf("invalid zero incarnation value in event %+v", evt)
 	}
+
 	// Mark the rank as unavailable for membership in new pools, etc.
 	needsGrpUpd, err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation)
 	if err != nil {
