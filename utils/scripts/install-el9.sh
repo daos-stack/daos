@@ -34,6 +34,7 @@ dnf --nodocs install ${dnf_install_args} \
     git \
     glibc-langpack-en \
     golang \
+    gperftools-devel \
     graphviz \
     help2man \
     hdf5-devel \
