@@ -68,7 +68,7 @@ float
 query_libc_version(void);
 
 /**
- * query the size of a variable and the relative offset of the variable to a reference function
+ * query the size and address of a variable in a loaded shared library with a reference function
  *
  * \param[in]	ref_func_addr	The address of a reference function
  * \param[in]	ref_func_name	The name of a reference function

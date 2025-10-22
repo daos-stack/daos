@@ -1240,9 +1240,16 @@ query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const 
 			}
 			num_sym = sections[i].sh_size / sections[i].sh_entsize;
 
+			/* i should be larger than 0 here given sections[i].sh_type == SHT_SYMTAB.
+			 * The range of [i-1, i+2) was set from my experience with several shared
+			 * libraries I have tried so far. In case this range does not work, we
+			 * could simply extend the search to the full range of [0, header->e_shnum).
+			 */
 			for (j = i - 1; j < i + 2; j++) {
-				if (sections[j].sh_type == SHT_STRTAB)
+				if (sections[j].sh_type == SHT_STRTAB) {
 					strtab_offset = (int)(sections[j].sh_offset);
+					break;
+				}
 			}
 
 			for (j = 0; j < num_sym; j++) {
