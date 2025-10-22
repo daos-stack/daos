@@ -115,8 +115,8 @@ struct crt_gdata {
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
 
-	/** global swim index for all servers */
-	int32_t			cg_swim_crt_idx;
+	/** cart context index used by SWIM */
+	int32_t			cg_swim_ctx_idx;
 
 	/** traffic class used by SWIM */
 	enum crt_traffic_class   cg_swim_tc;
