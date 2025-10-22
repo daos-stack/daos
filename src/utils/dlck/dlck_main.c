@@ -15,8 +15,8 @@
 #include <gurt/common.h>
 
 #include "dlck_args.h"
+#include "dlck_checker.h"
 #include "dlck_cmds.h"
-#include "dlck_print.h"
 
 int
 main(int argc, char *argv[])
@@ -43,7 +43,7 @@ main(int argc, char *argv[])
 		goto err_args_free;
 	}
 
-	rc = dlck_print_main_init(&ctrl.print);
+	rc = dlck_checker_main_init(&ctrl.checker);
 	if (rc != DER_SUCCESS) {
 		goto err_abt_fini;
 	}
@@ -53,7 +53,7 @@ main(int argc, char *argv[])
 		goto err_print_main_fini;
 	}
 
-	rc = dlck_print_main_fini(&ctrl.print);
+	rc = dlck_checker_main_fini(&ctrl.checker);
 	if (rc != DER_SUCCESS) {
 		goto err_abt_fini;
 	}
@@ -74,7 +74,7 @@ main(int argc, char *argv[])
 	return rc;
 
 err_print_main_fini:
-	(void)dlck_print_main_fini(&ctrl.print);
+	(void)dlck_checker_main_fini(&ctrl.checker);
 err_abt_fini:
 	(void)ABT_finalize();
 err_args_free:

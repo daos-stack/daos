@@ -38,24 +38,24 @@ args_common_init(struct dlck_args_common *args)
 	memset(args, 0, sizeof(*args));
 	/** set defaults */
 	args->write_mode = false; /** dry run */
-	args->options.non_zero_padding = DLCK_EVENT_WARNING;
+	args->options.cko_non_zero_padding = CHECKER_EVENT_WARNING;
 }
 
 static int
-args_common_options_parse(char *options_str, struct dlck_options *opts, struct argp_state *state)
+args_common_options_parse(char *options_str, struct checker_options *opts, struct argp_state *state)
 {
 	char           *value;
-	enum dlck_event tmp_event;
+	enum checker_event tmp_event;
 	int             rc;
 
 	while (*options_str != '\0') {
 		switch (getsubopt(&options_str, options_tokens, &value)) {
 		case DLCK_OPT_NON_ZERO_PADDING:
 			tmp_event = parse_event(DLCK_OPT_NON_ZERO_PADDING_STR, value, state, &rc);
-			if (tmp_event == DLCK_EVENT_INVALID) {
+			if (tmp_event == CHECKER_EVENT_INVALID) {
 				return rc;
 			}
-			opts->non_zero_padding = tmp_event;
+			opts->cko_non_zero_padding = tmp_event;
 			break;
 		default:
 			RETURN_FAIL(state, EINVAL, "Unknown option: '%s'", value);

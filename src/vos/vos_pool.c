@@ -14,7 +14,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
-#include <daos/dlck.h>
+#include <daos_srv/btree_check.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_errno.h>
@@ -1023,7 +1023,7 @@ umem_create:
 
 static int
 vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned int flags,
-		 void *metrics, struct dlck_print *dp, struct umem_pool **ph)
+		 void *metrics, struct checker *ck, struct umem_pool **ph)
 {
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct umem_store	 store = { 0 };
@@ -1050,7 +1050,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		xs_ctxt, DP_UUID(pool_id));
 
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
-	DLCK_PRINTL_RC(dp, rc, "Open BIO meta context");
+	CK_PRINTL_RC(ck, rc, "Open BIO meta context");
 	if (rc) {
 		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID", "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
@@ -1063,7 +1063,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 umem_open:
 	pop = umempobj_open(path, layout, UMEMPOBJ_ENABLE_STATS, &store);
 	rc  = (pop == NULL) ? daos_errno2der(errno) : DER_SUCCESS;
-	DLCK_PRINTL_RC(dp, rc, "Open the pool");
+	CK_PRINTL_RC(ck, rc, "Open the pool");
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
@@ -1074,7 +1074,7 @@ umem_open:
 	if (store.stor_priv != NULL) {
 		ret = bio_mc_close(store.stor_priv);
 		if (ret) {
-			DLCK_PRINTL_RC(dp, ret, BIO_META_CLOSE_FAIL_STR);
+			CK_PRINTL_RC(ck, ret, BIO_META_CLOSE_FAIL_STR);
 			D_ERROR(BIO_META_CLOSE_FAIL_STR ". " DF_RC "\n", DP_RC(ret));
 		}
 	}
@@ -1325,7 +1325,7 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool);
 
 static int
 pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned int flags,
-	       void *metrics, struct vos_pool *pool, struct dlck_print *dp, int ret);
+	       void *metrics, struct vos_pool *pool, struct checker *ck, int ret);
 
 int
 vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
@@ -1709,11 +1709,11 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	return rc;
 }
 
-#define DLCK_CONT_TREE_STR "Containers tree"
+#define CK_CONT_TREE_STR "Containers tree"
 
 static int
 pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned int flags,
-	       void *metrics, struct vos_pool *pool, struct dlck_print *dp, int ret)
+	       void *metrics, struct vos_pool *pool, struct checker *ck, int ret)
 {
 	struct umem_attr	*uma;
 	daos_handle_t            poh;
@@ -1751,11 +1751,11 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 		goto out;
 	}
 
-	DLCK_PRINT(dp, DLCK_CONT_TREE_STR "...\n");
+	CK_PRINT(ck, CK_CONT_TREE_STR "...\n");
 	/* Cache container table btree hdl */
-	DLCK_INDENT(dp, rc = dbtree_open_inplace_dp(&pool_df->pd_cont_root, &pool->vp_uma,
-						    DAOS_HDL_INVAL, pool, dp, &pool->vp_cont_th));
-	DLCK_PRINTL_RC(dp, rc, DLCK_CONT_TREE_STR);
+	CK_INDENT(ck, rc = dbtree_open_inplace_ck(&pool_df->pd_cont_root, &pool->vp_uma,
+						  DAOS_HDL_INVAL, pool, ck, &pool->vp_cont_th));
+	CK_PRINTL_RC(ck, rc, CK_CONT_TREE_STR);
 	if (rc) {
 		D_ERROR("Container Tree open failed\n");
 		goto out;
@@ -1793,7 +1793,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	if (rc)
 		goto out;
 
-	rc = gc_open_pool(pool, dp);
+	rc = gc_open_pool(pool, ck);
 	if (rc)
 		goto out;
 
@@ -1823,7 +1823,7 @@ out:
 
 int
 vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
-		      struct dlck_print *dp, daos_handle_t *poh)
+		      struct checker *ck, daos_handle_t *poh)
 {
 	struct vos_pool_df	*pool_df = NULL;
 	struct vos_pool		*pool = NULL;
@@ -1843,8 +1843,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 
 	/** header with parameters */
-	DLCK_PRINTF(dp, "Check pool:\n\tpath: %s\n\tuuid: " DF_UUIDF "\n", path, DP_UUID(uuid));
-	dlck_print_indent_inc(dp);
+	CK_PRINTF(ck, "Check pool:\n\tpath: %s\n\tuuid: " DF_UUIDF "\n", path, DP_UUID(uuid));
+	checker_print_indent_inc(ck);
 
 	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
 		DP_UUID(uuid));
@@ -1856,8 +1856,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 
 	rc = pool_lookup(&ukey, &pool, true);
 	if (rc == 0) {
-		DLCK_ASSERT(dp, "Pool is not NULL... ", pool != NULL);
-		DLCK_PRINT(dp, "Pool is already opened.\n");
+		CK_ASSERT(ck, "Pool is not NULL... ", pool != NULL);
+		CK_PRINT(ck, "Pool is already opened.\n");
 		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
 		if (pool->vp_dying) {
@@ -1880,13 +1880,13 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		return rc;
 
 	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
-	DLCK_PRINTL_RC(dp, rc, "NVMe devices (if applicable)");
+	CK_PRINTL_RC(ck, rc, "NVMe devices (if applicable)");
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		goto out;
 	}
 
-	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, dp, &ph);
+	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, ck, &ph);
 	if (rc) {
 		D_ERROR("Error in opening the pool "DF_UUID". "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -1894,19 +1894,19 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 
 	pool_df = vos_pool_pop2df(ph);
-	DLCK_PRINT(dp, "Magic... ");
+	CK_PRINT(ck, "Magic... ");
 	if (pool_df->pd_magic != POOL_DF_MAGIC || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_MAGIC)) {
-		DLCK_APPENDFL_ERR(dp, "invalid (%#x)", pool_df->pd_magic);
+		CK_APPENDFL_ERR(ck, "invalid (%#x)", pool_df->pd_magic);
 		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
 		rc = -DER_DF_INVAL;
 		goto out;
 	}
-	DLCK_APPENDL_OK(dp);
+	CK_APPENDL_OK(ck);
 
-	DLCK_PRINT(dp, "Version... ");
+	CK_PRINT(ck, "Version... ");
 	if (pool_df->pd_version > POOL_DF_VERSION || pool_df->pd_version < POOL_DF_VER_1 ||
 	    DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_VERSION)) {
-		DLCK_APPENDFL_ERR(dp, "unsupported (%#x)", pool_df->pd_version);
+		CK_APPENDFL_ERR(ck, "unsupported (%#x)", pool_df->pd_version);
 		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
 		/** Send a RAS notification */
 		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
@@ -1915,26 +1915,26 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		rc = -DER_DF_INCOMPT;
 		goto out;
 	}
-	DLCK_APPENDL_OK(dp);
+	CK_APPENDL_OK(ck);
 
-	DLCK_PRINT(dp, "UUID... ");
+	CK_PRINT(ck, "UUID... ");
 	if (uuid_compare(uuid, pool_df->pd_id) || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_UUID)) {
-		DLCK_APPENDFL_ERR(dp, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")",
-				  DP_UUID(uuid), DP_UUID(pool_df->pd_id));
+		CK_APPENDFL_ERR(ck, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")",
+				DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		D_ERROR("Mismatch uuid, user=" DF_UUIDF ", pool=" DF_UUIDF "\n", DP_UUID(uuid),
 			DP_UUID(pool_df->pd_id));
 		rc = -DER_ID_MISMATCH;
 		goto out;
 	}
-	DLCK_APPENDL_OK(dp);
+	CK_APPENDL_OK(ck);
 
 out:
-	rc = pool_open_post(&ph, pool_df, flags, metrics, pool, dp, rc);
+	rc = pool_open_post(&ph, pool_df, flags, metrics, pool, ck, rc);
 	if (rc == 0) {
 		*poh = vos_pool2hdl(pool);
 
-		dlck_print_indent_dec(dp);
-		DLCK_PRINTL_RC(dp, rc, "Check pool");
+		checker_print_indent_dec(ck);
+		CK_PRINTL_RC(ck, rc, "Check pool");
 	}
 
 	/* Close this local handle, if it hasn't been consumed nor already

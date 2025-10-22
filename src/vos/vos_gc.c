@@ -14,6 +14,7 @@
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include <daos/mem.h>
+#include <daos_srv/btree_check.h>
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
@@ -1492,18 +1493,18 @@ gc_close_bkt(struct vos_gc_info *gc_info)
 	gc_info->gi_last_pinned = UMEM_DEFAULT_MBKT_ID;
 }
 
-#define DLCK_GC_TREE_STR "Garbage collector's tree"
+#define CK_GC_TREE_STR "Garbage collector's tree"
 
 static inline int
-gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct dlck_print *dp,
+gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct checker *ck,
 	    struct vos_gc_info *gc_info)
 {
 	int rc;
 
-	DLCK_PRINT(dp, DLCK_GC_TREE_STR "...\n");
-	DLCK_INDENT(dp, rc = dbtree_open_inplace_dp(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL,
-						    NULL, dp, &gc_info->gi_bins_btr));
-	DLCK_PRINTL_RC(dp, rc, DLCK_GC_TREE_STR);
+	CK_PRINT(ck, CK_GC_TREE_STR "...\n");
+	CK_INDENT(ck, rc = dbtree_open_inplace_ck(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL, NULL,
+						  ck, &gc_info->gi_bins_btr));
+	CK_PRINTL_RC(ck, rc, CK_GC_TREE_STR);
 	if (rc) {
 		DL_ERROR(rc, "Failed to open GC bin tree.");
 	}
@@ -1517,61 +1518,61 @@ gc_close_pool(struct vos_pool *pool)
 	return gc_close_bkt(&pool->vp_gc_info);
 }
 
-#define DLCK_NON_ZERO_PADDING_FMT  "non-zero padding[%d] (%#" PRIx64 ")"
-#define DLCK_NON_ZERO_RESERVED_FMT "non-zero reserved space (%#" PRIx64 ")"
+#define CK_NON_ZERO_PADDING_FMT  "non-zero padding[%d] (%#" PRIx64 ")"
+#define CK_NON_ZERO_RESERVED_FMT "non-zero reserved space (%#" PRIx64 ")"
 
 static int
-dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct dlck_print *dp)
+dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct checker *ck)
 {
-	DLCK_PRINTF(dp, "Pool extension (off=%#x)... ", off);
+	CK_PRINTF(ck, "Pool extension (off=%#x)... ", off);
 
 	if (pd_ext == NULL) {
-		DLCK_APPENDL_OK(dp);
+		CK_APPENDL_OK(ck);
 		return DER_SUCCESS;
 	}
 
 	for (int i = 0; i < VOS_POOL_EXT_DF_PADDING_SIZE; ++i) {
 		if (pd_ext->ped_paddings[i] != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_PADDING)) {
-			if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
-				DLCK_APPENDFL_ERR(dp, DLCK_NON_ZERO_PADDING_FMT, i,
-						  pd_ext->ped_paddings[i]);
+			if (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) {
+				CK_APPENDFL_ERR(ck, CK_NON_ZERO_PADDING_FMT, i,
+						pd_ext->ped_paddings[i]);
 				return -DER_NOTYPE;
 			} else {
-				DLCK_APPENDFL_WARN(dp, DLCK_NON_ZERO_PADDING_FMT, i,
-						   pd_ext->ped_paddings[i]);
+				CK_APPENDFL_WARN(ck, CK_NON_ZERO_PADDING_FMT, i,
+						 pd_ext->ped_paddings[i]);
 			}
 		}
 	}
 
 	if (pd_ext->ped_reserve != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_RESERVED)) {
-		if (dp->options->non_zero_padding == DLCK_EVENT_ERROR) {
-			DLCK_APPENDFL_ERR(dp, DLCK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
+		if (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) {
+			CK_APPENDFL_ERR(ck, CK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
 			return -DER_NOTYPE;
 		} else {
-			DLCK_APPENDFL_WARN(dp, DLCK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
+			CK_APPENDFL_WARN(ck, CK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
 		}
 	}
 
-	DLCK_APPENDL_OK(dp);
+	CK_APPENDL_OK(ck);
 
 	return DER_SUCCESS;
 }
 
 int
-gc_open_pool(struct vos_pool *pool, struct dlck_print *dp)
+gc_open_pool(struct vos_pool *pool, struct checker *ck)
 {
 	struct vos_pool_ext_df *pd_ext = umem_off2ptr(&pool->vp_umm, pool->vp_pool_df->pd_ext);
 	int                     rc;
 
-	if (IS_DLCK(dp)) {
-		rc = dlck_pd_ext_check(pd_ext, pool->vp_pool_df->pd_ext, dp);
+	if (IS_CHECKER(ck)) {
+		rc = dlck_pd_ext_check(pd_ext, pool->vp_pool_df->pd_ext, ck);
 		if (rc != DER_SUCCESS) {
 			return rc;
 		}
 	}
 
 	if (pd_ext != NULL)
-		return gc_open_bkt(&pool->vp_uma, &pd_ext->ped_gc_bkt, dp, &pool->vp_gc_info);
+		return gc_open_bkt(&pool->vp_uma, &pd_ext->ped_gc_bkt, ck, &pool->vp_gc_info);
 	return 0;
 }
 

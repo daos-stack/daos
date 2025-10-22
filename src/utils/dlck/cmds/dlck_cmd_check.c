@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <daos/dlck.h>
 #include <daos/mem.h>
 #include <daos_srv/mgmt_tgt_common.h>
 #include <daos_srv/vos.h>
 
 #include "../dlck_args.h"
 #include "../dlck_bitmap.h"
+#include "../dlck_checker.h"
 #include "../dlck_engine.h"
 #include "../dlck_pool.h"
-#include "../dlck_print.h"
 #include "../dlck_report.h"
 
 /**
@@ -29,8 +28,8 @@
  * \retval -DER_*	Other errors.
  */
 static int
-pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *main_dp,
-	     struct dlck_print *dp)
+pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *main_ck,
+	     struct checker *ck)
 {
 	char         *path;
 	daos_handle_t poh;
@@ -40,11 +39,11 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct dlck_print *
 	rc = ds_mgmt_file(xa->ctrl->engine.storage_path, file->po_uuid, VOS_FILE, &xa->xs->tgt_id,
 			  &path);
 	if (rc != DER_SUCCESS) {
-		DLCK_PRINTL_RC(dp, xa->rc, "VOS file path allocation failed");
+		CK_PRINTL_RC(ck, xa->rc, "VOS file path allocation failed");
 		return rc;
 	}
 
-	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, dp, &poh);
+	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
 	if (rc == DER_SUCCESS) {
 		(void)vos_pool_close(poh);
 	}
@@ -70,8 +69,8 @@ exec_one(void *arg)
 {
 	struct xstream_arg *xa = arg;
 	struct dlck_file   *file;
-	struct dlck_print  *main_dp = &xa->ctrl->print;
-	struct dlck_print   dp;
+	struct checker     *main_ck = &xa->ctrl->checker;
+	struct checker      ck;
 	int                 rc;
 
 	/** initialize the daos_io_* thread */
@@ -91,8 +90,8 @@ exec_one(void *arg)
 		}
 
 		/** initialize the logfile and its print utility */
-		rc = dlck_print_worker_init(&xa->ctrl->common.options, xa->ctrl->log_dir,
-					    file->po_uuid, xa->xs->tgt_id, main_dp, &dp);
+		rc = dlck_checker_worker_init(&xa->ctrl->common.options, xa->ctrl->log_dir,
+					      file->po_uuid, xa->xs->tgt_id, main_ck, &ck);
 		if (rc != DER_SUCCESS) {
 			/** There is no point continuing without a logfile. */
 			dlck_xstream_set_rc(xa, rc);
@@ -101,24 +100,24 @@ exec_one(void *arg)
 		}
 
 		/** check the pool */
-		rc = pool_process(xa, file, main_dp, &dp);
+		rc = pool_process(xa, file, main_ck, &ck);
 		/** report the result */
-		if (rc == DER_SUCCESS && dp.warnings_num > 0) {
-			DLCK_PRINTF(
-			    main_dp,
-			    DLCK_POOL_CHECK_RESULT_PREFIX_FMT DLCK_OK_INFIX DLCK_WARNINGS_NUM_FMT
+		if (rc == DER_SUCCESS && ck.ck_warnings_num > 0) {
+			CK_PRINTF(
+			    main_ck,
+			    DLCK_POOL_CHECK_RESULT_PREFIX_FMT CHECKER_OK_INFIX DLCK_WARNINGS_NUM_FMT
 			    ".\n",
-			    xa->xs->tgt_id, DP_UUID(file->po_uuid), dp.warnings_num);
+			    xa->xs->tgt_id, DP_UUID(file->po_uuid), ck.ck_warnings_num);
 		} else {
-			DLCK_PRINTFL_RC(main_dp, rc, DLCK_POOL_CHECK_RESULT_PREFIX_FMT,
-					xa->xs->tgt_id, DP_UUID(file->po_uuid));
+			CK_PRINTFL_RC(main_ck, rc, DLCK_POOL_CHECK_RESULT_PREFIX_FMT,
+				      xa->xs->tgt_id, DP_UUID(file->po_uuid));
 		}
 		dlck_xstream_set_rc(xa, rc);
-		dlck_uadd_no_overflow(xa->warnings_num, dp.warnings_num, &xa->warnings_num);
+		dlck_uadd_no_overflow(xa->warnings_num, ck.ck_warnings_num, &xa->warnings_num);
 		/** Continue to the next pool regardless of the result. */
 
 		/** close the logfile */
-		dlck_print_worker_fini(&dp);
+		dlck_checker_worker_fini(&ck);
 
 		/** report the progress to the main thread */
 		++xa->progress;
@@ -143,7 +142,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 {
 	D_ASSERT(ctrl != NULL);
 
-	struct dlck_print  *dp                 = &ctrl->print;
+	struct checker     *ck                 = &ctrl->checker;
 	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
 	struct dlck_engine *engine             = NULL;
 	struct dlck_exec    de                 = {0};
@@ -159,36 +158,36 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	}
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
-		DLCK_PRINTL_RC(dp, rc, "Cannot create log directory");
+		CK_PRINTL_RC(ck, rc, "Cannot create log directory");
 		return rc;
 	}
-	DLCK_PRINTF(dp, "Log directory: %s\n", ctrl->log_dir);
+	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
 
-	DLCK_PRINT(dp, "Start the engine... ");
+	CK_PRINT(ck, "Start the engine... ");
 	rc = dlck_engine_start(&ctrl->engine, &engine);
-	DLCK_APPENDL_RC(dp, rc);
+	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
 
 	if (d_list_empty(&ctrl->files.list)) {
 		/** no files specified means all files are requested */
-		DLCK_PRINT(dp, "Read the list of pools... ");
+		CK_PRINT(ck, "Read the list of pools... ");
 		rc = dlck_pool_list(&ctrl->files.list);
-		DLCK_APPENDL_RC(dp, rc);
+		CK_APPENDL_RC(ck, rc);
 		if (rc != DER_SUCCESS) {
 			goto err_stop_engine;
 		}
 		/** no files exist */
 		if (d_list_empty(&ctrl->files.list)) {
-			DLCK_PRINT(dp, "No pools exist. Exiting...\n");
+			CK_PRINT(ck, "No pools exist. Exiting...\n");
 			goto err_stop_engine;
 		}
 	}
 
-	DLCK_PRINT(dp, "Create pools directories... ");
-	rc = dlck_pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list, dp);
-	DLCK_APPENDL_RC(dp, rc);
+	CK_PRINT(ck, "Create pools directories... ");
+	rc = dlck_pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list, ck);
+	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		goto err_stop_engine;
 	}
@@ -197,33 +196,33 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	D_ALLOC_ARRAY(rcs, ctrl->engine.targets);
 	if (rcs == NULL) {
 		rc = -DER_NOMEM;
-		DLCK_PRINTL_RC(dp, rc, "");
+		CK_PRINTL_RC(ck, rc, "");
 		goto err_stop_engine;
 	}
 
-	DLCK_PRINT(dp, "Start targets... ");
+	CK_PRINT(ck, "Start targets... ");
 	rc = dlck_engine_exec_all_async(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
 					dlck_engine_xstream_arg_free, &de);
-	DLCK_APPENDL_RC(dp, rc);
+	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		goto err_free_rcs;
 	}
 
-	DLCK_PRINT(dp, STOP_TGT_STR "...\n");
+	CK_PRINT(ck, STOP_TGT_STR "...\n");
 	rc = dlck_engine_join_all(engine, &de, rcs);
-	DLCK_PRINTL_RC(dp, rc, STOP_TGT_STR);
+	CK_PRINTL_RC(ck, rc, STOP_TGT_STR);
 	if (rc != DER_SUCCESS) {
 		D_FREE(rcs);
 		/** Cannot stop the engine in this case. It will probably crash. */
 		return rc;
 	}
 
-	DLCK_PRINT(dp, "Stop the engine... ");
+	CK_PRINT(ck, "Stop the engine... ");
 	rc = dlck_engine_stop(engine);
-	DLCK_APPENDL_RC(dp, rc);
+	CK_APPENDL_RC(ck, rc);
 
 	/** Ignore an error for now to print the collected results. */
-	dlck_report_results(rcs, ctrl->engine.targets, ctrl->warnings_num, dp);
+	dlck_report_results(rcs, ctrl->engine.targets, ctrl->warnings_num, ck);
 	D_FREE(rcs);
 
 	/** Return the first encountered error. */

@@ -101,14 +101,14 @@ free_file:
 #define DLCK_EVENT_ERROR_STR   "error"
 #define DLCK_EVENT_WARNING_STR "warning"
 
-enum dlck_event
+enum checker_event
 parse_event(const char *option, const char *value, struct argp_state *state, int *rc)
 {
 	if (value != NULL) {
 		if (strcmp(value, DLCK_EVENT_ERROR_STR) == 0) {
-			return DLCK_EVENT_ERROR;
+			return CHECKER_EVENT_ERROR;
 		} else if (strcmp(value, DLCK_EVENT_WARNING_STR) == 0) {
-			return DLCK_EVENT_WARNING;
+			return CHECKER_EVENT_WARNING;
 		}
 
 		FAIL(state, *rc, EINVAL, "Invalid event '%s' for the '%s' option", value, option);
@@ -116,5 +116,5 @@ parse_event(const char *option, const char *value, struct argp_state *state, int
 		FAIL(state, *rc, EINVAL, MISSING_ARG_FMT, option);
 	}
 
-	return DLCK_EVENT_INVALID;
+	return CHECKER_EVENT_INVALID;
 }

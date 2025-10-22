@@ -11,9 +11,8 @@
 #include <stdint.h>
 #include <argp.h>
 #include <uuid/uuid.h>
+#include <daos/checker.h>
 #include <gurt/list.h>
-
-#include <daos/dlck.h>
 
 #define _STRINGIFY(x)                   #x
 #define STRINGIFY(x)                    _STRINGIFY(x)
@@ -46,7 +45,7 @@
 #define MISSING_ARG_FMT                 "Missing argument for the '%s' option"
 
 struct dlck_args_common {
-	struct dlck_options options;
+	struct checker_options options;
 	bool          write_mode; /** false by default (dry run) */
 };
 
@@ -114,8 +113,8 @@ struct dlck_control {
 	struct dlck_args_common common;
 	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
-	/** print */
-	struct dlck_print       print;
+	/** checker */
+	struct checker          checker;
 	/** out */
 	char                   *log_dir;
 	unsigned                warnings_num;
@@ -186,10 +185,10 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
  * \param[out]	state	State of the parser.
  * \param[out]	rc	Return code.
  *
- * \retval DLCK_EVENT_INVALID	The provided event is invalid.
- * \retval DLCK_EVENT_*		DLCK event.
+ * \retval CHECKER_EVENT_INVALID	The provided event is invalid.
+ * \retval CHECKER_EVENT_*		DLCK event.
  */
-enum dlck_event
+enum checker_event
 parse_event(const char *option, const char *value, struct argp_state *state, int *rc);
 
 /** dlck_args_files.c */

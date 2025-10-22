@@ -20,6 +20,6 @@
  * \retval -DER_*	Other errors.
  */
 void
-dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct dlck_print *dp);
+dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct checker *ck);
 
 #endif /** __DLCK_REPORT__ */

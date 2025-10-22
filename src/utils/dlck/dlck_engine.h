@@ -9,8 +9,6 @@
 
 #include <abt.h>
 
-#include <daos/dlck.h>
-
 #include "dlck_args.h"
 
 #if defined(__x86_64) || defined(_M_X64) || defined(__aarch64__) || defined(__riscv)

@@ -18,7 +18,7 @@
  *
  * \param[in]	storage_path	Storage path.
  * \param[in]	po_uuid		Pool UUID.
- * \param[in]	dp		Print utility.
+ * \param[in]	ck		Checker.
  *
  * \retval DER_SUCCESS		Success.
  * \retval -DER_NOMEM		Out of memory.
@@ -27,14 +27,14 @@
  * \retval -DER_*		Possibly other errors.
  */
 int
-dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct dlck_print *dp);
+dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct checker *ck);
 
 /**
  * Create pool directories for all \p files provided.
  *
  * \param[in]	storage_path	Engine the ULT is about to be run in.
  * \param[in]	files		List of files.
- * \param[in]	dp		Print utility.
+ * \param[in]	ck		Checker.
  *
  * \retval DER_SUCCESS		Success.
  * \retval -DER_NOMEM		Out of memory.
@@ -43,7 +43,7 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct dlck_print *dp)
  * \retval -DER_*		Possibly other errors but not -DER_EXIST.
  */
 int
-dlck_pool_mkdir_all(const char *storage_path, d_list_t *files, struct dlck_print *dp);
+dlck_pool_mkdir_all(const char *storage_path, d_list_t *files, struct checker *ck);
 
 /**
  * Open a pool.

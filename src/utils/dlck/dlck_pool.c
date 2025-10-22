@@ -15,7 +15,7 @@
 #include "dlck_pool.h"
 
 int
-dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct dlck_print *dp)
+dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct checker *ck)
 {
 	char  po_uuid_str[UUID_STR_LEN];
 	char *path;
@@ -36,7 +36,7 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct dlck_print *dp)
 	}
 	if (rc != 0 && errno != EEXIST) {
 		rc = daos_errno2der(errno);
-		DLCK_PRINTFL_RC(dp, rc, "Cannot create a pool directory: %s", path);
+		CK_PRINTFL_RC(ck, rc, "Cannot create a pool directory: %s", path);
 	} else {
 		rc = DER_SUCCESS;
 	}
@@ -46,13 +46,13 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct dlck_print *dp)
 }
 
 int
-dlck_pool_mkdir_all(const char *storage_path, d_list_t *files, struct dlck_print *dp)
+dlck_pool_mkdir_all(const char *storage_path, d_list_t *files, struct checker *ck)
 {
 	struct dlck_file *file;
 	int               rc;
 
 	d_list_for_each_entry(file, files, link) {
-		rc = dlck_pool_mkdir(storage_path, file->po_uuid, dp);
+		rc = dlck_pool_mkdir(storage_path, file->po_uuid, ck);
 		if (rc != DER_SUCCESS) {
 			return rc;
 		}
