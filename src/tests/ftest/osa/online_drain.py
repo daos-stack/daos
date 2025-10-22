@@ -85,7 +85,7 @@ class OSAOnlineDrain(OSAUtils):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # Get initial total space (scm+nvme)
             initial_total_space = self.pool.get_total_space(refresh=True)
-            output = self.pool.drain(rank, t_string)
+            output = self.pool.drain(ranks, t_string)
             self.print_and_assert_on_rebuild_failure(output)
             total_space_after_drain = self.pool.get_total_space(refresh=True)
 

@@ -264,7 +264,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
         pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
         ranks = self.get_random_test_ranks()
-        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks, oclass=oclass, pool_fillup=pool_fillup)
+        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks, oclass=oclass,
+                                    pool_fillup=pool_fillup)
 
     def test_osa_offline_drain_with_multiple_ranks(self):
         """Test ID: DAOS-4753.

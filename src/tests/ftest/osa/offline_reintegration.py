@@ -32,8 +32,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
 
-    def run_offline_reintegration_test(self, num_pool, ranks, data=False, server_boot=False, oclass=None,
-                                       pool_fillup=0):
+    def run_offline_reintegration_test(self, num_pool, ranks, data=False, server_boot=False,
+                                       oclass=None, pool_fillup=0):
         # pylint: disable=too-many-branches
         """Run the offline reintegration without data.
 
