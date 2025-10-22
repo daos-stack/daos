@@ -84,6 +84,7 @@ type (
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 		MemFileBytes     uint64               `json:"mem_file_bytes"`
 		MdOnSsdActive    bool                 `json:"md_on_ssd_active"`
+		SelfHealPolicy   string               `json:"self_heal_policy"`
 	}
 
 	PoolQueryTargetType  int32
@@ -131,6 +132,8 @@ const (
 	PoolQueryOptionDisabledEngines PoolQueryOption = "disabled_engines"
 	// PoolQueryOptionDeadEngines retrieves dead engines as part of the pool query.
 	PoolQueryOptionDeadEngines PoolQueryOption = "dead_engines"
+	// PoolQueryOptionSelfHealPolicy retrieves self_heal_policy in addition to the pool query.
+	PoolQueryOptionSelfHealPolicy PoolQueryOption = "self_heal_policy"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
 	PoolConnectFlagReadOnly PoolConnectFlag = C.DAOS_PC_RO
@@ -165,6 +168,7 @@ var poolQueryOptMap = map[C.int]PoolQueryOption{
 	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
 	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
 	C.DPI_ENGINES_DEAD:     PoolQueryOptionDeadEngines,
+	C.DPI_SELF_HEAL_POLICY: PoolQueryOptionSelfHealPolicy,
 }
 
 func resolvePoolQueryOpt(name PoolQueryOption) (C.int, error) {

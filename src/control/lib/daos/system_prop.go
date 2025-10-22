@@ -543,7 +543,7 @@ func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
 }
 
 // SystemPropertySelfHealUnsetFlags returns disabled flags in the self-heal system property as a
-// SelfHealFlag slice.
+// string slice.
 func SystemPropertySelfHealUnsetFlags(value string) []string {
 	offFlags := []string{}
 	for _, flag := range allSelfHealFlags {

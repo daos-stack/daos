@@ -826,12 +826,16 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		Absenthosts: missHosts.String(),
 	}
 
-	// Retrieve system self-heal property.
-	selfHeal, err := svc.getSysSelfHeal()
-	if err != nil {
+	// Retrieve system self-heal property. Assume default value where all flags are set if
+	// property isn't present.
+	resp.SysSelfHealPolicy = daos.DefaultSelfHealFlagsStr
+	if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf(err.Error())
+	} else if err != nil {
 		return nil, err
+	} else {
+		resp.SysSelfHealPolicy = selfHeal
 	}
-	resp.SysSelfHealPolicy = selfHeal
 
 	if hitRanks.Count() == 0 {
 		// If the membership is empty, this replica is likely waiting
@@ -1464,13 +1468,8 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 // selfHealExcludeRanks fetches a list of detected dead ranks from the leader's engine and updates
 // states within the control-plane membership appropriately.
 func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
-	mapVer, err := svc.sysdb.CurMapVersion()
-	if err == nil {
-		return err
-	}
-	req := &mgmtpb.GetGroupStatusReq{
-		MapVersion: mapVer,
-	}
+	// TODO: Pass a real, nonzero map version.
+	req := &mgmtpb.GetGroupStatusReq{}
 
 	// Fetch dead rank list from leader's engine with group status dRPC call.
 	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodGroupStatusGet, req)
@@ -1570,7 +1569,7 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		return nil, err
 	}
 
-	// Retrieve system self-heal property.
+	// Retrieve system self-heal property. Assume a system property exists when running eval.
 	selfHeal, err := svc.getSysSelfHeal()
 	if err != nil {
 		return nil, err
