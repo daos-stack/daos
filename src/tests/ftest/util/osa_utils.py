@@ -290,11 +290,11 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
             self.container.oclass.update(None)
 
-    def get_random_ranks(self, total_ranks=2, stop_individually=True):
+    def get_random_test_ranks(self, total_ranks=2, stop_individually=True):
         """Get random list of ranks for OSA tests.
 
         Args:
-            total_ranks (list): Random rank list for testing. Deafults to 2.
+            total_ranks (list): Random rank list for testing. Defaults to 2.
             ranks_to_be_stopped (int): Number of ranks to be stopped per iteration during testing.
                                        Defaults to 1.
         Returns:
