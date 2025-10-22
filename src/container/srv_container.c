@@ -1055,6 +1055,11 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *sv
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
+	/* Reset recov_cont prop to notify on flight pool_recov_cont to retry. */
+	rc = ds_pool_prop_recov_cont_reset(tx, svc->cs_rsvc);
+	if (rc != 0)
+		goto out;
+
 	cont_create_in_get_data(rpc, CONT_CREATE, cont_proto_ver, &cprop);
 
 	/* Determine if the label property was supplied, and if so,
@@ -1558,6 +1563,11 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	cont_destroy_in_get_data(rpc, opc_get(rpc->cr_opc), cont_proto_ver, &force, NULL);
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, force);
+
+	/* Reset recov_cont prop to notify on flight pool_recov_cont to retry. */
+	rc = ds_pool_prop_recov_cont_reset(tx, cont->c_svc->cs_rsvc);
+	if (rc != 0)
+		goto out;
 
 	/* Fetch the container props to check access for delete */
 	rc = cont_prop_read(tx, cont,
