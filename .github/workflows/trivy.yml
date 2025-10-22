@@ -11,6 +11,16 @@ on:
     branches: ["master", "release/**"]
   pull_request:
     branches: ["master", "release/**"]
+    paths:
+      - .github/workflows/trivy.yml
+      - requirements-*.txt
+      - src/client/java/**/pom.xml
+      - src/control/go.mod
+      - src/control/vendor/**
+      - utils/build.config
+      - utils/rpms/**
+      - utils/scripts/install-*.sh
+      - utils/trivy/**
 
 # Declare default permissions as nothing.
 permissions: {}
@@ -23,7 +33,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Run Trivy vulnerability scanner in filesystem mode (table format)
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # 0.33.1
@@ -58,7 +68,7 @@ jobs:
           trivy-config: 'utils/trivy/trivy.yaml'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@3599b3baa15b485a2e49ef411a7a4bb2452e7f93  # v3.30.5
+        uses: github/codeql-action/upload-sarif@e296a935590eb16afc0c0108289f68c87e2a89a5  # v4.30.7
         with:
           sarif_file: 'trivy-results.sarif'
 

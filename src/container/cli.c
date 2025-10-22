@@ -178,8 +178,8 @@ daos_prop_has_entry(daos_prop_t *prop, uint32_t entry_type)
  * The newly allocated prop is expected to be freed by the cont create callback.
  */
 static int
-dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
-		      daos_prop_t *prop_in)
+dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out, daos_prop_t *prop_in,
+		      uint32_t co_ver)
 {
 	char				*owner = NULL;
 	char				*owner_grp = NULL;
@@ -189,8 +189,7 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 	uint32_t			entries;
 	int				rc = 0;
 	uid_t				uid = geteuid();
-	gid_t				gid = getegid();
-	uint32_t                         co_ver = 0;
+	gid_t                            gid = getegid();
 
 	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
 
@@ -226,8 +225,10 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 		entries++;
 	}
 	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_OBJ_VERSION)) {
-		co_ver = DAOS_POOL_OBJ_VERSION_2;
-		entries++;
+		if (co_ver >= DAOS_POOL_OBJ_VERSION_2)
+			entries++;
+		else /* don't specify version if server is old */
+			co_ver = 0;
 	}
 
 	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_ROOTS)) {
@@ -351,7 +352,8 @@ dc_cont_create(tse_task_t *task)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
 	/** duplicate properties and add extra ones (e.g. ownership) */
-	rc = dup_cont_create_props(args->poh, &rpc_prop, args->prop);
+	rc = dup_cont_create_props(args->poh, &rpc_prop, args->prop,
+				   pool->dp_max_supported_layout_ver);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
@@ -1009,7 +1011,9 @@ dc_cont_open(tse_task_t *task)
 		if (tpriv->cont == NULL)
 			D_GOTO(err_pool, rc = -DER_NOMEM);
 		uuid_generate(tpriv->cont->dc_cont_hdl);
-		tpriv->cont->dc_capas = args->flags | DAOS_COO_NEW_LAYOUT;
+		tpriv->cont->dc_capas = args->flags;
+		if (pool->dp_max_supported_layout_ver >= DAOS_POOL_OBJ_VERSION_2)
+			tpriv->cont->dc_capas |= DAOS_COO_NEW_LAYOUT;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID ":%s: opening: hdl=" DF_UUIDF " flags=%x\n", DP_UUID(pool->dp_pool),
