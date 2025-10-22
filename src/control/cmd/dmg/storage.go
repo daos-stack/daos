@@ -19,13 +19,13 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan          storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format        storageFormatCmd  `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query         storageQueryCmd   `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeRebind    nvmeRebindCmd     `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
-	Set           setFaultyCmd      `command:"set" description:"Manually set the device state."`
-	Replace       storageReplaceCmd `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	LedManage     ledManageCmd      `command:"led" description:"Manage LED status for supported drives."`
+	Scan       storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format     storageFormatCmd  `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query      storageQueryCmd   `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	NvmeRebind nvmeRebindCmd     `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
+	Set        setFaultyCmd      `command:"set" description:"Manually set the device state."`
+	Replace    storageReplaceCmd `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	LedManage  ledManageCmd      `command:"led" description:"Manage LED status for supported drives."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
