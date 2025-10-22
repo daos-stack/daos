@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2676,7 +2677,9 @@ co_rf_simple(void **state)
 	daos_prop_val_2_co_status(entry->dpe_val, &stat);
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
 
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS);
+	/* Hang the rebuild */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0) {
 		unsigned int ranks[2];
 
@@ -2697,8 +2700,6 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 
-	/* Hang the rebuild */
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
@@ -3107,7 +3108,8 @@ co_redun_lvl(void **state)
 	/* exclude two engined on same node, as redun_lvl set as DAOS_PROP_CO_REDUN_NODE,
 	 * should not cause RF broken.
 	 */
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0) {
 		arg->no_rebuild = 1;
 		rebuild_pools_ranks(&arg, 1, ranks, 2, false);
@@ -3148,7 +3150,6 @@ co_redun_lvl(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	print_message("obj update should success before RF broken\n");
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
