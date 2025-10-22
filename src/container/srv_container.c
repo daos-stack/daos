@@ -102,10 +102,16 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 		D_GOTO(err, rc = dss_abterr2der(rc));
 	}
 
+	rc = ABT_mutex_create(&svc->cs_cont_ephs_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create cs_cont_ephs_mutex: %d\n", rc);
+		D_GOTO(err_rwlock, rc = dss_abterr2der(rc));
+	}
+
 	/* cs_root */
 	rc = rdb_path_init(&svc->cs_root);
 	if (rc != 0)
-		goto err_lock;
+		goto err_mutex;
 	rc = rdb_path_push(&svc->cs_root, &rdb_path_root_key);
 	if (rc != 0)
 		goto err_root;
@@ -144,7 +150,9 @@ err_uuids:
 	rdb_path_fini(&svc->cs_uuids);
 err_root:
 	rdb_path_fini(&svc->cs_root);
-err_lock:
+err_mutex:
+	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
+err_rwlock:
 	ABT_rwlock_free(&svc->cs_lock);
 err:
 	return rc;
@@ -158,6 +166,7 @@ cont_svc_fini(struct cont_svc *svc)
 	rdb_path_fini(&svc->cs_uuids);
 	rdb_path_fini(&svc->cs_root);
 	ABT_rwlock_free(&svc->cs_lock);
+	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
 }
 
 int
@@ -2032,6 +2041,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		return;
 	}
 
+	ABT_mutex_lock(svc->cs_cont_ephs_mutex);
 	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
 		if (eph_ldr->cte_deleted) {
 			d_list_del(&eph_ldr->cte_list);
@@ -2135,6 +2145,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (pool->sp_rebuilding)
 			break;
 	}
+	ABT_mutex_unlock(svc->cs_cont_ephs_mutex);
 
 	map_ranks_fini(&fail_ranks);
 }
