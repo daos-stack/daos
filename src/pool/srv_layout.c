@@ -34,6 +34,7 @@ RDB_STRING_KEY(ds_pool_prop_, svc_ops_num);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_age);
 RDB_STRING_KEY(ds_pool_prop_, srv_handle);
 RDB_STRING_KEY(ds_pool_prop_, srv_cont_handle);
+RDB_STRING_KEY(ds_pool_prop_, recov_cont);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
@@ -136,7 +137,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
     },
     {
 	.dpe_type = DAOS_PROP_PO_OBJ_VERSION,
-	.dpe_val  = DS_POOL_OBJ_VERSION,
+	.dpe_val  = DAOS_POOL_OBJ_VERSION,
     },
     {
 	.dpe_type = DAOS_PROP_PO_PERF_DOMAIN,

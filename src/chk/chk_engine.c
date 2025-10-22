@@ -60,6 +60,7 @@ struct chk_cont_rec {
 	d_iov_t				 ccr_label_cs;
 	uint32_t			 ccr_label_checked:1,
 					 ccr_skip:1;
+	uint32_t ccr_tgt_nr;
 };
 
 struct chk_cont_bundle {
@@ -114,6 +115,7 @@ chk_cont_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	if (ccr == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	ccr->ccr_tgt_nr = 1;
 	uuid_copy(ccr->ccr_uuid, ccb->ccb_uuid);
 	ccr->ccr_aggregator = ccb->ccb_aggregator;
 	d_list_add_tail(&ccr->ccr_link, &ccb->ccb_aggregator->ccla_list);
@@ -159,6 +161,10 @@ static int
 chk_cont_update(struct btr_instance *tins, struct btr_record *rec,
 		d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
+	struct chk_cont_rec *ccr = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+
+	ccr->ccr_tgt_nr++;
+
 	return 0;
 }
 
@@ -1591,12 +1597,19 @@ static int
 chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 			struct chk_cont_list_aggregator *aggregator)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct cont_svc			*svc;
-	struct chk_cont_rec		*ccr;
-	struct chk_cont_label_cb_args	 cclca = { 0 };
-	int				 rc = 0;
-	bool				 failout;
+	struct chk_instance          *ins = cpr->cpr_ins;
+	struct cont_svc              *svc;
+	struct chk_cont_rec          *ccr;
+	char                          msg[CHK_MSG_BUFLEN];
+	struct chk_cont_label_cb_args cclca = {0};
+	struct chk_report_unit        cru   = {0};
+	uint64_t                      seq;
+	uint32_t                      exp_tgt_nr = 0;
+	int                           rc         = 0;
+	bool                          failout;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHK_VERIFY_CONT_SHARDS))
+		exp_tgt_nr = daos_fail_value_get();
 
 	if (ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)
 		failout = true;
@@ -1636,11 +1649,36 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 		goto out;
 
 	d_list_for_each_entry(ccr, &aggregator->ccla_list, ccr_link) {
-		if (!ccr->ccr_skip && !ccr->ccr_label_checked) {
+		if (ccr->ccr_skip)
+			continue;
+
+		if (!ccr->ccr_label_checked) {
 			rc = chk_engine_cont_set_label(cpr, ccr, svc);
 			if (rc != 0)
 				goto out;
 		}
+
+		if (likely(ccr->ccr_tgt_nr >= exp_tgt_nr))
+			continue;
+
+		snprintf(
+		    msg, CHK_MSG_BUFLEN - 1,
+		    "The container " DF_UUID " in the pool " DF_UUID " lost some shards: %u/%u\n",
+		    DP_UUID(ccr->ccr_uuid), DP_UUID(cpr->cpr_uuid), ccr->ccr_tgt_nr, exp_tgt_nr);
+
+		cru.cru_msg        = msg;
+		cru.cru_gen        = cpr->cpr_bk.cb_gen;
+		cru.cru_cla        = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
+		cru.cru_act        = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cru.cru_rank       = dss_self_rank();
+		cru.cru_pool       = (uuid_t *)&cpr->cpr_uuid;
+		cru.cru_pool_label = cpr->cpr_label;
+		cru.cru_cont       = (uuid_t *)&ccr->ccr_uuid;
+		if (ccr->ccr_label_prop != NULL && ccr->ccr_label_prop->dpp_entries != NULL)
+			cru.cru_cont_label = ccr->ccr_label_prop->dpp_entries[0].dpe_str;
+
+		seq = 0;
+		chk_engine_report(&cru, &seq, NULL);
 	}
 
 out:
@@ -3112,6 +3150,30 @@ out:
 	return rc;
 }
 
+int
+chk_engine_set_policy(uint64_t gen, uint32_t policy_nr, struct chk_policy *policies)
+{
+	struct chk_instance *ins  = chk_engine;
+	struct chk_bookmark *cbk  = &ins->ci_bk;
+	struct chk_property *prop = &ins->ci_prop;
+	int                  rc   = 0;
+
+	/* Do nothing if no (engine) check instance is running. */
+	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE || cbk->cb_gen != gen ||
+	    cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
+		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
+
+	rc = chk_policy_refresh(policy_nr, policies, prop);
+	if (rc > 0)
+		rc = chk_prop_update(prop, NULL);
+
+out:
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, DF_ENGINE " set policy: " DF_RC "\n", DP_ENGINE(ins),
+		 DP_RC(rc));
+
+	return rc == -DER_NOTAPPLICABLE ? 0 : rc;
+}
+
 /*
  * \return	Positive value if interaction is interrupted, such as check stop.
  *		Zero on success.
@@ -3146,7 +3208,8 @@ new_seq:
 		pool = (struct chk_pool_rec *)riov.iov_buf;
 
 		rc = chk_pending_add(ins, &pool->cpr_pending_list, NULL, *cru->cru_pool, *seq,
-				     cru->cru_rank, cru->cru_cla, &cpr);
+				     cru->cru_rank, cru->cru_cla, cru->cru_option_nr,
+				     cru->cru_options, &cpr);
 		if (unlikely(rc == -DER_AGAIN))
 			goto new_seq;
 
@@ -3181,10 +3244,11 @@ new_seq:
 		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_PENDING;
 
 log:
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" on rank %u report with class %u, action %u, seq "
-		 DF_X64", handle_rc %d, report_rc %d\n", DP_ENGINE(ins),
-		 cru->cru_rank, cru->cru_cla, cru->cru_act, *seq, cru->cru_result, rc);
+	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, rc,
+		  DF_ENGINE " on rank %u report with class %u, action %u, seq " DF_X64 ", %s, "
+			    "handle_rc %d, report_rc %d",
+		  DP_ENGINE(ins), cru->cru_rank, cru->cru_cla, cru->cru_act, *seq, cru->cru_msg,
+		  cru->cru_result, rc);
 
 	if (rc != 0 || cpr == NULL)
 		goto out;

@@ -1324,7 +1324,8 @@ class DFuse():
 
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False, ro=False):
+                 caching=True, wbcache=True, multi_user=False, ro=False, dump_h=False,
+                 read_h=False, file_h=None):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1349,6 +1350,9 @@ class DFuse():
         self.log_mask = None
         self.log_file = None
         self._ro = ro
+        self.dump_h = dump_h
+        self.read_h = read_h
+        self.file_h = file_h
 
         self.valgrind = None
         if not os.path.exists(self.dir):
@@ -1420,6 +1424,11 @@ class DFuse():
         else:
             if not self.wbcache:
                 cmd.append('--disable-wb-cache')
+
+        if self.dump_h:
+            cmd.extend(['--dump-handles', self.file_h])
+        if self.read_h:
+            cmd.extend(['--read-handles', self.file_h])
 
         if self._ro:
             cmd.append('--read-only')
@@ -2409,15 +2418,29 @@ class PosixTests():
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
+
+        try:
+            fd, tmpfile = tempfile.mkstemp(prefix="my_temp_file_", dir="/tmp")
+            print(f"Created temp file: {tmpfile}")
+            os.close(fd)
+
+        except OSError as e:
+            print(f"mkstemp failed: {e}", file=sys.stderr)
+            sys.exit(1)
+
         dfuse0 = DFuse(self.server,
                        self.conf,
                        caching=False,
+                       dump_h=True,
+                       file_h=tmpfile,
                        container=self.container)
         dfuse0.start(v_hint='two_0')
 
         dfuse1 = DFuse(self.server,
                        self.conf,
                        caching=True,
+                       read_h=True,
+                       file_h=tmpfile,
                        container=self.container)
         dfuse1.start(v_hint='two_1')
 
@@ -2433,9 +2456,9 @@ class PosixTests():
         with open(file0, 'w') as fd:
             fd.write('test')
 
-        if dfuse0.stop():
-            self.fatal_errors = True
         if dfuse1.stop():
+            self.fatal_errors = True
+        if dfuse0.stop():
             self.fatal_errors = True
 
     def test_cache_expire(self):

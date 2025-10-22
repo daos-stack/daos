@@ -291,10 +291,7 @@ message PoolUpgradeReq {
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
-// PoolUpgradeResp returns resultant state of upgrade operation.
-message PoolUpgradeResp {
-	int32 status = 1; // DAOS error code
-}
+// PoolUpgrade returns a DaosResp.
 
 // PoolQueryTargetReq represents a pool query target(s) request.
 message PoolQueryTargetReq {
@@ -345,3 +342,38 @@ message PoolQueryTargetResp {
 	int32 status = 1; // DAOS error code
 	repeated PoolQueryTargetInfo infos = 2; // Per-target information
 }
+
+// PoolRebuildStartReq contains information about a request to start an interactive rebuild on a
+// given pool.
+message PoolRebuildStartReq
+{
+	string sys = 1; // DAOS system identifier
+	string id  = 2; // DAOS pool identifier
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
+}
+
+// PoolRebuildStart uses DaosResp
+
+// PoolRebuildStopReq contains information about a request to stop an interactive rebuild on a
+// given pool.
+message PoolRebuildStopReq
+{
+	string sys = 1; // DAOS system identifier
+	string id  = 2; // DAOS pool identifier
+	bool            force     = 3; // Force interactive rebuild stop
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
+}
+
+// PoolRebuildStop uses DaosResp
+
+// PoolSelfHealEvalReq contains information about a request to evaluate the self_heal system
+// property value on a given pool.
+message PoolSelfHealEvalReq
+{
+	string          sys       = 1; // DAOS system identifier
+	string          id        = 2; // DAOS pool identifier
+	string          sys_prop_val = 4; // self_heal system property value
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
+}
+
+// PoolSelfHealEval uses DaosResp

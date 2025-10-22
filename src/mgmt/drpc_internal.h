@@ -60,8 +60,18 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 void
 ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req,
 				Drpc__Response *drpc_resp);
+
 void
 ds_mgmt_drpc_pool_upgrade(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_pool_rebuild_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_pool_rebuild_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_pool_self_heal_eval(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void
 ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
@@ -122,5 +132,8 @@ ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void
 ds_mgmt_drpc_get_group_status(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_check_set_policy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 #endif /* __MGMT_DRPC_INTERNAL_H__ */

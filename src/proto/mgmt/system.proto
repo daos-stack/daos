@@ -90,7 +90,7 @@ message SystemDrainReq
 	bool   reint = 4; // Flag to indicate if request is for drain or reint.
 }
 
-// Response from pool-ranks operation.
+// PoolRanksResp describes a response from pool-ranks operation.
 message PoolRanksResp
 {
 	string   id                        = 1; // Pool ID
@@ -102,6 +102,35 @@ message SystemDrainResp
 {
 	bool                    reint   = 1; // Flag to indicate if results are for drain or reint.
 	repeated PoolRanksResp  responses = 2; // Response from drain or reint calls on pool-ranks.
+}
+
+// SystemRebuildManageReq supplies system-rebuild operational parameters.
+message SystemRebuildManageReq
+{
+	string sys     = 1; // DAOS system name
+	uint32 op_code = 2; // pool-rebuild operation to run on all pools
+	bool   force   = 3; // Flag to indicate a forced operation
+}
+
+// PoolRebuildManageResult returns the result of a pool-rebuild-manage operation.
+message PoolRebuildManageResult
+{
+	string id      = 1; // Pool ID
+	uint32 op_code = 2; // pool-rebuild operation to run on all pools
+	bool   errored = 3;
+	string msg     = 4;
+}
+
+// SystemRebuildManageResp returns status of system-rebuild-manage request.
+message SystemRebuildManageResp
+{
+	repeated PoolRebuildManageResult results = 1; // Pool-rebuild operation results.
+}
+
+// SystemSelfHealEvalReq supplies system self-heal eval parameters.
+message SystemSelfHealEvalReq
+{
+	string sys = 1; // DAOS system name
 }
 
 // SystemQueryReq supplies system query parameters.
@@ -119,6 +148,7 @@ message SystemQueryResp {
 	string absenthosts = 3; // hostset missing from membership
 	uint64 data_version = 4; // Version of the system database.
 	repeated string providers = 5; // Providers supported by system in configured order
+	string                sys_self_heal_policy = 6; // System self_heal property value
 }
 
 // SystemEraseReq supplies system erase parameters.

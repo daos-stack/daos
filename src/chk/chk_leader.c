@@ -2200,17 +2200,19 @@ out:
 static void
 chk_leader_sched(void *args)
 {
-	struct chk_instance	*ins = args;
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_dead_rank	*cdr;
-	struct chk_iv		 iv = { 0 };
-	uint32_t		 ins_phase;
-	uint32_t		 ins_status;
-	uint32_t		 pool_status;
-	int			 done = 0;
-	int			 rc = 0;
-	bool			 bcast = false;
-	bool			 more_dead;
+	struct chk_instance    *ins = args;
+	struct chk_bookmark    *cbk = &ins->ci_bk;
+	struct chk_dead_rank   *cdr;
+	struct chk_pending_rec *pending;
+	struct chk_iv           iv = {0};
+	uint32_t                ins_phase;
+	uint32_t                ins_status;
+	uint32_t                pool_status;
+	uint32_t                act;
+	int                     done  = 0;
+	int                     rc    = 0;
+	bool                    bcast = false;
+	bool                    more_dead;
 
 	D_INFO(DF_LEADER" scheduler enter at phase %u\n", DP_LEADER(ins), cbk->cb_phase);
 
@@ -2263,6 +2265,17 @@ check_dead:
 
 		if (more_dead)
 			goto check_dead;
+
+		if (!d_list_empty(&ins->ci_interaction_filter_list)) {
+			pending = d_list_pop_entry(&ins->ci_interaction_filter_list,
+						   struct chk_pending_rec, cpr_ins_link);
+			act     = ins->ci_prop.cp_policies[pending->cpr_class];
+			if (pending->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT ||
+			    !chk_is_valid_action(pending, act))
+				d_list_add_tail(&pending->cpr_ins_link, &ins->ci_pending_list);
+			else
+				chk_leader_act(pending->cpr_seq, act);
+		}
 
 		/*
 		 * TBD: The leader may need to detect engines' status/phase actively, otherwise
@@ -3544,6 +3557,47 @@ out:
 	return rc;
 }
 
+int
+chk_leader_set_policy(uint32_t policy_nr, struct chk_policy *policies)
+{
+	struct chk_instance    *ins  = chk_leader;
+	struct chk_bookmark    *cbk  = &ins->ci_bk;
+	struct chk_property    *prop = &ins->ci_prop;
+	struct chk_pending_rec *pending;
+	struct chk_pending_rec *tmp;
+	int                     rc;
+
+	/* Do nothing if no (leader) check instance is running. */
+	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER ||
+	    cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
+		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
+
+	rc = chk_policy_refresh(policy_nr, policies, prop);
+	if (rc <= 0)
+		goto out;
+
+	rc = chk_set_policy_remote(ins->ci_ranks, cbk->cb_gen, policy_nr, policies);
+	if (rc != 0)
+		goto out;
+
+	rc = chk_prop_update(prop, NULL);
+	if (rc != 0)
+		goto out;
+
+	d_list_for_each_entry_safe(pending, tmp, &ins->ci_pending_list, cpr_ins_link) {
+		if (chk_is_valid_action(pending, ins->ci_prop.cp_policies[pending->cpr_class])) {
+			d_list_del(&pending->cpr_ins_link);
+			d_list_add_tail(&pending->cpr_ins_link, &ins->ci_interaction_filter_list);
+		}
+	}
+
+out:
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, DF_LEADER " set policy: " DF_RC "\n", DP_LEADER(ins),
+		 DP_RC(rc));
+
+	return rc == -DER_NOTAPPLICABLE ? 0 : rc;
+}
+
 /*
  * \return	Positive value if interaction is interrupted, such as check stop.
  *		Zero on success.
@@ -3568,16 +3622,19 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	if (cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
+	if (cru->cru_result == 0 && ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+		cru->cru_result = CHK__CHECK_RESULT__DRY_RUN;
+
 	if (*seq == 0) {
 
 new_seq:
 		*seq = chk_report_seq_gen(ins);
 	}
 
-	D_INFO(DF_LEADER" handle %s report from rank %u with seq "
-	       DF_X64" class %u, action %u, result %d\n", DP_LEADER(ins),
-	       decision != NULL ? "local" : "remote", cru->cru_rank, *seq, cru->cru_cla,
-	       cru->cru_act, cru->cru_result);
+	D_INFO(DF_LEADER " handle %s report from rank %u with seq " DF_X64 " class %u, action %u, "
+			 "%s, result %d\n",
+	       DP_LEADER(ins), decision != NULL ? "local" : "remote", cru->cru_rank, *seq,
+	       cru->cru_cla, cru->cru_act, cru->cru_msg, cru->cru_result);
 
 	if (cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
 		if (cru->cru_pool == NULL)
@@ -3602,8 +3659,9 @@ new_seq:
 		}
 
 		rc = chk_pending_add(ins, &pool->cpr_pending_list,
-				     crr != NULL ? &crr->crr_pending_list : NULL,
-				     *cru->cru_pool, *seq, cru->cru_rank, cru->cru_cla, &cpr);
+				     crr != NULL ? &crr->crr_pending_list : NULL, *cru->cru_pool,
+				     *seq, cru->cru_rank, cru->cru_cla, cru->cru_option_nr,
+				     cru->cru_options, &cpr);
 		if (decision != NULL) {
 			if (unlikely(rc == -DER_AGAIN))
 				goto new_seq;

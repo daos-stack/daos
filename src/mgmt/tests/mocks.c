@@ -595,6 +595,47 @@ mock_ds_mgmt_pool_upgrade_setup(void)
 	uuid_clear(ds_mgmt_pool_upgrade_uuid);
 }
 
+int    ds_mgmt_pool_rebuild_return;
+uuid_t ds_mgmt_pool_rebuild_uuid;
+
+int
+ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	uuid_copy(ds_mgmt_pool_rebuild_uuid, pool_uuid);
+	return ds_mgmt_pool_rebuild_return;
+}
+
+int
+ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks)
+{
+	uuid_copy(ds_mgmt_pool_rebuild_uuid, pool_uuid);
+	return ds_mgmt_pool_rebuild_return;
+}
+
+void
+mock_ds_mgmt_pool_rebuild_setup(void)
+{
+	ds_mgmt_pool_rebuild_return = 0;
+	uuid_clear(ds_mgmt_pool_rebuild_uuid);
+}
+
+int    ds_mgmt_pool_self_heal_eval_return;
+uuid_t ds_mgmt_pool_self_heal_eval_uuid;
+
+int
+ds_mgmt_pool_self_heal_eval(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t policy)
+{
+	uuid_copy(ds_mgmt_pool_self_heal_eval_uuid, pool_uuid);
+	return ds_mgmt_pool_self_heal_eval_return;
+}
+
+void
+mock_ds_mgmt_pool_self_heal_eval_setup(void)
+{
+	ds_mgmt_pool_self_heal_eval_return = 0;
+	uuid_clear(ds_mgmt_pool_self_heal_eval_uuid);
+}
+
 int	ds_mgmt_dev_manage_led_return;
 uuid_t  ds_mgmt_dev_manage_led_uuid;
 
@@ -680,6 +721,12 @@ ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf)
 
 int
 ds_mgmt_check_act(uint64_t seq, uint32_t act)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_set_policy(uint32_t policy_nr, Mgmt__CheckInconsistPolicy **policies)
 {
 	return 0;
 }

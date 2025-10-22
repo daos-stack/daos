@@ -93,6 +93,21 @@ class LogLine():
 
     # Address to search.
     re_address = re.compile(r"0x7fcc8be52010")
+    @staticmethod
+    def is_valid(line):
+        """Return True if a valid CaRT log line is recognized."""
+        fields = line.split(None, 6)
+        return (
+            # pylint: disable=too-many-boolean-expressions
+            # CaRT log line contains at least 7 fields:
+            # <date> <time> <node_name> <TAG+PIDs> <FAC> <level> <message>
+            len(fields) == 7
+            # Valid date at the beginning: YYYY/MM/DD
+            and len(fields[0]) == 10 and fields[0][4] == '/' and fields[0][7] == '/'
+            # Valid time at the second position: hh:mm:ss.micros
+            and len(fields[1]) == 15 and fields[1][2] == ':' and fields[1][8] == '.'
+            # pylint: enable=too-many-boolean-expressions
+        )
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
@@ -252,6 +267,7 @@ class LogLine():
         return ' '.join(self._fields[1:])
 
     def get_anon_msg(self):
+        # pylint: disable=too-many-branches
         """Return the message part of a line.
 
         stripping up to and including the filename but removing pointers
@@ -479,6 +495,7 @@ class StateIter():
         return self
 
     def __next__(self):
+        # pylint: disable=too-many-branches
         line = next(self._l)
 
         if not line.trace:
@@ -701,16 +718,7 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split(None, 9)
-            # assuming (mst.oflags & DLOG_FLV_YEAR) always true in src/gurt/dlog.c: 644
-            # pylint: disable=too-many-boolean-expressions
-            if (
-                len(fields) < 7
-                or len(fields[1]) != 10 or fields[1][4] != '/'
-                or len(fields[2]) != 15 or fields[2][2] != ':' or fields[2][8] != '.'
-                or len(fields[0]) > 4 or ".go:" in fields[3]
-            ):
-                # pylint: enable=too-many-boolean-expressions
+            if not LogLine.is_valid(line):
                 return LogRaw(line)
             return LogLine(line, self.fname)
 

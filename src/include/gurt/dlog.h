@@ -40,6 +40,8 @@ typedef uint64_t d_dbug_t;
 #define DLOG_FLV_STDOUT	(1 << 5)	/**< always log to stdout */
 #define DLOG_FLV_STDERR	(1 << 6)	/**< always log to stderr */
 
+#define DLOG_FLV_DEFAULT (DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG | DLOG_FLV_YEAR)
+
 /* per-message log flag values */
 #define DLOG_STDERR     0x20000000	/**< always log to stderr */
 #define DLOG_STDOUT     0x10000000	/**< always log to stdout */

@@ -286,8 +286,11 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	D_ASSERT(dae_old != dae_new);
 
 	if (unlikely(dae_old->dae_aborting)) {
-		D_ERROR("Hit former in-aborting DTX entry %p "DF_DTI"\n",
-			dae_old, DP_DTI(&DAE_XID(dae_old)));
+		D_ERROR("Hit former in-aborting DTX entry %p: ID " DF_DTI ", LID %u, flags %x, "
+			"attached %s, status bits: preparing %d, prepared %d, aborted %d.\n",
+			dae_old, DP_DTI(&DAE_XID(dae_old)), DAE_LID(dae_old), DAE_FLAGS(dae_old),
+			dae_old->dae_dth != NULL ? "yes" : "no", dae_old->dae_preparing ? 1 : 0,
+			dae_old->dae_prepared ? 1 : 0, dae_old->dae_aborted ? 1 : 0);
 		return -DER_INPROGRESS;
 	}
 
@@ -4005,4 +4008,46 @@ vos_dtx_local_end(struct dtx_handle *dth, int result)
 	dth->dth_local_oid_cap = 0;
 
 	return result;
+}
+
+int
+vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt)
+{
+	struct umem_instance   *umm;
+	struct vos_container   *cont;
+	struct vos_dtx_blob_df *dbd;
+	uint32_t                tmp;
+	int                     rc;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+	if (cnt == NULL) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	tmp = 0;
+	umm = vos_cont2umm(cont);
+	dbd = umem_off2ptr(umm, cont->vc_cont_df->cd_dtx_committed_head);
+	while (dbd != NULL) {
+		if (dbd->dbd_magic != DTX_CMT_BLOB_MAGIC) {
+			D_ERROR("Committed DTX blob with bad magic: container=" DF_UUID
+				", wait=%#x, get=%#x\n",
+				DP_UUID(cont->vc_id), DTX_CMT_BLOB_MAGIC, dbd->dbd_magic);
+			rc = -DER_INVAL;
+			goto out;
+		}
+		tmp += dbd->dbd_count;
+
+		dbd = umem_off2ptr(umm, dbd->dbd_next);
+	}
+
+	*cnt = tmp;
+	rc   = 0;
+
+out:
+	return rc;
 }

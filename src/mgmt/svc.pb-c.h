@@ -539,7 +539,7 @@ struct  _Mgmt__GetGroupStatusReq
   /*
    * System map version
    */
-  uint32_t group_version;
+  uint32_t         map_version;
 };
 #define MGMT__GET_GROUP_STATUS_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_group_status_req__descriptor) \
