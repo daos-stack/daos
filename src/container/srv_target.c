@@ -500,8 +500,11 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				  param->ap_vos_agg ? "VOS" : "EC");
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
-			/* Don't sleep when there is space pressure */
-			msecs = 0;
+			/*
+			 * Introduce a small sleep interval between each round to yield CPU time
+			 * for the flush & GC ULTs, irrespective of space pressure. DAOS-18012.
+			 */
+			msecs = 200;
 		}
 
 		if (param->ap_vos_agg)
@@ -517,7 +520,7 @@ next:
 		 * if no space pressure.
 		 */
 		if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool) && !param->ap_vos_agg &&
-		    msecs != 0)
+		    msecs != 200)
 			msecs = 18000;
 
 		if (msecs != 0)
