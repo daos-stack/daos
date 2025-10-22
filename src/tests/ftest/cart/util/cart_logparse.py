@@ -93,21 +93,6 @@ class LogLine():
 
     # Address to search.
     re_address = re.compile(r"0x7fcc8be52010")
-    @staticmethod
-    def is_valid(line):
-        """Return True if a valid CaRT log line is recognized."""
-        fields = line.split(None, 6)
-        return (
-            # pylint: disable=too-many-boolean-expressions
-            # CaRT log line contains at least 7 fields:
-            # <date> <time> <node_name> <TAG+PIDs> <FAC> <level> <message>
-            len(fields) == 7
-            # Valid date at the beginning: YYYY/MM/DD
-            and len(fields[0]) == 10 and fields[0][4] == '/' and fields[0][7] == '/'
-            # Valid time at the second position: hh:mm:ss.micros
-            and len(fields[1]) == 15 and fields[1][2] == ':' and fields[1][8] == '.'
-            # pylint: enable=too-many-boolean-expressions
-        )
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
@@ -127,6 +112,39 @@ class LogLine():
     # Match DF_CONT
     re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
+    @staticmethod
+    def is_valid(line):
+        """Return True if a valid CaRT log line is recognized."""
+        fields = line.split(None, 6)
+
+        # CaRT log line contains exactly 7 fields:
+        # <level> <date> <time> <node_name> <TAG+PIDs> <FAC> <message>
+        # <level> <date> HH:MM:SS.micros <node_name> <TAG>[<PID>/<TID>/<UID>] <FAC> <message>
+
+        if len(fields) != 7:
+            return False
+
+        level, date, time, node_name, tag_pids, fac, message = fields
+
+        # Check for valid date: YYYY/MM/DD
+        if len(date) != 10 or date[4] != '/' or date[7] != '/':
+            return False
+
+        # Check for valid time: hh:mm:ss.micros
+        if len(time) != 15 or time[2] != ':' or time[8] != '.':
+            return False
+
+        # Validate level (must be 4 or 5 chars long)
+        if len(level) < 4 or len(level) > 5:
+            return False
+
+        # Exclude lines containing ".go:" in message
+        if ".go:" in message:
+            return False
+
+        # If all checks pass, the line is valid
+        return True
+
     def __init__(self, line, log_name: str, pid_only=False):
         """
         Parse a CART log line and extract structured components such as log level, timestamp,
@@ -137,7 +155,7 @@ class LogLine():
         is extracted and the rest of the parsing is skipped.
 
         Expected log line format:
-        <level> <date> HH:MM:SS.ffffff <node_name> <TAG>[<PID>/<TID>/<UID>] <FAC> <message>
+        <level> <date> HH:MM:SS.micros <node_name> <TAG>[<PID>/<TID>/<UID>] <FAC> <message>
         where:
         level - see LOG_LEVEL
         date = [YYYY/]MM/DD
