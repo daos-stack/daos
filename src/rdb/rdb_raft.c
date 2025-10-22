@@ -1,6 +1,5 @@
 /*
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1471,18 +1470,17 @@ static void
 rdb_raft_cb_log(raft_server_t *raft, raft_node_t *node, void *arg, raft_loglevel_e level,
 		const char *buf)
 {
-#define RRCL_LOG(flag)                                                                             \
-	if (node == NULL)                                                                          \
-		D_DEBUG(flag, DF_DB ": %s\n", DP_DB(db), buf);                                     \
-	else                                                                                       \
-		D_DEBUG(flag, DF_DB ": %s: rank=%u\n", DP_DB(db), buf,                             \
-			((struct rdb_raft_node *)raft_node_get_udata(node))->dn_rank);
-
 	struct rdb *db = raft_get_udata(raft);
+	d_rank_t    rank;
+
+	if (node == NULL)
+		rank = CRT_NO_RANK;
+	else
+		rank = ((struct rdb_raft_node *)raft_node_get_udata(node))->dn_rank;
 
 	switch (level) {
 	case RAFT_LOG_ERROR:
-		RRCL_LOG(DLOG_ERR);
+		D_ERROR(DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
 		break;
 	case RAFT_LOG_INFO:
 		/*
@@ -1492,13 +1490,11 @@ rdb_raft_cb_log(raft_server_t *raft, raft_node_t *node, void *arg, raft_loglevel
 		 * few election messages, which might attract complaints if done
 		 * with D_INFO.
 		 */
-		RRCL_LOG(DB_MD);
+		D_DEBUG(DB_MD, DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
 		break;
 	default:
-		RRCL_LOG(DB_IO);
+		D_DEBUG(DB_IO, DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
 	}
-
-#undef RRCL_LOG
 }
 
 static raft_time_t
