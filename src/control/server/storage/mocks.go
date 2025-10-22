@@ -231,8 +231,6 @@ func MockScmNamespaceRamdisk(varIdx ...int32) *ScmNamespace {
 
 	return &ScmNamespace{
 		BlockDevice: "ramdisk",
-		//		NumaNode:    uint32(idx),
-		//		Size:        uint64(humanize.TByte) * uint64(idx+1),
 		Mount: &ScmMountPoint{
 			Class: ClassRam,
 			Path:  fmt.Sprintf("/mnt/daos%d", idx),

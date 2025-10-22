@@ -402,6 +402,11 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
 		return 0;
 
+	if (!daos_prop_valid(prop, true, true)) {
+		D_ERROR("invalid pool property\n");
+		return -DER_INVAL;
+	}
+
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
@@ -683,7 +688,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_redun_fac, &value);
 			break;
 		case DAOS_PROP_PO_OBJ_VERSION:
-			if (entry->dpe_val > DS_POOL_OBJ_VERSION) {
+			if (entry->dpe_val > DAOS_POOL_OBJ_VERSION) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -2430,7 +2435,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct pool_iv_conns   *iv_hdls            = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	d_rank_t		rank = dss_self_rank();
+	d_rank_t                rank               = dss_self_rank();
 	int			rc;
 
 	D_ASSERTF(svc->ps_error == 0, "ps_error: " DF_RC "\n", DP_RC(svc->ps_error));
@@ -2513,9 +2518,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	}
 
 	if (svc->ps_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_SRV_HDLS) {
-		/* See the is_pool_from_srv comment in the "else" branch. */
 		if (uuid_is_null(svc->ps_pool->sp_srv_pool_hdl))
 			uuid_copy(svc->ps_pool->sp_srv_pool_hdl, srv_pool_hdl);
+		if (uuid_is_null(svc->ps_pool->sp_srv_cont_hdl))
+			uuid_copy(svc->ps_pool->sp_srv_cont_hdl, srv_cont_hdl);
 	} else {
 		if (!uuid_is_null(svc->ps_pool->sp_srv_cont_hdl)) {
 			uuid_copy(srv_pool_hdl, svc->ps_pool->sp_srv_pool_hdl);
@@ -2523,11 +2529,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		} else {
 			uuid_generate(srv_pool_hdl);
 			uuid_generate(srv_cont_hdl);
-			/* Only copy server handle to make is_pool_from_srv() check correctly, and
-			 * container server handle will not be copied here, otherwise
-			 * ds_pool_iv_refresh_hdl will not open the server container handle.
-			 */
 			uuid_copy(svc->ps_pool->sp_srv_pool_hdl, srv_pool_hdl);
+			uuid_copy(svc->ps_pool->sp_srv_cont_hdl, srv_cont_hdl);
 		}
 	}
 
@@ -2552,7 +2555,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, 0);
 	if (rc != 0)
 		goto out;
 
@@ -4199,6 +4202,8 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
 	}
+	if (query_bits & DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER)
+		out->pco_rebuild_st.rs_max_supported_layout_ver = DAOS_POOL_OBJ_VERSION;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -6345,7 +6350,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 
 			obj_version = (uint32_t)fail_val;
 		} else {
-			obj_version = DS_POOL_OBJ_VERSION;
+			obj_version = DAOS_POOL_OBJ_VERSION;
 		}
 
 		d_iov_set(&value, &obj_version, sizeof(obj_version));
@@ -6406,11 +6411,11 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 	else if (rc == -DER_NONEXIST)
 		current_layout_ver = 0;
 
-	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
+	if (current_layout_ver < DAOS_POOL_OBJ_VERSION) {
 		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
-					 DS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE,
+					 DAOS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE,
 					 RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
-					 false /* stop_admin */, 0);
+					 false /* stop_admin */, NULL /* cur_taskp */, 0);
 		if (rc == 0)
 			*scheduled_layout_upgrade = true;
 	}
@@ -7691,6 +7696,12 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
 				 DP_UUID(svc->ps_uuid));
+			/*
+			 * Another PS replica might be able reach the MS. If I'm
+			 * not the PS leader of the specified term, this
+			 * rdb_resign call does nothing.
+			 */
+			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
 			goto out;
 		}
 		if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE)) {
@@ -7758,7 +7769,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	if (tgt_map_ver != 0) {
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
 					 RB_OP_REBUILD, RB_OP_NONE /* retry_rebuild_op */,
-					 0 /* retry_map_ver */, false /* stop_admin */, delay);
+					 0 /* retry_map_ver */, false /* stop_admin */,
+					 NULL /* cur_taskp */, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);

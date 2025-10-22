@@ -219,15 +219,17 @@ free:
 }
 
 daos_size_t
-daos_sgl_data_len(d_sg_list_t *sgl)
+daos_sgl_data_len(d_sg_list_t *sgl, bool out)
 {
 	daos_size_t	len;
-	int		i;
+	uint32_t        sg_nr;
+	uint32_t        i;
 
 	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return 0;
 
-	for (i = 0, len = 0; i < sgl->sg_nr; i++)
+	sg_nr = out ? sgl->sg_nr_out : sgl->sg_nr;
+	for (i = 0, len = 0; i < sg_nr; i++)
 		len += sgl->sg_iovs[i].iov_len;
 
 	return len;

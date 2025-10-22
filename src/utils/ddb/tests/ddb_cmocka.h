@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +8,10 @@
 #ifndef DAOS_DDB_CMOCKA_H
 #define DAOS_DDB_CMOCKA_H
 #include <stddef.h>
+#include <stdio.h>
 #include <setjmp.h>
 #include <stdarg.h>
+#include <regex.h>
 #include <cmocka.h>
 
 #define assert_uuid_equal(a, b) \
@@ -68,5 +71,53 @@
 
 #define assert_invalid(x) assert_rc_equal(-DER_INVAL, (x))
 #define assert_nonexist(x) assert_rc_equal(-DER_NONEXIST, (x))
+
+/* XXX Needs of testing _buf to avoid false positive error from gcc: '%s' directive argument is null
+ * [-Werror=format-overflow=] */
+#define assert_regex_match(str, regex)                                                             \
+	do {                                                                                       \
+		char   *_str_dup;                                                                  \
+		char   *_token;                                                                    \
+		regex_t _preg;                                                                     \
+		int     _rc = regcomp(&_preg, regex, REG_NOSUB | REG_EXTENDED);                    \
+		if (_rc != 0) {                                                                    \
+			char  *_buf;                                                               \
+			size_t _buf_size = regerror(_rc, NULL, NULL, 0);                           \
+			D_ALLOC_ARRAY(_buf, _buf_size);                                            \
+			assert_non_null(_buf);                                                     \
+			regerror(_rc, NULL, _buf, _buf_size);                                      \
+			if (_buf)                                                                  \
+				print_error("ERROR: invalid regex '%s': %s\n", regex, _buf);       \
+			D_FREE(_buf);                                                              \
+			fail();                                                                    \
+		}                                                                                  \
+		D_STRNDUP(_str_dup, str, strlen(str));                                             \
+		assert_non_null(_str_dup);                                                         \
+		_token = strtok(_str_dup, "\n");                                                   \
+		while (_token != NULL) {                                                           \
+			_rc = regexec(&_preg, _token, 0, NULL, 0);                                 \
+			if (_rc == 0)                                                              \
+				break;                                                             \
+			if (_rc != REG_NOMATCH) {                                                  \
+				char  *_buf;                                                       \
+				size_t _buf_size = regerror(_rc, &_preg, NULL, 0);                 \
+				D_ALLOC_ARRAY(_buf, _buf_size);                                    \
+				assert_non_null(_buf);                                             \
+				regerror(_rc, &_preg, _buf, _buf_size);                            \
+				if (_buf)                                                          \
+					print_error("ERROR: invalid regex '%s': %s\n", regex,      \
+						    _buf);                                         \
+				D_FREE(_buf);                                                      \
+				regfree(&_preg);                                                   \
+				D_FREE(_str_dup);                                                  \
+				fail();                                                            \
+			}                                                                          \
+			_token = strtok(NULL, "\n");                                               \
+		}                                                                                  \
+		D_FREE(_str_dup);                                                                  \
+		regfree(&_preg);                                                                   \
+		if (_rc == REG_NOMATCH)                                                            \
+			fail_msg("'%s' regex not matched in '%s'", regex, str);                    \
+	} while (0)
 
 #endif /* DAOS_DDB_CMOCKA_H */

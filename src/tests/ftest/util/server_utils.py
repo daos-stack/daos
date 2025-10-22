@@ -1196,3 +1196,20 @@ class DaosServerManager(SubprocessManager):
                     vos_files.append(os.path.join(vos_path, file))
                     self.log.info("Found vos file path: %s", vos_files[-1])
         return vos_files
+
+    def search_engine_logs(self, pattern):
+        """Search the server logs for a specific pattern.
+
+        Args:
+            pattern (str): The pattern to search for in the logs.
+
+        Returns:
+            CommandResult: Result of the grep command run against each server log.
+        """
+        # Get the path of one of the server log files
+        log_dir = os.path.dirname(self.get_config_value("log_file"))
+        command = (f"find {log_dir} -type f -regextype egrep "
+                   r"-regex '.*/daos_server[[:digit:]]?\.log\.[[:digit:]]+' -print0 "
+                   f"| xargs -0 -r grep -E -e '{pattern}'")
+        result = run_remote(self.log, self.hosts, command_as_user(command, "root"))
+        return result
