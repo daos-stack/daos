@@ -405,39 +405,16 @@ drec_del_at_act(dfs_dcache_t *dcache, dfs_obj_t *rec);
 static int
 drec_del_act(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent);
 
+/** for shmem cache, serialize the object and insert the serialized form */
 static inline int
-dcache_add_root(dfs_dcache_t *dcache)
+dcache_add_root_shm(dfs_dcache_t *dcache)
 {
-	void       *val;
-	daos_size_t val_size;
 	int         rc;
+	void       *val = NULL;
+	daos_size_t val_size;
 	char        key[SHM_DCACHE_KEY_PREF_SIZE];
 	uint64_t   *ptr_key = (uint64_t *)key;
 
-	/** for local cache, just duplicate the entry and store the pointer */
-	if (dcache->dd_type == DFS_CACHE_DRAM) {
-		dfs_obj_t *rec;
-
-		rc = dup_int(dcache->dd_dfs, &dcache->dd_dfs->root, O_RDWR, &rec,
-			     DCACHE_KEY_PREF_SIZE);
-		if (rc)
-			return rc;
-		rec->dc = dcache;
-		atomic_init(&rec->dc_ref, 0);
-		atomic_flag_clear(&rec->dc_deleted);
-		memcpy(&rec->dc_key_child_prefix[0], &dcache->dd_key_root_prefix[0],
-		       DCACHE_KEY_PREF_SIZE);
-		memcpy(&rec->dc_key[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
-		rec->dc_key_len = DCACHE_KEY_PREF_SIZE - 1;
-
-		rc = d_hash_rec_insert(&dcache->dh.dd_dir_hash, rec->dc_key, rec->dc_key_len,
-				       &rec->dc_entry, true);
-		if (rc)
-			release_int(rec);
-		return rc;
-	}
-
-	/** for shmem cache, serialize the object and insert the serialized form */
 	rc = dfs_obj_serialize(&dcache->dd_dfs->root, NULL, &val_size);
 	if (rc)
 		return rc;
@@ -459,6 +436,36 @@ dcache_add_root(dfs_dcache_t *dcache)
 
 out:
 	D_FREE(val);
+	return rc;
+}
+
+static inline int
+dcache_add_root(dfs_dcache_t *dcache)
+{
+	int        rc;
+	dfs_obj_t *rec;
+
+	if (dcache->dd_type == DFS_CACHE_SHM)
+		return dcache_add_root_shm(dcache);
+
+	/** DFS_CACHE_DRAM: for local cache, just duplicate the entry and store the pointer */
+
+	rc = dup_int(dcache->dd_dfs, &dcache->dd_dfs->root, O_RDWR, &rec,
+		     DCACHE_KEY_PREF_SIZE);
+	if (rc)
+		return rc;
+	rec->dc = dcache;
+	atomic_init(&rec->dc_ref, 0);
+	atomic_flag_clear(&rec->dc_deleted);
+	memcpy(&rec->dc_key_child_prefix[0], &dcache->dd_key_root_prefix[0],
+	       DCACHE_KEY_PREF_SIZE);
+	memcpy(&rec->dc_key[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
+	rec->dc_key_len = DCACHE_KEY_PREF_SIZE - 1;
+
+	rc = d_hash_rec_insert(&dcache->dh.dd_dir_hash, rec->dc_key, rec->dc_key_len,
+			       &rec->dc_entry, true);
+	if (rc)
+		release_int(rec);
 	return rc;
 }
 
@@ -583,6 +590,42 @@ dcache_get(dfs_dcache_t *dcache, const char *key, size_t key_len)
 	return dlist2drec(rlink);
 }
 
+/* for shmem cache, serialize the object and insert the serialized form */
+static int
+dcache_add_shm(dfs_dcache_t *dcache, dfs_obj_t *obj, const char *key, size_t key_len,
+	       dfs_obj_t **rec)
+{
+	int         rc;
+	void       *val = NULL;
+	daos_size_t val_size;
+
+	rc = dfs_obj_serialize(obj, NULL, &val_size);
+	if (rc)
+		D_GOTO(err, rc);
+
+	D_ALLOC(val, val_size);
+	if (val == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	rc = dfs_obj_serialize(obj, val, &val_size);
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = shm_lru_put(dcache->shm.d_shm_lru_dentry, (void *)key, key_len, val, val_size);
+	/* val was copied into shm hash table record, so it is not needed any more. */
+	D_FREE(val);
+	if (rc)
+		dfs_release(obj);
+	else
+		*rec = obj;
+	return rc;
+
+err:
+	D_FREE(val);
+	dfs_release(obj);
+	return rc;
+}
+
 static inline int
 dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len, const char *key,
 	   size_t key_len, dfs_obj_t **rec, mode_t *mode, struct stat *stbuf)
@@ -604,34 +647,10 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 
 	obj->dc = dcache;
 
-	/** for shmem cache, serialize the object and insert the serialized form */
-	if (dcache->dd_type == DFS_CACHE_SHM) {
-		void       *val;
-		daos_size_t val_size;
+	if (dcache->dd_type == DFS_CACHE_SHM)
+		return dcache_add_shm(dcache, obj, key, key_len, rec);
 
-		rc = dfs_obj_serialize(obj, NULL, &val_size);
-		if (rc)
-			goto err;
-
-		D_ALLOC(val, val_size);
-		if (val == NULL)
-			D_GOTO(err, rc = ENOMEM);
-
-		rc = dfs_obj_serialize(obj, val, &val_size);
-		if (rc) {
-			D_FREE(val);
-			goto err;
-		}
-
-		rc = shm_lru_put(dcache->shm.d_shm_lru_dentry, (void *)key, key_len, val, val_size);
-		/* val was copied into shm hash table record, so it is not needed any more. */
-		D_FREE(val);
-		if (rc)
-			dfs_release(obj);
-		*rec = obj;
-		return rc;
-	}
-
+	/* branch of DFS_CACHE_DRAM */
 	atomic_init(&obj->dc_ref, 1);
 	atomic_flag_clear(&obj->dc_deleted);
 	rc = snprintf(&obj->dc_key_child_prefix[0], DCACHE_KEY_PREF_SIZE,
@@ -662,8 +681,100 @@ dcache_add(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name, size_t len
 
 	*rec = obj;
 	return 0;
+}
+
+static int
+dcache_find_insert_rel_act_shm(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *name,
+			       size_t len, int flags, dfs_obj_t **_rec, mode_t *mode,
+			       struct stat *stbuf)
+{
+	dfs_obj_t      *rec = NULL;
+	char            key[DCACHE_KEY_PREF_SIZE + DFS_MAX_NAME];
+	size_t          key_len;
+	char           *value;
+	shm_lru_node_t *node_found = NULL;
+	int             rc;
+	size_t          val_size;
+	uint64_t       *ptr_key;
+	dfs_t          *dfs = dcache->dd_dfs;
+
+	ptr_key    = (uint64_t *)key;
+	ptr_key[0] = dcache->shm.dd_pool_cont_hash;
+	if (parent) {
+		ptr_key[1] = parent->oid.lo;
+		ptr_key[2] = parent->oid.hi;
+	} else {
+		/* item under root dir */
+		ptr_key[1] = dfs->root.oid.lo;
+		ptr_key[2] = dfs->root.oid.hi;
+	}
+	memcpy(key + SHM_DCACHE_KEY_PREF_SIZE, name, len);
+	key_len = SHM_DCACHE_KEY_PREF_SIZE + len;
+	rc      = shm_lru_get(dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
+			      (void **)&value);
+	D_DEBUG(DB_TRACE, "dentry cache %s: name=" DF_PATH "\n", (rc != 0) ? "miss" : "hit",
+		DP_PATH(name));
+	if (rc == ENOENT) {
+		/* record is not found */
+		rc = dcache_add(dcache, parent, name, len, key, key_len, &rec, mode, stbuf);
+		if (rc)
+			D_GOTO(err, rc);
+	} else {
+		D_ALLOC_PTR(rec);
+		if (rec == NULL)
+			D_GOTO(err, rc = ENOMEM);
+
+		rc = dfs_obj_deserialize(dfs, flags, value, rec);
+		if (rc)
+			D_GOTO(err, rc);
+
+		/** handle following symlinks outside of the dcache */
+		if (S_ISLNK(rec->mode) && !(flags & O_NOFOLLOW)) {
+			dfs_obj_t *sym;
+
+			rc = lookup_rel_path(dfs, parent, rec->value, flags, &sym, mode, stbuf, 0);
+			if (rc)
+				D_GOTO(err, rc);
+			rec = sym;
+			D_GOTO(done, rc);
+		}
+		if (stbuf) {
+			if (rec->dc_stated) {
+				memcpy(stbuf, &rec->dc_stbuf, sizeof(struct stat));
+			} else {
+				rc = entry_stat(dfs, dfs->th, parent->oh, name, len, NULL, true,
+						stbuf, NULL);
+				if (rc != 0)
+					D_GOTO(err, rc);
+				memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
+				rec->dc_stated = true;
+				/* stat and dc_stated are updated, need to update the record in
+				 * cache too. The data buffer size is stored as an integer at the
+				 * very beginning of data.
+				 */
+				val_size = *((size_t *)value) & 0xFFFFFFFF;
+				rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
+				if (rc != 0)
+					D_GOTO(err, rc);
+			}
+		}
+		if (mode)
+			*mode = rec->mode;
+		rec->dc = dfs->dcache;
+		rc      = 0;
+	}
+
+done:
+	D_ASSERT(rec != NULL);
+	*_rec = rec;
+	if (node_found)
+		shm_lru_node_dec_ref(node_found);
+	return rc;
+
 err:
-	dfs_release(obj);
+	if (node_found)
+		shm_lru_node_dec_ref(node_found);
+	D_FREE(rec);
 	return rc;
 }
 
@@ -741,6 +852,139 @@ out:
 }
 
 static int
+dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, int flags,
+			   dfs_obj_t **_rec, mode_t *mode, struct stat *stbuf)
+{
+	dfs_obj_t      *rec;
+	dfs_obj_t      *parent;
+	char            key[SHM_DCACHE_KEY_PREF_SIZE + DFS_MAX_NAME];
+	char           *name;
+	size_t          name_len;
+	bool            skip_stat = false;
+	int             rc;
+	uint64_t       *ptr_key = (uint64_t *)key;
+	size_t          key_len;
+	shm_lru_node_t *node_found = NULL;
+	char           *value;
+	size_t          val_size;
+	dfs_t          *dfs = dcache->dd_dfs;
+
+	D_ASSERT(path_len > 0);
+	name       = path;
+	name_len   = 0;
+	parent     = NULL;
+	ptr_key[0] = dcache->shm.dd_pool_cont_hash;
+	ptr_key[1] = dfs->root.oid.lo;
+	ptr_key[2] = dfs->root.oid.hi;
+
+	for (;;) {
+		if (node_found) {
+			shm_lru_node_dec_ref(node_found);
+			node_found = NULL;
+		}
+
+		memcpy(key + SHM_DCACHE_KEY_PREF_SIZE, name, name_len);
+		key_len = SHM_DCACHE_KEY_PREF_SIZE + name_len;
+		rc      = shm_lru_get(dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
+				      (void **)&value);
+		D_DEBUG(DB_TRACE, "dentry cache %s: path=" DF_PATH "\n", (rc != 0) ? "miss" : "hit",
+			DP_PATH(path));
+		if (rc == ENOENT) {
+			/* record is not found in cache */
+			char tmp;
+
+			if (name_len == 0) {
+				/* root is not found in cache, then add root first */
+				dcache_add_root(dcache);
+				continue;
+			}
+
+			tmp            = name[name_len];
+			name[name_len] = '\0';
+
+			/** don't pass stbuf and mode if this is not the last entry */
+			if (name + name_len == path + path_len) {
+				rc = dcache_add(dcache, parent, name, name_len, key, key_len, &rec,
+						mode, stbuf);
+				/** stbuf and mode are filled already if valid, so skip later */
+				skip_stat = true;
+			} else {
+				rc = dcache_add(dcache, parent, name, name_len, key, key_len, &rec,
+						NULL, NULL);
+			}
+			name[name_len] = tmp;
+			if (rc)
+				D_GOTO(out, rc);
+		} else {
+			D_ALLOC_PTR(rec);
+			if (rec == NULL)
+				D_GOTO(out, rc = ENOMEM);
+
+			rc = dfs_obj_deserialize(dfs, flags, value, rec);
+			if (rc) {
+				D_FREE(rec);
+				D_GOTO(out, rc);
+			}
+		}
+		D_ASSERT(rec != NULL);
+
+		// NOTE skip '/' character
+		name += name_len + 1;
+		name_len = 0;
+		while (name + name_len < path + path_len && name[name_len] != '/')
+			++name_len;
+		if (name_len == 0) {
+			/** handle following symlinks outside of the dcache */
+			if (S_ISLNK(rec->mode) && !(flags & O_NOFOLLOW)) {
+				dfs_obj_t *sym;
+
+				rc = lookup_rel_path(dfs, parent, rec->value, flags, &sym, mode,
+						     stbuf, 0);
+				if (rc)
+					D_GOTO(out, rc);
+				rec = sym;
+				D_GOTO(done, rc);
+			}
+			break;
+		}
+
+		parent     = rec;
+		ptr_key[1] = parent->oid.lo;
+		ptr_key[2] = parent->oid.hi;
+	}
+
+	if (stbuf && !skip_stat) {
+		if (rec->dc_stated) {
+			memcpy(stbuf, &rec->dc_stbuf, sizeof(struct stat));
+		} else {
+			rc = entry_stat(dfs, dfs->th, parent->oh, rec->name, strlen(rec->name), rec,
+					true, stbuf, NULL);
+			if (rc != 0)
+				D_GOTO(out, rc);
+			memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
+			rec->dc_stated = true;
+			/* stat and dc_stated are updated, need to update the record in cache too.
+			 * the data buffer size is stored as an integer at the very beginning of
+			 * data.
+			 */
+			val_size = *((size_t *)value) & 0xFFFFFFFF;
+			rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		}
+	}
+	if (mode && !skip_stat)
+		*mode = rec->mode;
+
+done:
+	*_rec = rec;
+out:
+	if (node_found)
+		shm_lru_node_dec_ref(node_found);
+	return rc;
+}
+
+static int
 dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int flags,
 		       dfs_obj_t **_rec, mode_t *mode, struct stat *stbuf)
 {
@@ -755,7 +999,6 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int fl
 	int        rc;
 
 	D_ASSERT(path_len > 0);
-
 	D_ALLOC(key, key_prefix_len + path_len + 1);
 	if (key == NULL)
 		return -DER_NOMEM;
@@ -1048,10 +1291,10 @@ dcache_create(dfs_t *dfs, int type, uint32_t bits, uint32_t rec_timeout, uint32_
 	D_ASSERT(dfs);
 	if (bits == 0)
 		return dcache_create_dact(dfs);
-	if (type == DFS_CACHE_DRAM)
-		return dcache_create_act(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
+	if (type == DFS_CACHE_SHM)
+		return dcache_create_shm(dfs);
 
-	return dcache_create_shm(dfs);
+	return dcache_create_act(dfs, bits, rec_timeout, gc_period, gc_reclaim_max);
 }
 
 int
@@ -1071,240 +1314,34 @@ int
 dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t **_rec,
 		   mode_t *mode, struct stat *stbuf)
 {
-	dfs_obj_t      *rec;
-	dfs_obj_t      *parent;
-	char            key[SHM_DCACHE_KEY_PREF_SIZE + DFS_MAX_NAME];
-	char           *name;
-	size_t          name_len;
-	bool            skip_stat = false;
-	int             rc;
-	uint64_t       *ptr_key = (uint64_t *)key;
-	size_t          key_len;
-	shm_lru_node_t *node_found = NULL;
-	char           *value;
-	size_t          val_size;
-
 	D_ASSERT(_rec != NULL);
 	D_ASSERT(dfs->dcache != NULL);
 	D_ASSERT(path != NULL);
 
-	if (dfs->dcache->dd_type == DFS_CACHE_DRAM) {
-		D_ASSERT(dfs->dcache->dh.find_insert_fn != NULL);
-		return dfs->dcache->dh.find_insert_fn(dfs->dcache, path, path_len, flags, _rec,
-						      mode, stbuf);
-	}
+	if (dfs->dcache->dd_type == DFS_CACHE_SHM)
+		return dcache_find_insert_act_shm(dfs->dcache, path, path_len, flags, _rec, mode,
+						  stbuf);
+	D_ASSERT(dfs->dcache->dh.find_insert_fn != NULL);
 
-	name       = path;
-	name_len   = 0;
-	parent     = NULL;
-	ptr_key[0] = dfs->dcache->shm.dd_pool_cont_hash;
-	ptr_key[1] = dfs->root.oid.lo;
-	ptr_key[2] = dfs->root.oid.hi;
-
-	for (;;) {
-		if (node_found) {
-			shm_lru_node_dec_ref(node_found);
-			node_found = NULL;
-		}
-
-		memcpy(key + SHM_DCACHE_KEY_PREF_SIZE, name, name_len);
-		key_len = SHM_DCACHE_KEY_PREF_SIZE + name_len;
-		rc      = shm_lru_get(dfs->dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
-				      (void **)&value);
-		D_DEBUG(DB_TRACE, "dentry cache %s: path=" DF_PATH "\n", (rc != 0) ? "miss" : "hit",
-			DP_PATH(path));
-		if (rc == ENOENT) {
-			/* record is not found in cache */
-			char tmp;
-
-			if (name_len == 0) {
-				/* root is not found in cache, then add root first */
-				dcache_add_root(dfs->dcache);
-				continue;
-			}
-
-			tmp            = name[name_len];
-			name[name_len] = '\0';
-
-			/** don't pass stbuf and mode if this is not the last entry */
-			if (name + name_len == path + path_len) {
-				rc = dcache_add(dfs->dcache, parent, name, name_len, key, key_len,
-						&rec, mode, stbuf);
-				/** stbuf and mode are filled already if valid, so skip later */
-				skip_stat = true;
-			} else {
-				rc = dcache_add(dfs->dcache, parent, name, name_len, key, key_len,
-						&rec, NULL, NULL);
-			}
-			name[name_len] = tmp;
-			if (rc)
-				D_GOTO(out, rc);
-		} else {
-			D_ALLOC_PTR(rec);
-			if (rec == NULL)
-				D_GOTO(out, rc = ENOMEM);
-
-			rc = dfs_obj_deserialize(dfs, flags, value, rec);
-			if (rc) {
-				D_FREE(rec);
-				D_GOTO(out, rc);
-			}
-		}
-		D_ASSERT(rec != NULL);
-
-		// NOTE skip '/' character
-		name += name_len + 1;
-		name_len = 0;
-		while (name + name_len < path + path_len && name[name_len] != '/')
-			++name_len;
-		if (name_len == 0) {
-			/** handle following symlinks outside of the dcache */
-			if (S_ISLNK(rec->mode) && !(flags & O_NOFOLLOW)) {
-				dfs_obj_t *sym;
-
-				rc = lookup_rel_path(dfs->dcache->dd_dfs, parent, rec->value, flags,
-						     &sym, mode, stbuf, 0);
-				if (rc)
-					D_GOTO(out, rc);
-				rec = sym;
-				D_GOTO(done, rc);
-			}
-			break;
-		}
-
-		parent     = rec;
-		ptr_key[1] = parent->oid.lo;
-		ptr_key[2] = parent->oid.hi;
-	}
-
-	if (stbuf && !skip_stat) {
-		if (rec->dc_stated) {
-			memcpy(stbuf, &rec->dc_stbuf, sizeof(struct stat));
-		} else {
-			rc = entry_stat(dfs, dfs->th, parent->oh, rec->name, strlen(rec->name), rec,
-					true, stbuf, NULL);
-			if (rc != 0)
-				D_GOTO(out, rc);
-			memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
-			rec->dc_stated = true;
-			/* stat and dc_stated are updated, need to update the record in cache too.
-			 * the data buffer size is stored as an integer at the very beginning of
-			 * data.
-			 */
-			val_size = *((size_t *)value) & 0xFFFFFFFF;
-			rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
-			if (rc != 0)
-				D_GOTO(out, rc);
-		}
-	}
-	if (mode && !skip_stat)
-		*mode = rec->mode;
-
-done:
-	*_rec = rec;
-out:
-	if (node_found)
-		shm_lru_node_dec_ref(node_found);
-	return rc;
+	return dfs->dcache->dh.find_insert_fn(dfs->dcache, path, path_len, flags, _rec, mode,
+					      stbuf);
 }
 
 int
 dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int flags,
 		       dfs_obj_t **_rec, mode_t *mode, struct stat *stbuf)
 {
-	dfs_obj_t      *rec;
-	char            key[DCACHE_KEY_PREF_SIZE + DFS_MAX_NAME];
-	size_t          key_len;
-	char           *value;
-	shm_lru_node_t *node_found = NULL;
-	int             rc;
-	size_t          val_size;
-	uint64_t       *ptr_key;
-
 	D_ASSERT(dfs->dcache != NULL);
 	D_ASSERT(name != NULL);
 
-	if (dfs->dcache->dd_type == DFS_CACHE_DRAM) {
-		D_ASSERT(dfs->dcache->dh.find_insert_rel_fn != NULL);
-		return dfs->dcache->dh.find_insert_rel_fn(dfs->dcache, parent, name, len, flags,
-							  _rec, mode, stbuf);
-	}
+	if (dfs->dcache->dd_type == DFS_CACHE_SHM)
+		return dcache_find_insert_rel_act_shm(dfs->dcache, parent, name, len, flags, _rec,
+						      mode, stbuf);
 
-	ptr_key    = (uint64_t *)key;
-	ptr_key[0] = dfs->dcache->shm.dd_pool_cont_hash;
-	if (parent) {
-		ptr_key[1] = parent->oid.lo;
-		ptr_key[2] = parent->oid.hi;
-	} else {
-		/* item under root dir */
-		ptr_key[1] = dfs->root.oid.lo;
-		ptr_key[2] = dfs->root.oid.hi;
-	}
-	memcpy(key + SHM_DCACHE_KEY_PREF_SIZE, name, len);
-	key_len = SHM_DCACHE_KEY_PREF_SIZE + len;
-	rc      = shm_lru_get(dfs->dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
-			      (void **)&value);
-	D_DEBUG(DB_TRACE, "dentry cache %s: name=" DF_PATH "\n", (rc != 0) ? "miss" : "hit",
-		DP_PATH(name));
-	if (rc == ENOENT) {
-		/* record is not found */
-		rc = dcache_add(dfs->dcache, parent, name, len, key, key_len, &rec, mode, stbuf);
-		if (rc)
-			D_GOTO(out, rc);
-	} else {
-		D_ALLOC_PTR(rec);
-		if (rec == NULL)
-			D_GOTO(out, rc = ENOMEM);
+	D_ASSERT(dfs->dcache->dh.find_insert_rel_fn != NULL);
 
-		rc = dfs_obj_deserialize(dfs, flags, value, rec);
-		if (rc) {
-			D_FREE(rec);
-			D_GOTO(out, rc);
-		}
-
-		/** handle following symlinks outside of the dcache */
-		if (S_ISLNK(rec->mode) && !(flags & O_NOFOLLOW)) {
-			dfs_obj_t *sym;
-
-			rc = lookup_rel_path(dfs, parent, rec->value, flags, &sym, mode, stbuf, 0);
-			if (rc)
-				D_GOTO(out, rc);
-			rec = sym;
-			D_GOTO(done, rc);
-		}
-		if (stbuf) {
-			if (rec->dc_stated) {
-				memcpy(stbuf, &rec->dc_stbuf, sizeof(struct stat));
-			} else {
-				rc = entry_stat(dfs, dfs->th, parent->oh, name, len, NULL, true,
-						stbuf, NULL);
-				if (rc != 0)
-					D_GOTO(out, rc);
-				memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
-				rec->dc_stated = true;
-				/* stat and dc_stated are updated, need to update the record in
-				 * cache too. The data buffer size is stored as an integer at the
-				 * very beginning of data.
-				 */
-				val_size = *((size_t *)value) & 0xFFFFFFFF;
-				rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
-				if (rc != 0)
-					D_GOTO(out, rc);
-			}
-		}
-		if (mode)
-			*mode = rec->mode;
-		rec->dc = dfs->dcache;
-		rc      = 0;
-	}
-
-done:
-	D_ASSERT(rec != NULL);
-	*_rec = rec;
-out:
-	if (node_found)
-		shm_lru_node_dec_ref(node_found);
-	return rc;
+	return dfs->dcache->dh.find_insert_rel_fn(dfs->dcache, parent, name, len, flags,
+						  _rec, mode, stbuf);
 }
 
 void

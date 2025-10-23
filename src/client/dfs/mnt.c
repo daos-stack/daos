@@ -737,15 +737,17 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	*_dfs        = dfs;
 
 	if (amode == O_RDONLY) {
-		bool d_enable_dcache = false;
+		char dcache_type[8];
 
-		d_getenv_bool("DFS_ENABLE_DCACHE", &d_enable_dcache);
-		if (d_enable_dcache) {
+		d_getenv_str(dcache_type, 8, "DFS_DCACHE_TYPE");
+		rc = 0;
+		if (strcasecmp(dcache_type, "SHM") == 0)
 			rc = dcache_create(dfs, DFS_CACHE_SHM, DCACHE_SIZE_BITS, 0, 0, 0);
-			if (rc) {
-				D_ERROR("Failed to create dcache: %d (%s)\n", rc, strerror(rc));
-				goto err_root;
-			}
+		if (strcasecmp(dcache_type, "DRAM") == 0)
+			rc = dcache_create(dfs, DFS_CACHE_DRAM, DCACHE_SIZE_BITS, 0, 0, 0);
+		if (rc) {
+			D_ERROR("Failed to create dcache: %d (%s)\n", rc, strerror(rc));
+			goto err_root;
 		}
 	}
 
