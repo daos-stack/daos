@@ -337,7 +337,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
 				 size_t meta_size, bool skip_rf_check)
 {
-	int			rc;
+	uint64_t deadline;
+	int      rc;
 
 	if (state == PO_COMP_ST_UP) {
 		/* When doing reintegration, need to make sure the pool is created and started on
@@ -361,8 +362,16 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
-					      target_addrs, state, skip_rf_check);
+	deadline = mgmt_ps_call_deadline();
+
+again:
+	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, deadline, target_addrs, state,
+					      skip_rf_check);
+	if (rc == -DER_AGAIN && state == PO_COMP_ST_UP && daos_getmtime_coarse() < deadline) {
+		D_WARN("Retry incremental reintegration for pool " DF_UUID " because of race\n",
+		       DP_UUID(pool_uuid));
+		goto again;
+	}
 
 	return rc;
 }

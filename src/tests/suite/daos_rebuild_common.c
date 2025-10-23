@@ -1330,7 +1330,7 @@ save_group_state(void **state)
 	}
 }
 
-static void
+void
 restore_group_state(void **state)
 {
 	if (state != NULL && save_arg != NULL) {
