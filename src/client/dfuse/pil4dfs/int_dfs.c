@@ -1106,13 +1106,22 @@ reset_ucs_global_variable_after_fork(void)
 		memset(ucs_global_var_addr, 0, ucs_global_var_size);
 }
 
+#include <execinfo.h>
+
 void
 ucs_init(void)
 {
 	int rc;
-
+	void *buffer[200];
+	int size;
 	if (next_ucs_init == NULL) {
 		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
+		if (next_ucs_init == NULL) {
+			size = backtrace(buffer, 200);
+			printf("DBG> Stack trace:\n");
+			backtrace_symbols_fd(buffer, size, fileno(stdout));
+			fflush(stdout);
+		}
 		D_ASSERT(next_ucs_init != NULL);
 	}
 	rc = query_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
