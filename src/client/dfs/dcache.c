@@ -732,6 +732,7 @@ dcache_find_insert_rel_act_shm(dfs_dcache_t *dcache, dfs_obj_t *parent, const ch
 			rc = lookup_rel_path(dfs, parent, rec->value, flags, &sym, mode, stbuf, 0);
 			if (rc)
 				D_GOTO(err, rc);
+			D_FREE(rec);
 			rec = sym;
 			D_GOTO(done, rc);
 		}
