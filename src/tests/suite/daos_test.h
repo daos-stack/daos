@@ -47,6 +47,9 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
+#define T_BEGIN printf("BEGIN %s()\n", __FUNCTION__)
+#define T_END   printf("END %s() success\n", __FUNCTION__)
+
 /** Server crt group ID */
 extern const char *server_group;
 
@@ -147,7 +150,7 @@ typedef struct {
 	uint64_t		fail_num;
 	uint64_t		fail_value;
 	uint32_t                 overlap : 1, not_check_result : 1, idx_no_jump : 1, no_rebuild : 1,
-	    delay_rebuild : 1, interactive_rebuild : 1;
+	    delay_rebuild : 1, interactive_rebuild_cmdline : 1, interactive_rebuild : 1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -500,6 +503,8 @@ int
 rebuild_start_with_dmg(void *data);
 int
      rebuild_resume_wait(void *data);
+int
+     rebuild_resume_wait_to_start(void *data);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,
@@ -539,8 +544,10 @@ void make_buffer(char *buffer, char start, int total);
 
 bool oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr);
 uint32_t test_ec_get_parity_off(daos_key_t *dkey, struct daos_oclass_attr *oca);
+
 int reintegrate_inflight_io(void *data);
-int reintegrate_inflight_io_verify(void *data);
+int
+reintegrate_inflight_io_verify(void *data);
 
 static inline void
 daos_test_print(int rank, char *message)

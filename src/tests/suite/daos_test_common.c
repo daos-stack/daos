@@ -407,11 +407,13 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	/** Look at variables set by test arguments and configure testing */
+	arg->interactive_rebuild_cmdline = dt_rb_interactive;
 	if (dt_rb_interactive) {
 		print_message("\n-------\n"
 			      "Interactive rebuild (stop|start) is enabled in some tests!"
 			      "\n-------\n");
-		arg->interactive_rebuild = 1;
+		arg->interactive_rebuild =
+		    1; /* tests examine this or set (to override command-line) */
 	}
 
 	/** Look at variables set by test arguments and setup pool props */
@@ -830,11 +832,10 @@ rebuild_pool_erroring(test_arg_t *arg)
 		return false;
 	} else {
 		bool started  = (rst->rs_state == DRS_IN_PROGRESS);
-		bool erroring = started && (rst->rs_errno != 0);
+		bool erroring = (rst->rs_errno != 0);
 
-		print_message("rebuild for pool " DF_UUIDF "has %sstarted, rs_errno=%d\n",
-			      DP_UUID(arg->pool.pool_uuid), started ? "" : "not yet ",
-			      rst->rs_errno);
+		print_message("rebuild for pool " DF_UUIDF " is %scurrently running, rs_errno=%d\n",
+			      DP_UUID(arg->pool.pool_uuid), started ? "" : "not ", rst->rs_errno);
 
 		/* save final pool query info to be able to inspect rebuild status */
 		if (erroring)
