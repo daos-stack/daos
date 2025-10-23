@@ -450,15 +450,13 @@ dcache_add_root(dfs_dcache_t *dcache)
 
 	/** DFS_CACHE_DRAM: for local cache, just duplicate the entry and store the pointer */
 
-	rc = dup_int(dcache->dd_dfs, &dcache->dd_dfs->root, O_RDWR, &rec,
-		     DCACHE_KEY_PREF_SIZE);
+	rc = dup_int(dcache->dd_dfs, &dcache->dd_dfs->root, O_RDWR, &rec, DCACHE_KEY_PREF_SIZE);
 	if (rc)
 		return rc;
 	rec->dc = dcache;
 	atomic_init(&rec->dc_ref, 0);
 	atomic_flag_clear(&rec->dc_deleted);
-	memcpy(&rec->dc_key_child_prefix[0], &dcache->dd_key_root_prefix[0],
-	       DCACHE_KEY_PREF_SIZE);
+	memcpy(&rec->dc_key_child_prefix[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
 	memcpy(&rec->dc_key[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
 	rec->dc_key_len = DCACHE_KEY_PREF_SIZE - 1;
 
@@ -710,8 +708,7 @@ dcache_find_insert_rel_act_shm(dfs_dcache_t *dcache, dfs_obj_t *parent, const ch
 	}
 	memcpy(key + SHM_DCACHE_KEY_PREF_SIZE, name, len);
 	key_len = SHM_DCACHE_KEY_PREF_SIZE + len;
-	rc      = shm_lru_get(dcache->shm.d_shm_lru_dentry, key, key_len, &node_found,
-			      (void **)&value);
+	rc = shm_lru_get(dcache->shm.d_shm_lru_dentry, key, key_len, &node_found, (void **)&value);
 	D_DEBUG(DB_TRACE, "dentry cache %s: name=" DF_PATH "\n", (rc != 0) ? "miss" : "hit",
 		DP_PATH(name));
 	if (rc == ENOENT) {
@@ -1340,8 +1337,8 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 
 	D_ASSERT(dfs->dcache->dh.find_insert_rel_fn != NULL);
 
-	return dfs->dcache->dh.find_insert_rel_fn(dfs->dcache, parent, name, len, flags,
-						  _rec, mode, stbuf);
+	return dfs->dcache->dh.find_insert_rel_fn(dfs->dcache, parent, name, len, flags, _rec, mode,
+						  stbuf);
 }
 
 void
