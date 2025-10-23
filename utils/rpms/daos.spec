@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       4%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -633,6 +633,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Oct 23 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-6
+- Fourth release candidate for 2.6.4
+
 * Tue Oct 21 2025 Ryon Jensen <ryon.jensen@hpe.com> 2.6.4-5
 - Bump libfabric version >= 1.22.0-4
 - Bump mercury version >= 2.4.0-7
