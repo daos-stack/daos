@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +13,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func TestControl_SystemCheckReport_RepairChoices(t *testing.T) {
@@ -98,6 +101,48 @@ func TestControl_SystemCheckReport_RepairChoices(t *testing.T) {
 			if diff := cmp.Diff(tc.expChoices, result); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SystemCheckReport_IsDryRun(t *testing.T) {
+	for name, tc := range map[string]struct {
+		report    *SystemCheckReport
+		expResult bool
+	}{
+		"nil": {},
+		"success result": {
+			report: &SystemCheckReport{
+				chkpb.CheckReport{
+					Result: int32(chkpb.CheckResult_SUCCESS),
+				},
+			},
+		},
+		"error result": {
+			report: &SystemCheckReport{
+				chkpb.CheckReport{
+					Result: int32(daos.MiscError),
+				},
+			},
+		},
+		"unknown positive result": {
+			report: &SystemCheckReport{
+				chkpb.CheckReport{
+					Result: 1000,
+				},
+			},
+		},
+		"dry run result": {
+			report: &SystemCheckReport{
+				chkpb.CheckReport{
+					Result: int32(chkpb.CheckResult_DRY_RUN),
+				},
+			},
+			expResult: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.report.IsDryRun(), "")
 		})
 	}
 }

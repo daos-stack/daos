@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -19,7 +20,7 @@ class MSMembershipTest(TestWithServers):
         """Test checker can only be run when the system status is AdminExcluded.
 
         1. Call dmg check enable.
-        2. Stop rank 1.
+        2. Stop 1 random rank
         3. Call dmg system query and check that status of at least one rank is not
         "checkerstarted". We verify that the new checkerstarted state is properly changed.
         4. Call dmg check start. It should show error because the stopped rank is not at
@@ -38,45 +39,42 @@ class MSMembershipTest(TestWithServers):
         """
         dmg_command = self.get_dmg_command()
 
-        # 1. Call dmg check enable.
+        self.log_step("Call dmg check enable.")
         dmg_command.check_enable()
 
-        # 2. Stop rank 1.
-        dmg_command.system_stop(ranks="1")
+        self.log_step("Stop 1 random rank")
+        rank_to_stop = self.random.choice(list(self.server_managers[0].ranks.keys()))
+        dmg_command.system_stop(ranks=rank_to_stop)
 
-        # 3. Call dmg system query and check that status of at least one rank is not
-        # "checkerstarted". We verify that the new checkerstarted state is properly
-        # changed.
+        self.log_step("Verify the the stopped rank is stopped and all others are checkerstarted")
         query_out = dmg_command.system_query()
-        not_checkerstarted_found = False
         for member in query_out["response"]["members"]:
-            if member["state"] != "checkerstarted":
-                not_checkerstarted_found = True
-                break
-        if not not_checkerstarted_found:
-            # All rank's status is "checkerstarted".
-            self.fail("All rank's status is checkerstarted!")
+            if member["rank"] == rank_to_stop:
+                if member["state"] != "stopped":
+                    self.fail(f"Stopped rank has invalid state: {member['state']}")
+            elif member["state"] != "checkerstarted":
+                self.fail("Expected non-stopped ranks to be in state checkstarted")
 
-        # 4. Call dmg check start. It should show error because the stopped rank is not at
-        # CheckerStarted state.
+        self.log_step("Verify dmg check start fails")
         try:
             dmg_command.check_start()
+            self.fail("dmg check start did not fail as expected")
         except CommandFailure as error:
             self.log.info("dmg check start is expected to fail. Error: %s", error)
 
-        # 5. Call dmg check query. It should show error because the stopped rank is not at
-        # CheckerStarted state.
+        self.log_step("Verify dmg check query fails")
         try:
             dmg_command.check_query()
+            # To be fixed by DAOS-18001
+            # self.fail("dmg check query did not fail as expected")
         except CommandFailure as error:
             self.log.info("dmg check query is expected to fail. Error: %s", error)
 
-        # 6. Call dmg check disable. It should work.
+        self.log_step("Verify dmg check disable works")
         dmg_command.check_disable()
 
-        # 7. Restart the stopped rank for cleanup.
-        self.log.info("Restart stopped rank for cleanup.")
-        dmg_command.system_start(ranks="1")
+        self.log_step("Restart stopped rank for cleanup.")
+        dmg_command.system_start(ranks=rank_to_stop)
 
     def test_enable_disable_admin_excluded(self):
         """Test dmg system exclude and clear-exclude.
@@ -84,15 +82,14 @@ class MSMembershipTest(TestWithServers):
         Test admin can enable and disable the rank state to AdminExcluded when the rank is
         down.
 
-        1. Stop rank 1.
-        2. Set rank 1 to AdminExcluded by calling dmg system exclude --ranks=1 and verify
+        1. Stop all ranks
+        2. Set 1 random rank to AdminExcluded by calling dmg system exclude --ranks=1 and verify
         the state has been changed.
         3. Verify that the checker can be run with AdminExcluded state by calling enable,
         start, query, and disable. Verify that none of the commands returns error.
-        4. Disable AdminExcluded of rank 1 by calling dmg system clear-exclude --ranks=1
+        4. Disable AdminExcluded of the excluded rank by calling dmg system clear-exclude
         and verify the state has been changed.
-        5. Servers haven't been started, so update the expected state of rank 0 for
-        cleanup.
+        5. Start the ranks again
 
         Jira ID: DAOS-11704
 
@@ -104,15 +101,16 @@ class MSMembershipTest(TestWithServers):
         errors = []
         dmg_command = self.get_dmg_command()
 
-        # 1. Stop rank 1.
-        dmg_command.system_stop(ranks="1")
+        self.log_step("Stop all ranks")
+        dmg_command.system_stop(force=True)
 
-        # 2. Set rank 1 to AdminExcluded and verify the state has been changed.
-        self.server_managers[-1].system_exclude(ranks=[1])
+        self.log_step("Exclude 1 random rank")
+        rank_to_exclude = self.random.choice(list(self.server_managers[0].ranks.keys()))
+        self.server_managers[-1].system_exclude(ranks=[rank_to_exclude])
 
-        # 3. Verify that the checker can be run with AdminExcluded state.
+        self.log_step("Verify that the checker can be run with AdminExcluded state.")
         try:
-            dmg_command.check_enable()
+            dmg_command.check_enable(stop=False)
             dmg_command.check_start()
             dmg_command.check_query()
             # We need to start after calling dmg system clear-exclude, otherwise the start
@@ -122,11 +120,14 @@ class MSMembershipTest(TestWithServers):
             msg = f"dmg check command failed! {error}"
             errors.append(msg)
 
-        # 4. Disable AdminExcluded of rank 1 and verify the state has been changed.
-        self.server_managers[-1].system_clear_exclude(ranks=[1])
+        self.log_step(
+            "Disable AdminExcluded of the stopped rank and verify the state has been changed.")
+        self.server_managers[-1].system_clear_exclude(ranks=[rank_to_exclude])
 
-        # 5. Servers haven't been started, so update the expected state of rank 0 for
-        # cleanup.
-        self.server_managers[-1].update_expected_states(0, ['stopped'])
+        self.log_step("Verify all ranks are able to restart")
+        dmg_command.system_start()
+        all_ranks = list(self.server_managers[0].ranks.keys())
+        self.server_managers[-1].update_expected_states(all_ranks, ['joined'])
+        self.server_managers[-1].check_rank_state(all_ranks, ['joined'])
 
         report_errors(test=self, errors=errors)

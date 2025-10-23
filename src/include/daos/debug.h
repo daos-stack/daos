@@ -32,6 +32,7 @@
 	ACTION(tree, tree, arg)                                                                    \
 	ACTION(vos, vos, arg)                                                                      \
 	ACTION(pmdk, pmdk, arg)                                                                    \
+	ACTION(dlck, dlck, arg)                                                                    \
 	ACTION(client, client, arg)                                                                \
 	ACTION(server, server, arg)                                                                \
 	ACTION(rdb, rdb, arg)                                                                      \

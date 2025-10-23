@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,6 +9,7 @@
 #include <daos_srv/vos.h>
 #include <ddb_common.h>
 #include <ddb_parse.h>
+#include "daos_errno.h"
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
@@ -348,6 +350,44 @@ pool_flags_tests(void **state)
 	assert_rc_equal(-DER_INVAL, rc);
 }
 
+static void
+date2cmt_time_tests(void **state)
+{
+	uint64_t cmt_time;
+	int      rc;
+
+	cmt_time = -1;
+	rc       = ddb_date2cmt_time(NULL, &cmt_time);
+	assert_rc_equal(rc, -DER_INVAL);
+	assert_int_equal(cmt_time, -1);
+
+	rc = ddb_date2cmt_time("1970-01-01 00:00:00", NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	assert_int_equal(cmt_time, -1);
+
+	rc = ddb_date2cmt_time(NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	assert_int_equal(cmt_time, -1);
+
+	rc = ddb_date2cmt_time("foo", NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	assert_int_equal(cmt_time, -1);
+
+	rc = ddb_date2cmt_time("0000-00-00 00:00:00", &cmt_time);
+	assert_rc_equal(rc, -DER_INVAL);
+	assert_int_equal(cmt_time, -1);
+
+	rc = ddb_date2cmt_time("1970-01-01 00:00:00", &cmt_time);
+	assert_success(rc);
+	assert_int_equal(rc, 0);
+	assert_int_equal(cmt_time, 0ull);
+
+	rc = ddb_date2cmt_time("1970-01-01 00:01:00", &cmt_time);
+	assert_success(rc);
+	assert_int_equal(rc, 0);
+	assert_int_equal(cmt_time, 60ull);
+}
+
 /*
  * -----------------------------------------------
  * Execute
@@ -360,6 +400,7 @@ ddb_parse_tests_run()
 	static const struct CMUnitTest tests[] = {
 	    TEST(vos_file_parts_tests), TEST(string_to_argv_tests),      TEST(parse_args_tests),
 	    TEST(parse_dtx_id_tests),   TEST(keys_are_parsed_correctly), TEST(pool_flags_tests),
+	    TEST(date2cmt_time_tests),
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);

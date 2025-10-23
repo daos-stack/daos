@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +53,8 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/SystemStop":               {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemRebuildManage":      {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemSelfHealEval":       {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},
@@ -67,6 +70,10 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
 	"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolRebuildStart":         {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolRebuildStop":          {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolSelfHealEval":         {ComponentAdmin},
 	"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
 	"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
 	"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
@@ -83,11 +90,10 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin, ComponentServer},
 	"/RaftTransport/AppendEntries":           {ComponentServer},
 	"/RaftTransport/AppendEntriesPipeline":   {ComponentServer},
 	"/RaftTransport/RequestVote":             {ComponentServer},
