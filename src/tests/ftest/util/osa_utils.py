@@ -296,8 +296,8 @@ class OSAUtils(MdtestBase, IorTestBase):
 
         Args:
             total_ranks (list): Random rank list for testing. Defaults to 2.
-            ranks_to_be_stopped (int): Number of ranks to be stopped per iteration during testing.
-                                       Defaults to 1.
+            stop_individually (bool): Stop ranks individually. 
+                                      Defaults to True.
         Returns:
 
         """
