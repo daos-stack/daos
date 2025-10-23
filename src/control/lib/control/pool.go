@@ -517,9 +517,8 @@ func (pqr *PoolQueryResp) UpdateState() error {
 	return nil
 }
 
-// UpdateSelfHealPolicyDisable retrieves the value of the pool's self_heal policy and compares it
-// with the system's self_heal policy. Then updates the response with slice of disabled policy
-// flags.
+// UpdateSelfHealPolicy retrieves the value of the pool's self_heal policy and adds it to the
+// response. Default policy value is returned if the property value cannot be fetched.
 func (pqr *PoolQueryResp) UpdateSelfHealPolicy(ctx context.Context, rpcClient UnaryInvoker) error {
 	req := &PoolGetPropReq{
 		ID: pqr.UUID.String(),
@@ -533,24 +532,15 @@ func (pqr *PoolQueryResp) UpdateSelfHealPolicy(ctx context.Context, rpcClient Un
 		return err
 	}
 
-	//pretty.PrintPoolProperties(cmd.PoolID().String(), &bld, resp...)
-	//	propHdlrs := daos.PoolProperties()
-	//	f.GettableKeys(propHdlrs.Keys()...)
-	//	f.DeprecatedKeyMap(daos.PoolDeprecatedProperties())
-	//
-	//	if err := f.GetPropertiesFlag.UnmarshalFlag(fv); err != nil {
-	//		return err
-	//	}
-	//
-	//	for key := range f.ParsedProps {
-	//		hdlr := propHdlrs[key]
-	//		f.ToGet = append(f.ToGet, hdlr.GetProperty(key))
-
-	if len(props) != 1 {
-		return errors.Errorf("unexpected number of pool props returned, want 1 got %d",
-			len(props))
+	switch len(props) {
+	case 0:
+		rpcClient.Debug("self_heal pool property not found, assuming default value 'exclude;rebuild'")
+		pqr.SelfHealPolicy = "exclude;rebuild"
+	case 1:
+		pqr.SelfHealPolicy = props[0].StringValue()
+	default:
+		return errors.Errorf("unexpected number of pool props returned, want 1 got %d", len(props))
 	}
-	pqr.SelfHealPolicy = props[0].StringValue()
 
 	rpcClient.Debugf("pool-query: fetched pool self_heal propval: %s", pqr.SelfHealPolicy)
 

@@ -118,9 +118,9 @@ type (
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD | C.DPI_SELF_HEAL_POLICY))
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
-	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
+	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE | C.DPI_SELF_HEAL_POLICY))
 
 	// PoolQueryOptionSpace retrieves storage space usage as part of the pool query.
 	PoolQueryOptionSpace PoolQueryOption = "space"

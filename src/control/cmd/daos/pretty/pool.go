@@ -65,9 +65,9 @@ func printPoolTiersMdOnSsd(memFileBytes uint64, suss []*daos.StorageUsageStats, 
 	}
 }
 
-// PrintSelfHealPolicyDisable compares system and pool self_heal flags and display disabled
+// PrintPoolSelfHealDisable compares system and pool self_heal flags and display disabled
 // features.
-func PrintSelfHealPolicyDisable(poolSelfHeal, sysSelfHeal string, out io.Writer) {
+func PrintPoolSelfHealDisable(poolSelfHeal, sysSelfHeal string, out io.Writer) {
 	disabled := make(map[string][]string)
 
 	sysOffFlags := daos.SystemPropertySelfHealUnsetFlags(sysSelfHeal)
@@ -90,14 +90,17 @@ func PrintSelfHealPolicyDisable(poolSelfHeal, sysSelfHeal string, out io.Writer)
 		}
 	}
 
-	if len(disabled) > 0 {
-		for _, key := range []string{"exclude", "rebuild"} {
-			policies := common.DedupeStringSlice(disabled[key])
-			if len(policies) > 0 {
-				fmt.Fprintf(out, "%s disabled on pool due to %v %s", key, policies,
-					english.PluralWord(len(policies), "policy", "policies"))
-			}
+	if len(disabled) == 0 {
+		return
+	}
+
+	for _, key := range []string{"exclude", "rebuild"} {
+		policies := common.DedupeStringSlice(disabled[key])
+		if len(policies) == 0 {
+			continue
 		}
+		fmt.Fprintf(out, "%s disabled on pool due to %v %s\n", key, policies,
+			english.PluralWord(len(policies), "policy", "policies"))
 	}
 }
 

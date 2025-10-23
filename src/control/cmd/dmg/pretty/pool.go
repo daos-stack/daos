@@ -30,7 +30,7 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	if err := pretty.PrintPoolInfo(&pqr.PoolInfo, out); err != nil {
 		return err
 	}
-	pretty.PrintSelfHealPolicyDisable(pqr.PoolInfo.SelfHealPolicy, pqr.SysSelfHealPolicy, out)
+	pretty.PrintPoolSelfHealDisable(pqr.PoolInfo.SelfHealPolicy, pqr.SysSelfHealPolicy, out)
 
 	return nil
 }

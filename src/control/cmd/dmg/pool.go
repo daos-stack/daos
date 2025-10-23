@@ -686,8 +686,8 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 // poolQueryCmd is the struct representing the command to query a DAOS pool.
 type poolQueryCmd struct {
 	poolCmd
-	ShowEnabledRanks bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
 	HealthOnly       bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
+	ShowEnabledRanks bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
 	NoSelfHealCheck  bool `long:"no-self-heal-check" description:"Disable self_heal pool property check"`
 }
 
@@ -698,11 +698,11 @@ func (cmd *poolQueryCmd) Execute(args []string) error {
 		QueryMask: daos.DefaultPoolQueryMask,
 	}
 
-	if !cmd.NoSelfHealCheck {
-		req.QueryMask.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
-	}
 	if cmd.HealthOnly {
 		req.QueryMask = daos.HealthOnlyPoolQueryMask
+	}
+	if !cmd.NoSelfHealCheck {
+		req.QueryMask.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
 	}
 	if cmd.ShowEnabledRanks {
 		req.QueryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
