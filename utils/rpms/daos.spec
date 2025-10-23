@@ -10,9 +10,9 @@
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4
-%global libfabric_version 1.15.1-1
-%global argobots_version 1.2
+%global mercury_version   2.4.0-7
+%global libfabric_version 1.22.0-4
+%global argobots_version 1.2-3
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -81,10 +81,10 @@ BuildRequires: spdk-devel >= 22.01.2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
-BuildRequires: libisa-l_crypto-devel
+BuildRequires: libisa-l_crypto-devel >= 2.24.0-1
 %else
-BuildRequires: libisal-devel
-BuildRequires: libisal_crypto-devel
+BuildRequires: libisal-devel >= 2.31.1-7
+BuildRequires: libisal_crypto-devel >= 2.24.0-3
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -156,11 +156,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.0-1.suse1500
+Requires: libpmemobj1 >= 2.1.0-3.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.0-1%{?dist}
+Requires: libpmemobj >= 2.1.0-6%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
@@ -633,6 +633,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Oct 21 2025 Ryon Jensen <ryon.jensen@hpe.com> 2.6.4-5
+- Bump libfabric version >= 1.22.0-4
+- Bump mercury version >= 2.4.0-7
+- Bump argobots version >= 1.2-3
+- Bump libisal version >= 2.31.1-7
+- Bump libisal_crypto version >= 2.24.0-3
+- Bump pmemobj1 >= 2.1.0-3
+- Bump pmemobj >= 2.1.0-6
+
 * Fri Oct 17 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-4
 - Third release candidate for 2.6.4
 
