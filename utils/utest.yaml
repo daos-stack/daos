@@ -47,6 +47,7 @@
     - cmd: ["src/engine/tests/drpc_progress_tests"]
     - cmd: ["src/engine/tests/drpc_handler_tests"]
     - cmd: ["src/engine/tests/drpc_listener_tests"]
+    - cmd: ["src/engine/tests/drpc_comm_tests"]
     - cmd: ["src/mgmt/tests/srv_drpc_tests"]
 - name: gurt
   base: "BUILD_DIR"

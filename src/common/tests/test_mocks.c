@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -230,7 +231,7 @@ void
 mock_sendmsg_setup(void)
 {
 	sendmsg_call_count = 0;
-	sendmsg_return = 5; /* greater than 0 is success */
+	sendmsg_return           = 1; /* > 0 will return success from mock */
 	sendmsg_sockfd = 0;
 	sendmsg_msg_ptr = NULL;
 	sendmsg_msg_iov_base_ptr = NULL;
@@ -265,6 +266,9 @@ __wrap_sendmsg(int sockfd, const struct msghdr *msg, int flags)
 		errno = -sendmsg_return;
 		return -1;
 	}
+	if (sendmsg_return > 0) /* success */
+		return msg->msg_iov[0].iov_len;
+
 	return sendmsg_return;
 }
 
@@ -311,17 +315,35 @@ __wrap_recvmsg(int sockfd, struct msghdr *msg, int flags)
 		errno = -recvmsg_return;
 		return -1;
 	}
+	if (recvmsg_return > 0)
+		return msg->msg_iov[0].iov_len;
 	return recvmsg_return;
+}
+
+void
+mock_valid_drpc_header_in_recvmsg(size_t data_len)
+{
+	struct drpc_header *hdr;
+
+	recvmsg_return = data_len + DRPC_HEADER_LEN;
+
+	hdr                  = (struct drpc_header *)recvmsg_msg_content;
+	hdr->chunk_data_size = data_len;
+	hdr->total_data_size = data_len;
+	hdr->chunk_idx       = 0;
+	hdr->total_chunks    = 1;
 }
 
 void
 mock_valid_drpc_call_in_recvmsg(void)
 {
 	Drpc__Call *call = new_drpc_call();
+	size_t      data_len;
 
-	/* Mock a valid DRPC call coming in */
-	recvmsg_return = drpc__call__get_packed_size(call);
-	drpc__call__pack(call, recvmsg_msg_content);
+	/* Mock a valid DRPC call coming in, with header */
+	data_len = drpc__call__get_packed_size(call);
+	mock_valid_drpc_header_in_recvmsg(data_len);
+	drpc__call__pack(call, DRPC_CHUNK_DATA_PTR(recvmsg_msg_content));
 
 	drpc__call__free_unpacked(call, NULL);
 }
@@ -330,12 +352,14 @@ void
 mock_valid_drpc_resp_in_recvmsg(Drpc__Status status)
 {
 	Drpc__Response *resp = new_drpc_response();
+	size_t          data_len;
 
 	resp->status = status;
 
 	/* Mock a valid DRPC response coming in */
-	recvmsg_return = drpc__response__get_packed_size(resp);
-	drpc__response__pack(resp, recvmsg_msg_content);
+	data_len = drpc__response__get_packed_size(resp);
+	mock_valid_drpc_header_in_recvmsg(data_len);
+	drpc__response__pack(resp, DRPC_CHUNK_DATA_PTR(recvmsg_msg_content));
 
 	drpc__response__free_unpacked(resp, NULL);
 }

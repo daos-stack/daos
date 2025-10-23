@@ -1074,7 +1074,7 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 	buf  = entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
 	diff = entry->ae_sgl.sg_iovs[AGG_IOV_DIFF].iov_buf;
 
-	for (i = 0, j = 0; i < cell_cnt; i++) {
+	for (i = 0, j = 0; i < cell_cnt; i++, j++) {
 		old = &obuf[i * cell_bytes];
 		new = &buf[i * cell_bytes];
 		vects[0] = old;
@@ -1085,6 +1085,7 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 			goto out;
 		while (!isset(bit_map, j))
 			j++;
+		D_ASSERTF(j < k, "bad cell_idx %d, number of data shards %d\n", j, k);
 		agg_diff_preprocess(entry, diff, j);
 		ec_encode_data_update(cell_bytes, k, p, j,
 				      entry->ae_codec->ec_gftbls, diff,
@@ -1951,15 +1952,15 @@ out:
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
 			if (rc)
-				D_ERROR("agg_peer_update fail: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "agg_peer_update failed, write_parity %d",
+					 write_parity);
 		}
 
 		if (rc == 0) {
 			rc = agg_update_vos(agg_param, entry, write_parity);
 			if (rc)
-				D_ERROR("agg_update_vos failed: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "agg_update_vos failed, write_parity %d",
+					 write_parity);
 		}
 	}
 
@@ -2729,8 +2730,8 @@ retry:
 	if (rc != 0)
 		goto update_hae;
 
-	rc = vos_iterate_obj(&iter_param, true, &anchors, agg_iterate_pre_cb,
-			     agg_iterate_post_cb, ec_agg_param, dth);
+	rc = vos_iterate_obj(&iter_param, &anchors, agg_iterate_pre_cb, agg_iterate_post_cb,
+			     ec_agg_param, dth);
 	if (rc == -DER_INPROGRESS && !d_list_empty(&dth->dth_share_tbd_list)) {
 		uint64_t	now = daos_gettime_coarse();
 

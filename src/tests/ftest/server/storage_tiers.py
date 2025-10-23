@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,6 +26,7 @@ class StorageTiers(TestWithServers):
 
         Test Description:
             Verify storage tiers are correctly obtained from the test yaml file.
+            Does not test or rely on actual hardware being present.
 
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
@@ -58,9 +60,9 @@ class StorageTiers(TestWithServers):
                         "class": storage_class,
                         "bdev_list": self.params.get("bdev_list", namespace),
                     }
-                    storage_roles = self.params.get("roles", namespace, None)
+                    storage_roles = self.params.get("bdev_roles", namespace, None)
                     if storage_roles:
-                        data["roles"] = storage_roles
+                        data["bdev_roles"] = storage_roles
                 storage.append(data)
             expected.append(storage)
         self.log.info("expected:\n%s", yaml.dump(expected, default_flow_style=False))

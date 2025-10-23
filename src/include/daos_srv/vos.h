@@ -235,12 +235,15 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
 /**
  * Aggregate the committed DTXs.
  *
- * \param coh	[IN]	Container open handle.
+ * \param coh		[IN]	Container open handle.
+ * \param cmt_time	[IN]	The upper commit time to aggregate, or NULL.
  *
- * \return		Zero on success, negative value if error.
+ * \return			Zero if all qualified DTX entries have been removed.
+ * 				Positive value if more DTX entries can be eventually aggregated.
+ * 				Negative value for error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh);
+vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time);
 
 /**
  * Query the container's DTXs statistics information.
@@ -353,7 +356,7 @@ int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
 int
-vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool init_spdk);
 
 /**
  * Finalize the environment for a VOS instance
@@ -363,6 +366,19 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
  */
 void
 vos_self_fini(void);
+
+/**
+ * Initialize the environment for a VOS instance as an engine.
+ *
+ * \param[in]	nvme_conf	NVMe config file
+ * \param[in]	storage_path	Storage path e.g. /mnt/daos
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
+ */
+int
+vos_sys_db_init(const char *nvme_conf, const char *storage_path);
 
 /**
  * Versioning Object Storage Pool (VOSP)
@@ -1303,12 +1319,13 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
- * Iterate VOS objects and subtrees when recursive mode is specified. When it's
- * called against md-on-ssd phase2 pool, it iterates objects in bucket ID order
- * instead of OID order to minimize bucket eviction/load.
+ * Recursively iterate VOS objects and subtrees. When it's called against md-on-ssd
+ * phase2 pool, it iterates objects in bucket ID order instead of OID order to
+ * minimize the bucket eviction/loading.
+ *
+ * Note: Don't use this interface when caller requires iterating in OID order.
  *
  * \param[in]		param		iteration parameters
- * \param[in]		recursive	iterate in lower level recursively
  * \param[in]		anchors		array of anchors, one for each
  *					iteration level
  * \param[in]		pre_cb		pre subtree iteration callback
@@ -1321,8 +1338,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \retval		-DER_*	error (but never -DER_NONEXIST)
  */
 int
-vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
-		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+vos_iterate_obj(vos_iter_param_t *param, struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+		vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
  * Skip the object not located on specified bucket (for md-on-ssd phase2).
@@ -1762,5 +1779,24 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
  */
 bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
+
+/* Timing statistic of DTX entries */
+#define DTX_TIME_STAT_COUNT 3
+struct dtx_time_stat {
+	daos_epoch_t dts_epoch[DTX_TIME_STAT_COUNT];
+	uint64_t     dts_cmt_time[DTX_TIME_STAT_COUNT];
+};
+
+/**
+ * Return statistics on the DTX committed entries of a container.
+ *
+ * \param[in]	coh	container open handle.
+ * \param[out]	cmt_cnt	number of DTX committed entries.
+ * \param[out]	dts	Timing statistics on the DTX committed entries.
+ *
+ * \return		0 on success, error otherwise.
+ */
+int
+vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat *dts);
 
 #endif /* __VOS_API_H */

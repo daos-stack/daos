@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -358,8 +359,6 @@ func (r *repairSeqNum) UnmarshalFlag(value string) error {
 type checkRepairCmd struct {
 	checkCmdBase
 
-	ForAll bool `short:"f" long:"for-all" description:"Take the same action for all inconsistencies with the same class."`
-
 	Args struct {
 		SeqNum         repairSeqNum `positional-arg-name:"[seq-num]" required:"1"`
 		SelectedAction int          `positional-arg-name:"[action]" required:"1"`
@@ -391,7 +390,6 @@ func (cmd *checkRepairCmd) Execute(_ []string) error {
 
 	req := new(control.SystemCheckRepairReq)
 	req.Seq = uint64(cmd.Args.SeqNum)
-	req.ForAll = cmd.ForAll
 	if err := req.SetAction(int32(choices[cmd.Args.SelectedAction].Action)); err != nil {
 		return err
 	}
