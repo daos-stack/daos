@@ -1506,35 +1506,48 @@ dtx_stat_cont_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type
 	if (args->opt->details) {
 		if (args->aggr_epoch < args_tmp.aggr_epoch)
 			args->aggr_epoch = args_tmp.aggr_epoch;
-		if (args->time_stat.dts_cmt_time[0] > args_tmp.time_stat.dts_cmt_time[0])
-			args->time_stat.dts_cmt_time[0] = args_tmp.time_stat.dts_cmt_time[0];
-		if (args->time_stat.dts_cmt_time[1] < args_tmp.time_stat.dts_cmt_time[1])
-			args->time_stat.dts_cmt_time[1] = args_tmp.time_stat.dts_cmt_time[1];
-		if (args->time_stat.dts_cmt_time[2] == 0)
-			args->time_stat.dts_cmt_time[2] = args_tmp.time_stat.dts_cmt_time[2];
+		if (args->time_stat.dts_cmt_time[DTX_TIME_STAT_MIN] >
+		    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MIN])
+			args->time_stat.dts_cmt_time[DTX_TIME_STAT_MIN] =
+			    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MIN];
+		if (args->time_stat.dts_cmt_time[DTX_TIME_STAT_MAX] <
+		    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MAX])
+			args->time_stat.dts_cmt_time[DTX_TIME_STAT_MAX] =
+			    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MAX];
+		if (args->time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] == 0)
+			args->time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] =
+			    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN];
 		else {
 			long double tmp_mean;
 
-			tmp_mean = args->time_stat.dts_cmt_time[2] * (long double)args->cmt_cnt;
-			tmp_mean += (long double)args_tmp.time_stat.dts_cmt_time[2] *
-				    (long double)args_tmp.cmt_cnt;
+			tmp_mean = args->time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] *
+				   (long double)args->cmt_cnt;
+			tmp_mean +=
+			    (long double)args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] *
+			    (long double)args_tmp.cmt_cnt;
 			tmp_mean /= (long double)(args->cmt_cnt + args_tmp.cmt_cnt);
-			args->time_stat.dts_cmt_time[2] = tmp_mean;
+			args->time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] = tmp_mean;
 		}
-		if (args->time_stat.dts_epoch[0] > args_tmp.time_stat.dts_epoch[0])
-			args->time_stat.dts_epoch[0] = args_tmp.time_stat.dts_epoch[0];
-		if (args->time_stat.dts_epoch[1] < args_tmp.time_stat.dts_epoch[1])
-			args->time_stat.dts_epoch[1] = args_tmp.time_stat.dts_epoch[1];
-		if (args->time_stat.dts_epoch[2] == 0)
-			args->time_stat.dts_epoch[2] = args_tmp.time_stat.dts_epoch[2];
+		if (args->time_stat.dts_epoch[DTX_TIME_STAT_MIN] >
+		    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MIN])
+			args->time_stat.dts_epoch[DTX_TIME_STAT_MIN] =
+			    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MIN];
+		if (args->time_stat.dts_epoch[DTX_TIME_STAT_MAX] <
+		    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MAX])
+			args->time_stat.dts_epoch[DTX_TIME_STAT_MAX] =
+			    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MAX];
+		if (args->time_stat.dts_epoch[DTX_TIME_STAT_MEAN] == 0)
+			args->time_stat.dts_epoch[DTX_TIME_STAT_MEAN] =
+			    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MEAN];
 		else {
 			long double tmp_mean;
 
-			tmp_mean = args->time_stat.dts_epoch[2] * (long double)args->cmt_cnt;
-			tmp_mean += (long double)args_tmp.time_stat.dts_epoch[2] *
+			tmp_mean = args->time_stat.dts_epoch[DTX_TIME_STAT_MEAN] *
+				   (long double)args->cmt_cnt;
+			tmp_mean += (long double)args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MEAN] *
 				    (long double)args_tmp.cmt_cnt;
 			tmp_mean /= (long double)(args->cmt_cnt + args_tmp.cmt_cnt);
-			args->time_stat.dts_epoch[2] = tmp_mean;
+			args->time_stat.dts_epoch[DTX_TIME_STAT_MEAN] = tmp_mean;
 		}
 	}
 
@@ -1592,8 +1605,8 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 	}
 
 	args.cmt_cnt                   = 0;
-	args.time_stat.dts_cmt_time[0] = UINT64_MAX;
-	args.time_stat.dts_epoch[0]    = DAOS_EPOCH_MAX;
+	args.time_stat.dts_cmt_time[DTX_TIME_STAT_MIN] = UINT64_MAX;
+	args.time_stat.dts_epoch[DTX_TIME_STAT_MIN]    = DAOS_EPOCH_MAX;
 	param.ip_hdl                   = ctx->dc_poh;
 	param.ip_epr.epr_hi            = DAOS_EPOCH_MAX;
 	do {

@@ -4078,10 +4078,12 @@ vos_dtx_local_end(struct dtx_handle *dth, int result)
 	return result;
 }
 
+enum { DTS_EPOCH_ACC = 0, DTS_CMT_TIME_ACC, DTS_ACC_COUNT };
+
 struct dtx_time_stat_priv {
 	struct dtx_time_stat dts_pub;
 	/* DAOS-17322: Use of floating point to avoid integer overflow issue */
-	long double          dts_mean[2];
+	long double          dts_mean[DTS_ACC_COUNT];
 };
 
 int
@@ -4107,8 +4109,8 @@ vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat 
 	cmt_cnt_tmp                     = 0;
 	umm = vos_cont2umm(cont);
 	dbd = umem_off2ptr(umm, cont->vc_cont_df->cd_dtx_committed_head);
-	dts_tmp.dts_pub.dts_epoch[0]    = DAOS_EPOCH_MAX;
-	dts_tmp.dts_pub.dts_cmt_time[0] = UINT64_MAX;
+	dts_tmp.dts_pub.dts_epoch[DTX_TIME_STAT_MIN]    = DAOS_EPOCH_MAX;
+	dts_tmp.dts_pub.dts_cmt_time[DTX_TIME_STAT_MIN] = UINT64_MAX;
 	while (dbd != NULL) {
 		if (dbd->dbd_magic != DTX_CMT_BLOB_MAGIC) {
 			D_ERROR("Committed DTX blob with bad magic: container=" DF_UUID
@@ -4127,17 +4129,25 @@ vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat 
 
 				dce_df = &dbd->dbd_committed_data[i];
 
-				if (dts_tmp.dts_pub.dts_epoch[0] > dce_df->dce_epoch)
-					dts_tmp.dts_pub.dts_epoch[0] = dce_df->dce_epoch;
-				if (dts_tmp.dts_pub.dts_epoch[1] < dce_df->dce_epoch)
-					dts_tmp.dts_pub.dts_epoch[1] = dce_df->dce_epoch;
-				dts_tmp.dts_mean[0] += dce_df->dce_epoch;
+				if (dts_tmp.dts_pub.dts_epoch[DTX_TIME_STAT_MIN] >
+				    dce_df->dce_epoch)
+					dts_tmp.dts_pub.dts_epoch[DTX_TIME_STAT_MIN] =
+					    dce_df->dce_epoch;
+				if (dts_tmp.dts_pub.dts_epoch[DTX_TIME_STAT_MAX] <
+				    dce_df->dce_epoch)
+					dts_tmp.dts_pub.dts_epoch[DTX_TIME_STAT_MAX] =
+					    dce_df->dce_epoch;
+				dts_tmp.dts_mean[DTS_EPOCH_ACC] += dce_df->dce_epoch;
 
-				if (dts_tmp.dts_pub.dts_cmt_time[0] > dce_df->dce_cmt_time)
-					dts_tmp.dts_pub.dts_cmt_time[0] = dce_df->dce_cmt_time;
-				if (dts_tmp.dts_pub.dts_cmt_time[1] < dce_df->dce_cmt_time)
-					dts_tmp.dts_pub.dts_cmt_time[1] = dce_df->dce_cmt_time;
-				dts_tmp.dts_mean[1] += dce_df->dce_cmt_time;
+				if (dts_tmp.dts_pub.dts_cmt_time[DTX_TIME_STAT_MIN] >
+				    dce_df->dce_cmt_time)
+					dts_tmp.dts_pub.dts_cmt_time[DTX_TIME_STAT_MIN] =
+					    dce_df->dce_cmt_time;
+				if (dts_tmp.dts_pub.dts_cmt_time[DTX_TIME_STAT_MAX] <
+				    dce_df->dce_cmt_time)
+					dts_tmp.dts_pub.dts_cmt_time[DTX_TIME_STAT_MAX] =
+					    dce_df->dce_cmt_time;
+				dts_tmp.dts_mean[DTS_CMT_TIME_ACC] += dce_df->dce_cmt_time;
 			}
 		}
 
@@ -4148,11 +4158,13 @@ vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat 
 
 	if (dts != NULL) {
 		if (cmt_cnt_tmp != 0) {
-			dts_tmp.dts_mean[0] /= (long double)cmt_cnt_tmp;
-			dts_tmp.dts_pub.dts_epoch[2] = (daos_epoch_t)dts_tmp.dts_mean[0];
+			dts_tmp.dts_mean[DTS_EPOCH_ACC] /= (long double)cmt_cnt_tmp;
+			dts_tmp.dts_pub.dts_epoch[DTX_TIME_STAT_MEAN] =
+			    (daos_epoch_t)dts_tmp.dts_mean[DTS_EPOCH_ACC];
 
-			dts_tmp.dts_mean[1] /= (long double)cmt_cnt_tmp;
-			dts_tmp.dts_pub.dts_cmt_time[2] = (uint64_t)dts_tmp.dts_mean[1];
+			dts_tmp.dts_mean[DTS_CMT_TIME_ACC] /= (long double)cmt_cnt_tmp;
+			dts_tmp.dts_pub.dts_cmt_time[DTX_TIME_STAT_MEAN] =
+			    (uint64_t)dts_tmp.dts_mean[DTS_CMT_TIME_ACC];
 		}
 
 		memcpy(dts, &dts_tmp, sizeof(struct dtx_time_stat));
