@@ -3968,10 +3968,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/*
-	 * Simply serialize this whole RPC with rsvc_step_{up,down}_cb() and
-	 * ds_rsvc_stop().
-	 */
 	ABT_mutex_lock(svc->ps_rsvc.s_mutex);
 
 	if (svc->ps_rsvc.s_stop) {
@@ -3988,6 +3984,17 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		 */
 		rc = rdb_campaign(svc->ps_rsvc.s_db);
 		D_DEBUG(DB_MD, DF_UUID": campaign: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+	}
+
+	if (ds_rsvc_get_state(&svc->ps_rsvc) == DS_RSVC_UP) {
+		D_DEBUG(DB_MD, DF_UUID ": already UP\n", DP_UUID(svc->ps_uuid));
+		rc = 0;
+		goto out_mutex;
+	} else if (ds_rsvc_get_state(&svc->ps_rsvc) != DS_RSVC_UP_EMPTY) {
+		D_DEBUG(DB_MD, DF_UUID ": not yet UP_EMPTY: state=%s\n", DP_UUID(svc->ps_uuid),
+			ds_rsvc_state_str(ds_rsvc_get_state(&svc->ps_rsvc)));
+		rc = -DER_NOTLEADER;
+		goto out_mutex;
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, RDB_NIL_TERM, &tx);
