@@ -31,6 +31,8 @@ import (
 
 /*
 #include <stdint.h>
+
+#include <daos_pool.h>
 */
 import "C"
 
@@ -979,14 +981,14 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 
 	// Retrieve system self-heal property. Assume default value where all flags are set if
 	// property isn't present.
-	resp.SysSelfHealPolicy = daos.DefaultSelfHealFlagsStr
-	qm := daos.PoolQueryMask(C.uint64_t(req.QueryMask))
-	if qm.HasOption(daos.PoolQueryOptionSelfHealPolicy) {
+	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
+	if req.QueryMask&C.DPI_SELF_HEAL_POLICY != 0 {
 		if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
 			svc.log.Debugf(err.Error())
 		} else if err != nil {
 			return nil, err
 		} else {
+			svc.log.Debugf("system self-heal: %s", selfHeal)
 			resp.SysSelfHealPolicy = selfHeal
 		}
 	}

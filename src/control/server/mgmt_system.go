@@ -828,7 +828,7 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 
 	// Retrieve system self-heal property. Assume default value where all flags are set if
 	// property isn't present.
-	resp.SysSelfHealPolicy = daos.DefaultSelfHealFlagsStr
+	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
 	if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
 		svc.log.Debugf(err.Error())
 	} else if err != nil {
@@ -1578,7 +1578,7 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 	svc.log.Debugf("system property self_heal='%+v'", selfHeal)
 
 	// Exclude engines based on SWIM status if system property bit set.
-	if daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagExclude) {
+	if daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagExclude) {
 		if err := svc.selfHealExcludeRanks(ctx); err != nil {
 			return nil, errors.Wrap(err, "excluding ranks based on self_heal.exclude")
 		}
@@ -1587,8 +1587,8 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 	// If pool_exclude or pool_rebuild is set, send the latest self_heal value to all PSs, who
 	// will handle the reevaluation. This involves calling into the leader engine with self_heal
 	// value for each pool and calling dsc_pool_svc_eval_self_heal() in dRPC handler.
-	if !daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagPoolRebuild) &&
-		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagPoolExclude) {
+	if !daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagPoolRebuild) &&
+		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagPoolExclude) {
 		return new(mgmtpb.DaosResp), nil
 	}
 
