@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -945,6 +946,13 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 			expErr: storage.FaultBdevConfigRolesNoControlMetadata,
+		},
+		"bdev_exclude addresses clash with bdev_list": {
+			extraConfig: func(c *Server) *Server {
+				c.BdevExclude = c.Engines[0].Storage.GetBdevs().Strings()
+				return c
+			},
+			expErr: FaultConfigBdevExcludeClash,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
