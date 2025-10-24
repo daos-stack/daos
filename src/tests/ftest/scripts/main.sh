@@ -23,7 +23,8 @@ then
     rm -rf venv
 fi
 
-python3 -m venv venv
+: "${PYTHON_VERSION:=3.11}"
+"python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
