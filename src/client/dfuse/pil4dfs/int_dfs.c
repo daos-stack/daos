@@ -1108,6 +1108,45 @@ reset_ucs_global_variable_after_fork(void)
 
 #include <execinfo.h>
 
+extern char **environ;
+
+static void print_cmd_env(void)
+{
+    FILE *file = fopen("/proc/self/cmdline", "r");
+    if (!file) {
+        perror("Failed to open /proc/self/cmdline");
+        return ;
+    }
+
+    char buffer[4000]; // Buffer to hold the command-line arguments
+    size_t bytesRead = fread(buffer, 1, sizeof(buffer) - 1, file);
+    fclose(file);
+
+    if (bytesRead == 0) {
+        perror("Failed to read /proc/self/cmdline");
+        return;
+    }
+
+    buffer[bytesRead] = '\0'; // Null-terminate the buffer
+
+    // Command-line arguments in /proc/self/cmdline are null-separated
+    char *arg = buffer;
+    printf("DBG> begin cmdline\n");
+    while (arg < buffer + bytesRead) {
+        printf("%s ", arg);
+        arg += strlen(arg) + 1; // Move to the next argument
+    }
+    printf("\nDBG> end   cmdline\n");
+
+    char **env = environ;
+    printf("DBG> begin env\n");
+    while (*env) {
+        printf("%s\n", *env);
+        env++;
+    }
+    printf("\nDBG> end   env\n");
+}
+
 void
 ucs_init(void)
 {
@@ -1120,6 +1159,8 @@ ucs_init(void)
 			size = backtrace(buffer, 200);
 			printf("DBG> Stack trace:\n");
 			backtrace_symbols_fd(buffer, size, fileno(stdout));
+			fflush(stdout);
+			print_cmd_env();
 			fflush(stdout);
 		}
 		D_ASSERT(next_ucs_init != NULL);
