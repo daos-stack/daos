@@ -767,7 +767,7 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_entry *vfe)
 	return 0;
 }
 
-#define EXPIRE_INTVL            3               /* seconds */
+#define EXPIRE_INTVL            6               /* seconds */
 #define UNMAP_SIZE_THRESH	(1UL << 20)	/* 1MB */
 
 static int
