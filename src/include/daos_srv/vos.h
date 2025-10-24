@@ -1781,7 +1781,8 @@ bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
 /* Timing statistic of DTX entries */
-#define DTX_TIME_STAT_COUNT 3
+enum { DTX_TIME_STAT_MIN = 0, DTX_TIME_STAT_MAX, DTX_TIME_STAT_MEAN, DTX_TIME_STAT_COUNT };
+
 struct dtx_time_stat {
 	daos_epoch_t dts_epoch[DTX_TIME_STAT_COUNT];
 	uint64_t     dts_cmt_time[DTX_TIME_STAT_COUNT];
