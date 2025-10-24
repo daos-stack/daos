@@ -18,9 +18,16 @@
 #include <daos/checker.h>
 #include <daos/dtx.h>
 
-#include "btree_internal.h"
-
 #define BTR_EXT_FEAT_MASK (BTR_FEAT_MASK ^ BTR_FEAT_EMBEDDED)
+
+/**
+ * Tree node types.
+ * NB: a node can be both root and leaf.
+ */
+enum btr_node_type {
+	BTR_NODE_LEAF		= (1 << 0),
+	BTR_NODE_ROOT		= (1 << 1),
+};
 
 enum btr_probe_rc {
 	PROBE_RC_UNKNOWN,
@@ -156,8 +163,6 @@ struct btr_context {
 	struct btr_trace_info            tc_trace;
 	/** trace buffer */
 	struct btr_trace		 tc_traces[BTR_TRACE_MAX];
-	/** checker */
-	struct checker                  *tc_checker;
 };
 
 /** size of print buffer */
@@ -325,13 +330,13 @@ btr_ops(struct btr_context *tcx)
  * \param uma		Memory class attributes.
  * \param coh		The container open handle.
  * \param priv		Private information from user
- * \param ck		Checker.
  * \param tcxp		Returned context.
  */
 static int
-btr_context_create(umem_off_t root_off, struct btr_root *root, unsigned int tree_class,
-		   uint64_t tree_feats, unsigned int tree_order, struct umem_attr *uma,
-		   daos_handle_t coh, void *priv, struct checker *ck, struct btr_context **tcxp)
+btr_context_create(umem_off_t root_off, struct btr_root *root,
+		   unsigned int tree_class, uint64_t tree_feats,
+		   unsigned int tree_order, struct umem_attr *uma,
+		   daos_handle_t coh, void *priv, struct btr_context **tcxp)
 {
 	struct btr_context	*tcx;
 	unsigned int		 depth;
@@ -342,7 +347,7 @@ btr_context_create(umem_off_t root_off, struct btr_root *root, unsigned int tree
 		return -DER_NOMEM;
 
 	tcx->tc_ref = 1; /* for the caller */
-	rc          = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, ck,
+	rc          = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, NULL,
 				     &tcx->tc_tins);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
@@ -367,8 +372,6 @@ btr_context_create(umem_off_t root_off, struct btr_root *root, unsigned int tree
 			root_off);
 	}
 
-	tcx->tc_checker = ck;
-
 	btr_context_set_depth(tcx, depth);
 	*tcxp = tcx;
 	return 0;
@@ -387,8 +390,10 @@ btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
 	int		 rc;
 
 	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
-	rc = btr_context_create(tcx->tc_tins.ti_root_off, tcx->tc_tins.ti_root, -1, -1, -1, &uma,
-				tcx->tc_tins.ti_coh, tcx->tc_tins.ti_priv, NULL, tcx_p);
+	rc = btr_context_create(tcx->tc_tins.ti_root_off,
+				tcx->tc_tins.ti_root, -1, -1, -1, &uma,
+				tcx->tc_tins.ti_coh,
+				tcx->tc_tins.ti_priv, tcx_p);
 	return rc;
 }
 
@@ -1663,8 +1668,6 @@ out:
 	return rc;
 }
 
-#define EMPTY_TREE_STR "Empty tree\n"
-
 /**
  * Try to find \a key within a btree, it will store the searching path in
  * tcx::tc_traces.
@@ -1702,15 +1705,12 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
 
 	if (btr_root_empty(tcx)) { /* empty tree */
-		CK_PRINT(tcx->tc_checker, EMPTY_TREE_STR);
-		D_DEBUG(DB_TRACE, EMPTY_TREE_STR);
+		D_DEBUG(DB_TRACE, "Empty tree\n");
 		rc = PROBE_RC_NONE;
 		goto out;
 	}
 
 	if (btr_has_embedded_value(tcx)) {
-		/** checker's instrumentation is not present in the embedded probe yet. */
-		D_ASSERT(tcx->tc_checker == NULL);
 		rc = btr_probe_embedded(tcx, probe_opc, intent, key, hkey);
 		return rc;
 	}
@@ -1722,14 +1722,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			next_level = false;
 			start	= 0;
 			nd	= btr_off2ptr(tcx, nd_off);
-			if (IS_CHECKER(tcx->tc_checker)) {
-				rc =
-				    tcx->tc_checker->ck_ops.node_check(nd, nd_off, tcx->tc_checker);
-				if (rc != DER_SUCCESS) {
-					rc = PROBE_RC_DATA_LOSS;
-					goto out;
-				}
-			}
 			end	= nd->tn_keyn - 1;
 
 			D_DEBUG(DB_TRACE,
@@ -3618,8 +3610,8 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 		return -DER_INVAL;
 	}
 
-	rc = btr_context_create(BTR_ROOT_NULL, NULL, tree_class, tree_feats, tree_order, uma,
-				DAOS_HDL_INVAL, NULL, NULL, &tcx);
+	rc = btr_context_create(BTR_ROOT_NULL, NULL, tree_class, tree_feats,
+				tree_order, uma, DAOS_HDL_INVAL, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -3690,8 +3682,8 @@ dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 		return -DER_NO_PERM;
 	}
 
-	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats, tree_order, uma, coh,
-				priv, NULL, &tcx);
+	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats,
+				tree_order, uma, coh, priv, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -3721,32 +3713,12 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 	struct btr_context *tcx;
 	int		    rc;
 
-	rc = btr_context_create(root_off, NULL, -1, -1, -1, uma, DAOS_HDL_INVAL, NULL, NULL, &tcx);
+	rc = btr_context_create(root_off, NULL, -1, -1, -1, uma,
+				DAOS_HDL_INVAL, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
 	*toh = btr_tcx2hdl(tcx);
-	return 0;
-}
-
-int
-dbtree_open_inplace_ex_internal(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh,
-				void *priv, struct checker *ck, daos_handle_t *toh)
-{
-	struct btr_context *tcx;
-	int                 rc;
-
-	if (root->tr_order == 0) {
-		D_DEBUG(DB_TRACE, "Nonexistent tree\n");
-		return -DER_NONEXIST;
-	}
-
-	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma, coh, priv, ck, &tcx);
-	if (rc != 0)
-		return rc;
-
-	*toh = btr_tcx2hdl(tcx);
-
 	return 0;
 }
 
@@ -3771,7 +3743,8 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 		return -DER_NONEXIST;
 	}
 
-	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma, coh, priv, NULL, &tcx);
+	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma,
+				coh, priv, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -4540,16 +4513,16 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	       uint64_t *tree_feats, struct umem_attr *uma, daos_handle_t coh, void *priv,
 	       struct checker *ck, struct btr_instance *tins)
 {
-	struct btr_class *tc;
-	int               rc;
+	struct btr_class	*tc;
+	int			 rc;
 
 	memset(tins, 0, sizeof(*tins));
 	rc = umem_class_init(uma, &tins->ti_umm);
 	if (rc != 0)
 		return rc;
 
-	tins->ti_priv     = priv;
-	tins->ti_coh      = coh;
+	tins->ti_priv = priv;
+	tins->ti_coh = coh;
 	tins->ti_root_off = UMOFF_NULL;
 
 	if (!UMOFF_IS_NULL(root_off)) {
@@ -4560,7 +4533,7 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	tins->ti_root = root;
 
 	if (root != NULL && root->tr_class != 0) {
-		tree_class  = root->tr_class;
+		tree_class = root->tr_class;
 		*tree_feats = root->tr_feats;
 	}
 
@@ -4702,3 +4675,178 @@ done:
 	return 0;
 }
 
+#define CK_BTREE_NODE_MALFORMED_STR   "malformed - "
+#define CK_BTREE_NON_ZERO_PADDING_FMT CK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")"
+#define CK_BTREE_NON_ZERO_GEN_FMT     CK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")"
+
+/**
+ * Validate the integrity of the btree node.
+ *
+ * \param[in] nd	Node to check.
+ * \param[in] nd_off	Node's offset.
+ * \param[in] ck	Checker.
+ *
+ * \retval DER_SUCCESS	The node is correct.
+ * \retval -DER_NOTYPE	The node is malformed.
+ */
+static int
+btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct checker *ck)
+{
+	uint16_t unknown_flags;
+
+	D_ASSERT(ck != NULL);
+
+	CK_PRINTF(ck, "Node (off=%#x)... ", nd_off);
+
+	unknown_flags = nd->tn_flags & ~(BTR_NODE_LEAF | BTR_NODE_ROOT);
+	if (unknown_flags != 0) {
+		CK_APPENDFL_ERR(ck, CK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")",
+				unknown_flags);
+		return -DER_NOTYPE;
+	}
+
+	if (nd->tn_pad_32 != 0) {
+		if (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) {
+			CK_APPENDFL_ERR(ck, CK_BTREE_NON_ZERO_PADDING_FMT, nd->tn_pad_32);
+			return -DER_NOTYPE;
+		} else {
+			CK_APPENDFL_WARN(ck, CK_BTREE_NON_ZERO_PADDING_FMT, nd->tn_pad_32);
+		}
+	}
+
+	if (nd->tn_gen != 0) {
+		if (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) {
+			CK_APPENDFL_ERR(ck, CK_BTREE_NON_ZERO_GEN_FMT, nd->tn_gen);
+			return -DER_NOTYPE;
+		} else {
+			CK_APPENDFL_WARN(ck, CK_BTREE_NON_ZERO_GEN_FMT, nd->tn_gen);
+		}
+	}
+
+	CK_APPENDL_OK(ck);
+
+	return DER_SUCCESS;
+}
+
+/**
+ * \struct node_info
+ *
+ * List of node offsets.
+ */
+struct node_info {
+	d_list_t   link;
+	umem_off_t nd_off;
+};
+
+/**
+ * Validate the integrity of a btree.
+ *
+ * \param[in] tcx		Btree context.
+ * \param[in] ck		Checker.
+ *
+ * \retval DER_SUCCESS		The tree is correct.
+ * \retval -DER_NOTYPE		The tree is malformed.
+ * \retval -DER_NONEXIST	The tree is malformed.
+ * \retval -DER_*		Possibly other errors.
+ */
+static int
+btr_nodes_check(struct btr_context *tcx, struct checker *ck)
+{
+	D_LIST_HEAD(node_list);
+	struct node_info *ni;
+	struct node_info *ni_tmp;
+	umem_off_t        nd_off;
+	struct btr_node  *nd;
+	int               rc = DER_SUCCESS;
+
+	D_ASSERT(ck != NULL);
+
+	if (btr_root_empty(tcx)) {
+		CK_PRINT(ck, "Empty tree\n");
+		return DER_SUCCESS;
+	}
+
+	D_ASSERT(!btr_has_embedded_value(tcx));
+
+	/** add the root node to the list */
+	D_ALLOC_PTR(ni);
+	ni->nd_off = tcx->tc_tins.ti_root->tr_node;
+	d_list_add_tail(&ni->link, &node_list);
+
+	/** process the list */
+	d_list_for_each_entry_safe(ni, ni_tmp, &node_list, link) {
+		/** pick the node from the list's head */
+		nd_off = ni->nd_off;
+		nd     = btr_off2ptr(tcx, nd_off);
+
+		/** check the node */
+		rc = btr_node_check(nd, nd_off, ck);
+		if (rc != DER_SUCCESS) {
+			break;
+		}
+
+		/** remove the node from the list */
+		d_list_del(&ni->link);
+		D_FREE(ni);
+
+		/** a leaf has no child nodes */
+		if (nd->tn_flags & BTR_NODE_LEAF) {
+			continue;
+		}
+
+		/** append the node's children to the list */
+		for (int at = 0; at < nd->tn_keyn - 1; ++at) {
+			D_ALLOC_PTR(ni);
+			ni->nd_off = btr_node_child_at(tcx, nd_off, at);
+			d_list_add_tail(&ni->link, &node_list);
+		}
+	}
+
+	if (d_list_empty(&node_list)) {
+		return rc;
+	}
+
+	/** free the list */
+	d_list_for_each_entry_safe(ni, ni_tmp, &node_list, link) {
+		/** remove the node from the list */
+		d_list_del(&ni->link);
+		D_FREE(ni);
+	}
+
+	return rc;
+}
+
+/**
+ * Check a btree.
+ *
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[in] ck	Checker.
+ */
+int
+dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, struct checker *ck)
+{
+	struct btr_context tcx        = {0};
+	uint64_t           tree_feats = -1;
+	int                rc;
+
+	D_ASSERT(root != NULL);
+	D_ASSERT(uma != NULL);
+	D_ASSERT(ck != NULL);
+
+	rc = btr_class_init(UMOFF_NULL, root, -1, &tree_feats, uma, DAOS_HDL_INVAL, NULL, ck,
+			    &tcx.tc_tins);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	tcx.tc_feats = root->tr_feats;
+	tcx.tc_order = root->tr_order;
+
+	CK_PRINT(ck, "Nodes:\n");
+	CK_INDENT(ck, rc = btr_nodes_check(&tcx, ck));
+
+	/** no need to free tcx */
+
+	return rc;
+}

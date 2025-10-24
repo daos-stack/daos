@@ -14,7 +14,6 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
-#include <daos_srv/btree_check.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_errno.h>
@@ -1751,11 +1750,18 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 		goto out;
 	}
 
-	CK_PRINT(ck, CK_CONT_TREE_STR "...\n");
+	if (IS_CHECKER(ck)) {
+		CK_PRINT(ck, CK_CONT_TREE_STR "...\n");
+		CK_INDENT(ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma, ck));
+		CK_PRINTL_RC(ck, rc, CK_CONT_TREE_STR);
+		if (rc != DER_SUCCESS) {
+			goto out;
+		}
+	}
+
 	/* Cache container table btree hdl */
-	CK_INDENT(ck, rc = dbtree_open_inplace_ck(&pool_df->pd_cont_root, &pool->vp_uma,
-						  DAOS_HDL_INVAL, pool, ck, &pool->vp_cont_th));
-	CK_PRINTL_RC(ck, rc, CK_CONT_TREE_STR);
+	rc = dbtree_open_inplace_ex(&pool_df->pd_cont_root, &pool->vp_uma,
+				    DAOS_HDL_INVAL, pool, &pool->vp_cont_th);
 	if (rc) {
 		D_ERROR("Container Tree open failed\n");
 		goto out;

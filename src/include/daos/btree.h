@@ -15,6 +15,7 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos/checker.h>
 #include <daos/mem.h>
 
 /**
@@ -543,6 +544,8 @@ int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
 int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 			    daos_handle_t coh, void *priv, daos_handle_t *toh);
+int
+     dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, struct checker *ck);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);

@@ -14,7 +14,6 @@
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include <daos/mem.h>
-#include <daos_srv/btree_check.h>
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
@@ -1501,10 +1500,16 @@ gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct checker 
 {
 	int rc;
 
-	CK_PRINT(ck, CK_GC_TREE_STR "...\n");
-	CK_INDENT(ck, rc = dbtree_open_inplace_ck(&bkt_df->gd_bins_root, uma, DAOS_HDL_INVAL, NULL,
-						  ck, &gc_info->gi_bins_btr));
-	CK_PRINTL_RC(ck, rc, CK_GC_TREE_STR);
+	if (IS_CHECKER(ck)) {
+		CK_PRINT(ck, CK_GC_TREE_STR "...\n");
+		CK_INDENT(ck, rc = dbtree_check_inplace(&bkt_df->gd_bins_root, uma, ck));
+		CK_PRINTL_RC(ck, rc, CK_GC_TREE_STR);
+		if (rc != DER_SUCCESS) {
+			return rc;
+		}
+	}
+
+	rc = dbtree_open_inplace(&bkt_df->gd_bins_root, uma, &gc_info->gi_bins_btr);
 	if (rc) {
 		DL_ERROR(rc, "Failed to open GC bin tree.");
 	}

@@ -510,13 +510,13 @@ bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt, bool log_err, bool updat
 	struct media_error_msg	*mem;
 	enum smd_dev_type	 st;
 
-	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_NVME_HEALTH)) { /** fault injection */
-		return daos_errno2der(daos_fail_value_get());
-	}
-
 	/* sys xstream in pmem mode doesn't have NVMe context */
 	if (xs_ctxt == NULL)
 		return 0;
+
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_NVME_HEALTH)) { /** fault injection */
+		return daos_errno2der(daos_fail_value_get());
+	}
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = xs_ctxt->bxc_xs_blobstores[st];

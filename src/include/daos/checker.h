@@ -8,7 +8,6 @@
 #define __DAOS_CHECKER_H__
 
 #include <daos_types.h>
-#include <daos/btree.h>
 #include <daos/common.h>
 #include <daos/mem.h>
 
@@ -34,22 +33,6 @@ struct checker_options {
 	enum checker_event cko_non_zero_padding;
 };
 
-struct checker;
-
-struct checker_ops {
-	/**
-	 * Validate the integrity of the btree node.
-	 *
-	 * \param[in] nd	Node to check.
-	 * \param[in] nd_off	Node's offset.
-	 * \param[in] dp	DLCK print utility.
-	 *
-	 * \retval DER_SUCCESS	The node is correct.
-	 * \retval -DER_NOTYPE	The node is malformed.
-	 */
-	int (*node_check)(struct btr_node *nd, umem_off_t nd_off, struct checker *ck);
-};
-
 /**
  * @struct checker
  *
@@ -59,7 +42,6 @@ struct checker {
 	/** input */
 	void                  *ck_private;
 	struct checker_options ck_options;
-	struct checker_ops     ck_ops;
 	/** state */
 	int                    ck_level;
 	char                  *ck_prefix;

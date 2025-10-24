@@ -11,7 +11,6 @@
 
 #include <daos_errno.h>
 #include <daos/debug.h>
-#include <daos_srv/btree_check.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/mgmt_tgt_common.h>
 #include <gurt/common.h>
@@ -234,7 +233,6 @@ dlck_checker_worker_init(struct checker_options *options, const char *log_dir, u
 
 	memset(ck, 0, sizeof(*ck));
 	memcpy(&ck->ck_options, options, sizeof(*options));
-	ck->ck_ops.node_check = btr_node_check;
 	ck->ck_printf         = dlck_checker_worker_printf;
 	ck->ck_indent_set     = dlck_checker_worker_indent_set;
 	ck->ck_private        = dcw;
