@@ -80,6 +80,12 @@ extern int daos_event_priv_reset(void);
 #define DAOS_SERVER_CONF	"/etc/daos/daos_server.yml"
 #define DAOS_SERVER_CONF_LENGTH		512
 
+struct test_cont {
+	uuid_t        uuid;
+	daos_handle_t coh;
+	char          label[DAOS_PROP_LABEL_MAX_LEN];
+};
+
 /* the pool used for daos test suite */
 struct test_pool {
 	d_rank_t		ranks[TEST_RANKS_MAX_NUM];
@@ -256,6 +262,8 @@ int
 test_setup_pool_create(void **state, struct test_pool *ipool,
 		       struct test_pool *opool, daos_prop_t *prop);
 int
+test_setup_pool_connect(void **state, struct test_pool *pool);
+int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline daos_obj_id_t
@@ -338,6 +346,7 @@ enum {
 	HANDLE_CO
 };
 
+/* clang-format off */
 int run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_pool_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size);
@@ -370,6 +379,7 @@ int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_extend_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_inc_reint_test(int rank, int size, int *tests, int test_size);
 int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
@@ -377,6 +387,8 @@ int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 int run_daos_upgrade_test(int rank, int size, int *sub_tests,
 			  int sub_tests_size);
 int run_daos_pipeline_test(int rank, int size);
+/* clang-format on */
+
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
 void daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
@@ -397,6 +409,10 @@ int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t *
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
+void
+test_rebuild_wait_to_start(test_arg_t **args, int args_cnt);
+void
+    test_rebuild_wait_to_error(test_arg_t **args, int args_cnt);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 
@@ -456,22 +472,34 @@ void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 int rebuild_pool_disconnect_internal(void *data);
 int rebuild_pool_connect_internal(void *data);
 
-
-int rebuild_sub_setup(void **state);
-int rebuild_sub_rf1_setup(void **state);
-int rebuild_sub_rf0_setup(void **state);
-int rebuild_sub_teardown(void **state);
-int rebuild_small_sub_setup(void **state);
-int rebuild_small_sub_rf1_setup(void **state);
-int rebuild_small_sub_rf0_setup(void **state);
-int rebuild_sub_3nodes_rf0_setup(void **state);
-int rebuild_sub_6nodes_rf1_setup(void **state);
-int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
-
 int
-fi_rebuild_stop(void *data);
+rebuild_sub_setup(void **state);
 int
-     fi_rebuild_resume_wait(void *data);
+rebuild_sub_rf1_setup(void **state);
+int
+rebuild_sub_rf0_setup(void **state);
+int
+rebuild_sub_teardown(void **state);
+int
+rebuild_small_sub_setup(void **state);
+int
+rebuild_small_sub_rf1_setup(void **state);
+int
+rebuild_small_sub_rf0_setup(void **state);
+int
+rebuild_sub_3nodes_rf0_setup(void **state);
+int
+rebuild_sub_6nodes_rf1_setup(void **state);
+int
+rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
+int
+rebuild_stop_with_dmg(void *data);
+int
+rebuild_force_stop_with_dmg(void *data);
+int
+rebuild_start_with_dmg(void *data);
+int
+     rebuild_resume_wait(void *data);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,
@@ -485,6 +513,8 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
 void save_group_state(void **state);
+void
+     restore_group_state(void **state);
 
 void trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
 				    int oids_nr, char *dkey, char *akey,
@@ -716,5 +746,8 @@ void
      test_set_engine_fail_loc_quiet(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
 void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
 void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
+
+void
+test_verify_cont(test_arg_t *arg, struct test_pool *pool, struct test_cont *conts, int cont_nr);
 
 #endif

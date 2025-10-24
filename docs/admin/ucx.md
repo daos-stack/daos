@@ -5,10 +5,6 @@ as an alternative to the default
 [libfabric](https://ofiwg.github.io/libfabric/) network stack.
 The UCX provider is fully supported since DAOS 2.4.
 
-!!! note The network provider is an immutable property of a DAOS system.
-         Changing the network provider to UCX requires that the DAOS storage
-         is reformatted. 
-
 To enable DAOS UCX support on InfiniBand fabrics,
 the following steps are needed:
 

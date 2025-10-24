@@ -6,7 +6,6 @@ def scons():
     Import('env')
 
     libs = ['daos_common', 'gurt', 'protobuf-c']
-    sources = ['drpc_test.c', 'drpc_test.pb-c.c']
 
     denv = env.Clone()
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
@@ -14,7 +13,7 @@ def scons():
 
     denv.require('protobufc')
 
-    drpc_test = denv.d_program('drpc_test', sources, LIBS=libs)
+    drpc_test = denv.d_program('drpc_test', ['drpc_test.c'], LIBS=libs)
     env.Install('$PREFIX/bin/', drpc_test)
 
     drpc_engine_test = denv.d_program('drpc_engine_test', ['drpc_engine_test.c'], LIBS=libs)

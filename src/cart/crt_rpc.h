@@ -534,7 +534,7 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((uint32_t)		(padding)		CRT_VAR)
 
 #define CRT_OSEQ_IV_UPDATE	/* output fields */		 \
-	((uint64_t)		(rc)			CRT_VAR) \
+	((uint64_t)		(ivo_rc)		CRT_VAR) \
 	((d_sg_list_t)		(ivo_iv_sgl)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
@@ -553,7 +553,7 @@ CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 	((uint32_t)		(ivs_class_id)		CRT_VAR) \
 
 #define CRT_OSEQ_IV_SYNC	/* output fields */		 \
-	((int32_t)		(rc)			CRT_VAR)
+	((int32_t)		(ivs_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_sync, CRT_ISEQ_IV_SYNC, CRT_OSEQ_IV_SYNC)
 
@@ -715,8 +715,10 @@ crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
 	D_ASSERT(rpc_priv != NULL);
 
-	if (rpc_priv->crp_timeout_sec == 0)
+	if (rpc_priv->crp_timeout_sec == 0) {
 		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
+		rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+	}
 
 	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 }
