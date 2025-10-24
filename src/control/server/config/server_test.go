@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -2188,6 +2189,40 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					t.Errorf("unexpected fabric numa node set (-want +got):\n%s", diff)
 				}
 			}
+		})
+	}
+}
+
+func TestConfig_HasPMem(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg        *Server
+		expHasPMem bool
+	}{
+		"has pmem": {
+			cfg: DefaultServer().WithEngines(
+				engine.MockConfig().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass(storage.ClassDcpm.String()).
+							WithScmMountPoint("bb").
+							WithScmDeviceList("a"),
+					),
+			),
+			expHasPMem: true,
+		},
+		"no pmem": {
+			cfg: DefaultServer().WithEngines(
+				engine.MockConfig().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass(storage.ClassRam.String()).
+							WithScmMountPoint("bb"),
+					),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expHasPMem, tc.cfg.HasPMem(), "unexpected")
 		})
 	}
 }
