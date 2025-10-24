@@ -975,8 +975,10 @@ reintegrate_inflight_io(void *data)
 	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
 	char		single_data[LARGE_SINGLE_VALUE_SIZE];
 	struct ioreq	req;
+	bool             interactive_rebuild = arg->interactive_rebuild && !arg->no_rebuild;
 	int		i;
 
+	print_message("%s(): begin\n", __FUNCTION__);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < 5; i++) {
 		char	key[64];
@@ -996,6 +998,14 @@ reintegrate_inflight_io(void *data)
 		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
 			     buf, DATA_SIZE, &req);
 
+		/* Stop the rebuild */
+		if (i == 3 && interactive_rebuild) {
+			print_message("%s(): stop rebuild in middle of inflight IO\n",
+				      __FUNCTION__);
+			rebuild_stop_with_dmg(arg);
+			test_rebuild_wait(&arg, 1); /* rebuild is stopped here */
+		}
+
 		req.iod_type = DAOS_IOD_SINGLE;
 		memset(single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
 		sprintf(key, "d_inflight_single_small_%d", i);
@@ -1007,7 +1017,16 @@ reintegrate_inflight_io(void *data)
 			      &req);
 	}
 	ioreq_fini(&req);
-	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
+
+	/* Resume the rebuild */
+	if (interactive_rebuild) {
+		print_message("%s(): restart rebuild after remaining inflight IO done\n",
+			      __FUNCTION__);
+		rebuild_resume_wait_to_start(arg);
+	}
+
+	print_message("%s() sleep 12 seconds to wait for the stable epoch update and return.\n",
+		      __FUNCTION__);
 	sleep(12);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
@@ -1237,10 +1256,10 @@ rebuild_stop_with_dmg(void *data)
 {
 	test_arg_t *arg = data;
 
-	print_message("wait for rebuild to start for pool " DF_UUID "\n",
+	print_message("(before stopping) wait for rebuild to start for pool " DF_UUID "\n",
 		      DP_UUID(arg->pool.pool_uuid));
 	test_rebuild_wait_to_start(&arg, 1);
-	sleep(5);
+	sleep(4);
 
 	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					      false);
@@ -1252,7 +1271,7 @@ rebuild_force_stop_with_dmg(void *data)
 {
 	test_arg_t *arg = data;
 
-	print_message("wait for rebuild to start for pool " DF_UUID "\n",
+	print_message("(before stopping) wait for rebuild to start for pool " DF_UUID "\n",
 		      DP_UUID(arg->pool.pool_uuid));
 	test_rebuild_wait_to_start(&arg, 1);
 	sleep(5);
@@ -1276,6 +1295,32 @@ rebuild_start_with_dmg(void *data)
 }
 
 int
+rebuild_resume_wait_to_start(void *data)
+{
+	test_arg_t                 *arg = data;
+	struct daos_rebuild_status *rst = &arg->pool.pool_info.pi_rebuild_st;
+	int                         rc;
+
+	/* Verify that the stop resulted in the correct rebuild status */
+	print_message(
+	    "(before starting) wait for stopped rebuild and check: rs_errno=%d (expect %d), "
+	    "rs_state=%d (expect %d)\n",
+	    rst->rs_errno, -DER_OP_CANCELED, rst->rs_state, DRS_NOT_STARTED);
+	test_rebuild_wait(&arg, 1);
+	assert_int_equal(rst->rs_errno, -DER_OP_CANCELED);
+	assert_int_equal(rst->rs_state, DRS_NOT_STARTED);
+	print_message("check passed\n");
+
+	rc = rebuild_start_with_dmg(data);
+	assert_rc_equal(rc, 0);
+
+	/* Verify that the rebuild is no longer stopped (has been restarted). */
+	test_rebuild_wait_to_start(&arg, 1);
+
+	return 0;
+}
+
+int
 rebuild_resume_wait(void *data)
 {
 	test_arg_t                 *arg = data;
@@ -1289,8 +1334,11 @@ rebuild_resume_wait(void *data)
 		skip_restart = *((bool *)arg->rebuild_post_cb_arg);
 
 	/* Verify that the stop resulted in the correct rebuild status */
-	print_message("check: stopped rebuild rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
-		      rst->rs_errno, -DER_OP_CANCELED, rst->rs_state, DRS_NOT_STARTED);
+	test_rebuild_wait_to_error(&arg, 1);
+	print_message(
+	    "(before starting) check: stopped rebuild rs_errno=%d (expect %d), rs_state=%d "
+	    "(expect %d)\n",
+	    rst->rs_errno, -DER_OP_CANCELED, rst->rs_state, DRS_NOT_STARTED);
 	assert_int_equal(rst->rs_errno, -DER_OP_CANCELED);
 	assert_int_equal(rst->rs_state, DRS_NOT_STARTED);
 	print_message("check passed\n");
