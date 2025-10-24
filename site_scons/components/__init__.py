@@ -358,8 +358,12 @@ def define_components(reqs):
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
 
+    spdk_reqs = ['isal', 'isal_crypto']
+    spdk_conf = ['--with-isal=$ISAL_PREFIX', '--with-isal-crypto=$ISAL_CRYPTO_PREFIX']
     if ARM_PLATFORM:
         spdk_arch = 'native'
+        spdk_reqs = []
+        spdk_conf = []
     elif dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
@@ -376,13 +380,13 @@ def define_components(reqs):
                            '--disable-tests',
                            '--disable-unit-tests',
                            '--without-vhost',
-                           '--without-crypto',
                            '--without-rbd',
                            '--without-iscsi-initiator',
                            '--without-vtune',
                            '--with-shared',
                            '--without-nvme-cuse',
-                           f'--target-arch={spdk_arch}'],
+                           '--without-crypto',
+                           f'--target-arch={spdk_arch}'] + spdk_conf,
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
                            'includedir=$SPDK_PREFIX/include/daos_srv', 'install'],
@@ -404,7 +408,8 @@ def define_components(reqs):
                 extra_lib_path=['lib64/daos_srv'],
                 headers=['spdk/nvme.h'],
                 pkgconfig='daos_spdk',
-                patch_rpath=['lib64/daos_srv', 'bin'])
+                patch_rpath=['lib64/daos_srv', 'bin'],
+                requires=spdk_reqs)
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever(),

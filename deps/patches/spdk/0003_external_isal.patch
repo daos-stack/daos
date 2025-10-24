@@ -1,0 +1,205 @@
+diff --git a/CONFIG b/CONFIG
+index 89c34e90b..086db27a4 100644
+--- a/CONFIG
++++ b/CONFIG
+@@ -170,9 +170,11 @@ CONFIG_CUSTOMOCF=n
+ 
+ # Build ISA-L library
+ CONFIG_ISAL=y
++CONFIG_ISAL_PATH=
+ 
+ # Build ISA-L-crypto library
+ CONFIG_ISAL_CRYPTO=y
++CONFIG_ISAL_CRYPTO_PATH=
+ 
+ # Build with IO_URING support
+ CONFIG_URING=n
+diff --git a/Makefile b/Makefile
+index 3aeae41ad..5e249aaa3 100644
+--- a/Makefile
++++ b/Makefile
+@@ -18,8 +18,16 @@ DIRS-$(CONFIG_EXAMPLES) += examples
+ DIRS-$(CONFIG_APPS) += app
+ DIRS-y += test
+ DIRS-$(CONFIG_IPSEC_MB) += ipsecbuild
++ifeq ($(CONFIG_ISAL),y)
++ifeq ($(CONFIG_ISAL_PATH),)
+ DIRS-$(CONFIG_ISAL) += isalbuild
++endif
++endif
++ifeq ($(CONFIG_ISAL_CRYPTO),y)
++ifeq ($(CONFIG_ISAL_CRYPTO_PATH),)
+ DIRS-$(CONFIG_ISAL_CRYPTO) += isalcryptobuild
++endif
++endif
+ DIRS-$(CONFIG_VFIO_USER) += vfiouserbuild
+ DIRS-$(CONFIG_SMA) += proto
+ DIRS-$(CONFIG_XNVME) += xnvmebuild
+@@ -63,14 +71,18 @@ DPDK_DEPS += ipsecbuild
+ endif
+ 
+ ifeq ($(CONFIG_ISAL),y)
++ifeq ($(CONFIG_ISAL_PATH),)
+ ISALBUILD = isalbuild
+ LIB += isalbuild
+ DPDK_DEPS += isalbuild
+ ifeq ($(CONFIG_ISAL_CRYPTO),y)
++ifeq ($(CONFIG_ISAL_CRYPTO_PATH),)
+ ISALCRYPTOBUILD = isalcryptobuild
+ LIB += isalcryptobuild
+ endif
+ endif
++endif
++endif
+ 
+ ifeq ($(CONFIG_VFIO_USER),y)
+ VFIOUSERBUILD = vfiouserbuild
+diff --git a/configure b/configure
+index 26c9b0f4d..6b2a8e412 100755
+--- a/configure
++++ b/configure
+@@ -63,6 +63,9 @@ function usage() {
+ 	echo " --with-crypto             Build isa-l-crypto and vbdev crypto module. No path required."
+ 	echo " --without-crypto          Disable isa-l-crypto and vbdev crypto module."
+ 	echo " --with-fio[=DIR]          Build fio_plugin."
++	echo " --with-isal=DIR           Don't build isal, use external library"
++	echo " --with-isal-crypto=DIR    Don't build isal-crypto, use external library"
++	echo " --with-fio[=DIR]          Build fio_plugin."
+ 	echo " --without-fio             default: /usr/src/fio"
+ 	echo " --with-xnvme              Build xNVMe bdev module."
+ 	echo " --without-xnvme           No path required."
+@@ -581,6 +584,20 @@ for i in "$@"; do
+ 		--without-fio)
+ 			CONFIG[FIO_PLUGIN]=n
+ 			;;
++		--with-isal=*)
++			if [[ ${i#*=} != "$i" ]]; then
++				CONFIG[ISAL_PATH]=${i#*=}
++			fi
++			check_dir "--with-isal=${CONFIG[ISAL_PATH]}"
++			CONFIG[ISAL]=y
++			;;
++		--with-isal-crypto=*)
++			if [[ ${i#*=} != "$i" ]]; then
++				CONFIG[ISAL_CRYPTO_PATH]=${i#*=}
++			fi
++			check_dir "--with-isal=${CONFIG[ISAL_CRYPTO_PATH]}"
++			CONFIG[ISAL_CRYPTO]=y
++			;;
+ 		--with-vtune=*)
+ 			check_dir "$i"
+ 			CONFIG[VTUNE_DIR]="${i#*=}"
+@@ -1228,7 +1245,10 @@ if [[ "${CONFIG[FUZZER]}" = "y" && "$CC_TYPE" != "clang" ]]; then
+ 	exit 1
+ fi
+ 
+-if [[ $arch == x86_64* ]] || [[ $arch == aarch64* ]]; then
++if [[ -d "${CONFIG[ISAL_PATH]}" ]]; then
++	echo "Using ISA-L from ${CONFIG[ISAL_PATH]}"
++	CONFIG[ISAL]=y
++elif [[ $arch == x86_64* ]] || [[ $arch == aarch64* ]]; then
+ 	CONFIG[ISAL]=y
+ 	# make sure the submodule is initialized
+ 	if [ ! -f "$rootdir"/isa-l/autogen.sh ]; then
+@@ -1266,35 +1286,40 @@ else
+ fi
+ 
+ # now either configure ISA-L or disable unavailable features
+-if [[ "${CONFIG[ISAL]}" = "y" ]]; then
+-	cd $rootdir/isa-l
+-	ISAL_LOG=$rootdir/.spdk-isal.log
+-	if [[ -n "${CONFIG[CROSS_PREFIX]}" ]]; then
+-		ISAL_OPTS=("--host=${CONFIG[CROSS_PREFIX]}")
+-	else
+-		ISAL_OPTS=()
+-	fi
+-	if [[ "${CONFIG[SHARED]}" = "y" ]]; then
+-		ISAL_OPTS+=("--enable-shared=yes")
++if [[ ! -d "${CONFIG[ISAL_PATH]}" ]]; then
++	if [[ "${CONFIG[ISAL]}" = "y" ]]; then
++		cd $rootdir/isa-l
++		ISAL_LOG=$rootdir/.spdk-isal.log
++		if [[ -n "${CONFIG[CROSS_PREFIX]}" ]]; then
++			ISAL_OPTS=("--host=${CONFIG[CROSS_PREFIX]}")
++		else
++			ISAL_OPTS=()
++		fi
++		if [[ "${CONFIG[SHARED]}" = "y" ]]; then
++			ISAL_OPTS+=("--enable-shared=yes")
++		else
++			ISAL_OPTS+=("--enable-shared=no")
++		fi
++		ISAL_OPTS+=("--prefix=${CONFIG[PREFIX]}")
++		echo -n "Configuring ISA-L (logfile: $ISAL_LOG)..."
++		./autogen.sh &> $ISAL_LOG
++		./configure CFLAGS="-fPIC -g -O2 -fuse-ld=$LD_TYPE -Wno-unused-command-line-argument" "${ISAL_OPTS[@]}" --enable-shared=no >> $ISAL_LOG 2>&1
++		echo "done."
++		cd $rootdir
+ 	else
+-		ISAL_OPTS+=("--enable-shared=no")
++		echo "Without ISA-L, there is no software support for crypto or compression,"
++		echo "so these features will be disabled."
++		CONFIG[CRYPTO]=n
++		CONFIG[VBDEV_COMPRESS]=n
++		CONFIG[DPDK_COMPRESSDEV]=n
+ 	fi
+-	ISAL_OPTS+=("--prefix=${CONFIG[PREFIX]}")
+-	echo -n "Configuring ISA-L (logfile: $ISAL_LOG)..."
+-	./autogen.sh &> $ISAL_LOG
+-	./configure CFLAGS="-fPIC -g -O2 -fuse-ld=$LD_TYPE -Wno-unused-command-line-argument" "${ISAL_OPTS[@]}" --enable-shared=no >> $ISAL_LOG 2>&1
+-	echo "done."
+-	cd $rootdir
+-else
+-	echo "Without ISA-L, there is no software support for crypto or compression,"
+-	echo "so these features will be disabled."
+-	CONFIG[CRYPTO]=n
+-	CONFIG[VBDEV_COMPRESS]=n
+-	CONFIG[DPDK_COMPRESSDEV]=n
+ fi
+ 
+ # ISA-L-crypto complements ISA-L functionality, it is only enabled together with ISA-L
+-if [[ "${CONFIG[ISAL]}" = "y" ]]; then
++if [[ -d "${CONFIG[ISAL_CRYPTO_PATH]}" ]]; then
++	echo "Using isa-l_crypto from ${CONFIG[ISAL_CRYPTO_PATH]}"
++	CONFIG[ISAL_CRYPTO]=y
++elif [[ "${CONFIG[ISAL]}" = "y" ]]; then
+ 	if [ ! -f "$rootdir"/isa-l-crypto/autogen.sh ]; then
+ 		echo "ISA-L-crypto is required but was not found, please init the submodule with:"
+ 		echo "  git submodule update --init"
+diff --git a/mk/spdk.common.mk b/mk/spdk.common.mk
+index 19f0192c2..b774a4c79 100644
+--- a/mk/spdk.common.mk
++++ b/mk/spdk.common.mk
+@@ -184,6 +184,7 @@ ISAL_CRYPTO_DIR=$(SPDK_ROOT_DIR)/isa-l-crypto
+ ISAL_BUILD_DIR=$(SPDK_ROOT_DIR)/isalbuild
+ ISAL_CRYPTO_BUILD_DIR=$(SPDK_ROOT_DIR)/isalcryptobuild
+ ifeq ($(CONFIG_ISAL), y)
++ifeq ($(CONFIG_ISAL_PATH),)
+ COMMON_CFLAGS += -I$(ISAL_DIR)/.. -I$(ISAL_BUILD_DIR)
+ ifeq ($(CONFIG_SHARED),y)
+ SYS_LIBS += -L$(ISAL_DIR)/.libs -lisal
+@@ -192,6 +193,7 @@ else
+ SYS_LIBS += $(ISAL_DIR)/.libs/libisal.a
+ endif
+ ifeq ($(CONFIG_ISAL_CRYPTO), y)
++ifeq ($(CONFIG_ISAL_CRYPTO_PATH),)
+ COMMON_CFLAGS += -I$(ISAL_CRYPTO_DIR)/.. -I$(ISAL_CRYPTO_BUILD_DIR)
+ ifeq ($(CONFIG_SHARED),y)
+ SYS_LIBS += -L$(ISAL_CRYPTO_DIR)/.libs -lisal_crypto
+@@ -199,6 +201,16 @@ LDFLAGS += -Wl,-rpath=$(ISAL_CRYPTO_DIR)/.libs
+ else
+ SYS_LIBS += $(ISAL_CRYPTO_DIR)/.libs/libisal_crypto.a
+ endif
++else
++COMMON_CFLAGS += -I$(CONFIG_ISAL_CONFIG_PATH)/include
++SYS_LIBS += -L$(CONFIG_ISAL_CONFIG_PATH)/lib64 -lisal_crypto
++LDFLAGS += -Wl,-rpath=$(CONFIG_ISAL_CONFIG_PATH)/lib64
++endif
++endif
++else
++COMMON_CFLAGS += -I$(CONFIG_ISAL_PATH)/include
++SYS_LIBS += -L$(CONFIG_ISAL_PATH)/lib64 -lisal_crypto
++LDFLAGS += -Wl,-rpath=$(CONFIG_ISAL_PATH)/lib64
+ endif
+ endif
+ 
