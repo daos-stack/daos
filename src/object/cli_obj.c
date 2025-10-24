@@ -1729,14 +1729,24 @@ dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint16_t *retry_cnt,
 		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
 		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
 		/* Rebuild is being established on the server side, wait a bit longer */
-		if (err == -DER_UPDATE_AGAIN)
+		if (err == -DER_UPDATE_AGAIN) {
 			delay <<= 10;
-		else if (opc == DAOS_OBJ_RPC_COLL_PUNCH)
-			/* 128 times of the delay for collective object RPC. */
-			delay <<= 7;
-		else if (opc == DAOS_OBJ_RPC_CPD)
-			/* 8 times of the delay for compounded RPC. */
-			delay <<= 3;
+		} else {
+			switch (opc) {
+			case DAOS_OBJ_RPC_COLL_PUNCH:
+			case DAOS_OBJ_RPC_COLL_QUERY:
+				/* 256 times of the delay for collective object RPC. */
+				delay <<= 8;
+				break;
+			case DAOS_OBJ_RPC_CPD:
+				/* 8 times of the delay for compounded RPC. */
+				delay <<= 3;
+				break;
+			default:
+				break;
+			}
+		}
+
 		D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u/%u times with %u us delay\n",
 			task, opc, *inprogress_cnt, *retry_cnt, delay);
 	}
