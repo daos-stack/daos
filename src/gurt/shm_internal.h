@@ -35,6 +35,8 @@
  */
 #define LARGE_MEM        (64 * 1024)
 
+#define DEFAULT_CACHE_DENTRY_CAPACITY (256 * 1024)
+
 /* Head of shared memory region */
 struct d_shm_hdr {
 	/* magic not equal DSM_MAGIC means shared memory is not initialized yet */
@@ -56,6 +58,9 @@ struct d_shm_hdr {
 	d_shm_mutex_t    ht_lock;
 	/* the offset to the first hash table head */
 	long int         off_ht_head;
+
+	/* the offset to LRU directory entry cache */
+	long int         off_lru_cache_dentry;
 
 	/* the total size of shared memory region */
 	uint64_t         size;
