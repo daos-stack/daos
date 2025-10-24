@@ -371,6 +371,13 @@ Pool space info:
 	}
 }
 
+// TODO DAOS-18128: Add more test cases
+//func TestPretty_PrintPoolSelfHealDisable(t *testing.T) {
+//	for name, tc := range map[string]struct {
+//		sysSelfHeal string
+//		poolSelfHeal string
+//}
+
 func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 	for name, tc := range map[string]struct {
 		pqti        *daos.PoolQueryTargetInfo

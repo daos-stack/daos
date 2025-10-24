@@ -349,15 +349,15 @@ const (
 	systemPropertyMax
 )
 
-// SelfHealFlag defines a type to be used to represent an individual self-heal flag.
-type SelfHealFlag string
+// SysSelfHealFlag defines a type to be used to represent an individual self-heal flag.
+type SysSelfHealFlag string
 
 // IsValid returns a boolean indicating whether or not the self-heal flag is valid.
-func (shf SelfHealFlag) IsValid() bool {
-	return map[SelfHealFlag]bool{
-		SelfHealFlagExclude:     true,
-		SelfHealFlagPoolExclude: true,
-		SelfHealFlagPoolRebuild: true,
+func (shf SysSelfHealFlag) IsValid() bool {
+	return map[SysSelfHealFlag]bool{
+		SysSelfHealFlagExclude:     true,
+		SysSelfHealFlagPoolExclude: true,
+		SysSelfHealFlagPoolRebuild: true,
 	}[shf]
 }
 
@@ -365,24 +365,24 @@ const (
 	propValSep         = ";"
 	selfHealFlagsEmpty = "none"
 
-	// SelfHealFlagExclude indicates system-level exclusion is enabled.
-	SelfHealFlagExclude SelfHealFlag = "exclude"
-	// SelfHealFlagPoolExclude indicates pool-level exclusion is enabled.
-	SelfHealFlagPoolExclude SelfHealFlag = "pool_exclude"
-	// SelfHealFlagPoolRebuild indicates pool rebuild is enabled.
-	SelfHealFlagPoolRebuild SelfHealFlag = "pool_rebuild"
+	// SysSelfHealFlagExclude indicates system-level exclusion is enabled.
+	SysSelfHealFlagExclude SysSelfHealFlag = "exclude"
+	// SysSelfHealFlagPoolExclude indicates pool-level exclusion is enabled.
+	SysSelfHealFlagPoolExclude SysSelfHealFlag = "pool_exclude"
+	// SysSelfHealFlagPoolRebuild indicates pool rebuild is enabled.
+	SysSelfHealFlagPoolRebuild SysSelfHealFlag = "pool_rebuild"
 )
 
 var (
-	allSelfHealFlags = []SelfHealFlag{
-		SelfHealFlagExclude, SelfHealFlagPoolExclude, SelfHealFlagPoolRebuild,
+	allSysSelfHealFlags = []SysSelfHealFlag{
+		SysSelfHealFlagExclude, SysSelfHealFlagPoolExclude, SysSelfHealFlagPoolRebuild,
 	}
 
-	// DefaultSelfHealFlagsStr will be used as self-heal system property default value and includes all
+	// DefaultSysSelfHealFlagsStr will be used as self-heal system property default value and includes all
 	// possible flags set.
-	DefaultSelfHealFlagsStr = func() string {
+	DefaultSysSelfHealFlagsStr = func() string {
 		var strs []string
-		for _, f := range allSelfHealFlags {
+		for _, f := range allSysSelfHealFlags {
 			strs = append(strs, string(f))
 		}
 		return strings.Join(strs, propValSep)
@@ -532,9 +532,9 @@ func pph2sp(key SystemPropertyKey, pph *PoolPropHandler, def string) SystemPrope
 
 // SystemPropertySelfHealHasFlag returns true if the given self-heal property
 // value contains the specified flag.
-func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
+func SystemPropertySelfHealHasFlag(value string, flag SysSelfHealFlag) bool {
 	for _, strFlag := range strings.Split(value, propValSep) {
-		if SelfHealFlag(strFlag) == flag {
+		if SysSelfHealFlag(strFlag) == flag {
 			return true
 		}
 	}
@@ -543,10 +543,10 @@ func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
 }
 
 // SystemPropertySelfHealUnsetFlags returns disabled flags in the self-heal system property as a
-// SelfHealFlag slice.
+// string slice.
 func SystemPropertySelfHealUnsetFlags(value string) []string {
 	offFlags := []string{}
-	for _, flag := range allSelfHealFlags {
+	for _, flag := range allSysSelfHealFlags {
 		if !SystemPropertySelfHealHasFlag(value, flag) {
 			offFlags = append(offFlags, string(flag))
 		}
@@ -607,8 +607,8 @@ func SystemProperties() SystemPropertyMap {
 			"off"),
 		SystemPropertySelfHeal: SystemProperty{
 			Key: SystemPropertySelfHeal,
-			Value: NewStringPropVal(DefaultSelfHealFlagsStr,
-				subsets(strings.Split(DefaultSelfHealFlagsStr, propValSep),
+			Value: NewStringPropVal(DefaultSysSelfHealFlagsStr,
+				subsets(strings.Split(DefaultSysSelfHealFlagsStr, propValSep),
 					propValSep, selfHealFlagsEmpty)...),
 			Description: "Self-heal policy for the system",
 		},

@@ -460,8 +460,9 @@ type (
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status int32 `json:"status"`
 		daos.PoolInfo
+		Status            int32  `json:"status"`
+		SysSelfHealPolicy string `json:"sys_self_heal_policy"`
 	}
 
 	// PoolQueryTargetReq contains parameters for a pool query target request
@@ -497,10 +498,53 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// PoolQuery performs a pool query operation for the specified pool ID on a
-// DAOS Management Server instance.
-func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (*PoolQueryResp, error) {
-	return poolQueryInt(ctx, rpcClient, req, nil)
+// UpdateState updates the pool state based on response field values.
+func (pqr *PoolQueryResp) UpdateState() error {
+	// Update the state as Ready if DAOS return code is 0.
+	if pqr.Status == 0 {
+		pqr.State = daos.PoolServiceStateReady
+	}
+
+	// Pool state is unknown, if TotalTargets is 0.
+	if pqr.TotalTargets == 0 {
+		pqr.State = daos.PoolServiceStateUnknown
+	}
+
+	if pqr.State == daos.PoolServiceStateReady && pqr.DisabledTargets > 0 {
+		pqr.State = daos.PoolServiceStateTargetsExcluded
+	}
+
+	return nil
+}
+
+// UpdateSelfHealPolicy retrieves the value of the pool's self_heal policy and adds it to the
+// response. Default policy value is returned if the property value cannot be fetched.
+func (pqr *PoolQueryResp) UpdateSelfHealPolicy(ctx context.Context, rpcClient UnaryInvoker) error {
+	req := &PoolGetPropReq{
+		ID: pqr.UUID.String(),
+		Properties: []*daos.PoolProperty{
+			daos.PoolProperties()["self_heal"].GetProperty("self_heal"),
+		},
+	}
+
+	props, err := PoolGetProp(ctx, rpcClient, req)
+	if err != nil {
+		return err
+	}
+
+	switch len(props) {
+	case 0:
+		rpcClient.Debug("self_heal pool property not found, assuming default value 'exclude;rebuild'")
+		pqr.SelfHealPolicy = "exclude;rebuild"
+	case 1:
+		pqr.SelfHealPolicy = props[0].StringValue()
+	default:
+		return errors.Errorf("unexpected number of pool props returned, want 1 got %d", len(props))
+	}
+
+	rpcClient.Debugf("pool-query: fetched pool self_heal propval: %s", pqr.SelfHealPolicy)
+
+	return nil
 }
 
 // poolQueryInt is the internal implementation of PoolQuery that
@@ -529,31 +573,23 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 		return nil, err
 	}
 
-	err = resp.UpdateState()
-	if err != nil {
+	if err := resp.UpdateState(); err != nil {
 		return nil, err
+	}
+
+	if req.QueryMask.HasOption(daos.PoolQueryOptionSelfHealPolicy) {
+		if err := resp.UpdateSelfHealPolicy(ctx, rpcClient); err != nil {
+			return nil, errors.Wrap(err, "pool get-prop self_heal failed")
+		}
 	}
 
 	return resp, err
 }
 
-// UpdateState updates the pool state based on response field values.
-func (pqr *PoolQueryResp) UpdateState() error {
-	// Update the state as Ready if DAOS return code is 0.
-	if pqr.Status == 0 {
-		pqr.State = daos.PoolServiceStateReady
-	}
-
-	// Pool state is unknown, if TotalTargets is 0.
-	if pqr.TotalTargets == 0 {
-		pqr.State = daos.PoolServiceStateUnknown
-	}
-
-	if pqr.State == daos.PoolServiceStateReady && pqr.DisabledTargets > 0 {
-		pqr.State = daos.PoolServiceStateTargetsExcluded
-	}
-
-	return nil
+// PoolQuery performs a pool query operation for the specified pool ID on a
+// DAOS Management Server instance.
+func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (*PoolQueryResp, error) {
+	return poolQueryInt(ctx, rpcClient, req, nil)
 }
 
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
