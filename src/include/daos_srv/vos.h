@@ -876,6 +876,23 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		daos_key_t *akey);
 
 /**
+ * Mark the specified object or {d,a}key as corrupted.
+ *
+ * \param coh     [IN]	Container open handle
+ * \param epoch   [IN]	Epoch for the the mark operation
+ * \param pm_ver  [IN]	Pool map version for the mark operation
+ * \param oid     [IN]	ID of the object
+ * \param dkey    [IN]	Optional, dkey being marked if \akey_nr is zero
+ * \param akey_nr [IN]	Number of akeys in \a akeys.
+ * \param akeys   [IN]	Optional, akey being marked if \akey_nr is not zero
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, daos_unit_oid_t oid,
+			daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys);
+
+/**
  * I/O APIs
  */
 /**
