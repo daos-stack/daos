@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -688,6 +689,7 @@ extern btr_ops_t		chk_pending_ops;
 extern btr_ops_t		chk_rank_ops;
 extern btr_ops_t		chk_cont_ops;
 
+/* clang-format off */
 /* chk_common.c */
 
 void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
@@ -703,16 +705,17 @@ void chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, u
 
 void chk_pool_stop_all(struct chk_instance *ins, uint32_t status, int *ret);
 
-int chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args);
+int chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts);
 
-int chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args);
+int chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts);
 
 int chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen);
 
 int chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 			int pool_nr, uuid_t pools[], uint32_t *phase);
 
-int chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args);
+int chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args,
+			   unsigned *acts);
 
 int chk_pools_update_bk(struct chk_instance *ins, uint32_t phase);
 
@@ -883,6 +886,7 @@ int chk_traverse_pools(sys_db_trav_cb_t cb, void *args);
 void chk_vos_init(void);
 
 void chk_vos_fini(void);
+/* clang-format on */
 
 static inline bool
 chk_is_ins_reset(struct chk_instance *ins, uint32_t flags)
