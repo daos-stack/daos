@@ -495,6 +495,8 @@ static int (*next_mpi_init)(int *argc, char ***argv);
 static int (*next_pmpi_init)(int *argc, char ***argv);
 static void *(*next_dlopen)(const char *filename, int flags);
 
+static void (*next_ucs_init)(void);
+
 /* to do!! */
 /**
  * static char * (*org_realpath)(const char *pathname, char *resolved_path);
@@ -1092,6 +1094,84 @@ new_dlopen(const char *filename, int flags)
 	rc = next_dlopen(filename, flags);
 	atomic_fetch_add_relaxed(&dlopen_count, -1);
 	return rc;
+}
+
+static size_t ucs_global_var_size;
+static char  *ucs_global_var_addr;
+
+static void
+reset_ucs_global_variable_after_fork(void)
+{
+	if (ucs_global_var_addr && ucs_global_var_size)
+		memset(ucs_global_var_addr, 0, ucs_global_var_size);
+}
+
+#include <execinfo.h>
+
+extern char **environ;
+
+static char cmd_buffer[4000];
+
+static void print_cmd_env(void)
+{
+    FILE *file = fopen("/proc/self/cmdline", "r");
+    if (!file) {
+        perror("Failed to open /proc/self/cmdline");
+        return ;
+    }
+
+    size_t bytesRead = fread(cmd_buffer, 1, sizeof(cmd_buffer) - 1, file);
+    fclose(file);
+
+    if (bytesRead == 0) {
+        perror("Failed to read /proc/self/cmdline");
+        return;
+    }
+
+    cmd_buffer[bytesRead] = '\0'; // Null-terminate the buffer
+
+    // Command-line arguments in /proc/self/cmdline are null-separated
+    char *arg = cmd_buffer;
+    printf("DBG> begin cmdline\n");
+    while (arg < cmd_buffer + bytesRead) {
+        printf("%s ", arg);
+        arg += strlen(arg) + 1; // Move to the next argument
+    }
+    printf("\nDBG> end   cmdline\n");
+
+    char **env = environ;
+    printf("DBG> begin env\n");
+    while (*env) {
+        printf("%s\n", *env);
+        env++;
+    }
+    printf("\nDBG> end   env\n");
+}
+
+void
+ucs_init(void)
+{
+	int rc;
+	void *buffer[200];
+	int size;
+	if (next_ucs_init == NULL) {
+		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
+		if (next_ucs_init == NULL) {
+			size = backtrace(buffer, 200);
+			printf("DBG> Stack trace:\n");
+			backtrace_symbols_fd(buffer, size, fileno(stdout));
+			fflush(stdout);
+			print_cmd_env();
+			fflush(stdout);
+		}
+		D_ASSERT(next_ucs_init != NULL);
+	}
+	rc = query_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
+				 &ucs_global_var_size, &ucs_global_var_addr);
+	if (rc == 0)
+		pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
+
+	next_ucs_init();
 }
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
