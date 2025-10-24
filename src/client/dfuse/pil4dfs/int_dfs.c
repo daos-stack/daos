@@ -1110,6 +1110,8 @@ reset_ucs_global_variable_after_fork(void)
 
 extern char **environ;
 
+static char cmd_buffer[4000];
+
 static void print_cmd_env(void)
 {
     FILE *file = fopen("/proc/self/cmdline", "r");
@@ -1118,8 +1120,7 @@ static void print_cmd_env(void)
         return ;
     }
 
-    char buffer[4000]; // Buffer to hold the command-line arguments
-    size_t bytesRead = fread(buffer, 1, sizeof(buffer) - 1, file);
+    size_t bytesRead = fread(cmd_buffer, 1, sizeof(cmd_buffer) - 1, file);
     fclose(file);
 
     if (bytesRead == 0) {
@@ -1127,12 +1128,12 @@ static void print_cmd_env(void)
         return;
     }
 
-    buffer[bytesRead] = '\0'; // Null-terminate the buffer
+    cmd_buffer[bytesRead] = '\0'; // Null-terminate the buffer
 
     // Command-line arguments in /proc/self/cmdline are null-separated
-    char *arg = buffer;
+    char *arg = cmd_buffer;
     printf("DBG> begin cmdline\n");
-    while (arg < buffer + bytesRead) {
+    while (arg < cmd_buffer + bytesRead) {
         printf("%s ", arg);
         arg += strlen(arg) + 1; // Move to the next argument
     }
