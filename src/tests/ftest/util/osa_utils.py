@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -289,6 +290,22 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
             self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
             self.container.oclass.update(None)
+
+    def get_random_test_ranks(self, total_ranks=2, stop_individually=True):
+        """Get random list of ranks for OSA tests.
+
+        Args:
+            total_ranks (list): Random rank list for testing. Defaults to 2.
+            stop_individually (bool): Stop ranks individually. 
+                                      Defaults to True.
+        Returns:
+
+        """
+        # Get a random rank(s) based on num_ranks input.
+        ranklist = list(self.server_managers[0].ranks.keys())
+        if stop_individually is True:
+            return list(map(str, self.random.sample(ranklist, k=total_ranks)))
+        return [",".join(map(str, self.random.sample(ranklist, k=total_ranks)))]
 
     def assert_on_exception(self, out_queue=None):
         """Assert on exception while executing an application.
