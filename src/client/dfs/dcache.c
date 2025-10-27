@@ -913,16 +913,16 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 			}
 			name[name_len] = tmp;
 			if (rc)
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 		} else {
 			D_ALLOC_PTR(rec);
 			if (rec == NULL)
-				D_GOTO(out, rc = ENOMEM);
+				D_GOTO(err, rc = ENOMEM);
 
 			rc = dfs_obj_deserialize(dfs, flags, value, rec);
 			if (rc) {
 				D_FREE(rec);
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 		}
 		D_ASSERT(rec != NULL);
@@ -940,7 +940,7 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 				rc = lookup_rel_path(dfs, parent, rec->value, flags, &sym, mode,
 						     stbuf, 0);
 				if (rc)
-					D_GOTO(out, rc);
+					D_GOTO(err, rc);
 				rec = sym;
 				D_GOTO(done, rc);
 			}
@@ -959,7 +959,7 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 			rc = entry_stat(dfs, dfs->th, parent->oh, rec->name, strlen(rec->name), rec,
 					true, stbuf, NULL);
 			if (rc != 0)
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
 			rec->dc_stated = true;
 			/* stat and dc_stated are updated, need to update the record in cache too.
@@ -969,7 +969,7 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 			val_size = *((size_t *)value) & 0xFFFFFFFF;
 			rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
 			if (rc != 0)
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 		}
 	}
 	if (mode && !skip_stat)
@@ -977,7 +977,11 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 
 done:
 	*_rec = rec;
-out:
+	if (node_found)
+		shm_lru_node_dec_ref(node_found);
+	return rc;
+
+err:
 	D_FREE(rec);
 	if (node_found)
 		shm_lru_node_dec_ref(node_found);
