@@ -4441,7 +4441,7 @@ out:
 	return rc;
 }
 
-#define BTR_TYPE_MAX 1024
+#define BTR_TYPE_MAX	1024
 
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 
@@ -4513,16 +4513,16 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	       uint64_t *tree_feats, struct umem_attr *uma, daos_handle_t coh, void *priv,
 	       struct checker *ck, struct btr_instance *tins)
 {
-	struct btr_class	*tc;
-	int			 rc;
+	struct btr_class *tc;
+	int               rc;
 
 	memset(tins, 0, sizeof(*tins));
 	rc = umem_class_init(uma, &tins->ti_umm);
 	if (rc != 0)
 		return rc;
 
-	tins->ti_priv = priv;
-	tins->ti_coh = coh;
+	tins->ti_priv     = priv;
+	tins->ti_coh      = coh;
 	tins->ti_root_off = UMOFF_NULL;
 
 	if (!UMOFF_IS_NULL(root_off)) {
@@ -4533,7 +4533,7 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	tins->ti_root = root;
 
 	if (root != NULL && root->tr_class != 0) {
-		tree_class = root->tr_class;
+		tree_class  = root->tr_class;
 		*tree_feats = root->tr_feats;
 	}
 

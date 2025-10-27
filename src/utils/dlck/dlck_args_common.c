@@ -44,9 +44,9 @@ args_common_init(struct dlck_args_common *args)
 static int
 args_common_options_parse(char *options_str, struct checker_options *opts, struct argp_state *state)
 {
-	char           *value;
+	char              *value;
 	enum checker_event tmp_event;
-	int             rc;
+	int                rc;
 
 	while (*options_str != '\0') {
 		switch (getsubopt(&options_str, options_tokens, &value)) {

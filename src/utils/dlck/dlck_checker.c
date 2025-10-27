@@ -233,10 +233,10 @@ dlck_checker_worker_init(struct checker_options *options, const char *log_dir, u
 
 	memset(ck, 0, sizeof(*ck));
 	memcpy(&ck->ck_options, options, sizeof(*options));
-	ck->ck_printf         = dlck_checker_worker_printf;
-	ck->ck_indent_set     = dlck_checker_worker_indent_set;
-	ck->ck_private        = dcw;
-	ck->ck_prefix         = dcw->prefix;
+	ck->ck_printf     = dlck_checker_worker_printf;
+	ck->ck_indent_set = dlck_checker_worker_indent_set;
+	ck->ck_private    = dcw;
+	ck->ck_prefix     = dcw->prefix;
 
 	return DER_SUCCESS;
 }
