@@ -132,8 +132,6 @@ exec_one(void *arg)
 	dlck_xstream_set_rc(xa, rc);
 }
 
-#define STOP_TGT_STR "Wait for targets to stop"
-
 /**
  * The main thread spawns and waits for other threads to complete their tasks.
  */
@@ -145,7 +143,6 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	struct checker     *ck                 = &ctrl->checker;
 	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
 	struct dlck_engine *engine             = NULL;
-	struct dlck_exec    de                 = {0};
 	int                *rcs;
 	int                 rc;
 
@@ -200,21 +197,11 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		goto err_stop_engine;
 	}
 
-	CK_PRINT(ck, "Start targets... ");
-	rc = dlck_engine_exec_all_async(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
-					dlck_engine_xstream_arg_free, &de);
+	rc = dlck_engine_exec_all(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
+				  dlck_engine_xstream_arg_free, ck);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		goto err_free_rcs;
-	}
-
-	CK_PRINT(ck, STOP_TGT_STR "...\n");
-	rc = dlck_engine_join_all(engine, &de, rcs);
-	CK_PRINTL_RC(ck, rc, STOP_TGT_STR);
-	if (rc != DER_SUCCESS) {
-		D_FREE(rcs);
-		/** Cannot stop the engine in this case. It will probably crash. */
-		return rc;
 	}
 
 	CK_PRINT(ck, "Stop the engine... ");

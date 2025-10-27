@@ -472,7 +472,7 @@ main(int argc, char **argv)
 		goto fail_args_free;
 	}
 
-	rc = dlck_engine_exec_all_sync(bundle.engine, exec_one, arg_alloc, &bundle, arg_free);
+	rc = dlck_engine_exec_all(bundle.engine, exec_one, arg_alloc, &bundle, arg_free, NULL);
 	if (rc != DER_SUCCESS) {
 		goto fail_teardown;
 	}
