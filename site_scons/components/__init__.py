@@ -219,6 +219,8 @@ def define_mercury(reqs):
     except KeyError:
         pass
     mercury_build.append(f'-DCMAKE_BUILD_TYPE:STRING={build_type}')
+    if build_type != "RelWithDebInfo":
+        mercury_build.append('-DMERCURY_LIB_DEBUG_NAME_IS_RELEASE:BOOL=ON')
 
     if reqs.target_type == 'debug':
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')

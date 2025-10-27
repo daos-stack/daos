@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.101
-Release:       16%{?relval}%{?dist}
+Release:       17%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -659,10 +659,13 @@ fi
 %endif
 
 %changelog
+* Mon Oct 27 2025  Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.7.101-17
+- Add support of the libasan to the mercury dependencies
+
 * Thu Oct 16 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-16
 - Make daos-spdk conflict with spdk
 
-* Thu Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
+* Fri Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
 - Fix leap package name
 
 * Thu Sep 11 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14
