@@ -722,7 +722,6 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 			D_ERROR("container global %u version could be not set\n", entry->dpe_type);
 			return -DER_INVAL;
 		case DAOS_PROP_CO_OBJ_VERSION:
-			/* this is a walkaround for 2.6 only */
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		default:
@@ -777,10 +776,14 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	if (entry_def)
 		entry_def->dpe_val = pool_hdl->sph_global_ver;
 
-	/* inherit object version from pool*/
+	/*
+	 * New container creation by clients will specify the object version.
+	 * If not specified (dpe_val == 0), it indicates a client from before
+	 * DAOS 2.6.4, so use VERSION 1 for backward compatibility.
+	 */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_OBJ_VERSION);
 	if (entry_def && entry_def->dpe_val == 0)
-		entry_def->dpe_val = pool_hdl->sph_obj_ver;
+		entry_def->dpe_val = DAOS_POOL_OBJ_VERSION_1;
 
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
@@ -1305,10 +1308,18 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to destroy %d targets\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
-		rc = -DER_IO;
+	if (rc == -DER_BUSY) {
+		D_INFO(DF_CONT ": some target busy\n", DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		/*
+		 * Must return an error that ds_pool_svc_ops_save considers
+		 * retryable. Otherwise, when it is retried, this container
+		 * destroy operation would always get its result from svc_ops
+		 * without being executed.
+		 */
+		rc = -DER_TIMEDOUT;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to destroy targets",
+			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	}
 
 out_rpc:
