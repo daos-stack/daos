@@ -144,6 +144,8 @@ run_evtree_tests(const char *cfg);
 int
 run_tree_tests(const char *cfg);
 int
+run_mark_tests(const char *cfg);
+int
 run_vos_command(const char *arg0, const char *cmd);
 
 void
