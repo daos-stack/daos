@@ -149,7 +149,7 @@ enum daos_pool_props {
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
 
 #define DAOS_PROP_PO_REDUN_FAC_MAX	4
-#define DAOS_PROP_PO_REDUN_FAC_DEFAULT	0
+#define DAOS_PROP_PO_REDUN_FAC_DEFAULT	3
 
 static inline bool
 daos_rf_is_valid(unsigned long long rf)
@@ -291,7 +291,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_LAYOUT_VER,
 	/**
 	 * Checksum on/off + checksum type (CRC16, CRC32, SHA-1 & SHA-2).
-	 * default = DAOS_PROP_CO_CSUM_OFF
+	 * default = DAOS_PROP_CO_CSUM_CRC32
 	 */
 	DAOS_PROP_CO_CSUM,
 	/**
@@ -301,7 +301,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_CSUM_CHUNK_SIZE,
 	/**
 	* Checksum verification on server. Value = ON/OFF
-	* default = DAOS_PROP_CO_CSUM_SV_OFF
+	* default = DAOS_PROP_CO_CSUM_SV_ON
 	*/
 	DAOS_PROP_CO_CSUM_SERVER_VERIFY,
 	/**
