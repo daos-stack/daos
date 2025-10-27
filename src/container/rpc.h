@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -849,7 +850,6 @@ cont_snap_oit_oid_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_pro
 	((uuid_t)		(tdi_uuid)		CRT_VAR)
 
 #define DAOS_OSEQ_TGT_DESTROY	/* output fields */		 \
-				/* number of errors */		 \
 	((int32_t)		(tdo_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_tgt_destroy, DAOS_ISEQ_TGT_DESTROY, DAOS_OSEQ_TGT_DESTROY)
