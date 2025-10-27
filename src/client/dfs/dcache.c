@@ -876,6 +876,7 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 	ptr_key[2] = dfs->root.oid.hi;
 
 	for (;;) {
+		rec = NULL;
 		if (node_found) {
 			shm_lru_node_dec_ref(node_found);
 			node_found = NULL;
@@ -977,6 +978,7 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 done:
 	*_rec = rec;
 out:
+	D_FREE(rec);
 	if (node_found)
 		shm_lru_node_dec_ref(node_found);
 	return rc;
