@@ -920,10 +920,8 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 				D_GOTO(err, rc = ENOMEM);
 
 			rc = dfs_obj_deserialize(dfs, flags, value, rec);
-			if (rc) {
-				D_FREE(rec);
+			if (rc)
 				D_GOTO(err, rc);
-			}
 		}
 		D_ASSERT(rec != NULL);
 
@@ -939,9 +937,12 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 
 				rc = lookup_rel_path(dfs, parent, rec->value, flags, &sym, mode,
 						     stbuf, 0);
-				if (rc)
+				if (rc) {
 					D_GOTO(err, rc);
-				rec = sym;
+				} else {
+					D_FREE(rec);
+					rec = sym;
+				}
 				D_GOTO(done, rc);
 			}
 			break;
