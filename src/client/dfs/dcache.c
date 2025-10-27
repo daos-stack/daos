@@ -1066,7 +1066,6 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int fl
 				drec_decref(dcache, rec);
 				if (rc)
 					D_GOTO(out, rc);
-				D_FREE(rec);
 				rec = sym;
 				D_GOTO(done, rc);
 			}
