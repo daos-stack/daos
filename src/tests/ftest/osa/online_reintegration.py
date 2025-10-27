@@ -235,5 +235,5 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_with_multiple_ranks
         """
         self.log.info("Online Reintegration : Multiple ranks")
-        ranks = self.get_random_test_ranks(stop_individually=False)
+        ranks = self.get_random_test_ranks(stop_individual_ranks=False)
         self.run_online_reintegration_test(num_pool=1, oclass="RP_3G1", ranks=ranks)

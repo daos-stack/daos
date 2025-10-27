@@ -202,5 +202,5 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_multiple_ranks
         """
         self.log.info("Online Drain : Test with multiple ranks")
-        ranks = self.get_random_test_ranks(stop_individually=False)
+        ranks = self.get_random_test_ranks(stop_individual_ranks=False)
         self.run_online_drain_test(num_pool=1, ranks=ranks)
