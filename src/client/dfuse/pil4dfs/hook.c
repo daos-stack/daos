@@ -1214,20 +1214,20 @@ query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const 
 
 	rc = stat(dl_info.dli_fname, &file_stat);
 	if (rc == -1) {
-		D_DEBUG(DB_ANY, "Fail to query stat of file %s", dl_info.dli_fname);
+		D_ERROR("Fail to query stat of file %s", dl_info.dli_fname);
 		return errno;
 	}
 
 	fd = open(dl_info.dli_fname, O_RDONLY);
 	if (fd == -1) {
-		D_DEBUG(DB_ANY, "Fail to open file %s", dl_info.dli_fname);
+		D_ERROR("Fail to open file %s", dl_info.dli_fname);
 		return errno;
 	}
 
 	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
 	if ((long int)map_start == -1) {
 		close(fd);
-		D_DEBUG(DB_ANY, "Fail to mmap file %s", dl_info.dli_fname);
+		D_ERROR("Fail to mmap file %s", dl_info.dli_fname);
 		return errno;
 	}
 
@@ -1239,23 +1239,25 @@ query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const 
 			symb_base_addr = (void *)(sections[i].sh_offset + map_start);
 			sym_rec_size   = sections[i].sh_entsize;
 			if (sections[i].sh_entsize == 0) {
-				D_DEBUG(DB_ANY, "unexpected entry size in ELF file");
-				munmap(map_start, file_stat.st_size);
-				close(fd);
-				return ENODATA;
+				D_ERROR("Unexpected entry size in ELF file");
+				goto err;
 			}
 			num_sym = sections[i].sh_size / sections[i].sh_entsize;
 
 			/* i should be larger than 0 here given sections[i].sh_type == SHT_SYMTAB.
-			 * The range of [i-1, i+2) was set from my experience with several shared
-			 * libraries I have tried so far. In case this range does not work, we
-			 * could simply extend the search to the full range of [0, header->e_shnum).
+			 * The range was set from my experience with several shared libraries I
+			 * have tried so far. In case this range does not work, we could simply
+			 * extend the search to the full range of [0, header->e_shnum).
 			 */
-			for (j = i - 1; j < i + 2; j++) {
+			for (j = max(i - 1, 0); j < header->e_shnum; j++) {
 				if (sections[j].sh_type == SHT_STRTAB) {
 					strtab_offset = (int)(sections[j].sh_offset);
 					break;
 				}
+			}
+			if (!strtab_offset) {
+				D_ERROR("Failed to find STRTAB section in elf file");
+				goto err;
 			}
 
 			for (j = 0; j < num_sym; j++) {
@@ -1284,4 +1286,9 @@ query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const 
 	*var_addr = (char *)((long int)ref_func_addr + addr_var - addr_fun);
 
 	return 0;
+
+err:
+	munmap(map_start, file_stat.st_size);
+	close(fd);
+	return ENODATA;
 }
