@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +59,69 @@ map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *r
 			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
 			n++;
 		}
+	}
+	D_ASSERTF(n == ranks->rl_nr, "%d != %u\n", n, ranks->rl_nr);
+
+	return 0;
+}
+
+/* Build failed rank list, treats the rank as DOWN if all its targets are DOWN . */
+int
+map_ranks_failed(const struct pool_map *map, d_rank_list_t *ranks)
+{
+	struct pool_domain *domains = NULL;
+	unsigned int        status  = PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN;
+	int                 nranks;
+	int                 n = 0;
+	int                 i, j;
+	d_rank_t           *rs;
+
+	nranks = pool_map_find_ranks((struct pool_map *)map, PO_COMP_ID_ALL, &domains);
+	if (nranks == 0) {
+		D_ERROR("no nodes in pool map\n");
+		return -DER_IO;
+	}
+
+	for (i = 0; i < nranks; i++) {
+		if (status & domains[i].do_comp.co_status) {
+			n++;
+			continue;
+		}
+		for (j = 0; j < domains[i].do_target_nr; j++) {
+			if ((status & domains[i].do_targets[j].ta_comp.co_status) == 0)
+				continue;
+		}
+		n++;
+	}
+
+	if (n == 0) {
+		ranks->rl_nr    = 0;
+		ranks->rl_ranks = NULL;
+		return 0;
+	}
+
+	D_ALLOC_ARRAY(rs, n);
+	if (rs == NULL)
+		return -DER_NOMEM;
+
+	ranks->rl_nr    = n;
+	ranks->rl_ranks = rs;
+
+	n = 0;
+	for (i = 0; i < nranks; i++) {
+		if (status & domains[i].do_comp.co_status) {
+			D_ASSERT(n < ranks->rl_nr);
+			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
+			n++;
+			continue;
+		}
+		for (j = 0; j < domains[i].do_target_nr; j++) {
+			if ((status & domains[i].do_targets[j].ta_comp.co_status) == 0)
+				continue;
+		}
+		D_ASSERT(n < ranks->rl_nr);
+		ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
+		n++;
 	}
 	D_ASSERTF(n == ranks->rl_nr, "%d != %u\n", n, ranks->rl_nr);
 
