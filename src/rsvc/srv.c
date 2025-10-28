@@ -116,7 +116,7 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	if (rsvc_class(class)->sc_map_dist != NULL) {
 		rc = ABT_mutex_create(&svc->s_map_dist_mutex);
 		if (rc != ABT_SUCCESS) {
-			DL_ERROR(rc, "%s: failed to create map_dist_mutex", svc->s_name);
+			D_ERROR("%s: failed to create map_dist_mutex: %d\n", svc->s_name, rc);
 			rc = dss_abterr2der(rc);
 			goto err_leader_ref_cv;
 		}
