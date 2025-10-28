@@ -11,7 +11,6 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <cmocka.h>
-#include <cmocka.h>
 #include <getopt.h>
 #include <sys/stat.h>
 #include <argp.h>

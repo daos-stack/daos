@@ -1529,7 +1529,7 @@ gc_close_pool(struct vos_pool *pool)
 static int
 dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct checker *ck)
 {
-	CK_PRINTF(ck, "Pool extension (off=%#x)... ", off);
+	CK_PRINTF(ck, "Pool extension (off=%#lx)... ", off);
 
 	if (pd_ext == NULL) {
 		CK_APPENDL_OK(ck);

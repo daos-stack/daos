@@ -4696,7 +4696,7 @@ btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct checker *ck)
 
 	D_ASSERT(ck != NULL);
 
-	CK_PRINTF(ck, "Node (off=%#x)... ", nd_off);
+	CK_PRINTF(ck, "Node (off=%#lx)... ", nd_off);
 
 	unknown_flags = nd->tn_flags & ~(BTR_NODE_LEAF | BTR_NODE_ROOT);
 	if (unknown_flags != 0) {
@@ -4753,6 +4753,7 @@ static int
 btr_nodes_check(struct btr_context *tcx, struct checker *ck)
 {
 	D_LIST_HEAD(node_list);
+	D_LIST_HEAD(child_list);
 	struct node_info *ni;
 	struct node_info *ni_tmp;
 	umem_off_t        nd_off;
@@ -4768,45 +4769,48 @@ btr_nodes_check(struct btr_context *tcx, struct checker *ck)
 
 	D_ASSERT(!btr_has_embedded_value(tcx));
 
-	/** add the root node to the list */
+	/** add the root node to the node list */
 	D_ALLOC_PTR(ni);
 	ni->nd_off = tcx->tc_tins.ti_root->tr_node;
 	d_list_add_tail(&ni->link, &node_list);
 
-	/** process the list */
-	d_list_for_each_entry_safe(ni, ni_tmp, &node_list, link) {
-		/** pick the node from the list's head */
-		nd_off = ni->nd_off;
-		nd     = btr_off2ptr(tcx, nd_off);
+	/** process the node list */
+	do {
+		d_list_for_each_entry_safe(ni, ni_tmp, &node_list, link) {
+			/** pick the node from the list's head */
+			nd_off = ni->nd_off;
+			nd     = btr_off2ptr(tcx, nd_off);
 
-		/** check the node */
-		rc = btr_node_check(nd, nd_off, ck);
-		if (rc != DER_SUCCESS) {
-			break;
+			/** check the node */
+			rc = btr_node_check(nd, nd_off, ck);
+			if (rc != DER_SUCCESS) {
+				break;
+			}
+
+			/** remove the node from the list */
+			d_list_del(&ni->link);
+			D_FREE(ni);
+
+			/** a leaf has no child nodes */
+			if (btr_node_is_leaf(tcx, nd_off)) {
+				continue;
+			}
+
+			/** append the node's children to the children list */
+			for (int at = 0; at < nd->tn_keyn; ++at) {
+				D_ALLOC_PTR(ni);
+				ni->nd_off = btr_node_child_at(tcx, nd_off, at);
+				d_list_add_tail(&ni->link, &child_list);
+			}
 		}
 
-		/** remove the node from the list */
-		d_list_del(&ni->link);
-		D_FREE(ni);
+		/** append children to the node list */
+		d_list_splice_init(&child_list, &node_list);
 
-		/** a leaf has no child nodes */
-		if (nd->tn_flags & BTR_NODE_LEAF) {
-			continue;
-		}
+		/** continue as long as there is no error and there are nodes to check */
+	} while (rc == DER_SUCCESS && !d_list_empty(&node_list));
 
-		/** append the node's children to the list */
-		for (int at = 0; at < nd->tn_keyn - 1; ++at) {
-			D_ALLOC_PTR(ni);
-			ni->nd_off = btr_node_child_at(tcx, nd_off, at);
-			d_list_add_tail(&ni->link, &node_list);
-		}
-	}
-
-	if (d_list_empty(&node_list)) {
-		return rc;
-	}
-
-	/** free the list */
+	/** free the list - in case we exit with an error and the list of nodes is not empty */
 	d_list_for_each_entry_safe(ni, ni_tmp, &node_list, link) {
 		/** remove the node from the list */
 		d_list_del(&ni->link);
