@@ -451,7 +451,7 @@ vts_mark_5(void **state)
 static int
 mark_test_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE);
+	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	return 0;
 }
 
