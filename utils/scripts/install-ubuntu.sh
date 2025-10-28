@@ -54,6 +54,7 @@ apt-get install ${apt_get_install_args} \
     libyaml-dev \
     locales \
     maven \
+    nasm \
     numactl \
     openjdk-8-jdk \
     pandoc \
