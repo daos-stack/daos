@@ -3367,7 +3367,6 @@ cont_fetch_start_ult(void *arg)
 				 &fetch_arg->snapshots, &fetch_arg->snap_cnt);
 	if (rc) {
 		D_ERROR("ds_cont_fetch_snaps failed: " DF_RC "\n", DP_RC(rc));
-		ds_pool_put(fetch_arg->pool);
 		return rc;
 	}
 
@@ -3379,7 +3378,6 @@ cont_fetch_start_ult(void *arg)
 		 */
 		D_DEBUG(DB_REBUILD, DF_UUID " fetch agg_boundary failed: " DF_RC "\n",
 			DP_UUID(fetch_arg->cont_uuid), DP_RC(rc));
-		ds_pool_put(fetch_arg->pool);
 	}
 
 	return rc;
@@ -3604,7 +3602,7 @@ migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid,
 	return rc;
 }
 
-struct ds_pool_arg {
+struct ds_pool_migrate_arg {
 	uuid_t          pool_uuid;
 	struct ds_pool *pool;
 	uint32_t        rebuild_ver;
@@ -3614,12 +3612,13 @@ struct ds_pool_arg {
 	uint8_t         tgt_status;
 	uint32_t        tgt_in_ver;
 	int             rebuilding_count;
+	bool            no_iv;
 };
 
 static int
-ds_pool_put_ult(void *arg)
+ds_migrate_end_ult(void *arg)
 {
-	struct ds_pool_arg *pool_arg = (struct ds_pool_arg *)arg;
+	struct ds_pool_migrate_arg *pool_arg = (struct ds_pool_migrate_arg *)arg;
 
 	if (pool_arg->pool) {
 		pool_arg->pool->sp_rebuilding += pool_arg->rebuilding_count;
@@ -3631,12 +3630,12 @@ ds_pool_put_ult(void *arg)
 }
 
 static int
-ds_pool_lookup_ult(void *arg)
+ds_migrate_prepare_ult(void *arg)
 {
-	int                      rc;
-	uint32_t                 rebuild_ver;
-	struct ds_pool_arg      *pool_arg = (struct ds_pool_arg *)arg;
-	struct pool_target      *tgts;
+	int                         rc;
+	uint32_t                    rebuild_ver;
+	struct ds_pool_migrate_arg *pool_arg = (struct ds_pool_migrate_arg *)arg;
+	struct pool_target         *tgts;
 
 	rc = ds_pool_lookup(pool_arg->pool_uuid, &pool_arg->pool);
 	if (rc != 0) {
@@ -3657,6 +3656,9 @@ ds_pool_lookup_ult(void *arg)
 		rc = -DER_SHUTDOWN;
 		D_GOTO(out, rc);
 	}
+
+	if (pool_arg->no_iv)
+		D_GOTO(out, rc = 0);
 
 	D_ALLOC_PTR(pool_arg->prop);
 	if (pool_arg->prop == NULL)
@@ -3682,31 +3684,34 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 		  daos_epoch_t *epochs, daos_epoch_t *punched_epochs, unsigned int *shards,
 		  uint32_t count, unsigned int tgt_idx, uint32_t new_layout_ver)
 {
-	struct migrate_pool_tls	*tls = NULL;
-	int			i;
-	int			rc;
-	d_rank_list_t           *svc_list = NULL;
-	struct daos_prop_entry  *entry;
-	struct ds_pool_arg       arg    = {0};
-	uint32_t                 tgt_id = dss_get_module_info()->dmi_tgt_id;
+	struct migrate_pool_tls   *tls = NULL;
+	int                        i;
+	int                        rc;
+	d_rank_list_t             *svc_list = NULL;
+	struct daos_prop_entry    *entry;
+	struct ds_pool_migrate_arg arg    = {0};
+	uint32_t                   tgt_id = dss_get_module_info()->dmi_tgt_id;
 
 	tls = migrate_pool_tls_lookup(pool_uuid, version, generation);
 	if (tls)
-		goto skip_create;
+		arg.no_iv = true;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.rebuild_ver = version;
 	arg.tgt_id      = tgt_id;
 	arg.generation  = generation;
-	rc              = dss_ult_execute(ds_pool_lookup_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(ds_migrate_prepare_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
 	if (rc || arg.pool == NULL)
 		D_GOTO(out, rc);
+
+	if (tls)
+		goto skip_create;
 
 	entry = daos_prop_entry_get(arg.prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 
-	/* might yield */
+	/* prepare might yield */
 	tls = migrate_pool_tls_lookup(pool_uuid, version, generation);
 	if (tls) {
 		arg.rebuilding_count = -1;
@@ -3763,7 +3768,8 @@ out:
 	if (tls)
 		migrate_pool_tls_put(tls);
 	if (arg.pool)
-		D_ASSERT(dss_ult_execute(ds_pool_put_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0) == 0);
+		D_ASSERT(dss_ult_execute(ds_migrate_end_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0) ==
+			 0);
 	return rc;
 }
 
@@ -4064,13 +4070,12 @@ out:
 
 struct migrate_query_arg {
 	uuid_t				pool_uuid;
-	ABT_mutex			status_lock;
-	struct btr_root			*mpt_migrated_root;
+	ABT_mutex                       status_lock;
 	struct ds_migrate_status	dms;
 	uint32_t			version;
 	uint32_t			total_ult_cnt;
 	uint32_t			generation;
-	uint32_t                         ult_running;
+	uint32_t                        ult_running;
 	daos_rebuild_opc_t		rebuild_op;
 	uint32_t			mpt_reintegrating:1,
 					reint_post_start:1,
@@ -4131,7 +4136,7 @@ migrate_check_one(void *data)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		ult_arg->rpa_tls = tls;
-		ult_arg->rpa_migrated_root = arg->mpt_migrated_root;
+		ult_arg->rpa_migrated_root = &tls->mpt_migrated_root;
 		rc = dss_ult_create(reint_post_process_ult, ult_arg, DSS_XS_SELF, 0,
 				    MIGRATE_STACK_SIZE, NULL);
 		if (rc) {
@@ -4155,19 +4160,13 @@ int
 ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation, int op,
 			bool gl_scan_done, struct ds_migrate_status *dms)
 {
-	struct migrate_query_arg	arg = { 0 };
-	struct migrate_pool_tls		*tls;
+	struct migrate_query_arg        arg = {0};
 	int				rc;
-
-	tls = migrate_pool_tls_lookup(pool_uuid, ver, generation);
-	if (tls == NULL)
-		return 0;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.version = ver;
 	arg.generation = generation;
 	arg.rebuild_op = op;
-	arg.mpt_migrated_root = &tls->mpt_migrated_root;
 	rc = ABT_mutex_create(&arg.status_lock);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc);
@@ -4180,8 +4179,8 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	/* when globally scan done, and locally pull done, for reintegration need to do some post
 	 * processing, cannot report riv_pull_done before the post processing complete.
 	 */
-	if (gl_scan_done && arg.total_ult_cnt == 0 && !tls->mpt_ult_running &&
-	    arg.mpt_reintegrating && !arg.reint_post_processing) {
+	if (gl_scan_done && arg.total_ult_cnt == 0 && !arg.ult_running && arg.mpt_reintegrating &&
+	    !arg.reint_post_processing) {
 		arg.reint_post_start = 1;
 		rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 					       PO_COMP_ST_DOWNOUT, migrate_check_one, &arg, 0);
@@ -4201,12 +4200,11 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 		DF_RB " migrating=%s, obj_count=" DF_U64 ", rec_count=" DF_U64 ", size=" DF_U64
 		      " ult_cnt %u, mpt_ult_running %d, reint_post_processing %d, status %d\n",
 		DP_RB_MQA(&arg), arg.dms.dm_migrating ? "yes" : "no", arg.dms.dm_obj_count,
-		arg.dms.dm_rec_count, arg.dms.dm_total_size, arg.total_ult_cnt,
-		tls->mpt_ult_running, arg.reint_post_processing, arg.dms.dm_status);
+		arg.dms.dm_rec_count, arg.dms.dm_total_size, arg.total_ult_cnt, arg.ult_running,
+		arg.reint_post_processing, arg.dms.dm_status);
 
 out:
 	ABT_mutex_free(&arg.status_lock);
-	migrate_pool_tls_put(tls);
 	return rc;
 }
 
