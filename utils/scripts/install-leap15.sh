@@ -49,6 +49,7 @@ dnf --nodocs install \
     lua-lmod \
     make \
     maven \
+    nasm \
     numactl \
     openmpi3-devel \
     patch \

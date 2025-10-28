@@ -47,6 +47,7 @@ apt-get install \
     libyaml-dev \
     locales \
     maven \
+    nasm \
     numactl \
     openjdk-8-jdk \
     patchelf \

@@ -47,6 +47,7 @@ dnf --nodocs install \
     libyaml-devel \
     lz4-devel \
     make \
+    nasm \
     ndctl \
     ndctl-devel \
     numactl \
