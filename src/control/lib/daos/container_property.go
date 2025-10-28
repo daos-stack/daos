@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -368,7 +369,7 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_REDUN_FAC: {
 		C.DAOS_PROP_CO_REDUN_FAC,
-		"Redundancy Factor",
+		"Redundancy Factor (0-4)",
 		nil,
 		valHdlrMap{
 			"0": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RF0),
@@ -381,15 +382,15 @@ var propHdlrs = propHdlrMap{
 		func(p *ContainerProperty) string {
 			switch p.GetValue() {
 			case C.DAOS_PROP_CO_REDUN_RF0:
-				return "rd_fac0"
+				return "0"
 			case C.DAOS_PROP_CO_REDUN_RF1:
-				return "rd_fac1"
+				return "1"
 			case C.DAOS_PROP_CO_REDUN_RF2:
-				return "rd_fac2"
+				return "2"
 			case C.DAOS_PROP_CO_REDUN_RF3:
-				return "rd_fac3"
+				return "3"
 			case C.DAOS_PROP_CO_REDUN_RF4:
-				return "rd_fac4"
+				return "4"
 			default:
 				return propInvalidValue(p)
 			}
@@ -500,24 +501,27 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_REDUN_LVL: {
 		C.DAOS_PROP_CO_REDUN_LVL,
-		"Redundancy Level",
+		"Redundancy Level (rank=0, node=1, pool=2)",
 		nil,
 		valHdlrMap{
 			"1":    genSetValHdlr(C.DAOS_PROP_CO_REDUN_RANK),
 			"2":    genSetValHdlr(C.DAOS_PROP_CO_REDUN_NODE),
+			"3":    genSetValHdlr(C.DAOS_PROP_CO_REDUN_FAULT),
 			"rank": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RANK),
 			"node": genSetValHdlr(C.DAOS_PROP_CO_REDUN_NODE),
+			"pool": genSetValHdlr(C.DAOS_PROP_CO_REDUN_FAULT),
 		},
 		[]string{"rf_lvl"},
 		func(p *ContainerProperty) string {
-			lvl := p.GetValue()
-			switch lvl {
+			switch p.GetValue() {
 			case C.DAOS_PROP_CO_REDUN_RANK:
-				return fmt.Sprintf("rank (%d)", lvl)
+				return "1"
 			case C.DAOS_PROP_CO_REDUN_NODE:
-				return fmt.Sprintf("node (%d)", lvl)
+				return "2"
+			case C.DAOS_PROP_CO_REDUN_FAULT:
+				return "3"
 			default:
-				return fmt.Sprintf("(%d)", lvl)
+				return propInvalidValue(p)
 			}
 		},
 		false,
@@ -549,7 +553,7 @@ var propHdlrs = propHdlrMap{
 	// ----------------------------------------
 	C.DAOS_PROP_ENTRY_LAYOUT_TYPE: {
 		C.DAOS_PROP_CO_LAYOUT_TYPE,
-		"Layout Type",
+		"Layout Type (POSIX, HDF5, PYTHON, SPARK, DATABASE, ROOT, SEISMIC, METEO)",
 		nil,
 		nil,
 		nil,
@@ -558,7 +562,7 @@ var propHdlrs = propHdlrMap{
 			loInt := C.ushort(p.GetValue())
 
 			C.daos_unparse_ctype(loInt, &loStr[0])
-			return fmt.Sprintf("%s (%d)", C.GoString(&loStr[0]), loInt)
+			return fmt.Sprintf("%s", C.GoString(&loStr[0]))
 		},
 		true,
 	},
