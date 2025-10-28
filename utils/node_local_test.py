@@ -1048,14 +1048,12 @@ class DaosServer():
 
         cmd_env = get_base_env()
 
-        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
-                                         suffix='.log',
-                                         dir=self.conf.tmp_dir,
-                                         delete=False) as log_file:
-            log_name = log_file.name
-            cmd_env['D_LOG_FILE'] = log_name
-            with open(log_name, 'w', encoding='utf-8') as lf:
-                lf.write(f'cmd: {" ".join(cmd)}\n')
+        if self.conf.tmp_dir is None:
+            self.conf.tmp_dir = tempfile.gettempdir()
+        log_name = os.path.join(self.conf.tmp_dir, "dnt_cmd.log")
+        cmd_env['D_LOG_FILE'] = log_name
+        with open(log_name, 'w', encoding='utf-8') as lf:
+            lf.write(f'cmd: {" ".join(cmd)}\n')
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
@@ -1107,12 +1105,10 @@ class DaosServer():
 
         cmd_env = get_base_env()
 
-        with tempfile.NamedTemporaryFile(prefix=f'dnt_pil4dfs_{cmd[0]}_{get_inc_id()}_',
-                                         suffix='.log',
-                                         dir=self.conf.tmp_dir,
-                                         delete=False) as log_file:
-            log_name = log_file.name
-            cmd_env['D_LOG_FILE'] = log_name
+        if self.conf.tmp_dir is None:
+            self.conf.tmp_dir = tempfile.gettempdir()
+        log_name = os.path.join(self.conf.tmp_dir, f'dnt_pil4dfs_{cmd[0]}.log')
+        cmd_env['D_LOG_FILE'] = log_name
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         if report:
@@ -1218,21 +1214,18 @@ class DaosServer():
             exec_cmd.append(join(self.conf['PREFIX'], 'bin', 'cart_ctl'))
             exec_cmd.extend(cmd)
 
-            with tempfile.NamedTemporaryFile(prefix=f'dnt_crt_ctl_{get_inc_id()}_',
-                                             suffix='.log',
-                                             delete=False) as log_file:
+            log_file_name = '/tmp/dnt_crt_ctl.log'
+            cmd_env['D_LOG_FILE'] = log_file_name
+            cmd_env['DAOS_AGENT_DRPC_DIR'] = self.agent_dir
 
-                cmd_env['D_LOG_FILE'] = log_file.name
-                cmd_env['DAOS_AGENT_DRPC_DIR'] = self.agent_dir
-
-                rc = subprocess.run(exec_cmd,
-                                    env=cmd_env,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    check=False)
-                print(rc)
-                valgrind_hdl.convert_xml()
-                log_test(self.conf, log_file.name, show_memleaks=False)
+            rc = subprocess.run(exec_cmd,
+                                env=cmd_env,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                check=False)
+            print(rc)
+            valgrind_hdl.convert_xml()
+            log_test(self.conf, log_file_name, show_memleaks=False)
 
 
 class ValgrindHelper():
@@ -1553,7 +1546,7 @@ class DFuse():
             check_fstat = False
 
         my_env = get_base_env()
-        prefix = f'dnt_ioil_{cmd[0]}_{get_inc_id()}_'
+        prefix = f'dnt_ioil_{cmd[0]}_'
         with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
             log_name = log_file.name
         my_env['D_LOG_FILE'] = log_name
@@ -1736,14 +1729,12 @@ def run_daos_cmd(conf,
         del cmd_env['DD_SUBSYS']
         del cmd_env['D_LOG_MASK']
 
-    with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
-                                     suffix='.log',
-                                     dir=conf.tmp_dir,
-                                     delete=False) as log_file:
-        log_name = log_file.name
-        cmd_env['D_LOG_FILE'] = log_name
-        with open(log_file.name, 'w', encoding='utf-8') as lf:
-            lf.write(f'cmd: {" ".join(cmd)}\n')
+    if conf.tmp_dir is None:
+        conf.tmp_dir = tempfile.gettempdir()
+    log_name = os.path.join(conf.tmp_dir, 'dnt_cmd.log')
+    cmd_env['D_LOG_FILE'] = log_name
+    with open(log_name, 'w', encoding='utf-8') as lf:
+        lf.write(f'cmd: {" ".join(cmd)}\n')
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
@@ -5376,11 +5367,8 @@ def test_pydaos_kv(server, conf):
     """Test the KV interface"""
     # pylint: disable=consider-using-with
 
-    pydaos_log_file = tempfile.NamedTemporaryFile(prefix='dnt_pydaos_',
-                                                  suffix='.log',
-                                                  delete=False)
-
-    os.environ['D_LOG_FILE'] = pydaos_log_file.name
+    pydaos_log_file = os.path.join(conf.tmp_dir, f'dnt_pydaos_{get_inc_id()}.log')
+    os.environ['D_LOG_FILE'] = pydaos_log_file
     daos = import_daos(server)
 
     pool = server.get_test_pool_obj()
@@ -5439,11 +5427,11 @@ def test_pydaos_kv(server, conf):
 
 def test_pydaos_kv_obj_class(server, conf):
     """Test the predefined object class works with KV"""
-    with tempfile.NamedTemporaryFile(prefix='kv_objclass_pydaos_',
-                                     suffix='.log',
-                                     delete=False) as tmp_file:
-        log_name = tmp_file.name
-        os.environ['D_LOG_FILE'] = log_name
+
+    if conf.tmp_dir is None:
+        conf.tmp_dir = tempfile.gettempdir()
+    log_name = os.path.join(conf.tmp_dir, 'kv_objclass_pydaos.log')
+    os.environ['D_LOG_FILE'] = log_name
 
     daos = import_daos(server)
 
