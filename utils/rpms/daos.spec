@@ -662,6 +662,7 @@ fi
 * Tue Oct 21 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-17
 - Update to spdk 24
 - Sync isa-l and isa-l_crypto options with rpm builders
+- Update isa-l_crypto to v2.25.0
 
 * Thu Oct 16 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-16
 - Make daos-spdk conflict with spdk

@@ -166,40 +166,192 @@ index 26c9b0f4d..6b2a8e412 100755
  	if [ ! -f "$rootdir"/isa-l-crypto/autogen.sh ]; then
  		echo "ISA-L-crypto is required but was not found, please init the submodule with:"
  		echo "  git submodule update --init"
+diff --git a/dpdkbuild/Makefile b/dpdkbuild/Makefile
+index 64da6cc32..a88c8a6ec 100644
+--- a/dpdkbuild/Makefile
++++ b/dpdkbuild/Makefile
+@@ -108,8 +108,8 @@ DPDK_DRIVERS += compress compress/isal
+ ifeq ($(CONFIG_VBDEV_COMPRESS_MLX5),y)
+ DPDK_DRIVERS += compress/mlx5
+ endif
+-DPDK_CFLAGS += -I$(ISAL_DIR) -I$(ISAL_BUILD_DIR)
+-DPDK_LDFLAGS += -L$(ISAL_DIR)/.libs -lisal
++DPDK_CFLAGS += -I$(ISAL_DIR) -I$(ISAL_DIR)/include -I$(ISAL_BUILD_DIR)
++DPDK_LDFLAGS += -L$(ISAL_DIR)/.libs -L$(ISAL_DIR)/lib64 -lisal
+ endif
+ 
+ DPDK_ENABLED_DRIVERS = $(shell echo $(DPDK_DRIVERS) | sed -E "s/ +/,/g")
+diff --git a/lib/accel/Makefile b/lib/accel/Makefile
+index 0d4cb1239..840a031a1 100644
+--- a/lib/accel/Makefile
++++ b/lib/accel/Makefile
+@@ -18,6 +18,8 @@ ifeq ($(CONFIG_HAVE_LZ4),y)
+ LOCAL_SYS_LIBS += -llz4
+ endif
+ 
++LOCAL_SYS_LIBS += -L$(ISAL_CRYPTO_DIR)/lib64 -lisal_crypto
++
+ SPDK_MAP_FILE = $(abspath $(CURDIR)/spdk_accel.map)
+ 
+ include $(SPDK_ROOT_DIR)/mk/spdk.lib.mk
+diff --git a/lib/accel/accel_sw.c b/lib/accel/accel_sw.c
+index d7e2dfff9..03b1dcb4c 100644
+--- a/lib/accel/accel_sw.c
++++ b/lib/accel/accel_sw.c
+@@ -24,12 +24,21 @@
+ #endif
+ 
+ #ifdef SPDK_CONFIG_ISAL
++#ifdef SPDK_CONFIG_ISAL_PATH
++#include <isa-l/igzip_lib.h>
++#else
+ #include "../isa-l/include/igzip_lib.h"
++#endif
+ #ifdef SPDK_CONFIG_ISAL_CRYPTO
++#ifdef SPDK_CONFIG_ISAL_CRYPTO_PATH
++#include "isa-l-crypto/aes_xts.h"
++#include "isa-l-crypto/isal_crypto_api.h"
++#else
+ #include "../isa-l-crypto/include/aes_xts.h"
+ #include "../isa-l-crypto/include/isal_crypto_api.h"
+ #endif
+ #endif
++#endif
+ 
+ /* Per the AES-XTS spec, the size of data unit cannot be bigger than 2^20 blocks, 128b each block */
+ #define ACCEL_AES_XTS_MAX_BLOCK_SIZE (1 << 24)
+diff --git a/lib/env_dpdk/env.mk b/lib/env_dpdk/env.mk
+index f71de7f48..a45a019df 100644
+--- a/lib/env_dpdk/env.mk
++++ b/lib/env_dpdk/env.mk
+@@ -171,7 +171,7 @@ endif
+ endif
+ 
+ ifeq ($(CONFIG_VBDEV_COMPRESS),y)
+-DPDK_PRIVATE_LINKER_ARGS += -lisal -L$(ISAL_DIR)/.libs
++DPDK_PRIVATE_LINKER_ARGS += -lisal -L$(ISAL_DIR)/.libs -L$(ISAL_DIR)/lib64
+ ifeq ($(CONFIG_VBDEV_COMPRESS_MLX5),y)
+ DPDK_PRIVATE_LINKER_ARGS += -lmlx5 -libverbs
+ endif
+diff --git a/lib/util/Makefile b/lib/util/Makefile
+index e9daa2623..c2fa28734 100644
+--- a/lib/util/Makefile
++++ b/lib/util/Makefile
+@@ -22,6 +22,8 @@ ifeq ($(CONFIG_HAVE_UUID_GENERATE_SHA1), n)
+ LOCAL_SYS_LIBS += -lssl
+ endif
+ 
++LOCAL_SYS_LIBS += -L$(ISAL_DIR)/lib64 -lisal
++
+ CFLAGS += -Wpointer-arith
+ 
+ SPDK_MAP_FILE = $(abspath $(CURDIR)/spdk_util.map)
+diff --git a/lib/util/crc16.c b/lib/util/crc16.c
+index f085a2851..a5e6937ca 100644
+--- a/lib/util/crc16.c
++++ b/lib/util/crc16.c
+@@ -11,7 +11,12 @@
+  */
+ 
+ #ifdef SPDK_CONFIG_ISAL
++#ifdef SPDK_CONFIG_ISAL_PATH
++#include <isa-l/crc.h>
++#else
+ #include "isa-l/include/crc.h"
++#endif
++
+ 
+ uint16_t
+ spdk_crc16_t10dif(uint16_t init_crc, const void *buf, size_t len)
+diff --git a/lib/util/crc64.c b/lib/util/crc64.c
+index b1a37af35..31bd7bd3c 100644
+--- a/lib/util/crc64.c
++++ b/lib/util/crc64.c
+@@ -7,7 +7,11 @@
+ #include "spdk/crc64.h"
+ 
+ #ifdef SPDK_CONFIG_ISAL
++#ifdef SPDK_CONFIG_ISAL_PATH
++#include <isa-l/crc64.h>
++#else
+ #include "isa-l/include/crc64.h"
++#endif
+ 
+ uint64_t
+ spdk_crc64_nvme(const void *buf, size_t len, uint64_t crc)
+diff --git a/lib/util/crc_internal.h b/lib/util/crc_internal.h
+index b432d0d7b..f9979249f 100644
+--- a/lib/util/crc_internal.h
++++ b/lib/util/crc_internal.h
+@@ -10,7 +10,11 @@
+ 
+ #ifdef SPDK_CONFIG_ISAL
+ #define SPDK_HAVE_ISAL
+-#include <isa-l/include/crc.h>
++#ifdef SPDK_CONFIG_ISAL_PATH
++#include <isa-l/crc.h>
++#else
++#include "isa-l/include/crc.h"
++#endif
+ #elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+ #define SPDK_HAVE_ARM_CRC
+ #include <arm_acle.h>
+diff --git a/lib/util/xor.c b/lib/util/xor.c
+index 07eca5f50..2b15aea3b 100644
+--- a/lib/util/xor.c
++++ b/lib/util/xor.c
+@@ -85,7 +85,11 @@ xor_gen_basic(void *dest, void **sources, uint32_t n, uint32_t len)
+ }
+ 
+ #ifdef SPDK_CONFIG_ISAL
++#ifdef SPDK_CONFIG_ISAL_PATH
++#include <isa-l/raid.h>
++#else
+ #include "isa-l/include/raid.h"
++#endif
+ 
+ #define SPDK_XOR_BUF_ALIGN 32
+ 
 diff --git a/mk/spdk.common.mk b/mk/spdk.common.mk
-index 19f0192c2..b774a4c79 100644
+index 19f0192c2..65ef68f50 100644
 --- a/mk/spdk.common.mk
 +++ b/mk/spdk.common.mk
-@@ -184,6 +184,7 @@ ISAL_CRYPTO_DIR=$(SPDK_ROOT_DIR)/isa-l-crypto
+@@ -179,23 +179,31 @@ endif
+ 
+ IPSEC_MB_DIR=$(CONFIG_IPSEC_MB_DIR)
+ 
++ifeq ($(CONFIG_ISAL_PATH),)
+ ISAL_DIR=$(SPDK_ROOT_DIR)/isa-l
++else
++ISAL_DIR=$(CONFIG_ISAL_PATH)
++endif
++ifeq ($(CONFIG_ISAL_CRYPTO_PATH),)
+ ISAL_CRYPTO_DIR=$(SPDK_ROOT_DIR)/isa-l-crypto
++else
++ISAL_CRYPTO_DIR=$(CONFIG_ISAL_CRYPTO_PATH)
++endif
  ISAL_BUILD_DIR=$(SPDK_ROOT_DIR)/isalbuild
  ISAL_CRYPTO_BUILD_DIR=$(SPDK_ROOT_DIR)/isalcryptobuild
- ifeq ($(CONFIG_ISAL), y)
-+ifeq ($(CONFIG_ISAL_PATH),)
- COMMON_CFLAGS += -I$(ISAL_DIR)/.. -I$(ISAL_BUILD_DIR)
+-ifeq ($(CONFIG_ISAL), y)
+-COMMON_CFLAGS += -I$(ISAL_DIR)/.. -I$(ISAL_BUILD_DIR)
++ifeq ($(CONFIG_ISAL),y)
++COMMON_CFLAGS += -I$(ISAL_DIR)/.. -I$(ISAL_DIR)/include -I$(ISAL_BUILD_DIR)
  ifeq ($(CONFIG_SHARED),y)
- SYS_LIBS += -L$(ISAL_DIR)/.libs -lisal
-@@ -192,6 +193,7 @@ else
+-SYS_LIBS += -L$(ISAL_DIR)/.libs -lisal
+-LDFLAGS += -Wl,-rpath=$(ISAL_DIR)/.libs
++SYS_LIBS += -L$(ISAL_DIR)/.libs -L$(ISAL_DIR)/lib64 -lisal
++LDFLAGS += -Wl,-rpath=$(ISAL_DIR)/.lib -Wl,-rpath=$(ISAL_DIR)/lib64
+ else
  SYS_LIBS += $(ISAL_DIR)/.libs/libisal.a
  endif
- ifeq ($(CONFIG_ISAL_CRYPTO), y)
-+ifeq ($(CONFIG_ISAL_CRYPTO_PATH),)
+-ifeq ($(CONFIG_ISAL_CRYPTO), y)
++ifeq ($(CONFIG_ISAL_CRYPTO),y)
  COMMON_CFLAGS += -I$(ISAL_CRYPTO_DIR)/.. -I$(ISAL_CRYPTO_BUILD_DIR)
  ifeq ($(CONFIG_SHARED),y)
- SYS_LIBS += -L$(ISAL_CRYPTO_DIR)/.libs -lisal_crypto
-@@ -199,6 +201,16 @@ LDFLAGS += -Wl,-rpath=$(ISAL_CRYPTO_DIR)/.libs
+-SYS_LIBS += -L$(ISAL_CRYPTO_DIR)/.libs -lisal_crypto
+-LDFLAGS += -Wl,-rpath=$(ISAL_CRYPTO_DIR)/.libs
++SYS_LIBS += -L$(ISAL_CRYPTO_DIR)/.libs -L$(ISAL_CRYPTO_DIR)/lib64 -lisal_crypto
++LDFLAGS += -Wl,-rpath=$(ISAL_CRYPTO_DIR)/.libs -Wl,-rpath=$(ISAL_CRYPTO_DIR)/lib64
  else
  SYS_LIBS += $(ISAL_CRYPTO_DIR)/.libs/libisal_crypto.a
  endif
-+else
-+COMMON_CFLAGS += -I$(CONFIG_ISAL_CONFIG_PATH)/include
-+SYS_LIBS += -L$(CONFIG_ISAL_CONFIG_PATH)/lib64 -lisal_crypto
-+LDFLAGS += -Wl,-rpath=$(CONFIG_ISAL_CONFIG_PATH)/lib64
-+endif
-+endif
-+else
-+COMMON_CFLAGS += -I$(CONFIG_ISAL_PATH)/include
-+SYS_LIBS += -L$(CONFIG_ISAL_PATH)/lib64 -lisal_crypto
-+LDFLAGS += -Wl,-rpath=$(CONFIG_ISAL_PATH)/lib64
- endif
- endif
- 
