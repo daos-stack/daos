@@ -1,0 +1,24 @@
+* Thu Nov 6 2025 Jeff Olivier <jeffolivier@google.com> - 2.25.0-1
+- Update DAOS to 2.25.0 release
+- Restore change log missing since 2.24.0-1
+
+* Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> - 2.25.0-2
+- Use fpm to build isa-l_crypto
+
+* Thu Jun 22 2023 Brian J. Murrell <brian.murrell@intel> - 2.24.0-1
+- Update to new version
+- Disable static library build
+- Add debuginfo generation for Leap 15
+
+* Mon Feb 01 2021 Brian J. Murrell <brian.murrell@intel> - 2.23.0-1
+- Update to new version
+- Add %%{_libdir}/pkgconfig/libisal_crypto.pc to -devel package
+
+* Wed Oct 02 2019 John E. Malmberg <john.e.malmberg@intel> - 2.21.0-3
+- Fix the Red Hat family devel package name.
+
+* Wed Oct 02 2019 John E. Malmberg <john.e.malmberg@intel> - 2.21.0-2
+- Fix some SUSE rpmlint packaging complaints
+
+* Fri Aug 16 2019 Ryon Jensen <ryon.jensen@intel> - 2.21.0-1
+- initial package
