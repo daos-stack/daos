@@ -812,9 +812,22 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF3:
-		/** EC not supported here */
-		*ord = OR_RP_4;
-		grp_size = 4;
+		if ((rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) &&
+		    domain_nr >= 10) {
+			if (domain_nr >= 22) {
+				*ord     = OR_RS_16P3;
+				grp_size = 19;
+			} else if (domain_nr >= 14) {
+				*ord     = OR_RS_8P3;
+				grp_size = 11;
+			} else {
+				*ord     = OR_RS_4P3;
+				grp_size = 7;
+			}
+		} else {
+			*ord     = OR_RP_4;
+			grp_size = 4;
+		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF4:
 		/** EC not supported here */

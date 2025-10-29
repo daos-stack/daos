@@ -432,12 +432,55 @@ func ignoreFaultDomainIDOption() cmp.Option {
 		}, cmp.Ignore())
 }
 
-func TestSystem_Database_memberRaftOps(t *testing.T) {
-	ctx := test.Context(t)
+func checkMemberDB(t *testing.T, mdb *MemberDatabase, expMember *Member, opts ...cmp.Option) {
+	t.Helper()
 
-	testMembers := make([]*Member, 0)
-	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
-	for i := 0; i < 3; i++ {
+	cmpOpts := []cmp.Option{
+		cmp.AllowUnexported(Member{}),
+		cmpopts.IgnoreFields(Member{}, "LastUpdate"),
+	}
+	cmpOpts = append(cmpOpts, opts...)
+
+	uuidM, ok := mdb.Uuids[expMember.UUID]
+	if !ok {
+		t.Errorf("member not found for UUID %s", expMember.UUID)
+	}
+	if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
+		t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
+	}
+
+	rankM, ok := mdb.Ranks[expMember.Rank]
+	if !ok {
+		t.Errorf("member not found for rank %d", expMember.Rank)
+	}
+	if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
+		t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
+	}
+
+	addrMs, ok := mdb.Addrs[expMember.Addr.String()]
+	if !ok {
+		t.Errorf("slice not found for addr %s", expMember.Addr.String())
+	}
+
+	found := false
+	for _, am := range addrMs {
+		if am.Rank == expMember.Rank {
+			found = true
+			if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
+				t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
+	}
+}
+
+func genTestMembers(t *testing.T, num int) []*Member {
+	ctx := test.Context(t)
+	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 1)
+	testMembers := make([]*Member, 0, num)
+	for i := 0; i < num; i++ {
 		testMembers = append(testMembers, &Member{
 			Rank:        Rank(i),
 			UUID:        uuid.New(),
@@ -446,6 +489,29 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			FaultDomain: MustCreateFaultDomainFromString("/rack0"),
 		})
 	}
+	return testMembers
+}
+
+func expectMembersInDB(t *testing.T, db *Database, expMembers []*Member) {
+	for _, expMember := range expMembers {
+		checkMemberDB(t, db.data.Members, expMember)
+	}
+
+	if len(db.data.Members.Uuids) != len(expMembers) {
+		t.Fatalf("expected %d members, got %d", len(expMembers), len(db.data.Members.Uuids))
+	}
+
+	totalMemberAddrs := 0
+	for _, members := range db.data.Members.Addrs {
+		totalMemberAddrs += len(members)
+	}
+	if totalMemberAddrs != len(expMembers) {
+		t.Fatalf("expected %d members in address table, got %d: %+v", len(expMembers), totalMemberAddrs, db.data.Members.Addrs)
+	}
+}
+
+func TestSystem_Database_memberRaftOps(t *testing.T) {
+	testMembers := genTestMembers(t, 3)
 
 	changedFaultDomainMember := &Member{
 		Rank:        testMembers[1].Rank,
@@ -453,10 +519,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 		Addr:        testMembers[1].Addr,
 		State:       testMembers[1].State,
 		FaultDomain: MustCreateFaultDomainFromString("/rack1"),
-	}
-
-	cmpOpts := []cmp.Option{
-		cmp.AllowUnexported(Member{}),
 	}
 
 	for name, tc := range map[string]struct {
@@ -545,48 +607,127 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			raftUpdateTestMember(t, db, tc.op, tc.updateMember)
 
 			// Check member DB was updated
-			for _, expMember := range tc.expMembers {
-				uuidM, ok := db.data.Members.Uuids[expMember.UUID]
-				if !ok {
-					t.Errorf("member not found for UUID %s", expMember.UUID)
-				}
-				if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
-					t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
-				}
-
-				rankM, ok := db.data.Members.Ranks[expMember.Rank]
-				if !ok {
-					t.Errorf("member not found for rank %d", expMember.Rank)
-				}
-				if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
-					t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
-				}
-
-				addrMs, ok := db.data.Members.Addrs[expMember.Addr.String()]
-				if !ok {
-					t.Errorf("slice not found for addr %s", expMember.Addr.String())
-				}
-
-				found := false
-				for _, am := range addrMs {
-					if am.Rank == expMember.Rank {
-						found = true
-						if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
-							t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
-						}
-					}
-				}
-				if !found {
-					t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
-				}
-
-			}
-			if len(db.data.Members.Uuids) != len(tc.expMembers) {
-				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
-			}
+			expectMembersInDB(t, db, tc.expMembers)
 
 			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_Database_UpdateMember(t *testing.T) {
+	const numReplicas = 3
+	testMembers := genTestMembers(t, 5)
+	fakeUUID := uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")
+
+	for name, tc := range map[string]struct {
+		startingMembers []*Member
+		notLeader       bool
+		updateMember    *Member
+		expMembers      []*Member
+		expErr          error
+		expVotersAdded  []string
+	}{
+		"not leader": {
+			startingMembers: testMembers,
+			updateMember:    testMembers[1],
+			notLeader:       true,
+			expMembers:      testMembers,
+			expErr:          errors.New("Management Service leader"),
+		},
+		"member not found": {
+			startingMembers: testMembers,
+			updateMember: &Member{
+				Rank: 123,
+				UUID: fakeUUID,
+			},
+			expMembers: testMembers,
+			expErr:     ErrMemberUUIDNotFound(fakeUUID),
+		},
+		"update replica": {
+			startingMembers: testMembers,
+			updateMember: &Member{
+				Rank:        testMembers[1].Rank,
+				UUID:        testMembers[1].UUID,
+				Addr:        testMembers[1].Addr,
+				State:       MemberStateReady,
+				FaultDomain: testMembers[1].FaultDomain,
+			},
+			expMembers: []*Member{
+				testMembers[0],
+				{
+					Rank:        testMembers[1].Rank,
+					UUID:        testMembers[1].UUID,
+					Addr:        testMembers[1].Addr,
+					State:       MemberStateReady,
+					FaultDomain: testMembers[1].FaultDomain,
+				},
+				testMembers[2],
+				testMembers[3],
+				testMembers[4],
+			},
+			expVotersAdded: []string{testMembers[1].Addr.String()},
+		},
+		"update non-replica": {
+			startingMembers: testMembers,
+			updateMember: &Member{
+				Rank:        testMembers[4].Rank,
+				UUID:        testMembers[4].UUID,
+				Addr:        testMembers[4].Addr,
+				State:       MemberStateReady,
+				FaultDomain: testMembers[4].FaultDomain,
+			},
+			expMembers: []*Member{
+				testMembers[0],
+				testMembers[1],
+				testMembers[2],
+				testMembers[3],
+				{
+					Rank:        testMembers[4].Rank,
+					UUID:        testMembers[4].UUID,
+					Addr:        testMembers[4].Addr,
+					State:       MemberStateReady,
+					FaultDomain: testMembers[4].FaultDomain,
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, _ := logging.NewTestLogger(t.Name())
+			ctx := test.MustLogContext(t, log)
+
+			replicaAddrs := make([]*net.TCPAddr, 0, numReplicas)
+			for i := 0; i < numReplicas; i++ {
+				replicaAddrs = append(replicaAddrs, tc.startingMembers[i].Addr)
+			}
+			t.Logf("%+v", replicaAddrs)
+
+			db := MockDatabaseWithCfg(t, logging.FromContext(ctx), &DatabaseConfig{
+				Replicas: replicaAddrs,
+			})
+			db.replicaAddr = replicaAddrs[0]
+
+			// setup initial member DB
+			for _, initMember := range tc.startingMembers {
+				raftUpdateTestMember(t, db, raftOpAddMember, initMember)
+			}
+
+			mockRaftSvc, ok := db.raft.svc.(*mockRaftService)
+			if !ok {
+				t.Fatal("raft service used wasn't a mockRaftService!")
+			}
+			if tc.notLeader {
+				mockRaftSvc.cfg.State = raft.Follower
+			}
+
+			err := db.UpdateMember(tc.updateMember)
+
+			test.CmpErr(t, tc.expErr, err)
+			expectMembersInDB(t, db, tc.expMembers)
+
+			if diff := cmp.Diff(tc.expVotersAdded, mockRaftSvc.addVoterCalledForAddrs); diff != "" {
+				t.Fatalf("wrong raft voters added (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -820,7 +961,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 	}
 }
 
-func TestSystemDatabase_PoolServiceList(t *testing.T) {
+func TestSystem_Database_PoolServiceList(t *testing.T) {
 	ready := &PoolService{
 		PoolUUID:   uuid.New(),
 		PoolLabel:  "pool0001",
@@ -1062,7 +1203,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 	}
 }
 
-func Test_Database_ResignLeadership(t *testing.T) {
+func TestSystem_Database_ResignLeadership(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cause     error
 		expErr    error
@@ -1117,7 +1258,7 @@ func Test_Database_ResignLeadership(t *testing.T) {
 	}
 }
 
-func TestDatabase_TakePoolLock(t *testing.T) {
+func TestSystem_Database_TakePoolLock(t *testing.T) {
 	mockUUID := uuid.MustParse(test.MockUUID(1))
 	parentLock := makeLock(1, 1, 1)
 	wrongIdLock := makeLock(1, 2, 1)
