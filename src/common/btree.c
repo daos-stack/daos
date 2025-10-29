@@ -319,7 +319,7 @@ btr_ops(struct btr_context *tcx)
 }
 
 static inline void
-report_fn_nop(void *, enum btr_report_type warning, const char *fmt, ...)
+report_fn_nop(void *arg, enum btr_report_type type, const char *fmt, ...)
 {
 }
 
