@@ -764,7 +764,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if (rc == -DER_TIMEDOUT &&
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -2865,6 +2865,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	uint32_t		 minimum_nr;
 	uint32_t		 enum_flags;
 	uint32_t		 num;
+	int                       waited = 0;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
@@ -3028,7 +3029,10 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
 			 * aggregation yet, so let's retry.
 			 */
-			D_DEBUG(DB_REBUILD, DF_UOID "retry with %d \n", DP_UOID(arg->oid), rc);
+			waited++;
+			dss_sleep(5000);
+			D_DEBUG(DB_REBUILD, DF_UOID "retry %d secs with %d \n", DP_UOID(arg->oid),
+				waited * 5, rc);
 			rc = 0;
 			continue;
 		} else if (rc) {

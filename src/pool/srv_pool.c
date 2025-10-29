@@ -2268,7 +2268,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	d_rank_t		rank = dss_self_rank();
+	d_rank_t                rank               = dss_self_rank();
 	int			rc;
 
 	D_ASSERTF(svc->ps_error == 0, "ps_error: " DF_RC "\n", DP_RC(svc->ps_error));
@@ -2367,7 +2367,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, 0);
 	if (rc != 0)
 		goto out;
 
@@ -3941,6 +3941,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
 	}
+	if (query_bits & DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER)
+		out->pco_rebuild_st.rs_max_supported_layout_ver = DAOS_POOL_OBJ_VERSION;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -7306,10 +7308,11 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 }
 
 int
-ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
+ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
+			   uint32_t *reclaim_ver)
 {
-	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list,
-					NULL, NULL, NULL, NULL, NULL, NULL);
+	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list, NULL, NULL,
+					NULL, NULL, reclaim_ver, NULL);
 }
 
 int
