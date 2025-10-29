@@ -120,11 +120,11 @@ ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
 
 /** basic helpers */
 
-#define IS_CHECKER(ck)        (unlikely((ck) != NULL))
+#define IS_CHECKER(ck)     (unlikely((ck) != NULL))
 
-#define IS_NOT_CHECKER(dp)    (likely((ck) == NULL))
+#define IS_NOT_CHECKER(dp) (likely((ck) == NULL))
 
-#define YES_NO_STR(cond)      ((cond) ? "yes" : "no")
+#define YES_NO_STR(cond)   ((cond) ? "yes" : "no")
 
 /** direct print(f) macros with and without prefix */
 
