@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -142,7 +144,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 		},
 		"default gets hostname": {
 			cfg:       &config.Server{},
-			expResult: system.FaultDomainSeparator + realHostname,
+			expResult: system.FaultDomainSeparator + strings.ToLower(realHostname),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

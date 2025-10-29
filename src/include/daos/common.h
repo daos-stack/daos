@@ -387,7 +387,10 @@ int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgls_alloc(d_sg_list_t *dst, d_sg_list_t *src, int nr);
 int daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src);
-daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
+daos_size_t
+daos_sgl_data_len(d_sg_list_t *sgl, bool out);
+daos_size_t
+	    daos_sgl_out_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
@@ -963,6 +966,10 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define daos_hhash_hlink_init(hlink, ops)	d_hhash_hlink_init(hlink, ops)
 #define daos_hhash_link_empty(hlink)		d_hhash_link_empty(hlink)
 #define daos_hhash_link_key(hlink, key)		d_hhash_link_key(hlink, key)
+
+typedef int (*daos_hhash_traverse_cb_t)(struct d_hlink *link, void *arg);
+int
+daos_hhash_traverse(int type, daos_hhash_traverse_cb_t cb, void *arg);
 
 /* daos_recx_t overlap detector */
 #define DAOS_RECX_OVERLAP(recx_1, recx_2)				\

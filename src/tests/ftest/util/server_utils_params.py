@@ -436,6 +436,7 @@ class EngineYamlParameters(YamlParameters):
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
             "DAOS_POOL_RF=4",
+            "DAOS_REBUILD_WAIT_EC_PAUSE=1",
             "CRT_EVENT_DELAY=1",
             # pylint: disable-next=fixme
             # FIXME disable space cache since some tests need to verify instant pool space

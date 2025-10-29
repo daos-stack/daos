@@ -64,7 +64,7 @@ if [ -n "$REPO_FILE_URL" ]; then
     pushd /etc/yum.repos.d/
     curl -k --noproxy '*' -sSf                                  \
          -o "daos_ci-fedora${archive}-${REPOSITORY_NAME}.repo"  \
-         "{$REPO_FILE_URL}daos_ci-fedora${archive}-${REPOSITORY_NAME}.repo"
+         "${REPO_FILE_URL}daos_ci-fedora${archive}-${REPOSITORY_NAME}.repo"
     disable_repos /etc/yum.repos.d/
     popd
 fi
