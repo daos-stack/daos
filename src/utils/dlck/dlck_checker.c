@@ -47,10 +47,9 @@ dlck_vprintf_internal(FILE *stream, const char *fmt, va_list args)
  * Wrap printing in a lock/unlock block to guarantee thread-safe output.
  */
 static int
-dlck_checker_main_printf(struct checker *ck, const char *fmt, ...)
+dlck_checker_main_vprintf(struct checker *ck, const char *fmt, va_list args)
 {
 	struct dlck_checker_main *dcm = dlck_checker_main_get_custom(ck);
-	va_list                   args;
 	int                       rc_abt;
 	int                       rc;
 
@@ -61,10 +60,7 @@ dlck_checker_main_printf(struct checker *ck, const char *fmt, ...)
 		return rc;
 	}
 
-	va_start(args, fmt);
 	rc = dlck_vprintf_internal(dcm->core.stream, fmt, args);
-	va_end(args);
-
 	if (rc != DER_SUCCESS) {
 		(void)ABT_mutex_unlock(dcm->stream_mutex);
 		return rc;
@@ -125,7 +121,7 @@ dlck_checker_main_init(struct checker *ck)
 	}
 
 	ck->ck_private    = dcm;
-	ck->ck_printf     = dlck_checker_main_printf;
+	ck->ck_vprintf    = dlck_checker_main_vprintf;
 	ck->ck_indent_set = dlck_checker_main_indent_set;
 	ck->ck_prefix     = dcm->core.prefix;
 
@@ -177,18 +173,12 @@ dlck_checker_worker_indent_set(struct checker *ck)
  * Just print.
  */
 static int
-dlck_checker_worker_printf(struct checker *ck, const char *fmt, ...)
+dlck_checker_worker_vprintf(struct checker *ck, const char *fmt, va_list args)
 {
 	struct dlck_checker_worker *dcw    = dlck_checker_worker_get_custom(ck);
 	FILE                       *stream = dcw->stream;
-	va_list                     args;
-	int                         rc;
 
-	va_start(args, fmt);
-	rc = dlck_vprintf_internal(stream, fmt, args);
-	va_end(args);
-
-	return rc;
+	return dlck_vprintf_internal(stream, fmt, args);
 }
 
 int
@@ -233,7 +223,7 @@ dlck_checker_worker_init(struct checker_options *options, const char *log_dir, u
 
 	memset(ck, 0, sizeof(*ck));
 	memcpy(&ck->ck_options, options, sizeof(*options));
-	ck->ck_printf     = dlck_checker_worker_printf;
+	ck->ck_vprintf    = dlck_checker_worker_vprintf;
 	ck->ck_indent_set = dlck_checker_worker_indent_set;
 	ck->ck_private    = dcw;
 	ck->ck_prefix     = dcw->prefix;

@@ -15,7 +15,6 @@
 
 #include <daos_errno.h>
 #include <daos/btree.h>
-#include <daos/checker.h>
 #include <daos/dtx.h>
 
 #define BTR_EXT_FEAT_MASK (BTR_FEAT_MASK ^ BTR_FEAT_EMBEDDED)
@@ -171,7 +170,7 @@ struct btr_context {
 static int
 btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_class,
 	       uint64_t *tree_feats, struct umem_attr *uma, daos_handle_t coh, void *priv,
-	       struct checker *ck, struct btr_instance *tins);
+	       btr_report_fn_t report_fn, void *report_arg, struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  umem_off_t nd_off,
 					  unsigned int at);
@@ -319,6 +318,11 @@ btr_ops(struct btr_context *tcx)
 	return tcx->tc_tins.ti_ops;
 }
 
+static inline void
+report_fn_nop(void *, enum btr_report_type warning, const char *fmt, ...)
+{
+}
+
 /**
  * Create a btree context (in volatile memory).
  *
@@ -347,8 +351,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 		return -DER_NOMEM;
 
 	tcx->tc_ref = 1; /* for the caller */
-	rc          = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, NULL,
-				     &tcx->tc_tins);
+	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, report_fn_nop,
+			    NULL, &tcx->tc_tins);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
 			DP_RC(rc));
@@ -4501,9 +4505,12 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 	return DER_SUCCESS;
 }
 
-#define INVALID_CLASS_FMT        "Invalid class id: %d"
-#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d"
-#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64
+#define TREE_CLASS_STR           "Tree class... "
+#define TREE_FEATURES_STR        "Tree features... "
+#define INVALID_CLASS_FMT        "Invalid class id: %d\n"
+#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d\n"
+#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64 "\n"
+#define OK_STR                   "ok.\n"
 
 /**
  * Initialize a tree instance from a registered tree class.
@@ -4511,7 +4518,7 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 static int
 btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_class,
 	       uint64_t *tree_feats, struct umem_attr *uma, daos_handle_t coh, void *priv,
-	       struct checker *ck, struct btr_instance *tins)
+	       btr_report_fn_t report_fn, void *report_arg, struct btr_instance *tins)
 {
 	struct btr_class *tc;
 	int               rc;
@@ -4537,30 +4544,31 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 		*tree_feats = root->tr_feats;
 	}
 
-	CK_PRINT(ck, "Tree class... ");
 	/* XXX should be multi-thread safe */
 	if (tree_class >= BTR_TYPE_MAX || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_INV_CLASS)) {
-		CK_APPENDFL_ERR(ck, INVALID_CLASS_FMT, tree_class);
-		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT "\n", tree_class);
+		report_fn(report_arg, BTR_REPORT_ERROR, TREE_CLASS_STR INVALID_CLASS_FMT,
+			  tree_class);
+		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT, tree_class);
 		return -DER_INVAL;
 	}
 
 	tc = &btr_class_registered[tree_class];
 	if (tc->tc_ops == NULL || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_UNREG_CLASS)) {
-		CK_APPENDFL_ERR(ck, UNREGISTERED_CLASS_FMT, tree_class);
-		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT "\n", tree_class);
+		report_fn(report_arg, BTR_REPORT_ERROR, TREE_CLASS_STR UNREGISTERED_CLASS_FMT,
+			  tree_class);
+		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT, tree_class);
 		return -DER_NONEXIST;
 	}
-	CK_APPENDL_OK(ck);
+	report_fn(report_arg, BTR_REPORT_MSG, TREE_CLASS_STR OK_STR);
 
-	CK_PRINT(ck, "Tree features... ");
 	rc = btr_class_feats_init(tree_class, tree_feats, tc);
 	if (rc != DER_SUCCESS) {
-		CK_APPENDFL_ERR(ck, UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
-		D_ERROR(UNSUPPORTED_FEATURES_FMT "\n", *tree_feats, tc->tc_feats);
+		report_fn(report_arg, BTR_REPORT_ERROR, TREE_FEATURES_STR UNSUPPORTED_FEATURES_FMT,
+			  *tree_feats, tc->tc_feats);
+		D_ERROR(UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
 		return rc;
 	}
-	CK_APPENDL_OK(ck);
+	report_fn(report_arg, BTR_REPORT_MSG, TREE_FEATURES_STR OK_STR);
 
 	tins->ti_ops = tc->tc_ops;
 	return rc;
@@ -4675,6 +4683,7 @@ done:
 	return 0;
 }
 
+#define CK_BTREE_NODE_FMT             "Node (off=%#lx)... "
 #define CK_BTREE_NODE_MALFORMED_STR   "malformed - "
 #define CK_BTREE_NON_ZERO_PADDING_FMT CK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")"
 #define CK_BTREE_NON_ZERO_GEN_FMT     CK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")"
@@ -4690,40 +4699,46 @@ done:
  * \retval -DER_NOTYPE	The node is malformed.
  */
 static int
-btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct checker *ck)
+btr_node_check(struct btr_node *nd, umem_off_t nd_off, btr_report_fn_t report_fn, void *report_arg,
+	       bool error_on_non_zero_padding)
 {
 	uint16_t unknown_flags;
 
-	D_ASSERT(ck != NULL);
-
-	CK_PRINTF(ck, "Node (off=%#lx)... ", nd_off);
+	D_ASSERT(report_fn != NULL);
 
 	unknown_flags = nd->tn_flags & ~(BTR_NODE_LEAF | BTR_NODE_ROOT);
 	if (unknown_flags != 0) {
-		CK_APPENDFL_ERR(ck, CK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")",
-				unknown_flags);
+		report_fn(report_arg, BTR_REPORT_ERROR,
+			  CK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")",
+			  unknown_flags);
 		return -DER_NOTYPE;
 	}
 
 	if (nd->tn_pad_32 != 0) {
-		if (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) {
-			CK_APPENDFL_ERR(ck, CK_BTREE_NON_ZERO_PADDING_FMT, nd->tn_pad_32);
+		if (error_on_non_zero_padding) {
+			report_fn(report_arg, BTR_REPORT_ERROR,
+				  CK_BTREE_NODE_FMT CK_BTREE_NON_ZERO_PADDING_FMT, nd_off,
+				  nd->tn_pad_32);
 			return -DER_NOTYPE;
 		} else {
-			CK_APPENDFL_WARN(ck, CK_BTREE_NON_ZERO_PADDING_FMT, nd->tn_pad_32);
+			report_fn(report_arg, BTR_REPORT_WARNING,
+				  CK_BTREE_NODE_FMT CK_BTREE_NON_ZERO_PADDING_FMT, nd_off,
+				  nd->tn_pad_32);
 		}
 	}
 
 	if (nd->tn_gen != 0) {
-		if (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) {
-			CK_APPENDFL_ERR(ck, CK_BTREE_NON_ZERO_GEN_FMT, nd->tn_gen);
+		if (error_on_non_zero_padding) {
+			report_fn(report_arg, BTR_REPORT_ERROR,
+				  CK_BTREE_NODE_FMT CK_BTREE_NON_ZERO_GEN_FMT, nd_off, nd->tn_gen);
 			return -DER_NOTYPE;
 		} else {
-			CK_APPENDFL_WARN(ck, CK_BTREE_NON_ZERO_GEN_FMT, nd->tn_gen);
+			report_fn(report_arg, BTR_REPORT_WARNING,
+				  CK_BTREE_NODE_FMT CK_BTREE_NON_ZERO_GEN_FMT, nd_off, nd->tn_gen);
 		}
 	}
 
-	CK_APPENDL_OK(ck);
+	report_fn(report_arg, BTR_REPORT_MSG, CK_BTREE_NODE_FMT OK_STR, nd_off);
 
 	return DER_SUCCESS;
 }
@@ -4750,7 +4765,8 @@ struct node_info {
  * \retval -DER_*		Possibly other errors.
  */
 static int
-btr_nodes_check(struct btr_context *tcx, struct checker *ck)
+btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report_arg,
+		bool error_on_non_zero_padding)
 {
 	D_LIST_HEAD(node_list);
 	D_LIST_HEAD(child_list);
@@ -4760,10 +4776,10 @@ btr_nodes_check(struct btr_context *tcx, struct checker *ck)
 	struct btr_node  *nd;
 	int               rc = DER_SUCCESS;
 
-	D_ASSERT(ck != NULL);
+	D_ASSERT(report_fn != NULL);
 
 	if (btr_root_empty(tcx)) {
-		CK_PRINT(ck, "Empty tree\n");
+		report_fn(report_arg, BTR_REPORT_MSG, "Empty tree\n");
 		return DER_SUCCESS;
 	}
 
@@ -4782,7 +4798,8 @@ btr_nodes_check(struct btr_context *tcx, struct checker *ck)
 			nd     = btr_off2ptr(tcx, nd_off);
 
 			/** check the node */
-			rc = btr_node_check(nd, nd_off, ck);
+			rc = btr_node_check(nd, nd_off, report_fn, report_arg,
+					    error_on_non_zero_padding);
 			if (rc != DER_SUCCESS) {
 				break;
 			}
@@ -4828,7 +4845,8 @@ btr_nodes_check(struct btr_context *tcx, struct checker *ck)
  * \param[in] ck	Checker.
  */
 int
-dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, struct checker *ck)
+dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn_t report_fn,
+		     void *report_arg, bool error_on_non_zero_padding)
 {
 	struct btr_context tcx        = {0};
 	uint64_t           tree_feats = -1;
@@ -4836,10 +4854,10 @@ dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, struct checke
 
 	D_ASSERT(root != NULL);
 	D_ASSERT(uma != NULL);
-	D_ASSERT(ck != NULL);
+	D_ASSERT(report_fn != NULL);
 
-	rc = btr_class_init(UMOFF_NULL, root, -1, &tree_feats, uma, DAOS_HDL_INVAL, NULL, ck,
-			    &tcx.tc_tins);
+	rc = btr_class_init(UMOFF_NULL, root, -1, &tree_feats, uma, DAOS_HDL_INVAL, NULL, report_fn,
+			    report_arg, &tcx.tc_tins);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
@@ -4847,8 +4865,7 @@ dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, struct checke
 	tcx.tc_feats = root->tr_feats;
 	tcx.tc_order = root->tr_order;
 
-	CK_PRINT(ck, "Nodes:\n");
-	CK_INDENT(ck, rc = btr_nodes_check(&tcx, ck));
+	rc = btr_nodes_check(&tcx, report_fn, report_arg, error_on_non_zero_padding);
 
 	/** no need to free tcx */
 

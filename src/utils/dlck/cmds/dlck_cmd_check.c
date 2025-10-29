@@ -199,7 +199,6 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	rc = dlck_engine_exec_all(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
 				  dlck_engine_xstream_arg_free, ck);
-	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		goto err_free_rcs;
 	}

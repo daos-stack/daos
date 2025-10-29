@@ -1498,11 +1498,14 @@ static inline int
 gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct checker *ck,
 	    struct vos_gc_info *gc_info)
 {
+	const bool error_on_non_zero_padding =
+	    (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR);
 	int rc;
 
 	if (IS_CHECKER(ck)) {
 		CK_PRINT(ck, CK_GC_TREE_STR "...\n");
-		CK_INDENT(ck, rc = dbtree_check_inplace(&bkt_df->gd_bins_root, uma, ck));
+		CK_INDENT(ck, rc = dbtree_check_inplace(&bkt_df->gd_bins_root, uma, ck_report, ck,
+							error_on_non_zero_padding));
 		CK_PRINTL_RC(ck, rc, CK_GC_TREE_STR);
 		if (rc != DER_SUCCESS) {
 			return rc;
