@@ -105,7 +105,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 }
             ],
             "md_on_ssd_active": self.server_managers[0].manager.job.using_control_metadata,
-            "mem_file_bytes": scm_size_total
+            "mem_file_bytes": scm_size_total,
+            "self_heal_policy": self.params.get("self_heal_policy", path="/run/exp_vals/*")
         }
 
         self.assertDictEqual(
