@@ -602,7 +602,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	}
 
 	/* Use tagged messages for other providers, disable multi-recv */
-	if (prov != CRT_PROV_OFI_CXI && prov != CRT_PROV_OFI_TCP && prov != CRT_PROV_OFI_VERBS_RXM)
+	if (prov != CRT_PROV_OFI_CXI && prov != CRT_PROV_OFI_TCP)
 		d_setenv("NA_OFI_UNEXPECTED_TAG_MSG", "1", 0);
 
 	g_prov_settings_applied[prov] = true;
