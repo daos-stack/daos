@@ -548,7 +548,7 @@ enum btr_report_type {
 	BTR_REPORT_WARNING,
 	BTR_REPORT_MSG,
 };
-typedef void (*btr_report_fn_t)(void *, enum btr_report_type type, const char *fmt, ...);
+typedef void (*btr_report_fn_t)(void *arg, enum btr_report_type type, const char *fmt, ...);
 int
      dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn_t report_fn,
 			  void *report_arg, bool error_on_non_zero_padding);
