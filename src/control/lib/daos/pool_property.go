@@ -209,6 +209,22 @@ func DataThreshIsValid(size uint64) bool {
 	return bool(C.daos_data_thresh_valid(C.uint32_t(size)))
 }
 
+// PoolPropertySelfHealUnsetFlags returns disabled flags in the self-heal pool property as a
+// string slice.
+func PoolPropertySelfHealUnsetFlags(value string) []string {
+	offFlags := []string{"exclude", "rebuild", "delay_rebuild"}
+	for _, flag := range strings.Split(value, propValSep) {
+		for i, v := range offFlags {
+			if v == flag {
+				offFlags = append(offFlags[:i], offFlags[i+1:]...)
+				break
+			}
+		}
+	}
+
+	return offFlags
+}
+
 const (
 	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
 	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
