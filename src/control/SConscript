@@ -197,7 +197,7 @@ def scons():
                             "-L$ISAL_CRYPTO_PREFIX/lib64 $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
     ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" + \
-        " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lisal -lisal_crypto -lssl -lnuma -ldl"
+        " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lisal -lssl -lnuma -ldl"
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     aenv.AppendENVPath("CGO_CFLAGS", aenv.subst("$_CPPINCFLAGS"), sep=" ")
