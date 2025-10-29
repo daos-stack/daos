@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -203,17 +204,21 @@ drpc_progress_context_accept(struct drpc_progress_context *ctx)
 	}
 
 	rc = drpc_accept(ctx->listener_ctx, &session);
-	if (rc != -DER_SUCCESS) {
+	if (rc != 0) {
 		/* Any failure to accept is weird and surprising */
 		DL_ERROR(rc, "Failed to accept new drpc connection");
-		D_FREE(session_node);
-		return rc;
+		D_GOTO(fail, rc);
 	}
 
+	session->yield    = ABT_thread_yield;
 	session_node->ctx = session;
 	d_list_add(&session_node->link, &ctx->session_ctx_list);
 
-	return DER_SUCCESS;
+	return 0;
+
+fail:
+	D_FREE(session_node);
+	return rc;
 }
 
 static int

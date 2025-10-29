@@ -60,14 +60,18 @@ class DaosServerTransportCredentials(TransportCredentials):
 class DaosServerYamlParameters(YamlParameters):
     """Defines the daos_server configuration yaml parameters."""
 
-    def __init__(self, filename, common_yaml):
+    def __init__(self, filename, common_yaml, version=None):
         """Initialize an DaosServerYamlParameters object.
 
         Args:
             filename (str): yaml configuration file name
             common_yaml (YamlParameters): [description]
+            version (Version, optional): daos_server version for compatibility changes.
+                Default is None, which does not handle compatibility
         """
         super().__init__("/run/server_config/*", filename, None, common_yaml)
+
+        self._version = version
 
         # pylint: disable=wrong-spelling-in-comment
         # daos_server configuration file parameters
@@ -138,7 +142,12 @@ class DaosServerYamlParameters(YamlParameters):
         self.helper_log_file = LogParameter(log_dir, None, "daos_server_helper.log")
         self.telemetry_port = BasicParameter(None, 9191)
         self.client_env_vars = BasicParameter(None)
-        self.mgmt_svc_replicas = BasicParameter(None, ["localhost"])
+
+        # access_points was changed to mgmt_svc_replicas in 2.7
+        if self._version is not None and self._version < "2.7.0":
+            self.mgmt_svc_replicas = BasicParameter(None, ["localhost"], yaml_key="access_points")
+        else:
+            self.mgmt_svc_replicas = BasicParameter(None, ["localhost"])
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -468,6 +477,8 @@ class EngineYamlParameters(YamlParameters):
                 Defaults to MAX_STORAGE_TIERS.
         """
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
+        common_ns = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines_common", "*"]
+        self.common_namespace = os.path.join(*common_ns)
         self._base_namespace = base_namespace
         self._index = index
         self._provider = provider or os.environ.get("D_PROVIDER", "ofi+tcp")
@@ -523,7 +534,11 @@ class EngineYamlParameters(YamlParameters):
         Args:
             test (Test): avocado Test object
         """
-        super().get_params(test)
+        # Get the values for the engine yaml parameters
+        for name in self.get_param_names():
+            if not getattr(self, name).get_yaml_value(name, test, self.namespace):
+                # If a new value was not assigned, check the engine's common namespace for a value
+                getattr(self, name).get_yaml_value(name, test, self.common_namespace)
 
         # Override the log file file name with the test log file name
         if hasattr(test, "server_log") and test.server_log is not None:

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1470,17 +1471,18 @@ static void
 rdb_raft_cb_log(raft_server_t *raft, raft_node_t *node, void *arg, raft_loglevel_e level,
 		const char *buf)
 {
-	struct rdb *db = raft_get_udata(raft);
-	d_rank_t    rank;
+#define RRCL_LOG(flag)                                                                             \
+	if (node == NULL)                                                                          \
+		D_DEBUG(flag, DF_DB ": %s\n", DP_DB(db), buf);                                     \
+	else                                                                                       \
+		D_DEBUG(flag, DF_DB ": %s: rank=%u\n", DP_DB(db), buf,                             \
+			((struct rdb_raft_node *)raft_node_get_udata(node))->dn_rank);
 
-	if (node == NULL)
-		rank = CRT_NO_RANK;
-	else
-		rank = ((struct rdb_raft_node *)raft_node_get_udata(node))->dn_rank;
+	struct rdb *db = raft_get_udata(raft);
 
 	switch (level) {
 	case RAFT_LOG_ERROR:
-		D_ERROR(DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
+		RRCL_LOG(DLOG_ERR);
 		break;
 	case RAFT_LOG_INFO:
 		/*
@@ -1490,11 +1492,13 @@ rdb_raft_cb_log(raft_server_t *raft, raft_node_t *node, void *arg, raft_loglevel
 		 * few election messages, which might attract complaints if done
 		 * with D_INFO.
 		 */
-		D_DEBUG(DB_MD, DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
+		RRCL_LOG(DB_MD);
 		break;
 	default:
-		D_DEBUG(DB_IO, DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
+		RRCL_LOG(DB_IO);
 	}
+
+#undef RRCL_LOG
 }
 
 static raft_time_t
@@ -3066,8 +3070,7 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 		return;
 	}
 
-	D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n", DP_DB(db),
-		term);
+	D_INFO(DF_DB ": resigning from term " DF_U64 "\n", DP_DB(db), term);
 	rdb_raft_save_state(db, &state);
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);

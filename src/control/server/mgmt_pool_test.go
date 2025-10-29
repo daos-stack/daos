@@ -10,6 +10,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -2393,8 +2394,9 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Id: mockUUID,
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				State: mgmtpb.PoolServiceState_Ready,
-				Uuid:  mockUUID,
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			},
 		},
 		"successful query (includes pre-2.6 Leader field)": {
@@ -2410,10 +2412,11 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				setupMockDrpcClient(svc, resp, nil)
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				State:  mgmtpb.PoolServiceState_Ready,
-				Uuid:   mockUUID,
-				SvcLdr: 42,
-				Leader: 42,
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				SvcLdr:            42,
+				Leader:            42,
+				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			},
 		},
 		"successful query; mdonssd enabled": {
@@ -2429,9 +2432,21 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				setupMockDrpcClient(svc, resp, nil)
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				State:        mgmtpb.PoolServiceState_Ready,
-				Uuid:         mockUUID,
-				MemFileBytes: humanize.GiByte,
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				MemFileBytes:      humanize.GiByte,
+				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+			},
+		},
+		"successful query; sys self-heal prop fetch": {
+			req: &mgmtpb.PoolQueryReq{
+				Id:        mockUUID,
+				QueryMask: uint64(daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy)),
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				SysSelfHealPolicy: "pool_rebuild",
 			},
 		},
 	} {
@@ -2462,6 +2477,12 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
+			}
+
+			// Change stored value to something different from the default.
+			if err := system.SetUserProperty(tc.mgmtSvc.sysdb, tc.mgmtSvc.systemProps,
+				"self_heal", "pool_rebuild"); err != nil {
+				t.Fatal(err)
 			}
 
 			gotResp, gotErr := tc.mgmtSvc.PoolQuery(test.Context(t), tc.req)
@@ -2712,7 +2733,7 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 		mgmtSvc       *mgmtSvc
 		setupMockDrpc func(_ *mgmtSvc, _ error)
 		req           *mgmtpb.PoolUpgradeReq
-		expResp       *mgmtpb.PoolUpgradeResp
+		expResp       *mgmtpb.DaosResp
 		expErr        error
 	}{
 		"nil request": {
@@ -2752,7 +2773,7 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 		},
 		"successful upgraded": {
 			req:     &mgmtpb.PoolUpgradeReq{Id: mockUUID},
-			expResp: &mgmtpb.PoolUpgradeResp{},
+			expResp: &mgmtpb.DaosResp{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -2786,5 +2807,140 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
+	}
+}
+
+type methParams struct {
+	Name string
+	Req  proto.Message
+}
+
+func TestServer_MgmtSvc_PoolServiceSimple(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defSys := build.DefaultSystemName
+	missingSB := newTestMgmtSvc(t, log)
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
+	notAP := newTestMgmtSvc(t, log)
+	testPoolService := &system.PoolService{
+		PoolUUID: uuid.MustParse(mockUUID),
+		State:    system.PoolServiceStateReady,
+		Replicas: []ranklist.Rank{0},
+	}
+	invoke := func(any interface{}, name string, args ...interface{}) []reflect.Value {
+		inputs := make([]reflect.Value, len(args))
+		for i, _ := range args {
+			inputs[i] = reflect.ValueOf(args[i])
+		}
+		return reflect.ValueOf(any).MethodByName(name).Call(inputs)
+	}
+	// One slice elements per pool service method to test.
+	methods := []methParams{
+		{
+			"PoolUpgrade",
+			&mgmtpb.PoolUpgradeReq{},
+		},
+		{
+			"PoolRebuildStart",
+			&mgmtpb.PoolRebuildStartReq{},
+		},
+		{
+			"PoolRebuildStop",
+			&mgmtpb.PoolRebuildStopReq{},
+		},
+		{
+			"PoolSelfHealEval",
+			&mgmtpb.PoolSelfHealEvalReq{},
+		},
+	}
+
+	runPoolServiceTests := func(t *testing.T, methName string, methReq proto.Message) {
+		for name, tc := range map[string]struct {
+			mgmtSvc       *mgmtSvc
+			setupMockDrpc func(_ *mgmtSvc, _ error)
+			sysName       string
+			emptyPoolID   bool
+			expRespNotNil bool
+			expErr        error
+		}{
+			"wrong system": {
+				sysName: "bad",
+				expErr:  FaultWrongSystem("bad", defSys),
+			},
+			"missing superblock": {
+				mgmtSvc: missingSB,
+				expErr:  errNotReplica,
+			},
+			"not MS replica": {
+				mgmtSvc: notAP,
+				expErr:  errNotReplica,
+			},
+			"dRPC send fails": {
+				expErr: errors.New("send failure"),
+			},
+			"garbage resp": {
+				setupMockDrpc: func(svc *mgmtSvc, err error) {
+					// dRPC call returns junk in the message body
+					badBytes := makeBadBytes(42)
+					setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
+				},
+				expErr: errors.New("unmarshal"),
+			},
+			"missing uuid": {
+				emptyPoolID: true,
+				expErr:      errors.New("empty pool id"),
+			},
+			"successful call": {
+				expRespNotNil: true,
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				buf.Reset()
+				defer test.ShowBufferOnFailure(t, buf)
+
+				tc.mgmtSvc = newTestMgmtSvc(t, log)
+				addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
+
+				if tc.setupMockDrpc == nil {
+					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+						setupSvcDrpcClient(svc, 0,
+							getMockDrpcClient(new(mgmtpb.DaosResp), tc.expErr))
+					}
+				}
+				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+
+				s := reflect.ValueOf(methReq).Elem()
+
+				sysName := defSys
+				if tc.sysName != "" {
+					sysName = tc.sysName
+				}
+				s.FieldByName("Sys").SetString(sysName)
+
+				poolID := ""
+				if !tc.emptyPoolID {
+					poolID = mockUUID
+				}
+				s.FieldByName("Id").SetString(poolID)
+
+				res := invoke(tc.mgmtSvc, methName, test.Context(t), methReq)
+				ret := res[0].Interface()
+				var gotErr error
+				if v := res[1].Interface(); v != nil {
+					gotErr = v.(error)
+				}
+
+				test.CmpErr(t, tc.expErr, gotErr)
+				if tc.expErr != nil {
+					return
+				}
+
+				test.AssertEqual(t, tc.expRespNotNil, ret != nil,
+					"expected non-nil response")
+			})
+		}
+	}
+
+	for _, params := range methods {
+		runPoolServiceTests(t, params.Name, params.Req)
 	}
 }

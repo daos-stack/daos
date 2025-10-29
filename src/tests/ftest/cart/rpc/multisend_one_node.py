@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -23,13 +24,7 @@ class CartMultisendOneNodeTest(CartTest):
         :avocado: tags=CartMultisendOneNodeTest,test_cart_multisend
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
-
-        try:
-            srv_rtn = self.launch_cmd_bg(srvcmd)
-        # pylint: disable=broad-except
-        except Exception as my_except:
-            self.print("Exception in launching server : {}".format(my_except))
-            self.fail("Test failed.\n")
+        srv_rtn = self.launch_cmd_bg(srvcmd)
 
         # Verify the server is still running.
         if not self.check_process(srv_rtn):

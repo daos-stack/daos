@@ -19,9 +19,19 @@ def scons():
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     tenv.Append(OBJPREFIX="b_")
 
-    test_src = ['dtx_tests.c', 'sched_mock.c', 'ult_mock.c', 'srv_mock.c', 'pl_map_mock.c',
-                '../../common/tls.c', 'dts_utils.c', 'dts_local.c', 'dts_local_rdb.c',
-                vts_objs]
+    test_src = [
+        '../../common/tls.c',
+        'dts_local_rdb.c',
+        'dts_local.c',
+        'dts_utils.c',
+        'dtx_tests.c',
+        'pl_map_mock.c',
+        'sched_mock.c',
+        'srv_mock.c',
+        'srv_module_mock.c',
+        'ult_mock.c',
+        vts_objs
+    ]
     dtx_tests = tenv.d_program('dtx_tests', test_src, LIBS=libraries)
 
     # build dtx_ut
@@ -41,11 +51,23 @@ def scons():
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_irec_is_valid'])
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=evt_desc_is_valid'])
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_lookup'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_tls_get'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=lrua_array_aggregate'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_delete'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_tm_dec_gauge'])
 
     vos_src = Glob('../../vos/*.c')
 
-    test_src = ['dtx_ut.c', 'dts_discard_invalid.c', 'dts_structs.c',
-                'srv_mock.c', 'sched_mock.c']
+    test_src = [
+        'dts_discard_invalid.c',
+        'dts_structs.c',
+        'dtx_ut.c',
+        'sched_mock.c',
+        'srv_mock.c',
+        'srv_module_mock.c',
+        'dts_cmt_stat.c',
+        'dts_aggregate.c'
+    ]
     dtx_ut = tenv.d_program('dtx_ut', test_src + vos_src, LIBS=libraries)
 
     # install both

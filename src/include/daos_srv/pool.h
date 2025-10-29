@@ -26,15 +26,10 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/rsvc.h>
 
 /* Pool service (opaque) */
 struct ds_pool_svc;
-
-/**
- * Each individual object layout format, like oid layout, dkey to group,
- * dkey to EC group start.
- */
-#define DS_POOL_OBJ_VERSION		1
 
 /* age of an entry in svc_ops KVS before it may be evicted */
 #define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
@@ -73,13 +68,13 @@ struct ds_pool {
 	crt_group_t	       *sp_group;
 	/* Size threshold to store data on backend bdev */
 	uint32_t		sp_data_thresh;
+	uint64_t                 sp_self_heal;
 	ABT_mutex		sp_mutex;
-	ABT_cond		sp_fetch_hdls_cond;
-	ABT_cond		sp_fetch_hdls_done_cond;
+	ABT_cond                 sp_fetch_hdls_cond;
 	struct ds_iv_ns		*sp_iv_ns;
 	uint32_t		*sp_states;	/* pool child state array */
 
-	/* structure related to EC aggregate epoch query */
+	/* Used for EC aggregation epoch reporting */
 	d_list_t		sp_ec_ephs_list;
 	struct sched_request	*sp_ec_ephs_req;
 
@@ -91,14 +86,8 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t		sp_stopping:1,
-				sp_cr_checked:1,
-				sp_immutable:1,
-				sp_fetch_hdls:1,
-				sp_need_discard:1,
-				sp_disable_rebuild:1,
-				sp_disable_dtx_resync:1,
-				sp_incr_reint:1;
+	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_need_discard : 1,
+	    sp_disable_rebuild : 1, sp_disable_dtx_resync : 1, sp_incr_reint : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -126,6 +115,8 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
 	uint32_t		 sp_reint_mode;
+	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
+	ABT_rwlock               sp_recov_lock;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -178,6 +169,7 @@ struct ds_pool_child {
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
+	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
 	 * vos aggregation can not cross this epoch during rebuild to avoid
@@ -329,6 +321,14 @@ int dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
 int dsc_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline);
+int
+dsc_pool_svc_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *ps_ranks,
+			  uint64_t deadline);
+int
+     dsc_pool_svc_rebuild_start(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline);
+int
+     dsc_pool_svc_eval_self_heal(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+				 uint64_t sys_self_heal);
 int ds_pool_failed_add(uuid_t uuid, int rc);
 void ds_pool_failed_remove(uuid_t uuid);
 int ds_pool_failed_lookup(uuid_t uuid);
@@ -407,7 +407,7 @@ void ds_pool_enable_exclude(void);
 int
 ds_pool_rebuild_start(uuid_t pool_uuid, struct rsvc_hint *hint);
 int
-	    ds_pool_rebuild_stop(uuid_t pool_uuid, struct rsvc_hint *hint);
+	    ds_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, struct rsvc_hint *hint);
 
 extern bool ec_agg_disabled;
 
@@ -547,5 +547,24 @@ int ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out);
 int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct rsvc_hint *hint);
 
 void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
+
+int
+ds_pool_prop_recov_cont_reset(struct rdb_tx *tx, struct ds_rsvc *rsvc);
+
+static inline bool
+is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)
+{
+	uint64_t flags = DAOS_SELF_HEAL_AUTO_REBUILD;
+
+	if (check_delayed_rebuild)
+		flags |= DAOS_SELF_HEAL_DELAY_REBUILD;
+
+	if (pool->sp_disable_rebuild)
+		return false;
+	if (!(pool->sp_self_heal & flags))
+		return false;
+
+	return true;
+}
 
 #endif /* __DAOS_SRV_POOL_H__ */

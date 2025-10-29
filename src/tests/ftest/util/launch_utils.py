@@ -15,7 +15,7 @@ from pathlib import Path
 from ClusterShell.NodeSet import NodeSet
 from slurm_setup import SlurmSetup, SlurmSetupException
 # pylint: disable=import-error,no-name-in-module
-from util.collection_utils import TEST_RESULTS_DIRS, collect_test_result
+from util.collection_utils import TEST_RESULTS_DIRS, check_server_storage, collect_test_result
 from util.data_utils import dict_extract_values, list_flatten, list_unique
 from util.environment_utils import TestEnvironment
 from util.host_utils import HostException, HostInfo, get_local_host, get_node_set
@@ -26,7 +26,7 @@ from util.slurm_utils import create_partition, delete_partition, show_partition
 from util.storage_utils import StorageException, StorageInfo
 from util.systemctl_utils import SystemctlFailure, create_override_config
 from util.user_utils import get_group_id, get_user_groups, groupadd, useradd, userdel
-from util.yaml_utils import YamlUpdater, get_yaml_data
+from util.yaml_utils import YamlUpdater, get_yaml_data, write_yaml_file
 
 D_TM_SHARED_MEMORY_KEY = 0x10242048
 
@@ -130,12 +130,12 @@ def setup_systemctl(logger, servers, clients, test_env):
         __add_systemctl_override(
             logger, servers, "daos_server.service", "root",
             os.path.join(test_env.daos_prefix, "bin", "daos_server"), test_env.server_config,
-            None, None))
+            test_env.systemd_path, test_env.systemd_library_path))
     systemctl_configs.update(
         __add_systemctl_override(
             logger, clients, "daos_agent.service", test_env.agent_user,
             os.path.join(test_env.daos_prefix, "bin", "daos_agent"), test_env.agent_config,
-            None, None))
+            test_env.systemd_path, test_env.systemd_library_path))
     return systemctl_configs
 
 
@@ -183,7 +183,8 @@ def summarize_run(logger, mode, status):
         1024: "ERROR: Failed to rename logs and results after one or more tests!",
         2048: "ERROR: Core stack trace files detected!",
         4096: "ERROR: Unexpected processes or mounts found running!",
-        8192: "ERROR: Failed to create steps.log!"
+        8192: "ERROR: Failed to create steps.log!",
+        16384: "ERROR: Failed to parse test variant status!"
     }
     for bit_code, error_message in bit_error_map.items():
         if status & bit_code == bit_code:
@@ -246,6 +247,9 @@ class TestInfo():
         "client_partition",
         "client_reservation",
         "client_users",
+        "scm_list",
+        "bdev_list",
+        "check_server_storage",
     ]
 
     def __init__(self, test_file, order, yaml_extension=None):
@@ -291,10 +295,13 @@ class TestInfo():
         """
         self.yaml_info = {"include_local_host": include_local_host}
         yaml_data = get_yaml_data(self.yaml_file)
+        for extra_yaml in self.extra_yaml:
+            yaml_data.update(get_yaml_data(extra_yaml))
         info = {}
         for key in self.YAML_INFO_KEYS:
             # Get the unique values with lists flattened
-            values = list_unique(list_flatten(dict_extract_values(yaml_data, [key], (str, list))))
+            values = list_unique(list_flatten(
+                dict_extract_values(yaml_data, [key], (str, list, bool))))
             if values:
                 # Use single value if list only contains 1 element
                 info[key] = values if len(values) > 1 else values[0]
@@ -379,6 +386,7 @@ class TestRunner():
 
     def prepare(self, logger, test_log_file, test, repeat, user_create, slurm_setup, control_host,
                 partition_hosts, clear_mounts):
+        # pylint: disable=too-many-return-statements
         """Prepare the test for execution.
 
         Args:
@@ -405,28 +413,30 @@ class TestRunner():
         self.test_result.start()
 
         # Setup the test host information, including creating any required slurm partitions
-        status = self._setup_host_information(
-            logger, test, slurm_setup, control_host, partition_hosts)
-        if status:
-            return status
+        if not self._setup_host_information(
+                logger, test, slurm_setup, control_host, partition_hosts):
+            return 128
 
         # Setup (remove/create/list) the common test directory on each test host
-        status = self._setup_test_directory(logger, test)
-        if status:
-            return status
+        if not self._setup_test_directory(logger, test):
+            return 128
 
         # Setup additional test users
-        status = self._user_setup(logger, test, user_create)
-        if status:
-            return status
+        if not self._user_setup(logger, test, user_create):
+            return 128
 
         # Remove existing mount points on each test host
-        status = self._clear_mount_points(logger, test, clear_mounts)
-        if status:
-            return status
+        if not self._clear_mount_points(logger, test, clear_mounts):
+            return 128
+
+        # Check storage devices for servers
+        if not check_server_storage(logger, test, self.test_result, "Prepare"):
+            return 128
 
         # Generate certificate files for the test
-        return self._generate_certs(logger)
+        if not self._generate_certs(logger):
+            return 128
+        return 0
 
     def execute(self, logger, test, repeat, number, sparse, fail_fast):
         """Run the specified test.
@@ -475,8 +485,8 @@ class TestRunner():
         logger.info("Total test time: %ss", end_time - start_time)
         return return_code
 
-    def process(self, logger, job_results_dir, test, repeat, stop_daos, archive, rename,
-                jenkins_xml, core_files, threshold):
+    def process(self, logger, job_results_dir, test, loop, stop_daos, archive, rename,
+                jenkins_xml, core_files, threshold, details):
         # pylint: disable=too-many-arguments
         """Process the test results.
 
@@ -490,13 +500,14 @@ class TestRunner():
         Args:
             logger (Logger): logger for the messages produced by this method
             test (TestInfo): the test information
-            repeat (int): the test repetition number
+            loop (int): the test repetition number (1s based)
             stop_daos (bool): whether or not to stop daos servers/clients after the test
             archive (bool): whether or not to collect remote files generated by the test
             rename (bool): whether or not to rename the default avocado job-results directory names
             jenkins_xml (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
+            details (dict): dictionary to update with test results
 
         Returns:
             int: status code: 0 = success, >0 = failure
@@ -507,10 +518,10 @@ class TestRunner():
         logger.debug("=" * 80)
         logger.info(
             "Processing the %s test after the run on repeat %s/%s",
-            test, repeat, self.total_repeats)
+            test, loop, self.total_repeats)
         status = collect_test_result(
             logger, test, self.test_result, job_results_dir, stop_daos, archive, rename,
-            jenkins_xml, core_files, threshold, self.total_repeats)
+            jenkins_xml, core_files, threshold, self.total_repeats, details)
 
         # Mark the execution of the test as passed if nothing went wrong
         if self.test_result.status is None:
@@ -532,7 +543,7 @@ class TestRunner():
             partition_hosts (NodeSet): slurm partition hosts
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            bool: True if successful; False otherwise
         """
         logger.debug("-" * 80)
         logger.debug("Setting up host information for %s", test)
@@ -545,14 +556,14 @@ class TestRunner():
             if not exists and not slurm_setup:
                 message = f"Error missing {partition} partition"
                 self.test_result.fail_test(logger, "Prepare", message, None)
-                return 128
+                return False
             if slurm_setup and exists:
                 logger.info(
                     "Removing existing %s partition to ensure correct configuration", partition)
                 if not delete_partition(logger, control_host, partition).passed:
                     message = f"Error removing existing {partition} partition"
                     self.test_result.fail_test(logger, "Prepare", message, None)
-                    return 128
+                    return False
             if slurm_setup:
                 hosts = partition_hosts.difference(test.yaml_info["test_servers"])
                 logger.debug(
@@ -561,12 +572,12 @@ class TestRunner():
                 if not hosts:
                     message = "Error no partition hosts exist after removing the test servers"
                     self.test_result.fail_test(logger, "Prepare", message, None)
-                    return 128
+                    return False
                 logger.info("Creating the '%s' partition with the '%s' hosts", partition, hosts)
                 if not create_partition(logger, control_host, partition, hosts).passed:
                     message = f"Error adding the {partition} partition"
                     self.test_result.fail_test(logger, "Prepare", message, None)
-                    return 128
+                    return False
 
         # Define the hosts for this test
         try:
@@ -574,7 +585,7 @@ class TestRunner():
         except LaunchException:
             message = "Error setting up host information"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-            return 128
+            return False
 
         # Log the test information
         msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
@@ -585,7 +596,7 @@ class TestRunner():
         logger.debug(
             msg_format, test.name.order, test.test_file, test.yaml_file,
             test.host_info.servers.hosts, test.host_info.clients.hosts)
-        return 0
+        return True
 
     def _setup_test_directory(self, logger, test):
         """Set up the common test directory on all hosts.
@@ -595,7 +606,7 @@ class TestRunner():
             test (TestInfo): the test information
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            bool: True if successful; False otherwise
         """
         logger.debug("-" * 80)
         test_env = TestEnvironment()
@@ -617,8 +628,8 @@ class TestRunner():
             if not run_remote(logger, hosts, command).passed:
                 message = "Error setting up the common test directory on all hosts"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
-        return 0
+                return False
+        return True
 
     def _user_setup(self, logger, test, create=False):
         """Set up test users on client nodes.
@@ -629,7 +640,7 @@ class TestRunner():
             create (bool, optional): whether to create extra test users defined by the test
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            bool: True if successful; False otherwise
         """
         users = test.get_yaml_client_users()
         clients = test.host_info.clients.hosts
@@ -650,16 +661,16 @@ class TestRunner():
                     group_gid[group] = self._query_create_group(logger, clients, group, create)
                 except LaunchException as error:
                     self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
-                    return 128
+                    return False
 
             gid = group_gid.get(group, None)
             try:
                 self._query_create_user(logger, clients, user, gid, create)
             except LaunchException as error:
                 self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
-                return 128
+                return False
 
-        return 0
+        return True
 
     @staticmethod
     def _query_create_group(logger, hosts, group, create=False):
@@ -743,10 +754,10 @@ class TestRunner():
             clear_mounts (list): mount points to remove before the test
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            bool: True if successful; False otherwise
         """
         if not clear_mounts:
-            return 0
+            return True
 
         logger.debug("-" * 80)
         hosts = test.host_info.all_hosts
@@ -766,20 +777,20 @@ class TestRunner():
             if not self._remove_super_blocks(logger, mount_hosts, mount_point):
                 message = "Error removing superblocks for existing mount points"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
+                return False
 
         if not self._remove_shared_memory_segments(logger, hosts):
             message = "Error removing shared memory segments for existing mount points"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-            return 128
+            return False
 
         for mount_point, mount_hosts in mount_point_hosts.items():
             if not self._remove_mount_point(logger, mount_hosts, mount_point):
                 message = "Error removing existing mount points"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
+                return False
 
-        return 0
+        return True
 
     def _remove_super_blocks(self, logger, hosts, mount_point):
         """Remove the super blocks from the specified mount point.
@@ -848,10 +859,11 @@ class TestRunner():
     def _generate_certs(self, logger):
         """Generate the certificates for the test.
 
-        Returns:
+        Args:
             logger (Logger): logger for the messages produced by this method
-            int: status code: 0 = success, 128 = failure
 
+        Returns:
+            bool: True if successful; False otherwise
         """
         logger.debug("-" * 80)
         logger.debug("Generating certificates")
@@ -863,12 +875,12 @@ class TestRunner():
         if not run_local(logger, f"/usr/bin/rm -rf {certs_dir}").passed:
             message = "Error removing old certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-            return 128
+            return False
         if not run_local(logger, f"{command} {test_env.log_dir}").passed:
             message = "Error generating certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-            return 128
-        return 0
+            return False
+        return True
 
     def _collect_crash_files(self, logger):
         """Move any avocado crash files into job-results/latest/crashes.
@@ -1072,6 +1084,9 @@ class TestGroup():
             logger, storage_info, self._yaml_directory, tier_0_type, scm_size, scm_mount,
             max_nvme_tiers, control_metadata)
 
+        # Generate launch parameter branch extra yaml file
+        self._add_launch_param_yaml(logger, self._yaml_directory)
+
         # Replace any placeholders in the test yaml file
         for test in self.tests:
             new_yaml_file = updater.update(test.yaml_file, self._yaml_directory)
@@ -1098,6 +1113,7 @@ class TestGroup():
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
+            logger (Logger): logger for the messages produced by this method
             storage_info (StorageInfo): the collected storage information from the hosts
             yaml_dir (str): path in which to create the extra storage yaml files
             tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
@@ -1137,6 +1153,26 @@ class TestGroup():
                     engine_storage_yaml[engines], str(test))
                 # Allow extra yaml files to be to override the generated storage yaml
                 test.extra_yaml.insert(0, engine_storage_yaml[engines])
+
+    def _add_launch_param_yaml(self, logger, yaml_dir):
+        """Optionally add an extra yaml to include (filter in) test variants.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            yaml_dir (str): path in which to create the extra storage yaml files
+
+        Raises:
+            YamlException: if there was an error writing the yaml file
+        """
+        yaml_file = os.path.join(yaml_dir, "extra_yaml_launch_filters.yaml")
+        if self._nvme and self._nvme.startswith("auto_md_on_ssd"):
+            lines = [
+                'launch:',
+                '  !filter-only : /run/pool/md_on_ssd_p2'
+            ]
+            write_yaml_file(logger, yaml_file, lines)
+            for test in self.tests:
+                test.extra_yaml.insert(0, yaml_file)
 
     def setup_slurm(self, logger, setup, install, user, result):
         """Set up slurm on the hosts if any tests are using partitions.
@@ -1261,18 +1297,31 @@ class TestGroup():
         if not code_coverage.setup(logger, result.tests[0]):
             return_code |= 128
 
+        self._details["tests"] = []
+
         # Run each test for as many repetitions as requested
         for loop in range(1, repeat + 1):
             logger.info("-" * 80)
             logger.info("Starting test repetition %s/%s", loop, repeat)
 
-            for index, test in enumerate(self.tests):
+            for sequence, test in enumerate(self.tests):
                 # Define a log for the execution of this test for this repetition
                 test_log_file = test.get_log_file(logdir, loop, repeat)
                 logger.info("-" * 80)
                 logger.info("Log file for repetition %s of %s: %s", loop, test, test_log_file)
                 test_file_handler = get_file_handler(test_log_file, LOG_FILE_FORMAT, logging.DEBUG)
                 logger.addHandler(test_file_handler)
+
+                if len(self._details["tests"]) == sequence:
+                    # Add an entry for this test the first time its run in the loop
+                    self._details["tests"].append({
+                        "sequence": sequence + 1,
+                        "test_file": str(test),
+                        "results": test_log_file,
+                        "clients": str(test.yaml_info["test_clients"]),
+                        "servers": str(test.yaml_info["test_servers"]),
+                        "bdev_list": test.yaml_info["bdev_list"]})
+                self._details["tests"][sequence]["repetitions"] = loop
 
                 # Prepare the hosts to run the tests
                 step_status = runner.prepare(
@@ -1284,12 +1333,12 @@ class TestGroup():
                     continue
 
                 # Run the test with avocado
-                return_code |= runner.execute(logger, test, loop, index + 1, sparse, fail_fast)
+                return_code |= runner.execute(logger, test, loop, sequence + 1, sparse, fail_fast)
 
                 # Archive the test results
                 return_code |= runner.process(
                     logger, job_results_dir, test, loop, stop_daos, archive, rename,
-                    jenkins_log, core_files, threshold)
+                    jenkins_log, core_files, threshold, self._details["tests"][sequence])
 
                 # Display disk usage after the test is complete
                 display_disk_space(logger, logdir)

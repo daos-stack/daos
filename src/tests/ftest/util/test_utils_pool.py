@@ -22,6 +22,48 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
+def add_pools(dmg, add_pool_kwargs, error_handler=None):
+    """Add multiple TestPool objects to the test.
+
+    Args:
+        dmg (DmgCommand): dmg command used to update the server log mask before creating the first
+            pool and reset it after creating the last pool. Not used if no pools are created.
+        add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
+            pool. Must at least include the 'test' kwargs. See add_pool() for other options.
+        error_handler (method, optional): optional method to call when a pool create fails. Defaults
+            to None.
+
+    Returns:
+        list: a list of new pool objects
+    """
+    _any_create = any(kwargs.get("create", True) is True for kwargs in add_pool_kwargs)
+
+    if _any_create:
+        # Set the DEBUG log mask before the first pool create
+        dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
+    # Add the requested pools
+    pools = []
+    try:
+        for kwargs in add_pool_kwargs:
+            # Disable setting/resetting log masks for each individual pool create
+            _restore = kwargs.get("set_logmasks", True)
+            kwargs["set_logmasks"] = False
+            try:
+                pools.append(add_pool(**kwargs))
+                pools[-1].set_logmasks.value = _restore
+            except TestFail as error:
+                if not error_handler:
+                    raise
+                error_handler(error)
+    finally:
+        if _any_create:
+            # Reset the log mask after the last pool create
+            dmg.server_set_logmasks(raise_exception=False)
+
+    return pools
+
+
 def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
     """Add a new TestPool object to the test.
 
@@ -182,6 +224,25 @@ def time_pool_create(log, number, pool):
     return duration
 
 
+def get_pool_create_percentages(num_pools, total_percent):
+    """Get a list of percentages for pool create sizes.
+
+    Args:
+        num_pools (int): number of pools to create
+        total_percent (int, str): total percent of the storage to use
+
+    Returns:
+        list: list of the percentages for each pool create
+    """
+    if isinstance(total_percent, str):
+        total_percent = int(total_percent.replace("%", ""))
+    percentages = []
+    for index in range(num_pools):
+        remaining_pools = num_pools - index
+        percentages.append(f"{round(total_percent / remaining_pools)}%")
+    return percentages
+
+
 class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""
@@ -216,6 +277,7 @@ class TestPool(TestDaosApiBase):
         self.nranks = BasicParameter(None)
         self.size = BasicParameter(None)
         self.tier_ratio = BasicParameter(None)
+        self.mem_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
@@ -239,6 +301,9 @@ class TestPool(TestDaosApiBase):
 
         # Parameter to control log mask enable/disable for pool create/destroy
         self.set_logmasks = BasicParameter(None, True)
+
+        # Parameter to control running 'dmg storage query usage --show_usable' if pool create fails
+        self.query_on_create_error = BasicParameter(None, False)
 
         self.pool = None
         self.info = None
@@ -404,6 +469,7 @@ class TestPool(TestDaosApiBase):
             "gid": self.gid,
             "size": self.size.value,
             "tier_ratio": self.tier_ratio.value,
+            "mem_ratio": self.mem_ratio.value,
             "scm_size": self.scm_size.value,
             "nranks": self.nranks.value,
             "properties": self.properties.value,
@@ -423,6 +489,11 @@ class TestPool(TestDaosApiBase):
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
+        except Exception as error:                      # pylint: disable=broad-except
+            if self.query_on_create_error.value is True:
+                query_kwargs = {"show_usable": True, "mem_ratio": kwargs.get("mem_ratio")}
+                self.dmg.storage_query_usage(**query_kwargs)
+            raise error
         finally:
             if self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
@@ -959,7 +1030,7 @@ class TestPool(TestDaosApiBase):
         return False
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_state=None, rs_padding32=None,
+                             rs_errno=None, rs_state=None, rs_padding16=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -976,7 +1047,7 @@ class TestPool(TestDaosApiBase):
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
             rs_state (int, optional): rebuild state flag. Defaults to None.
-            rs_padding32 (int, optional): padding. Defaults to None.
+            rs_padding16 (int, optional): padding. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
                 Defaults to None.

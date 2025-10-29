@@ -207,224 +207,6 @@ def run_task(hosts, command, timeout=None, verbose=False):
     return task
 
 
-def check_task(task, logger=None):
-    """Check the results of the executed task and get the output.
-
-    Args:
-        task (Task): a ClusterShell.Task.Task object for the executed command
-
-    Returns:
-        bool: if the command returned an 0 exit status on every host
-
-    """
-    def check_task_log(message):
-        """Log the provided text if a logger is present.
-
-        Args:
-            message (str): text to display
-        """
-        if logger:
-            logger.info(message)
-
-    # Create a dictionary of hosts for each unique return code
-    results = dict(task.iter_retcodes())
-
-    # Display the command output
-    for code in sorted(results):
-        output_data = list(task.iter_buffers(results[code]))
-        if not output_data:
-            output_data = [["<NONE>", results[code]]]
-        for output, o_hosts in output_data:
-            node_set = NodeSet.fromlist(o_hosts)
-            lines = list(output.splitlines())
-            if len(lines) > 1:
-                # Print the sub-header for multiple lines of output
-                check_task_log("    {}: rc={}, output:".format(node_set, code))
-            for number, line in enumerate(lines):
-                if isinstance(line, bytes):
-                    line = line.decode("utf-8")
-                if len(lines) == 1:
-                    # Print the sub-header and line for one line of output
-                    check_task_log("    {}: rc={}, output: {}".format(node_set, code, line))
-                    continue
-                try:
-                    check_task_log("      {}".format(line))
-                except IOError:
-                    # DAOS-5781 Jenkins doesn't like receiving large amounts of data in a short
-                    # space of time so catch this and retry.
-                    check_task_log(
-                        "*** DAOS-5781: Handling IOError detected while processing line {}/{} with "
-                        "retry ***".format(*number + 1, len(lines)))
-                    time.sleep(5)
-                    check_task_log("      {}".format(line))
-
-    # List any hosts that timed out
-    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
-    if timed_out:
-        check_task_log("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
-
-    # Determine if the command completed successfully across all the hosts
-    return len(results) == 1 and 0 in results
-
-
-def display_task(task):
-    """Display the output for the executed task.
-
-    Args:
-        task (Task): a ClusterShell.Task.Task object for the executed command
-
-    Returns:
-        bool: if the command returned an 0 exit status on every host
-
-    """
-    log = getLogger()
-    return check_task(task, log)
-
-
-def log_task(hosts, command, timeout=None):
-    """Display the output of the command executed on each host in parallel.
-
-    Args:
-        hosts (list): list of hosts
-        command (str): the command to run in parallel
-        timeout (int, optional): command timeout in seconds. Defaults to None.
-
-    Returns:
-        bool: if the command returned an 0 exit status on every host
-
-    """
-    return display_task(run_task(hosts, command, timeout, True))
-
-
-def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
-    """Run a command on each host in parallel and get the results.
-
-    Args:
-        hosts (NodeSet): hosts on which to run the command
-        command (str): the command to run in parallel
-        verbose (bool, optional): display command output. Defaults to True.
-        timeout (int, optional): command timeout in seconds. Defaults to None.
-        expect_rc (int, optional): display output if the command return code
-            does not match this value. Defaults to 0. A value of None will
-            bypass this feature.
-
-    Returns:
-        list: a list of dictionaries with each entry containing output, exit
-            status, and interrupted status common to each group of hosts, e.g.:
-                [
-                    {
-                        "command": "ls my_dir",
-                        "hosts": NodeSet(wolf-[1-3]),
-                        "exit_status": 0,
-                        "interrupted": False,
-                        "stdout": ["file1.txt", "file2.json"],
-                    },
-                    {
-                        "command": "ls my_dir",
-                        "hosts": NodeSet(wolf-[4]),
-                        "exit_status": 1,
-                        "interrupted": False,
-                        "stdout": ["No such file or directory"],
-                    },
-                    {
-                        "command": "ls my_dir",
-                        "hosts": NodeSet(wolf-[5-6]),
-                        "exit_status": 255,
-                        "interrupted": True,
-                        "stdout": [""]
-                    },
-                ]
-
-    """
-    log = getLogger()
-    results = []
-
-    # Run the command on each host in parallel
-    task = run_task(hosts, command, timeout)
-
-    # Get the exit status of each host
-    host_exit_status = {str(host): None for host in hosts}
-    for exit_status, host_list in task.iter_retcodes():
-        for host in host_list:
-            host_exit_status[host] = exit_status
-
-    # Get a list of any interrupted hosts
-    host_interrupted = []
-    if timeout and task.num_timeout() > 0:
-        host_interrupted.extend(list(task.iter_keys_timeout()))
-
-    # Iterate through all the groups of common output
-    output_data = list(task.iter_buffers())
-    if not output_data:
-        output_data = [["", hosts]]
-    for output, host_list in output_data:
-        # Determine the unique exit status for each host with the same output
-        output_exit_status = {}
-        for host in host_list:
-            if host_exit_status[host] not in output_exit_status:
-                output_exit_status[host_exit_status[host]] = NodeSet()
-            output_exit_status[host_exit_status[host]].add(host)
-
-        # Determine the unique interrupted state for each host with the same
-        # output and exit status
-        for exit_status, _hosts in output_exit_status.items():
-            output_interrupted = {}
-            for host in list(_hosts):
-                is_interrupted = host in host_interrupted
-                if is_interrupted not in output_interrupted:
-                    output_interrupted[is_interrupted] = NodeSet()
-                output_interrupted[is_interrupted].add(host)
-
-            # Add a result entry for each group of hosts with the same output,
-            # exit status, and interrupted status
-            for interrupted, _hosts in output_interrupted.items():
-                results.append({
-                    "command": command,
-                    "hosts": _hosts,
-                    "exit_status": exit_status,
-                    "interrupted": interrupted,
-                    "stdout": [
-                        line.decode("utf-8").rstrip(os.linesep)
-                        for line in output],
-                })
-
-    # Display results if requested or there is an unexpected exit status
-    bad_exit_status = [
-        item["exit_status"]
-        for item in results
-        if expect_rc is not None and item["exit_status"] != expect_rc]
-    if verbose or bad_exit_status:
-        log.info(collate_results(command, results))
-
-    return results
-
-
-def collate_results(command, results):
-    """Collate the output of run_pcmd.
-
-    Args:
-        command (str): command used to obtain the data on each server
-        results (list): list: a list of dictionaries with each entry
-                        containing output, exit status, and interrupted
-                        status common to each group of hosts (see run_pcmd()'s
-                        return for details)
-
-    Returns:
-        str: a string collating run_pcmd()'s results
-
-    """
-    res = ""
-    res += "Command: %s\n" % command
-    res += "Results:\n"
-    for result in results:
-        res += "  %s: exit_status=%s, interrupted=%s:" % (
-            result["hosts"], result["exit_status"], result["interrupted"])
-        for line in result["stdout"]:
-            res += "    %s\n" % line
-
-    return res
-
-
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
 
@@ -453,31 +235,6 @@ def get_host_data(hosts, command, text, error, timeout=None):
     return [
         {"hosts": NodeSet(_hosts), "data": stdout}
         for _hosts, stdout in result.all_stdout.items()]
-
-
-def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
-    """Run a command on each host in parallel and get the return codes.
-
-    Args:
-        hosts (NodeSet): hosts on which to run the command
-        command (str): the command to run in parallel
-        verbose (bool, optional): display command output. Defaults to True.
-        timeout (int, optional): command timeout in seconds. Defaults to None.
-        expect_rc (int, optional): expected return code. Defaults to 0.
-
-    Returns:
-        dict: a dictionary of return codes keys and accompanying NodeSet
-            values indicating which hosts yielded the return code.
-
-    """
-    # Run the command on each host in parallel
-    results = run_pcmd(hosts, command, verbose, timeout, expect_rc)
-    exit_status = {}
-    for result in results:
-        if result["exit_status"] not in exit_status:
-            exit_status[result["exit_status"]] = NodeSet()
-        exit_status[result["exit_status"]].add(result["hosts"])
-    return exit_status
 
 
 def check_file_exists(hosts, filename, user=None, directory=False,
@@ -1011,7 +768,8 @@ def percent_change(val1, val2):
         return math.nan
 
 
-def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
+def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None,
+                           run_user="root"):
     """Get the journalctl command to capture all unit/identifier activity from since to until.
 
     Args:
@@ -1023,12 +781,13 @@ def get_journalctl_command(since, until=None, system=False, units=None, identifi
             None.
         identifiers (str/list, optional): show messages for the specified syslog identifier(s).
             Defaults to None.
+        run_user (str, optional): user to run as. Defaults to root
 
     Returns:
         str: journalctl command to capture all unit activity
 
     """
-    command = ["sudo", os.path.join(os.sep, "usr", "bin", "journalctl")]
+    command = [os.path.join(os.sep, "usr", "bin", "journalctl")]
     if system:
         command.append("--system")
     for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
@@ -1037,10 +796,10 @@ def get_journalctl_command(since, until=None, system=False, units=None, identifi
     command.append("--since=\"{}\"".format(since))
     if until:
         command.append("--until=\"{}\"".format(until))
-    return " ".join(command)
+    return command_as_user(" ".join(command), run_user)
 
 
-def get_journalctl(hosts, since, until, journalctl_type):
+def get_journalctl(hosts, since, until, journalctl_type, run_user="root"):
     """Run the journalctl on the hosts.
 
     Args:
@@ -1048,6 +807,7 @@ def get_journalctl(hosts, since, until, journalctl_type):
         since (str): Start time to search the log.
         until (str): End time to search the log.
         journalctl_type (str): String to search in the log. -t param for journalctl.
+        run_user (str, optional): user to run as. Defaults to root
 
     Returns:
         list: a list of dictionaries containing the following key/value pairs:
@@ -1055,7 +815,9 @@ def get_journalctl(hosts, since, until, journalctl_type):
             "data":  data requested for the group of hosts
 
     """
-    command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
+    system = run_user != getuser()
+    command = get_journalctl_command(
+        since, until, system, identifiers=journalctl_type, run_user=run_user)
     err = "Error gathering system log events"
     return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 

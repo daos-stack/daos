@@ -37,6 +37,8 @@ void ds_cont_svc_step_down(struct cont_svc *svc);
 int
     ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
+int
+    ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid);
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
@@ -45,6 +47,11 @@ int ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
 		     uint32_t status_pm_ver);
+int
+ds_cont_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid);
+void
+ds_cont_srv_close(struct ds_pool_child *pool_child);
+
 /*
  * Per-thread container (memory) object
  *
@@ -63,6 +70,7 @@ struct ds_cont_child {
 	struct daos_csummer	*sc_csummer;
 	struct cont_props	 sc_props;
 
+	ABT_mutex                sc_open_mutex;
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	ABT_cond		 sc_scrub_cond;
@@ -72,7 +80,9 @@ struct ds_cont_child {
 	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_props_fetched : 1, sc_stopping : 1,
 	    sc_destroying : 1, sc_vos_agg_active : 1, sc_ec_agg_active : 1,
 	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
-	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1, sc_open_initializing : 1;
+	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1,
+	    /* flag of sc_ec_agg_eph_boundary valid */
+	    sc_ec_agg_eph_valid : 1;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 
@@ -117,7 +127,7 @@ struct ds_cont_child {
 	uint64_t		sc_ec_agg_eph_boundary;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
-	/* Used by ds_cont_track_eph_query_ult to query the minimum ec_agg_eph and stable_eph
+	/* Used by ds_cont_eph_report() to query the minimum ec_agg_eph and stable_eph
 	 * from all local VOS.
 	 */
 	uint64_t		*sc_query_ec_agg_eph;
@@ -175,7 +185,10 @@ int agg_rate_ctl(void *arg);
  */
 struct ds_cont_hdl {
 	d_list_t		sch_entry;
-	/* link to ds_cont_child::sc_open_hdls if sch_cont is not NULL. */
+	/*
+	 * Link to ds_cont_child::sc_open_hdls if sch_cont is not NULL, otherwise,
+	 * link to ds_pool_child::spc_srv_cont_hdl.
+	 */
 	d_list_t		sch_link;
 	uuid_t			sch_uuid;	/* of the container handle */
 	uint64_t		sch_flags;	/* user-supplied flags */
@@ -212,8 +225,9 @@ int ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
 
-int ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
-			      struct ds_cont_child **cont);
+int
+ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid, bool locked,
+			  struct ds_cont_child **cont);
 
 typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
@@ -262,7 +276,8 @@ int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
-void ds_cont_track_eph_query_ult(void *data);
+int
+     ds_cont_eph_report(struct ds_pool *pool);
 void ds_cont_track_eph_free(struct ds_pool *pool);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);

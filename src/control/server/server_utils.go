@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -607,17 +608,17 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(createPublishInstanceExitFunc(srv.pubSub.Publish, srv.hostname))
 
-	engine.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
-		if engine.storage.BdevRoleMetaConfigured() {
-			return engine.storage.UnmountTmpfs()
-		}
-
+	engine.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ uint64, _ error, _ int) error {
 		storageCfg := engine.runner.GetConfig().Storage
 		pciAddrs := storageCfg.Tiers.NVMeBdevs().Devices()
 
 		if err := cleanSpdkResources(srv, pciAddrs); err != nil {
 			srv.log.Error(
 				errors.Wrapf(err, "engine instance %d", engine.Index()).Error())
+		}
+
+		if engine.storage.BdevRoleMetaConfigured() {
+			return engine.storage.UnmountTmpfs()
 		}
 
 		return nil
@@ -734,6 +735,67 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
+func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
+	selfHeal, err := svc.getSysSelfHeal()
+	if err != nil {
+		if system.IsErrSystemAttrNotFound(err) {
+			// Assume default value where all flags are set if property isn't present.
+			return true, nil
+		}
+		return false, err
+	}
+
+	svc.log.Tracef("system property self_heal='%+v'", selfHeal)
+
+	return daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagExclude), nil
+}
+
+func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
+	ts, err := evt.GetTimestamp()
+	if err != nil {
+		srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
+		return
+	}
+
+	msg := fmt.Sprintf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation,
+		ts)
+
+	isSet, err := isSysSelfHealExcludeSet(srv.mgmtSvc)
+	if err != nil {
+		srv.log.Errorf("handle rank dead: %s (%s)", err, msg)
+		return
+	}
+	if !isSet {
+		srv.log.Tracef("skipping ms exclude-state update, sys-prop-self_heal.exclude unset (%s)",
+			msg)
+		return
+	}
+	srv.log.Debug(msg)
+
+	if evt.Incarnation == 0 {
+		srv.log.Errorf("invalid zero incarnation value in event %+v", evt)
+	}
+
+	// Mark the rank as unavailable for membership in new pools, etc.
+	needsGrpUpd, err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation)
+	if err != nil {
+		srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
+		if system.IsNotLeader(err) {
+			// If we've lost leadership while processing the event, attempt to
+			// re-forward it to the new leader.
+			evt = evt.WithForwarded(false).WithForwardable(true)
+			srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank,
+				evt.Incarnation)
+			srv.evtForwarder.OnEvent(ctx, evt)
+		}
+		return
+	}
+	if needsGrpUpd {
+		srv.log.Debugf("do group update after marking rank %d dead", evt.Rank)
+		srv.mgmtSvc.reqGroupUpdate(ctx, false)
+	}
+}
+
 // registerLeaderSubscriptions stops forwarding events to MS and instead starts
 // handling received forwarded (and local) events.
 func registerLeaderSubscriptions(srv *server) {
@@ -745,26 +807,7 @@ func registerLeaderSubscriptions(srv *server) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
-				ts, err := evt.GetTimestamp()
-				if err != nil {
-					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
-					return
-				}
-				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
-				// Mark the rank as unavailable for membership in
-				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation); err != nil {
-					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
-					if system.IsNotLeader(err) {
-						// If we've lost leadership while processing the event,
-						// attempt to re-forward it to the new leader.
-						evt = evt.WithForwarded(false).WithForwardable(true)
-						srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank, evt.Incarnation)
-						srv.evtForwarder.OnEvent(ctx, evt)
-					}
-					return
-				}
-				srv.mgmtSvc.reqGroupUpdate(ctx, false)
+				handleRankDead(ctx, srv, evt)
 			}
 		}))
 

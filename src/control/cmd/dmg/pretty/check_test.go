@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -130,6 +131,7 @@ No reports to display.
 					{
 						CheckReport: chkpb.CheckReport{
 							Seq:      4,
+							Result:   int32(chkpb.CheckResult_DRY_RUN),
 							Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE,
 							Action:   chkpb.CheckInconsistAction_CIA_DISCARD,
 							Msg:      "message 4",
@@ -174,7 +176,7 @@ Inconsistency Reports:
   Class:      POOL_NONEXIST_ON_ENGINE
   Message:    message 4
   Pool:       pool-4
-  Resolution: DISCARD
+  Resolution: DISCARD (dry run - not applied)
 
 `,
 		},
@@ -238,6 +240,7 @@ Inconsistency Reports:
 					{
 						CheckReport: chkpb.CheckReport{
 							Seq:      4,
+							Result:   int32(chkpb.CheckResult_DRY_RUN),
 							Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE,
 							Action:   chkpb.CheckInconsistAction_CIA_DISCARD,
 							Msg:      "message 4",
@@ -254,12 +257,12 @@ DAOS System Checker Info
 
 Inconsistency Reports:
 - Resolved:
-ID  Class                        Pool   Resolution 
---  -----                        ----   ---------- 
-0x1 POOL_BAD_SVCL                pool-1 IGNORE     
-0x2 POOL_BAD_LABEL               pool-2 TRUST_MS   
-0x3 POOL_LESS_SVC_WITHOUT_QUORUM pool-3 TRUST_PS   
-0x4 POOL_NONEXIST_ON_ENGINE      pool-4 DISCARD    
+ID  Class                        Pool   Resolution        
+--  -----                        ----   ----------        
+0x1 POOL_BAD_SVCL                pool-1 IGNORE            
+0x2 POOL_BAD_LABEL               pool-2 TRUST_MS          
+0x3 POOL_LESS_SVC_WITHOUT_QUORUM pool-3 TRUST_PS          
+0x4 POOL_NONEXIST_ON_ENGINE      pool-4 DISCARD (dry run) 
 
 `,
 		},
