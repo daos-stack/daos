@@ -9,7 +9,7 @@
 
 #include <stdio.h>
 
-#include <daos/checker.h>
+#include <daos_srv/checker.h>
 
 #define DLCK_PRINT_INDENT         '-'
 #define DLCK_CHECKER_MAIN_MAGIC   0x17A28DC5626110A5

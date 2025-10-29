@@ -17,8 +17,8 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
-#include <daos/checker.h>
 #include <daos/placement.h>
+#include <daos_srv/checker.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 

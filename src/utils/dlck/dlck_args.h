@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <argp.h>
 #include <uuid/uuid.h>
-#include <daos/checker.h>
+#include <daos_srv/checker.h>
 #include <gurt/list.h>
 
 #define _STRINGIFY(x)                   #x
