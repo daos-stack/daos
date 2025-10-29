@@ -31,6 +31,7 @@ dnf --nodocs install ${dnf_install_args} \
     git \
     go \
     go-race \
+    gperftools-devel \
     graphviz \
     gzip \
     hdf5-devel \

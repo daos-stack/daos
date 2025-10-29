@@ -29,6 +29,7 @@ pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
       $(utils/rpms/package_version.sh pmdk debug pmem)               \
       fuse3                                                          \
       gotestsum                                                      \
+      gperftools-devel                                               \
       hwloc-devel                                                    \
       libasan                                                        \
       libipmctl-devel                                                \

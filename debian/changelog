@@ -1,3 +1,9 @@
+daos (2.7.101-18) unstable; urgency=medium
+  [ Cedric Koch-Hofer]
+  * Add support of the Google Performance tools
+
+ -- Cedric Koch-Hofer <cedric.koch-hofer@hpe.com>  Mon, 27 Oct 2025 14:12:00 +0100
+
 daos (2.7.101-17) unstable; urgency=medium
   [ Cedric Koch-Hofer]
   * Add support of the libasan to the mercury dependencies
