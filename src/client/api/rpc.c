@@ -98,6 +98,7 @@ daos_rpc_send_wait(crt_rpc_t *rpc)
 
 struct rpc_proto {
 	int            rank_idx;
+	int            start_rank_idx;
 	crt_endpoint_t ep;
 	int            version;
 	int            rc;
@@ -122,6 +123,16 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 		nr_ranks = dc_mgmt_net_get_num_srv_ranks();
 		D_ASSERT(nr_ranks > 0);
 		rproto->rank_idx = (rproto->rank_idx + 1) % nr_ranks;
+
+		/** We made a full loop and found no engines alive */
+		if (rproto->start_rank_idx == rproto->rank_idx) {
+			D_ERROR("crt_proto_query_with_ctx() failed -- All %d targets tried\n",
+				nr_ranks);
+			rproto->rc        = cb_info->pq_rc;
+			rproto->completed = true;
+			return;
+		}
+
 		rank             = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
 		D_ASSERT(rank != CRT_NO_RANK);
 		rproto->ep.ep_rank = rank;
@@ -170,6 +181,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 		D_GOTO(out_free, -DER_NONEXIST);
 	}
 	rproto->rank_idx = d_rand() % nr_ranks;
+	rproto->start_rank_idx = rproto->rank_idx;
 	rank             = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
 	D_ASSERT(rank != CRT_NO_RANK);
 	rproto->ep.ep_rank = rank;
