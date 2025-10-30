@@ -1,34 +1,3 @@
-daos (2.7.101-17) unstable; urgency=medium
-  [ Cedric Koch-Hofer]
-  * Add support of the libasan to the mercury dependencies
-
- -- Cedric Koch-Hofer <cedric.koch-hofer@hpe.com>  Mon, 27 Oct 2025 14:12:00 +0100
-
-daos (2.7.101-16) unstable; urgency=medium
-  [ Jeff Olivier]
-  * Make daos-spdk conflict with spdk
-
- -- Jeff Olivier <jeffolivier@google.com>  Mon, 19 May 2025 14:12:00 -0700
-
-daos (2.7.101-15) unstable; urgency=medium
-  [ Jeff Olivier]
-  * Fix leap package name
-
- -- Jeff Olivier <jeffolivier@google.com>  Fri, 12 Sep 2025 14:12:00 -0700
-
-daos (2.7.101-14) unstable; urgency=medium
-  [ Jeff Olivier]
-  * Fix pmdk package for leap
-  * Fix daos-spdk package
-
- -- Jeff Olivier <jeffolivier@google.com>  Thu, 11 Sep 2025 14:12:00 -0700
-
-daos (2.7.101-13) unstable; urgency=medium
-  [ Jeff Olivier]
-  * Switch to fpm build for RPMs
-
- -- Jeff Olivier <jeffolivier@google.com>  Mon, 11 Aug 2025 14:12:00 -0700
-
 daos (2.7.101-12) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * pmemobj errors and warnings reported via DAOS logging system
