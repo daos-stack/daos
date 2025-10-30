@@ -24,8 +24,8 @@ server_config:
       log_mask: INFO
       storage: auto
       env_vars:
-        - D_POST_INIT=1024
-        - D_POST_INCR=1024
+        - D_POST_INIT=4096
+        - D_POST_INCR=4096
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -35,8 +35,8 @@ server_config:
       log_mask: INFO
       storage: auto
       env_vars:
-        - D_POST_INIT=1024
-        - D_POST_INCR=1024
+        - D_POST_INIT=4096
+        - D_POST_INCR=4096
 pool:
   size: 93%
 container:
