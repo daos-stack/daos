@@ -20,8 +20,10 @@ This release includes fixes and improvements, including:
 * Avoid potential races between rebuild and EC aggregation by serializing these two operations;
   this prevents inconsistencies between data and parity.
 * Store EC aggregation epoch in RDB so the rebuild system retains the value after system restart.
-* Add two new DFUSE options: --dump-handles and --read-handles to dump pool, container, and DFS
-  handles.
+* Add two new DFUSE options: --dump-handles to dump pool, container, and DFS handles when mounting
+  dfuse on a client. Other clients can use the dumped information to mount dfuse by using the
+  --read-handles option. This mechanism uses the local2global and global2local to serialize and
+  share handles from a root process to other processes.
 * Correct how the JCH placement algorithm invokes CRC functions and improve data balancing.
 * Fixes for EC object consistency verification so it can detect inconsistencies between data
   and parity.
@@ -41,13 +43,16 @@ This release includes fixes and improvements, including:
 * Fix a race between DTX refresh and abort that could leave a transaction in an unexpected state.
 * Multiple fixes for EC degraded fetch of single values.
 * Fix size queries for array values protected by erasure coding.
-* Adjust the automatic DFS chunk-size selection to prefer sizes larger than 1 MiB, since smaller
-  sizes can be less performant in certain scenarios.
 * Allow modification of a pool's redundancy factor on existing pools.
 * Fix a race between DTX aggregation and container close that could cause an assertion failure.
 * Multiple fixes in the rebuild system to prevent rebuild hangs on unstable networks.
 * Increase the retry delay for collective RPCs to avoid generating large bursts of network traffic.
-* Set DFS chunk size to a multiple of the full EC stripe length to avoid misalignment.
+* Set the DFS chunk size on container creation (if not set by the caller) to a multiple of the full
+  EC stripe length to avoid misalignment. This ensures that the default DFS chunk size does not
+  create partial stripe updates if the IO size is full stripe. This auto setting works for
+  containers created with rd_fac 1 or 2. EC for rd_fac 3 was newly added and missed in this
+  optimization so users would have to set the chunk-size manually for that. This will be fixed next
+  release.
 * Remove the separate RPM build for raft.
 * Add a new environment variable, D\_QUOTA\_BULKS. When enabled, it limits the number of active
   Mercury bulk allocations by postponing those that exceed the limit.
