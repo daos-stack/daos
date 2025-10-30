@@ -501,25 +501,21 @@ var propHdlrs = propHdlrMap{
 	},
 	C.DAOS_PROP_ENTRY_REDUN_LVL: {
 		C.DAOS_PROP_CO_REDUN_LVL,
-		"Redundancy Level (rank=0, node=1, pool=2)",
+		"Redundancy Level (rank=1, node=2)",
 		nil,
 		valHdlrMap{
 			"1":    genSetValHdlr(C.DAOS_PROP_CO_REDUN_RANK),
 			"2":    genSetValHdlr(C.DAOS_PROP_CO_REDUN_NODE),
-			"3":    genSetValHdlr(C.DAOS_PROP_CO_REDUN_FAULT),
 			"rank": genSetValHdlr(C.DAOS_PROP_CO_REDUN_RANK),
 			"node": genSetValHdlr(C.DAOS_PROP_CO_REDUN_NODE),
-			"pool": genSetValHdlr(C.DAOS_PROP_CO_REDUN_FAULT),
 		},
 		[]string{"rf_lvl"},
 		func(p *ContainerProperty) string {
 			switch p.GetValue() {
 			case C.DAOS_PROP_CO_REDUN_RANK:
-				return "1"
+				return "rank"
 			case C.DAOS_PROP_CO_REDUN_NODE:
-				return "2"
-			case C.DAOS_PROP_CO_REDUN_FAULT:
-				return "3"
+				return "node"
 			default:
 				return propInvalidValue(p)
 			}
@@ -553,7 +549,16 @@ var propHdlrs = propHdlrMap{
 	// ----------------------------------------
 	C.DAOS_PROP_ENTRY_LAYOUT_TYPE: {
 		C.DAOS_PROP_CO_LAYOUT_TYPE,
-		"Layout Type (POSIX, HDF5, PYTHON, SPARK, DATABASE, ROOT, SEISMIC, METEO)",
+		func() string {
+			acc := []string{}
+			for i := 0; i < C.DAOS_PROP_CO_LAYOUT_MAX; i++ {
+				var loStr [10]C.char
+
+				C.daos_unparse_ctype(C.ushort(i), &loStr[0])
+				acc = append(acc, C.GoString(&loStr[0]))
+			}
+			return "Layout Type (" + strings.Join(acc, ", ") + ")"
+		}(),
 		nil,
 		nil,
 		nil,
