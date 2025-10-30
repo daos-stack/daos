@@ -856,7 +856,6 @@ class TestWithServers(TestWithoutServers):
             cart_ctl.log_message.value = message
             # Don't ping all ranks before sending the log command
             cart_ctl.no_sync.value = True
-            cart_ctl.use_daos_agent_env.value = True
             cart_ctl.get_params(self)
 
             for manager in self.agent_managers:
