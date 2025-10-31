@@ -79,9 +79,9 @@ test_lrucache(void **state)
 	int              val;
 	int             *addr_val;
 	int              key_size;
-	char             key_long[16] = "aaaaaaaaaaaaaaa";
+	char             key_long[18] = "aaaaaaaaaaaaaaaa";
 	char             key_var[16];
-	char             data_long[16] = "bbbbbbbbbbbbbbbb";
+	char             data_long[18] = "bbbbbbbbbbbbbbbb";
 	shm_lru_node_t  *node_found;
 	int              capacity;
 	shm_lru_cache_t *cache;

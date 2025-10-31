@@ -89,12 +89,15 @@ out:
 static int
 create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 {
-	int      i;
-	int      shm_ht_fd;
-	int      shmopen_perm = 0600;
-	void    *shm_addr;
-	char     daos_shm_name_buf[64];
-	uint32_t cpu_count;
+	int              i;
+	int              rc;
+	int              shm_ht_fd;
+	int              shmopen_perm = 0600;
+	void            *shm_addr;
+	char             daos_shm_name_buf[64];
+	uint32_t         cpu_count;
+	uint32_t         dentry_cache_capacity;
+	shm_lru_cache_t *lru_cache_dentry;
 
 	cpu_count = get_cpu_core();
 	if (cpu_count == INVALID_NUM_CORE)
@@ -162,6 +165,16 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	d_shm_head->magic = DSM_MAGIC;
 	/* initialization is finished now. */
 	close(shm_ht_fd);
+
+	dentry_cache_capacity = DEFAULT_CACHE_DENTRY_CAPACITY;
+	d_getenv_uint("DFS_SHM_DENTRY_CACHE_CAPACITY", &dentry_cache_capacity);
+	D_INFO("shm dentry cache capacity is %u\n", dentry_cache_capacity);
+	rc = shm_lru_create_cache(true, dentry_cache_capacity, 0, 0, &lru_cache_dentry);
+	if (rc) {
+		D_ERROR("Failed to create dentry cache: %d (%s)\n", rc, strerror(rc));
+		goto err_unmap;
+	}
+	d_shm_head->off_lru_cache_dentry = (long int)lru_cache_dentry - (long int)d_shm_head;
 
 	return 0;
 
