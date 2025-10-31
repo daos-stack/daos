@@ -159,6 +159,10 @@ build_package() {
   output_type="${OUTPUT_TYPE:-rpm}"
   EXTRA_OPTS+=("--rpm-autoprov")
 
+  if [[ -n "${CHANGELOG_FILEPATH:-}" ]]; then
+    EXTRA_OPTS+=("--rpm-changelog" "${root}/utils/rpms/${CHANGELOG_FILEPATH}")
+  fi
+
   depends=()
   create_opts "--depends" depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
   conflicts=()
