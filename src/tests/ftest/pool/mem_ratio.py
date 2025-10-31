@@ -22,16 +22,19 @@ class MemRatioTest(TestWithServers):
         Args:
             error (Exception): the error raised during pool creation
         """
-        allowed_errors = [
-            "Insufficient scm size",
-            "No space on storage target",
-            "requested NVMe capacity too small"]
-        pattern = f"({'|'.join(allowed_errors)})"
         self.log.debug("Verifying Pool creation failure: %s", error)
-        result = self.server_managers[0].search_engine_logs(pattern)
-        if not result.passed:
-            raise error
-        self.log.debug("Pool create failure expected due to: '%s'", pattern)
+        pattern_methods = (
+            ("(Insufficient scm size|No space on storage target)",
+             self.server_managers[0].search_engine_logs),
+            ("requested NVMe capacity too small",
+             self.server_managers[0].search_control_logs)
+        )
+        for pattern, method in pattern_methods:
+            result = method(pattern)
+            if result.passed:
+                self.log.debug("Pool create failure expected due to: '%s'", pattern)
+                return
+        raise error
 
     @staticmethod
     def readable_bytes(size):
