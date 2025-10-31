@@ -662,7 +662,7 @@ fi
 * Thu Oct 16 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-16
 - Make daos-spdk conflict with spdk
 
-* Thu Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
+* Fri Sep 12 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-15
 - Fix leap package name
 
 * Thu Sep 11 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-14
