@@ -34,7 +34,6 @@ import sys
 import traceback
 from copy import deepcopy
 
-from SCons.Errors import InternalError
 from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
 from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
