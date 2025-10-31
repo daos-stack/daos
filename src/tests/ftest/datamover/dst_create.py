@@ -1,8 +1,10 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from getpass import getuser
 from os.path import join
 
 import avocado
@@ -72,7 +74,6 @@ class DmvrDstCreate(DataMoverTestBase):
             dst_path=format_path(pool1))
         cont2_label = self.parse_create_cont_label(result.stdout_text)
         cont2 = get_existing_container(self, pool1, cont2_label)
-        cont2.type.update(cont1.type.value, "type")
         self.verify_cont(cont2, api, check_props, src_props)
 
         result = self.run_datamover(
@@ -81,7 +82,6 @@ class DmvrDstCreate(DataMoverTestBase):
             dst_path=format_path(pool1, 'cont3_label'))
         cont3_label = self.parse_create_cont_label(result.stdout_text)
         cont3 = get_existing_container(self, pool1, cont3_label)
-        cont3.type.update(cont1.type.value, "type")
         self.verify_cont(cont3, api, check_props, src_props)
 
         special_label = 'cont:.-_'
@@ -93,7 +93,6 @@ class DmvrDstCreate(DataMoverTestBase):
         cont3 = get_existing_container(self, pool1, cont3_label)
         if cont3.label.value != special_label:
             self.fail(f'Expected dst cont label "{special_label}" but got "{cont3.label.value}"')
-        cont3.type.update(cont1.type.value, "type")
         self.verify_cont(cont3, api, check_props, src_props)
 
         # Create another pool
@@ -105,8 +104,19 @@ class DmvrDstCreate(DataMoverTestBase):
             dst_path=format_path(pool2))
         cont4_label = self.parse_create_cont_label(result.stdout_text)
         cont4 = get_existing_container(self, pool2, cont4_label)
-        cont4.type.update(cont1.type.value, "type")
         self.verify_cont(cont4, api, check_props, src_props)
+
+        # Set container owner to root and copy as current user
+        # Not yet supported by DCP
+        if tool in ("FS_COPY",):
+            cont1.set_owner(user="root", group="root")
+            result = self.run_datamover(
+                self.test_id + " cont1 to cont5 (different pool) (empty cont) (different user)",
+                src_path=format_path(pool1, cont1),
+                dst_path=format_path(pool2))
+            cont5_label = self.parse_create_cont_label(result.stdout_text)
+            cont5 = get_existing_container(self, pool2, cont5_label)
+            self.verify_cont(cont5, api, check_props, src_props)
 
         # Only test POSIX paths with DFS API
         if api == "DFS":
@@ -120,7 +130,6 @@ class DmvrDstCreate(DataMoverTestBase):
                 dst_path=format_path(pool1))
             cont6_label = self.parse_create_cont_label(result.stdout_text)
             cont6 = get_existing_container(self, pool1, cont6_label)
-            cont6.type.update(cont1.type.value, "type")
             self.verify_cont(cont6, api, False)
 
         pool1.disconnect()
@@ -147,6 +156,9 @@ class DmvrDstCreate(DataMoverTestBase):
         attrs = self.get_cont_usr_attr()
         cont.container.set_attr(attrs)
         cont.close()
+
+        # Update ACL perms for tests that change ownership
+        cont.update_acl(entry=f"A::{getuser()}@:rwdtTaAo")
 
         # Return existing cont properties
         return cont.get_prop()["response"]
@@ -196,7 +208,8 @@ class DmvrDstCreate(DataMoverTestBase):
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
             # Labels must be unique
-            if prop['name'] == 'label':
+            # Owner will always match running user
+            if prop['name'] in ('label', 'owner', 'owner_group'):
                 continue
             # This one is not set
             if api == "DFS" and "OID" in prop["description"]:
