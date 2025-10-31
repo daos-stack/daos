@@ -4,7 +4,7 @@ We are pleased to announce the release of DAOS version 2.6.
 
 ## DAOS Version 2.6.4 (2025-10-29)
 
-The DAOS 2.6.4 release includes the daos-2.6.4-4 RPM packages and their prerequisites.
+The DAOS 2.6.4 release includes the daos-2.6.4-6 RPM packages and their prerequisites.
 It contains the following updates on top of DAOS 2.6.3:
 
 * Libfabric has been updated to version 1.22.0-4.
