@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,6 +44,7 @@ drain_dkeys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -80,6 +82,7 @@ drain_dkeys(void **state)
 
 	reintegrate_inflight_io_verify(arg);
 	ioreq_fini(&req);
+	T_END;
 }
 
 static int
@@ -110,6 +113,7 @@ cont_open_in_drain(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -129,9 +133,12 @@ cont_open_in_drain(void **state)
 	ioreq_fini(&req);
 
 	test_teardown_cont_hdl(arg);
-	arg->rebuild_cb = cont_open_and_inflight_io;
+	arg->interactive_rebuild =
+	    1; /* force insert rebuild stop|start regardless of cmdline arg */
+	arg->rebuild_cb     = cont_open_and_inflight_io;
 	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	arg->interactive_rebuild = arg->interactive_rebuild_cmdline; /* restore */
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < KEY_NR; i++) {
@@ -150,6 +157,7 @@ cont_open_in_drain(void **state)
 
 	reintegrate_inflight_io_verify(arg);
 	ioreq_fini(&req);
+	T_END;
 }
 
 static void
@@ -166,6 +174,7 @@ drain_akeys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -202,6 +211,7 @@ drain_akeys(void **state)
 	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
+	T_END;
 }
 
 static void
@@ -219,6 +229,7 @@ drain_indexes(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -258,6 +269,7 @@ drain_indexes(void **state)
 
 	reintegrate_inflight_io_verify(arg);
 	ioreq_fini(&req);
+	T_END;
 }
 
 static void
@@ -280,6 +292,7 @@ drain_snap_update_keys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -298,7 +311,7 @@ drain_snap_update_keys(void **state)
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
-	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb     = reintegrate_inflight_io;
 	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
@@ -335,6 +348,7 @@ drain_snap_update_keys(void **state)
 	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
+	T_END;
 }
 
 static void
@@ -357,6 +371,7 @@ drain_snap_punch_keys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -390,9 +405,12 @@ drain_snap_punch_keys(void **state)
 		punch_akey("dkey", akey, DAOS_TX_NONE, &req);
 	}
 
-	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->interactive_rebuild =
+	    1; /* force insert rebuild stop|start regardless of cmdline arg */
+	arg->rebuild_cb     = reintegrate_inflight_io;
 	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	arg->interactive_rebuild = arg->interactive_rebuild_cmdline; /* restore */
 
 	for (i = 0; i < 5; i++) {
 		daos_handle_t th_open;
@@ -427,6 +445,7 @@ drain_snap_punch_keys(void **state)
 	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
+	T_END;
 }
 
 static void
@@ -445,6 +464,7 @@ drain_multiple(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -495,6 +515,7 @@ drain_multiple(void **state)
 	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
+	T_END;
 }
 
 static void
@@ -513,6 +534,7 @@ drain_large_rec(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -548,6 +570,7 @@ drain_large_rec(void **state)
 	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
+	T_END;
 }
 
 static void
@@ -563,6 +586,7 @@ drain_objects(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0,
 					    0, arg->myrank);
@@ -577,20 +601,22 @@ drain_objects(void **state)
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
 	reintegrate_inflight_io_verify(arg);
+	T_END;
 }
 
 static void
 drain_fail_and_retry_objects(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	int		i;
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oids[OBJ_NR];
+	int           i;
 
 	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0,
 					    0, arg->myrank);
@@ -611,8 +637,15 @@ drain_fail_and_retry_objects(void **state)
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	rebuild_io_validate(arg, oids, OBJ_NR);
 
+	arg->interactive_rebuild =
+	    1; /* force insert rebuild stop|start regardless of cmdline arg */
+	arg->rebuild_cb     = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oids[OBJ_NR - 1];
 	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+	arg->interactive_rebuild = arg->interactive_rebuild_cmdline; /* restore */
 	rebuild_io_validate(arg, oids, OBJ_NR);
+	reintegrate_inflight_io_verify(arg);
+	T_END;
 }
 
 static void
@@ -626,9 +659,15 @@ drain_then_exclude(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	T_BEGIN;
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1GX, 0, 0, arg->myrank);
 	rebuild_io(arg, &oid, 1);
 
+	if (arg->interactive_rebuild) {
+		/* NB: also applies to the subsequent reintegrate too */
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
+	}
 	drain_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
@@ -639,6 +678,7 @@ drain_then_exclude(void **state)
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 	rebuild_io_validate(arg, &oid, 1);
+	T_END;
 }
 
 #define EXTEND_DRAIN_OBJ_NR	5
@@ -661,6 +701,18 @@ enum extend_drain_opc {
 	EXTEND_DRAIN_OVERWRITE,
 	EXTEND_DRAIN_WRITELOOP,
 };
+
+/* clang-format off */
+const char *extend_drain_opstrs[] = {
+    "EXTEND_DRAIN_PUNCH",
+	"EXTEND_DRAIN_STAT",
+	"EXTEND_DRAIN_ENUMERATE",
+	"EXTEND_DRAIN_FETCH",
+    "EXTEND_DRAIN_UPDATE",
+	"EXTEND_DRAIN_OVERWRITE",
+	"EXTEND_DRAIN_WRITELOOP"
+};
+/* clang-format on */
 
 static void
 extend_drain_read_check(dfs_t *dfs_mt, dfs_obj_t *dir, uint32_t objclass, uint32_t objcnt,
@@ -757,6 +809,8 @@ extend_drain_write(dfs_t *dfs_mt, dfs_obj_t *dir, uint32_t objclass, uint32_t ob
 	free(buf);
 }
 
+/* FIXME: rename a few things - most of this code is performing drain + kill/exclude, NOT extend */
+
 static int
 extend_drain_cb_internal(void *arg)
 {
@@ -775,14 +829,22 @@ extend_drain_cb_internal(void *arg)
 	int			i;
 
 	if (opc != EXTEND_DRAIN_WRITELOOP) {
-		print_message("sleep 5 seconds then start op %d\n", opc);
+		print_message("sleep 5 seconds first\n");
 		sleep(5);
 	}
+
+	print_message("%sstart op %d (%s)\n",
+		      test_arg->interactive_rebuild ? "stop rebuild before " : "", opc,
+		      extend_drain_opstrs[opc]);
+
+	if (test_arg->interactive_rebuild)
+		rebuild_stop_with_dmg(arg);
 
 	/* Kill another rank during extend */
 	switch(opc) {
 	case EXTEND_DRAIN_PUNCH:
-		print_message("punch objects during extend & drain\n");
+		print_message("punch objects during extend & drain%s\n",
+			      test_arg->interactive_rebuild ? " during stopped rebuild" : "");
 		for (i = 0; i < EXTEND_DRAIN_OBJ_NR; i++) {
 			char filename[32];
 
@@ -792,7 +854,8 @@ extend_drain_cb_internal(void *arg)
 		}
 		break;
 	case EXTEND_DRAIN_STAT:
-		print_message("stat objects during extend & drain\n");
+		print_message("stat objects during extend & drain%s\n",
+			      test_arg->interactive_rebuild ? " during stopped rebuild" : "");
 		for (i = 0; i < EXTEND_DRAIN_OBJ_NR; i++) {
 			char		filename[32];
 			struct stat	stbuf;
@@ -803,7 +866,8 @@ extend_drain_cb_internal(void *arg)
 		}
 		break;
 	case EXTEND_DRAIN_ENUMERATE:
-		print_message("enumerate objects during extend & drain\n");
+		print_message("enumerate objects during extend & drain%s]n",
+			      test_arg->interactive_rebuild ? " during stopped rebuild" : "");
 		while (!daos_anchor_is_eof(&anchor)) {
 			num_ents = 10;
 			rc = dfs_readdir(dfs_mt, dir, &anchor, &num_ents, ents);
@@ -813,22 +877,26 @@ extend_drain_cb_internal(void *arg)
 		assert_int_equal(total_entries, EXTEND_DRAIN_OBJ_NR);
 		break;
 	case EXTEND_DRAIN_FETCH:
-		print_message("fetch objects during extend & drain\n");
+		print_message("fetch objects during extend & drain%s\n",
+			      test_arg->interactive_rebuild ? " during stopped rebuild" : "");
 		extend_drain_read_check(dfs_mt, dir, objclass, EXTEND_DRAIN_OBJ_NR, WRITE_SIZE,
 					'a');
 		break;
 	case EXTEND_DRAIN_UPDATE:
-		print_message("update objects during extend & drain\n");
+		print_message("update objects during extend & drain%s\n",
+			      test_arg->interactive_rebuild ? " during stopped rebuild" : "");
 		extend_drain_write(dfs_mt, dir, objclass, EXTEND_DRAIN_OBJ_NR, WRITE_SIZE, 'a',
 				   NULL);
 		break;
 	case EXTEND_DRAIN_OVERWRITE:
-		print_message("overwrite objects during extend & drain\n");
+		print_message("overwrite objects during extend & drain%s\n",
+			      test_arg->interactive_rebuild ? " during stopped rebuild" : "");
 		extend_drain_write(dfs_mt, dir, objclass, EXTEND_DRAIN_OBJ_NR, WRITE_SIZE, 'b',
 				   NULL);
 		break;
 	case EXTEND_DRAIN_WRITELOOP:
-		print_message("keepwrite objects during extend & drain\n");
+		print_message("keepwrite objects during extend & drain%s\n",
+			      test_arg->interactive_rebuild ? " during stopped rebuild" : "");
 		extend_drain_write(dfs_mt, dir, objclass, 1, 512 * 1048576, 'a', NULL);
 		break;
 	default:
@@ -836,6 +904,13 @@ extend_drain_cb_internal(void *arg)
 	}
 
 	daos_debug_set_params(test_arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+
+	print_message("%sdone op %d (%s)\n",
+		      test_arg->interactive_rebuild ? "resume rebuild after " : "", opc,
+		      extend_drain_opstrs[opc]);
+
+	if (test_arg->interactive_rebuild)
+		rebuild_resume_wait_to_start(arg);
 
 	return 0;
 }
@@ -938,50 +1013,91 @@ dfs_extend_drain_common(void **state, int opc, uint32_t objclass)
 void
 dfs_drain_punch(void **state)
 {
+	test_arg_t *arg = *state;
+
+	print_message("=== Begin EXTEND_DRAIN_PUNCH, oclass OC_EC_2P1GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_PUNCH, OC_EC_2P1GX);
+	arg->interactive_rebuild =
+	    1; /* force insert rebuild stop|start regardless of cmdline arg */
+	print_message("=== Begin EXTEND_DRAIN_PUNCH, oclass OC_EC_4P2GX, rebuild stop|start\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_PUNCH, OC_EC_4P2GX);
+	arg->interactive_rebuild = arg->interactive_rebuild_cmdline; /* restore */
+	T_END;
 }
 
 void
 dfs_drain_stat(void **state)
 {
+	print_message("=== Begin EXTEND_DRAIN_STAT, oclass OC_EC_2P1GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_STAT, OC_EC_2P1GX);
+	print_message("=== Begin EXTEND_DRAIN_STAT, oclass OC_EC_4P2GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_STAT, OC_EC_4P2GX);
+	T_END;
 }
 
 void
 dfs_drain_enumerate(void **state)
 {
+	print_message("=== Begin EXTEND_DRAIN_ENUMERATE, oclass OC_EC_2P1GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_ENUMERATE, OC_EC_2P1GX);
+	print_message("=== Begin EXTEND_DRAIN_ENUMERATE, oclass OC_EC_4P2GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_ENUMERATE, OC_EC_4P2GX);
+	T_END;
 }
 
 void
 dfs_drain_fetch(void **state)
 {
+	test_arg_t *arg = *state;
+
+	print_message("=== Begin EXTEND_DRAIN_FETCH, oclass OC_EC_2P1GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_FETCH, OC_EC_2P1GX);
+	arg->interactive_rebuild =
+	    1; /* force insert rebuild stop|start regardless of cmdline arg */
+	print_message("=== Begin EXTEND_DRAIN_FETCH, oclass OC_EC_4P2GX, rebuild stop|start\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_FETCH, OC_EC_4P2GX);
+	arg->interactive_rebuild = arg->interactive_rebuild_cmdline; /* restore */
+	T_END;
 }
 
 void
 dfs_drain_update(void **state)
 {
+	test_arg_t *arg = *state;
+
+	print_message("=== Begin EXTEND_DRAIN_UPDATE, oclass OC_EC_2P1GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_UPDATE, OC_EC_2P1GX);
+	arg->interactive_rebuild =
+	    1; /* force insert rebuild stop|start regardless of cmdline arg */
+	print_message("=== Begin EXTEND_DRAIN_UPDATE, oclass OC_EC_4P2GX, rebuild stop|start\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_UPDATE, OC_EC_4P2GX);
+	arg->interactive_rebuild = arg->interactive_rebuild_cmdline; /* restore */
+	T_END;
 }
 
 void
 dfs_drain_overwrite(void **state)
 {
+	test_arg_t *arg = *state;
+
+	arg->interactive_rebuild =
+	    1; /* force insert rebuild stop|start regardless of cmdline arg */
+	print_message("=== Begin EXTEND_DRAIN_OVERWRITE, oclass OC_EC_2P1GX, rebuild stop|start\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_OVERWRITE, OC_EC_2P1GX);
+	arg->interactive_rebuild = arg->interactive_rebuild_cmdline; /* restore */
+	print_message("=== Begin EXTEND_DRAIN_OVERWRITE, oclass OC_EC_4P2GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_OVERWRITE, OC_EC_4P2GX);
+	T_END;
 }
 
 void
 dfs_drain_writeloop(void **state)
 {
+	print_message("=== Begin EXTEND_DRAIN_WRITELOOP, oclass OC_EC_2P1GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_WRITELOOP, OC_EC_2P1GX);
+	print_message("=== Begin EXTEND_DRAIN_WRITELOOP, oclass OC_EC_4P2GX\n");
 	dfs_extend_drain_common(state, EXTEND_DRAIN_WRITELOOP, OC_EC_4P2GX);
+	T_END;
 }
 
 void
@@ -1002,6 +1118,7 @@ dfs_drain_extend(void **state)
 	if (!test_runable(arg, 3))
 		return;
 
+	T_BEGIN;
 	attr.da_props = daos_prop_alloc(2);
 	assert_non_null(attr.da_props);
 	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
@@ -1049,6 +1166,7 @@ dfs_drain_extend(void **state)
 	uuid_unparse(co_uuid, str);
 	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
+	T_END;
 }
 
 /** create a new pool/container for each test */

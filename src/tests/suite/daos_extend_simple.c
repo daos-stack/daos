@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +16,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_iotest.h"
+#include "daos_test.h"
 #include "dfs_test.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
@@ -57,7 +59,13 @@ extend_dkeys(void **state)
 		ioreq_fini(&req);
 	}
 
+	if (arg->interactive_rebuild) {
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
+	}
 	extend_single_pool_rank(arg, 3);
+	arg->rebuild_cb      = NULL;
+	arg->rebuild_post_cb = NULL;
 
 	for (i = 0; i < OBJ_NR; i++) {
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
@@ -99,7 +107,14 @@ extend_akeys(void **state)
 		ioreq_fini(&req);
 	}
 
+	if (arg->interactive_rebuild) {
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
+	}
 	extend_single_pool_rank(arg, 3);
+	arg->rebuild_cb      = NULL;
+	arg->rebuild_post_cb = NULL;
+
 	for (i = 0; i < OBJ_NR; i++) {
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
 		assert_rc_equal(rc, 0);
@@ -143,7 +158,14 @@ extend_indexes(void **state)
 		ioreq_fini(&req);
 	}
 
+	if (arg->interactive_rebuild) {
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
+	}
 	extend_single_pool_rank(arg, 3);
+	arg->rebuild_cb      = NULL;
+	arg->rebuild_post_cb = NULL;
+
 	for (i = 0; i < OBJ_NR; i++) {
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
 		assert_rc_equal(rc, 0);
@@ -185,7 +207,14 @@ extend_large_rec(void **state)
 		ioreq_fini(&req);
 	}
 
+	if (arg->interactive_rebuild) {
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
+	}
 	extend_single_pool_rank(arg, 3);
+	arg->rebuild_cb      = NULL;
+	arg->rebuild_post_cb = NULL;
+
 	for (i = 0; i < OBJ_NR; i++) {
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
 		assert_rc_equal(rc, 0);
@@ -215,7 +244,13 @@ extend_objects(void **state)
 		ioreq_fini(&req);
 	}
 
+	if (arg->interactive_rebuild) {
+		arg->rebuild_cb      = rebuild_stop_with_dmg;
+		arg->rebuild_post_cb = rebuild_resume_wait;
+	}
 	extend_single_pool_rank(arg, 3);
+	arg->rebuild_cb      = NULL;
+	arg->rebuild_post_cb = NULL;
 
 	for (i = 0; i < OBJ_NR; i++) {
 		char buffer[16];
@@ -246,6 +281,16 @@ enum extend_opc {
 	EXTEND_FETCH,
 	EXTEND_UPDATE,
 };
+
+/* clang-format off */
+const char *extend_opstrs[] = {
+	"EXTEND_PUNCH",
+	"EXTEND_STAT",
+	"EXTEND_ENUMERATE",
+	"EXTEND_FETCH",
+	"EXTEND_UPDATE"
+};
+/* clang-format on */
 
 static void
 extend_read_check(dfs_t *dfs_mt, dfs_obj_t *dir)
@@ -344,29 +389,40 @@ extend_cb_internal(void *arg)
 	int			total_entries = 0;
 	uint32_t		num_ents = 10;
 	daos_anchor_t		anchor = { 0 };
+	bool                     do_stop       = (!cb_arg->kill && test_arg->interactive_rebuild);
 	const char		*pre_op = (cb_arg->kill ? "kill" : "extend");
 	int			rc;
 	int			i;
 
-	print_message("sleep 10 seconds then %s %u and start op %d\n", pre_op,
-		      cb_arg->rank, opc);
+	print_message("Extending, sleep 10, %s another rank %u, %sand start op %d (%s)\n", pre_op,
+		      cb_arg->rank, do_stop ? "stop rebuild, " : "", opc, extend_opstrs[opc]);
+
 	sleep(10);
 
 	if (cb_arg->kill) {
+		/* Kill another rank during extend */
 		daos_kill_server(test_arg, test_arg->pool.pool_uuid, test_arg->group,
 				 test_arg->pool.alive_svc, cb_arg->rank);
 	} else {
-		/* it should fail with -DER_BUSY */
+		/* Extend another rank during extend */
 		print_message("extend pool " DF_UUID " rank %u\n",
 			      DP_UUID(test_arg->pool.pool_uuid), cb_arg->rank);
 		rc = dmg_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
 				     test_arg->group, &cb_arg->rank, 1);
 		assert_int_equal(rc, 0);
 	}
-	/* Kill another rank during extend */
+
+	if (do_stop) {
+		sleep(17); /* wait for first extend rebuild to fail and second extend rebuild to
+			      start */
+		rebuild_stop_with_dmg(arg); /* then stop the new rebuild */
+		test_rebuild_wait_to_error(&test_arg, 1);
+	}
+
 	switch(opc) {
 	case EXTEND_PUNCH:
-		print_message("punch objects during %s\n", pre_op);
+		print_message("punch objects during extend one rank%s, %s rank %u\n",
+			      do_stop ? ", stop rebuild" : "", pre_op, cb_arg->rank);
 		for (i = 0; i < EXTEND_OBJ_NR; i++) {
 			char filename[32];
 
@@ -376,7 +432,8 @@ extend_cb_internal(void *arg)
 		}
 		break;
 	case EXTEND_STAT:
-		print_message("stat objects during %s\n", pre_op);
+		print_message("stat objects during extend one rank%s, %s rank %u\n",
+			      do_stop ? ", stop rebuild" : "", pre_op, cb_arg->rank);
 		for (i = 0; i < EXTEND_OBJ_NR; i++) {
 			char		filename[32];
 			struct stat	stbuf;
@@ -387,7 +444,8 @@ extend_cb_internal(void *arg)
 		}
 		break;
 	case EXTEND_ENUMERATE:
-		print_message("enumerate objects during %s\n", pre_op);
+		print_message("enumerate objects during extend one rank%s, %s rank %u\n",
+			      do_stop ? ", stop rebuild" : "", pre_op, cb_arg->rank);
 		while (!daos_anchor_is_eof(&anchor)) {
 			num_ents = 10;
 			rc = dfs_readdir(dfs_mt, dir, &anchor, &num_ents, ents);
@@ -397,11 +455,13 @@ extend_cb_internal(void *arg)
 		assert_int_equal(total_entries, 1000);
 		break;
 	case EXTEND_FETCH:
-		print_message("fetch objects during %s\n", pre_op);
+		print_message("fetch objects during extend one rank%s, %s rank %u\n",
+			      do_stop ? ", stop rebuild" : "", pre_op, cb_arg->rank);
 		extend_read_check(dfs_mt, dir);
 		break;
 	case EXTEND_UPDATE:
-		print_message("update objects during %s\n", pre_op);
+		print_message("update objects during extend one rank%s, %s rank %u\n",
+			      do_stop ? ", stop rebuild" : "", pre_op, cb_arg->rank);
 		extend_write(dfs_mt, dir);
 		break;
 	default:
@@ -409,6 +469,9 @@ extend_cb_internal(void *arg)
 	}
 
 	daos_debug_set_params(test_arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+
+	if (do_stop)
+		rebuild_resume_wait_to_start(arg);
 
 	return 0;
 }
@@ -480,15 +543,16 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 
-	arg->no_rebuild=1;
+	arg->no_rebuild =
+	    1; /* This has no effect for RB_OP_TYPE_ADD - so can this be removed here? */
 	extend_single_pool_rank(arg, extend_rank);
 	arg->no_rebuild=0;
 
 	print_message("sleep 30 secs for rank %u %s\n", cb_arg.rank,
-		      cb_arg.kill ? "exclude" : "extend");
+		      cb_arg.kill ? "kill/exclude" : "extend");
 	sleep(30);
 	print_message("wait for rebuild due to rank %u extend and rank %u %s\n", extend_rank,
-		      cb_arg.rank, cb_arg.kill ? "exclude" : "extend");
+		      cb_arg.rank, cb_arg.kill ? "kill/exclude" : "extend");
 	test_rebuild_wait(&arg, 1);
 
 	if (opc == EXTEND_UPDATE) {
