@@ -3774,9 +3774,9 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 	 * 2) if any shard failed, store it in obj_auxi->result, the
 	 *    un-retryable error with higher priority.
 	 */
+	if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
+		obj_auxi->map_ver_reply = shard_auxi->map_ver;
 	if (ret == 0) {
-		if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
-			obj_auxi->map_ver_reply = shard_auxi->map_ver;
 		if (obj_req_is_ec_cond_fetch(obj_auxi)) {
 			iter_arg->cond_fetch_exist = true;
 			if (obj_auxi->result == -DER_NONEXIST)
