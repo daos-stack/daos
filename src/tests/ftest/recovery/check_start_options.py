@@ -10,6 +10,11 @@ from general_utils import check_file_exists
 from recovery_utils import query_detect
 from run_utils import command_as_user, run_remote
 
+# Enums used in this test
+ENUM_CIC_POOL_NONEXIST_ON_MS = 4
+ENUM_CIA_INTERACT = 1
+ENUM_CIA_STALE = 0xffff
+
 
 class DMGCheckStartOptionsTest(TestWithServers):
     """Test dmg check start options.
@@ -36,13 +41,12 @@ class DMGCheckStartOptionsTest(TestWithServers):
         from "unchecked".
         4. Verify that the orphan pool is detected.
         5. Stop the checker. The state is now at "stopped".
-        6. Remove the pool directory from the mount point.
-        7. Start the checker without --reset. State is back to "checking".
-        8. Verify that the action entry is still there.
-        9. Stop the checker. State is "stopped".
-        10. Start the checker with --reset. The state should have transitioned to
+        6. Start the checker without --reset. State is back to "checking".
+        7. Verify that the action entry is still there.
+        8. Stop the checker. State is "stopped".
+        9. Start the checker with --reset. The state should have transitioned to
         "unchecked", then "checking".
-        11. Verify that the action entry is empty and the status is COMPLETED.
+        10. Verify that the action entry is empty and the status is COMPLETED.
 
         Jira ID: DAOS-17623
 
@@ -61,10 +65,9 @@ class DMGCheckStartOptionsTest(TestWithServers):
         dmg_command.faults_mgmt_svc_pool(
             pool=pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_MS")
 
-        # 3. Start the checker with interactive mode.
-        self.log_step("Start the checker with interactive mode.")
+        # 3. Start the checker.
+        self.log_step("Start the checker.")
         dmg_command.check_enable()
-        dmg_command.check_set_policy(all_interactive=True)
         dmg_command.check_start()
 
         # 4. Verify that the orphan pool is detected.
@@ -75,36 +78,18 @@ class DMGCheckStartOptionsTest(TestWithServers):
         self.log_step("Stop the checker.")
         dmg_command.check_stop()
 
-        # 6. Remove the pool directory from the mount point.
-        self.log_step("Remove the pool directory from the mount point.")
-        pool_path = self.server_managers[0].get_vos_path(pool)
-        pool_out = check_file_exists(
-            hosts=self.hostlist_servers, filename=pool_path, sudo=True)
-        if not pool_out[0]:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control "
-                   "plane after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
-        command = command_as_user(command=f"rm -rf {pool_path}", user="root")
-        remove_result = run_remote(
-            log=self.log, hosts=self.hostlist_servers, command=command)
-        if not remove_result.passed:
-            self.fail(f"Failed to remove {pool_path} from {remove_result.failed_hosts}")
-
-        # 7. Start the checker without --reset.
+        # 6. Start the checker without --reset.
         self.log_step("Start the checker without --reset.")
         dmg_command.check_start()
 
-        # 8. Verify that the action entry is still there.
-        self.log_step("Verify that the action entry is still there.")
-        # At this point, the status is STOPPED (it will not turn to RUNNING), so just
-        # check whether msg contains "orphan pool".
+        # 7. Verify that the action entry is still there.
+        self.log_step("Verify that the old action entry is still there.")
         check_query_out = dmg_command.check_query()
         query_reports = check_query_out["response"]["reports"]
         if not query_reports:
             self.fail("Checker didn't detect any inconsistency!")
+        if len(query_reports) != 1:
+            self.fail(f"Expected only one report, but multiple reports found: {query_reports}")
         fault_msg = query_reports[0]["msg"]
         if "orphan pool" not in fault_msg:
             msg = (f"Checker didn't detect the orphan pool (2)! Fault msg = "
@@ -112,15 +97,15 @@ class DMGCheckStartOptionsTest(TestWithServers):
             dmg_command.check_disable()
             self.fail(msg)
 
-        # 9. Stop the checker.
+        # 8. Stop the checker.
         self.log_step("Stop the checker.")
         dmg_command.check_stop()
 
-        # 10. Start the checker with --reset.
+        # 9. Start the checker with --reset.
         self.log_step("Start the checker with --reset.")
         dmg_command.check_start(reset=True)
 
-        # 11. Verify that the action entry is empty and the status is COMPLETED.
+        # 10. Verify that the action entry is empty and the status is COMPLETED.
         self.log_step(
             "Verify that the action entry is empty and the status is COMPLETED.")
         repair_reports = None
@@ -141,8 +126,150 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # Disable the checker to prepare for the tearDown.
         dmg_command.check_disable()
-        # The pool is orphan pool, so skip the cleanup.
-        pool.skip_cleanup()
+
+    def get_reports(self, cmd):
+        check_query_out = cmd.check_query()
+        return check_query_out["response"]["reports"]
+
+    def expect_reports(self, query_reports, exp_reports):
+        if not query_reports:
+            self.fail("Checker didn't detect any inconsistency!")
+        for exp in exp_reports:
+            found = False
+            for report in query_reports:
+                if (
+                    report["pool_uuid"].lower() == exp["pool_uuid"].lower()
+                    and report["class"] == exp["class"]
+                    and report["action"] == exp["action"]
+                ):
+                    found = True
+                    break
+            if not found:
+                self.fail(f"expected report {exp} not found")
+
+    def test_check_start_interactive(self):
+        """Test dmg check start's effects on interactive actions.
+
+        1. Create 2 pools.
+        2. Inject faults on both pools.
+        3. Start the checker with interactive mode for all.
+        4. Verify that the first pool's issue is found.
+        5. Stop the checker.
+        6. Start the checker on the second pool.
+        7. Verify that the first pool's action is now STALE, and the second pool's fault appears.
+        8. Stop the checker.
+        9. Start the checker on the first pool.
+        10. Verify that the first pool's action is not STALE, but the second pool's action is STALE.
+        11. Stop the checker.
+        12. Start the checker with no pool specified.
+        13. Check that both pools have non-stale actions.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,cat_recov
+        :avocado: tags=DMGCheckStartOptionsTest,test_check_start_interactive
+        """
+        # 1. Create a pool.
+        self.log_step("Create a pool")
+        pool1 = self.get_pool(connect=False, size="50%")
+        pool2 = self.get_pool(connect=False, size="50%")
+
+        # 2. Inject pool faults.
+        self.log_step("Inject pool faults")
+        dmg_command = self.get_dmg_command()
+        dmg_command.faults_mgmt_svc_pool(
+            pool=pool1.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_MS")
+        dmg_command.faults_mgmt_svc_pool(
+            pool=pool2.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_MS")
+
+        # 3. Enable the checker with interactive policies.
+        self.log_step("Enable the checker with interactive policies")
+        dmg_command.check_enable()
+        dmg_command.check_set_policy(all_interactive=True)
+
+        # 4. Start the checker on pool 1.
+        self.log_step("Start the checker on pool1")
+        dmg_command.check_start(pool=pool1.uuid)
+
+        # 5. Verify the interactive action
+        self.log_step("Verify the interactive action for pool1")
+        reports = self.get_reports(dmg_command)
+        self.expect_reports(reports, [{
+            "pool_uuid": pool1.uuid,
+            "class": ENUM_CIC_POOL_NONEXIST_ON_MS,
+            "action": ENUM_CIA_INTERACT,
+        }])
+
+        # 6. Stop the checker.
+        self.log_step("Stop the checker")
+        dmg_command.check_stop()
+
+        # 7. Start the checker on pool2.
+        self.log_step("Start the checker on pool2")
+        dmg_command.check_start(pool=pool2.uuid)
+
+        # 8. Verify pool2 action is INTERACT, pool1 is STALE.
+        self.log_step("Verify the interactive and stale actions")
+        reports = self.get_reports(dmg_command)
+        self.expect_reports(reports, [{
+            "pool_uuid": pool1.uuid,
+            "class": ENUM_CIC_POOL_NONEXIST_ON_MS,
+            "action": ENUM_CIA_STALE,
+        }, {
+            "pool_uuid": pool2.uuid,
+            "class": ENUM_CIC_POOL_NONEXIST_ON_MS,
+            "action": ENUM_CIA_INTERACT,
+        }])
+
+        # 9. Stop the checker.
+        self.log_step("Stop the checker")
+        dmg_command.check_stop()
+
+        # 10. Start the checker on pool1.
+        self.log_step("Start the checker on pool1")
+        dmg_command.check_start(pool=pool1.uuid)
+
+        # 11. Verify pool1 action is INTERACT, pool2 is STALE.
+        self.log_step("Verify the interactive and stale actions")
+        reports = self.get_reports(dmg_command)
+        self.expect_reports(reports, [{
+            "pool_uuid": pool1.uuid,
+            "class": ENUM_CIC_POOL_NONEXIST_ON_MS,
+            "action": ENUM_CIA_INTERACT,
+        }, {
+            "pool_uuid": pool2.uuid,
+            "class": ENUM_CIC_POOL_NONEXIST_ON_MS,
+            "action": ENUM_CIA_STALE,
+        }])
+
+        # 12. Stop the checker.
+        self.log_step("Stop the checker")
+        dmg_command.check_stop()
+
+        # 13. Start the checker on the whole system.
+        self.log_step("Start the checker on the whole system")
+        dmg_command.check_start()
+
+        # 14. Verify both pool actions are INTERACT.
+        self.log_step("Verify the interactive actions")
+        reports = self.get_reports(dmg_command)
+        self.expect_reports(reports, [{
+            "pool_uuid": pool1.uuid,
+            "class": ENUM_CIC_POOL_NONEXIST_ON_MS,
+            "action": ENUM_CIA_INTERACT,
+        }, {
+            "pool_uuid": pool2.uuid,
+            "class": ENUM_CIC_POOL_NONEXIST_ON_MS,
+            "action": ENUM_CIA_INTERACT,
+        }])
+
+        # 15. Repair both of the injected faults.
+        self.log_step("Repairing all findings with default option")
+        for report in reports:
+            dmg_command.check_repair(seq_num=report["seq"], action=0)
+
+        # Disable the checker to prepare for the tearDown.
+        dmg_command.check_disable()
 
     def test_check_start_failout(self):
         """Test dmg check start --failout=on.
