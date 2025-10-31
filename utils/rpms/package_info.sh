@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 root="$(realpath "$(dirname "$(dirname "$(dirname "${BASH_SOURCE[0]}")")")")"
 set_lib_name() {
   comp="$1"; shift
@@ -58,6 +60,9 @@ export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
 export fused_version="1.0.0"
 export fused_release="3${distro_name}"
 export fused_full="${fused_version}-${fused_release}"
+export e3smio_version="v.1.3.0.pre3"
+export e3smio_release="1${distro_name}"
+export e3smio_full="${e3smio_version}-${e3smio_release}"
 
 set_lib_name openmpi lib openmpi openmpi3 openmpi
 export openmpi_lib
@@ -122,6 +127,9 @@ export uuid_lib
 
 set_lib_name hdf5 lib hdf5 hdf5 hdf5
 export hdf5_lib
+
+set_lib_name e3smio dev e3smio e3smio e3smio
+export e3smio_dev
 
 lmod="Lmod"
 if [[ "${DISTRO:-el8}" =~ suse ]]; then
