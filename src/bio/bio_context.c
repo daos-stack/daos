@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -903,6 +904,10 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 	spdk_blob_id		 data_blobid = SPDK_BLOBID_INVALID;
 
 	D_ASSERT(xs_ctxt != NULL);
+
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_BIO)) { /** fault injection */
+		return daos_errno2der(daos_fail_value_get());
+	}
 
 	*mc = NULL;
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {

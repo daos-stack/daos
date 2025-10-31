@@ -15,7 +15,7 @@
 #include "dlck_pool.h"
 
 int
-dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid)
+dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct checker *ck)
 {
 	char  po_uuid_str[UUID_STR_LEN];
 	char *path;
@@ -28,13 +28,37 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid)
 		return -DER_NOMEM;
 	}
 
-	rc = mkdir(path, 0777);
-	D_FREE(path);
-	if (rc != 0 && errno != EEXIST) {
-		return daos_errno2der(errno);
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_POOL_DIR)) {
+		errno = daos_fail_value_get();
+		rc    = -1;
 	} else {
-		return DER_SUCCESS;
+		rc = mkdir(path, 0777);
 	}
+	if (rc != 0 && errno != EEXIST) {
+		rc = daos_errno2der(errno);
+		CK_PRINTFL_RC(ck, rc, "Cannot create a pool directory: %s", path);
+	} else {
+		rc = DER_SUCCESS;
+	}
+
+	D_FREE(path);
+	return rc;
+}
+
+int
+dlck_pool_mkdir_all(const char *storage_path, d_list_t *files, struct checker *ck)
+{
+	struct dlck_file *file;
+	int               rc;
+
+	d_list_for_each_entry(file, files, link) {
+		rc = dlck_pool_mkdir(storage_path, file->po_uuid, ck);
+		if (rc != DER_SUCCESS) {
+			return rc;
+		}
+	}
+
+	return DER_SUCCESS;
 }
 
 static int
@@ -59,15 +83,11 @@ int
 dlck_pool_open(const char *storage_path, uuid_t po_uuid, int tgt_id, daos_handle_t *poh)
 {
 	char              *path;
-	char               po_uuid_str[UUID_STR_LEN];
-	const unsigned int flags = VOS_POF_EXCL | VOS_POF_FOR_FEATURE_FLAG;
 	int                rc;
 
-	uuid_unparse(po_uuid, po_uuid_str);
-
-	D_ASPRINTF(path, "%s/%s/" VOS_FILE "%d", storage_path, po_uuid_str, tgt_id);
-	if (path == NULL) {
-		return -DER_NOMEM;
+	rc = ds_mgmt_file(storage_path, po_uuid, VOS_FILE, &tgt_id, &path);
+	if (rc != DER_SUCCESS) {
+		return rc;
 	}
 
 	/** no MD-on-SSD mode means no file preallocation is necessary */
@@ -78,7 +98,7 @@ dlck_pool_open(const char *storage_path, uuid_t po_uuid, int tgt_id, daos_handle
 		}
 	}
 
-	rc = vos_pool_open(path, po_uuid, flags, poh);
+	rc = vos_pool_open(path, po_uuid, DLCK_POOL_OPEN_FLAGS, poh);
 
 fail:
 	D_FREE(path);
@@ -120,4 +140,61 @@ dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids)
 
 	return vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_list_append, NULL,
 			   co_uuids, NULL);
+}
+
+int
+dlck_pool_list(d_list_t *file_list)
+{
+	D_LIST_HEAD(pool_list);
+	int                   pool_cnt  = 0;
+	struct smd_pool_info *pool_info = NULL;
+	struct smd_pool_info *tmp;
+	struct dlck_file     *file = NULL;
+	struct dlck_file     *file_tmp;
+	int                   rc;
+
+	D_ASSERT(d_list_empty(file_list));
+
+	/** get the list of pools */
+	rc = smd_pool_list(&pool_list, &pool_cnt);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		/** allocate a new file */
+		D_ALLOC_PTR(file);
+		if (file == NULL) {
+			rc = -DER_NOMEM;
+			goto err;
+		}
+
+		/** populate and append the file */
+		uuid_copy(file->po_uuid, pool_info->spi_id);
+		file->targets_bitmap = -1; /** all targets by default */
+		d_list_add(&file->link, file_list);
+
+		/** remove the pool from the list and free it */
+		d_list_del(&pool_info->spi_link);
+		smd_pool_free_info(pool_info);
+	}
+
+	return DER_SUCCESS;
+
+err:
+	/** free the list of files */
+	d_list_for_each_entry_safe(file, file_tmp, file_list, link) {
+		d_list_del(&file->link);
+		D_FREE(file);
+	}
+	D_ASSERT(d_list_empty(file_list));
+
+	/** free the list of pools */
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		d_list_del(&pool_info->spi_link);
+		smd_pool_free_info(pool_info);
+		pool_info = NULL;
+	}
+
+	return rc;
 }
