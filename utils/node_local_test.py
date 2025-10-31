@@ -1839,6 +1839,8 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
     if attrs:
         cmd.extend(['--attrs', ','.join([f"{name}:{val}" for name, val in attrs.items()])])
 
+    cmd.extend(['--properties', 'cksum:off,srv_cksum:off,rd_fac:0'])
+
     def _create_cont():
         """Helper function for create_cont"""
         rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind,
@@ -6166,7 +6168,7 @@ def test_alloc_cont_create(server, conf, wf):
                 'create',
                 pool.id(),
                 '--properties',
-                f'srv_cksum:on,label:{cont_id}']
+                f'srv_cksum:on,label:{cont_id},rd_fac:0']
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf
