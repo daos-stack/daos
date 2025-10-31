@@ -5341,7 +5341,10 @@ args_fini:
 			 */
 			obj_rw_csum_destroy(obj, obj_auxi);
 
-			if (daos_handle_is_valid(obj_auxi->th) &&
+			/* for EC recovery fetch task, need not cache the tx as it only fetch from
+			 * committed full-stripe.
+			 */
+			if (daos_handle_is_valid(obj_auxi->th) && !obj_auxi->ec_in_recov &&
 			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
 			    (task->dt_result == 0 || task->dt_result == -DER_NONEXIST))
 				/* Cache transactional read if exist or not. */
