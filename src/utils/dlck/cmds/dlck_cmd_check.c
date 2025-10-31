@@ -20,16 +20,14 @@
  *
  * \param[in]	xa	Target's arguments.
  * \param[in]	file	File to process.
- * \param[in]	main_dp	Main print utility.
- * \param[in]	dp	Target's print utility.
+ * \param[in]	ck	Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_NOMEM	Out of memory.
  * \retval -DER_*	Other errors.
  */
 static int
-pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *main_ck,
-	     struct checker *ck)
+pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 {
 	char         *path;
 	daos_handle_t poh;
@@ -100,7 +98,7 @@ exec_one(void *arg)
 		}
 
 		/** check the pool */
-		rc = pool_process(xa, file, main_ck, &ck);
+		rc = pool_process(xa, file, &ck);
 		/** report the result */
 		if (rc == DER_SUCCESS && ck.ck_warnings_num > 0) {
 			CK_PRINTF(

@@ -1716,7 +1716,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 {
 	struct umem_attr	*uma;
 	const bool               error_on_non_zero_padding =
-	    (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR);
+	    (IS_CHECKER(ck) ? (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) : false);
 	daos_handle_t            poh;
 	int			 rc;
 

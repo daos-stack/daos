@@ -91,7 +91,7 @@ dlck_checker_main_get_custom(struct checker *ck)
  * \param[in]	log_dir	Directory where a logfile will be created.
  * \param[in]	po_uuid	Pool's UUID.
  * \param[in]	tgt_id	Target's ID.
- * \param[in]	main_dp	Main checker. To report errors when they occur.
+ * \param[in]	main_ck	Main checker. To report errors when they occur.
  * \param[out]	ck	Created checker.
  *
  * \retval DER_SUCCESS	Success.

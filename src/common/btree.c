@@ -4685,8 +4685,8 @@ done:
 
 #define CK_BTREE_NODE_FMT             "Node (off=%#lx)... "
 #define CK_BTREE_NODE_MALFORMED_STR   "malformed - "
-#define CK_BTREE_NON_ZERO_PADDING_FMT CK_BTREE_NODE_MALFORMED_STR "non-zero padding (%#" PRIx32 ")"
-#define CK_BTREE_NON_ZERO_GEN_FMT     CK_BTREE_NODE_MALFORMED_STR "nd_gen != 0 (%#" PRIx32 ")"
+#define CK_BTREE_NON_ZERO_PADDING_FMT CK_BTREE_NODE_MALFORMED_STR "tn_pad_32 != 0 (%#" PRIx32 ")"
+#define CK_BTREE_NON_ZERO_GEN_FMT     CK_BTREE_NODE_MALFORMED_STR "tn_gen != 0 (%#" PRIx32 ")"
 
 /**
  * Validate the integrity of the btree node.
@@ -4769,7 +4769,6 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
 		bool error_on_non_zero_padding)
 {
 	D_LIST_HEAD(node_list);
-	D_LIST_HEAD(child_list);
 	struct node_info *ni;
 	struct node_info *ni_tmp;
 	umem_off_t        nd_off;
@@ -4791,41 +4790,34 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
 	d_list_add_tail(&ni->link, &node_list);
 
 	/** process the node list */
-	do {
-		d_list_for_each_entry_safe(ni, ni_tmp, &node_list, link) {
-			/** pick the node from the list's head */
-			nd_off = ni->nd_off;
-			nd     = btr_off2ptr(tcx, nd_off);
+	while (!d_list_empty(&node_list)) {
+		ni     = d_list_pop_entry(&node_list, struct node_info, link);
+		nd_off = ni->nd_off;
+		nd     = btr_off2ptr(tcx, nd_off);
 
-			/** check the node */
-			rc = btr_node_check(nd, nd_off, report_fn, report_arg,
-					    error_on_non_zero_padding);
-			if (rc != DER_SUCCESS) {
-				break;
-			}
-
-			/** remove the node from the list */
-			d_list_del(&ni->link);
-			D_FREE(ni);
-
-			/** a leaf has no child nodes */
-			if (btr_node_is_leaf(tcx, nd_off)) {
-				continue;
-			}
-
-			/** append the node's children to the children list */
-			for (int at = 0; at < nd->tn_keyn; ++at) {
-				D_ALLOC_PTR(ni);
-				ni->nd_off = btr_node_child_at(tcx, nd_off, at);
-				d_list_add_tail(&ni->link, &child_list);
-			}
+		/** check the node */
+		rc = btr_node_check(nd, nd_off, report_fn, report_arg, error_on_non_zero_padding);
+		if (rc != DER_SUCCESS) {
+			break;
 		}
 
-		/** append children to the node list */
-		d_list_splice_init(&child_list, &node_list);
+		/** a leaf has no child nodes */
+		if (btr_node_is_leaf(tcx, nd_off)) {
+			continue;
+		}
 
-		/** continue as long as there is no error and there are nodes to check */
-	} while (rc == DER_SUCCESS && !d_list_empty(&node_list));
+		/**
+		 * append the node's children to the front of the nodes' list
+		 *
+		 * Note: This makes the traversal depth-first. Given the limited depth of a typical
+		 * DAOS tree, this approach should help reduce resource usage.
+		 */
+		for (int at = 0; at < nd->tn_keyn; ++at) {
+			D_ALLOC_PTR(ni);
+			ni->nd_off = btr_node_child_at(tcx, nd_off, at);
+			d_list_add(&ni->link, &node_list);
+		}
+	}
 
 	/** free the list - in case we exit with an error and the list of nodes is not empty */
 	d_list_for_each_entry_safe(ni, ni_tmp, &node_list, link) {

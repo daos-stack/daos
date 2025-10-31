@@ -1499,7 +1499,7 @@ gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct checker 
 	    struct vos_gc_info *gc_info)
 {
 	const bool error_on_non_zero_padding =
-	    (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR);
+	    (IS_CHECKER(ck) ? (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) : false);
 	int rc;
 
 	if (IS_CHECKER(ck)) {
