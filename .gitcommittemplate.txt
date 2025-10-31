@@ -1,0 +1,74 @@
+#<ticket> <component>: <title> 
+# Valid components are: 'agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il',
+#                       'md', 'mercury', 'packaging', 'pil4dfs', 'swim',
+#                       'test', 'tools', 'ddb'
+
+# See instruction at the end of the file
+
+#Doc-only: true
+#Cancel-prev-build: false
+#Priority: 2
+
+# Skip pragmas in stages order
+# Stage: Build
+#Skip-build: true
+# Stage: Build - Build on EL 8.8
+#Skip-build-el8-gcc: true
+# Stage: Build - Build on EL 9
+#Skip-build-el9-gcc: true
+# Stage: Build - Build on Leap 15.5 
+#Skip-build-leap15-gcc: true
+
+# Stage: Unit Tests
+#Skip-unit-tests:true
+# Stage: Unit Tests - Unit Test [bdev] on EL 8.8
+#Skip-unit-test: true
+# Stage: Unit Tests - NLT on EL 8.8
+#Skip-NLT: false
+# Stage: Unit Tests - Unit Test [bdev] with memcheck on EL 8.8
+#Skip-unit-test-memcheck: true
+
+#Allow-unstable-test: true
+
+# Stage: Skip all tests except Unit Tests
+#Skip-test: true
+#Skip-func-test: true
+
+# Stage: Test - use CI_FUNCTIONAL_TEST_SKIP parameter
+#Skip-func-vm: true
+# Stage: Test - Functional on EL 8.8 with Valgrind
+#Skip-func-test-vm-valgrind: true
+# Stage: Test - Functional on EL 8.8
+#Skip-func-test-el8: true
+# Stage: Test - Functional on EL 9
+#Skip-func-test-el9: true
+# Stage: Test - Functional on Leap 15.6
+#Skip-func-test-leap15: true
+# Stage: Test - Fault injection testing on EL 8.8
+#Skip-fault-injection-test: true
+# Stage: Test - Test RPMs on EL 8.6'
+#Skip-test-el-8.6-rpms: true
+# Stage: Test - Test RPMs on Leap 15.5
+#Skip-test-leap-15-rpms: true
+
+
+# Stage: Test Hardware
+#Skip-func-hw-test: true
+# Stage: Test Hardware - Functional Hardware Medium
+#Skip-func-hw-test-medium: true
+# Stage: Test Hardware - Functional Hardware Medium MD on SSD
+#Skip-func-hw-test-medium-md-on-ssd: true
+# Stage: Test Hardware - Functional Hardware Medium VMD
+#Skip-func-hw-test-medium-vmd: true
+# Stage: Test Hardware - Functional Hardware Medium Verbs Provider
+#Skip-func-hw-test-medium-verbs-provider: true
+# Stage: Test Hardware - Functional Hardware Medium Verbs Provider MD on SSD
+#Skip-func-hw-test-medium-verbs-provider-md-on-ssd: true
+# Stage: Test Hardware - Functional Hardware Medium UCX Provider
+#Skip-func-hw-test-medium-ucx-provider: true
+# Stage: Test Hardware - Functional Hardware Large
+#Skip-func-hw-test-large: true
+# Stage: Test Hardware - Functional Hardware Large MD on SSD
+#Skip-func-hw-test-large-md-on-ssd: true
+
+# Run `git config commit.template ./.gitcommittemplate.txt` to start using it.
