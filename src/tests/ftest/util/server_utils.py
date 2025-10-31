@@ -1198,18 +1198,40 @@ class DaosServerManager(SubprocessManager):
         return vos_files
 
     def search_engine_logs(self, pattern):
-        """Search the server logs for a specific pattern.
+        """Search the server log files for a specific pattern.
 
         Args:
-            pattern (str): The pattern to search for in the logs.
+            pattern (str): The pattern to search for in the log files.
 
         Returns:
-            CommandResult: Result of the grep command run against each server log.
+            CommandResult: Result of the grep command run against each server log file.
         """
-        # Get the path of one of the server log files
         log_dir = os.path.dirname(self.get_config_value("log_file"))
-        command = (f"find {log_dir} -type f -regextype egrep "
-                   r"-regex '.*/daos_server[[:digit:]]?\.log\.[[:digit:]]+' -print0 "
-                   f"| xargs -0 -r grep -E -e '{pattern}'")
+        find_args = (f"{log_dir} -type f -regextype egrep -regex "
+                     r"'.*/daos_server[[:digit:]]?\.log\.[[:digit:]]+'")
+        return self._search_logs(find_args, pattern)
+
+    def search_control_logs(self, pattern):
+        """Search the control log files for a specific pattern.
+
+        Args:
+            pattern (str): The pattern to search for in the log files
+
+        Returns:
+            CommandResult: Result of the grep command run against each control log file.
+        """
+        return self._search_logs(f"{self.get_config_value('control_log_file')}", pattern)
+
+    def _search_logs(self, find_args, pattern):
+        """Search the log files for a specific pattern.
+
+        Args:
+            find_args (str): arguments used with the find command to locate the log files
+            pattern (str): The pattern to search for in the log files
+
+        Returns:
+            CommandResult: Result of the grep command run against each log file.
+        """
+        command = (f"find {find_args} -print0 | xargs -0 -r grep -E -e '{pattern}'")
         result = run_remote(self.log, self.hosts, command_as_user(command, "root"))
         return result
