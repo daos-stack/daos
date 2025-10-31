@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -120,7 +121,10 @@ extern "C" {
 	/** Fatal (non-retry-able) transport layer mercury error */                                \
 	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)                                  \
 	/** Quota limit reached on the requested resource */                                       \
-	ACTION(DER_QUOTA_LIMIT, Quota limit reached)
+	ACTION(DER_QUOTA_LIMIT, Quota limit reached)											   \
+	/** Client has indicated it's behind a firewall. Client must establish a connection. */    \
+	ACTION(DER_RECONNECT, Client was unreachable on bulk transfer)
+	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
 #define D_FOREACH_DAOS_ERR(ACTION)                                                                 \
