@@ -1896,7 +1896,8 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	rc = ds_pool_lookup(pool_uuid, &pool);
 	if (rc != 0) {
-		D_ERROR(DF_UUID" lookup pool failed: %d\n", DP_UUID(pool_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc,
+			  DF_UUID " lookup pool failed", DP_UUID(pool_uuid));
 		goto out;
 	}
 	rank = dss_self_rank();
@@ -1941,8 +1942,9 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to look container",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -2005,8 +2007,9 @@ cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph, 
 	ABT_rwlock_wrlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to look container",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -2074,9 +2077,15 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (eph_ldr->cte_rdb_ec_agg_eph == 0) {
 			rc = cont_agg_eph_load(svc, eph_ldr->cte_cont_uuid,
 					       &eph_ldr->cte_rdb_ec_agg_eph);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(rc, DF_CONT " container skipped",
+						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+					continue;
+				}
 				DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.",
 					 DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+			}
 		}
 
 		min_ec_agg_eph = DAOS_EPOCH_MAX;
@@ -2135,11 +2144,17 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_ec_agg_eph > eph_ldr->cte_rdb_ec_agg_eph) {
 			rc = cont_agg_eph_store(svc, eph_ldr->cte_cont_uuid, min_ec_agg_eph,
 						&eph_ldr->cte_rdb_ec_agg_eph);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(rc, DF_CONT " container skipped",
+						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+					continue;
+				}
 				DL_ERROR(rc,
 					 DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64 " failed.",
 					 DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
 					 min_ec_agg_eph);
+			}
 		}
 
 		rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->cte_cont_uuid,
