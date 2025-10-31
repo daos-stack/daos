@@ -414,7 +414,7 @@ static int (*next_rename)(const char *old_name, const char *new_name);
 
 static int (*next_renameat)(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
 
-static char *(*next_getcwd)(char *buf, size_t size);
+static char *(*libc_getcwd)(char *buf, size_t size);
 
 static int (*libc_unlink)(const char *path);
 
@@ -494,12 +494,6 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 static int (*next_mpi_init)(int *argc, char ***argv);
 static int (*next_pmpi_init)(int *argc, char ***argv);
 static void *(*next_dlopen)(const char *filename, int flags);
-
-/* to do!! */
-/**
- * static char * (*org_realpath)(const char *pathname, char *resolved_path);
- * org_realpath real_realpath=NULL;
- */
 
 static int
 remove_dot_dot(char path[], int *len);
@@ -5095,30 +5089,30 @@ out_err:
 }
 
 char *
-getcwd(char *buf, size_t size)
+new_getcwd(char *buf, size_t size)
 {
-	if (next_getcwd == NULL) {
-		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
-		D_ASSERT(next_getcwd != NULL);
-	}
+	char  *rc;
+	size_t len;
 
 	if (!d_hook_enabled)
-		return next_getcwd(buf, size);
+		return libc_getcwd(buf, size);
 
-	if (cur_dir[0] != '/')
-		update_cwd();
+	if (cur_dir[0] != '/') {
+		/* cur_dir is not initialized yet */
+		rc = libc_getcwd(cur_dir, DFS_MAX_PATH);
+		if (rc == NULL)
+			return NULL;
+	}
 
 	if (query_dfs_mount(cur_dir) < 0)
-		return next_getcwd(buf, size);
+		return libc_getcwd(buf, size);
 
 	if (buf == NULL) {
-		size_t len;
-
 		if (size == 0)
 			size = PATH_MAX;
 		len = strnlen(cur_dir, size);
 		if (len >= size) {
-			errno = ERANGE;
+			errno = ENAMETOOLONG;
 			return NULL;
 		}
 		return strdup(cur_dir);
@@ -6814,23 +6808,12 @@ static void
 update_cwd(void)
 {
 	char *cwd = NULL;
-	char *pt_end = NULL;
 
 	/* daos_init() may be not called yet. */
-	cwd = get_current_dir_name();
-
+	cwd = libc_getcwd(cur_dir, DFS_MAX_PATH);
 	if (cwd == NULL) {
-		D_FATAL("fatal error to get CWD with get_current_dir_name(): %d (%s)\n", errno,
-			strerror(errno));
+		D_FATAL("fatal error to get CWD with getcwd(): %d (%s)\n", errno, strerror(errno));
 		abort();
-	} else {
-		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
-		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-			D_FATAL("fatal error, cwd path is too long:  %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			abort();
-		}
-		free(cwd);
 	}
 }
 
@@ -7241,7 +7224,6 @@ init_myhook(void)
 		return;
 	}
 
-	update_cwd();
 	rc = D_MUTEX_INIT(&lock_reserve_fd, NULL);
 	if (rc)
 		return;
@@ -7332,6 +7314,7 @@ init_myhook(void)
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 	register_a_hook("libc", "readlink", (void *)new_readlink, (long int *)(&libc_readlink));
+	register_a_hook("libc", "getcwd", (void *)new_getcwd, (long int *)(&libc_getcwd));
 
 	libc_version = query_libc_version();
 	if (libc_ver_cmp(libc_version, 2.34) < 0)
@@ -7348,6 +7331,8 @@ init_myhook(void)
 		dcache_rec_timeout = 0;
 
 	install_hook();
+
+	update_cwd();
 
 	d_hook_enabled   = 1;
 	hook_enabled_bak = d_hook_enabled;
