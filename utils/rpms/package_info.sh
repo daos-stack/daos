@@ -37,8 +37,8 @@ export daos_release
 export libfabric_version="1.22.0"
 export libfabric_release="4${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
-export mercury_version="2.4.0"
-export mercury_release="7${distro_name}"
+export mercury_version="2.4.1~rc5"
+export mercury_release="1${distro_name}"
 export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
 export argobots_release="3${distro_name}"
@@ -93,6 +93,8 @@ set_lib_name mercury dev mercury mercury mercury
 export mercury_dev
 set_lib_name mercury lib mercury mercury mercury
 export mercury_lib
+set_lib_name mercury_libfabric lib mercury-libfabric mercury-libfabric mercury-libfabric
+export mercury_libfabric_lib
 
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
 set_lib_name pmemobj dev libpmemobj libpmemobj1 libpmemobj1
