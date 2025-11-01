@@ -81,10 +81,10 @@ BuildRequires: spdk-devel >= 22.01.2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
-BuildRequires: libisa-l_crypto-devel >= 2.24.0-1
+BuildRequires: libisa-l_crypto-devel >= 2.24.0-1, libisa-l_crypto-devel < 2.25.0
 %else
 BuildRequires: libisal-devel >= 2.31.1-7
-BuildRequires: libisal_crypto-devel >= 2.24.0-3
+BuildRequires: libisal_crypto-devel >= 2.24.0-3, libisal_crypto-devel < 2.25.0
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
