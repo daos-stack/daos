@@ -802,6 +802,43 @@ evt_dop_log_del(struct umem_instance *umm, daos_epoch_t epoch,
 					 umem_ptr2off(umm, desc));
 }
 
+static inline struct vos_btr_attr *
+tree_find_attr_by_class(unsigned tclass)
+{
+	int i;
+
+	for (i = 0;; i++) {
+		struct vos_btr_attr *ta = &vos_btr_attrs[i];
+
+		if (ta->ta_class == tclass)
+			return ta;
+
+		if (ta->ta_class == VOS_BTR_END)
+			return NULL;
+	}
+}
+
+static inline uint64_t
+tree_obj2feats(struct vos_object *obj, bool for_dkey)
+{
+	uint64_t          feats = 0;
+	enum daos_otype_t type  = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
+
+	if (for_dkey) {
+		if (daos_is_dkey_uint64_type(type))
+			feats |= VOS_KEY_CMP_UINT64_SET;
+		else if (daos_is_dkey_lexical_type(type))
+			feats |= VOS_KEY_CMP_LEXICAL_SET;
+	} else {
+		if (daos_is_akey_uint64_type(type))
+			feats |= VOS_KEY_CMP_UINT64_SET;
+		else if (daos_is_akey_lexical_type(type))
+			feats |= VOS_KEY_CMP_LEXICAL_SET;
+	}
+
+	return feats;
+}
+
 void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh)
@@ -900,16 +937,8 @@ create:
 		uint64_t		 tree_feats = 0;
 
 		/* Step-1: find the btree attributes and create btree */
-		if (tclass == VOS_BTR_DKEY) {
-			enum daos_otype_t type;
-
-			/* Check and setup the akey key compare bits */
-			type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
-			if (daos_is_akey_uint64_type(type))
-				tree_feats |= VOS_KEY_CMP_UINT64_SET;
-			else if (daos_is_akey_lexical_type(type))
-				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
-		}
+		if (tclass == VOS_BTR_DKEY)
+			tree_feats = tree_obj2feats(obj, false);
 
 		ta = obj_tree_find_attr(tclass, flags);
 
@@ -1005,6 +1034,10 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	case 0:
 		krec = rbund.rb_krec;
 		ilog = &krec->kr_ilog;
+		if (vos_ilog_failout(ilog, intent)) {
+			D_ERROR("Try to access corrupted target ilog\n");
+			D_GOTO(out, rc = -DER_DATA_LOSS);
+		}
 		/** fall through to cache re-cache entry */
 	case -DER_NONEXIST:
 		/** Key hash may already be calculated but isn't for some key
@@ -1174,6 +1207,56 @@ done:
 }
 
 int
+vos_tree_mark_corruption(struct vos_container *cont, struct vos_object *obj, daos_handle_t toh,
+			 enum vos_tree_class tclass, daos_epoch_t epoch, uint32_t pm_ver,
+			 bool is_dkey, daos_key_t *key, daos_handle_t *sub_toh)
+{
+	struct vos_pool      *pool = cont->vc_pool;
+	struct umem_attr     *uma  = &pool->vp_uma;
+	struct vos_krec_df   *krec;
+	struct vos_btr_attr  *ta;
+	struct vos_rec_bundle rbund;
+	struct dcs_csum_info  csum;
+	d_iov_t               riov;
+	int                   rc;
+
+	tree_rec_bundle2iov(&rbund, &riov);
+	rbund.rb_ver    = pm_ver;
+	rbund.rb_csum   = &csum;
+	rbund.rb_tclass = is_dkey ? VOS_BTR_DKEY : VOS_BTR_AKEY;
+	ci_set_null(&csum);
+
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_MARK, key, NULL, &riov);
+	if (rc == -DER_NONEXIST) {
+		rbund.rb_iov = key;
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_MARK, key, &riov, NULL);
+	}
+	if (rc != 0)
+		return rc;
+
+	krec = rbund.rb_krec;
+	D_ASSERT(krec != NULL);
+
+	if (ilog_is_corrupted(&krec->kr_ilog))
+		return -DER_ALREADY;
+
+	rc = vos_ilog_set_flags(cont, &krec->kr_ilog, epoch,
+				sub_toh != NULL ? 0 : ILOG_FLAGS_CORRUPTED);
+	if (rc != 0 || sub_toh == NULL)
+		return rc;
+
+	if (krec->kr_btr.tr_class != 0)
+		return dbtree_open_inplace_ex(&krec->kr_btr, uma, vos_cont2hdl(cont), pool,
+					      sub_toh);
+
+	ta = tree_find_attr_by_class(tclass);
+	D_ASSERT(ta != NULL);
+
+	return dbtree_create_inplace_ex(tclass, tree_obj2feats(obj, false), ta->ta_order, uma,
+					&krec->kr_btr, vos_cont2hdl(cont), pool, sub_toh);
+}
+
+int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov)
 {
 	/* Delete a dkey or akey from tree @toh */
@@ -1192,22 +1275,10 @@ obj_tree_init(struct vos_object *obj)
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		uint64_t tree_feats = 0;
-		enum daos_otype_t type;
-
 		D_DEBUG(DB_DF, "Create btree for object\n");
-
-		type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
-		if (daos_is_dkey_uint64_type(type))
-			tree_feats |= VOS_KEY_CMP_UINT64_SET;
-		else if (daos_is_dkey_lexical_type(type))
-			tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
-
-		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
-					      ta->ta_order, vos_obj2uma(obj),
-					      &obj->obj_df->vo_tree,
-					      vos_cont2hdl(obj->obj_cont),
-					      vos_obj2pool(obj),
+		rc = dbtree_create_inplace_ex(ta->ta_class, tree_obj2feats(obj, true), ta->ta_order,
+					      vos_obj2uma(obj), &obj->obj_df->vo_tree,
+					      vos_cont2hdl(obj->obj_cont), vos_obj2pool(obj),
 					      &obj->obj_toh);
 	} else {
 		D_DEBUG(DB_DF, "Open btree for object\n");
@@ -1261,8 +1332,6 @@ obj_tree_register(void)
 static struct vos_btr_attr *
 obj_tree_find_attr(unsigned tree_class, int flags)
 {
-	int	i;
-
 	switch (tree_class) {
 	default:
 	case VOS_BTR_SINGV:
@@ -1280,18 +1349,7 @@ obj_tree_find_attr(unsigned tree_class, int flags)
 		break;
 	}
 
-	for (i = 0;; i++) {
-		struct vos_btr_attr *ta = &vos_btr_attrs[i];
-
-		D_DEBUG(DB_TRACE, "ta->ta_class: %d, tree_class: %d\n",
-			ta->ta_class, tree_class);
-
-		if (ta->ta_class == tree_class)
-			return ta;
-
-		if (ta->ta_class == VOS_BTR_END)
-			return NULL;
-	}
+	return tree_find_attr_by_class(tree_class);
 }
 
 bool
