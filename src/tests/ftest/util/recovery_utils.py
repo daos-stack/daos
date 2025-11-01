@@ -122,3 +122,27 @@ def check_policies(dmg_command, interact_count):
             msg = f"Unexpected policy for {class_name}! Expected = DEFAULT, Actual = {policy}"
             raise CommandFailure(msg)
     return policies
+
+
+def check_ram_used(server_manager, log):
+    """Check whether 'ram' field is used in the server config's storage section.
+
+    Args:
+        server_manager (ServerManager):
+        log (logging.Logger): Used to print helpful logs.
+
+    Returns:
+        bool: If 'ram' field is found in 'storage', return True. Otherwise return False.
+    """
+    server_config_file = server_manager.manager.job.yaml_data
+    log.info("server_config_file = %s", server_config_file)
+    engine = server_config_file["engines"][0]
+    storage_list = engine["storage"]
+    ram_used = False
+    for storage in storage_list:
+        log.info("storage = %s", storage)
+        if storage["class"] == "ram":
+            log.info("ram found in %s", storage)
+            ram_used = True
+            break
+    return ram_used

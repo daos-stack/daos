@@ -10,7 +10,7 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, report_errors
-from recovery_utils import wait_for_check_complete
+from recovery_utils import check_ram_used, wait_for_check_complete
 from run_utils import command_as_user, run_remote
 
 
@@ -303,8 +303,11 @@ class PoolListConsolidationTest(TestWithServers):
                 count += 1
                 if count > 1:
                     break
-        using_control_metadata = self.server_managers[0].manager.job.using_control_metadata
-        if count == 0 or using_control_metadata:
+        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
+        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
+        # cluster, the "class" would be "dcpm").
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
             self.log.info(msg)
@@ -383,9 +386,8 @@ class PoolListConsolidationTest(TestWithServers):
             "scm_mount")
         rdb_pool_paths = [f"{scm}/{pool.uuid.lower()}/rdb-pool" for scm in scm_mounts]
         self.log.info("rdb_pool_paths: %s", rdb_pool_paths)
-        rdb_pool_exists = [check_file_exists(
-            self.hostlist_servers, path, sudo=True)[0] for path in rdb_pool_paths]
-        if not all(rdb_pool_exists):
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
             self.log.info(msg)
