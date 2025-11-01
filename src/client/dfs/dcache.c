@@ -58,8 +58,8 @@ dcache_add_root(dfs_dcache_t *dcache)
 	ptr_key[0] = dcache->dd_pool_cont_hash;
 	ptr_key[1] = dcache->dd_dfs->root.oid.lo;
 	ptr_key[2] = dcache->dd_dfs->root.oid.hi;
-	rc = shm_lru_put(dcache->d_shm_lru_dentry, (void *)key, DCACHE_KEY_PREF_SIZE, val,
-			 val_size);
+	rc =
+	    shm_lru_put(dcache->d_shm_lru_dentry, (void *)key, DCACHE_KEY_PREF_SIZE, val, val_size);
 	/* val was copied into shm LRU record, so it is not needed any more. */
 
 out:
@@ -135,7 +135,7 @@ dcache_create(dfs_t *dfs)
 	if (dcache_tmp == NULL)
 		D_GOTO(err_shm, rc = ENOMEM);
 
-	dcache_tmp->dd_dfs  = dfs;
+	dcache_tmp->dd_dfs = dfs;
 
 	/** calculate a hash with the pool and cont uuid */
 	rc = dc_pool_hdl2uuid(dfs->poh, NULL, &pool_cont_uuid[0]);
@@ -347,7 +347,7 @@ dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t l
 	}
 	memcpy(key + DCACHE_KEY_PREF_SIZE, name, len);
 	key_len = DCACHE_KEY_PREF_SIZE + len;
-	rc = shm_lru_get(dcache->d_shm_lru_dentry, key, key_len, &node_found, (void **)&value);
+	rc      = shm_lru_get(dcache->d_shm_lru_dentry, key, key_len, &node_found, (void **)&value);
 	D_DEBUG(DB_TRACE, "dentry cache %s: name=" DF_PATH "\n", (rc != 0) ? "miss" : "hit",
 		DP_PATH(name));
 	if (rc == ENOENT) {
