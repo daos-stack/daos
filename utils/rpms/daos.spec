@@ -588,6 +588,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files server-tests
 %doc README.md
 %{_bindir}/dtx_tests
+%{_bindir}/dtx_ut
 %{_bindir}/evt_ctl
 %{_bindir}/rdbt
 %{_bindir}/smd_ut
@@ -596,6 +597,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
 %{_bindir}/ddb_tests
+%{_bindir}/ddb_ut
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 %endif
