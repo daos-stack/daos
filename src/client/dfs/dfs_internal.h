@@ -102,14 +102,8 @@
 /** Max recursion depth for symlinks */
 #define DFS_MAX_RECURSION  40
 
-/* Default power2(bits) size of dir-cache */
-#define DCACHE_SIZE_BITS      16
-/** Size of the hash key prefix */
-#define DCACHE_KEY_PREF_SIZE  35
-#define DCACHE_KEY_MAX        (DCACHE_KEY_PREF_SIZE - 1 + PATH_MAX)
-
 /** Size of the hash key prefix for shm dentry cache. 64-bit pool_cont_hash + obj_id */
-#define SHM_DCACHE_KEY_PREF_SIZE (sizeof(uint64_t) + sizeof(daos_obj_id_t))
+#define DCACHE_KEY_PREF_SIZE (sizeof(uint64_t) + sizeof(daos_obj_id_t))
 
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
@@ -149,26 +143,6 @@ struct dfs_obj {
 	struct stat      dc_stbuf;
 	/** indicates if we need to retrieve the file size for the stbuf cache */
 	bool             dc_stated;
-
-	/** Dram cache */
-	/** Entry in the hash table of the DFS cache */
-	d_list_t         dc_entry;
-	/** Reference counter used to manage memory deallocation */
-	_Atomic uint32_t dc_ref;
-	/** True iff this record was deleted from the hash table */
-	atomic_flag      dc_deleted;
-	/** Entry in the garbage collector list */
-	d_list_t         dc_entry_gc;
-	/** True iff this record is not in the garbage collector list */
-	bool             dc_deleted_gc;
-	/** Expiration date of the record */
-	struct timespec  dc_expire_gc;
-	/** Key prefix used by its child directory */
-	char             dc_key_child_prefix[DCACHE_KEY_PREF_SIZE];
-	/** Length of the hash key used to compute the hash index */
-	size_t           dc_key_len;
-	/** the hash key used to compute the hash index */
-	char             dc_key[];
 };
 
 enum {
@@ -488,8 +462,7 @@ int
 release_int(dfs_obj_t *obj);
 
 int
-dcache_create(dfs_t *dfs, int type, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
-	      uint32_t gc_reclaim_max);
+dcache_create(dfs_t *dfs);
 int
 dcache_destroy(dfs_t *dfs);
 int
@@ -498,19 +471,6 @@ dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t
 int
 dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int flags,
 		       dfs_obj_t **rec, mode_t *mode, struct stat *stbuf);
-dfs_obj_t *
-drec2obj(dfs_obj_t *rec);
-void
-drec_incref(dfs_dcache_t *dcache, dfs_obj_t *rec);
-void
-drec_decref(dfs_dcache_t *dcache, dfs_obj_t *rec);
-void
-drec_del_at(dfs_dcache_t *dcache, dfs_obj_t *rec);
-int
-drec_del(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent);
-
-enum { DFS_CACHE_SHM, DFS_CACHE_DRAM };
-
 int
 dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size);
 int
