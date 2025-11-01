@@ -7,9 +7,9 @@
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from general_utils import check_file_exists, report_errors
+from general_utils import report_errors
 from ior_test_base import IorTestBase
-from recovery_utils import wait_for_check_complete
+from recovery_utils import check_ram_used, wait_for_check_complete
 from run_utils import run_remote
 
 
@@ -115,11 +115,11 @@ class PoolMembershipTest(IorTestBase):
         # 4. Stop servers.
         self.log_step("Stop servers.")
         self.server_managers[0].system_stop()
-
-        pool_directory = f"{src_mount}/{pool.uuid.lower()}"
-        pool_directory_result = check_file_exists(
-            hosts=self.hostlist_servers, filename=pool_directory, directory=True)
-        if not pool_directory_result[0]:
+        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
+        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
+        # cluster, the "class" would be "dcpm").
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
             self.log.info(msg)
@@ -252,8 +252,8 @@ class PoolMembershipTest(IorTestBase):
         self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
         vos_0_path = f"{self.server_managers[0].get_vos_path(pool)}/vos-0"
-        vos_0_result = check_file_exists(hosts=self.hostlist_servers, filename=vos_0_path)
-        if not vos_0_result[0]:
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
             self.log.info(msg)
@@ -333,11 +333,11 @@ class PoolMembershipTest(IorTestBase):
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
         pool_directory = self.server_managers[0].get_vos_path(self.pool)
-        pool_directory_result = check_file_exists(
-            hosts=self.hostlist_servers, filename=pool_directory, directory=True)
-        if not pool_directory_result[0]:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
+        ram_used = check_ram_used(
+            server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by "
+                   "control plane after system stop.")
             self.log.info(msg)
             dmg_command.system_start()
             # return results in PASS.
@@ -352,7 +352,6 @@ class PoolMembershipTest(IorTestBase):
         # If we call check start immediately after check enable, checker may not detect
         # the fault. Developer is fixing this issue.
         time.sleep(3)
-
         self.log_step("Start checker.")
         dmg_command.check_start()
 
