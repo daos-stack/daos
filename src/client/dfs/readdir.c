@@ -75,7 +75,6 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, str
 								    &ent, NULL, &stbufs[key_nr]);
 					if (rc)
 						D_GOTO(out, rc);
-					drec_decref(dfs->dcache, ent);
 				} else {
 					rc = entry_stat(dfs, dfs->th, obj->oh, dirs[key_nr].d_name,
 							kds[i].kd_key_len, NULL, true,

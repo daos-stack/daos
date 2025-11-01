@@ -752,9 +752,7 @@ dfs_release(dfs_obj_t *obj)
 	if (obj == NULL)
 		return EINVAL;
 
-	if (obj->dc) {
-		drec_decref(obj->dc, obj);
-	} else {
+	if (obj->dc == NULL) {
 		rc = release_int(obj);
 	}
 	return rc;
@@ -821,7 +819,6 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		rc = dcache_find_insert_rel(dfs, parent, name, len, O_NOFOLLOW, &obj, NULL, stbuf);
 		if (rc)
 			return rc;
-		drec_decref(dfs->dcache, obj);
 	} else {
 		rc = entry_stat(dfs, dfs->th, oh, name, len, NULL, true, stbuf, NULL);
 	}
