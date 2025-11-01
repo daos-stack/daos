@@ -125,7 +125,7 @@ def check_policies(dmg_command, interact_count):
 
 
 def check_ram_used(server_manager, log):
-    """Check whether 'ram' field is used in the server config's storage section.
+    """Check whether 'ram' field is used in the storage section of the server config.
 
     Args:
         server_manager (ServerManager):
