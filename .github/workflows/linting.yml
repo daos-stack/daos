@@ -125,7 +125,7 @@ jobs:
       - name: Run check
         run: doxygen Doxyfile
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3  # v4.3.1
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         with:
           name: API Documentation
           path: docs/doxygen/html/
@@ -179,7 +179,7 @@ jobs:
         with:
           target: origin/${{ github.event.pull_request.base.ref }}
       - name: Export changes
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3  # v4.3.1
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         if: failure()
         with:
           name: format-patch-for-pr-${{ github.event.pull_request.number }}
