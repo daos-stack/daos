@@ -11,7 +11,7 @@
 %global daos_build_args client test
 %endif
 %global mercury_version   2.4.0-7
-%global libfabric_version 1.22.0-4
+%global libfabric_version 1.20
 %global argobots_version 1.2-3
 %global __python %{__python3}
 
@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -633,6 +633,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Oct 31 2025 Mohamad Chaarawi <mohamad.chaarawi@hpe.com> 2.6.4-7
+- Revert bump of libfabric to 1.20
+
 * Thu Oct 23 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-6
 - Fourth release candidate for 2.6.4
 
