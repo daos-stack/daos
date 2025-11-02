@@ -411,6 +411,8 @@ dtx_stat_tests(void **state)
 	struct dt_vos_pool_ctx *tctx = *state;
 	struct ddb_ctx          ctx  = {0};
 	struct dtx_stat_options opt  = {0};
+	int                     i;
+	int                     cont_cnt;
 
 	ctx.dc_poh                     = tctx->dvt_poh;
 	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
@@ -419,22 +421,141 @@ dtx_stat_tests(void **state)
 	opt.path                       = "[0]";
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt));
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^DTX entries statistics of container "
+			   "CONT:[[:blank:]]+\\(/\\[0\\]\\)[[:blank:]]+/[[:digit:]-]+$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+1$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- DTX aggregated epoch:[[:blank:]]+NA \\(NA\\)$");
+	assert_nl_equal(dvt_fake_print_buffer, 3);
+
+	opt.details = true;
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt));
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^DTX entries statistics of container "
+			   "CONT:[[:blank:]]+\\(/\\[0\\]\\)[[:blank:]]+/[[:digit:]-]+$");
 	assert_regex_match(
 	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
+	    "^[[:blank:]]+- Committed DTX time:[[:blank:]]+min=20.+, max=20.+, mean=20.+$");
+	assert_regex_match(
+	    dvt_fake_print_buffer,
+	    "^[[:blank:]]+- Committed DTX epoch:[[:blank:]]+min=20.+, max=20.+, mean=20.+$");
 	assert_regex_match(dvt_fake_print_buffer,
-			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
+			   "^[[:blank:]]+- DTX aggregated epoch:[[:blank:]]+NA \\(NA\\)$");
+	assert_nl_equal(dvt_fake_print_buffer, 5);
 
 	opt.path = "";
 	dvt_fake_print_reset();
 	assert_success(ddb_run_dtx_stat(&ctx, &opt));
+	cont_cnt = (DAOS_ON_VALGRIND) ? 8 : 10;
+	for (i = 0; i < cont_cnt; i++) {
+		char buf[] = "^DTX entries statistics of container "
+			     "CONT:[[:blank:]]+\\(/\\[0\\]\\)[[:blank:]]+/[[:digit:]-]+$";
+
+		buf[59] += i;
+		assert_regex_match(dvt_fake_print_buffer, buf);
+	}
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^DTX entries statistics of the pool \\(null\\)$");
+}
+
+static uint64_t
+dtx_get_cmt_time(char *buf)
+{
+	uint64_t cmt_time;
+
+	buf = strstr(buf, "- Committed DTX time:");
+	assert_non_null(buf);
+	buf = strstr(buf, "(");
+	assert_non_null(buf);
+
+	buf++;
+	cmt_time = 0;
+	while (*buf >= '0' && *buf <= '9') {
+		cmt_time *= 10;
+		cmt_time += *buf - '0';
+		buf++;
+	}
+
+	return cmt_time;
+}
+
+static void
+dtx_aggr_tests(void **state)
+{
+	uuid_t                 *p_uuid   = &g_uuids[3];
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct ddb_ctx          ctx      = {0};
+	struct dtx_stat_options opt_stat = {0};
+	struct dtx_aggr_options opt_aggr = {0};
+	daos_handle_t           coh;
+	char                    buf[256];
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = true;
+
+	buf[0] = '/';
+	uuid_unparse(*p_uuid, &buf[1]);
+
+	/* Insert 8  mocked DTX entries */
+	assert_success(vos_cont_open(tctx->dvt_poh, *p_uuid, &coh));
+	dvt_vos_insert_dtx_records(coh, 10, 8);
+	assert_success(vos_cont_close(coh));
+
+	opt_stat.path = buf;
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+8$");
+
+	/* Test aggregation without epoch (i.e. all 8 DTX entries) */
+	opt_aggr.path   = buf;
+	opt_aggr.format = DDB_DTX_AGGR_NOW;
+	assert_success(ddb_run_dtx_aggr(&ctx, &opt_aggr));
+
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+0$");
 	assert_regex_match(
 	    dvt_fake_print_buffer,
-	    "^[[:blank:]]+- Number of committed DTX of the container:[[:blank:]]+1$");
+	    "^[[:blank:]]+- DTX aggregated epoch:[[:blank:]]+.+ \\([[:digit:]]+\\)$");
+
+	/* Insert 10  mocked DTX entries */
+	assert_success(vos_cont_open(tctx->dvt_poh, *p_uuid, &coh));
+	dvt_vos_insert_dtx_records(coh, 10, 3);
+	sleep(2);
+	dvt_vos_insert_dtx_records(coh, 10, 7);
+	assert_success(vos_cont_close(coh));
+
+	opt_stat.details = true;
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
 	assert_regex_match(dvt_fake_print_buffer,
-			   "^[[:blank:]]+- DTX newest aggregated time:.+, 0$");
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+10$");
+
+	/* Test aggregation with an epoch (i.e. aggregate 3 first DTX entries) */
+	opt_aggr.format   = DDB_DTX_AGGR_CMT_TIME;
+	opt_aggr.cmt_time = dtx_get_cmt_time(dvt_fake_print_buffer) + 1;
+	assert_success(ddb_run_dtx_aggr(&ctx, &opt_aggr));
+
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
 	assert_regex_match(dvt_fake_print_buffer,
-			   "^Number of committed DTX of the pool:[[:blank:]]+1$");
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+7$");
+
+	/* Test aggregation without epoch (i.e. aggregate last 7 DTX entries) */
+	opt_aggr.format = DDB_DTX_AGGR_NOW;
+	assert_success(ddb_run_dtx_aggr(&ctx, &opt_aggr));
+
+	dvt_fake_print_reset();
+	assert_success(ddb_run_dtx_stat(&ctx, &opt_stat));
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+0$");
 }
 
 /*
@@ -497,6 +618,7 @@ ddb_commands_tests_run()
 	    TEST(dtx_act_discard_invalid_tests),
 	    TEST(dtx_abort_entry_tests),
 	    TEST(feature_cmd_tests),
+	    TEST(dtx_aggr_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands tests", tests,

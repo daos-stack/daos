@@ -102,10 +102,16 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 		D_GOTO(err, rc = dss_abterr2der(rc));
 	}
 
+	rc = ABT_mutex_create(&svc->cs_cont_ephs_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create cs_cont_ephs_mutex: %d\n", rc);
+		D_GOTO(err_rwlock, rc = dss_abterr2der(rc));
+	}
+
 	/* cs_root */
 	rc = rdb_path_init(&svc->cs_root);
 	if (rc != 0)
-		goto err_lock;
+		goto err_mutex;
 	rc = rdb_path_push(&svc->cs_root, &rdb_path_root_key);
 	if (rc != 0)
 		goto err_root;
@@ -144,7 +150,9 @@ err_uuids:
 	rdb_path_fini(&svc->cs_uuids);
 err_root:
 	rdb_path_fini(&svc->cs_root);
-err_lock:
+err_mutex:
+	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
+err_rwlock:
 	ABT_rwlock_free(&svc->cs_lock);
 err:
 	return rc;
@@ -158,6 +166,7 @@ cont_svc_fini(struct cont_svc *svc)
 	rdb_path_fini(&svc->cs_uuids);
 	rdb_path_fini(&svc->cs_root);
 	ABT_rwlock_free(&svc->cs_lock);
+	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
 }
 
 int
@@ -713,7 +722,6 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 			D_ERROR("container global %u version could be not set\n", entry->dpe_type);
 			return -DER_INVAL;
 		case DAOS_PROP_CO_OBJ_VERSION:
-			/* this is a walkaround for 2.6 only */
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		default:
@@ -768,10 +776,14 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	if (entry_def)
 		entry_def->dpe_val = pool_hdl->sph_global_ver;
 
-	/* inherit object version from pool*/
+	/*
+	 * New container creation by clients will specify the object version.
+	 * If not specified (dpe_val == 0), it indicates a client from before
+	 * DAOS 2.6.4, so use VERSION 1 for backward compatibility.
+	 */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_OBJ_VERSION);
 	if (entry_def && entry_def->dpe_val == 0)
-		entry_def->dpe_val = pool_hdl->sph_obj_ver;
+		entry_def->dpe_val = DAOS_POOL_OBJ_VERSION_1;
 
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
@@ -1046,6 +1058,11 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *sv
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
+	/* Reset recov_cont prop to notify on flight pool_recov_cont to retry. */
+	rc = ds_pool_prop_recov_cont_reset(tx, svc->cs_rsvc);
+	if (rc != 0)
+		goto out;
+
 	cont_create_in_get_data(rpc, CONT_CREATE, cont_proto_ver, &cprop);
 
 	/* Determine if the label property was supplied, and if so,
@@ -1291,10 +1308,18 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to destroy %d targets\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
-		rc = -DER_IO;
+	if (rc == -DER_BUSY) {
+		D_INFO(DF_CONT ": some target busy\n", DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		/*
+		 * Must return an error that ds_pool_svc_ops_save considers
+		 * retryable. Otherwise, when it is retried, this container
+		 * destroy operation would always get its result from svc_ops
+		 * without being executed.
+		 */
+		rc = -DER_TIMEDOUT;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to destroy targets",
+			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	}
 
 out_rpc:
@@ -1549,6 +1574,11 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	cont_destroy_in_get_data(rpc, opc_get(rpc->cr_opc), cont_proto_ver, &force, NULL);
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, force);
+
+	/* Reset recov_cont prop to notify on flight pool_recov_cont to retry. */
+	rc = ds_pool_prop_recov_cont_reset(tx, cont->c_svc->cs_rsvc);
+	if (rc != 0)
+		goto out;
 
 	/* Fetch the container props to check access for delete */
 	rc = cont_prop_read(tx, cont,
@@ -2032,6 +2062,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		return;
 	}
 
+	ABT_mutex_lock(svc->cs_cont_ephs_mutex);
 	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
 		if (eph_ldr->cte_deleted) {
 			d_list_del(&eph_ldr->cte_list);
@@ -2135,6 +2166,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (pool->sp_rebuilding)
 			break;
 	}
+	ABT_mutex_unlock(svc->cs_cont_ephs_mutex);
 
 	map_ranks_fini(&fail_ranks);
 }
