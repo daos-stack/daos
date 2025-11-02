@@ -63,6 +63,15 @@ class PoolMembershipTest(IorTestBase):
         :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_orphan_pool_shard
         """
+        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
+        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
+        # cluster, the "class" would be "dcpm").
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         # 1. Create a pool.
         self.log_step("Creating a pool (dmg pool create)")
         pool = self.get_pool(connect=False, target_list="0")
@@ -115,17 +124,6 @@ class PoolMembershipTest(IorTestBase):
         # 4. Stop servers.
         self.log_step("Stop servers.")
         self.server_managers[0].system_stop()
-        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
-        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
-        # cluster, the "class" would be "dcpm").
-        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
-        if ram_used:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
 
         # 5. Copy /mnt/daos?/<pool_path> from the engine where we created the pool to
         # another engine where we didn’t create.
@@ -242,6 +240,12 @@ class PoolMembershipTest(IorTestBase):
         :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_pool_map
         """
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         self.log_step("Create a pool.")
         pool = self.get_pool(connect=False)
 
@@ -252,14 +256,6 @@ class PoolMembershipTest(IorTestBase):
         self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
         vos_0_path = f"{self.server_managers[0].get_vos_path(pool)}/vos-0"
-        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
-        if ram_used:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
         rm_cmd = f"sudo rm {vos_0_path}"
         if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
@@ -315,6 +311,12 @@ class PoolMembershipTest(IorTestBase):
         :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_rank_entry
         """
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         targets = self.params.get("targets", "/run/server_config/engines/0/*")
         exp_msg = "dangling rank entry"
 
@@ -333,15 +335,6 @@ class PoolMembershipTest(IorTestBase):
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
         pool_directory = self.server_managers[0].get_vos_path(self.pool)
-        ram_used = check_ram_used(
-            server_manager=self.server_managers[0], log=self.log)
-        if ram_used:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by "
-                   "control plane after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
         rm_cmd = f"sudo rm -rf {pool_directory}"
         if not run_remote(log=self.log, hosts=rank_1_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_1_host}! {rm_cmd}")

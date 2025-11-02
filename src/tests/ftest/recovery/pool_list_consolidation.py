@@ -281,6 +281,15 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
+        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
+        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
+        # cluster, the "class" would be "dcpm").
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         self.log_step("Create a pool with --nsvc=3.")
         pool = self.get_pool(svcn=3)
 
@@ -303,17 +312,6 @@ class PoolListConsolidationTest(TestWithServers):
                 count += 1
                 if count > 1:
                     break
-        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
-        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
-        # cluster, the "class" would be "dcpm").
-        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
-        if ram_used:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
 
         self.log_step("Start servers.")
         dmg_command.system_start()
@@ -374,6 +372,12 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         self.log_step("Create a pool.")
         pool = self.get_pool(connect=False)
 
@@ -386,14 +390,6 @@ class PoolListConsolidationTest(TestWithServers):
             "scm_mount")
         rdb_pool_paths = [f"{scm}/{pool.uuid.lower()}/rdb-pool" for scm in scm_mounts]
         self.log.info("rdb_pool_paths: %s", rdb_pool_paths)
-        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
-        if ram_used:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
         for rdb_pool_path in rdb_pool_paths:
             command = command_as_user(command=f"rm {rdb_pool_path}", user="root")
             remove_result = run_remote(
