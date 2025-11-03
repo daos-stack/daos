@@ -1914,7 +1914,13 @@ need_nvme_poll(struct dss_xstream *dx, struct sched_cycle *cycle)
 
 	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
-	return bio_need_nvme_poll(dmi->dmi_nvme_ctxt);
+	/*
+	 * If SPDK I/O stalls indefinitely due to a hardware fault (or software bug),
+	 * the resulting backlog of undrained I/Os will cause bio_need_nvme_poll() to
+	 * consistently return true. To prevent starvation and ensure system progress,
+	 * schedule the NVMe polling ULT and other ULTs intverleavingly.
+	 */
+	return !cycle->sc_age_nvme && bio_need_nvme_poll(dmi->dmi_nvme_ctxt);
 }
 
 static ABT_unit
