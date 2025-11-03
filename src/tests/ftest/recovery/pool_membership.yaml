@@ -5,7 +5,7 @@ hosts:
 timeout: 360
 
 # We need to restart servers to obtain the server config file in the test. If we don't
-# restart and try to access, following error appears.
+# restart and try to access, following error appears:
 # yaml_utils.YamlException: File not found:
 # /var/tmp/daos_testing/test_dangling_pool_map/test_dangling_pool_map__daos_server_server.yaml
 setup:
