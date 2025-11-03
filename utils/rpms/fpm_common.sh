@@ -159,7 +159,7 @@ build_package() {
   output_type="${OUTPUT_TYPE:-rpm}"
   EXTRA_OPTS+=("--rpm-autoprov")
 
-  if [[ -n "${RPM_CHANGELOG:-}" ]]; then
+  if [ -n "${RPM_CHANGELOG:-}" ]; then
     EXTRA_OPTS+=("--rpm-changelog" "${root}/utils/rpms/${RPM_CHANGELOG}")
   fi
 

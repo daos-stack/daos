@@ -5,7 +5,8 @@
 - Fix leap package name
 
 * Thu Sep 11 2025  Jeff Olivier <jeffolivier@google.com> - 2.1.0-5
-- Fix pmdk package for leap
+- Add distro to package names
+- Fix pmdk devel package names
 - Expand the sds.at_create CTL to also cover pmemobj_open() (daos-stack/pmdk#5, DAOS-17449)
   - Previously, this CTL affected only pmemobj_create().
   - Now, it affects both pmemobj_create() and pmemobj_open().
