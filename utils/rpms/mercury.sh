@@ -42,7 +42,7 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("${libfabric_lib} >= ${libfabric_full}")
+DEPENDS=("${libfabric_lib} >= ${libfabric_version}")
 build_package "mercury"
 DEPENDS=()
 
