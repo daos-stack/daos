@@ -1232,6 +1232,6 @@ class DaosServerManager(SubprocessManager):
         Returns:
             CommandResult: Result of the grep command run against each log file.
         """
-        command = (f"find {find_args} -print0 | xargs -0 -r grep -E -e '{pattern}'")
+        command = f"find {find_args} -print0 | xargs -0 -r grep -E -e '{pattern}'"
         result = run_remote(self.log, self.hosts, command_as_user(command, "root"))
         return result
