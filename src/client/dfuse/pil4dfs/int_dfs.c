@@ -1655,47 +1655,6 @@ find_next_available_map(int *idx)
 	return 0;
 }
 
-extern char **environ;
-
-static char cmd_buffer[4000];
-
-static void print_cmd_env(void)
-{
-    FILE *file = fopen("/proc/self/cmdline", "r");
-    if (!file) {
-        perror("Failed to open /proc/self/cmdline");
-        return ;
-    }
-
-    size_t bytesRead = fread(cmd_buffer, 1, sizeof(cmd_buffer) - 1, file);
-    fclose(file);
-
-    if (bytesRead == 0) {
-        perror("Failed to read /proc/self/cmdline");
-        return;
-    }
-
-    cmd_buffer[bytesRead] = '\0'; // Null-terminate the buffer
-
-    // Command-line arguments in /proc/self/cmdline are null-separated
-    char *arg = cmd_buffer;
-    printf("DBG> begin cmdline\n");
-    while (arg < cmd_buffer + bytesRead) {
-        printf("%s ", arg);
-        arg += strlen(arg) + 1; // Move to the next argument
-    }
-    printf("\nDBG> end   cmdline\n");
-
-    char **env = environ;
-    printf("DBG> begin env\n");
-    while (*env) {
-        printf("%s\n", *env);
-        env++;
-    }
-    printf("\nDBG> end   env\n");
-}
-
-/* May need to support duplicated fd as duplicated dirfd too. */
 static void
 free_fd(int idx, bool closing_dup_fd)
 {
@@ -1716,11 +1675,7 @@ free_fd(int idx, bool closing_dup_fd)
 	d_file_list[idx]->ref_count--;
 	if (d_file_list[idx]->ref_count == 0)
 		saved_obj = d_file_list[idx];
-	if (dup_ref_count[idx] <= 0 && ((d_file_list[idx]->ref_count > 0) && !d_compatible_mode)) {
-		print_cmd_env();
-		fflush(stdout);
-	}
-	if (dup_ref_count[idx] > 0 || ((d_file_list[idx]->ref_count > 0) && !d_compatible_mode)) {
+	if ((dup_ref_count[idx] > 0) || (closing_dup_fd && (d_file_list[idx]->ref_count > 0))) {
 		D_MUTEX_UNLOCK(&lock_fd);
 		return;
 	}
