@@ -1241,6 +1241,7 @@ alloc_xs_blobstore(void)
 	if (bxb == NULL)
 		return NULL;
 
+	D_INIT_LIST_HEAD(&bxb->bxb_pending_ios);
 	D_INIT_LIST_HEAD(&bxb->bxb_io_ctxts);
 
 	return bxb;
@@ -1761,8 +1762,10 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 static inline void
 reset_media_errors(struct bio_blobstore *bbs)
 {
-	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
+	struct bio_dev_health *bdh       = &bbs->bb_dev_health;
+	struct nvme_stats     *dev_stats = &bdh->bdh_health_state;
 
+	bdh->bdh_io_stalled       = 0;
 	dev_stats->bio_read_errs = 0;
 	dev_stats->bio_write_errs = 0;
 	dev_stats->bio_unmap_errs = 0;
@@ -1991,6 +1994,9 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		scan_bio_bdevs(ctxt, now);
 		bio_led_event_monitor(ctxt, now);
 	}
+
+	/* Detect stalled I/Os */
+	bio_io_monitor(ctxt, now);
 
 	return rc;
 }
