@@ -851,12 +851,13 @@ class TestWithServers(TestWithoutServers):
         if self.server_managers and self.agent_managers:
             # Compose and run cart_ctl command
             cart_ctl = CartCtl()
+            cart_ctl.get_params(self)
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
             cart_ctl.log_message.value = message
             # Don't ping all ranks before sending the log command
             cart_ctl.no_sync.value = True
-            cart_ctl.get_params(self)
+            cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
                 cart_ctl.group_name.value = manager.get_config_value("name")
