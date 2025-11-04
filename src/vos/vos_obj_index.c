@@ -85,13 +85,11 @@ static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
-	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
-	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
-	struct vos_obj_df	*obj;
-	daos_unit_oid_t		*key;
-	umem_off_t		 obj_off;
-	struct vos_pool		*pool = (struct vos_pool *)tins->ti_priv;
-	int			 rc;
+	struct vos_obj_df *obj;
+	daos_unit_oid_t   *key;
+	struct vos_pool   *pool = (struct vos_pool *)tins->ti_priv;
+	umem_off_t         obj_off;
+	int                rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
 	obj_off = umem_zalloc(&tins->ti_umm, vos_obj_df_size(pool));
@@ -121,13 +119,6 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	d_iov_set(val_iov, obj, vos_obj_df_size(pool));
 	rec->rec_off = obj_off;
-
-	/* For new created object, commit it synchronously to reduce
-	 * potential conflict with subsequent modifications against
-	 * the same object.
-	 */
-	if (dtx_is_valid_handle(dth))
-		dth->dth_sync = 1;
 
 	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "DF_X64"\n",
 		DP_UOID(obj->vo_id), rec->rec_off);
