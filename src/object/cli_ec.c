@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1302,10 +1303,10 @@ obj_ec_recx_reasb(struct dc_object *obj, daos_iod_t *iod, d_sg_list_t *sgl,
 		siod->siod_tgt_idx = obj_ec_shard_idx(obj, dkey_hash, i);
 		siod->siod_idx = tgt_recx_idxs[i];
 		siod->siod_nr = tgt_recx_nrs[i];
-		EC_TRACE("i %d tgt %u idx %u nr %u, start "DF_U64
-			" tgt_recx %u/%u\n", i, siod->siod_tgt_idx, siod->siod_idx,
-			siod->siod_nr, obj_ec_shard_idx(obj, dkey_hash, 0),
-			tgt_recx_idxs[i], tgt_recx_nrs[i]);
+		EC_TRACE("i %d tgt %u idx %u nr %u, start %d,"
+			 " tgt_recx %u/%u\n",
+			 i, siod->siod_tgt_idx, siod->siod_idx, siod->siod_nr,
+			 obj_ec_shard_idx(obj, dkey_hash, 0), tgt_recx_idxs[i], tgt_recx_nrs[i]);
 		siod->siod_off = rec_nr * iod_size;
 		for (idx = last; idx < tgt_recx_idxs[i] + tgt_recx_nrs[i]; idx++)
 			rec_nr += riod->iod_recxs[idx].rx_nr;
@@ -1884,7 +1885,9 @@ obj_ec_fetch_set_sgl(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 		uiod = &uiods[i];
 		riod = &riods[i];
 		usgl = &usgls[i];
-		usgl->sg_nr_out = 0;
+		/* for data recovery case, the sg_nr_out possibly already set by obj_ec_sgl_copy */
+		if (!reasb_req->orr_recov_data)
+			usgl->sg_nr_out = 0;
 		tail_hole_size = 0;
 		size_in_iod =  daos_iods_len(uiod, 1);
 		if (uiod->iod_size == 0)
@@ -1932,7 +1935,7 @@ tgt_check:
 			 * is set by obj_ec_recov_fill_back().
 			 */
 			if (!reasb_req->orr_recov_data ||
-			    (size_in_iod - tail_hole_size) > daos_sgl_data_len(usgl))
+			    (size_in_iod - tail_hole_size) > daos_sgl_data_len(usgl, true))
 				dc_sgl_out_set(usgl, size_in_iod - tail_hole_size);
 
 			return;
@@ -2676,6 +2679,11 @@ obj_ec_sgl_copy(d_sg_list_t *sgl, uint64_t off, void *buf, uint64_t size)
 	/* to copy data from [buf, buf + size) to sgl */
 	rc = daos_sgl_processor(sgl, true, &sgl_idx, size, oes_copy, &arg);
 	D_ASSERT(rc == 0);
+	if (sgl_idx.iov_offset == 0)
+		sgl->sg_nr_out = sgl_idx.iov_idx;
+	else
+		sgl->sg_nr_out = sgl_idx.iov_idx + 1;
+	;
 }
 
 /* copy the recovered data back to missed (to be recovered) recx list */

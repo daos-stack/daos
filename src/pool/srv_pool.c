@@ -665,7 +665,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_redun_fac, &value);
 			break;
 		case DAOS_PROP_PO_OBJ_VERSION:
-			if (entry->dpe_val > DS_POOL_OBJ_VERSION) {
+			if (entry->dpe_val > DAOS_POOL_OBJ_VERSION) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -2268,7 +2268,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	d_rank_t		rank = dss_self_rank();
+	d_rank_t                rank               = dss_self_rank();
 	int			rc;
 
 	D_ASSERTF(svc->ps_error == 0, "ps_error: " DF_RC "\n", DP_RC(svc->ps_error));
@@ -2367,7 +2367,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, 0);
 	if (rc != 0)
 		goto out;
 
@@ -3941,6 +3941,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
 	}
+	if (query_bits & DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER)
+		out->pco_rebuild_st.rs_max_supported_layout_ver = DAOS_POOL_OBJ_VERSION;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -6030,7 +6032,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 
 			obj_version = (uint32_t)fail_val;
 		} else {
-			obj_version = DS_POOL_OBJ_VERSION;
+			obj_version = DAOS_POOL_OBJ_VERSION;
 		}
 
 		d_iov_set(&value, &obj_version, sizeof(obj_version));
@@ -6091,10 +6093,9 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 	else if (rc == -DER_NONEXIST)
 		current_layout_ver = 0;
 
-	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
-		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
-					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
-					 RB_OP_UPGRADE, 0);
+	if (current_layout_ver < DAOS_POOL_OBJ_VERSION) {
+		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
+					 DAOS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE, 0);
 		if (rc == 0)
 			*scheduled_layout_upgrade = true;
 	}
@@ -7307,10 +7308,11 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 }
 
 int
-ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
+ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
+			   uint32_t *reclaim_ver)
 {
-	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list,
-					NULL, NULL, NULL, NULL, NULL, NULL);
+	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list, NULL, NULL,
+					NULL, NULL, reclaim_ver, NULL);
 }
 
 int
@@ -7408,43 +7410,6 @@ out:
 	return rc;
 }
 
-void
-ds_pool_extend_handler(crt_rpc_t *rpc)
-{
-	struct pool_extend_in	*in = crt_req_get(rpc);
-	struct pool_extend_out	*out = crt_reply_get(rpc);
-	struct pool_svc		*svc;
-	uuid_t			pool_uuid;
-	d_rank_list_t		rank_list;
-	uint32_t		ndomains;
-	uint32_t		*domains;
-	int			rc;
-
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p\n", DP_UUID(in->pei_op.pi_uuid), rpc);
-
-	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
-	rank_list.rl_nr = in->pei_tgt_ranks->rl_nr;
-	rank_list.rl_ranks = in->pei_tgt_ranks->rl_ranks;
-	ndomains = in->pei_ndomains;
-	domains = in->pei_domains.ca_arrays;
-
-	rc = pool_svc_lookup_leader(in->pei_op.pi_uuid, &svc, &out->peo_op.po_hint);
-	if (rc != 0)
-		goto out;
-
-	rc =
-	    pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
-				false /* exclude_rank */, &rank_list, domains, ndomains, NULL, NULL,
-				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, true);
-
-	pool_svc_put_leader(svc);
-out:
-	out->peo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pei_op.pi_uuid), rpc,
-		DP_RC(rc));
-	crt_reply_send(rpc);
-}
-
 static int
 pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list)
 {
@@ -7502,6 +7467,62 @@ out:
 	if (rank_list)
 		d_rank_list_free(rank_list);
 	return rc;
+}
+
+void
+ds_pool_extend_handler(crt_rpc_t *rpc)
+{
+	struct pool_extend_in       *in  = crt_req_get(rpc);
+	struct pool_extend_out      *out = crt_reply_get(rpc);
+	struct pool_svc             *svc;
+	struct pool_target_addr_list tgt_addr_list;
+	uuid_t                       pool_uuid;
+	d_rank_list_t                rank_list;
+	uint32_t                     ndomains;
+	uint32_t                    *domains;
+	int                          i;
+	int                          rc;
+
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc %p\n", DP_UUID(in->pei_op.pi_uuid), rpc);
+
+	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
+	rank_list.rl_nr          = in->pei_tgt_ranks->rl_nr;
+	rank_list.rl_ranks       = in->pei_tgt_ranks->rl_ranks;
+	ndomains                 = in->pei_ndomains;
+	domains                  = in->pei_domains.ca_arrays;
+	tgt_addr_list.pta_number = rank_list.rl_nr;
+	D_ALLOC_ARRAY(tgt_addr_list.pta_addrs, tgt_addr_list.pta_number);
+	if (tgt_addr_list.pta_addrs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	for (i = 0; i < tgt_addr_list.pta_number; i++) {
+		tgt_addr_list.pta_addrs[i].pta_rank   = rank_list.rl_ranks[i];
+		tgt_addr_list.pta_addrs[i].pta_target = -1;
+	}
+
+	rc = pool_svc_lookup_leader(in->pei_op.pi_uuid, &svc, &out->peo_op.po_hint);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_discard(rpc->cr_ctx, svc, &tgt_addr_list);
+	if (rc) {
+		DL_ERROR(rc, DF_UUID ": pool_discard failed.", DP_UUID(in->pei_op.pi_uuid));
+		goto failed;
+	}
+
+	rc =
+	    pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
+				false /* exclude_rank */, &rank_list, domains, ndomains, NULL, NULL,
+				&out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG, true);
+
+failed:
+	pool_svc_put_leader(svc);
+out:
+	if (tgt_addr_list.pta_addrs != NULL)
+		D_FREE(tgt_addr_list.pta_addrs);
+	out->peo_op.po_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pei_op.pi_uuid), rpc,
+		DP_RC(rc));
+	crt_reply_send(rpc);
 }
 
 static void

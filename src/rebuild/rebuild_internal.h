@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -216,6 +217,7 @@ struct rebuild_global {
 
 /* Per target structure to track the rebuild status */
 extern struct rebuild_global rebuild_gst;
+extern unsigned int          rebuild_wait_ec_pause;
 
 struct rebuild_task {
 	d_list_t			dst_list;
@@ -299,9 +301,6 @@ struct rebuild_iv {
 	int		riv_status;
 
 };
-
-#define SCAN_YIELD_FREQ		4096
-#define SCAN_OBJ_YIELD_CNT	128
 
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *

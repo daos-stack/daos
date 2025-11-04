@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2022-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eux
 
 : "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
@@ -8,6 +13,11 @@ set -eux
 : "${BUILD_URL:=Not_in_jenkins}"
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
+: "${JENKINS_URL:=https://jenkins.example.com}"
+domain1="${JENKINS_URL#https://}"
+mail_domain="${domain1%%/*}"
+: "${EMAIL_DOMAIN:=$mail_domain}"
+: "${DAOS_DEVOPS_EMAIL:="$HOSTNAME"@"$EMAIL_DOMAIN"}"
 
 # functions common to more than one distro specific provisioning
 url_to_repo() {
@@ -49,17 +59,6 @@ add_repo() {
     fi
 }
 
-add_group_repo() {
-    local match="$1"
-
-    add_repo "$match" "$DAOS_STACK_GROUP_REPO"
-    group_repo_post
-}
-
-add_local_repo() {
-    add_repo 'argobots' "$DAOS_STACK_LOCAL_REPO" false
-}
-
 disable_gpg_check() {
     local url="$1"
 
@@ -95,6 +94,13 @@ retry_dnf() {
                 send_mail "Command retry successful in $STAGE_NAME after $((attempt + 1)) attempts using ${repo_servers[0]} as initial repo server " \
                           "Command:  ${args[*]}\nAttempts: $attempt\nStatus:   $rc"
             fi
+            if [ -n "$ARTIFACTORY_URL" ]; then
+                dnfx="dnf"
+                if command -v dnf4; then
+                    dnfx="dnf4"
+                fi
+                "$dnfx" config-manager --disable 'epel*' || true
+            fi
             return 0
         fi
         # Command failed, retry
@@ -107,9 +113,6 @@ retry_dnf() {
                 # non-experimental one after trying twice with the experimental one
                 set_local_repo "${repo_servers[1]}"
                 dnf -y makecache
-                if [ -n "${POWERTOOLSREPO:-}" ]; then
-                    POWERTOOLSREPO=${POWERTOOLSREPO/${repo_servers[0]}/${repo_servers[1]}}
-                fi
             fi
             sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
         fi
@@ -117,6 +120,10 @@ retry_dnf() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server "
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return 1
 
@@ -140,7 +147,7 @@ send_mail() {
         echo "Host:  $HOSTNAME"
         echo ""
         echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$recipients"
+    } 2>&1 | mail -s "$subject" -r "$DAOS_DEVOPS_EMAIL" "$recipients"
     set -x
 }
 
@@ -186,6 +193,10 @@ retry_cmd() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command retry failed in $STAGE_NAME after $attempt attempts"
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return 1
 }
@@ -217,22 +228,12 @@ timeout_cmd() {
     if [ "$rc" -ne 0 ]; then
         send_mail "Command timeout failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
+        echo "Command timeout failed in $STAGE_NAME after $attempt attempts"
+        echo "Command:  $*"
+        echo "Attempts: $attempt"
+        echo "Status:   $rc"
     fi
     return "$rc"
-}
-
-fetch_repo_config() {
-    local repo_server="$1"
-
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
-    local repopath="${REPOS_DIR}/$repo_file"
-    if ! curl -f -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
-        return 1
-    fi
-
-    return 0
 }
 
 pr_repos() {
@@ -265,17 +266,19 @@ set_local_repo() {
     # shellcheck disable=SC1091
     . /etc/os-release
 
-    rm -f "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}".repo
-    ln "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}"{-"$repo_server",.repo}
-
     if [ "$repo_server" = "artifactory" ]; then
         if { [[ \ $(pr_repos) = *\ daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
            [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-.0-9A-Za-z]+-testing ]]; then
             # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
             # used for daos packages
             dnf -y config-manager \
-                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
+        else
+            dnf -y config-manager \
+                --enable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
         fi
+        dnf -y config-manager \
+            --enable daos-stack-deps-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"*-stable-local-artifactory
     fi
 
     dnf repolist
@@ -284,30 +287,11 @@ set_local_repo() {
 update_repos() {
     local DISTRO_NAME="$1"
 
-    # Update the repo files
-    local repo_server
-    for repo_server in "${repo_servers[@]}"; do
-        if ! fetch_repo_config "$repo_server"; then
-            # leave the existing on-image repo config alone if the repo fetch fails
-            send_mail "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
-            return 1
-        fi
-    done
-
-    # we're not actually using the set_local_repos.sh script
-    # setting a repo server is as easy as renaming a file
-    #if ! curl -o /usr/local/sbin/set_local_repos.sh-tmp "${REPO_FILE_URL}set_local_repos.sh"; then
-    #    send_mail "Fetch set_local_repos.sh failed.  Continuing on with in-image copy."
-    #else
-    #    cat /usr/local/sbin/set_local_repos.sh-tmp > /usr/local/sbin/set_local_repos.sh
-    #    chmod +x /usr/local/sbin/set_local_repos.sh
-    #    rm -f /usr/local/sbin/set_local_repos.sh-tmp
-    #fi
-
-    # successfully grabbed them all, so replace the entire $REPOS_DIR
-    # content with them
+    # This is not working right on a second run.
+    # using a quick hack to stop deleting a critical repo
     local file
     for file in "$REPOS_DIR"/*.repo; do
+        [[ $file == *"artifactory"* ]] && continue
         [ -e "$file" ] || break
         # empty the file but keep it around so that updates don't recreate it
         true > "$file"
@@ -334,11 +318,11 @@ post_provision_config_nodes() {
         dnf -y erase fuse3\*
     fi
 
-    if $CONFIG_POWER_ONLY; then
+    if [ -n "$CONFIG_POWER_ONLY" ]; then
         rm -f "$REPOS_DIR"/*_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload          \
-                     ompi argobots cart daos daos-client dpdk      \
-                     fuse-libs libisa-l libpmemobj mercury mpich   \
+                     argobots cart daos daos-client dpdk      \
+                     libisa-l libpmemobj mercury mpich   \
                      pmix protobuf-c spdk libfabric libpmem        \
                      munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd
@@ -346,7 +330,27 @@ post_provision_config_nodes() {
 
     cat /etc/os-release
 
-    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
+    # ConnectX must be 5 or later to support MOFED/DOCA drivers
+    # RoCE tests with Mellanox adapters may use MOFED/DOCA drivers.
+    last_pci_bus=''
+    mellanox_drivers=false
+    while IFS= read -r line; do
+        pci_bus="${line%.*}"
+        if [ "$pci_bus" == "$last_pci_bus" ]; then
+            # We only use one interface on a dual interface HBA
+            # Fortunately lspci appears to group them together
+            continue
+        fi
+        last_pci_bus="$pci_bus"
+        mlnx_type="${line##*ConnectX-}"
+        mlnx_type="${mlnx_type%]*}"
+        if [ "$mlnx_type" -ge 5 ]; then
+            mellanox_drivers=true
+            break
+        fi
+    done < <(lspci -mm | grep "ConnectX")
+
+    if "$mellanox_drivers"; then
         # Remove OPA and install MOFED
         install_mofed
     fi
@@ -395,6 +399,7 @@ post_provision_config_nodes() {
     fi
     if ! "${cmd[@]}"; then
         dump_repos
+        echo "Failed to upgrade packages"
         return 1
     fi
 
@@ -410,38 +415,15 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2001
     if [ ${#inst_rpms[@]} -gt 0 ]; then
-        if ! retry_dnf 360 install "${inst_rpms[@]/%/${DAOS_VERSION:-}}"; then
+        if ! retry_dnf 360 install "${inst_rpms[@]/%/${DAOS_VERSION:-}}" --setopt=allow_vendor_change=True; then
             rc=${PIPESTATUS[0]}
             dump_repos
+            echo "Failed to install packages"
             return "$rc"
         fi
     fi
 
     if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
-        # Need this module file
-        version="$(rpm -q --qf "%{version}" openmpi)"
-        mkdir -p /etc/modulefiles/mpi/
-        cat << EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
-#%Module 1.0
-#
-#  OpenMPI module for use with 'environment-modules' package:
-#
-conflict		mpi
-prepend-path 		PATH 		/usr/mpi/gcc/openmpi-$version/bin
-prepend-path 		LD_LIBRARY_PATH /usr/mpi/gcc/openmpi-$version/lib64
-prepend-path 		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-$version/lib64/pkgconfig
-prepend-path		MANPATH		/usr/mpi/gcc/openmpi-$version/share/man
-setenv 			MPI_BIN		/usr/mpi/gcc/openmpi-$version/bin
-setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-$version/etc
-setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-$version/lib64
-setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-$version/include
-setenv	 		MPI_LIB		/usr/mpi/gcc/openmpi-$version/lib64
-setenv			MPI_MAN			/usr/mpi/gcc/openmpi-$version/share/man
-setenv			MPI_COMPILER	openmpi-x86_64
-setenv			MPI_SUFFIX	_openmpi
-setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
-EOF
-
         printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
     fi
 

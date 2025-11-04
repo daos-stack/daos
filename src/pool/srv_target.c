@@ -2438,8 +2438,13 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 put:
 	ds_cont_child_put(cont);
+	/* don't destroy vos container, to avoid ds_cont_tgt_refresh_agg_eph() failure,
+	 * later depend on container recovery process to handle it.
+	 */
+#if 0
 	if (rc == 0)
 		rc = ds_cont_child_destroy(arg->tgt_discard->pool_uuid, entry->ie_couuid);
+#endif
 	return rc;
 }
 
@@ -2600,7 +2605,7 @@ ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(v
 }
 
 /* Discard the objects by epoch in this pool */
-static void
+static int
 ds_pool_tgt_discard_ult(void *data)
 {
 	struct ds_pool		*pool;
@@ -2618,8 +2623,7 @@ ds_pool_tgt_discard_ult(void *data)
 		D_GOTO(free, rc = 0);
 	}
 
-	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
-		    PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
+	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
 				  DSS_ULT_DEEP_STACK);
 
@@ -2628,6 +2632,7 @@ ds_pool_tgt_discard_ult(void *data)
 	ds_pool_put(pool);
 free:
 	tgt_discard_arg_free(arg);
+	return rc;
 }
 
 void
@@ -2660,7 +2665,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 
 	pool->sp_need_discard = 1;
 	pool->sp_discard_status = 0;
-	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
 
 	ds_pool_put(pool);
 out:

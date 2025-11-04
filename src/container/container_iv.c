@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -448,6 +449,7 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		  d_sg_list_t *dst, void **priv)
 {
 	struct cont_iv_entry	*src_iv;
+	struct cont_iv_entry     iv_entry = {0};
 	daos_handle_t		root_hdl;
 	d_iov_t			key_iov;
 	d_iov_t			val_iov;
@@ -471,14 +473,20 @@ again:
 				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_DEBUG(DB_MD, "create cont snap iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				/* convert to more specific errno */
+				if (rc == -DER_NONEXIST)
+					rc = -DER_CONT_NONEXIST;
+				DL_ERROR(rc, DF_CONT " create IV_CONT_SNAP iv entry failed",
+					 DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_PROP) {
 				rc = cont_iv_prop_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont prop iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				/* convert to more specific errno */
+				if (rc == -DER_NONEXIST)
+					rc = -DER_CONT_NONEXIST;
+				DL_ERROR(rc, DF_CONT " create IV_CONT_PROP iv entry failed",
+					 DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_CAPA) {
 				struct container_hdl	chdl = { 0 };
 				int			rc1;
@@ -489,7 +497,6 @@ again:
 				rc1 = ds_cont_hdl_rdb_lookup(entry->ns->iv_pool_uuid,
 							     civ_key->cont_uuid, &chdl);
 				if (rc1 == 0) {
-					struct cont_iv_entry	iv_entry = { 0 };
 					daos_prop_t		*prop = NULL;
 					struct daos_prop_entry	*prop_entry;
 					struct daos_co_status	stat = { 0 };
@@ -539,9 +546,40 @@ again:
 				} else {
 					rc = -DER_NONEXIST;
 				}
+			} else if (class_id == IV_CONT_AGG_EPOCH_BOUNDRY) {
+				uint64_t ec_agg_eph;
+
+				rc = ds_cont_ec_agg_eph_rdb_lookup(entry->ns->iv_pool_uuid,
+								   civ_key->cont_uuid, &ec_agg_eph);
+				if (rc == 0) {
+					uuid_copy(iv_entry.cont_uuid, civ_key->cont_uuid);
+					iv_entry.iv_agg_eph.eph  = ec_agg_eph;
+					iv_entry.iv_agg_eph.rank = dss_self_rank();
+					d_iov_set(&val_iov, &iv_entry, sizeof(iv_entry));
+					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+					DL_CDEBUG(
+					    rc != 0, DLOG_ERR, DB_MD, rc,
+					    DF_CONT ": dbtree_update ec_agg_eph " DF_X64,
+					    DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid),
+					    ec_agg_eph);
+					if (rc)
+						goto failed;
+					/* on master node will not trigger on_refresh callback,
+					 * so need to explicitly refresh its own cont child's
+					 * sc_ec_agg_eph_boundary especially for the case of
+					 * restart that the value is zero.
+					 */
+					rc = ds_cont_tgt_refresh_agg_eph(entry->ns->iv_pool_uuid,
+									 civ_key->cont_uuid,
+									 ec_agg_eph);
+					if (rc == 0)
+						goto again;
+				}
 			}
 		}
-		D_DEBUG(DB_MGMT, "lookup cont: rc "DF_RC"\n", DP_RC(rc));
+failed:
+		D_DEBUG(DB_MGMT, DF_CONT "lookup cont: rc " DF_RC "\n",
+			DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -645,8 +683,15 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		} else if (entry->iv_class->iv_class_id ==
 						IV_CONT_AGG_EPOCH_BOUNDRY) {
 			rc = cont_iv_ent_agg_eph_refresh(entry, key, src);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(
+					    rc, DF_CONT " cont_iv_ent_agg_eph_refresh ignore",
+					    DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
+					rc = 0;
+				}
 				D_GOTO(out, rc);
+			}
 		}
 	}
 
@@ -1108,8 +1153,7 @@ cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
 int
 cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
 {
-	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
-						  0, CRT_IV_SYNC_LAZY,
+	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph, 0, CRT_IV_SYNC_EAGER,
 						  IV_CONT_AGG_EPOCH_BOUNDRY);
 }
 
