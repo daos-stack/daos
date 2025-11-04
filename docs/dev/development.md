@@ -381,9 +381,6 @@ it creates rpm packages after a DAOS build. Regardless of how that build is done
 it will put files in the right places in the final packages.  Most of the magic
 is in [`utils/rpms/fpm_common.sh`](../../utils/rpms/fpm_common.sh) with component specific code in
 `utils/rpms/<component>.sh`.
-A dedicated changelog should be maintained for each component in
-the `utils/rpms/<component>.changelog` file and should be referenced by
-the `RPM_CHANGELOG="<component>.changelog"` variable in `utils/rpms/<component>.sh`.
 
 In order to properly upgrade a 3rd party component, do all of the following:
 
@@ -395,4 +392,6 @@ In order to properly upgrade a 3rd party component, do all of the following:
    [`utils/rpms/package_info.sh`](../../utils/rpms/package_info.sh)
 1. Make any necessary changes to `utils/rpms/<component>.sh` such as adding new
    files to various packages.
-1. Update the `utils/rpms/<component>.changelog` to reflect all changes introduced.
+1. Update the `utils/rpms/<component>.changelog` file to document the change and make sure
+   the changelog file is referenced by the `RPM_CHANGELOG="<component>.changelog"` variable
+   in `utils/rpms/<component>.sh`.
