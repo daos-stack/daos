@@ -392,7 +392,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
         """
         # 1. Create a pool and a container.
         self.log_step("Create a pool and a container.")
-        pool_1 = self.get_pool(connect=False)
+        pool_1 = self.get_pool(connect=False, size="45%")
         container = self.get_container(pool=pool_1)
 
         # 2. Inject non orphan pool fault such as orphan container.
@@ -437,7 +437,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # 6. Create an orphan pool.
         self.log_step("Create an orphan pool.")
-        pool_2 = self.get_pool(connect=False)
+        pool_2 = self.get_pool(connect=False, size="45%")
         dmg_command.faults_mgmt_svc_pool(
             pool=pool_2.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_MS")
 
@@ -450,7 +450,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
         self.log_step("Check that orphan pool isn't detected.")
         for _ in range(8):
             check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "RUNNING":
+            if check_query_out["response"]["status"] == "RUNNING" and query_reports:
                 query_reports = check_query_out["response"]["reports"]
                 break
             time.sleep(5)
