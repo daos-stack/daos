@@ -1642,9 +1642,6 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
-	if (rpc_priv->crp_reply_sent != 0)
-		goto out;
-
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
@@ -1655,9 +1652,6 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 		RPC_DECREF(rpc_priv);
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
-
-	rpc_priv->crp_reply_pending = 0;
-	rpc_priv->crp_reply_sent    = 1;
 
 	/* Release input buffer */
 	if (rpc_priv->crp_release_input_early && !rpc_priv->crp_forward) {
@@ -1682,9 +1676,6 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(error_code != 0);
 
-	if (rpc_priv->crp_reply_sent != 0)
-		return;
-
 	hg_out_struct = &rpc_priv->crp_pub.cr_output;
 	rpc_priv->crp_reply_hdr.cch_rc = error_code;
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
@@ -1693,12 +1684,11 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 			  "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
 	} else {
-		rpc_priv->crp_reply_pending = 0;
-		rpc_priv->crp_reply_sent    = 1;
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Sent CART level error message back to client. error_code: %d\n",
 			  error_code);
 	}
+	rpc_priv->crp_reply_pending = 0;
 }
 
 int

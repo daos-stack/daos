@@ -95,6 +95,7 @@ struct cont_svc {
 	/* Manage the EC aggregation epoch and stable epoch */
 	struct sched_request   *cs_cont_ephs_leader_req;
 	d_list_t		cs_cont_ephs_leader_list; /* link cont_track_eph_leader */
+	ABT_mutex               cs_cont_ephs_mutex;       /* protect cs_cont_ephs_leader_list */
 };
 
 /* Container descriptor */

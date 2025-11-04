@@ -5212,6 +5212,9 @@ obj_ec_comp_cb(struct obj_auxi_args *obj_auxi)
 
 		daos_obj_fetch_t *args = dc_task_get_args(task);
 
+		/* possibly due to previous EC recovery task failed and do the recovery again */
+		obj_ec_recov_reset(&obj_auxi->reasb_req);
+
 		task->dt_result = 0;
 		obj_bulk_fini(obj_auxi);
 		D_DEBUG(DB_IO, "opc %d init recover task for "DF_OID"\n",
@@ -5505,7 +5508,10 @@ args_fini:
 			 */
 			obj_rw_csum_destroy(obj, obj_auxi);
 
-			if (daos_handle_is_valid(obj_auxi->th) &&
+			/* for EC recovery fetch task, need not cache the tx as it only fetch from
+			 * committed full-stripe.
+			 */
+			if (daos_handle_is_valid(obj_auxi->th) && !obj_auxi->ec_in_recov &&
 			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
 			    (task->dt_result == 0 || task->dt_result == -DER_NONEXIST))
 				/* Cache transactional read if exist or not. */
