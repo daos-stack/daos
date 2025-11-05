@@ -23,6 +23,8 @@ server_config:
       log_file: daos_server0.log
       log_mask: INFO
       storage: auto
+      env_vars:
+        - FI_OFI_RXM_RX_SIZE=2048
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -31,6 +33,8 @@ server_config:
       log_file: daos_server1.log
       log_mask: INFO
       storage: auto
+      env_vars:
+        - FI_OFI_RXM_RX_SIZE=2048
 pool:
   size: 93%
 container:
