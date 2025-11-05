@@ -31,7 +31,6 @@ to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost."
 URL="https://daos.io"
 
-awk '/^%changelog/ {p=1; next} p' "${root}/utils/rpms/daos.spec" > "${root}/utils/rpms/daos.changelog"
 RPM_CHANGELOG="daos.changelog"
 
 # Some extra "install" steps
