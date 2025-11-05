@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from apricot import skipForTicket
 from ec_utils import ErasureCodeMdtest
 
 
@@ -15,6 +16,7 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
 
     :avocado: recursive
     """
+    @skipForTicket("DAOS-17751")
     def test_ec_online_rebuild_mdtest(self):
         """Jira ID: DAOS-7320.
 
