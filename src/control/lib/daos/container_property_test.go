@@ -375,6 +375,11 @@ func TestDaos_ContainerProperty_Layout(t *testing.T) {
 			test.AssertEqual(t, tc.expStr, testProp.StringValue(), "unexpected string value")
 		})
 	}
+
+	t.Run("Property Description", func(t *testing.T) {
+		testProp := newTestContainerProperty(ContainerPropLayoutType)
+		test.AssertEqual(t, testProp.Description, "Layout Type (unknown, POSIX, HDF5, PYTHON, SPARK, DATABASE, ROOT, SEISMIC, METEO)", "unexpected description")
+	})
 }
 
 func TestDaos_ContainerProperty_ACL(t *testing.T) {
