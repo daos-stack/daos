@@ -36,6 +36,8 @@ void ds_cont_svc_step_down(struct cont_svc *svc);
 int
     ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
+int
+    ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid);
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
@@ -71,7 +73,9 @@ struct ds_cont_child {
 	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_props_fetched : 1, sc_stopping : 1,
 	    sc_destroying : 1, sc_vos_agg_active : 1, sc_ec_agg_active : 1,
 	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
-	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1;
+	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1,
+	    /* flag of sc_ec_agg_eph_boundary valid */
+	    sc_ec_agg_eph_valid : 1;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 
@@ -132,6 +136,7 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_batched_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
+	int                      sc_ec_agg_updates;
 };
 
 struct agg_param {
@@ -144,6 +149,14 @@ struct agg_param {
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
 				   daos_epoch_range_t *epr, uint32_t flags,
 				   struct agg_param *param);
+
+static inline bool
+ds_cont_child_ec_aggregating(struct ds_cont_child *cont)
+{
+	/* either I'm running aggregation, or someone else is writing to me for aggregation */
+	return cont->sc_ec_agg_updates || cont->sc_ec_agg_active;
+}
+
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param);
@@ -194,6 +207,9 @@ ds_cont_child_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
 
 void
 ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child);
+void
+     ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeout);
+
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
  */
