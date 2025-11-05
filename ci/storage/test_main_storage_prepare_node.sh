@@ -61,8 +61,9 @@ if ipmctl show -dimm; then
     fi
 else
     counter=0
-    for ib in /sys/class/net/ib*; do
+    for ib_path in /sys/class/net/ib*; do
         ((counter++)) || true
+        ib=$(basename "$ib_path")
         ip addr show "$ib"
     done
     if "$counter" -ge 2; then
