@@ -263,6 +263,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
+	D_INFO("Revert e9083b0d0c69bd56bd01d0347e35c743fb089a2a\n");
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
