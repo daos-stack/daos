@@ -27,8 +27,8 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 	daos_size_t              base;
 	int                      rc;
 
-	/** No EC above RF 2, use default CS */
-	if (rf > 2) {
+	/** No EC above RF 3, use default CS */
+	if (rf > 3) {
 		*cs = DFS_DEFAULT_CHUNK_SIZE;
 		return 0;
 	}
