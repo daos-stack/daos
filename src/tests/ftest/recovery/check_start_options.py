@@ -10,7 +10,7 @@ from general_utils import check_file_exists
 from recovery_utils import query_detect
 from run_utils import command_as_user, run_remote
 
-# Enums used in this test
+# Enum values used in this test
 ENUM_CIC_POOL_NONEXIST_ON_MS = 4
 ENUM_CIA_INTERACT = 1
 ENUM_CIA_STALE = 0xffff
@@ -128,10 +128,12 @@ class DMGCheckStartOptionsTest(TestWithServers):
         dmg_command.check_disable()
 
     def get_reports(self, cmd):
+        'Helper function - get the reports from the check query'
         check_query_out = cmd.check_query()
         return check_query_out["response"]["reports"]
 
     def expect_reports(self, query_reports, exp_reports):
+        'Helper function - verify expected check reports are found in actual query reports'
         if not query_reports:
             self.fail("Checker didn't detect any inconsistency!")
         for exp in exp_reports:
