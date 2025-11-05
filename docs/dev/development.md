@@ -392,3 +392,6 @@ In order to properly upgrade a 3rd party component, do all of the following:
    [`utils/rpms/package_info.sh`](../../utils/rpms/package_info.sh)
 1. Make any necessary changes to `utils/rpms/<component>.sh` such as adding new
    files to various packages.
+1. Update the `utils/rpms/<component>.changelog` file to document the change and make sure
+   the changelog file is referenced by the `RPM_CHANGELOG="<component>.changelog"` variable
+   in `utils/rpms/<component>.sh`.
