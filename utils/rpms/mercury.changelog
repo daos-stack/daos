@@ -6,10 +6,10 @@
 - Current dependency was too limiting for use with SHS provided libfabric rpms.
 - Prevents "unbound variable" errors while keeping the check meaningful
 
-* Tue Sep 15 2025 Jeff Olivier <jeffolivier@google.com> - 2.4.0-7
+* Mon Sep 15 2025 Jeff Olivier <jeffolivier@google.com> - 2.4.0-7
 - Fix leap package name
 
-* Fri Spe 12 2025 Jeff Olivier <jeffolivier@google.com> - 2.4.0-6
+* Fri Sep 12 2025 Jeff Olivier <jeffolivier@google.com> - 2.4.0-6
 - Enable new packaging builds with FPM
 - Add distro to package names
 
