@@ -24,6 +24,7 @@ Access (RMA). Its interface is generic and allows any function
 call to be serialized. Since code generation is done using the C
 preprocessor, no external tool is required."
 URL="http://mercury-hpc.github.io"
+RPM_CHANGELOG="mercury.changelog"
 
 files=()
 TARGET_PATH="${bindir}"
