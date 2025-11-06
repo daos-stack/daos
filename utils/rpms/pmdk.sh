@@ -16,6 +16,7 @@ ARCH=${isa}
 DESCRIPTION="The Persistent Memory Development Kit is a collection of libraries for
 using memory-mapped persistence, optimized specifically for persistent memory."
 URL="https://github.com/pmem/pmdk"
+RPM_CHANGELOG="pmdk.changelog"
 
 files=()
 
@@ -164,3 +165,4 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   DEPENDS=("${pmem_lib} = ${pmdk_full}")
   build_package "daxio"
 fi
+RPM_CHANGELOG=
