@@ -17,6 +17,7 @@ DESCRIPTION="The Storage Performance Development Kit provides a set of tools
 and libraries for writing high performance, scalable, user-mode storage
 applications."
 URL="https://spdk.io"
+RPM_CHANGELOG="spdk.changelog"
 
 files=()
 TARGET_PATH="${bindir}"
@@ -83,3 +84,4 @@ append_install_list "${files[@]}"
 
 DEPENDS=("daos-spdk = ${daos_spdk_full}")
 build_package "daos-spdk-devel"
+RPM_CHANGELOG=
