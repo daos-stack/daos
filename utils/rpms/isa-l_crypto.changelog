@@ -1,4 +1,3 @@
-%changelog
 * Thu Nov 6 2025 Jeff Olivier <jeffolivier@google.com> - 2.25.0-1
 - Update DAOS to 2.25.0 release
 - Restore change log missing since 2.24.0-1
