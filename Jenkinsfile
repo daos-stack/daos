@@ -670,10 +670,10 @@ pipeline {
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
-                                scons_args: sconsFaultsArgs() +
-                                            ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                code_coverage: is_code_coverage(),
-                                build_deps: 'yes'))
+                                           scons_args: sconsFaultsArgs() +
+                                                       ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                           code_coverage: is_code_coverage(),
+                                           build_deps: 'yes'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
                         }
