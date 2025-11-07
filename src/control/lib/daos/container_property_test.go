@@ -324,7 +324,7 @@ func testReadOnlyContainerProperty(t *testing.T, propType ContainerPropType) {
 	test.CmpErr(t, errors.Errorf("property %q is read-only", testProp.Name), testProp.Set("whoops"))
 }
 
-func TestDaos_ContainerProperty_Layout(t *testing.T) {
+func TestDaos_ContainerProperty_LayoutValues(t *testing.T) {
 	testReadOnlyContainerProperty(t, ContainerPropLayoutType)
 
 	for name, tc := range map[string]struct {
@@ -375,8 +375,12 @@ func TestDaos_ContainerProperty_Layout(t *testing.T) {
 			test.AssertEqual(t, tc.expStr, testProp.StringValue(), "unexpected string value")
 		})
 	}
+}
 
-	t.Run("Property Description", func(t *testing.T) {
+func TestDaos_ContainerProperty_LayoutDescription(t *testing.T) {
+	testReadOnlyContainerProperty(t, ContainerPropLayoutType)
+
+	t.Run("Layout property description", func(t *testing.T) {
 		testProp := newTestContainerProperty(ContainerPropLayoutType)
 		test.AssertEqual(t, testProp.Description, "Layout Type (unknown, POSIX, HDF5, PYTHON, SPARK, DATABASE, ROOT, SEISMIC, METEO)", "unexpected description")
 	})
