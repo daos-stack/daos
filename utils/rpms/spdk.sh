@@ -84,4 +84,3 @@ append_install_list "${files[@]}"
 
 DEPENDS=("daos-spdk = ${daos_spdk_full}")
 build_package "daos-spdk-devel"
-RPM_CHANGELOG=
