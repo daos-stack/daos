@@ -3622,16 +3622,19 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	if (cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
+	if (cru->cru_result == 0 && ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+		cru->cru_result = CHK__CHECK_RESULT__DRY_RUN;
+
 	if (*seq == 0) {
 
 new_seq:
 		*seq = chk_report_seq_gen(ins);
 	}
 
-	D_INFO(DF_LEADER" handle %s report from rank %u with seq "
-	       DF_X64" class %u, action %u, result %d\n", DP_LEADER(ins),
-	       decision != NULL ? "local" : "remote", cru->cru_rank, *seq, cru->cru_cla,
-	       cru->cru_act, cru->cru_result);
+	D_INFO(DF_LEADER " handle %s report from rank %u with seq " DF_X64 " class %u, action %u, "
+			 "%s, result %d\n",
+	       DP_LEADER(ins), decision != NULL ? "local" : "remote", cru->cru_rank, *seq,
+	       cru->cru_cla, cru->cru_act, cru->cru_msg, cru->cru_result);
 
 	if (cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
 		if (cru->cru_pool == NULL)

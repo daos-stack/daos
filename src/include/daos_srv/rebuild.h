@@ -16,6 +16,7 @@
 
 #define REBUILD_ENV            "DAOS_REBUILD"
 #define REBUILD_ENV_DISABLED   "no"
+#define REBUILD_WAIT_EC_PAUSE_ENV "DAOS_REBUILD_WAIT_EC_PAUSE"
 
 /**
  * Enum values to indicate the rebuild operation that should be applied to the
@@ -87,14 +88,15 @@ int
      ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t stable_eph,
 			 uint32_t layout_version, struct pool_target_id_list *tgts,
 			 daos_rebuild_opc_t rebuild_op, daos_rebuild_opc_t retry_rebuild_op,
-			 uint32_t retry_map_ver, bool stop_admin, uint64_t delay_sec);
+			 uint32_t retry_map_ver, bool stop_admin, void *cur_taskp, uint64_t delay_sec);
 void ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank);
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
 void ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *rebuild_ver,
 			      daos_epoch_t *current_eph, uint32_t *rebuild_gen);
 int
-     ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal);
+     ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal,
+				uint64_t delay_sec);
 void ds_rebuild_leader_stop_all(void);
 void ds_rebuild_abort(uuid_t pool_uuid, unsigned int version, uint32_t rebuild_gen,
 		      uint64_t term);

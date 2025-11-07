@@ -73,7 +73,8 @@ def _base_setup(env):
                 env["CCFLAGS"].remove(flag)
         cc_flags = [f"-Wframe-larger-than={ASAN_FRAME_SIZE_MAX[cc]}",
                     '-fno-omit-frame-pointer',
-                    '-fno-common']
+                    '-fno-common',
+                    '-Wno-stringop-truncation']
 
         asan_flags = []
         for sanitizer in env['SANITIZERS'].split(','):

@@ -127,6 +127,12 @@ message SystemRebuildManageResp
 	repeated PoolRebuildManageResult results = 1; // Pool-rebuild operation results.
 }
 
+// SystemSelfHealEvalReq supplies system self-heal eval parameters.
+message SystemSelfHealEvalReq
+{
+	string sys = 1; // DAOS system name
+}
+
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
 	string sys = 1; // DAOS system name
@@ -142,6 +148,7 @@ message SystemQueryResp {
 	string absenthosts = 3; // hostset missing from membership
 	uint64 data_version = 4; // Version of the system database.
 	repeated string providers = 5; // Providers supported by system in configured order
+	string                sys_self_heal_policy = 6; // System self_heal property value
 }
 
 // SystemEraseReq supplies system erase parameters.

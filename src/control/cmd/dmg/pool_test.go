@@ -602,9 +602,9 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
 						propWithVal("scrub", "timed"),
 						propWithVal("scrub_freq", "1"),
-						propWithVal("label", "label"),
 					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
@@ -613,6 +613,30 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Create pool with properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub_freq:1", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+						propWithVal("scrub", "timed"),
+						propWithVal("scrub_freq", "1"),
+					},
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with duplicate properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub:timed,scrub_freq:1", testSizeStr),
+			"",
+			errors.New("more than once"),
 		},
 		// Exclude testing with multiple ranks is verified at the control API layer.
 		{
@@ -827,6 +851,20 @@ func TestPoolCommands(t *testing.T) {
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
 						propWithVal("self_heal", "exclude;rebuild"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set pool properties with self_heal value 'none'",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:none,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "none"),
 						propWithVal("space_rb", "42"),
 					},
 				}),
@@ -1119,8 +1157,16 @@ func TestPoolCommands(t *testing.T) {
 			"pool query 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: daos.DefaultPoolQueryMask,
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
 				}),
 			}, " "),
 			nil,
@@ -1130,8 +1176,17 @@ func TestPoolCommands(t *testing.T) {
 			"pool query --show-enabled 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionEnabledEngines)
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
 				}),
 			}, " "),
 			nil,
@@ -1141,8 +1196,17 @@ func TestPoolCommands(t *testing.T) {
 			"pool query -e 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionEnabledEngines)
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
 				}),
 			}, " "),
 			nil,
@@ -1152,8 +1216,30 @@ func TestPoolCommands(t *testing.T) {
 			"pool query --health-only 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { *qm = daos.HealthOnlyPoolQueryMask }),
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						*qm = daos.HealthOnlyPoolQueryMask
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool for health only; skip self_heal fetch",
+			"pool query --health-only 12345678-1234-1234-1234-1234567890ab --no-self-heal-check",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						*qm = daos.HealthOnlyPoolQueryMask
+					}),
 				}),
 			}, " "),
 			nil,
@@ -1163,8 +1249,16 @@ func TestPoolCommands(t *testing.T) {
 			"pool query test_label",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "test_label",
-					QueryMask: daos.DefaultPoolQueryMask,
+					ID: "test_label",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
 				}),
 			}, " "),
 			nil,
