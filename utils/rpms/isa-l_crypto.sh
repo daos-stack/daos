@@ -55,4 +55,3 @@ append_install_list "${files[@]}"
 
 DEPENDS=("${isal_crypto_lib} = ${isal_crypto_full}")
 build_package "${isal_crypto_dev}"
-RPM_CHANGELOG=

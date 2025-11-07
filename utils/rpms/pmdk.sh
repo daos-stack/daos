@@ -165,4 +165,3 @@ if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
   DEPENDS=("${pmem_lib} = ${pmdk_full}")
   build_package "daxio"
 fi
-RPM_CHANGELOG=
