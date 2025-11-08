@@ -189,7 +189,7 @@ class PoolMembershipTest(IorTestBase):
 
         # If we call check start immediately after check enable, checker may not detect
         # the fault. Developer is fixing this issue.
-        time.sleep(3)
+        time.sleep(10)
 
         dmg_command.check_start()
 
