@@ -1,8 +1,9 @@
 /**
-* (C) Copyright 2018-2022 Intel Corporation.
-*
-* SPDX-License-Identifier: BSD-2-Clause-Patent
-*/
+ * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
@@ -509,6 +510,9 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 		opts.num_pci_addr = nr_pcil;
 	}
 	opts.name = "daos_server_helper";
+	if (geteuid() != 0) {
+		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
+	}
 
 	rc = spdk_env_init(&opts);
 	if (rc < 0) {
