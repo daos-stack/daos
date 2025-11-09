@@ -407,7 +407,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL,
-				daos_getmtime_coarse() + 60 * 1000, &pool_info, NULL, NULL,
+				daos_getmtime_coarse() + 2 * 60 * 1000, &pool_info, NULL, NULL,
 				&mem_file_bytes);
 	if (DAOS_FAIL_CHECK(DAOS_MGMT_FAIL_CREATE_QUERY))
 		rc = -DER_TIMEDOUT;
