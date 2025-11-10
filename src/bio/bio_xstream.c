@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -171,6 +172,10 @@ bio_spdk_env_init(void)
 			DL_ERROR(rc, "Failed to process nvme config");
 			goto out;
 		}
+	}
+
+	if (geteuid() != 0) {
+		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
 	}
 
 	/* Don't pass opt for reinitialization, otherwise it will fail */
@@ -1501,6 +1506,8 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
 						bio_spdk_subsys_timeout);
 			DL_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR, rc, "SPDK subsystems finalized");
+			if (rc != 0)
+				ctxt->bxc_skip_draining = 1;
 
 			nvme_glb.bd_init_thread = NULL;
 
@@ -1512,18 +1519,21 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 
 	if (ctxt->bxc_thread != NULL) {
-		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d",
-			ctxt->bxc_tgt_id);
+		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d, skip_draining:%u",
+			ctxt->bxc_tgt_id, ctxt->bxc_skip_draining);
 
-		/* Don't drain events if spdk_subsystem_fini() timeout */
-		while (rc == 0 && !spdk_thread_is_idle(ctxt->bxc_thread))
+		/*
+		 * Don't drain events if we are asked to skip this (usually
+		 * due to an earlier error).
+		 */
+		while (!ctxt->bxc_skip_draining && !spdk_thread_is_idle(ctxt->bxc_thread))
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 		D_DEBUG(DB_MGMT, "SPDK thread finalized, tgt_id:%d",
 			ctxt->bxc_tgt_id);
 
 		spdk_thread_exit(ctxt->bxc_thread);
-		while (rc == 0 && !spdk_thread_is_exited(ctxt->bxc_thread))
+		while (!ctxt->bxc_skip_draining && !spdk_thread_is_exited(ctxt->bxc_thread))
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 		spdk_thread_destroy(ctxt->bxc_thread);
 		ctxt->bxc_thread = NULL;
@@ -1609,7 +1619,12 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
-			D_ERROR("failed to init bdevs, rc:%d\n", rc);
+			DL_ERROR(rc, "failed to init bdevs");
+			/*
+			 * We're afraid that draining the thread might never
+			 * complete (DAOS-17442).
+			 */
+			ctxt->bxc_skip_draining = 1;
 			goto out;
 		}
 
