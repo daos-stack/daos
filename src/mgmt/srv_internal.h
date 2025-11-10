@@ -84,7 +84,8 @@ int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
 			size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
 			int domains_nr, uint32_t *domains, size_t meta_blob_size);
-int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int
+    ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
 		       char *machine, uint32_t *count);
@@ -118,7 +119,7 @@ int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   uint64_t *ncontainers);
 int
     ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		       d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info,
+		       d_rank_list_t **dead_ranks, uint64_t deadline, daos_pool_info_t *pool_info,
 		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
 int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
 			       d_rank_list_t *tgts, daos_target_info_t **infos);
