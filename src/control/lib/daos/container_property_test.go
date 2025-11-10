@@ -380,10 +380,8 @@ func TestDaos_ContainerProperty_LayoutValues(t *testing.T) {
 func TestDaos_ContainerProperty_LayoutDescription(t *testing.T) {
 	testReadOnlyContainerProperty(t, ContainerPropLayoutType)
 
-	t.Run("Layout property description", func(t *testing.T) {
-		testProp := newTestContainerProperty(ContainerPropLayoutType)
-		test.AssertEqual(t, testProp.Description, "Layout Type (unknown, POSIX, HDF5, PYTHON, SPARK, DATABASE, ROOT, SEISMIC, METEO)", "unexpected description")
-	})
+	testProp := newTestContainerProperty(ContainerPropLayoutType)
+	test.AssertEqual(t, testProp.Description, "Layout Type (unknown, POSIX, HDF5, PYTHON, SPARK, DATABASE, ROOT, SEISMIC, METEO)", "unexpected description")
 }
 
 func TestDaos_ContainerProperty_ACL(t *testing.T) {
