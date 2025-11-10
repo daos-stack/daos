@@ -2931,6 +2931,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	uint32_t		 minimum_nr;
 	uint32_t		 enum_flags;
 	uint32_t		 num;
+	int                       waited = 0;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, DF_RB ": migrate obj " DF_UOID " shard %u eph " DF_X64 "-" DF_X64 "\n",
@@ -3095,8 +3096,10 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
 			 * aggregation yet, so let's retry.
 			 */
-			D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " retry with %d \n", DP_RB_MPT(tls),
-				DP_UOID(arg->oid), rc);
+			waited++;
+			dss_sleep(5000);
+			D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " retry %d secs with %d \n",
+				DP_RB_MPT(tls), DP_UOID(arg->oid), waited * 5, rc);
 			rc = 0;
 			continue;
 		} else if (rc) {
