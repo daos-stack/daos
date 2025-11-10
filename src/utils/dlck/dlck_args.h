@@ -11,9 +11,8 @@
 #include <stdint.h>
 #include <argp.h>
 #include <uuid/uuid.h>
+#include <daos_srv/checker.h>
 #include <gurt/list.h>
-
-#include "dlck_cmds.h"
 
 #define _STRINGIFY(x)                   #x
 #define STRINGIFY(x)                    _STRINGIFY(x)
@@ -25,8 +24,7 @@
 #define GROUP_AUTOMAGIC                 (-1) /** yes, -1 is the last group */
 
 /** all short options */
-#define KEY_COMMON_CMD                  'c'
-#define KEY_COMMON_CO_UUID              'q'
+#define KEY_COMMON_OPTIONS              'o'
 #define KEY_COMMON_WRITE_MODE           'w'
 #define KEY_FILES                       'f'
 /** the options below follow the daos_engine options */
@@ -44,9 +42,10 @@
 
 #define DLCK_TARGET_MAX                 31
 
+#define MISSING_ARG_FMT                 "Missing argument for the '%s' option"
+
 struct dlck_args_common {
-	enum dlck_cmd cmd;
-	uuid_t        co_uuid;    /** Container UUID. */
+	struct checker_options options;
 	bool          write_mode; /** false by default (dry run) */
 };
 
@@ -59,7 +58,6 @@ struct dlck_file {
 	d_list_t    link;
 	uuid_t      po_uuid;        /** Pool UUID. */
 	uint32_t    targets_bitmap; /** Bitmap of targets involved. */
-	const char *desc;           /** Argument provided by the user. */
 };
 
 /**
@@ -85,17 +83,41 @@ struct dlck_args_files {
 	d_list_t list;
 };
 
-struct dlck_print {
-	int (*dp_printf)(const char *fmt, ...);
-};
+/**
+ * Count the number of files in the list.
+ *
+ * \param[in]	files	The list of files to count.
+ *
+ * \return The number of files on the list \p files.
+ */
+static inline unsigned
+dlck_args_files_num(struct dlck_args_files *files)
+{
+	struct dlck_file *file;
+	unsigned          num = 0;
 
+	d_list_for_each_entry(file, &files->list, link) {
+		++num;
+	}
+
+	return num;
+}
+
+/**
+ * @struct dlck_control
+ *
+ * Bundle of input, output, and control arguments.
+ */
 struct dlck_control {
 	/** in */
 	struct dlck_args_common common;
 	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
-	/** print */
-	struct dlck_print       print;
+	/** checker */
+	struct checker          checker;
+	/** out */
+	char                   *log_dir;
+	unsigned                warnings_num;
 };
 
 /** helper definitions */
@@ -113,7 +135,7 @@ struct dlck_control {
 #define FAIL(STATE, RC, ERRNUM, ...)                                                               \
 	do {                                                                                       \
 		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
-		RC = ERRNUM;                                                                       \
+		(RC) = ERRNUM;                                                                     \
 	} while (0)
 
 #define RETURN_FAIL(STATE, ERRNUM, ...)                                                            \
@@ -121,10 +143,6 @@ struct dlck_control {
 		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
 		return ERRNUM;                                                                     \
 	} while (0)
-
-#define DLCK_PRINT(ctrl, fmt)       (void)ctrl->print.dp_printf(fmt)
-
-#define DLCK_PRINTF(ctrl, fmt, ...) (void)ctrl->print.dp_printf(fmt, __VA_ARGS__)
 
 /** dlck_args_parse.c */
 
@@ -160,15 +178,18 @@ int
 parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_ptr);
 
 /**
- * Extract a command from \p arg.
+ * Extract an event from \p arg.
  *
- * \param[in]	arg	String value.
+ * \param[in]	option	Name of the option.
+ * \param[in]	value	String value.
+ * \param[out]	state	State of the parser.
+ * \param[out]	rc	Return code.
  *
- * \retval DLCK_CMD_UNKNOWN	The provided command is unknown.
- * \retval DLCK_CMD_*		DLCK command.
+ * \retval CHECKER_EVENT_INVALID	The provided event is invalid.
+ * \retval CHECKER_EVENT_*		DLCK event.
  */
-enum dlck_cmd
-parse_command(const char *arg);
+enum checker_event
+parse_event(const char *option, const char *value, struct argp_state *state, int *rc);
 
 /** dlck_args_files.c */
 
