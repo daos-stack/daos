@@ -10,7 +10,7 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, report_errors
-from recovery_utils import check_ram_used, wait_for_check_complete
+from recovery_utils import wait_for_check_complete
 from run_utils import command_as_user, run_remote
 
 
@@ -281,15 +281,6 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
-        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
-        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
-        # cluster, the "class" would be "dcpm").
-        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
-        if ram_used:
-            self.log.info("MD-on-SSD cluster isn't currently supported.")
-            # return results in PASS.
-            return
-
         self.log_step("Create a pool with --nsvc=3.")
         pool = self.get_pool(svcn=3)
 
@@ -372,12 +363,6 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
-        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
-        if ram_used:
-            self.log.info("MD-on-SSD cluster isn't currently supported.")
-            # return results in PASS.
-            return
-
         self.log_step("Create a pool.")
         pool = self.get_pool(connect=False)
 
