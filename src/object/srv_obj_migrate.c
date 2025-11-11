@@ -3430,7 +3430,8 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 	uuid_copy(fetch_arg.cont_uuid, cont_uuid);
 	uuid_copy(fetch_arg.pool_uuid, tls->mpt_pool_uuid);
-	rc = dss_ult_execute(cont_fetch_start_ult, &fetch_arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(cont_fetch_start_ult, &fetch_arg, NULL, NULL, DSS_XS_SYS, 0,
+			     MIGRATE_STACK_SIZE);
 	if (rc) {
 		DL_ERROR(rc, DF_RB ": ds_pool_lookup failed", DP_RB_MPT(tls));
 		if (rc == -DER_SHUTDOWN)
@@ -3712,7 +3713,8 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 	arg.rebuild_ver = version;
 	arg.tgt_id      = tgt_id;
 	arg.generation  = generation;
-	rc = dss_ult_execute(ds_migrate_prepare_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc              = dss_ult_execute(ds_migrate_prepare_ult, &arg, NULL, NULL, DSS_XS_SYS, 0,
+					  MIGRATE_STACK_SIZE);
 	if (rc || arg.pool == NULL)
 		D_GOTO(out, rc);
 
