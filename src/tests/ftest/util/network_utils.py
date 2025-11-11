@@ -18,6 +18,7 @@ SUPPORTED_PROVIDERS = (
     "ofi+verbs;ofi_rxm",
     "ucx+dc_x",
     "ucx+ud_x",
+    "ucx+tcp",
     "ofi+tcp",
     "ofi+tcp;ofi_rxm",
     "ofi+opx"
