@@ -7234,7 +7234,7 @@ log_unavailable_targets(struct pool_svc *svc, struct pool_map *map)
 		if (doms[i].do_comp.co_status & PO_COMP_ST_DOWN) {
 			D_ERROR(DF_UUID ":  rank %u\n", DP_UUID(svc->ps_uuid),
 				doms[i].do_comp.co_rank);
-		} else if (doms[i].do_comp.co_status & PO_COMP_ST_UPIN) { // XXX: ask Xuezhao
+		} else if (doms[i].do_comp.co_status & PO_COMP_ST_UPIN) {
 			int j;
 
 			for (j = 0; j < doms[i].do_target_nr; j++)
