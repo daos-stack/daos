@@ -293,6 +293,10 @@ show_help(char *name)
 	    "\n"
 	    "	   --multi-user		Run dfuse in multi user mode\n"
 	    "	   --read-only		Mount dfuse read-only\n"
+	    "      --dump-handles=file  Serialize and dump the pool, container, and dfs handles"
+	    "				to file using the local2global DAOS functionality\n"
+	    "	   --read-handles=file  Read the deserialize the pool, cont, and dfs handles,"
+	    "				and use them instead of connecting to the server\n"
 	    "\n"
 	    "	-h --help		Show this help\n"
 	    "	-v --version		Show version\n"
@@ -369,6 +373,11 @@ show_help(char *name)
 	    "  The default is --enable-wb-cache.\n"
 	    "* If --disable-caching and --enable-wb-cache are both specified,\n"
 	    "  the --enable-wb-cache option is ignored and no caching is performed.\n"
+	    "* If --dump-handles is used from one dfuse mount and --read-handles is used for\n"
+	    "  starting other dfuse mounts, the dfuse mount that dumps the handles cannot be\n"
+	    "  umounted before the others, otherwise the other mounts will become inaccessible\n"
+	    "  since the g2l & l2g method for sharing DAOS handles requires the main process\n"
+	    "  that establishes the pool and container connections to keep those alive.\n"
 	    "\n"
 	    "Version: %s\n",
 	    name, DAOS_VERSION);
@@ -433,6 +442,8 @@ main(int argc, char **argv)
 					     {"enable-wb-cache", no_argument, 0, 'F'},
 					     {"disable-caching", no_argument, 0, 'A'},
 					     {"disable-wb-cache", no_argument, 0, 'B'},
+					     {"dump-handles", required_argument, 0, 'D'},
+					     {"read-handles", required_argument, 0, 'R'},
 					     {"read-only", no_argument, 0, 'r'},
 					     {"options", required_argument, 0, 'o'},
 					     {"version", no_argument, 0, 'v'},
@@ -453,6 +464,8 @@ main(int argc, char **argv)
 	dfuse_info->di_caching  = true;
 	dfuse_info->di_wb_cache = true;
 	dfuse_info->di_eq_count = 1;
+	dfuse_info->di_dump_handles = false;
+	dfuse_info->di_read_handles = false;
 
 	while (1) {
 		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
@@ -486,6 +499,14 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
+			break;
+		case 'D':
+			dfuse_info->di_handles_file = optarg;
+			dfuse_info->di_dump_handles = true;
+			break;
+		case 'R':
+			dfuse_info->di_handles_file = optarg;
+			dfuse_info->di_read_handles = true;
 			break;
 		case 'M':
 			dfuse_info->di_multi_user = true;
@@ -550,14 +571,13 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (!dfuse_info->di_foreground && d_isenv_def("PMIX_RANK")) {
-		DFUSE_TRA_WARNING(dfuse_info,
-				  "Not running in background under orterun");
-		dfuse_info->di_foreground = true;
-	}
-
 	if (!dfuse_info->di_mountpoint) {
 		printf("Mountpoint is required\n");
+		show_help(argv[0]);
+		D_GOTO(out_debug, rc = -DER_INVAL);
+	}
+	if (dfuse_info->di_dump_handles && dfuse_info->di_read_handles) {
+		printf("Cannot dump and read handles file at the same time\n");
 		show_help(argv[0]);
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
@@ -708,6 +728,91 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
+	/** if user passes a handle file, read it and store the serialized handles */
+	if (dfuse_info->di_read_handles && dfuse_info->di_handles_file) {
+		d_iov_t     pool_hdl = {NULL, 0, 0};
+		d_iov_t     cont_hdl = {NULL, 0, 0};
+		d_iov_t     dfs_hdl  = {NULL, 0, 0};
+		char       *buf      = NULL;
+		daos_size_t buf_size;
+		size_t      sizes[3];
+		FILE       *fp;
+		int         dfs_flags = O_RDWR;
+
+		fp = fopen(dfuse_info->di_handles_file, "rb");
+		if (!fp) {
+			rc = errno;
+			DHL_ERROR(dfuse_info, daos_errno2der(rc), "Failed to open file %s",
+				  dfuse_info->di_handles_file);
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+
+		/** read the 3 size_t values for the 3 handles */
+		if (fread(sizes, sizeof(size_t), 3, fp) != 3) {
+			rc = errno;
+			DHL_ERROR(dfuse_info, daos_errno2der(rc), "Failed to read file %s",
+				  dfuse_info->di_handles_file);
+			fclose(fp);
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+		pool_hdl.iov_buf_len = pool_hdl.iov_len = sizes[0];
+		cont_hdl.iov_buf_len = cont_hdl.iov_len = sizes[1];
+		dfs_hdl.iov_buf_len = dfs_hdl.iov_len = sizes[2];
+
+		buf_size = sizes[0] + sizes[1] + sizes[2];
+		D_ALLOC(buf, buf_size);
+		if (buf == NULL) {
+			fclose(fp);
+			D_GOTO(out_daos, rc = -DER_NOMEM);
+		}
+
+		if (fread(buf, 1, buf_size, fp) != buf_size) {
+			rc = errno;
+			DHL_ERROR(dfuse_info, daos_errno2der(rc), "Failed to read file %s",
+				  dfuse_info->di_handles_file);
+			fclose(fp);
+			D_FREE(buf);
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+
+		pool_hdl.iov_buf = buf;
+		cont_hdl.iov_buf = buf + pool_hdl.iov_buf_len;
+		dfs_hdl.iov_buf  = buf + pool_hdl.iov_buf_len + cont_hdl.iov_buf_len;
+
+		rc = daos_pool_global2local(pool_hdl, &dfuse_info->di_poh);
+		if (rc) {
+			fclose(fp);
+			D_FREE(buf);
+			DHL_ERROR(dfuse_info, rc, "daos_pool_global2local() failed");
+			D_GOTO(out_daos, rc);
+		}
+
+		rc = daos_cont_global2local(dfuse_info->di_poh, cont_hdl, &dfuse_info->di_coh);
+		if (rc) {
+			fclose(fp);
+			D_FREE(buf);
+			daos_pool_disconnect(dfuse_info->di_poh, NULL);
+			DHL_ERROR(dfuse_info, rc, "daos_cont_global2local() failed");
+			D_GOTO(out_daos, rc);
+		}
+
+		if (dfuse_info->di_read_only)
+			dfs_flags = O_RDONLY;
+		rc = dfs_global2local(dfuse_info->di_poh, dfuse_info->di_coh, dfs_flags, dfs_hdl,
+				      &dfuse_info->di_dfs);
+		if (rc) {
+			fclose(fp);
+			D_FREE(buf);
+			daos_cont_close(dfuse_info->di_coh, NULL);
+			daos_pool_disconnect(dfuse_info->di_poh, NULL);
+			DHL_ERROR(dfuse_info, rc, "dfs_global2local() failed");
+			D_GOTO(out_daos, rc);
+		}
+
+		fclose(fp);
+		D_FREE(buf);
+	}
+
 	/* Connect to a pool */
 	rc = dfuse_pool_connect(dfuse_info, pool_name[0] ? pool_name : NULL, &dfp);
 	if (rc != 0) {
@@ -719,6 +824,91 @@ main(int argc, char **argv)
 	if (rc != 0) {
 		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
+	}
+
+	/** if user asked to dump the handles, serialize them and write them to the file */
+	if (dfuse_info->di_dump_handles && dfuse_info->di_handles_file) {
+		d_iov_t     pool_hdl = {NULL, 0, 0};
+		d_iov_t     cont_hdl = {NULL, 0, 0};
+		d_iov_t     dfs_hdl  = {NULL, 0, 0};
+		char       *buf      = NULL;
+		daos_size_t buf_size;
+		FILE       *fp;
+
+		rc = daos_pool_local2global(dfp->dfp_poh, &pool_hdl);
+		if (rc) {
+			DHL_ERROR(dfuse_info, rc, "daos_pool_local2global() failed");
+			goto out_cont;
+		}
+		rc = daos_cont_local2global(dfs->dfs_coh, &cont_hdl);
+		if (rc) {
+			DHL_ERROR(dfuse_info, rc, "daos_cont_local2global() failed");
+			goto out_cont;
+		}
+		rc = dfs_local2global(dfs->dfs_ns, &dfs_hdl);
+		if (rc) {
+			DHL_ERROR(dfuse_info, rc, "dfs_local2global() failed");
+			goto out_cont;
+		}
+
+		buf_size = pool_hdl.iov_buf_len + cont_hdl.iov_buf_len + dfs_hdl.iov_buf_len;
+		D_ALLOC(buf, buf_size);
+		if (buf == NULL)
+			D_GOTO(out_cont, rc = -DER_NOMEM);
+
+		pool_hdl.iov_buf = buf;
+		cont_hdl.iov_buf = buf + pool_hdl.iov_buf_len;
+		dfs_hdl.iov_buf  = buf + pool_hdl.iov_buf_len + cont_hdl.iov_buf_len;
+
+		rc = daos_pool_local2global(dfp->dfp_poh, &pool_hdl);
+		if (rc) {
+			DHL_ERROR(dfuse_info, rc, "daos_pool_local2global() failed");
+			D_FREE(buf);
+			goto out_cont;
+		}
+		rc = daos_cont_local2global(dfs->dfs_coh, &cont_hdl);
+		if (rc) {
+			DHL_ERROR(dfuse_info, rc, "daos_cont_local2global() failed");
+			D_FREE(buf);
+			goto out_cont;
+		}
+		rc = dfs_local2global(dfs->dfs_ns, &dfs_hdl);
+		if (rc) {
+			DHL_ERROR(dfuse_info, rc, "dfs_local2global() failed");
+			D_FREE(buf);
+			goto out_cont;
+		}
+
+		fp = fopen(dfuse_info->di_handles_file, "wb+");
+		if (!fp) {
+			rc = errno;
+			DHL_ERROR(dfuse_info, daos_errno2der(rc), "Failed to open file %s",
+				  dfuse_info->di_handles_file);
+			D_FREE(buf);
+			D_GOTO(out_cont, rc = daos_errno2der(rc));
+		}
+
+		size_t sizes[3] = {pool_hdl.iov_buf_len, cont_hdl.iov_buf_len, dfs_hdl.iov_buf_len};
+
+		if (fwrite(sizes, sizeof(size_t), 3, fp) != 3) {
+			rc = errno;
+			fclose(fp);
+			D_FREE(buf);
+			DHL_ERROR(dfuse_info, daos_errno2der(rc), "Failed to write file %s",
+				  dfuse_info->di_handles_file);
+			D_GOTO(out_cont, rc = daos_errno2der(rc));
+		}
+
+		if (fwrite(buf, 1, buf_size, fp) != buf_size) {
+			rc = errno;
+			fclose(fp);
+			D_FREE(buf);
+			DHL_ERROR(dfuse_info, daos_errno2der(rc), "Failed to write file %s",
+				  dfuse_info->di_handles_file);
+			D_GOTO(out_cont, rc = daos_errno2der(rc));
+		}
+		fclose(fp);
+		D_FREE(buf);
 	}
 
 	rc = dfuse_fs_start(dfuse_info, dfs);
