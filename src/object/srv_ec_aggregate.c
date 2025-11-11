@@ -115,7 +115,7 @@ struct ec_agg_entry {
 	struct ec_agg_par_extent ae_par_extent;	 /* Parity extent             */
 	daos_handle_t		 ae_obj_hdl;	 /* Object handle for cur obj */
 	struct pl_obj_layout	*ae_obj_layout;
-	struct daos_shard_loc	 ae_peer_pshards[OBJ_EC_MAX_P];
+	struct daos_shard_loc    ae_peer_pshards[OBJ_EC_MAX_P];
 	uint32_t		 ae_grp_idx;
 	uint32_t		ae_is_leader:1,
 				ae_process_partial:1;
@@ -2219,7 +2219,7 @@ agg_shard_is_parity(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 
 /* Initializes the struct holding the iteration state (ec_agg_entry). */
 static void
-agg_reset_dkey_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry)
+agg_reset_dkey_entry(struct ec_agg_entry *agg_entry)
 {
 	agg_clear_extents(agg_entry);
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
@@ -2257,7 +2257,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_DEBUG(DB_EPC, "oid:"DF_UOID":"DF_KEY" ec agg starting leader %s\n",
 			DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey),
 			agg_entry->ae_is_leader ? "yes" : "no");
-		agg_reset_dkey_entry(&agg_param->ap_agg_entry, entry);
+		agg_reset_dkey_entry(&agg_param->ap_agg_entry);
 		rc = agg_get_obj_handle(agg_entry, true);
 	} else {
 		*acts |= VOS_ITER_CB_SKIP;
@@ -2346,8 +2346,8 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 
 	agg_entry->ae_rsize	= 0UL;
 	if (entry) {
-		agg_entry->ae_oid	= entry->ie_oid;
-		agg_entry->ae_codec	= obj_id2ec_codec(entry->ie_oid.id_pub);
+		agg_entry->ae_oid   = entry->ie_oid;
+		agg_entry->ae_codec = obj_id2ec_codec(entry->ie_oid.id_pub);
 		D_ASSERT(agg_entry->ae_codec);
 	} else {
 		agg_entry->ae_codec = NULL;
@@ -2366,12 +2366,12 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 	}
 
 	for (i = 0; i < OBJ_EC_MAX_P; i++) {
-		agg_entry->ae_peer_pshards[i].sd_rank = DAOS_TGT_IGNORE;
+		agg_entry->ae_peer_pshards[i].sd_rank    = DAOS_TGT_IGNORE;
 		agg_entry->ae_peer_pshards[i].sd_tgt_idx = DAOS_TGT_IGNORE;
 	}
 
 	agg_reset_pos(VOS_ITER_DKEY, agg_entry);
-	agg_reset_dkey_entry(agg_entry, entry);
+	agg_reset_dkey_entry(agg_entry);
 }
 
 static int
@@ -2473,7 +2473,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_pdom_lvl = props.dcp_perf_domain;
 	md.omd_pda = props.dcp_ec_pda;
 	shard_nr        = daos_oclass_grp_size(&oca) * daos_obj_id2grp_nr(md.omd_id);
-	agg_param->ap_credits += roundup(shard_nr, 128) / 128;
+	agg_param->ap_credits += min(512, roundup(shard_nr, 32) / 32);
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 
@@ -2700,6 +2700,23 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
+	if (likely(cont->sc_ec_agg_eph_valid)) {
+		if (cont->sc_ec_agg_eph == 0) {
+			D_INFO(DF_CONT ": update cont->sc_ec_agg_eph to " DF_X64,
+			       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			       cont->sc_ec_agg_eph_boundary);
+			cont->sc_ec_agg_eph = cont->sc_ec_agg_eph_boundary;
+		} else {
+			D_ASSERTF(cont->sc_ec_agg_eph >= cont->sc_ec_agg_eph_boundary,
+				  "bad sc_ec_agg_eph " DF_X64 " < sc_ec_agg_eph_boundary " DF_X64,
+				  cont->sc_ec_agg_eph, cont->sc_ec_agg_eph_boundary);
+		}
+	} else {
+		D_DEBUG(DB_EPC, DF_CONT ": pause EC aggregation for sc_ec_agg_eph_boundary.\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		return 0;
+	}
+
 	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	if (flags & VOS_AGG_FL_FORCE_SCAN) {
 		/** We don't want to use the latest container aggregation epoch for the filter
@@ -2710,7 +2727,10 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		ec_agg_param->ap_filter_eph = MAX(epr->epr_lo, cont->sc_ec_agg_eph);
 	}
 
-	if (ec_agg_param->ap_filter_eph != 0 &&
+	/* Currently cont->sc_ec_update_timestamp is in memory so this optimization won't be helpful
+	 * when there is no container update since restart.
+	 */
+	if (ec_agg_param->ap_filter_eph != 0 && cont->sc_ec_update_timestamp != 0 &&
 	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
 		D_DEBUG(DB_EPC, DF_CONT" skip EC agg "DF_U64">= "DF_U64"\n",
 			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
