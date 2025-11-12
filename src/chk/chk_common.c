@@ -333,20 +333,15 @@ chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks)
 	D_INFO("Ranks List:\n");
 
 	while (rank_nr >= 8) {
-		D_INFO("%8u %8u %8u %8u %8u %8u %8u %8u\n",
-		       ranks[0], ranks[1], ranks[2], ranks[3],
+		D_INFO("%8u%8u%8u%8u%8u%8u%8u%8u\n", ranks[0], ranks[1], ranks[2], ranks[3],
 		       ranks[4], ranks[5], ranks[6], ranks[7]);
 		rank_nr -= 8;
 		ranks += 8;
 	}
 
 	if (rank_nr > 0) {
-		rc = snprintf(ptr, 79, "%8u", ranks[0]);
-		D_ASSERT(rc > 0);
-		ptr += rc;
-
-		for (i = 1; i < rank_nr; i++) {
-			rc = snprintf(ptr, 79 - 8 * i, " %8u", ranks[i]);
+		for (i = 0; i < rank_nr; i++) {
+			rc = snprintf(ptr, 79 - 8 * i, "%8u", ranks[i]);
 			D_ASSERT(rc > 0);
 			ptr += rc;
 		}
@@ -614,6 +609,8 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 	struct chk_bookmark	cbk;
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	d_rank_t		myrank = dss_self_rank();
+	d_iov_t                 kiov;
+	d_iov_t                 riov;
 	int			i;
 	int			rc = 0;
 
@@ -662,6 +659,16 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 
 		if (rc == 0 && cbk.cb_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE && ins->ci_is_leader)
 			continue;
+
+		/* There may be repeated pool(s) in the list, filter out. */
+		d_iov_set(&kiov, pools[i], sizeof(uuid_t));
+		d_iov_set(&riov, NULL, 0);
+		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
+		if (unlikely(rc == 0))
+			continue;
+
+		if (unlikely(rc != -DER_NONEXIST))
+			break;
 
 		/*
 		 * Here, we only update the pool bookmark in DRAM, the caller will store the update
