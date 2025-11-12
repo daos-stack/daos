@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,7 +81,7 @@ struct vos_io_context {
 	    ic_dedup        : 1, /** candidate for dedup */
 	    ic_dedup_verify : 1, ic_read_ts_only : 1, ic_check_existence : 1, ic_remove : 1,
 	    ic_skip_fetch : 1, ic_agg_needed : 1, ic_skip_akey_support : 1, ic_rebuild : 1,
-	    ic_ec : 1; /**< see VOS_OF_EC */
+	    ic_csum_fetch : 1, ic_ec : 1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -717,6 +717,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_rebuild    = ((vos_flags & VOS_OF_REBUILD) != 0);
+	ioc->ic_csum_fetch = ((vos_flags & VOS_OF_FETCH_CSUM) != 0);
 	ioc->ic_umoffs_cnt = 0;
 	ioc->ic_iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
@@ -796,7 +797,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		}
 
 		/* Don't bother to initialize SGLs for size fetch */
-		if (ioc->ic_size_fetch)
+		if (ioc->ic_size_fetch || ioc->ic_csum_fetch)
 			continue;
 
 		bsgl = bio_iod_sgl(ioc->ic_biod, i);
@@ -819,7 +820,7 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	struct bio_sglist *bsgl;
 	int iov_nr, iov_at;
 
-	if (ioc->ic_size_fetch)
+	if (ioc->ic_size_fetch || ioc->ic_csum_fetch)
 		return 0;
 
 	bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
@@ -873,7 +874,7 @@ iod_gang_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	uint32_t	data_len;
 	int		i, rc = 0;
 
-	if (ioc->ic_size_fetch)
+	if (ioc->ic_size_fetch || ioc->ic_csum_fetch)
 		return 0;
 
 	if (biov->bi_addr.ba_gang_nr < 2) {
@@ -962,6 +963,8 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	if (ci_is_valid(&csum_info))
 		save_csum(ioc, &csum_info, NULL, 0);
+	if (ioc->ic_csum_fetch)
+		goto out;
 
 	if (BIO_ADDR_IS_CORRUPTED(&rbund.rb_biov->bi_addr)) {
 		D_DEBUG(DB_CSUM, "Found corrupted record\n");
@@ -1164,6 +1167,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		D_ASSERT(rsize == inob);
 
 		if (ioc->ic_save_recx) {
+			D_ASSERT(!ioc->ic_csum_fetch);
 			rc = save_recx(ioc, lo, nr, ent->en_epoch,
 				       inob, DRT_NORMAL);
 			if (rc != 0)
@@ -1184,9 +1188,24 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 					"but not all\n");
 		}
 
-		rc = iod_fetch(ioc, &biov);
-		if (rc != 0)
-			goto failed;
+		if (ioc->ic_csum_fetch && csum_enabled) {
+			daos_off_t  ex_lo;
+			daos_size_t ex_nr;
+
+			D_ASSERT(!ioc->ic_save_recx);
+			D_ASSERT(!with_shadow);
+			D_ASSERT(ioc->ic_iod_nr = 1);
+
+			ex_lo = ent->en_ext.ex_lo;
+			ex_nr = ent->en_ext.ex_hi - ex_lo + 1;
+			rc    = save_recx(ioc, ex_lo, ex_nr, ent->en_epoch, inob, DRT_NORMAL);
+			if (rc != 0)
+				goto failed;
+		} else {
+			rc = iod_fetch(ioc, &biov);
+			if (rc != 0)
+				goto failed;
+		}
 
 		index = lo + nr;
 	}
@@ -1223,7 +1242,7 @@ ioc_trim_tail_holes(struct vos_io_context *ioc)
 	struct bio_iov *biov;
 	int i;
 
-	if (ioc->ic_size_fetch)
+	if (ioc->ic_size_fetch || ioc->ic_csum_fetch)
 		return;
 
 	bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
@@ -3178,6 +3197,73 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	return vos_obj_fetch_ex(coh, oid, epoch, flags, dkey, iod_nr, iods,
 				sgls, NULL);
 }
+
+// FIXME DAOS-17321 -- Old checksum fetch API, to be removed later
+#if 0
+// FIXME DAOS-17321 -- Add epoch range support
+int
+vos_csum_fetch(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t oid, daos_iod_t *iod,
+	       struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	daos_handle_t       ioh;
+	uint32_t            idx;
+	struct vos_io_context *ioc;
+	struct dcs_ci_list *cil_tmp;
+	struct daos_recx_ep_list *rel_tmp;
+	int                 rc;
+
+	D_ASSERT(iod->iod_nr == 1);
+
+	rc = vos_fetch_begin(coh, oid, DAOS_EPOCH_MAX, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	/* rc = vos_fetch_begin(coh, oid, 2472910871729537023, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL); */
+	if (rc) {
+		VOS_TX_TRACE_FAIL(rc, "Cannot fetch csum "DF_UOID": "DF_RC"\n", DP_UOID(oid), DP_RC(rc));
+		goto out;
+	}
+
+	ioc = vos_ioh2ioc(ioh);
+	cil_tmp = &ioc->ic_csum_list;
+	rel_tmp = NULL;
+	if (ioc->ic_recx_lists != NULL) {
+		D_ASSERT(iod->iod_type == DAOS_IOD_ARRAY);
+
+		rel_tmp = &ioc->ic_recx_lists[0];
+		D_ASSERT(cil_tmp->dcl_csum_infos_nr == rel_tmp->re_nr);
+	}
+	for (idx = 0; idx < cil_tmp->dcl_csum_infos_nr; idx++) {
+		struct dcs_csum_info *ci;
+
+		ci = dcs_csum_info_get(cil_tmp, idx);
+		rc = dcs_csum_info_save(cil, ci);
+		if (rc != 0) {
+			D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(oid),
+				DP_RC(rc));
+			goto out_ioh;
+		}
+
+		if (rel == NULL || rel_tmp == NULL)
+			continue;
+
+		rc = daos_recx_ep_add(rel, &rel_tmp->re_items[idx]);
+		if (rc != 0) {
+			D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(oid),
+				DP_RC(rc));
+			goto out_ioh;
+		}
+	}
+
+out_ioh:
+	daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
+	ioc->ic_recx_lists = NULL;
+	rc = vos_fetch_end(ioh, NULL, rc);
+	if (rc != 0)
+		D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(oid),
+			DP_RC(rc));
+
+out:
+	return rc;
+}
+#endif
 
 int
 vos_obj_layout_upgrade(daos_handle_t coh, daos_unit_oid_t oid, uint32_t layout_ver)

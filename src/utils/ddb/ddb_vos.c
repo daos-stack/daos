@@ -1032,6 +1032,170 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 	return rc;
 }
 
+static int
+dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+	     dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t       ioh;
+	struct dcs_ci_list *cil;
+	int                 rc;
+
+	rc = vos_fetch_begin(coh, *oid, DAOS_EPOCH_MAX, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh,
+			     NULL);
+	if (rc) {
+		D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
+			DP_RC(rc));
+		goto out;
+	}
+
+	cil = vos_ioh2ci(ioh);
+
+	rc = dump_cb(cb_arg, NULL, cil);
+	if (!SUCCESS(rc))
+		D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
+			DP_RC(rc));
+
+	rc = vos_fetch_end(ioh, NULL, rc);
+	if (rc != 0)
+		D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
+			DP_RC(rc));
+
+out:
+	return rc;
+}
+
+static int
+dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+	       daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t             ioh;
+	struct dcs_ci_list       *cil;
+	struct daos_recx_ep_list *rel;
+	int                       rc;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (rc) {
+		D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
+			DP_RC(rc));
+		goto out;
+	}
+
+	cil = vos_ioh2ci(ioh);
+	rel = vos_ioh2recx_list(ioh);
+
+	rc = dump_cb(cb_arg, rel, cil);
+	if (!SUCCESS(rc))
+		D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
+			DP_RC(rc));
+
+	daos_recx_ep_list_free(rel, iod->iod_nr);
+	rc = vos_fetch_end(ioh, NULL, rc);
+	if (rc != 0)
+		D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
+			DP_RC(rc));
+
+out:
+	return rc;
+}
+
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	     dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t coh;
+	daos_iod_t    iod = {0};
+	int           rc;
+
+	rc = vos_cont_open(poh, path->vtp_cont, &coh);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Checksum fetch of " DF_UOID " failed: " DF_RC "\n", DP_UOID(path->vtp_oid),
+			DP_RC(rc));
+		goto out;
+	}
+
+	iod.iod_name  = path->vtp_akey;
+	iod.iod_recxs = &path->vtp_recx;
+	iod.iod_nr    = 1;
+	iod.iod_size  = 0;
+	if (path->vtp_is_recx) {
+		iod.iod_type = DAOS_IOD_ARRAY;
+		rc = dump_csum_recx(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, dump_cb,
+				    cb_arg);
+	} else {
+		iod.iod_type = DAOS_IOD_SINGLE;
+		rc = dump_csum_sv(coh, &path->vtp_dkey, &path->vtp_oid, &iod, dump_cb, cb_arg);
+	}
+
+out:
+	return rc;
+}
+
+#if 0
+// Old implementation kept for reference
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_iod_t         iod = {0};
+	daos_handle_t      coh;
+	struct daos_recx_ep_list *rel;
+	struct dcs_ci_list cil;
+	int                rc;
+
+	rc = vos_cont_open(poh, path->vtp_cont, &coh);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Unable to fetch object: " DF_RC "\n", DP_RC(rc));
+		goto out;
+	}
+
+	iod.iod_name  = path->vtp_akey;
+	iod.iod_recxs = &path->vtp_recx;
+	iod.iod_nr    = 1;
+	iod.iod_size  = 0;
+	iod.iod_type  = path->vtp_is_recx ? DAOS_IOD_ARRAY : DAOS_IOD_SINGLE;
+
+	rel = NULL;
+	if (iod.iod_type == DAOS_IOD_ARRAY) {
+		D_ALLOC_PTR(rel);
+		if (rel == NULL) {
+			rc = -DER_NOMEM;
+			goto out_cont;
+		}
+	}
+
+	rc = dcs_csum_info_list_init(&cil, 0);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Unable to init csum list: " DF_RC "\n", DP_RC(rc));
+		goto out_rel;
+	}
+
+	rc = vos_csum_fetch(coh, &path->vtp_dkey, path->vtp_oid, &iod, rel, &cil);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Unable to fetch csum: " DF_RC "\n", DP_RC(rc));
+		goto out_cil;
+	}
+
+	if (!dump_cb)
+		goto out_cil;
+	rc = dump_cb(cb_arg, rel, &cil);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Unable to dump csum: " DF_RC "\n", DP_RC(rc));
+	}
+
+out_cil:
+	dcs_csum_info_list_fini(&cil);
+
+out_rel:
+	if (rel != NULL)
+		daos_recx_ep_free(rel);
+
+out_cont:
+	vos_cont_close(coh);
+
+out:
+	return rc;
+}
+#endif
+
 static void
 ilog_entry_status(enum ilog_status status, char *status_str, uint32_t status_str_len)
 {

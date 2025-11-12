@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
 // (C) Copyright 2025 Vdura Inc.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -348,4 +348,16 @@ func ddbDtxAggr(ctx *DdbContext, path string, cmt_time uint64, cmt_date string) 
 	}
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_aggr(&ctx.ctx, &options))
+}
+
+func ddbCsumDump(ctx *DdbContext, path string, dst string, epoch uint64) error {
+	/* Set up the options */
+	options := C.struct_csum_dump_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	options.dst = C.CString(dst)
+	defer freeString(options.dst)
+	options.epoch = C.uint64_t(epoch)
+	/* Run the c code command */
+	return daosError(C.ddb_run_csum_dump(&ctx.ctx, &options))
 }

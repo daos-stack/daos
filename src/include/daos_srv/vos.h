@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -723,6 +723,16 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, d_sg_list_t *sgls, struct dtx_handle *dth);
 
+// FIXME DAOS-17321 -- Old checksum fetch API, to be removed later
+#if 0
+/**
+ * TODO DAOS-17321
+ */
+int
+vos_csum_fetch(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t oid, daos_iod_t *iod,
+	       struct daos_recx_ep_list *rel, struct dcs_ci_list *cil);
+#endif
+
 /**
  * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
@@ -905,6 +915,7 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
  * I/O and release resources.
  *
  * TODO: add more detail descriptions for punched or missing records.
+ * TODO DAOS-17321 -- Add description for csum handling.
  *
  * \param[in] coh	Container open handle
  * \param[in] oid	Object ID
