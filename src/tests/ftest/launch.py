@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,6 +15,7 @@ from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormat
 from collections import OrderedDict
 from tempfile import TemporaryDirectory
 
+import distro
 from ClusterShell.NodeSet import NodeSet
 from process_core_files import get_core_file_pattern
 # pylint: disable=import-error,no-name-in-module
@@ -176,6 +178,7 @@ class Launch():
 
         # Add details about the run
         self.details["avocado version"] = str(self.avocado)
+        self.details["distro"] = distro.linux_distribution(full_distribution_name=True)
         self.details["launch host"] = str(self.local_host)
 
     def _create_log_dir(self):
@@ -272,7 +275,7 @@ class Launch():
         all_hosts = args.test_servers | args.test_clients | self.local_host
         self.details["installed packages"] = find_packages(
             logger, all_hosts,
-            "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils|mlnx-ofed-basic)-'")
+            "'^(daos|libfabric|mercury|ior|openmpi|mpich|mpifileutils|mlnx-ofed-basic)-'")
 
         # Setup the test environment
         test_env = TestEnvironment()
