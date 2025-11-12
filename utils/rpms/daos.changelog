@@ -1,4 +1,7 @@
 %changelog
+* Wed Nov 05 2025  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.7-101-17
+- Update PMDK to release 2.1.2
+
 * Thu Oct 16 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-16
 - Make daos-spdk conflict with spdk
 
