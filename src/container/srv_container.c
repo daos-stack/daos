@@ -722,7 +722,6 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 			D_ERROR("container global %u version could be not set\n", entry->dpe_type);
 			return -DER_INVAL;
 		case DAOS_PROP_CO_OBJ_VERSION:
-			/* this is a walkaround for 2.6 only */
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		default:
@@ -777,10 +776,14 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	if (entry_def)
 		entry_def->dpe_val = pool_hdl->sph_global_ver;
 
-	/* inherit object version from pool*/
+	/*
+	 * New container creation by clients will specify the object version.
+	 * If not specified (dpe_val == 0), it indicates a client from before
+	 * DAOS 2.6.4, so use VERSION 1 for backward compatibility.
+	 */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_OBJ_VERSION);
 	if (entry_def && entry_def->dpe_val == 0)
-		entry_def->dpe_val = pool_hdl->sph_obj_ver;
+		entry_def->dpe_val = DAOS_POOL_OBJ_VERSION_1;
 
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
@@ -1305,10 +1308,18 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to destroy %d targets\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
-		rc = -DER_IO;
+	if (rc == -DER_BUSY) {
+		D_INFO(DF_CONT ": some target busy\n", DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		/*
+		 * Must return an error that ds_pool_svc_ops_save considers
+		 * retryable. Otherwise, when it is retried, this container
+		 * destroy operation would always get its result from svc_ops
+		 * without being executed.
+		 */
+		rc = -DER_TIMEDOUT;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to destroy targets",
+			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	}
 
 out_rpc:
@@ -1885,7 +1896,8 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	rc = ds_pool_lookup(pool_uuid, &pool);
 	if (rc != 0) {
-		D_ERROR(DF_UUID" lookup pool failed: %d\n", DP_UUID(pool_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc,
+			  DF_UUID " lookup pool failed", DP_UUID(pool_uuid));
 		goto out;
 	}
 	rank = dss_self_rank();
@@ -1930,8 +1942,9 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to look container",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -1994,8 +2007,9 @@ cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph, 
 	ABT_rwlock_wrlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to look container",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -2063,9 +2077,15 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (eph_ldr->cte_rdb_ec_agg_eph == 0) {
 			rc = cont_agg_eph_load(svc, eph_ldr->cte_cont_uuid,
 					       &eph_ldr->cte_rdb_ec_agg_eph);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(rc, DF_CONT " container skipped",
+						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+					continue;
+				}
 				DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.",
 					 DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+			}
 		}
 
 		min_ec_agg_eph = DAOS_EPOCH_MAX;
@@ -2124,11 +2144,17 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_ec_agg_eph > eph_ldr->cte_rdb_ec_agg_eph) {
 			rc = cont_agg_eph_store(svc, eph_ldr->cte_cont_uuid, min_ec_agg_eph,
 						&eph_ldr->cte_rdb_ec_agg_eph);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(rc, DF_CONT " container skipped",
+						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+					continue;
+				}
 				DL_ERROR(rc,
 					 DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64 " failed.",
 					 DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
 					 min_ec_agg_eph);
+			}
 		}
 
 		rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->cte_cont_uuid,

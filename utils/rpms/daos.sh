@@ -31,6 +31,8 @@ to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost."
 URL="https://daos.io"
 
+RPM_CHANGELOG="daos.changelog"
+
 # Some extra "install" steps
 # daos package
 files=()
