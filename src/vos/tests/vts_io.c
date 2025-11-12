@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -553,12 +553,11 @@ probe_from_anchor:
 static struct daos_csummer *
 io_test_init_csummer()
 {
-	enum DAOS_HASH_TYPE	 type = HASH_TYPE_CRC16;
-	size_t			 chunk_size = 1 << 12;
-	struct daos_csummer	*csummer = NULL;
+	enum DAOS_HASH_TYPE  type       = HASH_TYPE_CRC16;
+	size_t               chunk_size = 1 << 12;
+	struct daos_csummer *csummer    = NULL;
 
-	assert_success(daos_csummer_init_with_type(&csummer, type,
-						   chunk_size, 0));
+	assert_success(daos_csummer_init_with_type(&csummer, type, chunk_size, 0));
 
 	return csummer;
 
@@ -2315,9 +2314,9 @@ io_sgl_fetch(void **state)
 	/* Write/Update */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1,
 			    &iod, NULL, &sgl);
+	d_sgl_fini(&sgl, false);
 	if (rc)
 		goto exit;
-	d_sgl_fini(&sgl, false);
 	inc_cntr(arg->ta_flags);
 
 	/* Allocate memory for the scatter-gather list */
@@ -3045,6 +3044,253 @@ gang_sv_test(void **state)
 	D_FREE(fetch_buf);
 }
 
+static void
+io_csum_fetch_single(void **state)
+{
+	const enum DAOS_HASH_TYPE csum_type       = HASH_TYPE_CRC64;
+	const size_t              csum_chunk_size = 1u << 12;
+
+	struct io_test_args      *arg;
+	daos_key_t                dkey;
+	daos_key_t                akey;
+	daos_iod_t                iod;
+	d_sg_list_t               sgl;
+	struct daos_recx_ep_list *rel;
+	struct dcs_ci_list       *cil;
+	struct dcs_csum_info     *ci;
+	struct daos_csummer      *csummer;
+	struct dcs_iod_csums     *ic;
+	struct hash_ft           *hf;
+	char                      dkey_name[UPDATE_DKEY_SIZE];
+	char                      akey_name[UPDATE_AKEY_SIZE];
+	char                     *update_buf;
+	const size_t              update_buf_size = 2 * csum_chunk_size;
+	daos_handle_t             ioh;
+	int                       rc;
+
+	arg = *state;
+
+	/* Allocate update buffer */
+	D_ALLOC(update_buf, update_buf_size);
+	assert_non_null(update_buf);
+
+	/* Set up unique dkey and akey */
+	vts_key_gen(&dkey_name[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	vts_key_gen(&akey_name[0], arg->akey_size, false, arg);
+	set_iov(&akey, &akey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	iod.iod_size  = SGL_TEST_BUF_SIZE;
+	iod.iod_name  = akey;
+	iod.iod_recxs = NULL;
+	iod.iod_nr    = 1;
+
+	/* Fill the buffer with random letters */
+	dts_buf_render(&update_buf[0], update_buf_size);
+	rc = d_sgl_init(&sgl, 1);
+	if (rc)
+		goto out;
+	d_iov_set(sgl.sg_iovs, &update_buf[0], update_buf_size);
+
+	/* Compute update buffer checksum */
+	rc = daos_csummer_init_with_type(&csummer, csum_type, csum_chunk_size, 0);
+	if (rc != 0)
+		goto out_sgl;
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic);
+	if (rc)
+		goto out_csummer;
+
+	/* Write/Update and update mocking counters */
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1, &iod, ic, &sgl);
+	if (rc)
+		goto out_ic;
+	inc_cntr(arg->ta_flags);
+
+	/* Fetch checksum info */
+	iod.iod_size = 0;
+	rc           = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &dkey, 1, &iod,
+				       VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Check fetched csum info */
+	rel = vos_ioh2recx_list(ioh);
+	assert_null(rel);
+	cil = vos_ioh2ci(ioh);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 1);
+	hf = daos_mhash_type2algo(ci->cs_type);
+	assert_int_equal(hf->cf_type, csum_type);
+	assert_true(daos_csummer_compare_csum_info(csummer, ic->ic_data, ci));
+
+	/* Cleanup */
+	rc = vos_fetch_end(ioh, NULL, rc);
+	assert_rc_equal(rc, 0);
+
+out_ic:
+	daos_csummer_free_ic(csummer, &ic);
+out_csummer:
+	daos_csummer_destroy(&csummer);
+out_sgl:
+	d_sgl_fini(&sgl, false);
+out:
+	D_FREE(update_buf);
+	assert_rc_equal(rc, 0);
+}
+
+static int
+io_csum_update_recx(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dkey,
+		    daos_key_t *akey, uint64_t recx_idx, size_t recx_size,
+		    struct daos_csummer *csummer, struct dcs_iod_csums **p_ic)
+{
+	char       *buf;
+	daos_iod_t  iod;
+	daos_recx_t recx;
+	d_sg_list_t sgl;
+	int         rc;
+
+	D_ALLOC(buf, recx_size);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	recx.rx_idx = recx_idx;
+	recx.rx_nr  = recx_size;
+
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = *akey;
+	iod.iod_recxs = &recx;
+	iod.iod_size  = 1;
+	iod.iod_nr    = 1;
+
+	/* Fill the buffer with random letters */
+	dts_buf_render(&buf[0], recx_size);
+	rc = d_sgl_init(&sgl, 1);
+	if (rc)
+		goto out_buf;
+	d_iov_set(sgl.sg_iovs, &buf[0], recx_size);
+
+	/* Compute update buffer checksum */
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, p_ic);
+	if (rc)
+		goto out_sgl;
+
+	/* Write/Update and update mocking counters */
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, 0, dkey, 1, &iod, *p_ic, &sgl);
+	if (rc)
+		goto out_sgl;
+	inc_cntr(arg->ta_flags);
+
+out_sgl:
+	d_sgl_fini(&sgl, false);
+out_buf:
+	D_FREE(buf);
+out:
+	return rc;
+}
+
+static void
+io_csum_fetch_recx(void **state)
+{
+	const enum DAOS_HASH_TYPE csum_type       = HASH_TYPE_CRC16;
+	const size_t              csum_chunk_size = 1u << 6;
+
+	struct io_test_args      *arg;
+	daos_key_t                dkey;
+	daos_key_t                akey;
+	daos_recx_t               recx;
+	daos_iod_t                iod;
+	struct daos_csummer      *csummer;
+	struct dcs_iod_csums     *ic[2] = {NULL, NULL};
+	struct daos_recx_ep_list *rel;
+	struct dcs_ci_list       *cil;
+	struct dcs_csum_info     *ci;
+	struct hash_ft           *hf;
+	char                      dkey_name[UPDATE_DKEY_SIZE];
+	char                      akey_name[UPDATE_AKEY_SIZE];
+	daos_handle_t             ioh;
+	int                       i;
+	int                       rc;
+
+	arg = *state;
+
+	/* Set up dkey and akey */
+	vts_key_gen(&dkey_name[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	vts_key_gen(&akey_name[0], arg->akey_size, false, arg);
+	set_iov(&akey, &akey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	/* Create csumer */
+	rc = daos_csummer_init_with_type(&csummer, csum_type, csum_chunk_size, 0);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < 2; i++) {
+		rc = io_csum_update_recx(arg, i + 1, &dkey, &akey, i * csum_chunk_size / 2,
+					 2 * csum_chunk_size, csummer, &ic[i]);
+		if (rc)
+			goto out_csums;
+	}
+
+	/* Fetch recx and checksums info */
+	recx.rx_idx   = 0;
+	recx.rx_nr    = 2 * csum_chunk_size;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = akey;
+	iod.iod_recxs = &recx;
+	iod.iod_size  = 1;
+	iod.iod_nr    = 1;
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &dkey, 1, &iod,
+			     VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Check fetched recx info */
+	rel = vos_ioh2recx_list(ioh);
+	assert_non_null(rel);
+	assert_int_equal(rel->re_nr, 2);
+	assert_int_equal(rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(rel->re_items[0].re_recx.rx_nr, 2 * csum_chunk_size);
+	assert_int_equal(rel->re_items[0].re_ep, 1);
+	assert_int_equal(rel->re_items[1].re_recx.rx_idx, csum_chunk_size / 2);
+	assert_int_equal(rel->re_items[1].re_recx.rx_nr, 2 * csum_chunk_size);
+	assert_int_equal(rel->re_items[1].re_ep, 2);
+
+	/* Check fetched csum info */
+	cil = vos_ioh2ci(ioh);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 2);
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 2);
+	hf = daos_mhash_type2algo(ci->cs_type);
+	assert_int_equal(hf->cf_type, csum_type);
+	assert_true(daos_csummer_compare_csum_info(csummer, ic[0]->ic_data, ci));
+	ci = dcs_csum_info_get(cil, 1);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 3);
+	hf = daos_mhash_type2algo(ci->cs_type);
+	assert_int_equal(hf->cf_type, csum_type);
+	assert_true(daos_csummer_compare_csum_info(csummer, ic[1]->ic_data, ci));
+
+	/* Cleanup */
+	daos_recx_ep_list_free(rel, iod.iod_nr);
+	rc = vos_fetch_end(ioh, NULL, rc);
+	assert_rc_equal(rc, 0);
+
+out_csums:
+	for (i = 0; i < 2; i++) {
+		if (ic[i] != NULL)
+			daos_csummer_free_ic(csummer, &ic[i]);
+	}
+	daos_csummer_destroy(&csummer);
+out:
+	assert_rc_equal(rc, 0);
+}
+
 static const struct CMUnitTest iterator_tests[] = {
     {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
     {"VOS240.0: KV Iter tests (for dkey)", io_iter_test, NULL, NULL},
@@ -3081,6 +3327,7 @@ static const struct CMUnitTest io_tests[] = {
     {"VOS282.2: Accessing pool, container with same UUID", pool_cont_same_uuid, NULL, NULL},
     {"VOS299: Space overflow negative error test", io_pool_overflow_test, NULL,
      io_pool_overflow_teardown},
+    {"VOS401.1: Fetch checksum of array value objects", io_csum_fetch_recx, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {
@@ -3091,6 +3338,7 @@ static const struct CMUnitTest int_tests[] = {
     {"VOS300.2: Key query test", io_query_key, NULL, NULL},
     {"VOS300.3: Key query negative test", io_query_key_negative, NULL, NULL},
     {"VOS300.4: Gang SV update/fetch test", gang_sv_test, NULL, NULL},
+    {"VOS400.1: Fetch checksum of a single value object", io_csum_fetch_single, NULL, NULL},
 };
 
 static int
