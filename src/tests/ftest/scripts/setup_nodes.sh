@@ -2,6 +2,7 @@
 # shellcheck disable=SC1113
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -12,6 +13,8 @@ sudo bash -c "set -ex
 if ! $TEST_RPMS; then
 cat <<EOF > /etc/sysctl.d/10-daos-server.conf
 $(cat utils/rpms/10-daos_server.conf)
+kernel.core_uses_pid=1
+fs.suid_dumpable=1
 EOF
 fi
 # disable Leap15.3 (at least) from restricting dmesg to root
