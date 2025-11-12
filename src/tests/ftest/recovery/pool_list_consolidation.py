@@ -29,7 +29,7 @@ class PoolListConsolidationTest(TestWithServers):
         4. Run checker under auto mode and verify that it detects inconsistency.
         5. Reset repair policy as default.
         6. Run checker under regular mode, that will repair the inconsistency.
-        7. Disable check mode.
+        7. Disable check mode
 
         Jira ID: DAOS-13047
 
