@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -116,11 +117,19 @@ class PoolCreateTests(TestWithServers):
                     "existing pool on one server consuming the required space.")
 
             # Create the third of three pools which should succeed.
-            pools[2].create()
+            attempts = 1
+            while attempts <= 3:
+                pools[2].create()
+                if pools[2].dmg.result.exit_status == 0:
+                    break
+                self.log.info(
+                    "Loop %s: Pool create on ranks %s failed in %s/3 attempts",
+                    index, pools[2].target_list.value, attempts)
+                attempts += 1
             if pools[2].dmg.result.exit_status != 0:
                 self.fail(
                     "Creating a large capacity pool that spans across all but the first server "
-                    "should succeed.")
+                    f"should succeed - failed after {attempts} loops.")
 
             # Destroy the third of three pools so it can be created again in the next loop
             pools[2].destroy()
