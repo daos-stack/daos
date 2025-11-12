@@ -653,27 +653,6 @@ type systemGetPropCmd struct {
 	} `positional-args:"yes"`
 }
 
-func prettyPrintSysProps(out io.Writer, props []*daos.SystemProperty) {
-	if len(props) == 0 {
-		fmt.Fprintln(out, "No system properties found.")
-		return
-	}
-
-	nameTitle := "Name"
-	valueTitle := "Value"
-	table := []txtfmt.TableRow{}
-	for _, prop := range props {
-		row := txtfmt.TableRow{}
-		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Key)
-		row[valueTitle] = prop.Value.String()
-		table = append(table, row)
-	}
-
-	tf := txtfmt.NewTableFormatter(nameTitle, valueTitle)
-	tf.InitWriter(out)
-	tf.Format(table)
-}
-
 // Execute is run when systemGetPropCmd subcommand is activated.
 func (cmd *systemGetPropCmd) Execute(_ []string) error {
 	req := &control.SystemGetPropReq{
@@ -689,9 +668,9 @@ func (cmd *systemGetPropCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "system get-attr failed")
 	}
 
-	var bld strings.Builder
-	prettyPrintSysProps(&bld, resp.Properties)
-	cmd.Infof("%s", bld)
+	var out strings.Builder
+	pretty.PrintSystemProperties(&out, resp.Properties)
+	cmd.Info(out.String())
 
 	return nil
 }

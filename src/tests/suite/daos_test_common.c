@@ -145,7 +145,7 @@ out:
 	return rc;
 }
 
-static int
+int
 test_setup_pool_connect(void **state, struct test_pool *pool)
 {
 	test_arg_t *arg = *state;
