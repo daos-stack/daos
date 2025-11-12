@@ -126,6 +126,7 @@ enum ddb_cmd {
 	DDB_CMD_DTX_STAT                = 26,
 	DDB_CMD_PROV_MEM                = 27,
 	DDB_CMD_DTX_AGGR                = 28,
+	DDB_CMD_CSUM_DUMP               = 29,
 };
 
 /* option and argument structures for commands that need them */
@@ -236,6 +237,12 @@ struct dtx_aggr_options {
 	char                *cmt_date;
 };
 
+struct csum_dump_options {
+	char *path;
+	char *dst;
+	daos_epoch_t epoch;
+};
+
 struct ddb_cmd_info {
 	enum ddb_cmd dci_cmd;
 	union {
@@ -259,6 +266,7 @@ struct ddb_cmd_info {
 		struct dtx_stat_options      dci_dtx_stat;
 		struct prov_mem_options      dci_prov_mem;
 		struct dtx_aggr_options      dci_dtx_aggr;
+		struct csum_dump_options     dci_csum_dump;
 	} dci_cmd_option;
 };
 
@@ -330,6 +338,8 @@ int
 ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt);
 int
 ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt);
+int
+ddb_run_csum_dump(struct ddb_ctx *ctx, struct csum_dump_options *opt);
 
 void
 ddb_program_help(struct ddb_ctx *ctx);

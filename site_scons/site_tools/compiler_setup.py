@@ -54,7 +54,7 @@ def _base_setup(env):
 
     # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options
     # that this brings in.
-    env.Append(CCFLAGS=['-g', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
+    env.Append(CCFLAGS=['-g3', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
@@ -106,7 +106,10 @@ def _base_setup(env):
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
         env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
-    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
+    if env['CMOCKA_FILTER_SUPPORTED']:
+        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '1'})
+    else:
+        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
