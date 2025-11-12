@@ -442,4 +442,23 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Completer: nil,
 	})
+	// Command dtx_aggr
+	app.AddCommand(&grumble.Command{
+		Name:    "csum_dump",
+		Aliases: nil,
+		Help:    "Dump checksum information",
+		LongHelp: `Dump a checksum to the screen or file. The vos path should be a complete path,
+including the akey and if the value is an array value it should include the
+extent. If a path to a file was provided then the value will be written to the
+file, else it will be printed to the screen.`,
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to dump.")
+			a.String("dst", "Optional, destination vos tree path to a value.", grumble.Default(""))
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbCsumDump(ctx, c.Args.String("path"), c.Args.String("dst"))
+		},
+		Completer: nil,
+	})
 }

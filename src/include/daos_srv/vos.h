@@ -724,6 +724,13 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 daos_iod_t *iods, d_sg_list_t *sgls, struct dtx_handle *dth);
 
 /**
+ * TODO DAOS-17321
+ */
+int
+vos_csum_fetch(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t oid, daos_iod_t *iod,
+	       struct dcs_ci_list *cil);
+
+/**
  * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
