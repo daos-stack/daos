@@ -464,6 +464,8 @@ class EngineYamlParameters(YamlParameters):
                 Defaults to MAX_STORAGE_TIERS.
         """
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
+        common_ns = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines_common", "*"]
+        self.common_namespace = os.path.join(*common_ns)
         self._base_namespace = base_namespace
         self._index = index
         self._provider = provider or os.environ.get("D_PROVIDER", "ofi+tcp")
@@ -519,7 +521,11 @@ class EngineYamlParameters(YamlParameters):
         Args:
             test (Test): avocado Test object
         """
-        super().get_params(test)
+        # Get the values for the engine yaml parameters
+        for name in self.get_param_names():
+            if not getattr(self, name).get_yaml_value(name, test, self.namespace):
+                # If a new value was not assigned, check the engine's common namespace for a value
+                getattr(self, name).get_yaml_value(name, test, self.common_namespace)
 
         # Override the log file file name with the test log file name
         if hasattr(test, "server_log") and test.server_log is not None:
