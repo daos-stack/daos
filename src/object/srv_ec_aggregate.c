@@ -2739,10 +2739,6 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			       cont->sc_ec_agg_eph_boundary);
 			cont->sc_ec_agg_eph = cont->sc_ec_agg_eph_boundary;
-		} else {
-			D_ASSERTF(cont->sc_ec_agg_eph >= cont->sc_ec_agg_eph_boundary,
-				  "bad sc_ec_agg_eph " DF_X64 " < sc_ec_agg_eph_boundary " DF_X64,
-				  cont->sc_ec_agg_eph, cont->sc_ec_agg_eph_boundary);
 		}
 	} else {
 		D_DEBUG(DB_EPC, DF_CONT ": pause EC aggregation for sc_ec_agg_eph_boundary.\n",
@@ -2840,18 +2836,18 @@ update_hae:
 	if (rc == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
 		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
-			uint64_t orig, cur;
+			uint64_t orig, cur, cur_eph;
 
+			cur_eph = min(ec_agg_param->ap_min_unagg_eph, cont->sc_ec_agg_eph);
 			orig = d_hlc2sec(*cont->sc_ec_query_agg_eph);
-			cur = d_hlc2sec(cont->sc_ec_agg_eph);
+			cur     = d_hlc2sec(cur_eph);
 			if (orig && cur > orig && (cur - orig) >= 600)
 				D_WARN(DF_CONT" Sluggish EC boundary bumping: "
 				       ""DF_U64" -> "DF_U64", gap:"DF_U64"\n",
 				       DP_CONT(cont->sc_pool_uuid, cont->sc_uuid),
 				       orig, cur, cur - orig);
 
-			*cont->sc_ec_query_agg_eph = min(ec_agg_param->ap_min_unagg_eph,
-							 cont->sc_ec_agg_eph);
+			*cont->sc_ec_query_agg_eph = cur_eph;
 		}
 	}
 
