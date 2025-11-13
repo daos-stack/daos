@@ -442,9 +442,16 @@ dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		rec->rec_off = umem_ptr2off(&tins->ti_umm, dce_new);
 		D_FREE(dce_old);
 	} else if (!dce_old->dce_reindex) {
-		D_ASSERTF(dce_new->dce_reindex, "Repeatedly commit DTX "DF_DTI"\n",
-			  DP_DTI(&DCE_XID(dce_new)));
-		dce_new->dce_exist = 1;
+		/* If two client threads (such as non-initialized context after fork) use the same
+		 * DTX ID (by chance), then it is possible to arrive here. But once comes here, we
+		 * have no chance to require related client/application to restart the transaction
+		 * since related RPC may has already completed.
+		 * */
+		if (unlikely(dce_new->dce_reindex == 0))
+			D_WARN("Commit DTX " DF_DTI " for more than once, maybe reused\n",
+			       DP_DTI(&DCE_XID(dce_new)));
+		else
+			dce_new->dce_exist = 1;
 	}
 
 	return 0;
@@ -1484,7 +1491,8 @@ vos_dtx_validation(struct dtx_handle *dth)
 	d_iov_t			 riov;
 	int			 rc = 0;
 
-	D_ASSERT(dtx_is_valid_handle(dth));
+	if (!dtx_is_valid_handle(dth) || dth->dth_need_validation == 0)
+		return 0;
 
 	dae = dth->dth_ent;
 
@@ -1500,7 +1508,7 @@ vos_dtx_validation(struct dtx_handle *dth)
 	 * (or different) DTX LRU array slot.
 	 */
 
-	if (unlikely(dth->dth_aborted)) {
+	if (dth->dth_aborted) {
 		D_ASSERT(dae == NULL);
 		cont = vos_hdl2cont(dth->dth_coh);
 		D_ASSERT(cont != NULL);
@@ -1531,7 +1539,22 @@ vos_dtx_validation(struct dtx_handle *dth)
 
 out:
 	dth->dth_need_validation = 0;
-	return rc;
+
+	/* It is aborted, then resent, prepared and committed by race. Return -DER_ALREADY to avoid
+	 * repeated modification.
+	 */
+	if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTING || rc == DTX_ST_COMMITTABLE) {
+		dth->dth_already = 1;
+		return -DER_ALREADY;
+	}
+
+	/* The DTX has been ever aborted. Return -DER_AGAIN to make related client to retry sometime
+	 * later without triggering dtx_abort().
+	 */
+	if (dth->dth_aborted || rc == DTX_ST_ABORTED || rc == DTX_ST_ABORTING)
+		return -DER_AGAIN;
+
+	return rc > 0 ? 0 : rc;
 }
 
 /* The caller has started local transaction. */
@@ -1552,40 +1575,10 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	 * Check whether someone touched the DTX before we registering modification
 	 * for the first time (during the prepare, such as bulk data transferring).
 	 */
-	if (unlikely(dth->dth_need_validation && !dth->dth_active)) {
+	if (!dth->dth_active) {
 		rc = vos_dtx_validation(dth);
-		switch (rc) {
-		case DTX_ST_INITED:
-			if (!dth->dth_aborted)
-				break;
-			/* Fall through */
-		case DTX_ST_PREPARED:
-		case DTX_ST_PREPARING:
-			/* The DTX has been ever aborted and related resent RPC
-			 * is in processing. Return -DER_AGAIN to make this ULT
-			 * to retry sometime later without dtx_abort().
-			 */
-			D_GOTO(out, rc = -DER_AGAIN);
-		case DTX_ST_COMMITTED:
-		case DTX_ST_COMMITTING:
-		case DTX_ST_COMMITTABLE:
-			/* Aborted then prepared/committed by race.
-			 * Return -DER_ALREADY to avoid repeated modification.
-			 */
-			dth->dth_already = 1;
-			D_GOTO(out, rc = -DER_ALREADY);
-		case DTX_ST_ABORTED:
-			D_ASSERT(dth->dth_ent == NULL);
-			/* Aborted, return -DER_INPROGRESS for client retry.
-			 *
-			 * Fall through.
-			 */
-		case DTX_ST_ABORTING:
-			D_GOTO(out, rc = -DER_INPROGRESS);
-		default:
-			D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n",
-				  DP_DTI(&dth->dth_xid), rc);
-		}
+		if (rc != 0)
+			goto out;
 	}
 
 	dae = dth->dth_ent;
@@ -2076,6 +2069,123 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
 		else if (rc == -DER_NONEXIST && !cont->vc_cmt_dtx_indexed)
 			rc = -DER_INPROGRESS;
 	}
+
+	return rc;
+}
+
+int
+vos_dtx_refresh_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships *mbs,
+		    uint32_t pm_ver, bool leader)
+{
+	struct vos_container      *cont;
+	struct umem_instance      *umm;
+	d_iov_t                    kiov;
+	d_iov_t                    riov;
+	struct vos_dtx_act_ent    *dae     = NULL;
+	struct vos_dtx_act_ent_df *dae_df  = NULL;
+	uint32_t                   saved   = 0;
+	int                        rc      = 0;
+	bool                       started = false;
+	bool                       old_inline;
+	bool                       new_inline;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	umm = vos_cont2umm(cont);
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc != 0)
+		goto out;
+
+	dae = riov.iov_buf;
+
+	/* Only 'prepared' but not committed/committable DTX can be refreshed MBS. */
+	if (unlikely(dae->dae_prepared == 0))
+		D_GOTO(out, rc = -DER_NO_PERM);
+
+	if (DAE_MBS_DSIZE(dae) != mbs->dm_data_size) {
+		if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae)))
+			old_inline = true;
+		else
+			old_inline = false;
+		if (mbs->dm_data_size <= sizeof(DAE_MBS_INLINE(dae)))
+			new_inline = true;
+		else
+			new_inline = false;
+	} else {
+		if (mbs->dm_data_size <= sizeof(DAE_MBS_INLINE(dae))) {
+			if (memcmp(DAE_MBS_INLINE(dae), mbs->dm_data, mbs->dm_data_size) == 0)
+				D_GOTO(out, rc = 1);
+
+			old_inline = true;
+			new_inline = true;
+		} else {
+			if (memcmp(umem_off2ptr(umm, DAE_MBS_OFF(dae)), mbs->dm_data,
+				   mbs->dm_data_size) == 0)
+				D_GOTO(out, rc = 1);
+
+			old_inline = false;
+			new_inline = false;
+		}
+	}
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto out;
+
+	started = true;
+	dae_df  = umem_off2ptr(umm, dae->dae_df_off);
+	rc      = umem_tx_add_ptr(umm, dae_df, sizeof(*dae_df));
+	if (rc != 0)
+		goto out;
+
+	if (!old_inline) {
+		D_ASSERT(!UMOFF_IS_NULL(dae_df->dae_mbs_off));
+
+		rc = umem_free(umm, dae_df->dae_mbs_off);
+		if (rc != 0)
+			goto out;
+
+		dae_df->dae_mbs_off = UMOFF_NULL;
+	}
+
+	if (new_inline) {
+		memcpy(dae_df->dae_mbs_inline, mbs->dm_data, mbs->dm_data_size);
+	} else {
+		dae_df->dae_mbs_off = umem_zalloc(umm, mbs->dm_data_size);
+		if (UMOFF_IS_NULL(dae_df->dae_mbs_off))
+			D_GOTO(out, rc = -DER_NOSPACE);
+
+		memcpy(umem_off2ptr(umm, dae_df->dae_mbs_off), mbs->dm_data, mbs->dm_data_size);
+	}
+
+	dae_df->dae_mbs_dsize = mbs->dm_data_size;
+	dae_df->dae_tgt_cnt   = mbs->dm_tgt_cnt;
+	saved                 = dae_df->dae_ver;
+	dae_df->dae_ver       = pm_ver;
+	if (leader)
+		dae_df->dae_flags |= DTE_LEADER;
+
+out:
+	if (started) {
+		if (rc == 0) {
+			rc = umem_tx_commit(umm);
+			D_ASSERTF(rc == 0, "local TX commit failure: %d\n", rc);
+
+			memcpy(&dae->dae_base, dae_df, sizeof(*dae_df));
+		} else {
+			rc = umem_tx_abort(umm, rc);
+		}
+	}
+
+	if (rc < 0)
+		D_ERROR("Failed to refresh MBS for DTX " DF_DTI " with version %u: " DF_RC "\n",
+			DP_DTI(dti), pm_ver, DP_RC(rc));
+	else if (rc == 0)
+		D_DEBUG(DB_IO, "Refresh MBS for DTX " DF_DTI " from version %u to %u\n",
+			DP_DTI(dti), saved, pm_ver);
 
 	return rc;
 }
