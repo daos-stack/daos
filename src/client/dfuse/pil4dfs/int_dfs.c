@@ -1109,6 +1109,7 @@ reset_ucs_global_variable_after_fork(void)
 	}
 }
 
+static int null_cnt = 0;
 void
 ucs_init(void)
 {
@@ -1116,11 +1117,15 @@ ucs_init(void)
 
 	if (next_ucs_init == NULL) {
 		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
-		if (next_ucs_init == NULL)
+		if (next_ucs_init == NULL) {
+			null_cnt++;
+			printf("DBG> next_ucs_init = NULL\n");
+			fflush(stdout);
 			/* This function's name ends with _init. This is a special case. dl.so may
 			 * treat it as a constructor function sometimes.
 			 */
 			return;
+		}
 	}
 	printf("DBG> In ucs_init()\n");
 	rc = query_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
