@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -134,20 +135,23 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				*pqm = DefaultPoolQueryMask
 			}),
-			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild,
+				PoolQueryOptionSpace),
 		},
 		"health-only query mask": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				*pqm = HealthOnlyPoolQueryMask
 			}),
-			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines,
+				PoolQueryOptionRebuild),
 		},
 		"set query all=true": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				pqm.SetAll()
 			}),
-			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines,
-				PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines,
+				PoolQueryOptionEnabledEngines, PoolQueryOptionRebuild,
+				PoolQueryOptionSelfHealPolicy, PoolQueryOptionSpace),
 		},
 		"set query all=false": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -167,8 +171,9 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 				pqm.SetAll()
 				pqm.ClearOptions(PoolQueryOptionSpace)
 			}),
-			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines,
-				PoolQueryOptionRebuild),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines,
+				PoolQueryOptionEnabledEngines, PoolQueryOptionRebuild,
+				PoolQueryOptionSelfHealPolicy),
 		},
 		"set query space=false (already false)": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -187,7 +192,9 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 				pqm.SetAll()
 				pqm.ClearOptions(PoolQueryOptionRebuild)
 			}),
-			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionEnabledEngines, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines,
+				PoolQueryOptionEnabledEngines, PoolQueryOptionSelfHealPolicy,
+				PoolQueryOptionSpace),
 		},
 		"set query enabled_engines=true": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -200,7 +207,9 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 				pqm.SetAll()
 				pqm.ClearOptions(PoolQueryOptionEnabledEngines)
 			}),
-			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionDisabledEngines,
+				PoolQueryOptionRebuild, PoolQueryOptionSelfHealPolicy,
+				PoolQueryOptionSpace),
 		},
 		"set query disabled_engines=true": {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
@@ -213,7 +222,9 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 				pqm.SetAll()
 				pqm.ClearOptions(PoolQueryOptionDisabledEngines)
 			}),
-			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionEnabledEngines, PoolQueryOptionRebuild, PoolQueryOptionSpace),
+			expString: genOptsStr(PoolQueryOptionDeadEngines, PoolQueryOptionEnabledEngines,
+				PoolQueryOptionRebuild, PoolQueryOptionSelfHealPolicy,
+				PoolQueryOptionSpace),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -265,7 +276,7 @@ func TestDaos_PoolQueryMaskMarshalJSON(t *testing.T) {
 			testMask: genTestMask(func(pqm *PoolQueryMask) {
 				pqm.SetAll()
 			}),
-			expJSON: []byte(`"dead_engines,disabled_engines,enabled_engines,rebuild,space"`),
+			expJSON: []byte(`"dead_engines,disabled_engines,enabled_engines,rebuild,self_heal_policy,space"`),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -295,7 +306,7 @@ func TestDaos_PoolQueryMaskUnmarshalJSON(t *testing.T) {
 		},
 		"uint64 value": {
 			testData:  []byte("18446744073709551603"),
-			expString: "dead_engines,rebuild,space",
+			expString: "dead_engines,rebuild,self_heal_policy,space",
 		},
 		"string values": {
 			testData:  []byte("rebuild,disabled_engines"),
