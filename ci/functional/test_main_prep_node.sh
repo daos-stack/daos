@@ -242,7 +242,7 @@ if [ "$ib_count" -ge 2 ]; then
        echo "OK: Found $dimm_rcount DIMM PMEM regions."
     fi
     testcases+="  </testcase>$nl"
-<<SAM-COMMENT
+
     # While this gets more data than needed, it is the same search that
     # DAOS tests do and records it in the console log.
     nvme_devices="$(lspci -vmm -D | grep -E '^(Slot|Class|Device|NUMANode):' |
@@ -289,7 +289,7 @@ if [ "$ib_count" -ge 2 ]; then
        echo "OK: All $nvme_count NVMe devices are in lsblk report."
     fi
     testcases+="  </testcase>$nl"
-SAM-COMMENT
+
     ((testruns++)) || true
     testcases+="  <testcase name=\"PMEM lsblk Count Node $mynodenum\">${nl}"
     if [ "$lsblk_pmem" -ne "$dimm_rcount" ]; then
