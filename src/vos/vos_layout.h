@@ -116,6 +116,8 @@ struct vos_gc_bkt_df {
 /** 2.8 features */
 #define VOS_POOL_FEAT_2_8			(VOS_POOL_FEAT_GANG_SV)
 
+#define VOS_POOL_EXT_DF_PADDING_SIZE            53
+
 /* VOS pool durable format extension */
 struct vos_pool_ext_df {
 	/* Extension for GC bucket */
@@ -123,7 +125,7 @@ struct vos_pool_ext_df {
 	/* Memory file size for md-on-ssd phase2 pool */
 	uint64_t                ped_mem_sz;
 	/* Paddings for other potential new feature */
-	uint64_t                ped_paddings[53];
+	uint64_t                ped_paddings[VOS_POOL_EXT_DF_PADDING_SIZE];
 	/* Reserved for future extension */
 	uint64_t		ped_reserve;
 };
