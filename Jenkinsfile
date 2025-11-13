@@ -842,7 +842,8 @@ pipeline {
                 beforeAgent true
                 // expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && !is_code_coverage() }
+                // expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && !is_code_coverage() }
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -1109,7 +1110,8 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() && !is_code_coverage() }
+                // expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() && !is_code_coverage() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
             }
             steps {
                 script {
