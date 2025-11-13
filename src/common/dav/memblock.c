@@ -1503,6 +1503,24 @@ memblock_run_init(struct palloc_heap *heap,
 	return m;
 }
 
+static void
+zone_dump(struct palloc_heap *heap, const struct memory_block *m)
+{
+	struct zone *z = ZID_TO_ZONE(heap->layout, m->zone_id);
+	uint64_t    *chunk_hdr;
+
+	D_EMIT("memory_block {.chunk_id=%" PRIu32 ",.zone_id=%" PRIu32 "}", m->chunk_id,
+	       m->zone_id);
+	D_EMIT("zone {.header.magic=%" PRIu32 "}", z->header.magic);
+
+	for (int i = 0; i < MAX_CHUNK; ++i) {
+		D_CASSERT(sizeof(struct chunk_header) == sizeof(uint64_t));
+
+		chunk_hdr = (uint64_t *)&z->chunk_headers[i];
+		D_EMIT("zone.chunk_header[%d]=%" PRIx64, i, *chunk_hdr);
+	}
+}
+
 /*
  * memblock_detect_type -- looks for the corresponding chunk header and
  *	depending on the chunks type returns the right memory block type
@@ -1524,6 +1542,7 @@ memblock_detect_type(struct palloc_heap *heap, const struct memory_block *m)
 		break;
 	default:
 		/* unreachable */
+		zone_dump(heap, m);
 		FATAL("possible zone chunks metadata corruption");
 	}
 	return ret;
