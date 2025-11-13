@@ -31,9 +31,11 @@ class MemRatioTest(TestWithServers):
         )
         for pattern, method in pattern_methods:
             result = method(pattern)
-            if result.passed:
-                self.log.debug("Pool create failure expected due to: '%s'", pattern)
-                return
+            for data in result.output:
+                if data.passed and not data.timeout:
+                    # Expected failure detected in at least one of the logs
+                    self.log.debug("Pool create failure expected due to: '%s'", pattern)
+                    return
         raise error
 
     @staticmethod
