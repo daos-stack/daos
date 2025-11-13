@@ -107,10 +107,10 @@ function setup_environment()
 	if [ -d "$src_include" ]; then
 		echo "including path \"${src_include}\" in CGO_CFLAGS"
 		CGO_CFLAGS+=" -I${src_include}"
-		if [[ -n $(find "$src_include/../.." -name "\*.gcno") ]]; then
-		    echo "including gcov flags to CGO_LDFLAGS .."
-			CGO_LDFLAGS+=" -lgcov"
-		fi
+	fi
+	if [[ -n $(find "$build_source" -name "*.gcno") ]]; then
+		echo "including gcov flags to CGO_LDFLAGS .."
+		CGO_LDFLAGS+=" -lgcov"
 	fi
 	export CGO_CFLAGS LD_LIBRARY_PATH CGO_LDFLAGS
 }
