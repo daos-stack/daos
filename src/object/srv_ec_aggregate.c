@@ -2700,6 +2700,11 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
+	D_ASSERTF(cont->sc_ec_agg_eph >= cont->sc_ec_agg_eph_boundary,
+		  DF_CONT " bad sc_ec_agg_eph " DF_X64 " < sc_ec_agg_eph_boundary " DF_X64,
+		  DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), cont->sc_ec_agg_eph,
+		  cont->sc_ec_agg_eph_boundary);
+
 	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	if (flags & VOS_AGG_FL_FORCE_SCAN) {
 		/** We don't want to use the latest container aggregation epoch for the filter
