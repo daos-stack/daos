@@ -23,6 +23,9 @@ server_config:
       log_file: daos_server0.log
       log_mask: INFO
       storage: auto
+      env_vars:
+        - D_POST_INIT=2048
+        - D_POST_INCR=2048
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -31,6 +34,9 @@ server_config:
       log_file: daos_server1.log
       log_mask: INFO
       storage: auto
+      env_vars:
+        - D_POST_INIT=2048
+        - D_POST_INCR=2048
 pool:
   size: 93%
 container:
@@ -53,15 +59,15 @@ mdtest:
   # EC does not supported for directory so for now running with RP
   dfs_dir_oclass: RP_3G1
   dfs_oclass_mux: !mux
-    6_server_ec2p2gx:
-      !filter-only : "/run/hosts/servers/6_server"  # yamllint disable-line rule:colons
-      dfs_oclass: EC_2P2GX
-    8_server_ec4p2gx:
-      !filter-only : "/run/hosts/servers/8_server"  # yamllint disable-line rule:colons
-      dfs_oclass: EC_4P2GX
-    12_server_ec4p3gx:
-      !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
-      dfs_oclass: EC_4P3GX
+    #6_server_ec2p2gx:
+    #  !filter-only : "/run/hosts/servers/6_server"  # yamllint disable-line rule:colons
+    #  dfs_oclass: EC_2P2GX
+    #8_server_ec4p2gx:
+    #  !filter-only : "/run/hosts/servers/8_server"  # yamllint disable-line rule:colons
+    #  dfs_oclass: EC_4P2GX
+    #12_server_ec4p3gx:
+    #  !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
+    #  dfs_oclass: EC_4P3GX
     12_server_ec8p2gx:
       !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
       dfs_oclass: EC_8P2GX
