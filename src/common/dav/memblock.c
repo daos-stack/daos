@@ -1511,7 +1511,8 @@ zone_dump(struct palloc_heap *heap, const struct memory_block *m)
 
 	D_EMIT("memory_block {.chunk_id=%" PRIu32 ",.zone_id=%" PRIu32 "}", m->chunk_id,
 	       m->zone_id);
-	D_EMIT("zone {.header.magic=%" PRIu32 "}", z->header.magic);
+	D_EMIT("zone.header {.magic=%" PRIu32 ", .size_idx=%" PRIu32 "}", z->header.magic,
+	       z->header.size_idx);
 
 	for (int i = 0; i < MAX_CHUNK; ++i) {
 		D_CASSERT(sizeof(struct chunk_header) == sizeof(uint64_t));

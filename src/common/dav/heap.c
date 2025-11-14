@@ -782,6 +782,22 @@ heap_reclaim_run(struct palloc_heap *heap, struct memory_block *m, int startup)
 	return 0;
 }
 
+static void
+zone_dump(struct zone *z)
+{
+	uint64_t *chunk_hdr;
+
+	D_EMIT("zone.header {.magic=%" PRIu32 ", .size_idx=%" PRIu32 "}", z->header.magic,
+	       z->header.size_idx);
+
+	for (int i = 0; i < MAX_CHUNK; ++i) {
+		D_CASSERT(sizeof(struct chunk_header) == sizeof(uint64_t));
+
+		chunk_hdr = (uint64_t *)&z->chunk_headers[i];
+		D_EMIT("zone.chunk_header[%d]=%" PRIx64, i, *chunk_hdr);
+	}
+}
+
 /*
  * heap_reclaim_zone_garbage -- (internal) creates volatile state of unused runs
  */
@@ -791,8 +807,7 @@ heap_reclaim_zone_garbage(struct palloc_heap *heap, struct bucket *bucket,
 {
 	struct zone *z = ZID_TO_ZONE(heap->layout, zone_id);
 
-	D_EMIT("zone.header {.magic=%" PRIu32 ", .size_idx=%" PRIu32 "}", z->header.magic,
-	       z->header.size_idx);
+	zone_dump(z);
 
 	for (uint32_t i = 0; i < z->header.size_idx; ) {
 		struct chunk_header *hdr = &z->chunk_headers[i];
@@ -804,10 +819,6 @@ heap_reclaim_zone_garbage(struct palloc_heap *heap, struct bucket *bucket,
 		m.zone_id = zone_id;
 		m.chunk_id = i;
 		m.size_idx = hdr->size_idx;
-
-		D_EMIT("memory_block {.zone_id=%" PRIu32 ", .chunk_id=%" PRIu32
-		       ", .size_idx=%" PRIu32 "}",
-		       m.zone_id, m.chunk_id, m.size_idx);
 
 		memblock_rebuild_state(heap, &m);
 		m.m_ops->reinit_chunk(&m);
