@@ -2683,6 +2683,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	struct dtx_id		 dti = { 0 };
 	struct dtx_epoch	 epoch = { 0 };
 	daos_unit_oid_t		 oid = { 0 };
+	uint64_t                  ec_agg_eph;
 	int			 blocks = 0;
 	int			 rc = 0;
 
@@ -2713,6 +2714,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		return 0;
 	}
 
+	ec_agg_eph                     = cont->sc_ec_agg_eph;
 	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	if (flags & VOS_AGG_FL_FORCE_SCAN) {
 		/** We don't want to use the latest container aggregation epoch for the filter
@@ -2728,7 +2730,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	 */
 	if (ec_agg_param->ap_filter_eph != 0 && cont->sc_ec_update_timestamp != 0 &&
 	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
-		D_DEBUG(DB_EPC, DF_CONT" skip EC agg "DF_U64">= "DF_U64"\n",
+		D_DEBUG(DB_EPC, DF_CONT " skip EC agg " DF_U64 ">= " DF_U64 "\n",
 			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
 			cont->sc_ec_update_timestamp);
 		goto update_hae;
@@ -2801,6 +2803,19 @@ update_hae:
 		cont->sc_ec_agg_active = 0;
 
 	if (rc == 0) {
+		/* If pool map updated during this round of aggregation, the sc_ec_agg_eph
+		 * possibly be reset by ds_cont_child_reset_ec_agg_eph_all().
+		 * For that case should not bump local sc_ec_agg_eph and rescan from the reset
+		 * value (sc_ec_agg_eph_boundary).
+		 */
+		if (cont->sc_ec_agg_eph != ec_agg_eph) {
+			D_INFO(DF_CONT " sc_ec_agg_eph changed from " DF_X64 " to " DF_X64
+				       " don't bump EC aggregation epoch",
+			       DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_eph,
+			       cont->sc_ec_agg_eph);
+			return rc;
+		}
+
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
 		if (!cont->sc_stopping && cont->sc_query_ec_agg_eph) {
 			uint64_t orig, cur, cur_eph;
