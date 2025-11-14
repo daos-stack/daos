@@ -101,7 +101,7 @@ HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --with_code_coverage="$WITH_CODE_COVERAGE"
 
 # Generate code coverage report if at least one gcda file was generated
-if [ "$WITH_CODE_COVERAGE" = "true" ]; then
+if [ "$WITH_CODE_COVERAGE" = "yes" ]; then
     pip install --requirement requirements-code-coverage.txt
     mkdir -p "${test_log_dir}/code_coverage"
     gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors \
