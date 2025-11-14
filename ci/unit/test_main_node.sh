@@ -92,7 +92,7 @@ pip install --requirement requirements-utest.txt
 pip install /opt/daos/lib/daos/python/
 
 WITH_CODE_COVERAGE="no"
-if [[ -n $(find build -name "*.gcda") ]]; then
+if [[ -n $(find build -name "*.gcno") ]]; then
     WITH_CODE_COVERAGE="yes"
 fi
 
