@@ -98,10 +98,6 @@ function setup_environment()
 	CGO_LDFLAGS+="${SL_OFI_PREFIX+ -L${SL_OFI_PREFIX}/lib}"
 
 	build_dir="$(dirname "$build_source")"
-	# debug
-	find "$build_dir" -name "*.gcno"
-	ls "$build_dir"
-	# end debug
 	if [[ -n $(find "$build_dir" -name "*.gcno") ]]; then
 		echo "including gcov flags to CGO_LDFLAGS .."
 		CGO_LDFLAGS+=" -lgcov"
