@@ -2797,6 +2797,8 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	pool->sp_need_discard = 1;
 	pool->sp_discard_status = 0;
 	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (rc == 0)
+		ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
 
 	ds_pool_put(pool);
 out:
@@ -3116,6 +3118,9 @@ lock:
 	ABT_rwlock_wrlock(pool->sp_recov_lock);
 	rc = ds_pool_thread_collective(prci->prci_uuid, ex_status, pool_tgt_recov_cont, &prca, 0);
 	ABT_rwlock_unlock(pool->sp_recov_lock);
+
+	if (rc == 0)
+		ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
 
 out:
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_REBUILD, rc,
