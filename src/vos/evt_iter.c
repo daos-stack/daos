@@ -214,6 +214,8 @@ evt_iter_intent(struct evt_iterator *iter)
 		return DAOS_INTENT_DISCARD;
 	if (iter->it_options & EVT_ITER_FOR_MIGRATION)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_options & EVT_ITER_FOR_CHECK)
+		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
 }
 
