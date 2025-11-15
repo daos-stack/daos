@@ -1119,7 +1119,8 @@ ucs_init(void)
 	if (next_ucs_init == NULL) {
 		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
 		if (next_ucs_init == NULL) {
-			rc = query_var_addr_size("libucs.so", "ucs_init", &func_addr, "ucs_async_thread_global_context",
+			rc = query_var_addr_size("libucs.so", "ucs_init", &func_addr,
+						 "ucs_async_thread_global_context",
 						 &ucs_global_var_size, &ucs_global_var_addr);
 			assert(rc == 0);
 			next_ucs_init = (void *)func_addr;
@@ -1132,8 +1133,9 @@ ucs_init(void)
 	}
 
 	func_addr = (char *)next_ucs_init;
-	rc = query_var_addr_size("libucs.so", "ucs_init", &func_addr, "ucs_async_thread_global_context",
-				 &ucs_global_var_size, &ucs_global_var_addr);
+	rc        = query_var_addr_size("libucs.so", "ucs_init", &func_addr,
+					"ucs_async_thread_global_context", &ucs_global_var_size,
+					&ucs_global_var_addr);
 	if (rc == 0)
 		pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
 

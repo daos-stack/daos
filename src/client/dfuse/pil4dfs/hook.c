@@ -1239,7 +1239,7 @@ module_base_addr(const char *mod_name, char **lib_path)
 		goto err;
 	}
 	/* look back for the first '\n', the end of last line */
-	for(i = 0; i < 128; i++) {
+	for (i = 0; i < 128; i++) {
 		if (*(pos - i) == '\n') {
 			/* path_offset is the offset from the end of previous line to the beginning
 			 * of the lib path string in current line
@@ -1271,6 +1271,7 @@ module_base_addr(const char *mod_name, char **lib_path)
 	if (*lib_path == NULL)
 		goto err;
 	(*lib_path)[end - start] = 0;
+
 	num_item = sscanf(start - path_offset, "%lx", &base_addr);
 	if (num_item != 1) {
 		printf("Fail to read module base address.\n");
@@ -1367,7 +1368,8 @@ query_var_addr_size(const char *mod_name, const char *func_name, char **func_add
 					addr_var  = *((long int *)(symb_base_addr + rec_addr + 8));
 				}
 				if ((*func_addr == 0) && (strcmp(sym_name, func_name) == 0)) {
-					*func_addr  = base_addr + *((long int *)(symb_base_addr + rec_addr + 8));
+					*func_addr  = base_addr +
+						      *((long int *)(symb_base_addr + rec_addr + 8));
 				}
 				if (addr_var && *func_addr) {
 					break;
