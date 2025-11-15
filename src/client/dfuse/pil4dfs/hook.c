@@ -1188,9 +1188,106 @@ query_all_org_func_addr(void)
 	}
 }
 
+/*
+ * module_base_addr - Determine the full paths of one module in /proc/self/maps and base address
+ */
+static char *
+module_base_addr(const char *mod_name, char **lib_path)
+{
+	int      num_item;
+	int      path_offset   = 0, i;
+	char    *read_buff_map = NULL;
+	char    *pos, *start, *end;
+	char     buf[3072];
+	uint64_t base_addr;
+	size_t   byte_read;
+	size_t   file_size = 0;
+	FILE    *fp;
+
+	if (lib_path == NULL)
+		return NULL;
+
+	fp = fopen("/proc/self/maps", "r");
+	if (!fp) {
+		perror("fopen");
+		return NULL;
+	}
+
+	/* Read until EOF and count bytes */
+	while ((byte_read = fread(buf, 1, sizeof(buf), fp)) > 0) {
+		file_size += byte_read;
+	}
+
+	read_buff_map = malloc(file_size);
+	if (read_buff_map == NULL) {
+		perror("malloc");
+		return NULL;
+	}
+	fseek(fp, 0, SEEK_SET);
+	byte_read = fread(read_buff_map, 1, file_size, fp);
+	if (byte_read != file_size) {
+		perror("fread");
+		fclose(fp);
+		goto err;
+	}
+	fclose(fp);
+
+	/* need to find the offset of lib path in the line */
+	pos = strstr(read_buff_map, "[stack]");
+	if (pos == NULL) {
+		printf("Failed to find section of stack.\n");
+		goto err;
+	}
+	/* look back for the first '\n', the end of last line */
+	for(i = 0; i < 128; i++) {
+		if (*(pos - i) == '\n') {
+			/* path_offset is the offset from the end of previous line to the beginning
+			 * of the lib path string in current line
+			 */
+			path_offset = i;
+			break;
+		}
+		if ((pos - i) < read_buff_map) {
+			break;
+		}
+	}
+	if (path_offset == 0) {
+		printf("Fail to determine path_offset in /proc/self/maps.\n");
+		goto err;
+	}
+
+	/* need to find the offset of lib path in the line */
+	pos = strstr(read_buff_map, mod_name);
+	if (pos == NULL) {
+		printf("Failed to find section for module %s.\n", mod_name);
+		goto err;
+	}
+	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + file_size);
+	if ((end - start + 1) >= PATH_MAX) {
+		printf("path is too long");
+		goto err;
+	}
+	*lib_path = strndup(start, end - start + 1);
+	if (*lib_path == NULL)
+		goto err;
+	(*lib_path)[end - start] = 0;
+	num_item = sscanf(start - path_offset, "%lx", &base_addr);
+	if (num_item != 1) {
+		printf("Fail to read module base address.\n");
+		goto err;
+	}
+
+	free(read_buff_map);
+	return (char *)base_addr;
+
+err:
+	free(read_buff_map);
+	return NULL;
+}
+
 int
-query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const char *var_name,
-		    size_t *var_size, char **var_addr)
+query_var_addr_size(const char *mod_name, const char *func_name, char **func_addr,
+		    const char *var_name, size_t *var_size, char **var_addr)
 {
 	int         fd, i, j, rc;
 	struct stat file_stat;
@@ -1201,33 +1298,34 @@ query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const 
 	void       *symb_base_addr = NULL;
 	int         num_sym = 0, sym_rec_size = 0, sym_offset, rec_addr;
 	char       *sym_name;
-	long int    addr_fun = 0;
 	long int    addr_var = 0;
-	Dl_info     dl_info;
+	char       *base_addr;
+	char       *lib_path;
 
-	if (ref_func_addr == NULL || ref_func_name == NULL || var_size == NULL || var_addr == NULL)
+	if (mod_name == NULL || func_name == NULL || func_addr == NULL || var_size == NULL ||
+	    var_addr == NULL)
 		return EINVAL;
 
-	rc = dladdr(ref_func_addr, &dl_info);
-	if (rc == 0)
+	base_addr = module_base_addr(mod_name, &lib_path);
+	if (base_addr == NULL)
 		return ENODATA;
 
-	rc = stat(dl_info.dli_fname, &file_stat);
+	rc = stat(lib_path, &file_stat);
 	if (rc == -1) {
-		D_ERROR("Fail to query stat of file %s", dl_info.dli_fname);
+		D_ERROR("Fail to query stat of file %s", lib_path);
 		return errno;
 	}
 
-	fd = open(dl_info.dli_fname, O_RDONLY);
+	fd = open(lib_path, O_RDONLY);
 	if (fd == -1) {
-		D_ERROR("Fail to open file %s", dl_info.dli_fname);
+		D_ERROR("Fail to open file %s", lib_path);
 		return errno;
 	}
 
 	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
 	if ((long int)map_start == -1) {
 		close(fd);
-		D_ERROR("Fail to mmap file %s", dl_info.dli_fname);
+		D_ERROR("Fail to mmap file %s", lib_path);
 		return errno;
 	}
 
@@ -1268,10 +1366,12 @@ query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const 
 					*var_size = *((size_t *)(symb_base_addr + rec_addr + 16));
 					addr_var  = *((long int *)(symb_base_addr + rec_addr + 8));
 				}
-				if (strcmp(sym_name, ref_func_name) == 0)
-					addr_fun = *((long int *)(symb_base_addr + rec_addr + 8));
-				if (addr_fun && addr_var)
+				if ((*func_addr == 0) && (strcmp(sym_name, func_name) == 0)) {
+					*func_addr  = base_addr + *((long int *)(symb_base_addr + rec_addr + 8));
+				}
+				if (addr_var && *func_addr) {
 					break;
+				}
 			}
 		}
 	}
@@ -1279,11 +1379,12 @@ query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const 
 	munmap(map_start, file_stat.st_size);
 	close(fd);
 
-	if (!addr_fun || !addr_var)
+	if ((*func_addr == NULL) || (!addr_var))
 		/* the address of the variable or reference function is not found */
 		return ENODATA;
 
-	*var_addr = (char *)((long int)ref_func_addr + addr_var - addr_fun);
+	*var_addr = (char *)((long int)base_addr + addr_var);
+	D_FREE(lib_path);
 
 	return 0;
 

@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <assert.h>
 #include <sys/ucontext.h>
 #include <sys/user.h>
 #include <linux/binfmts.h>
@@ -1102,24 +1103,36 @@ static char  *ucs_global_var_addr;
 static void
 reset_ucs_global_variable_after_fork(void)
 {
-	if (ucs_global_var_addr && ucs_global_var_size)
+	if (ucs_global_var_addr && ucs_global_var_size) {
+		printf("DBG> zero ucs_async_thread_global_context.\n");
 		memset(ucs_global_var_addr, 0, ucs_global_var_size);
+		fflush(stdout);
+	}
 }
 
 void
 ucs_init(void)
 {
-	int rc;
+	int   rc;
+	char *func_addr = NULL;
 
 	if (next_ucs_init == NULL) {
 		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
-		if (next_ucs_init == NULL)
-			/* This function's name ends with _init. This is a special case. dl.so may
-			 * treat it as a constructor function sometimes.
-			 */
+		if (next_ucs_init == NULL) {
+			rc = query_var_addr_size("libucs.so", "ucs_init", &func_addr, "ucs_async_thread_global_context",
+						 &ucs_global_var_size, &ucs_global_var_addr);
+			assert(rc == 0);
+			next_ucs_init = (void *)func_addr;
+			/* daos_debug_init() may be not called yet, D_ASSERT() is not applicable. */
+			assert(next_ucs_init != NULL);
+			pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
+			next_ucs_init();
 			return;
+		}
 	}
-	rc = query_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
+
+	func_addr = (char *)next_ucs_init;
+	rc = query_var_addr_size("libucs.so", "ucs_init", &func_addr, "ucs_async_thread_global_context",
 				 &ucs_global_var_size, &ucs_global_var_addr);
 	if (rc == 0)
 		pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
