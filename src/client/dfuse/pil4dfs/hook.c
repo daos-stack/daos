@@ -1313,20 +1313,20 @@ query_var_addr_size(const char *mod_name, const char *func_name, char **func_add
 
 	rc = stat(lib_path, &file_stat);
 	if (rc == -1) {
-		D_ERROR("Fail to query stat of file %s", lib_path);
+		printf("Fail to query stat of file %s", lib_path);
 		return errno;
 	}
 
 	fd = open(lib_path, O_RDONLY);
 	if (fd == -1) {
-		D_ERROR("Fail to open file %s", lib_path);
+		printf("Fail to open file %s", lib_path);
 		return errno;
 	}
 
 	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
 	if ((long int)map_start == -1) {
 		close(fd);
-		D_ERROR("Fail to mmap file %s", lib_path);
+		printf("Fail to mmap file %s", lib_path);
 		return errno;
 	}
 
@@ -1338,7 +1338,7 @@ query_var_addr_size(const char *mod_name, const char *func_name, char **func_add
 			symb_base_addr = (void *)(sections[i].sh_offset + map_start);
 			sym_rec_size   = sections[i].sh_entsize;
 			if (sections[i].sh_entsize == 0) {
-				D_ERROR("Unexpected entry size in ELF file");
+				printf("Unexpected entry size in ELF file");
 				goto err;
 			}
 			num_sym = sections[i].sh_size / sections[i].sh_entsize;
@@ -1355,7 +1355,7 @@ query_var_addr_size(const char *mod_name, const char *func_name, char **func_add
 				}
 			}
 			if (!strtab_offset) {
-				D_ERROR("Failed to find STRTAB section in elf file");
+				printf("Failed to find STRTAB section in elf file");
 				goto err;
 			}
 
@@ -1368,8 +1368,8 @@ query_var_addr_size(const char *mod_name, const char *func_name, char **func_add
 					addr_var  = *((long int *)(symb_base_addr + rec_addr + 8));
 				}
 				if ((*func_addr == 0) && (strcmp(sym_name, func_name) == 0)) {
-					*func_addr  = base_addr +
-						      *((long int *)(symb_base_addr + rec_addr + 8));
+					*func_addr = base_addr +
+						     *((long int *)(symb_base_addr + rec_addr + 8));
 				}
 				if (addr_var && *func_addr) {
 					break;
@@ -1386,7 +1386,7 @@ query_var_addr_size(const char *mod_name, const char *func_name, char **func_add
 		return ENODATA;
 
 	*var_addr = (char *)((long int)base_addr + addr_var);
-	D_FREE(lib_path);
+	free(lib_path);
 
 	return 0;
 
