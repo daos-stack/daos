@@ -1018,7 +1018,7 @@ umem_create:
 	return rc;
 }
 
-static int
+int
 vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned int flags,
 		 void *metrics, struct umem_pool **ph)
 {
@@ -1867,6 +1867,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		goto out;
 	}
+
+	D_INFO("Opening pool " DF_UUID " with flags %x on path %s\n", DP_UUID(uuid), flags, path);
 
 	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, &ph);
 	if (rc) {
