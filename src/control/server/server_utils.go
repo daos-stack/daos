@@ -735,21 +735,19 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
-func isSelfHealExcludeSet(svc *mgmtSvc) bool {
-	// Retrieve system self-heal property.
-	selfHeal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, daos.SystemPropertySelfHeal.String())
-	if system.IsErrSystemAttrNotFound(err) {
-		return true // Assume default value where all flags are set.
-	}
+func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
+	selfHeal, err := svc.getSysSelfHeal()
 	if err != nil {
-		svc.log.Errorf("retrieving %s system property: %s", daos.SystemPropertySelfHeal,
-			err.Error())
-		return true // Assume default values if system property cannot be accessed.
+		if system.IsErrSystemAttrNotFound(err) {
+			// Assume default value where all flags are set if property isn't present.
+			return true, nil
+		}
+		return false, err
 	}
 
 	svc.log.Tracef("system property self_heal='%+v'", selfHeal)
 
-	return daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagExclude)
+	return daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagExclude), nil
 }
 
 func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
@@ -761,8 +759,14 @@ func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
 
 	msg := fmt.Sprintf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation,
 		ts)
-	if !isSelfHealExcludeSet(srv.mgmtSvc) {
-		srv.log.Tracef("skipping ms state update, sys-prop-self_heal.exclude unset (%s)",
+
+	isSet, err := isSysSelfHealExcludeSet(srv.mgmtSvc)
+	if err != nil {
+		srv.log.Errorf("handle rank dead: %s (%s)", err, msg)
+		return
+	}
+	if !isSet {
+		srv.log.Tracef("skipping ms exclude-state update, sys-prop-self_heal.exclude unset (%s)",
 			msg)
 		return
 	}

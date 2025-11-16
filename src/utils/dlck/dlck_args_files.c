@@ -14,9 +14,9 @@
 #include "dlck_args.h"
 
 static struct argp_option args_files_options[] = {
-    {"file", KEY_FILES, "UUID,TARGET", 0,
+    {"file", KEY_FILES, "UUID[,TARGET]", 0,
      "Pool UUID and a set of targets. If no TARGET is provided, all targets are used. This option "
-     "can be specified multiple times.",
+     "can be specified multiple times. By default all pools are used.",
      GROUP_OPTIONS},
     {0}};
 
@@ -26,15 +26,6 @@ args_files_init(struct dlck_args_files *args)
 	memset(args, 0, sizeof(*args));
 	/** set defaults */
 	D_INIT_LIST_HEAD(&args->list);
-}
-
-static int
-args_files_check(struct argp_state *state, struct dlck_args_files *args)
-{
-	if (d_list_empty(&args->list)) {
-		RETURN_FAIL(state, EINVAL, "No file chosen");
-	}
-	return 0;
 }
 
 static error_t
@@ -50,7 +41,6 @@ args_files_parser(int key, char *arg, struct argp_state *state)
 		args_files_init(args);
 		return 0;
 	case ARGP_KEY_END:
-		return args_files_check(state, args);
 	case ARGP_KEY_SUCCESS:
 	case ARGP_KEY_FINI:
 		return 0;

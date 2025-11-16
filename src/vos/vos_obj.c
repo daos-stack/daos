@@ -416,12 +416,13 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
-	struct vos_dtx_act_ent	**daes = NULL;
-	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_ts_set	*ts_set;
-	struct vos_container	*cont;
-	struct vos_object	*obj = NULL;
-	bool			 punch_obj = false;
+	struct vos_dtx_act_ent **daes = NULL;
+	struct vos_dtx_cmt_ent **dces = NULL;
+	struct vos_ts_set       *ts_set;
+	struct vos_container    *cont;
+	struct vos_object       *obj        = NULL;
+	bool                     punch_obj  = false;
+	bool                     tx_started = false;
 	uint64_t		 hold_flags;
 	daos_epoch_range_t	 epr = { 0 };
 	daos_epoch_t		 bound;
@@ -496,6 +497,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb);
 	if (rc != 0)
 		goto reset;
+
+	tx_started = true;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction.
 	 *
@@ -576,7 +579,7 @@ reset:
 		}
 	}
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
+	rc = vos_tx_end(cont, dth, NULL, NULL, tx_started, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
 		if (rc == 0)
 			dth->dth_cos_done = 1;
@@ -775,9 +778,8 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 
 	if (akey) { /* delete akey */
 		key = akey;
-		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
-				      dkey, 0, DAOS_INTENT_PUNCH, NULL,
-				      &toh, NULL);
+		rc  = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, 0, DAOS_INTENT_KILL,
+				       NULL, &toh, NULL);
 		if (rc) {
 			D_ERROR("open akey tree error: "DF_RC"\n", DP_RC(rc));
 			goto out_tx;
@@ -801,6 +803,115 @@ out_tx:
 out:
 	vos_obj_release(obj, 0, true);
 	return rc;
+}
+
+int
+vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, daos_unit_oid_t oid,
+			daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys)
+{
+	daos_epoch_range_t    epr = {0, DAOS_EPOCH_MAX};
+	struct vos_object    *obj = NULL;
+	struct vos_container *cont;
+	struct umem_instance *umm;
+	daos_handle_t         toh = DAOS_HDL_INVAL;
+	int                   rc  = 0;
+	int                   i;
+	bool                  dirty = false;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	umm = vos_cont2umm(cont);
+
+	if (dkey != NULL && daos_key_is_null(*dkey))
+		D_GOTO(log, rc = -DER_INVAL);
+
+	if (akey_nr != 0) {
+		if (dkey == NULL)
+			D_GOTO(log, rc = -DER_INVAL);
+
+		if (akeys == NULL)
+			D_GOTO(log, rc = -DER_INVAL);
+
+		if (vos_obj_skip_akey_supported(cont, oid))
+			D_GOTO(log, rc = -DER_NO_PERM);
+
+		for (i = 0; i < akey_nr; i++) {
+			if (daos_key_is_null(akeys[i]))
+				D_GOTO(log, rc = -DER_INVAL);
+		}
+	}
+
+	rc = vos_obj_hold(cont, oid, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE,
+			  DAOS_INTENT_MARK, &obj, NULL);
+	if (rc != 0)
+		goto log;
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto log;
+
+	rc = vos_obj_incarnate(obj, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE, DAOS_INTENT_MARK,
+			       NULL);
+	if (rc != 0)
+		goto out;
+
+	if (ilog_is_corrupted(&obj->obj_df->vo_ilog))
+		D_GOTO(out, rc = -DER_ALREADY);
+
+	rc = vos_ilog_set_flags(cont, &obj->obj_df->vo_ilog, epoch,
+				dkey == NULL ? ILOG_FLAGS_CORRUPTED : 0);
+	if (rc != 0 || dkey == NULL)
+		goto out;
+
+	rc = obj_tree_init(obj);
+	if (rc != 0)
+		goto out;
+
+	rc = vos_tree_mark_corruption(cont, obj, obj->obj_toh, VOS_BTR_DKEY, epoch, pm_ver, true,
+				      dkey, akey_nr == 0 ? NULL : &toh);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < akey_nr; i++) {
+		rc = vos_tree_mark_corruption(cont, obj, toh, VOS_BTR_AKEY, epoch, pm_ver, false,
+					      &akeys[i], NULL);
+		switch (rc) {
+		case 0:
+			dirty = true;
+			break;
+		case -DER_ALREADY:
+			rc = 0;
+			break;
+		default:
+			goto out;
+		}
+	}
+
+out:
+	if (rc == 0 && akey_nr != 0 && !dirty)
+		rc = -DER_ALREADY;
+
+	rc = umem_tx_end(umm, rc);
+
+log:
+	if (dkey != NULL)
+		DL_CDEBUG(rc == 0 || rc == -DER_ALREADY, DLOG_INFO, DLOG_ERR, rc,
+			  "Mark corruption on obj " DF_UOID ", dkey=" DF_KEY
+			  ", akey_nr %u, epoch " DF_X64 ", pm_ver %u",
+			  DP_UOID(oid), DP_KEY(dkey), akey_nr, epoch, pm_ver);
+	else
+		DL_CDEBUG(rc == 0 || rc == -DER_ALREADY, DLOG_INFO, DLOG_ERR, rc,
+			  "Mark corruption on obj " DF_UOID
+			  ", dkey (empty), akey_nr %u, epoch " DF_X64 ", pm_ver %u",
+			  DP_UOID(oid), akey_nr, epoch, pm_ver);
+
+	if (daos_handle_is_valid(toh))
+		dbtree_close(toh);
+	if (obj != NULL)
+		vos_obj_release(obj, 0, true);
+
+	return rc == -DER_ALREADY ? 0 : rc;
 }
 
 static int

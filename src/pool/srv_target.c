@@ -33,6 +33,7 @@
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/pool.h>
+#include <daos/btree_class.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/object.h>
@@ -538,7 +539,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
 	rc = vos_pool_open_metrics(path, child->spc_uuid,
 				   VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_EXTERNAL_CHKPT,
-				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
+				   child->spc_metrics[DAOS_VOS_MODULE], NULL, &child->spc_hdl);
 
 	D_FREE(path);
 
@@ -2796,6 +2797,8 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	pool->sp_need_discard = 1;
 	pool->sp_discard_status = 0;
 	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (rc == 0)
+		ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
 
 	ds_pool_put(pool);
 out:
@@ -2880,4 +2883,258 @@ out:
 	if (rc)
 		D_ERROR("rpc failed, " DF_RC "\n", DP_RC(rc));
 	crt_reply_send(rpc);
+}
+
+struct pool_recov_cont_args {
+	uuid_t                       prca_po_uuid;
+	uint64_t                     prca_cont_nr;
+	struct daos_pool_cont_info  *prca_conts;
+	struct pool_target_addr_list prca_tgt_list;
+};
+
+struct pool_recov_cont_tgt_args {
+	struct pool_recov_cont_args *prcta_parent;
+	daos_handle_t                prcta_tree_hdl;
+};
+
+static int
+pool_tgt_recov_cont_tgt_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+			   vos_iter_param_t *iter_param, void *cb_arg, unsigned int *acts)
+{
+	struct pool_recov_cont_tgt_args *prcta = cb_arg;
+	d_iov_t                          kiov;
+	d_iov_t                          riov;
+	int                              rc;
+
+	D_ASSERT(type == VOS_ITER_COUUID);
+
+	d_iov_set(&kiov, entry->ie_couuid, sizeof(entry->ie_couuid));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(prcta->prcta_tree_hdl, &kiov, &riov);
+	if (rc == -DER_NO_HDL || rc == -DER_NONEXIST) {
+		rc = ds_cont_child_destroy(prcta->prcta_parent->prca_po_uuid, entry->ie_couuid);
+		if (rc == 0)
+			*acts |= VOS_ITER_CB_DELETE;
+	}
+
+	if (rc != 0)
+		D_ERROR("Failed to locate the container shard " DF_UUID " in the pool " DF_UUID
+			" on the target %u/%u: " DF_RC "\n",
+			DP_UUID(entry->ie_couuid), DP_UUID(prcta->prcta_parent->prca_po_uuid),
+			dss_self_rank(), dss_get_module_info()->dmi_tgt_id, DP_RC(rc));
+
+	return rc;
+}
+
+static int
+pool_tgt_recov_cont(void *data)
+{
+	struct pool_recov_cont_args    *prca   = data;
+	struct pool_recov_cont_tgt_args prcta  = {0};
+	vos_iter_param_t                param  = {0};
+	struct vos_iter_anchors         anchor = {0};
+	struct umem_attr                uma    = {0};
+	struct ds_pool_child           *pool   = NULL;
+	struct pool_target_addr         addr;
+	d_iov_t                         kiov;
+	d_iov_t                         riov;
+	uint32_t                        myrank = dss_self_rank();
+	int                             rc;
+	int                             i;
+
+	addr.pta_rank   = myrank;
+	addr.pta_target = dss_get_module_info()->dmi_tgt_id;
+
+	/* Firstly, let's check whether current target in the recovery list or not. */
+	if (!pool_target_addr_found(&prca->prca_tgt_list, &addr))
+		D_GOTO(out, rc = 0);
+
+	pool = ds_pool_child_lookup(prca->prca_po_uuid);
+	if (pool == NULL) {
+		D_ERROR("Failed to locate the pool " DF_UUID " on the target %u/%u\n",
+			DP_UUID(prca->prca_po_uuid), myrank, addr.pta_target);
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	/*
+	 * Then, go through the PS leader offered containers list, for each one check whether it
+	 * exists locally or not, if not, create it. The sponsor has already held sp_recov_lock.
+	 */
+	for (i = 0; i < prca->prca_cont_nr; i++) {
+		rc = ds_cont_child_open_create(prca->prca_po_uuid, prca->prca_conts[i].pci_uuid,
+					       true, NULL);
+		if (rc != 0) {
+			D_ERROR("Failed to recover (create) cont " DF_UUID " in the pool " DF_UUID
+				" on the target %u/%u: " DF_RC "\n",
+				DP_UUID(prca->prca_po_uuid), DP_UUID(prca->prca_conts[i].pci_uuid),
+				myrank, addr.pta_target, DP_RC(rc));
+			goto out;
+		}
+	}
+
+	uma.uma_id = UMEM_CLASS_VMEM;
+	rc         = dbtree_create(DBTREE_CLASS_UV, 0, 8, &uma, NULL, &prcta.prcta_tree_hdl);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < prca->prca_cont_nr; i++) {
+		d_iov_set(&kiov, prca->prca_conts[i].pci_uuid,
+			  sizeof(prca->prca_conts[i].pci_uuid));
+		d_iov_set(&riov, prca->prca_conts[i].pci_label,
+			  sizeof(prca->prca_conts[i].pci_label));
+		rc = dbtree_upsert(prcta.prcta_tree_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov,
+				   &riov, NULL);
+		if (rc != 0)
+			goto out;
+	}
+
+	/*
+	 * And then, iterate containers locally, for each one check whether it is in the PS leader
+	 * offered containers list or not, if not, destroy the orphan container shard locally.
+	 */
+	prcta.prcta_parent = prca;
+	param.ip_hdl       = pool->spc_hdl;
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor, pool_tgt_recov_cont_tgt_cb, NULL,
+			 &prcta, NULL);
+
+out:
+	if (pool != NULL)
+		ds_pool_child_put(pool);
+
+	if (daos_handle_is_valid(prcta.prcta_tree_hdl))
+		dbtree_destroy(prcta.prcta_tree_hdl, NULL);
+
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_REBUILD, rc,
+		  "Recovery container for the pool " DF_UUID " on the target %u/%u",
+		  DP_UUID(prca->prca_po_uuid), myrank, addr.pta_target);
+
+	return rc;
+}
+
+struct recov_cont_bulk_args {
+	ABT_eventual rcba_eventual;
+	int          rcba_result;
+};
+
+static int
+recov_cont_bulk_cp(const struct crt_bulk_cb_info *cb_info)
+{
+	struct recov_cont_bulk_args *rcba = cb_info->bci_arg;
+	int                          rc;
+
+	rcba->rcba_result = cb_info->bci_rc;
+	rc                = ABT_eventual_set(rcba->rcba_eventual, NULL, 0);
+	D_ASSERTF(rc == ABT_SUCCESS, "Failed to ABT_eventual_set: %d\n", rc);
+
+	return 0;
+}
+
+void
+ds_pool_recov_cont_handler(crt_rpc_t *rpc)
+{
+	struct pool_recov_cont_in  *prci      = crt_req_get(rpc);
+	struct pool_recov_cont_out *prco      = crt_reply_get(rpc);
+	struct ds_pool             *pool      = NULL;
+	struct recov_cont_bulk_args rcba      = {0};
+	struct pool_recov_cont_args prca      = {0};
+	struct crt_bulk_desc        bulk_desc = {0};
+	crt_bulk_opid_t             bulk_opid = {0};
+	crt_bulk_t                  bulk      = CRT_BULK_NULL;
+	d_sg_list_t                 sgl;
+	d_iov_t                     cont_iov;
+	uint32_t                    ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
+	int                         rc;
+
+	D_DEBUG(DB_REBUILD, "Try to recover ( " DF_U64 ") containers for the pool " DF_UUID "\n",
+		prci->prci_cont_nr, DP_UUID(prci->prci_uuid));
+
+	rcba.rcba_eventual = ABT_EVENTUAL_NULL;
+
+	if (DAOS_FAIL_CHECK(DAOS_POOL_REINT_SLOW))
+		dss_sleep(6000);
+
+	rc = ds_pool_lookup(prci->prci_uuid, &pool);
+	if (rc != 0)
+		goto out;
+
+	uuid_copy(prca.prca_po_uuid, prci->prci_uuid);
+	prca.prca_cont_nr             = prci->prci_cont_nr;
+	prca.prca_tgt_list.pta_number = prci->prci_addrs.ca_count;
+	prca.prca_tgt_list.pta_addrs  = prci->prci_addrs.ca_arrays;
+
+	if (prci->prci_cont_nr == 0)
+		goto lock;
+
+	D_ALLOC_ARRAY(prca.prca_conts, prci->prci_cont_nr);
+	if (prca.prca_conts == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	cont_iov.iov_buf     = prca.prca_conts;
+	cont_iov.iov_buf_len = sizeof(*prca.prca_conts) * prci->prci_cont_nr;
+	cont_iov.iov_len     = cont_iov.iov_buf_len;
+
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &cont_iov;
+
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &bulk);
+	if (rc != 0)
+		goto out;
+
+	rc = ABT_eventual_create(0, &rcba.rcba_eventual);
+	if (rc != 0)
+		D_GOTO(out, rc = dss_abterr2der(rc));
+
+	bulk_desc.bd_rpc        = rpc;
+	bulk_desc.bd_bulk_op    = CRT_BULK_GET;
+	bulk_desc.bd_remote_hdl = prci->prci_cont_bulk;
+	bulk_desc.bd_local_hdl  = bulk;
+	bulk_desc.bd_len        = cont_iov.iov_buf_len;
+
+	rcba.rcba_result = 0;
+	if (prci->prci_flags & PRCF_BIND_BULK)
+		rc = crt_bulk_bind_transfer(&bulk_desc, recov_cont_bulk_cp, &rcba, &bulk_opid);
+	else
+		rc = crt_bulk_transfer(&bulk_desc, recov_cont_bulk_cp, &rcba, &bulk_opid);
+	if (rc != 0)
+		goto out;
+
+	rc = ABT_eventual_wait(rcba.rcba_eventual, NULL);
+	if (rc != 0)
+		goto out;
+
+	if (rcba.rcba_result != 0)
+		D_GOTO(out, rc = rcba.rcba_result);
+
+lock:
+	/*
+	 * When the PS leader waits for container recovery on the target to be reintegrated,
+	 * the PS leader role maybe switched. The new PS leader may update pool map with UP
+	 * current target earlier than the old PS leader. Then container tgt create/destroy
+	 * RPC will be sent to current target. Under such case, the container recovery that
+	 * is triggered by the old PS leader becomes stale, but current target may be not
+	 * aware that easily. So here, holding sp_recov_lock to prevent such race.
+	 */
+	ABT_rwlock_wrlock(pool->sp_recov_lock);
+	rc = ds_pool_thread_collective(prci->prci_uuid, ex_status, pool_tgt_recov_cont, &prca, 0);
+	ABT_rwlock_unlock(pool->sp_recov_lock);
+
+	if (rc == 0)
+		ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
+
+out:
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_REBUILD, rc,
+		  "Recovered ( " DF_U64 ") containers for the pool " DF_UUID, prci->prci_cont_nr,
+		  DP_UUID(prci->prci_uuid));
+
+	prco->prco_ret = rc;
+	crt_reply_send(rpc);
+
+	if (pool != NULL)
+		ds_pool_put(pool);
+	if (rcba.rcba_eventual != ABT_EVENTUAL_NULL)
+		ABT_eventual_free(&rcba.rcba_eventual);
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+	D_FREE(prca.prca_conts);
 }

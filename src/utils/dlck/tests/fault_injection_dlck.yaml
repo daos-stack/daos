@@ -1,0 +1,33 @@
+# Uncomment a fault you would like to trigger
+fault_config:
+  # - id: 131328 # DLCK_FAULT_CREATE_LOG_DIR
+  # - id: 131329 # DLCK_FAULT_CREATE_POOL_DIR
+  # - id: 131330 # DLCK_FAULT_ENGINE_START
+  # - id: 131331 # DLCK_FAULT_ENGINE_EXEC
+  # - id: 131332 # DLCK_FAULT_ENGINE_JOIN
+  # - id: 131333 # DLCK_FAULT_ENGINE_STOP
+  # - id: 131584 # DAOS_FAULT_POOL_NVME_HEALTH
+  #   interval: 2 # skip sys_db
+  # - id: 131585 # DAOS_FAULT_POOL_OPEN_BIO
+  # - id: 131586 # DAOS_FAULT_POOL_OPEN_UMEM
+  #   interval: 2 # skip sys_db
+  # - id: 131587 # DAOS_FAULT_POOL_OPEN_MAGIC
+  #   interval: 2 # skip sys_db
+  # - id: 131588 # DAOS_FAULT_POOL_OPEN_VERSION
+  #   interval: 2 # skip sys_db
+  # - id: 131589 # DAOS_FAULT_POOL_OPEN_UUID
+  #   interval: 2 # skip sys_db
+  # - id: 131590 # DAOS_FAULT_BTREE_OPEN_INV_CLASS
+  #   interval: 28 # containers tree fine-tuned; note: -t 1
+  #   interval: 29 # gc tree fine-tuned; note: -t 1
+  #   max_faults: 1
+  # - id: 131591 # DAOS_FAULT_BTREE_OPEN_UNREG_CLASS
+  #   interval: 28 # containers tree fine-tuned; note: -t 1
+  #   interval: 29 # gc tree fine-tuned; note: -t 1
+  #   max_faults: 1
+  # - id: 131592 # DAOS_FAULT_BTREE_FEATURES
+  #   interval: 28 # containers tree fine-tuned; note: -t 1
+  #   interval: 29 # gc tree fine-tuned; note: -t 1
+  #   max_faults: 1
+  # - id: 131593 # DAOS_FAULT_POOL_EXT_PADDING
+  # - id: 131594 # DAOS_FAULT_POOL_EXT_RESERVED

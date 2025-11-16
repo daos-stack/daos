@@ -18,6 +18,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/placement.h>
+#include <daos_srv/checker.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
@@ -235,12 +236,15 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
 /**
  * Aggregate the committed DTXs.
  *
- * \param coh	[IN]	Container open handle.
+ * \param coh		[IN]	Container open handle.
+ * \param cmt_time	[IN]	The upper commit time to aggregate, or NULL.
  *
- * \return		Zero on success, negative value if error.
+ * \return			Zero if all qualified DTX entries have been removed.
+ * 				Positive value if more DTX entries can be eventually aggregated.
+ * 				Negative value for error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh);
+vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time);
 
 /**
  * Query the container's DTXs statistics information.
@@ -488,7 +492,7 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version);
  */
 int
 vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
-		      daos_handle_t *poh);
+		      struct checker *ck, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -871,6 +875,23 @@ vos_obj_delete_ent(daos_handle_t coh, daos_unit_oid_t oid);
 int
 vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		daos_key_t *akey);
+
+/**
+ * Mark the specified object or {d,a}key as corrupted.
+ *
+ * \param coh     [IN]	Container open handle
+ * \param epoch   [IN]	Epoch for the the mark operation
+ * \param pm_ver  [IN]	Pool map version for the mark operation
+ * \param oid     [IN]	ID of the object
+ * \param dkey    [IN]	Optional, dkey being marked if \akey_nr is zero
+ * \param akey_nr [IN]	Number of akeys in \a akeys.
+ * \param akeys   [IN]	Optional, akey being marked if \akey_nr is not zero
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, daos_unit_oid_t oid,
+			daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys);
 
 /**
  * I/O APIs
@@ -1777,15 +1798,23 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
+/* Timing statistic of DTX entries */
+#define DTX_TIME_STAT_COUNT 3
+struct dtx_time_stat {
+	daos_epoch_t dts_epoch[DTX_TIME_STAT_COUNT];
+	uint64_t     dts_cmt_time[DTX_TIME_STAT_COUNT];
+};
+
 /**
- * Return the number of DTX committed entries of a container.
+ * Return statistics on the DTX committed entries of a container.
  *
  * \param[in]	coh	container open handle.
- * \param[out]	cnt	number of DTX committed entries.
+ * \param[out]	cmt_cnt	number of DTX committed entries.
+ * \param[out]	dts	Timing statistics on the DTX committed entries.
  *
  * \return		0 on success, error otherwise.
  */
 int
-vos_dtx_get_cmt_cnt(daos_handle_t coh, uint32_t *cnt);
+vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat *dts);
 
 #endif /* __VOS_API_H */
