@@ -202,9 +202,10 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 			D_GOTO(out, rc);
 
 		rc = d_rank_list_to_str(targets, &tgt_str);
-		if (rc != 0)
+		if (rc != 0) {
+			D_FREE(pg_str);
 			D_GOTO(out, rc);
-
+		}
 		D_ERROR(DF_UUID": targets (%s) contains ranks not in pg (%s)\n",
 			DP_UUID(pool_uuid), tgt_str, pg_str);
 
@@ -594,7 +595,13 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	int              rc;
 
 	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
-		D_ERROR("invalid property list\n");
+		D_ERROR("no properties in prop list\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (!daos_prop_valid(prop, true, true)) {
+		D_ERROR("invalid properties\n");
 		rc = -DER_INVAL;
 		goto out;
 	}

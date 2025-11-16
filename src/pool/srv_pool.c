@@ -386,6 +386,11 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
 		return 0;
 
+	if (!daos_prop_valid(prop, true, true)) {
+		D_ERROR("invalid pool property\n");
+		return -DER_INVAL;
+	}
+
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
@@ -1528,7 +1533,7 @@ handle_event(struct pool_svc *svc, struct pool_svc_event_set *event_set)
 	if (!pool_disable_exclude) {
 		rc = pool_svc_exclude_ranks(svc, event_set);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_UUID ": failed to exclude ranks", DP_UUID(svc->ps_uuid));
+			DL_INFO(rc, DF_UUID ": exclude ranks", DP_UUID(svc->ps_uuid));
 			return rc;
 		}
 	}
@@ -2796,9 +2801,17 @@ start_one(uuid_t uuid, void *varg)
 
 	rc = ds_pool_start(uuid, aft_chk, immutable);
 	if (rc != 0) {
+		uuid_t uuid_tmp;
+
 		DL_ERROR(rc, DF_UUID ": failed to start pool, aft_chk %s, immutable %s",
 			 DP_UUID(uuid), aft_chk ? "yes" : "no", immutable ? "yes" : "no");
 		ds_pool_failed_add(uuid, rc);
+		uuid_copy(uuid_tmp, uuid);
+		ds_notify_ras_eventf(RAS_POOL_START_FAILED, RAS_TYPE_INFO, RAS_SEV_ERROR,
+				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */, &uuid_tmp, NULL /* cont */, NULL /* objid */,
+				     NULL /* ctlop */, NULL /* data */,
+				     "failed to start pool: " DF_RC, DP_RC(rc));
 	}
 
 	return 0;
@@ -2809,11 +2822,10 @@ pool_start_all(void *arg)
 {
 	int rc;
 
-	/* Scan the storage and start all pool services. */
+	/* Scan the storage and start all pools. */
 	rc = ds_mgmt_tgt_pool_iterate(start_one, NULL /* arg */);
 	if (rc != 0)
-		D_ERROR("failed to scan all pool services: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to scan pools");
 }
 
 bool
@@ -4038,6 +4050,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
 	}
+	if (query_bits & DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER)
+		out->pco_rebuild_st.rs_max_supported_layout_ver = DAOS_POOL_OBJ_VERSION;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -5615,6 +5629,15 @@ out_lock:
 				"%d.\n", DP_UUID(in->psi_op.pi_uuid), rc);
 		daos_prop_free(prop);
 	}
+	/* If self_heal.exclude is set, resume event handling. */
+	if (rc == 0 && !dup_op) {
+		struct daos_prop_entry *entry;
+
+		entry = daos_prop_entry_get(prop_in, DAOS_PROP_PO_SELF_HEAL);
+		if (entry != NULL && daos_prop_is_set(entry) &&
+		    entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)
+			resume_event_handling(svc);
+	}
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -7084,6 +7107,29 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 		goto out;
 	ABT_rwlock_wrlock(svc->ps_lock);
 
+	if (opc == MAP_EXCLUDE && src == MUS_SWIM) {
+		daos_prop_t            *prop;
+		struct daos_prop_entry *entry;
+
+		/* Check if self_heal.exclude is enabled. */
+		rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_SELF_HEAL, &prop);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to read self_heal property",
+				 DP_UUID(svc->ps_uuid));
+			goto out_lock;
+		}
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
+		D_ASSERT(entry != NULL);
+		if (!daos_prop_is_set(entry) || !(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
+			D_INFO(DF_UUID ": not excluding for SWIM: self_heal.exclude not enabled\n",
+			       DP_UUID(svc->ps_uuid));
+			rc = -DER_NO_PERM;
+			daos_prop_free(prop);
+			goto out_lock;
+		}
+		daos_prop_free(prop);
+	}
+
 	/* Create a temporary pool map based on the last committed version. */
 	rc = read_map(&tx, &svc->ps_root, &map);
 	if (rc != 0)
@@ -7402,10 +7448,11 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 }
 
 int
-ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
+ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
+			   uint32_t *reclaim_ver)
 {
-	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list,
-					NULL, NULL, NULL, NULL, NULL, NULL);
+	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, false, list, NULL, NULL,
+					NULL, NULL, reclaim_ver, NULL);
 }
 
 int

@@ -35,6 +35,7 @@
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE			(1ULL << 0)
 #define DAOS_PO_QUERY_REBUILD_STATUS		(1ULL << 1)
+#define DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER     (1ULL << 2)
 #define PROP_BIT_START				16
 #define DAOS_PO_QUERY_PROP_BIT_START		PROP_BIT_START
 #define DAOS_PO_QUERY_PROP_LABEL		(1ULL << (PROP_BIT_START + 0))
@@ -136,6 +137,8 @@ struct dc_pool {
 
 	/* pool redunc factor */
 	uint32_t		dp_rf;
+	/* Maximum supported layout version */
+	uint16_t                dp_max_supported_layout_ver;
 };
 
 static inline unsigned int
