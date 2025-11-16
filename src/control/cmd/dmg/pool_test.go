@@ -516,9 +516,9 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
 						propWithVal("scrub", "timed"),
 						propWithVal("scrub_freq", "1"),
-						propWithVal("label", "label"),
 					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
@@ -527,6 +527,30 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Create pool with properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub_freq:1", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+						propWithVal("scrub", "timed"),
+						propWithVal("scrub_freq", "1"),
+					},
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with duplicate properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub:timed,scrub_freq:1", testSizeStr),
+			"",
+			errors.New("more than once"),
 		},
 		// Exclude testing with multiple ranks is verified at the control API layer.
 		{
@@ -734,6 +758,20 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set pool properties with semi-colon separated self_heal value",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:exclude;rebuild,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "exclude;rebuild"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool properties with pool flag",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:foo,space_rb:42",
 			strings.Join([]string{
@@ -804,6 +842,20 @@ func TestPoolCommands(t *testing.T) {
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", ""),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Get pool properties",
+			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label,self_heal",
+			strings.Join([]string{
+				printRequest(t, &control.PoolGetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", ""),
+						propWithVal("self_heal", ""),
 					},
 				}),
 			}, " "),

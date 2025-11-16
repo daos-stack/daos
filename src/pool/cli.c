@@ -910,6 +910,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 	d_iov_t                   *credp;
 	bool                       free_tpriv = true;
 	int			   rc = task->dt_result;
+	struct daos_rebuild_status *rs;
 
 	rc = pool_rsvc_client_complete_rpc(tpriv->pool, &arg->rpc->cr_ep, rc, &pco->pco_op, task);
 	if (rc < 0) {
@@ -941,9 +942,14 @@ pool_connect_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	rs = &pco->pco_rebuild_st;
 	rc = process_query_reply(tpriv->pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_op.po_hint.sh_rank, &pco->pco_space, &pco->pco_rebuild_st,
-				 NULL /* tgts */, info, NULL, NULL, true);
+				 pco->pco_op.po_hint.sh_rank, &pco->pco_space, rs, NULL /* tgts */,
+				 info, NULL, NULL, true);
+
+	tpriv->pool->dp_max_supported_layout_ver = rs->rs_max_supported_layout_ver
+						       ? rs->rs_max_supported_layout_ver
+						       : DAOS_POOL_OBJ_VERSION_1;
 	if (rc != 0) {
 		if (rc == -DER_AGAIN) {
 			rc = tse_task_reinit(task);
@@ -1085,8 +1091,9 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 		D_GOTO(out_cred, rc);
 
 	/** fill in request buffer */
-	pool_connect_in_set_data(rpc, pool->dp_capas, pool_query_bits(info, NULL), bulk,
-				 DAOS_POOL_GLOBAL_VERSION);
+	pool_connect_in_set_data(rpc, pool->dp_capas,
+				 pool_query_bits(info, NULL) | DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER,
+				 bulk, DAOS_POOL_GLOBAL_VERSION);
 
 	/** Prepare "con_args" for pool_connect_cp(). */
 	con_args.pca_info = info;
@@ -1348,7 +1355,8 @@ out_task:
 struct dc_pool_glob {
 	/* magic number, DC_POOL_GLOB_MAGIC */
 	uint32_t	dpg_magic;
-	uint32_t	dpg_padding;
+	uint16_t        dpg_max_supported_layout_ver;
+	uint16_t        dpg_padding;
 	/* pool UUID, pool handle UUID, and capas */
 	uuid_t		dpg_pool;
 	uuid_t		dpg_pool_hdl;
@@ -1403,6 +1411,7 @@ swap_pool_glob(struct dc_pool_glob *pool_glob)
 
 	D_SWAP32S(&pool_glob->dpg_magic);
 	/* skip pool_glob->dpg_padding */
+	D_SWAP16S(&pool_glob->dpg_max_supported_layout_ver);
 	/* skip pool_glob->dpg_pool (uuid_t) */
 	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
 	D_SWAP64S(&pool_glob->dpg_capas);
@@ -1470,6 +1479,7 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	/* init pool global handle */
 	pool_glob = (struct dc_pool_glob *)glob->iov_buf;
 	pool_glob->dpg_magic = DC_POOL_GLOB_MAGIC;
+	pool_glob->dpg_max_supported_layout_ver = pool->dp_max_supported_layout_ver;
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
@@ -1540,6 +1550,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	pool->dp_max_supported_layout_ver = pool_glob->dpg_max_supported_layout_ver;
 	uuid_copy(pool->dp_pool, pool_glob->dpg_pool);
 	uuid_copy(pool->dp_pool_hdl, pool_glob->dpg_pool_hdl);
 	pool->dp_capas = pool_glob->dpg_capas;
