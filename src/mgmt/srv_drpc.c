@@ -1748,22 +1748,24 @@ pool_query_free_tier_stats(Mgmt__PoolQueryResp *resp)
 void
 ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	int			rc = 0;
-	Mgmt__PoolQueryReq	*req;
-	Mgmt__PoolQueryResp	resp = MGMT__POOL_QUERY_RESP__INIT;
-	Mgmt__StorageUsageStats	scm = MGMT__STORAGE_USAGE_STATS__INIT;
-	Mgmt__StorageUsageStats	nvme = MGMT__STORAGE_USAGE_STATS__INIT;
-	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
-	uuid_t			uuid;
-	daos_pool_info_t	pool_info = {0};
-	d_rank_list_t		*svc_ranks;
-	d_rank_list_t           *ranks          = NULL;
-	d_rank_list_t           *dead_ranks     = NULL;
-	char			*range_list_str = NULL;
-	char                    *dead_ranks_str = NULL;
-	size_t			len;
-	uint8_t			*body;
+	struct drpc_alloc       alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int                     rc    = 0;
+	Mgmt__PoolQueryReq     *req;
+	Mgmt__PoolQueryResp     resp    = MGMT__POOL_QUERY_RESP__INIT;
+	Mgmt__StorageUsageStats scm     = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__StorageUsageStats nvme    = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__PoolRebuildStatus rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
+	uuid_t                  uuid;
+	daos_pool_info_t        pool_info          = {0};
+	d_rank_list_t          *svc_ranks          = NULL;
+	d_rank_list_t          *enabled_ranks      = NULL;
+	d_rank_list_t          *disabled_ranks     = NULL;
+	d_rank_list_t          *dead_ranks         = NULL;
+	char                   *enabled_ranks_str  = NULL;
+	char                   *disabled_ranks_str = NULL;
+	char                   *dead_ranks_str     = NULL;
+	size_t                  len;
+	uint8_t                *body;
 
 	req = mgmt__pool_query_req__unpack(&alloc.alloc, drpc_req->body.len,
 					   drpc_req->body.data);
@@ -1792,28 +1794,33 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(error, rc);
 	}
 
-	/* Calculate and stringify rank ranges to return to control plane for display */
-	rc = d_rank_list_to_str(ranks, &range_list_str);
+	rc = d_rank_list_to_str(enabled_ranks, &enabled_ranks_str);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of enabled ranks",
 			 DP_UUID(uuid));
-		D_GOTO(out_ranks, rc);
-	} else if (range_list_str == NULL) {
-		D_STRNDUP(range_list_str, "[]", strlen("[]"));
+		D_GOTO(error, rc);
 	}
+	if (enabled_ranks_str != NULL)
+		D_DEBUG(DB_MGMT, DF_UUID ": list of enabled ranks: %s\n", DP_UUID(uuid),
+			enabled_ranks_str);
 
-	rc = d_rank_list_to_str(dead_ranks, &dead_ranks_str);
+	rc = d_rank_list_to_str(disabled_ranks, &disabled_ranks_str);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of disabled ranks",
 			 DP_UUID(uuid));
-		D_GOTO(out_dead_ranks, rc);
-	} else if (dead_ranks_str == NULL) {
-		D_STRNDUP(dead_ranks_str, "[]", strlen("[]"));
+		D_GOTO(error, rc);
 	}
-
-	D_DEBUG(DB_MGMT, DF_UUID ": %s ranks: %s, dead_ranks: %s\n", DP_UUID(uuid),
-		pool_info.pi_bits & DPI_ENGINES_ENABLED ? "ENABLED" : "DISABLED", range_list_str,
-		dead_ranks_str);
+	rc = d_rank_list_to_str(dead_ranks, &dead_ranks_str);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of dead ranks", DP_UUID(uuid));
+		D_GOTO(error, rc);
+	}
+	if (disabled_ranks_str != NULL)
+		D_DEBUG(DB_MGMT, DF_UUID ": list of disabled ranks: %s\n", DP_UUID(uuid),
+			disabled_ranks_str);
+	if (dead_ranks_str != NULL)
+		D_DEBUG(DB_MGMT, DF_UUID ": list of dead ranks: %s\n", DP_UUID(uuid),
+			dead_ranks_str);
 
 	/* Populate the response */
 	resp.query_mask       = pool_info.pi_bits;
@@ -1825,15 +1832,17 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.svc_ldr          = pool_info.pi_leader;
 	resp.svc_reps         = req->svc_ranks;
 	resp.n_svc_reps       = req->n_svc_ranks;
-
-	resp.version = pool_info.pi_map_ver;
-	resp.enabled_ranks    = (req->query_mask & DPI_ENGINES_ENABLED) ? range_list_str : "";
-	resp.disabled_ranks   = (req->query_mask & DPI_ENGINES_DISABLED) ? range_list_str : "";
-	resp.dead_ranks       = dead_ranks_str;
+	resp.version          = pool_info.pi_map_ver;
+	if (enabled_ranks_str != NULL)
+		resp.enabled_ranks = enabled_ranks_str;
+	if (disabled_ranks_str != NULL)
+		resp.disabled_ranks = disabled_ranks_str;
+	if (dead_ranks_str != NULL)
+		resp.dead_ranks = dead_ranks_str;
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL)
-		D_GOTO(out_dead_ranks, rc = -DER_NOMEM);
+		D_GOTO(error, rc = -DER_NOMEM);
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);
@@ -1848,13 +1857,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
-out_dead_ranks:
-	d_rank_list_free(dead_ranks);
-out_ranks:
-	d_rank_list_free(ranks);
-out_svc_ranks:
-	d_rank_list_free(svc_ranks);
-out:
+error:
 	resp.status = rc;
 
 	len = mgmt__pool_query_resp__get_packed_size(&resp);

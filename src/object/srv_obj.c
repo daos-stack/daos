@@ -5379,7 +5379,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	}
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, true, bulks, NULL, NULL, DAOS_HDL_INVAL, sgls,
-			       count, count, NULL);
+			       count, count, NULL, check_conn(NULL, leader));
 	if (rc != 0)
 		goto out;
 
