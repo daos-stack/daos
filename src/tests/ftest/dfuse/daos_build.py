@@ -220,7 +220,6 @@ def __get_daos_build_checkout(self):
     return "origin/master"
 
 
->>>>>>> be250c07c (DAOS-16947 test: Update CI to use DOCA OFED. (#16634))
 class DaosBuild(TestWithServers):
     """Build DAOS over dfuse.
 
