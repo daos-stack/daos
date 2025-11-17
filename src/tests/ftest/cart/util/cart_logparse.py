@@ -3,18 +3,16 @@
   Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
+
+LogIter and LogLine class definitions.
+
+This provides a way of querying CaRT logfiles for processing.
 """
 
 import bz2
 import os
 import re
 from collections import OrderedDict
-
-"""
-LogIter and LogLine class definitions.
-
-This provides a way of querying CaRT logfiles for processing.
-"""
 
 
 class InvalidPid(Exception):
