@@ -27,16 +27,16 @@ class SameKeyDifferentValue(TestWithServers):
         values passed (i.e. single to array value) to the same akey and dkey.
         Case1: Insert akey,dkey with single value
                Insert same akey,dkey with array value
-               Result: should return -1001 ERR.
+               Result: should return -1001 ERROR.
         Case2: Insert akey,dkey with single value
                Punch the keys
                Insert same akey,dkey under same object with array value
-               Result: should either pass or return -1001 ERR
+               Result: should either pass or return -1001 ERROR
         Case3: Insert akey,dkey with single value
                Punch the keys
                Trigger aggregation
                Insert same akey,dkey under same object with array value
-               Result: should either pass or return -1001 ERR
+               Result: should either pass or return -1001 ERROR
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
@@ -81,7 +81,7 @@ class SameKeyDifferentValue(TestWithServers):
                         self.fail(
                             "Array value write to existing single value key should have failed")
 
-                    # should fail with -1001 ERR
+                    # should fail with -1001 ERROR
                     except DaosApiError as error:
                         if "-1001" not in str(error):
                             self.log.error(error)
@@ -102,7 +102,7 @@ class SameKeyDifferentValue(TestWithServers):
                         self.container.container.write_an_array_value(
                             array_value_data, dkey, akey, obj, obj_cls=1)
 
-                    # above write of array value should either succeed or fail with -1001 ERR
+                    # above write of array value should either succeed or fail with -1001 ERROR
                     except DaosApiError as error:
                         if "-1001" not in str(error):
                             self.log.error(error)
@@ -127,16 +127,16 @@ class SameKeyDifferentValue(TestWithServers):
         values passed (i.e array to single value) to the same akey and dkey.
         Case1: Insert akey,dkey with array value
                Insert same akey,dkey with single value
-               Result: should return -1001 ERR.
+               Result: should return -1001 ERROR.
         Case2: Insert akey,dkey with array value
                Punch the keys
                Insert same akey,dkey under same object with single value
-               Result: should either pass or return -1001 ERR
+               Result: should either pass or return -1001 ERROR
         Case3: Insert akey,dkey with array value
                Punch the keys
                Trigger aggregation
                Insert same akey,dkey under same object with single value
-               Result: should either pass or return -1001 ERR
+               Result: should either pass or return -1001 ERROR
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
@@ -183,7 +183,7 @@ class SameKeyDifferentValue(TestWithServers):
                         self.fail("Single value write to existing array value"
                                   + " key should have failed\n")
 
-                    # should fail with -1001 ERR
+                    # should fail with -1001 ERROR
                     except DaosApiError as error:
                         if "-1001" not in str(error):
                             self.log.error(error)
@@ -206,7 +206,7 @@ class SameKeyDifferentValue(TestWithServers):
                             single_value_data, len(single_value_data) + 1,
                             dkey, akey, obj, obj_cls=1)
                     # above write of array value should either succeed
-                    # or fail with -1001 ERR
+                    # or fail with -1001 ERROR
                     except DaosApiError as error:
                         if "-1001" not in str(error):
                             self.log.error(error)

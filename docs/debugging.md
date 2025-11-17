@@ -27,7 +27,7 @@ All macros which output logs have a priority level, shown in descending order
 below.
 - D_FATAL(fmt, ...)		FATAL
 - D_CRIT(fmt, ...)		CRIT
-- D_ERROR(fmt, ...)		ERR
+- D_ERROR(fmt, ...)		ERROR
 - D_WARN(fmt, ...)		WARN
 - D_NOTE(fmt, ...)		NOTE
 - D_INFO(fmt, ...)		INFO
@@ -40,7 +40,7 @@ however is separate from the priority of logging to `/tmp/daos.log`. The
 priority level of logging can be set with `D_LOG_MASK`, which by default is set
 to INFO (`D_LOG_MASK=INFO`), which will result in all messages excluding DEBUG
 messages being logged. `D_LOG_MASK` can also be used to specify the level of
-logging on a per-subsystem basis as well (`D_LOG_MASK="DEBUG,MEM=ERR"`).
+logging on a per-subsystem basis as well (`D_LOG_MASK="DEBUG,MEM=ERROR"`).
 
 ## Debug Masks/Streams:
 
@@ -84,20 +84,20 @@ values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
 - Disable all logs for performance tuning
 ```bash
-  $ export D_LOG_MASK=ERR   # -> will only log error messages from all facilities
+  $ export D_LOG_MASK=ERROR   # -> will only log error messages from all facilities
   $ export D_LOG_MASK=FATAL # -> will only log system fatal messages
 ```
 
 - Disable a noisy debug logging subsystem
 ```bash
-  $ export D_LOG_MASK=DEBUG,MEM=ERR # -> disables MEM facility by restricting all logs
+  $ export D_LOG_MASK=DEBUG,MEM=ERROR # -> disables MEM facility by restricting all logs
                                     # from that facility to ERROR or higher priority only
-  $ export D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR # -> disables SWIM and RPC/HG facilities
+  $ export D_LOG_MASK=DEBUG,SWIM=ERROR,RPC=ERROR,HG=ERROR # -> disables SWIM and RPC/HG facilities
 ```
 
 - Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
 ```bash
-  $ export D_LOG_MASK=DEBUG,MEM=ERR # log at DEBUG level from all facilities except MEM
+  $ export D_LOG_MASK=DEBUG,MEM=ERROR # log at DEBUG level from all facilities except MEM
   $ export DD_MASK=group_metadata   # limit logging to include only streams (mgmt, plus defaults from group_default)
 ```
 

@@ -155,7 +155,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
-		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
+		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERROR,MEM=ERROR").
 		WithPinnedNumaNode(1).
 		WithBypassHealthChk(&bypass).
 		WithCrtTimeout(30).
@@ -183,7 +183,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		"FI_OFI_RXM_USE_SRX=1",
 		"CRT_TIMEOUT=30",
 		"D_INTERFACE=qib0",
-		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
+		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERROR,MEM=ERROR",
 		allowedUserEnv + "=" + allowedUserVal,
 	}
 	sort.Strings(env)

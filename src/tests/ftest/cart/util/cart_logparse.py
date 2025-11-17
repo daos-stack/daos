@@ -28,13 +28,12 @@ class InvalidLogFile(Exception):
 LOG_LEVELS = {
     'EMIT': 1,
     'FATAL': 2,
-    'EMRG': 3,
     'CRIT': 4,
-    'ERR': 5,
+    'ERROR': 5,
     'WARN': 6,
     'NOTE': 7,
     'INFO': 8,
-    'DBUG': 9}
+    'DEBUG': 9}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}

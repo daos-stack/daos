@@ -258,7 +258,7 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 
 resp_valid_check:
 		if (!resp_isvalid) {
-			printf("ERR: rank %u invalid reply: rc="DF_RC", "
+			printf("ERROR: rank %u invalid reply: rc="DF_RC", "
 			       "hint is %s valid (rank=%u, term="DF_U64")\n",
 			       rank, DP_RC(rc_svc), hint_isvalid ? "" : "NOT",
 			       h.sh_rank, h.sh_term);
@@ -275,7 +275,7 @@ resp_valid_check:
 		*leaderp = ldr_rank;
 		*termp = term;
 	} else if (ldr_rank == NO_RANK) {
-		printf("ERR: no leader found!\n");
+		printf("ERROR: no leader found!\n");
 		return -1;
 	}
 
@@ -306,13 +306,13 @@ wait_for_this_leader(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 	}
 	if (rc == 0) {
 		if (found_ldr != expect_ldr) {
-			fprintf(stderr, "ERR: leader %u (expected %u)\n",
+			fprintf(stderr, "ERROR: leader %u (expected %u)\n",
 					found_ldr, expect_ldr);
 			return -1;
 		}
 
 		if (found_term < expect_term_min) {
-			fprintf(stderr, "ERR: term "DF_U64" < "DF_U64"\n",
+			fprintf(stderr, "ERROR: term "DF_U64" < "DF_U64"\n",
 					found_term, expect_term_min);
 			return -1;
 		}
@@ -351,7 +351,7 @@ wait_for_any_leader(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 		       (try+1), TRY_LIMIT, expect_term_min, DP_RC(rc));
 	}
 	if ((rc == 0) && (found_term < expect_term_min)) {
-		fprintf(stderr, "ERR: term "DF_U64" < "DF_U64"\n",
+		fprintf(stderr, "ERROR: term "DF_U64" < "DF_U64"\n",
 				found_term, expect_term_min);
 		return -1;
 	} else if (rc != 0) {
@@ -404,7 +404,7 @@ rdbt_add_replica_rank(crt_group_t *grp, d_rank_t ldr_rank, d_rank_t new_rank,
 	rc = out->rtmo_rc;
 	*hintp = out->rtmo_hint;
 	if (out->rtmo_failed != NULL)
-		fprintf(stderr, "ERR: adding replica %u (reply rank %u)\n",
+		fprintf(stderr, "ERROR: adding replica %u (reply rank %u)\n",
 				new_rank, out->rtmo_failed->rl_ranks[0]);
 	d_rank_list_free(replicas_to_add);
 	destroy_rpc(rpc);
@@ -433,7 +433,7 @@ rdbt_remove_replica_rank(crt_group_t *group, d_rank_t ldr_rank,
 	rc = out->rtmo_rc;
 	*hintp = out->rtmo_hint;
 	if (out->rtmo_failed != NULL)
-		fprintf(stderr, "ERR: removing replica %u (reply rank %u)\n",
+		fprintf(stderr, "ERROR: removing replica %u (reply rank %u)\n",
 				rem_rank, out->rtmo_failed->rl_ranks[0]);
 	d_rank_list_free(replicas_to_remove);
 	destroy_rpc(rpc);
@@ -459,7 +459,7 @@ restore_initial_replicas(crt_group_t *grp, uint32_t nranks,
 	       (cur_nreplicas - 1));
 	rc = rdbt_find_leader(grp, nranks, cur_nreplicas, &cur_ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 
@@ -491,7 +491,7 @@ restore_initial_replicas(crt_group_t *grp, uint32_t nranks,
 	/* Remove the added replica rank */
 	rc = rdbt_remove_replica_rank(grp, interim_ldr_rank, remove_rank, &h);
 	if (rc != 0) {
-		fprintf(stderr, "ERR: failed to remove rank %u: "DF_RC"\n",
+		fprintf(stderr, "ERROR: failed to remove rank %u: "DF_RC"\n",
 				remove_rank, DP_RC(rc));
 		return rc;
 	}
@@ -630,7 +630,7 @@ rdbt_create_multi(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas)
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 	printf("Discovered leader %u, term="DF_U64"\n", ldr_rank, term);
@@ -638,7 +638,7 @@ rdbt_create_multi(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas)
 	printf("===== Create RDB KV stores on leader %u\n", ldr_rank);
 	rc = rdbt_create_rank(grp, ldr_rank, &h);
 	if (rc) {
-		fprintf(stderr, "ERR: create RDB KV stores failed RPC to "
+		fprintf(stderr, "ERROR: create RDB KV stores failed RPC to "
 				"leader %u: "DF_RC", hint:(r=%u, t="DF_U64"\n",
 				ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
 		return rc;
@@ -734,7 +734,7 @@ test_hdlr(int argc, char *argv[])
 
 	/* make sure to run test with update=true first */
 	if (val_out != val_in) {
-		fprintf(stderr, "ERR: val_out="DF_U64" expected "DF_U64"\n",
+		fprintf(stderr, "ERROR: val_out="DF_U64" expected "DF_U64"\n",
 				val_out, val_in);
 		return -1;
 	}
@@ -760,7 +760,7 @@ testm_update_lookup(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
@@ -818,7 +818,7 @@ testm_update_lookup_all(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
@@ -922,7 +922,7 @@ testm_add_leader(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		goto out_ranks;
 	}
 	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
@@ -1036,7 +1036,7 @@ testm_add_follower(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
@@ -1117,7 +1117,7 @@ testm_disruptive_membership(crt_group_t *grp, uint32_t nranks,
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &orig_ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
@@ -1144,7 +1144,7 @@ testm_disruptive_membership(crt_group_t *grp, uint32_t nranks,
 		next_ldr_rank = orig_ldr_rank;
 	}
 	if (rc != 0) {
-		fprintf(stderr, "ERR: wait for leader failed\n");
+		fprintf(stderr, "ERROR: wait for leader failed\n");
 		return rc;
 	}
 
@@ -1259,7 +1259,7 @@ testm_dictate(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas, uint64_t ke
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
@@ -1286,7 +1286,7 @@ testm_dictate(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas, uint64_t ke
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
@@ -1414,7 +1414,7 @@ rdbt_destroy_multi(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas)
 
 	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "ERR: RDB find leader failed\n");
+		fprintf(stderr, "ERROR: RDB find leader failed\n");
 		return rc;
 	}
 	printf("Discovered leader %u, term="DF_U64"\n", ldr_rank, term);
@@ -1422,7 +1422,7 @@ rdbt_destroy_multi(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas)
 	printf("===== Destroy RDB KV stores on leader %u\n", ldr_rank);
 	rc = rdbt_destroy_rank(grp, ldr_rank, &h);
 	if (rc) {
-		fprintf(stderr, "ERR: destroy RDB KV stores failed RPC to rank "
+		fprintf(stderr, "ERROR: destroy RDB KV stores failed RPC to rank "
 				"%u: "DF_RC", hint:(r=%u, t="DF_U64"\n",
 				ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
 		return rc;

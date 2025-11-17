@@ -15,7 +15,7 @@ import (
 )
 
 func TestDmg_ServerCommands(t *testing.T) {
-	masks := "ERR,mgmt=DEBUG"
+	masks := "ERROR,mgmt=DEBUG"
 	streams := "MGMT,IO"
 	subsystems := "mISC"
 	runCmdTests(t, []cmdTest{
@@ -27,19 +27,19 @@ func TestDmg_ServerCommands(t *testing.T) {
 		},
 		{
 			"Set log masks",
-			"server set-logmasks -m ERR,mgmt=DEBUG",
+			"server set-logmasks -m ERROR,mgmt=DEBUG",
 			printRequest(t, &control.SetEngineLogMasksReq{Masks: &masks}),
 			nil,
 		},
 		{
 			"Set log masks with invalid flag",
-			"server set-logmasks --mask ERR,mgmt=DEBUG",
+			"server set-logmasks --mask ERROR,mgmt=DEBUG",
 			"",
 			errors.New("unknown flag"),
 		},
 		{
 			"Set log masks with debug streams (DD_MASK)",
-			"server set-logmasks -m ERR,mgmt=DEBUG -d MGMT,IO",
+			"server set-logmasks -m ERROR,mgmt=DEBUG -d MGMT,IO",
 			printRequest(t, &control.SetEngineLogMasksReq{
 				Masks:   &masks,
 				Streams: &streams,
@@ -48,7 +48,7 @@ func TestDmg_ServerCommands(t *testing.T) {
 		},
 		{
 			"Set log masks with debug streams and subsystems (DD_MASK,DD_SUBSYS)",
-			"server set-logmasks -m ERR,mgmt=DEBUG -d MGMT,IO -s mISC",
+			"server set-logmasks -m ERROR,mgmt=DEBUG -d MGMT,IO -s mISC",
 			printRequest(t, &control.SetEngineLogMasksReq{
 				Masks:      &masks,
 				Streams:    &streams,

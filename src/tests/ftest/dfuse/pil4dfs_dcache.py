@@ -334,15 +334,15 @@ class Pil4dfsDcache(TestWithServers):
     }
 
     _dcache_re = {
-        "dcache_add": re.compile(r'^.+ il +DBUG .+ dcache_add\(\) .+$'),
-        "dcache_del": re.compile(r'^.+ il +DBUG .+ dcache_rec_free\(\) .+$'),
-        "dcache_hit": re.compile(r'^.+ il +DBUG .+ dcache_find_insert_act\(\) dcache hit:.+$'),
-        "dcache_miss": re.compile(r'^.+ il +DBUG .+ dcache_find_insert_act\(\) dcache miss:.+$'),
-        "no_dcache_new": re.compile(r'^.+ il +DBUG .+ dcache_find_insert_dact\(\).+$'),
-        "no_dcache_del": re.compile(r'^.+ il +DBUG .+ drec_del_at_dact\(\) .+$'),
-        "dcache_gc_add": re.compile(r'^.+ il +DBUG .+ gc_add_rec\(\) .+$'),
-        "dcache_gc_del": re.compile(r'^.+ il +DBUG .+ gc_del_rec\(\) .+$'),
-        "dcache_gc_rec": re.compile(r'^.+ il +DBUG .+ gc_reclaim\(\) remove expired .+$')
+        "dcache_add": re.compile(r'^.+ il +DEBUG .+ dcache_add\(\) .+$'),
+        "dcache_del": re.compile(r'^.+ il +DEBUG .+ dcache_rec_free\(\) .+$'),
+        "dcache_hit": re.compile(r'^.+ il +DEBUG .+ dcache_find_insert_act\(\) dcache hit:.+$'),
+        "dcache_miss": re.compile(r'^.+ il +DEBUG .+ dcache_find_insert_act\(\) dcache miss:.+$'),
+        "no_dcache_new": re.compile(r'^.+ il +DEBUG .+ dcache_find_insert_dact\(\).+$'),
+        "no_dcache_del": re.compile(r'^.+ il +DEBUG .+ drec_del_at_dact\(\) .+$'),
+        "dcache_gc_add": re.compile(r'^.+ il +DEBUG .+ gc_add_rec\(\) .+$'),
+        "dcache_gc_del": re.compile(r'^.+ il +DEBUG .+ gc_del_rec\(\) .+$'),
+        "dcache_gc_rec": re.compile(r'^.+ il +DEBUG .+ gc_reclaim\(\) remove expired .+$')
     }
 
     __start_test_re__ = re.compile(r'^-- START of test_.+ --$')

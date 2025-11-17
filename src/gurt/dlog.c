@@ -115,8 +115,8 @@ static const char *clog_pristr(int);
 static int clog_setnfac(int);
 
 /* static arrays for converting between pri's and strings */
-static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
-				     "CRIT", "ALRT", "EMRG", "EMIT"};
+static const char *const norm[] = { "DEBUG", "INFO ", "NOTE ", "WARN ", "ERROR",
+				  "CRIT ", "ALERT", "FATAL", "EMIT "};
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
@@ -772,11 +772,10 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	 * handle some quirks
 	 */
 
-	if (strncasecmp(pstr, "ERR", len) == 0 || strncasecmp(pstr, "ERROR", len) == 0)
+	if (strncasecmp(pstr, "ERROR", len) == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
-	if (((strncasecmp(pstr, "DEBUG", len) == 0) ||
-	     (strncasecmp(pstr, "DBUG", len) == 0))) {
+	if (strncasecmp(pstr, "DEBUG", len) == 0) {
 		/* check to see is debug mask bits are set */
 		return d_dbglog_data.dd_mask != 0 ?
 		       d_dbglog_data.dd_mask : DLOG_DBG;

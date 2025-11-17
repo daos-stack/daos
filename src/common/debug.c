@@ -242,7 +242,7 @@ failed_unlock:
 
 int daos_debug_init(char *logfile)
 {
-	/* for client side, by default use ERR level */
+	/* for client side, by default use ERROR level */
 	return daos_debug_init_ex(logfile, DLOG_ERR);
 }
 

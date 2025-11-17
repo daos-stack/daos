@@ -58,21 +58,21 @@ type LogLevel uint
 // LogLevels matching D_LOG API priority strings.
 const (
 	LogLevelUndefined LogLevel = iota
-	LogLevelDbug
+	LogLevelDebug
 	LogLevelInfo
 	LogLevelNote
 	LogLevelWarn
 	LogLevelErr
 	LogLevelCrit
 	LogLevelAlrt
-	LogLevelEmrg
+	LogLevelFatal
 	LogLevelEmit
 )
 
 func (ll LogLevel) String() string {
 	switch ll {
-	case LogLevelDbug:
-		return "DBUG"
+	case LogLevelDebug:
+		return "DEBUG"
 	case LogLevelInfo:
 		return "INFO"
 	case LogLevelNote:
@@ -80,13 +80,13 @@ func (ll LogLevel) String() string {
 	case LogLevelWarn:
 		return "WARN"
 	case LogLevelErr:
-		return "ERR"
+		return "ERROR"
 	case LogLevelCrit:
 		return "CRIT"
 	case LogLevelAlrt:
 		return "ALRT"
-	case LogLevelEmrg:
-		return "EMRG"
+	case LogLevelFatal:
+		return "FATAL"
 	case LogLevelEmit:
 		return "EMIT"
 	default:
@@ -97,22 +97,22 @@ func (ll LogLevel) String() string {
 // StrToLogLevel takes an input string and returns a LogLevel type object.
 func StrToLogLevel(s string) LogLevel {
 	switch strings.ToUpper(s) {
-	case "DEBUG", "DBUG":
-		return LogLevelDbug
+	case "DEBUG":
+		return LogLevelDebug
 	case "INFO":
 		return LogLevelInfo
 	case "NOTE":
 		return LogLevelNote
 	case "WARN":
 		return LogLevelWarn
-	case "ERROR", "ERR":
+	case "ERROR":
 		return LogLevelErr
 	case "CRIT":
 		return LogLevelCrit
 	case "ALRT":
 		return LogLevelAlrt
-	case "FATAL", "EMRG":
-		return LogLevelEmrg
+	case "FATAL":
+		return LogLevelFatal
 	case "EMIT":
 		return LogLevelEmit
 	default:
@@ -122,8 +122,8 @@ func StrToLogLevel(s string) LogLevel {
 
 var (
 	validLogLevels = []string{
-		"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "FATAL",
-		"EMRG", "EMIT",
+		"DEBUG", "INFO", "NOTE", "WARN", "ERROR", "CRIT", "ALRT", "FATAL",
+		"EMIT",
 	}
 	validLogStreams = []string{
 		"ALL",                                                     // Select all streams
