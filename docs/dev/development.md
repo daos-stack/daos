@@ -371,27 +371,33 @@ can be created using the daos admin tool (see next section).
 For more advanced configurations involving SCM, SSD or a real fabric, please
 refer to the next section.
 
-## Updating a 3rd party component
+## DAOS RPMs build process
 
 The DAOS build process now covers building RPMs for both DAOS and dependencies
-specified in [`utils/build.config`](../../utils/build.config) (or those that we build regularly with
-`--build-deps=yes`). The RPM (and deb) build process uses
+specified in [`utils/build.config`](../../utils/build.config) (or those that we
+build regularly with `--build-deps=yes`). The complete list of RPMs  is defined
+in the [`utils/rpms/build_packages.sh`](../../utils/rpms/build_packages.sh)
+script. The RPM (and deb) build process uses
 [FPM](https://fpm.readthedocs.io/en/latest/getting-started.html). Essentially,
 it creates rpm packages after a DAOS build. Regardless of how that build is done,
 it will put files in the right places in the final packages.  Most of the magic
-is in [`utils/rpms/fpm_common.sh`](../../utils/rpms/fpm_common.sh) with component specific code in
-`utils/rpms/<component>.sh`.
+is in [`utils/rpms/fpm_common.sh`](../../utils/rpms/fpm_common.sh) with
+component specific code in `utils/rpms/<component>.sh`.
+
+### Updating a 3rd party component
 
 In order to properly upgrade a 3rd party component, do all of the following:
 
-1. Change the `utils/build.config` to point to the new version or to add a new patch. Patches should
-   be stored in `deps/patches/<component>`.
-1. Update [`utils/rpms/daos.spec`](../../utils/rpms/daos.spec) changelog and release iteration.
-   This is important to document the change.
+1. Change the [`utils/build.config`](../../utils/build.config) to point to
+   the new version or to add a new patch. Patches should be stored in
+   `deps/patches/<component>`.
+1. Update (increase) the `Release` variable in [`utils/rpms/daos.spec`](../../utils/rpms/daos.spec).
+1. Update [`utils/rpms/daos.changelog`](../../utils/rpms/daos.changelog)
+   changelog and release iteration. This is important to document the change.
 1. Update the `<component>_release` and/or `<component>_version` in
    [`utils/rpms/package_info.sh`](../../utils/rpms/package_info.sh)
 1. Make any necessary changes to `utils/rpms/<component>.sh` such as adding new
    files to various packages.
-1. Update the `utils/rpms/<component>.changelog` file to document the change and make sure
-   the changelog file is referenced by the `RPM_CHANGELOG="<component>.changelog"` variable
-   in `utils/rpms/<component>.sh`.
+1. Update the `utils/rpms/<component>.changelog` file to document the change and
+   make sure the file is referenced by the
+   `RPM_CHANGELOG="<component>.changelog"` variable in `utils/rpms/<component>.sh`.

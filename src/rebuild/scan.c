@@ -587,7 +587,7 @@ rebuild_obj_ult(void *data)
 	struct rebuild_obj_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
-	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
+	ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
 			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
@@ -617,7 +617,7 @@ rebuild_object_local(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 	arg->tgt_index = tgt_index;
 	arg->shard = shard;
 
-	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_VOS, tgt_index, 0, NULL);
 	if (rc) {
 		D_FREE(arg);
 		rpt_put(rpt);
