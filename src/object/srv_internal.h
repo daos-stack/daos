@@ -74,12 +74,8 @@ struct migrate_pool_tls {
 	/* The ULT number on each target xstream, which actually refer
 	 * back to the item within mpt_obj/dkey_ult_cnts array.
 	 */
-	ATOMIC uint32_t		*mpt_tgt_obj_ult_cnt;
-	ATOMIC uint32_t		*mpt_tgt_dkey_ult_cnt;
-
-	/* ULT count array from all targets, obj: enumeration, dkey:fetch/update */
-	ATOMIC uint32_t		*mpt_obj_ult_cnts;
-	ATOMIC uint32_t		*mpt_dkey_ult_cnts;
+	uint32_t                 mpt_tgt_obj_ult_cnt;
+	uint32_t                 mpt_tgt_dkey_ult_cnt;
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
@@ -94,18 +90,13 @@ struct migrate_pool_tls {
 	uint32_t		mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
-	ABT_cond		mpt_init_cond;
-	ABT_mutex		mpt_init_mutex;
-
 	/* The new layout version for upgrade job */
 	uint32_t		mpt_new_layout_ver;
 
 	/* migrate leader ULT */
-	unsigned int		mpt_ult_running:1,
-				mpt_init_tls:1,
-				mpt_fini:1,
-				mpt_reintegrating:1, /* incremental reint flag */
-				mpt_post_process_started:1; /* reint post process started flag */
+	unsigned int             mpt_ult_running : 1, mpt_fini : 1,
+	    mpt_reintegrating        : 1, /* incremental reint flag */
+	    mpt_post_process_started : 1; /* reint post process started flag */
 
 	/* migration init error */
 	int			mpt_init_err;
