@@ -142,12 +142,12 @@ with D_LOG_MASK, which by default is set to INFO
 ("D_LOG_MASK=INFO"), which will result in all messages excluding DEBUG
 messages being logged. D_LOG_MASK can also be used to specify the
 level of logging on a per-subsystem basis as well
-("D_LOG_MASK=DEBUG,MEM=ERR").
+("D_LOG_MASK=DEBUG,MEM=ERROR").
 
 -   Log Levels:
-    debug, dbug, info, note, warn, error, err, crit, alrt, fatal, emrg, emit
+    debug, info, note, warn, error, err, crit, alrt, fatal, emit
 
-Note: debug == dbug, error == err and fatal == emrg.
+Note: error == err.
 
 ### Debug Masks/Streams:
 
@@ -214,7 +214,7 @@ values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
 -   Disable all logs for performance tuning
 
-        D_LOG_MASK=ERR -> will only log error messages from all facilities
+        D_LOG_MASK=ERROR -> will only log error messages from all facilities
         D_LOG_MASK=FATAL -> will only log system fatal messages
 
 -   Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
@@ -224,9 +224,9 @@ values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
 -   Disable a noisy debug logging subsystem
 
-        D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
+        D_LOG_MASK=DEBUG,MEM=ERROR -> disables MEM facility by
         restricting all logs from that facility to ERROR or higher priority only
-        D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR -> disables SWIM and RPC/HG facilities
+        D_LOG_MASK=DEBUG,SWIM=ERROR,RPC=ERROR,HG=ERROR -> disables SWIM and RPC/HG facilities
 
 -   Enable a subset of facilities of interest
 
@@ -358,8 +358,8 @@ ERROR: dmg: Unable to load Certificate Data: could not load cert: stat /etc/daos
 ### use daos command before daos_agent started
 ```
 $ daos cont create $DAOS_POOL
-daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
-mgmt ERR  src/mgmt/cli_mgmt.c:222 get_attach_info() failed to connect to /var/run/daos_agent/daos_agent.sock DER_MISC(-1025): 'Miscellaneous error'
+daos ERROR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
+mgmt ERROR  src/mgmt/cli_mgmt.c:222 get_attach_info() failed to connect to /var/run/daos_agent/daos_agent.sock DER_MISC(-1025): 'Miscellaneous error'
 failed to initialize daos: Miscellaneous error (-1025)
 
 
@@ -453,7 +453,7 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 ```
 ### daos_engine fails to start with error "Address already in use"
 ```
-09/26-15:25:38.06 node-1 DAOS[3851384/-1/0] external ERR  # [4462751.071824] mercury->cls: [error] /builddir/build/BUILD/mercury-2.2.0/src/na/na_ofi.c:3638
+09/26-15:25:38.06 node-1 DAOS[3851384/-1/0] external ERROR  # [4462751.071824] mercury->cls: [error] /builddir/build/BUILD/mercury-2.2.0/src/na/na_ofi.c:3638
 na_ofi_basic_ep_open(): fi_enable() failed, rc: -98 (Address already in use)
 
 "Address already in use" will be observed when there is more than one engine per node sharing the same NIC and fabric_iface_port of engines are too close; e.g., the difference is not larger than 3.

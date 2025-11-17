@@ -1000,7 +1000,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         "" + "${JOB_ID}_" + "daos_dfuse.log")
     dfuse_env = ";".join(
         ["export D_LOG_FILE_APPEND_PID=1",
-         "export D_LOG_MASK=ERR",
+         "export D_LOG_MASK=ERROR",
          f"export D_LOG_FILE={dfuselog}"])
     module_load = ";".join([f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"])
 

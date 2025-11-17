@@ -545,7 +545,7 @@ def get_errors_count(log, hostlist, file_glob):
     """
     # Get the Client side Error from client_log file.
     cmd = "cat {} | sed -n -E -e ".format(get_log_file(file_glob))
-    cmd += r"'/^.+[[:space:]]ERR[[:space:]].+[[:space:]]DER_[^(]+\([^)]+\).+$/"
+    cmd += r"'/^.+[[:space:]]ERROR[[:space:]].+[[:space:]]DER_[^(]+\([^)]+\).+$/"
     cmd += r"s/^.+[[:space:]]DER_[^(]+\((-[[:digit:]]+)\).+$/\1/p'"
     result = run_remote(log, hostlist, cmd, verbose=False)
     errors_count = {}

@@ -17,7 +17,7 @@ const (
 	// UnsetLogMask defines an explicitly-unset log mask.
 	UnsetLogMask = "UNSET"
 	// DefaultDebugMask defines the basic debug mask.
-	DefaultDebugMask = "DEBUG,MEM=ERR,OBJECT=ERR,PLACEMENT=ERR"
+	DefaultDebugMask = "DEBUG,MEM=ERROR,OBJECT=ERROR,PLACEMENT=ERROR"
 	// DefaultInfoMask defines the basic info mask.
 	DefaultInfoMask = "INFO"
 	// DefaultErrorMask defines the basic error mask.

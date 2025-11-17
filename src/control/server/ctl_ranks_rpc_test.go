@@ -713,15 +713,15 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				Masks:      "DEBUG",
 				ResetMasks: true,
 			},
-			cfgMasks: "ERR",
-			expMasks: "ERR",
+			cfgMasks: "ERROR",
+			expMasks: "ERROR",
 		},
 		"masks specified in request": {
 			req: ctlpb.SetLogMasksReq{
 				Masks: "DEBUG",
 			},
-			cfgMasks: "ERR",
-			expMasks: "DBUG",
+			cfgMasks: "ERROR",
+			expMasks: "DEBUG",
 		},
 		"all values specified in request": {
 			req: ctlpb.SetLogMasksReq{
@@ -729,7 +729,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				Streams:    "MGMT",
 				Subsystems: "MISC",
 			},
-			expMasks:   "ERR,MISC=DBUG",
+			expMasks:   "ERROR,MISC=DEBUG",
 			expStreams: "MGMT",
 		},
 		"reset all masks; simple": {
@@ -741,10 +741,10 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				ResetStreams:    true,
 				ResetSubsystems: true,
 			},
-			cfgMasks:      "ERR",
+			cfgMasks:      "ERROR",
 			cfgStreams:    "md",
 			cfgSubsystems: "misc",
-			expMasks:      "ERR",
+			expMasks:      "ERROR",
 			expStreams:    "md",
 		},
 		"reset all masks; complex": {
@@ -755,7 +755,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 			},
 			cfgMasks:   "info,dtx=debug,vos=debug,object=debug",
 			cfgStreams: "io,epc",
-			expMasks:   "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
+			expMasks:   "INFO,dtx=DEBUG,vos=DEBUG,object=DEBUG",
 			expStreams: "io,epc",
 		},
 	} {
@@ -813,7 +813,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			},
 		},
 		"instances stopped": {
-			req:              &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			req:              &ctlpb.SetLogMasksReq{Masks: "ERROR,mgmt=DEBUG"},
 			instancesStopped: true,
 			expResp: &ctlpb.SetLogMasksResp{
 				Errors: []string{
@@ -823,7 +823,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			},
 		},
 		"dRPC resp fails": {
-			req:     &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			req:     &ctlpb.SetLogMasksReq{Masks: "ERROR,mgmt=DEBUG"},
 			drpcRet: errors.New("call failed"),
 			drpcResps: []proto.Message{
 				&ctlpb.SetLogMasksResp{Status: 0},
@@ -837,12 +837,12 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			},
 		},
 		"dRPC resp junk": {
-			req:      &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			req:      &ctlpb.SetLogMasksReq{Masks: "ERROR,mgmt=DEBUG"},
 			junkResp: true,
 			expErr:   errors.New("invalid wire-format data"),
 		},
 		"missing superblock": { // shouldn't matter in this case
-			req:         &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			req:         &ctlpb.SetLogMasksReq{Masks: "ERROR,mgmt=DEBUG"},
 			missingRank: true,
 			drpcResps: []proto.Message{
 				&ctlpb.SetLogMasksResp{Status: 0},
@@ -853,7 +853,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			},
 		},
 		"successful call": {
-			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			req: &ctlpb.SetLogMasksReq{Masks: "ERROR,mgmt=DEBUG"},
 			drpcResps: []proto.Message{
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
@@ -863,7 +863,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			},
 		},
 		"unsuccessful call": {
-			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			req: &ctlpb.SetLogMasksReq{Masks: "ERROR,mgmt=DEBUG"},
 			drpcResps: []proto.Message{
 				&ctlpb.SetLogMasksResp{Status: -1},
 				&ctlpb.SetLogMasksResp{Status: -1},

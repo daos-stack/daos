@@ -420,7 +420,7 @@ struct vos_container {
 	 * durable hints in vos_cont_df
 	 */
 	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
-	/* Current ongoing aggregation ERR */
+	/* Current ongoing aggregation ERROR */
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
 	daos_epoch_range_t	vc_epr_discard;

@@ -368,7 +368,7 @@
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
-#  # default: ERR
+#  # default: ERROR
 #  log_mask: INFO
 #
 #  # Force specific path for DAOS debug logs.
@@ -532,7 +532,7 @@
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
-#  # default: ERR
+#  # default: ERROR
 #  log_mask: INFO
 #
 #  # Force specific path for DAOS debug logs.

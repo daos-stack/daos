@@ -390,7 +390,7 @@ follows:
 
 ```bash
 $ dfuse --pool tank --container mycont1 -m /tmp/dfuse
-dfuse ERR  src/client/dfuse/dfuse_core.c:873 dfuse_cont_open(0x19b9b00) daos_cont_open() failed: DER_RF(-2031): 'Failures exceed RF'
+dfuse ERROR  src/client/dfuse/dfuse_core.c:873 dfuse_cont_open(0x19b9b00) daos_cont_open() failed: DER_RF(-2031): 'Failures exceed RF'
 Failed to connect to container (5) Input/output error
 ```
 
@@ -412,8 +412,8 @@ create, try creating with valid `rd_fac`.
 
 ```bash
 $ daos container create tank mycont1 --type=POSIX
-object ERR  src/object/obj_class.c:829 dc_set_oclass() grp_size 5 > domain_nr 1, DER_INVAL(-1003): 'Invalid parameters'
-dfs  ERR  src/client/dfs/cont.c:254 dfs_cont_create() Failed to generate SB OID DER_INVAL(-1003): 'Invalid parameters'
+object ERROR  src/object/obj_class.c:829 dc_set_oclass() grp_size 5 > domain_nr 1, DER_INVAL(-1003): 'Invalid parameters'
+dfs  ERROR  src/client/dfs/cont.c:254 dfs_cont_create() Failed to generate SB OID DER_INVAL(-1003): 'Invalid parameters'
 ERROR: daos: failed to create container: DER_INVAL(-1003): Invalid parameters
 ```
 

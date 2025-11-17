@@ -19,8 +19,8 @@ import (
 )
 
 func Test_setLogMasksReqToPB(t *testing.T) {
-	masks := "ERR,mgmt=DEBUG"
-	badMasks := "ERR,mgmt=DEBUGX"
+	masks := "ERROR,mgmt=DEBUG"
+	badMasks := "ERROR,mgmt=DEBUGX"
 	streams := "EPC,MEM"
 	badStreams := "EPC,MEMX"
 	subsystems := "hg,lm"

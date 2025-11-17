@@ -32,40 +32,40 @@ func Test_ValidateLogMasks(t *testing.T) {
 			masks: "mgmt=DEBUG",
 		},
 		"single level; single assignment": {
-			masks: "ERR,mgmt=DEBUG",
+			masks: "ERROR,mgmt=DEBUG",
 		},
 		"single level; single assignment; mixed case": {
 			masks: "err,mgmt=debuG",
 		},
 		"single level; single assignment; with space": {
-			masks:  "ERR, mgmt=DEBUG",
+			masks:  "ERROR, mgmt=DEBUG",
 			expErr: errors.New("illegal characters"),
 		},
 		"single level; single assignment; bad subsystem": {
-			masks:  "ERR,zzz=DBUG",
+			masks:  "ERROR,zzz=DEBUG",
 			expErr: errors.New("unknown name"),
 		},
 		"single level; single assignment; illegal use of all": {
-			masks:  "ERR,all=DBUG",
+			masks:  "ERROR,all=DEBUG",
 			expErr: errors.New("identifier can not be used"),
 		},
 		"single level; single assignment; bad level": {
-			masks:  "ERR,mgmt=DEG",
+			masks:  "ERROR,mgmt=DEG",
 			expErr: errors.New("unknown log level"),
 		},
 		"single assignment; single level": {
-			masks:  "mgmt=DEBUG,ERR",
+			masks:  "mgmt=DEBUG,ERROR",
 			expErr: errors.New("of the form PREFIX=LEVEL"),
 		},
 		"multiple assignments": {
-			masks: "mgmt=DEBUG,bio=ERR",
+			masks: "mgmt=DEBUG,bio=ERROR",
 		},
 		"multiple assignments; bad format": {
-			masks:  "mgmt=DEBUG,bio=ERR=",
+			masks:  "mgmt=DEBUG,bio=ERROR=",
 			expErr: errors.New("of the form PREFIX=LEVEL"),
 		},
 		"multiple assignments; bad chars": {
-			masks:  "mgmt=DEBUG,bio!=ERR",
+			masks:  "mgmt=DEBUG,bio!=ERROR",
 			expErr: errors.New("illegal characters"),
 		},
 		"multiple base levels specified": {
@@ -141,41 +141,41 @@ func Test_MergeLogEnvVars(t *testing.T) {
 		"debug base level": {
 			masks:      "debug",
 			subsystems: "vos",
-			expMasks:   "ERR,vos=DBUG",
+			expMasks:   "ERROR,vos=DEBUG",
 		},
 		"skip subsystem": {
 			masks:      "ERROR,misc=CRIT,mem=DEBUG",
 			subsystems: "misc",
-			expMasks:   "ERR,misc=CRIT",
+			expMasks:   "ERROR,misc=CRIT",
 		},
 		"don't skip subsystem if level above error": {
 			masks:      "error,common=crit,vos=debug",
 			subsystems: "vos",
-			expMasks:   "ERR,common=CRIT,vos=DBUG",
+			expMasks:   "ERROR,common=CRIT,vos=DEBUG",
 		},
 		"keep assignment for subsystem in list": {
 			masks:      "err,container=debug,object=debug",
 			subsystems: "object",
-			expMasks:   "ERR,object=DBUG",
+			expMasks:   "ERROR,object=DEBUG",
 		},
 		"add assignment for subsystem in list; remove ineffective assignments": {
-			masks:      "dbug,rdb=crit,pool=err",
+			masks:      "debug,rdb=crit,pool=err",
 			subsystems: "pool,mgmt",
-			expMasks:   "ERR,rdb=CRIT,mgmt=DBUG",
+			expMasks:   "ERROR,rdb=CRIT,mgmt=DEBUG",
 		},
 		"default base level applied": {
-			masks:      "corpc=crit,iv=dbug,grp=dbug",
+			masks:      "corpc=crit,iv=debug,grp=debug",
 			subsystems: "iv,st",
-			expMasks:   "ERR,corpc=CRIT,iv=DBUG",
+			expMasks:   "ERROR,corpc=CRIT,iv=DEBUG",
 		},
 		"all passthrough": {
 			masks:      "debug",
 			subsystems: "all",
-			expMasks:   "DBUG",
+			expMasks:   "DEBUG",
 		},
 		"long mask string": {
 			masks:    "info,dtx=debug,vos=debug,object=debug",
-			expMasks: "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
+			expMasks: "INFO,dtx=DEBUG,vos=DEBUG,object=DEBUG",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

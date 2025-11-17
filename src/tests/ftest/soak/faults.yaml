@@ -24,7 +24,7 @@ server_config:
       nr_xs_helpers: 2
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: ERR
+      log_mask: ERROR
       env_vars:
         - FI_UNIVERSE_SIZE=16383
       storage: auto
@@ -33,7 +33,7 @@ server_config:
       nr_xs_helpers: 2
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      log_mask: ERR
+      log_mask: ERROR
       env_vars:
         - FI_UNIVERSE_SIZE=16383
       storage: auto

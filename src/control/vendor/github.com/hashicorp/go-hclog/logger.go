@@ -209,14 +209,14 @@ type Logger interface {
 type StandardLoggerOptions struct {
 	// Indicate that some minimal parsing should be done on strings to try
 	// and detect their level and re-emit them.
-	// This supports the strings like [ERROR], [ERR] [TRACE], [WARN], [INFO],
+	// This supports the strings like [ERROR], [TRACE], [WARN], [INFO],
 	// [DEBUG] and strip it off before reapplying it.
 	InferLevels bool
 
 	// Indicate that some minimal parsing should be done on strings to try
 	// and detect their level and re-emit them while ignoring possible
 	// timestamp values in the beginning of the string.
-	// This supports the strings like [ERROR], [ERR] [TRACE], [WARN], [INFO],
+	// This supports the strings like [ERROR], [TRACE], [WARN], [INFO],
 	// [DEBUG] and strip it off before reapplying it.
 	// The timestamp detection may result in false positives and incomplete
 	// string outputs.

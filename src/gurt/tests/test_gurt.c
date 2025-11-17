@@ -620,7 +620,7 @@ test_log(void **state)
 	/* Alternatively, a component may have its own mask */
 	logmask = getenv("TEST_LOG_MASK");
 	if (logmask == NULL) {
-		D_STRNDUP_S(allocated_mask, "ERR,T1=DEBUG,CLOG=DEBUG");
+		D_STRNDUP_S(allocated_mask, "ERROR,T1=DEBUG,CLOG=DEBUG");
 		logmask = allocated_mask;
 	}
 	assert_non_null(logmask);
@@ -740,7 +740,7 @@ test_log(void **state)
 	if (oldmask)
 		d_log_setmasks(oldmask, -1);
 	else
-		d_log_setmasks("ERR", -1);
+		d_log_setmasks("ERROR", -1);
 
 	d_log_fini();
 }
