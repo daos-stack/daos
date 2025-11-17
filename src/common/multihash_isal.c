@@ -266,9 +266,13 @@ sha1_init(void **daos_mhash_ctx)
 		return -DER_NOMEM;
 
 	rc = isal_mh_sha1_init(&ctx->s1_ctx);
-	if (rc == 0)
-		*daos_mhash_ctx = ctx;
-	return rc;
+	if (rc != 0) {
+		D_FREE(ctx);
+		return rc;
+	}
+	*daos_mhash_ctx = ctx;
+
+	return 0;
 }
 
 static int
@@ -333,11 +337,15 @@ sha256_init(void **daos_mhash_ctx)
 		return -DER_NOMEM;
 
 	rc = isal_mh_sha256_init(&ctx->s2_ctx);
-	if (rc == 0) {
-		*daos_mhash_ctx = ctx;
-		ctx->s2_updated = false;
+	if (rc != 0) {
+		D_FREE(ctx);
+		return rc;
 	}
-	return rc;
+
+	*daos_mhash_ctx = ctx;
+	ctx->s2_updated = false;
+
+	return 0;
 }
 
 static int
