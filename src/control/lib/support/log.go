@@ -63,10 +63,10 @@ type LogTypeSubCmd struct {
 }
 
 const (
-	YYYYMMDD            = "2006-01-02"        // Date format as it is expected from commandline argument
-	HHMMSS              = "15:4:5"            // Time format as it is expected from commandline argument
-	YYYYMMDD_HHMMSS     = "2006-01-02 15:4:5" // Date/Time format as it is defined by ISO 8601
-	YYYYMMDD_HHMMSS_LOG = "2006/01/02 15:4:5" // Date/Time format as it is used in DAOS logs
+	YYYYMMDD            = "2006-01-02"          // Date format as it is expected from commandline argument
+	HHMMSS              = "15:04:05"            // Time format as it is expected from commandline argument
+	YYYYMMDD_HHMMSS     = "2006-01-02 15:04:05" // Date/Time format as it is defined by ISO 8601
+	YYYYMMDD_HHMMSS_LOG = "2006/01/02 15:04:05" // Date/Time format as it is used in DAOS logs
 )
 
 // Folder names to copy logs and configs
