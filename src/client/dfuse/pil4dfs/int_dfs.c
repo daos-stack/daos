@@ -5091,20 +5091,24 @@ out_err:
 char *
 new_getcwd(char *buf, size_t size)
 {
-	char  *rc;
-	size_t len;
+	char              *cwd;
+	size_t             len;
+	int                rc;
+	int                idx;
+	struct duns_attr_t attr = {0};
 
 	if (!d_hook_enabled)
 		return libc_getcwd(buf, size);
 
 	if (cur_dir[0] != '/') {
 		/* cur_dir is not initialized yet */
-		rc = libc_getcwd(cur_dir, DFS_MAX_PATH);
-		if (rc == NULL)
+		cwd = libc_getcwd(cur_dir, DFS_MAX_PATH);
+		if (cwd == NULL)
 			return NULL;
 	}
 
-	if (query_dfs_mount(cur_dir) < 0)
+	idx = query_dfs_mount(cur_dir);
+	if (idx < 0)
 		return libc_getcwd(buf, size);
 
 	if (buf == NULL) {
@@ -5118,7 +5122,24 @@ new_getcwd(char *buf, size_t size)
 		return strdup(cur_dir);
 	}
 
-	strncpy(buf, cur_dir, size);
+	rc = duns_resolve_path(cur_dir, &attr);
+	if (rc) {
+		errno = rc;
+		return NULL;
+	}
+
+	rc = snprintf(buf, size, "%s%s", dfs_list[idx].fs_root, attr.da_rel_path);
+	if (rc == size) {
+		/* buffer size is not large enough */
+		errno = ENAMETOOLONG;
+		D_FREE(attr.da_rel_path);
+		return NULL;
+	} else if (rc < 0) {
+		D_FREE(attr.da_rel_path);
+		return NULL;
+	}
+
+	D_FREE(attr.da_rel_path);
 	return buf;
 }
 
