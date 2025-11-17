@@ -268,7 +268,7 @@ sha1_init(void **daos_mhash_ctx)
 	rc = isal_mh_sha1_init(&ctx->s1_ctx);
 	if (rc != 0) {
 		D_FREE(ctx);
-		return rc;
+		return -DER_INVAL;
 	}
 	*daos_mhash_ctx = ctx;
 
@@ -339,7 +339,8 @@ sha256_init(void **daos_mhash_ctx)
 	rc = isal_mh_sha256_init(&ctx->s2_ctx);
 	if (rc != 0) {
 		D_FREE(ctx);
-		return rc;
+		D_ASSERTF(0, "rc = %d\n", rc);
+		return -DER_INVAL;
 	}
 
 	*daos_mhash_ctx = ctx;
@@ -413,7 +414,8 @@ sha512_init(void **daos_mhash_ctx)
 	rc = isal_sha512_ctx_mgr_init(&ctx->s5_mgr);
 	if (rc != 0) {
 		D_FREE(ctx);
-		return rc;
+		D_ASSERTF(0, "rc = %d\n", rc);
+		return -DER_INVAL;
 	}
 	isal_hash_ctx_init(&ctx->s5_ctx);
 	ctx->s5_updated = false;
@@ -453,17 +455,22 @@ sha512_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 		rc = isal_sha512_ctx_mgr_submit(&ctx->s5_mgr, &ctx->s5_ctx, &tmp, buf, buf_len,
 						ISAL_HASH_UPDATE);
 
-	if (rc != 0)
-		return rc;
+	if (rc != 0) {
+		D_ASSERTF(0, "rc = %d\n", rc);
+		return -DER_INVAL;
+	}
 
 	if (tmp == NULL) {
 		rc = isal_sha512_ctx_mgr_flush(&ctx->s5_mgr, &tmp);
-		if (rc != 0)
-			return rc;
+		if (rc != 0) {
+			D_ASSERTF(0, "rc = %d\n", rc);
+			return -DER_INVAL;
+		}
 	}
 
 	ctx->s5_updated = true;
-	return ctx->s5_ctx.error;
+	D_ASSERTF(ctx->s5_ctx.error == 0, "ctx->s5_ctx.error = %d\n", ctx->s5_ctx.error);
+	return ctx->s5_ctx.error == 0 ? 0 : -DER_INVAL;
 }
 
 static int
@@ -477,21 +484,26 @@ sha512_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 
 		rc = isal_sha512_ctx_mgr_submit(&ctx->s5_mgr, &ctx->s5_ctx, &tmp, NULL, 0,
 						ISAL_HASH_LAST);
-		if (rc != 0)
-			return rc;
+		if (rc != 0) {
+			D_ASSERTF(0, "rc = %d\n", rc);
+			return -DER_INVAL;
+		}
 
 		if (tmp == NULL) {
 			rc = isal_sha512_ctx_mgr_flush(&ctx->s5_mgr, &tmp);
-			if (rc != 0)
-				return rc;
+			if (rc != 0) {
+				D_ASSERTF(0, "rc = %d\n", rc);
+				return -DER_INVAL;
+			}
 		}
 
 		memcpy(buf, ctx->s5_ctx.job.result_digest, buf_len);
 
-		return ctx->s5_ctx.error;
+		rc = ctx->s5_ctx.error;
 	}
 
-	return rc;
+	D_ASSERTF(rc == 0, "rc = %d\n", rc);
+	return rc == 0 ? rc : -DER_INVAL;
 }
 
 struct hash_ft sha512_algo = {
