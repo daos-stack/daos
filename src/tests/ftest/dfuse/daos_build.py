@@ -240,7 +240,7 @@ class DaosBuild(TestWithServers):
         :avocado: tags=daosio,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
-        self.run_build_test("writeback")
+        run_build_test(self, "writeback")
 
     def test_dfuse_daos_build_wt(self):
         """This test builds DAOS on a dfuse filesystem.
@@ -256,39 +256,7 @@ class DaosBuild(TestWithServers):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt
         """
-        self.run_build_test("writethrough")
-
-    def test_dfuse_daos_build_wt_il(self):
-        """This test builds DAOS on a dfuse filesystem.
-
-        Use cases:
-            Create Pool
-            Create Posix container
-            Mount dfuse
-            Checkout and build DAOS sources.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=vm
-        :avocado: tags=daosio,dfs,dfuse,ioil
-        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
-        """
-        self.run_build_test("writethrough", il_lib='libioil.so', run_on_vms=True)
-
-    def test_dfuse_daos_build_wt_pil4dfs(self):
-        """This test builds DAOS on a dfuse filesystem.
-
-        Use cases:
-            Create Pool
-            Create Posix container
-            Mount dfuse
-            Checkout and build DAOS sources.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=vm
-        :avocado: tags=daosio,dfs,dfuse,pil4dfs
-        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
-        """
-        self.run_build_test("nocache", il_lib='libpil4dfs.so', run_on_vms=True)
+        run_build_test(self, "writethrough")
 
     def test_dfuse_daos_build_metadata(self):
         """This test builds DAOS on a dfuse filesystem.
@@ -304,7 +272,7 @@ class DaosBuild(TestWithServers):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_metadata
         """
-        self.run_build_test("metadata")
+        run_build_test(self, "metadata")
 
     def test_dfuse_daos_build_data(self):
         """This test builds DAOS on a dfuse filesystem.
@@ -320,7 +288,7 @@ class DaosBuild(TestWithServers):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_data
         """
-        self.run_build_test("data")
+        run_build_test(self, "data")
 
     def test_dfuse_daos_build_nocache(self):
         """This test builds DAOS on a dfuse filesystem.
@@ -336,4 +304,4 @@ class DaosBuild(TestWithServers):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
         """
-        self.run_build_test("nocache")
+        run_build_test(self, "nocache")
