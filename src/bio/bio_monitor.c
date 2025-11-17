@@ -709,14 +709,14 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 		}
 	}
 
-	if (!glb_criteria.fc_enabled)
-		return false;
-
-	/* I/O stalled on this device */
+	/* Auto-faulty for stalled I/O stalled is always enabled */
 	if (bdh->bdh_io_stalled) {
 		D_ERROR("I/O stalled on NVMe device " DF_UUID "\n", DP_UUID(bbs->bb_dev->bb_uuid));
 		return true;
 	}
+
+	if (!glb_criteria.fc_enabled)
+		return false;
 
 	if (dev_stats->bio_read_errs + dev_stats->bio_write_errs > glb_criteria.fc_max_io_errs) {
 		D_ERROR("NVMe I/O errors %u/%u reached limit %u\n", dev_stats->bio_read_errs,
