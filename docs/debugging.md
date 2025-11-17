@@ -84,21 +84,21 @@ values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
 - Disable all logs for performance tuning
 ```bash
-  $ export D_LOG_MASK=ERROR   # -> will only log error messages from all facilities
+  $ export D_LOG_MASK=ERROR # -> will only log error messages from all facilities
   $ export D_LOG_MASK=FATAL # -> will only log system fatal messages
 ```
 
 - Disable a noisy debug logging subsystem
 ```bash
   $ export D_LOG_MASK=DEBUG,MEM=ERROR # -> disables MEM facility by restricting all logs
-                                    # from that facility to ERROR or higher priority only
+                                      # from that facility to ERROR or higher priority only
   $ export D_LOG_MASK=DEBUG,SWIM=ERROR,RPC=ERROR,HG=ERROR # -> disables SWIM and RPC/HG facilities
 ```
 
 - Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
 ```bash
   $ export D_LOG_MASK=DEBUG,MEM=ERROR # log at DEBUG level from all facilities except MEM
-  $ export DD_MASK=group_metadata   # limit logging to include only streams (mgmt, plus defaults from group_default)
+  $ export DD_MASK=group_metadata     # limit logging to include only streams (mgmt, plus defaults from group_default)
 ```
 
 - Enable a subset of facilities of interest

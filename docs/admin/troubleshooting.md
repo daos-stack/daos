@@ -147,8 +147,6 @@ level of logging on a per-subsystem basis as well
 -   Log Levels:
     debug, info, note, warn, error, crit, alert, fatal, emit
 
-Note: error == err.
-
 ### Debug Masks/Streams:
 
 DEBUG messages account for a majority of the log messages, and
