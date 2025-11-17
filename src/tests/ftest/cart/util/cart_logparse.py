@@ -1,11 +1,9 @@
-# /*
-#  * (C) Copyright 2016-2023 Intel Corporation.
-#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
-#  *
-#  * SPDX-License-Identifier: BSD-2-Clause-Patent
-# */
-
 """
+  (C) Copyright 2016-2023 Intel Corporation.
+  Copyright 2025 Hewlett Packard Enterprise Development LP
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+
 LogIter and LogLine class definitions.
 
 This provides a way of querying CaRT logfiles for processing.
