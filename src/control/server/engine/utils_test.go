@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,7 +36,7 @@ func Test_ValidateLogMasks(t *testing.T) {
 			masks: "ERROR,mgmt=DEBUG",
 		},
 		"single level; single assignment; mixed case": {
-			masks: "err,mgmt=debuG",
+			masks: "error,mgmt=debuG",
 		},
 		"single level; single assignment; with space": {
 			masks:  "ERROR, mgmt=DEBUG",
@@ -73,7 +74,7 @@ func Test_ValidateLogMasks(t *testing.T) {
 			expErr: errors.New("of the form PREFIX=LEVEL"),
 		},
 		"base level not specified first": {
-			masks:  "bio=Err,debug",
+			masks:  "bio=Error,debug",
 			expErr: errors.New("of the form PREFIX=LEVEL"),
 		},
 		"too long": {
@@ -159,7 +160,7 @@ func Test_MergeLogEnvVars(t *testing.T) {
 			expMasks:   "ERROR,object=DEBUG",
 		},
 		"add assignment for subsystem in list; remove ineffective assignments": {
-			masks:      "debug,rdb=crit,pool=err",
+			masks:      "debug,rdb=crit,pool=error",
 			subsystems: "pool,mgmt",
 			expMasks:   "ERROR,rdb=CRIT,mgmt=DEBUG",
 		},
