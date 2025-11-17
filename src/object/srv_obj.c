@@ -517,7 +517,7 @@ check_conn(struct dtx_handle *dth, bool leader)
 }
 
 /* bypass bulk rma for single value's degraded fetch */
-#define OBJ_BULK_OFFSET_SKIP ((uint64_t) - 1)
+#define OBJ_BULK_OFFSET_SKIP ((uint64_t)-1)
 
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
