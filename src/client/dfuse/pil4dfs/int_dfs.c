@@ -1649,7 +1649,6 @@ find_next_available_map(int *idx)
 	return 0;
 }
 
-/* May need to support duplicated fd as duplicated dirfd too. */
 static void
 free_fd(int idx, bool closing_dup_fd)
 {
@@ -1670,7 +1669,7 @@ free_fd(int idx, bool closing_dup_fd)
 	d_file_list[idx]->ref_count--;
 	if (d_file_list[idx]->ref_count == 0)
 		saved_obj = d_file_list[idx];
-	if (dup_ref_count[idx] > 0 || ((d_file_list[idx]->ref_count > 0) && !d_compatible_mode)) {
+	if ((dup_ref_count[idx] > 0) || (closing_dup_fd && (d_file_list[idx]->ref_count > 0))) {
 		D_MUTEX_UNLOCK(&lock_fd);
 		return;
 	}

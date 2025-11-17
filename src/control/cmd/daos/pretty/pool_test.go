@@ -371,6 +371,43 @@ Pool space info:
 	}
 }
 
+func TestPretty_PrintPoolSelfHealDisable(t *testing.T) {
+	for name, tc := range map[string]struct {
+		poolSelfHeal string
+		sysSelfHeal  string
+		expPrintStr  string
+	}{
+		"defaults": {
+			poolSelfHeal: "exclude;rebuild",
+			sysSelfHeal:  "exclude;pool_exclude;pool_rebuild",
+		},
+		"no pool flags": {
+			poolSelfHeal: "none",
+			sysSelfHeal:  "exclude;pool_exclude;pool_rebuild",
+			expPrintStr:  "exclude disabled on pool due to [pool] policy\nrebuild disabled on pool due to [pool] policy\n",
+		},
+		"no system flags": {
+			poolSelfHeal: "exclude;rebuild",
+			sysSelfHeal:  "none",
+			expPrintStr:  "exclude disabled on pool due to [system] policy\nrebuild disabled on pool due to [system] policy\n",
+		},
+		"no flags": {
+			poolSelfHeal: "none",
+			sysSelfHeal:  "none",
+			expPrintStr:  "exclude disabled on pool due to [pool system] policies\nrebuild disabled on pool due to [pool system] policies\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			PrintPoolSelfHealDisable(tc.poolSelfHeal, tc.sysSelfHeal, &bld)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected print string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 	for name, tc := range map[string]struct {
 		pqti        *daos.PoolQueryTargetInfo

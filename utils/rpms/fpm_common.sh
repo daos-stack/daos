@@ -9,8 +9,9 @@ tmp="$(mktemp -d)"
 export install_list=()
 export PACKAGE_TYPE="dir"
 export dbg_list=()
-export EXTERNAL_DEPENDS=()
+export CONFLICTS=()
 export DEPENDS=()
+export EXTERNAL_DEPENDS=()
 export EXTRA_OPTS=()
 export FILTER_LIST=()
 isa="$(uname -m)"
@@ -140,11 +141,12 @@ replace_paths() {
   done
 }
 
-create_depends() {
+create_opts() {
+  local opt=$1; shift
   local -n deps=$1; shift
   deps=()
   for dep in "$@"; do
-    deps+=( "--depends" "${dep}" )
+    deps+=( "${opt}" "${dep}" )
   done
 }
 
@@ -157,8 +159,14 @@ build_package() {
   output_type="${OUTPUT_TYPE:-rpm}"
   EXTRA_OPTS+=("--rpm-autoprov")
 
+  if [ -n "${RPM_CHANGELOG:-}" ]; then
+    EXTRA_OPTS+=("--rpm-changelog" "${root}/utils/rpms/${RPM_CHANGELOG}")
+  fi
+
   depends=()
-  create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
+  create_opts "--depends" depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
+  conflicts=()
+  create_opts "--conflicts" conflicts "${CONFLICTS[@]}"
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
@@ -172,12 +180,14 @@ build_package() {
   --description "${DESCRIPTION}" \
   --url "${URL}" \
   "${depends[@]}" \
+  "${conflicts[@]}" \
   "${EXTRA_OPTS[@]}" \
   "${install_list[@]}"
 
   export EXTRA_OPTS=()
   install_list=()
 
+  CONFLICTS=()
   DEPENDS=()
   EXTERNAL_DEPENDS=()
   if [[ ! "${name}" =~ debuginfo ]]; then

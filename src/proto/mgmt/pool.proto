@@ -246,6 +246,8 @@ message PoolQueryResp {
 	uint64 mem_file_bytes = 21; // per-pool accumulated value of memory file sizes
 	string dead_ranks     = 22; // optional set of dead ranks
 	bool   md_on_ssd_active = 23; // MD-on-SSD mode flag
+	string self_heal_policy     = 24; // pool property self_heal value
+	string sys_self_heal_policy = 25; // system property self_heal value
 }
 
 message PoolProperty {

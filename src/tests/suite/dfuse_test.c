@@ -924,8 +924,10 @@ do_fdcallscheck(void **state)
 	char   path_old[512];
 	char   path_new[512];
 	char  *env_ldpreload;
-	bool   use_dfuse    = true;
-	bool   with_pil4dfs = false;
+	char  *env_compatible;
+	bool   use_dfuse       = true;
+	bool   with_pil4dfs    = false;
+	bool   compatible_mode = false;
 	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
 	char   native_mount_dir[] = "/tmp/dfuse-test";
 
@@ -936,6 +938,11 @@ do_fdcallscheck(void **state)
 	if (strstr(env_ldpreload, "libpil4dfs.so") != NULL)
 		/* libioil cannot pass this test since low fds are only temporarily blocked */
 		with_pil4dfs = true;
+
+	env_compatible = getenv("D_IL_COMPATIBLE");
+	if ((env_compatible != NULL) && (strcmp(env_compatible, "1") == 0))
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		compatible_mode = true;
 
 	root = open(test_dir, O_PATH | O_DIRECTORY);
 	assert_return_code(root, errno);
@@ -1050,7 +1057,7 @@ do_fdcallscheck(void **state)
 	fd = openat(root, "test_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
 
-	if (with_pil4dfs && use_dfuse)
+	if (with_pil4dfs && use_dfuse && !compatible_mode)
 		assert_true(is_fd_large(fd));
 
 	fd_new = 10000;
@@ -1070,12 +1077,62 @@ do_fdcallscheck(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
+	rc = close(root);
+	assert_return_code(rc, errno);
+	/* end   testing dup3() */
+
+	/* start testing dup3() - closing old fd first */
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	fd = openat(root, "test_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	fd_new = 10000;
+	flag   = O_CLOEXEC;
+	rc     = dup3(fd, fd_new, flag);
+	assert_true(rc == fd_new);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = close(fd_new);
+	assert_return_code(rc, errno);
+	/* end   testing dup3() - closing old fd first */
+
+	/* start testing dup() */
+	fd = openat(root, "test_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	fd_new = dup(fd);
+	assert_true(fd_new > 0);
+
+	/* close the new fd first */
+	rc = close(fd_new);
+	assert_return_code(rc, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	fd = openat(root, "test_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	fd_new = dup(fd);
+	assert_true(fd_new > 0);
+
+	/* close the old fd first */
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = close(fd_new);
+	assert_return_code(rc, errno);
+	/* end   testing dup3() - closing old fd first */
+
 	rc = unlinkat(root, "test_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
 	assert_return_code(rc, errno);
-	/* end   testing dup3() */
 }
 
 /*

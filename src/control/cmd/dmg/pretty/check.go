@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,26 +50,40 @@ func PrintCheckerPolicies(out io.Writer, flags control.SystemCheckFlags, policie
 	tf.Format(table)
 }
 
-func countResultPools(resp *control.SystemCheckQueryResp) int {
+func countResultPools(resp *control.SystemCheckQueryResp) (int, int) {
 	if resp == nil {
-		return 0
+		return 0, 0
 	}
 
-	poolMap := make(map[string]struct{})
+	checkedMap := make(map[string]struct{})
+	uncheckedMap := make(map[string]struct{})
 	for _, pool := range resp.Pools {
-		// Don't include pools that were not checked.
 		if pool.Unchecked() {
-			continue
+			uncheckedMap[pool.UUID] = struct{}{}
+		} else {
+			checkedMap[pool.UUID] = struct{}{}
 		}
-		poolMap[pool.UUID] = struct{}{}
 	}
 	for _, report := range resp.Reports {
 		if report.IsRemovedPool() && report.PoolUuid != "" {
-			poolMap[report.PoolUuid] = struct{}{}
+			checkedMap[report.PoolUuid] = struct{}{}
 		}
 	}
 
-	return len(poolMap)
+	return len(checkedMap), len(uncheckedMap)
+}
+
+func printSystemCheckPoolInfo(out io.Writer, pools []*control.SystemCheckPoolInfo, verbose bool) {
+	if verbose {
+		fmt.Fprintln(out, "\nPer-Pool Checker Info:")
+	} else {
+		fmt.Fprintln(out, "\nUnchecked Pools:")
+	}
+	for _, pool := range pools {
+		if verbose || pool.Unchecked() {
+			fmt.Fprintf(out, "  %+v\n", pool)
+		}
+	}
 }
 
 // PrintCheckQueryResp prints the checker results to the console.
@@ -90,15 +105,15 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 	// should show the number of pools being checked. If the checker has completed,
 	// we should show the number of unique pools found in the reports.
 	action := "Checking"
-	poolCount := countResultPools(resp)
+	checkedCount, uncheckedCount := countResultPools(resp)
 	if resp.Status == control.SystemCheckStatusCompleted {
 		action = "Checked"
 	}
-	if poolCount > 0 {
-		fmt.Fprintf(out, "  %s %s\n", action, english.Plural(poolCount, "pool", ""))
+	if checkedCount > 0 {
+		fmt.Fprintf(out, "  %s %s\n", action, english.Plural(checkedCount, "pool", ""))
 	}
 
-	if len(resp.Pools) > 0 && verbose {
+	if len(resp.Pools) > 0 && (verbose || uncheckedCount > 0) {
 		pools := make([]*control.SystemCheckPoolInfo, 0, len(resp.Pools))
 		for _, pool := range resp.Pools {
 			pools = append(pools, pool)
@@ -106,10 +121,7 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 		sort.Slice(pools, func(i, j int) bool {
 			return pools[i].UUID < pools[j].UUID
 		})
-		fmt.Fprintln(out, "\nPer-Pool Checker Info:")
-		for _, pool := range pools {
-			fmt.Fprintf(out, "  %+v\n", pool)
-		}
+		printSystemCheckPoolInfo(out, pools, verbose)
 	}
 
 	fmt.Fprintln(out)
@@ -168,6 +180,9 @@ func printInconsistencyReportsTable(out io.Writer, resp *control.SystemCheckQuer
 		} else {
 			if res := report.Resolution(); res != "" {
 				tr[resLabel] = res
+				if report.IsDryRun() {
+					tr[resLabel] += " (dry run)"
+				}
 			}
 			resolvedTable = append(resolvedTable, tr)
 		}
@@ -238,7 +253,11 @@ func printInconsistencyReportsVerbose(out io.Writer, resp *control.SystemCheckQu
 			}
 			fmt.Fprintln(iw)
 		} else if res := report.Resolution(); res != "" {
-			fmt.Fprintf(iw, "Resolution: %s\n\n", res)
+			var dryRunMsg string
+			if report.IsDryRun() {
+				dryRunMsg = " (dry run - not applied)"
+			}
+			fmt.Fprintf(iw, "Resolution: %s%s\n\n", res, dryRunMsg)
 		} else {
 			fmt.Fprintf(iw, "No resolutions available\n\n")
 			continue
