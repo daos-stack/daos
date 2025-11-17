@@ -637,7 +637,7 @@ do_directory(void **state)
 	char            native_mount_dir[] = "/tmp/dfuse-test";
 	char            cwd[1024];
 	char            cwd_saved[1024];
-	char            resolved_path[1024];
+	char           *resolved_path;
 	char           *path_ret;
 
 	if (strstr(test_dir, native_mount_dir))
@@ -745,6 +745,9 @@ do_directory(void **state)
 		return;
 
 	/* start testing getcwd() and realpath() */
+	resolved_path = malloc(PATH_MAX);
+	assert_true(resolved_path != NULL);
+
 	path_ret = getcwd(cwd_saved, sizeof(cwd_saved));
 	assert_true(path_ret != NULL);
 
@@ -789,6 +792,8 @@ do_directory(void **state)
 
 	rc = chdir(cwd_saved);
 	assert_return_code(rc, errno);
+
+	free(resolved_path);
 	/* end   testing getcwd() and realpath() */
 }
 
