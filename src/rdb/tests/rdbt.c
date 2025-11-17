@@ -258,10 +258,10 @@ rdbt_find_leader(crt_group_t *group, uint32_t nranks, uint32_t nreplicas,
 
 resp_valid_check:
 		if (!resp_isvalid) {
-			printf("ERROR: rank %u invalid reply: rc="DF_RC", "
-			       "hint is %s valid (rank=%u, term="DF_U64")\n",
-			       rank, DP_RC(rc_svc), hint_isvalid ? "" : "NOT",
-			       h.sh_rank, h.sh_term);
+			printf("ERROR: rank %u invalid reply: rc=" DF_RC ", "
+			       "hint is %s valid (rank=%u, term=" DF_U64 ")\n",
+			       rank, DP_RC(rc_svc), hint_isvalid ? "" : "NOT", h.sh_rank,
+			       h.sh_term);
 			rc = -1;
 			break;
 		}
@@ -306,14 +306,13 @@ wait_for_this_leader(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 	}
 	if (rc == 0) {
 		if (found_ldr != expect_ldr) {
-			fprintf(stderr, "ERROR: leader %u (expected %u)\n",
-					found_ldr, expect_ldr);
+			fprintf(stderr, "ERROR: leader %u (expected %u)\n", found_ldr, expect_ldr);
 			return -1;
 		}
 
 		if (found_term < expect_term_min) {
-			fprintf(stderr, "ERROR: term "DF_U64" < "DF_U64"\n",
-					found_term, expect_term_min);
+			fprintf(stderr, "ERROR: term " DF_U64 " < " DF_U64 "\n", found_term,
+				expect_term_min);
 			return -1;
 		}
 	} else {
@@ -351,8 +350,8 @@ wait_for_any_leader(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 		       (try+1), TRY_LIMIT, expect_term_min, DP_RC(rc));
 	}
 	if ((rc == 0) && (found_term < expect_term_min)) {
-		fprintf(stderr, "ERROR: term "DF_U64" < "DF_U64"\n",
-				found_term, expect_term_min);
+		fprintf(stderr, "ERROR: term " DF_U64 " < " DF_U64 "\n", found_term,
+			expect_term_min);
 		return -1;
 	} else if (rc != 0) {
 		fprintf(stderr, "FAIL: find leader after add replica\n");
@@ -491,8 +490,8 @@ restore_initial_replicas(crt_group_t *grp, uint32_t nranks,
 	/* Remove the added replica rank */
 	rc = rdbt_remove_replica_rank(grp, interim_ldr_rank, remove_rank, &h);
 	if (rc != 0) {
-		fprintf(stderr, "ERROR: failed to remove rank %u: "DF_RC"\n",
-				remove_rank, DP_RC(rc));
+		fprintf(stderr, "ERROR: failed to remove rank %u: " DF_RC "\n", remove_rank,
+			DP_RC(rc));
 		return rc;
 	}
 	printf("INFO: removed rank %u\n", remove_rank);
@@ -638,9 +637,10 @@ rdbt_create_multi(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas)
 	printf("===== Create RDB KV stores on leader %u\n", ldr_rank);
 	rc = rdbt_create_rank(grp, ldr_rank, &h);
 	if (rc) {
-		fprintf(stderr, "ERROR: create RDB KV stores failed RPC to "
-				"leader %u: "DF_RC", hint:(r=%u, t="DF_U64"\n",
-				ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
+		fprintf(stderr,
+			"ERROR: create RDB KV stores failed RPC to "
+			"leader %u: " DF_RC ", hint:(r=%u, t=" DF_U64 "\n",
+			ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
 		return rc;
 	}
 	printf("Created RDB KV stores, via RPC to leader %u\n", ldr_rank);
@@ -734,8 +734,7 @@ test_hdlr(int argc, char *argv[])
 
 	/* make sure to run test with update=true first */
 	if (val_out != val_in) {
-		fprintf(stderr, "ERROR: val_out="DF_U64" expected "DF_U64"\n",
-				val_out, val_in);
+		fprintf(stderr, "ERROR: val_out=" DF_U64 " expected " DF_U64 "\n", val_out, val_in);
 		return -1;
 	}
 
@@ -1422,9 +1421,10 @@ rdbt_destroy_multi(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas)
 	printf("===== Destroy RDB KV stores on leader %u\n", ldr_rank);
 	rc = rdbt_destroy_rank(grp, ldr_rank, &h);
 	if (rc) {
-		fprintf(stderr, "ERROR: destroy RDB KV stores failed RPC to rank "
-				"%u: "DF_RC", hint:(r=%u, t="DF_U64"\n",
-				ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
+		fprintf(stderr,
+			"ERROR: destroy RDB KV stores failed RPC to rank "
+			"%u: " DF_RC ", hint:(r=%u, t=" DF_U64 "\n",
+			ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
 		return rc;
 	}
 	printf("Destroyed RDB KV stores, via RPC to leader %u\n", ldr_rank);
