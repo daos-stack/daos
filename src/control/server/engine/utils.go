@@ -64,7 +64,7 @@ const (
 	LogLevelWarn
 	LogLevelErr
 	LogLevelCrit
-	LogLevelAlrt
+	LogLevelAlert
 	LogLevelFatal
 	LogLevelEmit
 )
@@ -83,8 +83,8 @@ func (ll LogLevel) String() string {
 		return "ERROR"
 	case LogLevelCrit:
 		return "CRIT"
-	case LogLevelAlrt:
-		return "ALRT"
+	case LogLevelAlert:
+		return "ALERT"
 	case LogLevelFatal:
 		return "FATAL"
 	case LogLevelEmit:
@@ -109,8 +109,8 @@ func StrToLogLevel(s string) LogLevel {
 		return LogLevelErr
 	case "CRIT":
 		return LogLevelCrit
-	case "ALRT":
-		return LogLevelAlrt
+	case "ALERT":
+		return LogLevelAlert
 	case "FATAL":
 		return LogLevelFatal
 	case "EMIT":
@@ -122,8 +122,8 @@ func StrToLogLevel(s string) LogLevel {
 
 var (
 	validLogLevels = []string{
-		"DEBUG", "INFO", "NOTE", "WARN", "ERROR", "CRIT", "ALRT", "FATAL",
-		"EMIT",
+		"DEBUG", "INFO", "NOTE", "WARN", "ERROR", "CRIT", "ALERT",
+		"FATAL", "EMIT",
 	}
 	validLogStreams = []string{
 		"ALL",                                                     // Select all streams
