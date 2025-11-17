@@ -1,0 +1,12 @@
+* Mon Nov 17 2025 Jeff Olivier <jeffolivier@google.com> - 1.1.0-1.0
+- Update to fuse-3.17.4
+- Use upstream tag directly
+
+* Sun Jan 12 2025 Jeff Olivier <jeffolivier@google.com> - 1.0.0-3.0
+- Remove dependence on fused
+
+* Sat Jan 11 2025 Jeff Olivier <jeffolivier@google.com> - 1.0.0-2.0
+- Only build static lib
+
+* Mon Feb 12 2024 Jeff Olivier <jeffolivier@google.com> - 1.0.0-1.0
+- Initial packaging for fused, a DAOS file system adaptation of libfused
