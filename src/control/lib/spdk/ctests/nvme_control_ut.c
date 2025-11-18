@@ -1,8 +1,9 @@
 /**
-* (C) Copyright 2019-2021 Intel Corporation.
-*
-* SPDX-License-Identifier: BSD-2-Clause-Patent
-*/
+ * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -100,6 +101,13 @@ mock_spdk_pci_device_get_socket_id(struct spdk_pci_device *dev)
 {
 	(void)dev;
 	return 1;
+}
+
+static const char *
+mock_spdk_pci_device_get_type(const struct spdk_pci_device *dev)
+{
+	(void)dev;
+	return "pci";
 }
 
 /**
@@ -203,14 +211,17 @@ test_collect(void **state)
 {
 	(void)state;
 
+	fprintf(stdout, "attach\n");
 	attach_mock_controllers();
 
+	fprintf(stdout, "init\n");
 	test_ret = init_ret();
 
 	assert_null(test_ret->ctrlrs);
-	_collect(test_ret, &mock_copy_ctrlr_data,
-		 &mock_spdk_nvme_ctrlr_get_pci_device,
-		 &mock_spdk_pci_device_get_socket_id);
+	fprintf(stdout, "before collect\n");
+	_collect(test_ret, &mock_copy_ctrlr_data, &mock_spdk_nvme_ctrlr_get_pci_device,
+		 &mock_spdk_pci_device_get_socket_id, &mock_spdk_pci_device_get_type);
+	fprintf(stdout, "after collect\n");
 
 	if (test_ret->rc != 0)
 		fprintf(stderr, "collect err: %s\n", test_ret->info);
