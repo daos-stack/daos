@@ -79,7 +79,7 @@ server_config_val: !mux
   control_log_mask_list:
     config_val:
       - "control_log_mask"
-      - "INFO,DEBUG,ERR"
+      - "INFO,DEBUG,ERROR"
       - "FAIL"
   control_log_mask_special_str:
     config_val:

@@ -21,7 +21,7 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31416
       log_file: daos_server0.log
-      log_mask: ERR
+      log_mask: ERROR
       targets: 2
       storage: auto
     1:
@@ -30,7 +30,7 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31517
       log_file: daos_server1.log
-      log_mask: ERR
+      log_mask: ERROR
       targets: 2
       storage: auto
 pool:

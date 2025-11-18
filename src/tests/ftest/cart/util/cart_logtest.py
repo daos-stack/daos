@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 #
 # (C) Copyright 2018-2024 Intel Corporation
+# Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -446,7 +447,7 @@ class LogTest():
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher like assert should
                         # trigger a failure.
-                        if line.level < cart_logparse.LOG_LEVELS['ERR']:
+                        if line.level < cart_logparse.LOG_LEVELS['ERROR']:
                             show_line(line, 'HIGH', 'error in strict mode')
                         else:
                             show_line(line, 'NORMAL', 'warning in strict mode')
