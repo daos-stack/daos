@@ -1362,6 +1362,25 @@ obj_rw_recx_list_post(struct obj_rw_in *orw, struct obj_rw_out *orwo, uint8_t *s
 	return rc;
 }
 
+struct ec_agg_boundary_arg {
+	struct ds_pool *eab_pool;
+	uuid_t          eab_co_uuid;
+};
+
+static int
+obj_fetch_ec_agg_boundary(void *data)
+{
+	struct ec_agg_boundary_arg *arg = data;
+	int                         rc;
+
+	rc = ds_cont_fetch_ec_agg_boundary(arg->eab_pool->sp_iv_ns, arg->eab_co_uuid);
+	if (rc)
+		DL_ERROR(rc, DF_CONT ", ds_cont_fetch_ec_agg_boundary failed.",
+			 DP_CONT(arg->eab_pool->sp_uuid, arg->eab_co_uuid));
+
+	return rc;
+}
+
 static int
 obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *iods,
 		      struct dcs_iod_csums *iod_csums, uint64_t *offs, uint8_t *skips,
@@ -1481,6 +1500,32 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			is_parity_shard = is_ec_parity_shard_by_tgt_off(tgt_off, &ioc->ioc_oca);
 			get_parity_list = ec_recov && is_parity_shard &&
 					  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		}
+		if ((ec_deg_fetch || (ec_recov && get_parity_list)) &&
+		    ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
+			struct ec_agg_boundary_arg arg;
+
+			arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
+			uuid_copy(arg.eab_co_uuid, ioc->ioc_coc->sc_uuid);
+			rc = dss_ult_execute(obj_fetch_ec_agg_boundary, &arg, NULL, NULL,
+					     DSS_XS_SYS, 0, 0);
+			if (rc) {
+				DL_ERROR(rc, DF_CONT ", " DF_UOID " fetch ec_agg_boundary failed.",
+					 DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
+					 DP_UOID(orw->orw_oid));
+				goto out;
+			}
+			if (ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
+				rc = -DER_FETCH_AGAIN;
+				DL_INFO(rc, DF_CONT ", " DF_UOID " zero ec_agg_boundary.",
+					DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
+					DP_UOID(orw->orw_oid));
+				goto out;
+			}
+			D_DEBUG(DB_IO,
+				DF_CONT ", " DF_UOID " fetched ec_agg_eph_boundary " DF_X64 "\n",
+				DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
+				DP_UOID(orw->orw_oid), ioc->ioc_coc->sc_ec_agg_eph_boundary);
 		}
 		if (get_parity_list) {
 			D_ASSERT(!ec_deg_fetch);
@@ -2377,7 +2422,8 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		      uint32_t rpc_map_ver, uint32_t flags)
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
-		if (child->sc_ec_agg_active) {
+		/* EC aggregation is still inflight, rebuild should wait until it's paused */
+		if (ds_cont_child_ec_aggregating(child)) {
 			D_ERROR(DF_CONT" ec aggregate still active, rebuilding %d\n",
 				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
 				child->sc_pool->spc_pool->sp_rebuilding);
@@ -2409,19 +2455,6 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	    (child->sc_pool->spc_pool->sp_need_discard &&
 	     child->sc_pool->spc_discard_done == 0)) {
 		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
-		return -DER_UPDATE_AGAIN;
-	}
-
-	/* All I/O during rebuilding, needs to wait for the rebuild fence to
-	 * be generated (see rebuild_prepare_one()), which will create a boundary
-	 * for rebuild, so the data after boundary(epoch) should not be rebuilt,
-	 * which otherwise might be written duplicately, which might cause
-	 * the failure in VOS.
-	 */
-	if ((flags & ORF_REBUILDING_IO) &&
-	    (is_pool_rebuild_allowed(child->sc_pool->spc_pool, false) &&
-	     child->sc_pool->spc_rebuild_fence == 0)) {
-		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
 
@@ -2493,6 +2526,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	ioc.ioc_coc->sc_ec_agg_updates++;
+
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
 	if (iod->iod_nr == 0) /* nothing to replicate, directly remove parity */
@@ -2503,7 +2538,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
-		goto out;
+		goto out_agg;
 	}
 	biod = vos_ioh2desc(ioh);
 	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx, CRT_BULK_RW);
@@ -2527,13 +2562,15 @@ end:
 	if (rc) {
 		D_ERROR(DF_UOID " vos_update_end failed: " DF_RC "\n", DP_UOID(oer->er_oid),
 			DP_RC(rc));
-		goto out;
+		goto out_agg;
 	}
 remove_parity:
 	recx.rx_nr = obj_ioc2ec_cs(&ioc);
 	recx.rx_idx = (oer->er_stripenum * recx.rx_nr) | PARITY_INDICATOR;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
 				  &iod->iod_name, &recx);
+out_agg:
+	ioc.ioc_coc->sc_ec_agg_updates--;
 out:
 	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -2573,6 +2610,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	ioc.ioc_coc->sc_ec_agg_updates++;
+
 	dkey = (daos_key_t *)&oea->ea_dkey;
 	if (parity_bulk != CRT_BULK_NULL) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid, oea->ea_epoch_range.epr_hi,
@@ -2580,7 +2619,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
-			goto out;
+			goto out_agg;
 		}
 		biod = vos_ioh2desc(ioh);
 		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx,
@@ -2613,7 +2652,7 @@ end:
 			} else {
 				D_ERROR(DF_UOID " vos_update_end failed: " DF_RC "\n",
 					DP_UOID(oea->ea_oid), DP_RC(rc));
-				D_GOTO(out, rc);
+				D_GOTO(out_agg, rc);
 			}
 		}
 	}
@@ -2630,6 +2669,8 @@ end:
 	if (rc1)
 		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 			DP_RC(rc1));
+out_agg:
+	ioc.ioc_coc->sc_ec_agg_updates--;
 out:
 	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -3319,8 +3360,14 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 	}
 
-	if (oei->oei_flags & ORF_FOR_MIGRATION)
+	if (oei->oei_flags & ORF_FOR_MIGRATION) {
+		/* just in case ds_pool::sp_rebuilding is not set, pause my local EC aggregation
+		 * by setting this flag.
+		 * NB: it's a lockess write to shared data structure and it's harmless.
+		 */
+		ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_scan = 1;
 		flags = DTX_FOR_MIGRATION;
+	}
 
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,

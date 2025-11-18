@@ -406,8 +406,11 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL, &pool_info, NULL, NULL,
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL,
+				daos_getmtime_coarse() + 2 * 60 * 1000, &pool_info, NULL, NULL,
 				&mem_file_bytes);
+	if (DAOS_FAIL_CHECK(DAOS_MGMT_FAIL_CREATE_QUERY))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -470,7 +473,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to create pool on %zu ranks.\n", req->n_ranks);
+	D_INFO("Received request to create pool %s on %zu ranks.\n", req->uuid, req->n_ranks);
 
 	if (req->n_tier_bytes != DAOS_MEDIA_MAX)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -534,6 +537,15 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
 	d_rank_list_free(svc);
+	if (rc != 0) {
+		int rc_tmp;
+
+		DL_ERROR(rc, DF_UUID ": failed to fill pool create response", DP_UUID(pool_uuid));
+		rc_tmp = ds_mgmt_destroy_pool(pool_uuid, targets);
+		if (rc_tmp != 0)
+			DL_ERROR(rc_tmp, DF_UUID ": failed to clean up pool", DP_UUID(pool_uuid));
+		goto out;
+	}
 
 out:
 	resp.status = rc;
@@ -1080,7 +1092,7 @@ ds_mgmt_drpc_pool_upgrade(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolUpgradeReq	*req = NULL;
-	Mgmt__PoolUpgradeResp	 resp = MGMT__POOL_UPGRADE_RESP__INIT;
+	Mgmt__DaosResp           resp  = MGMT__DAOS_RESP__INIT;
 	uuid_t			 uuid;
 	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
@@ -1116,12 +1128,12 @@ ds_mgmt_drpc_pool_upgrade(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
-	len = mgmt__pool_upgrade_resp__get_packed_size(&resp);
+	len         = mgmt__daos_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__pool_upgrade_resp__pack(&resp, body);
+		mgmt__daos_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
@@ -1807,8 +1819,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	pool_info.pi_bits = req->query_mask;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &dead_ranks,
-				&pool_info, &resp.pool_layout_ver, &resp.upgrade_layout_ver,
-				&resp.mem_file_bytes);
+				mgmt_ps_call_deadline(), &pool_info, &resp.pool_layout_ver,
+				&resp.upgrade_layout_ver, &resp.mem_file_bytes);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to query the pool", DP_UUID(uuid));
 		D_GOTO(error, rc);
@@ -2129,6 +2141,85 @@ out:
 	}
 
 	mgmt__pool_rebuild_stop_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+ds_mgmt_drpc_pool_self_heal_eval(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc          alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolSelfHealEvalReq *req   = NULL;
+	Mgmt__DaosResp             resp  = MGMT__DAOS_RESP__INIT;
+	uuid_t                     uuid;
+	d_rank_list_t             *svc_ranks = NULL;
+	uint8_t                   *body;
+	size_t                     len;
+	uint64_t                   policy = 0;
+	char                      *sep    = ";";
+	char                      *p;
+	char                      *saveptr;
+	int                        rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_self_heal_eval_req__unpack(&alloc.alloc, drpc_req->body.len,
+						    drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (pool_self_heal_eval)\n");
+		return;
+	}
+
+	D_INFO("Received request to evaluate self_heal system property on pool %s\n", req->id);
+
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
+	}
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	// Convert string prop value to bitset.
+	D_DEBUG(DB_MGMT, "self_heal=%s\n", req->sys_prop_val);
+	if (strcmp(req->sys_prop_val, "none") != 0) {
+		for (p = strtok_r(req->sys_prop_val, sep, &saveptr); p != NULL;
+		     p = strtok_r(NULL, sep, &saveptr)) {
+			if (strcmp(p, "exclude") == 0) {
+				policy |= DS_MGMT_SELF_HEAL_EXCLUDE;
+			} else if (strcmp(p, "pool_exclude") == 0) {
+				policy |= DS_MGMT_SELF_HEAL_POOL_EXCLUDE;
+			} else if (strcmp(p, "pool_rebuild") == 0) {
+				policy |= DS_MGMT_SELF_HEAL_POOL_REBUILD;
+			} else {
+				rc = -DER_INVAL;
+				D_ERROR("unknown self-heal policy '%s'\n", p);
+				goto out_svc_ranks;
+			}
+		}
+	}
+
+	rc = ds_mgmt_pool_self_heal_eval(uuid, svc_ranks, policy);
+	if (rc != 0)
+		DL_ERROR(rc, "self_heal_eval failed");
+
+out_svc_ranks:
+	d_rank_list_free(svc_ranks);
+
+out:
+	resp.status = rc;
+	len         = mgmt__daos_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__daos_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_self_heal_eval_req__free_unpacked(req, &alloc.alloc);
 }
 
 void
@@ -3158,9 +3249,9 @@ ds_mgmt_drpc_get_group_status(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to get group status: group_version=%u\n", req->group_version);
+	D_INFO("Received request to get group status: map_version=%u\n", req->map_version);
 
-	rc = ds_mgmt_get_group_status(req->group_version, &resp.dead_ranks, &resp.n_dead_ranks);
+	rc = ds_mgmt_get_group_status(req->map_version, &resp.dead_ranks, &resp.n_dead_ranks);
 	if (rc != 0) {
 		DL_CDEBUG(rc == -DER_GRPVER, DLOG_DBG, DLOG_ERR, rc, "Failed to get group status");
 		resp.dead_ranks   = NULL;

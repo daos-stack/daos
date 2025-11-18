@@ -89,7 +89,7 @@ export WITH_VALGRIND
 export STAGE_NAME
 export TEST_RPMS
 export DAOS_BASE
-export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/scratch/daos_test/apps"}
+export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/CIShare/daos_test/apps"}
 export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test/apps"}
 if [ -n "$DAOS_HTTPS_PROXY" ]; then
     # shellcheck disable=SC2154

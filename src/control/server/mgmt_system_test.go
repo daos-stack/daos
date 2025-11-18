@@ -595,6 +595,46 @@ func TestServer_MgmtSvc_getPoolRanks(t *testing.T) {
 			},
 			expDrpcCount: 2,
 		},
+		"two pools; bracketed zero disabled ranks": {
+			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
+			inRanks:    ranklist.MustCreateRankSet("1,8"),
+			getEnabled: false,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "0-4",
+						DisabledRanks: "[]",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "1-7",
+						DisabledRanks: "[]",
+					},
+				},
+			},
+			expDrpcCount: 2,
+		},
+		"two pools; bracketed zero enabled ranks": {
+			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
+			inRanks:    ranklist.MustCreateRankSet("1,8"),
+			getEnabled: true,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "[]",
+						DisabledRanks: "0-4",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "[]",
+						DisabledRanks: "1-7",
+					},
+				},
+			},
+			expDrpcCount: 2,
+		},
 		"match zero ranks; two pools": {
 			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
 			inRanks:    ranklist.MustCreateRankSet("8-10"),
@@ -2836,7 +2876,8 @@ func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
 						Id:      test.MockUUID(1),
 						OpCode:  uint32(control.PoolRebuildOpCodeStop),
 						Errored: true,
-						Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+						Msg: "pool-rebuild stop failed: " +
+							"DER_UNKNOWN(-1): Unknown error code -1",
 					},
 				},
 			},
@@ -2868,7 +2909,8 @@ func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
 						Id:      strings.Split(test.MockUUID(2), "-")[0],
 						OpCode:  uint32(control.PoolRebuildOpCodeStart),
 						Errored: true,
-						Msg:     "DER_UNKNOWN(-1): Unknown error code -1",
+						Msg: "pool-rebuild start failed: " +
+							"DER_UNKNOWN(-1): Unknown error code -1",
 					},
 					{
 						Id:     strings.Split(test.MockUUID(3), "-")[0],

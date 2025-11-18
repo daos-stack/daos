@@ -108,18 +108,15 @@ ddb_str2argv_free(struct argv_parsed *parse_args)
 int
 ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct program_args *pa)
 {
-	struct option	program_options[] = {
-		{ "write_mode", no_argument, NULL,	'w' },
-		{ "run_cmd", required_argument, NULL,	'R' },
-		{ "cmd_file", required_argument, NULL,	'f' },
-		{ "help", required_argument, NULL,	'h' },
-		{ NULL }
-	};
+	struct option program_options[] = {
+	    {"write_mode", no_argument, NULL, 'w'},     {"run_cmd", required_argument, NULL, 'R'},
+	    {"cmd_file", required_argument, NULL, 'f'}, {"db_path", required_argument, NULL, 'p'},
+	    {"help", required_argument, NULL, 'h'},     {NULL}};
 	int		index = 0, opt;
 
 	optind = 0; /* Reinitialize getopt */
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "wR:f:h", program_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "wR:f:p:h", program_options, &index)) != -1) {
 		switch (opt) {
 		case 'w':
 			pa->pa_write_mode = true;
@@ -129,6 +126,9 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 			break;
 		case 'f':
 			pa->pa_cmd_file = optarg;
+			break;
+		case 'p':
+			pa->pa_db_path = optarg;
 			break;
 		case 'h':
 			pa->pa_get_help = true;
@@ -481,22 +481,23 @@ ddb_parse_key(const char *input, daos_key_t *key)
 }
 
 int
-ddb_date2epoch(const char *date, uint64_t *epoch)
+ddb_date2cmt_time(const char *date, uint64_t *cmt_time)
 {
-	struct tm       date_tm    = {0};
-	struct timespec date_tspec = {0};
+	struct tm       date_tm = {0};
 	char           *endptr;
+	time_t          cmt_time_tmp;
 
-	if (date == NULL || epoch == NULL)
+	if (date == NULL || cmt_time == NULL)
 		return -DER_INVAL;
 
 	endptr = strptime(date, "%Y-%m-%d %H:%M:%S", &date_tm);
 	if (endptr == NULL || *endptr != '\0')
 		return -DER_INVAL;
 
-	date_tspec.tv_sec = mktime(&date_tm);
-	if (date_tspec.tv_sec == (time_t)-1)
+	cmt_time_tmp = mktime(&date_tm);
+	if (cmt_time_tmp == (time_t)-1)
 		return daos_errno2der(errno);
+	*cmt_time = cmt_time_tmp;
 
-	return d_timespec2hlc(date_tspec, epoch);
+	return 0;
 }
