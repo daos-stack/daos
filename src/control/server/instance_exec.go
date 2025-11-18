@@ -85,7 +85,8 @@ func (ei *EngineInstance) start(ctx context.Context) (chan *engine.RunnerExitInf
 		return nil, errors.Wrap(err, "initIncarnationFromSuperblock")
 	}
 
-	return errors.Wrap(ei.runner.Start(ctx), "runner Start")
+	ch, err := ei.runner.Start(ctx)
+	return ch, errors.Wrap(err, "runner Start")
 }
 
 // waitReady awaits ready signal from I/O Engine before starting
