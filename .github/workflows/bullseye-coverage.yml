@@ -366,7 +366,7 @@ jobs:
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@3a74b2957438d0b6e2e61d67b05318aa25c9e6c6  # v2.20.0
+        uses: EnricoMi/publish-unit-test-result-action@34d7c956a59aed1bfebf31df77b8de55db9bbaaf  # v2.21.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -374,14 +374,14 @@ jobs:
       - name: Publish artifacts
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
@@ -634,7 +634,7 @@ jobs:
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@3a74b2957438d0b6e2e61d67b05318aa25c9e6c6  # v2.20.0
+        uses: EnricoMi/publish-unit-test-result-action@34d7c956a59aed1bfebf31df77b8de55db9bbaaf  # v2.21.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -642,14 +642,14 @@ jobs:
       - name: Publish artifacts
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
