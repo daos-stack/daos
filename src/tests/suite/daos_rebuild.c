@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1473,7 +1474,7 @@ rebuild_delay_and_reintegrate(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
@@ -1507,7 +1508,7 @@ rebuild_delay_and_extend(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);

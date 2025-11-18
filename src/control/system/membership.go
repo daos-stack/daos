@@ -204,8 +204,8 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	memberToReplace := &Member{}
 	*memberToReplace = *cm
 
-	m.log.Debugf("replace-rank: updating member with UUID %s->%s", memberToReplace.UUID,
-		req.UUID)
+	m.log.Debugf("replace-rank: updating member with UUID %s->%s, Addr %s",
+		memberToReplace.UUID, req.UUID, memberToReplace.Addr)
 
 	if err := m.db.RemoveMember(cm); err != nil {
 		return nil, errors.Wrap(err, "removing old member in replace-rank join request")
@@ -708,6 +708,11 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 	member, err := m.db.FindMemberByRank(Rank(evt.Rank))
 	if err != nil {
 		m.log.Errorf("member with rank %d not found", evt.Rank)
+		return
+	}
+
+	if evt.Incarnation != 0 && evt.Incarnation < member.Incarnation {
+		m.log.Debugf("ignoring event for incarnation = %d, current member incarnation = %d: %s", evt.Incarnation, member.Incarnation, evt.String())
 		return
 	}
 

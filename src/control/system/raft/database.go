@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,6 +54,7 @@ type (
 		Barrier(time.Duration) raft.Future
 		Shutdown() raft.Future
 		State() raft.RaftState
+		GetConfiguration() raft.ConfigurationFuture
 	}
 
 	// syncRaft provides a wrapper for synchronized access to the
@@ -733,6 +735,21 @@ func (db *Database) RemoveMember(m *system.Member) error {
 	return db.submitMemberUpdate(raftOpRemoveMember, &memberUpdate{Member: m})
 }
 
+func raftSvcHasVoter(svc raftService, voterAddr raft.ServerAddress) (bool, error) {
+	cfgFuture := svc.GetConfiguration()
+	if cfgFuture.Error() != nil {
+		return false, errors.Wrapf(cfgFuture.Error(), "get raft configuration")
+	}
+
+	cfg := cfgFuture.Configuration()
+	for _, rs := range cfg.Servers {
+		if rs.Address == voterAddr {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 	// Ignore self as a voter candidate.
 	if common.CmpTCPAddr(db.replicaAddr, vc.Addr) {
@@ -748,25 +765,42 @@ func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 	rsa := raft.ServerAddress(vc.Addr.String())
 
 	switch op {
-	case raftOpAddMember:
-	case raftOpUpdateMember, raftOpRemoveMember:
-		// If we're updating an existing member, we need to kick it out of the
-		// raft cluster and then re-add it so that it doesn't hijack the campaign.
-		db.log.Debugf("removing %s as a current raft voter", vc)
+	case raftOpAddMember, raftOpUpdateMember:
+		return db.raft.withReadLock(func(svc raftService) error {
+			if hasVoter, err := raftSvcHasVoter(svc, rsa); err != nil {
+				return errors.Wrapf(err, "check if %s is already a raft voter", rsa)
+			} else if !hasVoter {
+				db.log.Debugf("adding %s as a new raft voter", vc)
+				return svc.AddVoter(rsi, rsa, 0, 0).Error()
+			}
+
+			// It's already a voter
+			return nil
+		})
+	case raftOpRemoveMember:
+		// We only need to remove a voter if all of its members are gone.
 		if err := db.raft.withReadLock(func(svc raftService) error {
+			members, err := db.FindMembersByAddr(vc.Addr)
+			if err != nil {
+				return errors.Wrapf(err, "look up members at address %s", rsa)
+			}
+			for _, m := range members {
+				if m.UUID == vc.UUID {
+					// This is the member we're planning to remove
+					continue
+				}
+
+				// There are members other than this one
+				return nil
+			}
+
+			db.log.Debugf("removing %s as a current raft voter", vc)
 			return svc.RemoveServer(rsi, 0, 0).Error()
 		}); err != nil {
 			return errors.Wrapf(err, "failed to remove %q as a raft replica", vc.Addr)
 		}
 	default:
 		return errors.Errorf("unhandled manageVoter op: %s", op)
-	}
-
-	db.log.Debugf("adding %s as a new raft voter", vc)
-	if err := db.raft.withReadLock(func(svc raftService) error {
-		return svc.AddVoter(rsi, rsa, 0, 0).Error()
-	}); err != nil {
-		return errors.Wrapf(err, "failed to add %q as raft replica", vc.Addr)
 	}
 
 	return nil
@@ -816,6 +850,10 @@ func (db *Database) UpdateMember(m *system.Member) error {
 
 	_, err := db.FindMemberByUUID(m.UUID)
 	if err != nil {
+		return err
+	}
+
+	if err := db.manageVoter(m, raftOpUpdateMember); err != nil {
 		return err
 	}
 

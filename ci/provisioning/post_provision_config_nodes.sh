@@ -16,14 +16,29 @@ if command -v dnf; then
     bootstrap_dnf
 fi
 
-if ! grep ":$MY_UID:" /etc/group; then
-  groupadd -g "$MY_UID" jenkins
-fi
+# If in CI use made up user "Jenkins" with UID that the build agent is
+# currently using.   Not sure that the UID is actually important any more
+# and that parameter can probably be removed in the future.
+# Nothing actually cares what the account name is as long as it does not
+# conflict with an existing name and we are consistent in its use.
+CI_USER="jenkins"
+
 mkdir -p /localhome
-if ! grep ":$MY_UID:$MY_UID:" /etc/passwd; then
-  useradd -b /localhome -g "$MY_UID" -u "$MY_UID" -s /bin/bash jenkins
+if ! getent passwd "$CI_USER"; then
+  # If that UID already exists, then this is not being run in CI.
+  if ! getent passwd "$MY_UID"; then
+    if ! getent group "$MY_UID"; then
+      groupadd -g "$MY_UID" "$CI_USER"
+    fi
+    useradd -b /localhome -g "$MY_UID" -u "$MY_UID" -s /bin/bash "$CI_USER"
+  else
+    # Still need a "$CI_USER" account, so just make one up.
+    useradd -b /localhome -s /bin/bash "$CI_USER"
+  fi
 fi
-jenkins_ssh=/localhome/jenkins/.ssh
+ci_uid="$(id -u $CI_USER)"
+ci_gid="$(id -g $CI_USER)"
+jenkins_ssh=/localhome/"$CI_USER"/.ssh
 mkdir -p "${jenkins_ssh}"
 if ! grep -q -s -f /tmp/ci_key.pub "${jenkins_ssh}/authorized_keys"; then
   cat /tmp/ci_key.pub >> "${jenkins_ssh}/authorized_keys"
@@ -37,12 +52,18 @@ cp /tmp/ci_key "${jenkins_ssh}/id_rsa"
 cp /tmp/ci_key_ssh_config "${jenkins_ssh}/config"
 chmod 700 "${jenkins_ssh}"
 chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
-chown -R jenkins.jenkins /localhome/jenkins/
-echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
+chown -R "${ci_uid}.${ci_gid}" "/localhome/${CI_USER}/"
+echo "$CI_USER ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/$CI_USER"
 
-# /scratch is needed on test nodes
-mkdir -p /scratch
-retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /scratch
+# /scratch is needed on test nodes to be CI info for now.
+# DAOS tests need to be changed to use /CIShare instead.
+if [ -n "$DAOS_CI_INFO_DIR" ]; then
+    mkdir -p /CIShare
+    retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /CIShare
+    # This part only until DAOS is migrated to use /CIShare
+    rm -f /scratch
+    ln -sfn /CIShare /scratch
+fi
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
@@ -78,7 +99,7 @@ function mount_nvme_drive {
 nvme_class="/sys/class/nvme/"
 function nvme_limit {
     set +x
-    if [ ! -d /sys/class/nvme ]; then
+    if [ ! -d "${nvme_class}" ] || [ -z "$(ls -A "${nvme_class}")" ]; then
         echo "No NVMe devices found"
         return
     fi

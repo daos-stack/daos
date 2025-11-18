@@ -628,29 +628,33 @@ dc_obj_shard2anchor(daos_anchor_t *anchor, uint32_t shard)
 
 enum daos_io_flags {
 	/* The RPC will be sent to leader replica. */
-	DIOF_TO_LEADER		= 0x1,
+	DIOF_TO_LEADER = 0x1,
 	/* The RPC will be sent to specified replica. */
-	DIOF_TO_SPEC_SHARD	= 0x2,
+	DIOF_TO_SPEC_SHARD = 0x2,
 	/* The operation (enumeration) has specified epoch. */
-	DIOF_WITH_SPEC_EPOCH	= 0x4,
+	DIOF_WITH_SPEC_EPOCH = 0x4,
 	/* The operation is for EC recovering. */
-	DIOF_EC_RECOV		= 0x8,
+	DIOF_EC_RECOV = 0x8,
 	/* The key existence. */
-	DIOF_CHECK_EXISTENCE	= 0x10,
+	DIOF_CHECK_EXISTENCE = 0x10,
 	/* The RPC will be sent to specified redundancy group. */
-	DIOF_TO_SPEC_GROUP	= 0x20,
+	DIOF_TO_SPEC_GROUP = 0x20,
 	/* For data migration. */
-	DIOF_FOR_MIGRATION	= 0x40,
+	DIOF_FOR_MIGRATION = 0x40,
 	/* For EC aggregation. */
-	DIOF_FOR_EC_AGG		= 0x80,
+	DIOF_FOR_EC_AGG = 0x80,
 	/* The operation is for EC snapshot recovering */
-	DIOF_EC_RECOV_SNAP	= 0x100,
+	DIOF_EC_RECOV_SNAP = 0x100,
 	/* Only recover from parity */
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 	/* Force fetch/list to do degraded enumeration/fetch */
 	DIOF_FOR_FORCE_DEGRADE = 0x400,
 	/* reverse enumeration for recx */
 	DIOF_RECX_REVERSE = 0x800,
+	/* Use for rebuild fetch epoch selection */
+	DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY = 0x1000,
+	/* Do not degrade enumeration/fetch if data shard failed */
+	DIOF_EC_NO_DEGRADE = 0x2000,
 };
 
 /**
