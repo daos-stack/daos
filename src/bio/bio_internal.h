@@ -605,6 +605,7 @@ extern unsigned int	bio_chk_cnt_max;
 extern unsigned int	bio_numa_node;
 extern unsigned int	bio_spdk_max_unmap_cnt;
 extern unsigned int	bio_max_async_sz;
+extern unsigned int                     bio_io_timeout;
 
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		       uint64_t timeout);

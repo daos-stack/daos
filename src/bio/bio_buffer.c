@@ -1984,8 +1984,7 @@ bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	return rc;
 }
 
-#define IO_MONITOR_INTVL   1000000  /* us, 1 second */
-#define IO_TIMEOUT_DEFAULT 40000000 /* us, 40 seconds */
+#define IO_MONITOR_INTVL 1000000 /* us, 1 second */
 
 void
 bio_io_monitor(struct bio_xs_context *xs_ctxt, uint64_t now)
@@ -2009,7 +2008,7 @@ bio_io_monitor(struct bio_xs_context *xs_ctxt, uint64_t now)
 		io_lug = d_list_entry(bxb->bxb_pending_ios.next, struct bio_io_lug, bil_link);
 		D_ASSERT(io_lug->bil_submit_ts != 0);
 
-		if ((io_lug->bil_submit_ts + IO_TIMEOUT_DEFAULT) >= now)
+		if ((io_lug->bil_submit_ts + bio_io_timeout) >= now)
 			continue;
 
 		D_ALLOC_PTR(mem);
