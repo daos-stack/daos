@@ -108,19 +108,26 @@ func findBdevTier(pciAddr string, tcs storage.TierConfigs) *storage.TierConfig {
 }
 
 // Convert bdev scan results to protobuf response.
-func bdevScanToProtoResp(scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb.ScanNvmeResp, error) {
+func bdevScanToProtoResp(log logging.DebugLogger, scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb.ScanNvmeResp, error) {
 	req := storage.BdevScanRequest{DeviceList: bdevCfgs.Bdevs()}
+
+	log.Debugf("bdevScanToProtoResp: bdev provider scan, req: %+v", req)
 
 	resp, err := scan(req)
 	if err != nil {
+		log.Debugf("bdevScanToProtoResp: bdev provider scan, err: %+v", err)
 		return nil, err
 	}
+
+	log.Debugf("bdevScanToProtoResp: bdev provider scan, resp: %+v", resp)
 
 	pbCtrlrs := make(proto.NvmeControllers, 0, len(resp.Controllers))
 
 	if err := pbCtrlrs.FromNative(resp.Controllers); err != nil {
 		return nil, err
 	}
+
+	log.Debugf("bdevScanToProtoResp: bdev provider scan, pbCtrlrs: %+v", pbCtrlrs)
 
 	if bdevCfgs.HaveRealNVMe() {
 		// Update proto Ctrlrs with role info and normal (DAOS) state for off-line display.
@@ -145,6 +152,8 @@ func bdevScanToProtoResp(scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb
 			c.DevState = ctlpb.NvmeDevState_NORMAL
 		}
 	}
+
+	log.Debugf("bdevScanToProtoResp: bdev provider scan, pbCtrlrs after adjustment: %+v", pbCtrlrs)
 
 	return &ctlpb.ScanNvmeResp{
 		State:  new(ctlpb.ResponseState),
@@ -230,7 +239,14 @@ func bdevScanAssigned(ctx context.Context, cs *ControlService, req *ctlpb.ScanNv
 			return nil, errors.New("meta smd usage info unavailable as engines stopped")
 		}
 
-		return bdevScanToProtoResp(cs.storage.ScanBdevs, bdevCfgs)
+		resp, err := bdevScanToProtoResp(cs.log, cs.storage.ScanBdevs, bdevCfgs)
+		if err != nil {
+			cs.log.Errorf("bdevScanToProtoResp() failed: %+v", err)
+			return nil, err
+		}
+
+		cs.log.Debugf("bdevScanToProtoResp returned: %+v", resp)
+		return resp, nil
 	}
 
 	// Delegate scan to engine instances as soon as one engine with assigned bdevs has started.
@@ -264,11 +280,13 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		cs.log.Debugf("scan bdevs from control service as no bdevs in cfg")
 
 		// No bdevs configured for engines to claim so scan through control service.
-		resp, err = bdevScanToProtoResp(cs.storage.ScanBdevs, bdevCfgs)
+		resp, err = bdevScanToProtoResp(cs.log, cs.storage.ScanBdevs, bdevCfgs)
 		if err != nil {
+			cs.log.Errorf("bdevScanToProtoResp() failed: %+v", err)
 			return nil, err
 		}
 
+		cs.log.Debugf("bdevScanToProtoResp returned: %+v", resp)
 		return bdevScanTrimResults(req, resp), nil
 	}
 
@@ -287,7 +305,7 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		return nil, err
 	}
 
-	cs.log.Tracef("bdevScanAssigned returned %d, want %d", nrScannedBdevs, nrCfgBdevs)
+	cs.log.Debugf("bdevScanAssigned returned %d, want %d", nrScannedBdevs, nrCfgBdevs)
 
 	if nrScannedBdevs == nrCfgBdevs {
 		return bdevScanTrimResults(req, resp), nil
@@ -774,8 +792,10 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 	} else {
 		respNvme, err := scanBdevs(ctx, cs, req.Nvme, respScm.Namespaces)
 		if err != nil {
+			cs.log.Errorf("scanBdevs: %+v", err)
 			return nil, err
 		}
+		cs.log.Debugf("scanBdevs returned respNvme: %+v", respNvme)
 		resp.Nvme = respNvme
 	}
 
