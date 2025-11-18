@@ -24,6 +24,7 @@ Access (RMA). Its interface is generic and allows any function
 call to be serialized. Since code generation is done using the C
 preprocessor, no external tool is required."
 URL="http://mercury-hpc.github.io"
+RPM_CHANGELOG="mercury.changelog"
 
 files=()
 TARGET_PATH="${bindir}"
@@ -36,14 +37,17 @@ list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
+ARCH="${isa}"
+build_package "mercury"
+
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ofi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("${libfabric_lib} >= ${libfabric_version}")
-build_package "mercury"
+DEPENDS=("${libfabric_lib} >= ${libfabric_min_version}")
+build_package "mercury-libfabric"
 DEPENDS=()
 
 TARGET_PATH="${libdir}/mercury"
