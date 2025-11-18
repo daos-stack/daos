@@ -332,7 +332,7 @@ func (cmd *poolCreateCmd) Execute(args []string) error {
 		User:       cmd.UserName.String(),
 		UserGroup:  cmd.GroupName.String(),
 		NumSvcReps: cmd.NumSvcReps,
-		Properties: cmd.Properties.ToSet,
+		Properties: cmd.Properties.ToSet.Slice(),
 		Ranks:      cmd.RankList.Ranks(),
 	}
 
@@ -799,7 +799,7 @@ type poolSetPropCmd struct {
 	poolCmd
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>" required:"1"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val1[;val2...]...]>" required:"1"`
 	} `positional-args:"yes"`
 }
 
@@ -819,7 +819,7 @@ func (cmd *poolSetPropCmd) Execute(_ []string) error {
 
 	req := &control.PoolSetPropReq{
 		ID:         cmd.PoolID().String(),
-		Properties: cmd.Args.Props.ToSet,
+		Properties: cmd.Args.Props.ToSet.Slice(),
 	}
 
 	err := control.PoolSetProp(cmd.MustLogCtx(), cmd.ctlInvoker, req)

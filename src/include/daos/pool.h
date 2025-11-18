@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +34,7 @@
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE			(1ULL << 0)
 #define DAOS_PO_QUERY_REBUILD_STATUS		(1ULL << 1)
+#define DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER     (1ULL << 2)
 #define PROP_BIT_START				16
 #define DAOS_PO_QUERY_PROP_BIT_START		PROP_BIT_START
 #define DAOS_PO_QUERY_PROP_LABEL		(1ULL << (PROP_BIT_START + 0))
@@ -85,6 +87,16 @@
  */
 #define DAOS_POOL_GLOBAL_VERSION 3
 
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+enum {
+	DAOS_POOL_OBJ_VERSION_1 = 1,
+	DAOS_POOL_OBJ_VERSION_2 = 2,
+	DAOS_POOL_OBJ_VERSION   = DAOS_POOL_OBJ_VERSION_2,
+};
+
 int dc_pool_init(void);
 void dc_pool_fini(void);
 
@@ -124,6 +136,8 @@ struct dc_pool {
 
 	/* pool redunc factor */
 	uint32_t		dp_rf;
+	/* Maximum supported layout version */
+	uint16_t                dp_max_supported_layout_ver;
 };
 
 static inline unsigned int

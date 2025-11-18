@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -158,6 +159,27 @@ hlc_recovery_end(uint64_t bound)
 		       tv.tv_sec, tv.tv_nsec);
 		nanosleep(&tv, NULL);
 	}
+}
+
+static int
+init_tls_support(void)
+{
+	int rc;
+
+	rc = ds_tls_key_create();
+	if (rc != 0)
+		return daos_errno2der(rc);
+
+	dss_register_key(&daos_srv_modkey);
+
+	return 0;
+}
+
+static void
+fini_tls_support(void)
+{
+	dss_unregister_key(&daos_srv_modkey);
+	ds_tls_key_delete();
 }
 
 /*
@@ -696,10 +718,6 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
-
-	if (server_init_state != DSS_INIT_STATE_SET_UP)
-		return;
-
 	if (uid != NULL && dss_abt_init) {
 		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
 		int rc;
@@ -751,10 +769,15 @@ server_init(int argc, char *argv[])
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
+	/* Must initialize TLS support before using server_id_cb. */
+	rc = init_tls_support();
+	if (rc != 0)
+		return rc;
+
 	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_INFO);
 	if (rc != 0)
-		return rc;
+		goto exit_tls_support;
 
 	/** initialize server topology data - this is needed to set up the number of targets */
 	rc = dss_topo_init();
@@ -927,6 +950,8 @@ exit_metrics_init:
 	/* dss_topo_fini cleans itself if it fails */
 exit_debug_init:
 	daos_debug_fini();
+exit_tls_support:
+	fini_tls_support();
 	return rc;
 }
 
@@ -987,6 +1012,8 @@ server_fini(bool force)
 	D_INFO("dss_top_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
+	fini_tls_support();
+	D_INFO("fini_tls_support() done\n");
 }
 
 static void

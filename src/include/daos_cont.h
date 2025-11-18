@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,8 +74,15 @@ extern "C" {
  */
 #define DAOS_COO_EVICT_ALL	(1U << 6)
 
+/**
+ * When clients attempt to open a container using the new hash layout,
+ * the server will reject the request if this flag is not set,
+ * even if the container is already in the new layout format.
+ */
+#define DAOS_COO_NEW_LAYOUT     (1U << 7)
+
 /** Number of bits in the container open mode flag, DAOS_COO_ bits */
-#define DAOS_COO_NBITS	(7)
+#define DAOS_COO_NBITS          (8)
 
 /** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)

@@ -37,9 +37,9 @@ var (
 	}
 )
 
-func mockEvtEngineDied(t *testing.T, r uint32) *events.RASEvent {
+func mockEvtEngineDied(t *testing.T, r uint32, inc uint64) *events.RASEvent {
 	t.Helper()
-	return events.NewEngineDiedEvent("foo", 0, r, common.NormalExit, 1234)
+	return events.NewEngineDiedEvent("foo", 0, r, inc, common.NormalExit, 1234)
 }
 
 func populateMembership(t *testing.T, log logging.Logger, members ...*Member) *Membership {
@@ -1132,10 +1132,10 @@ func TestSystem_Membership_Join(t *testing.T) {
 
 func TestSystem_Membership_OnEvent(t *testing.T) {
 	members := Members{
-		MockMember(t, 0, MemberStateJoined),
-		MockMember(t, 1, MemberStateJoined),
-		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateExcluded),
+		MockMemberWithIncarnation(t, 0, MemberStateJoined, 100),
+		MockMemberWithIncarnation(t, 1, MemberStateJoined, 200),
+		MockMemberWithIncarnation(t, 2, MemberStateStopped, 300),
+		MockMemberWithIncarnation(t, 3, MemberStateExcluded, 400),
 	}
 
 	for name, tc := range map[string]struct {
@@ -1150,20 +1150,37 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 		},
 		"event on unrecognized rank": {
 			members:    members,
-			event:      mockEvtEngineDied(t, 4),
+			event:      mockEvtEngineDied(t, 4, 789), // incarnation doesn't matter if rank doesn't exist
 			expMembers: members,
 		},
-		"state updated on unscheduled exit": {
+		"state updated if current incarnation": {
 			members: members,
-			event:   mockEvtEngineDied(t, 1),
+			event:   mockEvtEngineDied(t, 1, members[1].Incarnation),
 			expMembers: Members{
-				MockMember(t, 0, MemberStateJoined),
-				MockMember(t, 1, MemberStateErrored).WithInfo(
+				members[0],
+				MockMemberWithIncarnation(t, 1, MemberStateErrored, 200).WithInfo(
 					errors.Wrap(common.NormalExit,
 						"DAOS engine 0 exited unexpectedly").Error()),
-				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateExcluded),
+				members[2],
+				members[3],
 			},
+		},
+		"updated if new incarnation": {
+			members: members,
+			event:   mockEvtEngineDied(t, 1, members[1].Incarnation+1),
+			expMembers: Members{
+				members[0],
+				MockMemberWithIncarnation(t, 1, MemberStateErrored, 200).WithInfo(
+					errors.Wrap(common.NormalExit,
+						"DAOS engine 0 exited unexpectedly").Error()),
+				members[2],
+				members[3],
+			},
+		},
+		"not updated if old incarnation": {
+			members:    members,
+			event:      mockEvtEngineDied(t, 1, members[1].Incarnation-1),
+			expMembers: members,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
