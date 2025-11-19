@@ -69,7 +69,7 @@
 
 * Wed May  4 2022 Brian J. Murrell <brian.murrell@intel.com> - 1.15.0~rc3-2
 - Add _hardened_build flag to build PIE binaries on CentOS 7
-- Add optoins to C*FLAGS to build PIE binaries on Leap 15
+- Add options to C*FLAGS to build PIE binaries on Leap 15
 
 * Tue Apr 19 2022 Lei Huang <lei.huang@intel.com> - 1.15.0~rc3-1
 - Update to v1.15.0rc3
