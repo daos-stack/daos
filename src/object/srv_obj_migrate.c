@@ -640,6 +640,17 @@ retry:
 	return rc;
 }
 
+static inline int
+migrate_pool_tls_get_status(struct migrate_pool_tls *tls)
+{
+	if (tls && tls->mpt_status)
+		return tls->mpt_status;
+	if (tls == NULL || tls->mpt_fini)
+		return -DER_SHUTDOWN;
+
+	return 0;
+}
+
 static int
 mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
@@ -652,7 +663,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 				      mrone->mo_pool_tls_version, mrone->mo_generation);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(mrone->mo_pool_uuid));
-		D_GOTO(out, rc = -DER_SHUTDOWN);
+		D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
 	}
 
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
@@ -1797,7 +1808,7 @@ migrate_tgt_enter(struct migrate_pool_tls *tls, int ult_type, bool *yielded)
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
 		if (tls->mpt_fini)
-			D_GOTO(out, rc = -DER_SHUTDOWN);
+			D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
 
 		ult_cnt = migrate_tgt_ult_cnt(tls, ult_type);
 	}
@@ -3737,7 +3748,7 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 		D_GOTO(out, rc);
 skip_create:
 	if (tls->mpt_fini)
-		D_GOTO(out, rc = -DER_SHUTDOWN);
+		D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
 
 	rc = migrate_try_create_object_tree(tls);
 	if (rc)

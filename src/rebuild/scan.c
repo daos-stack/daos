@@ -131,8 +131,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 			break;
 
 		if (rpt->rt_abort || rpt->rt_finishing) {
-			if (rc == 0)
-				rc = -DER_SHUTDOWN;
+			rc = -DER_SHUTDOWN;
 			DL_INFO(rc, DF_RB ": give up ds_object_migrate_send, shutdown rebuild",
 				DP_RB_RPT(rpt));
 			break;
