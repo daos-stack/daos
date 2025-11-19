@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -94,6 +95,48 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			if tc.expExPid != rxEvts[0].ProcID {
 				t.Fatalf("unexpected PID in event (%d != %d)", tc.expExPid, rxEvts[0].ProcID)
 			}
+		})
+	}
+}
+
+func TestServer_EngineInstance_initIncarnationFromSuperblock(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startIncarnation uint64
+		superblock       *Superblock
+		expIncarnation   uint64
+		expErr           error
+	}{
+		"nil superblock": {
+			expErr: errors.New("no superblock found"),
+		},
+		"incarnation already set": {
+			startIncarnation: 1,
+			superblock: &Superblock{
+				Incarnation: 2,
+			},
+			expIncarnation: 1,
+		},
+		"success": {
+			superblock: &Superblock{
+				Incarnation: 2,
+			},
+			expIncarnation: 2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t, log)
+
+			ei := newTestEngine(logging.FromContext(ctx), false, nil)
+			ei.incarnation = tc.startIncarnation
+			ei.setSuperblock(tc.superblock)
+
+			err := ei.initIncarnationFromSuperblock()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expIncarnation, ei.incarnation, "")
 		})
 	}
 }
