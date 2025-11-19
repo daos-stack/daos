@@ -229,14 +229,14 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 			type = SCHED_REQ_UPDATE;
 		else
 			type = SCHED_REQ_FETCH;
-		sched_req_attr_init(attr, type, &orw->orw_pool_uuid);
+		sched_req_attr_init(attr, type, 0, &orw->orw_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_MIGRATE: {
 		struct obj_migrate_in *omi = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = omi->om_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &omi->om_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, 0, &omi->om_pool_uuid);
 		break;
 	}
 	/*
@@ -258,7 +258,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 			attr->sra_enqueue_id = oei_v10->oei_comm_in.req_in_enqueue_id;
 		}
 		type = (oei->oei_flags & ORF_FOR_MIGRATION) ? SCHED_REQ_MIGRATE : SCHED_REQ_ANONYM;
-		sched_req_attr_init(attr, type, &oei->oei_pool_uuid);
+		sched_req_attr_init(attr, type, 0, &oei->oei_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_PUNCH:
@@ -274,7 +274,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = opi_v10->opi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &opi->opi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, 0, &opi->opi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_QUERY_KEY: {
@@ -285,7 +285,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = okqi_v10->okqi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &okqi->okqi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, 0, &okqi->okqi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_SYNC: {
@@ -296,7 +296,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = osi_v10->osi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &osi->osi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, 0, &osi->osi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_KEY2ANCHOR: {
@@ -307,41 +307,43 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = oki_v10->oki_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oki->oki_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, 0, &oki->oki_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_EC_AGGREGATE: {
 		struct obj_ec_agg_in *ea = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ea->ea_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ea->ea_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, 0, &ea->ea_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_EC_REPLICATE: {
 		struct obj_ec_rep_in *er = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = er->er_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &er->er_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, 0, &er->er_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_CPD: {
 		struct obj_cpd_in *oci = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oci->oci_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, 0, &oci->oci_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_COLL_PUNCH: {
 		struct obj_coll_punch_in *ocpi = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ocpi->ocpi_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ocpi->ocpi_po_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, SCHED_REQ_FL_DEEP_STACK,
+				    &ocpi->ocpi_po_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_COLL_QUERY: {
 		struct obj_coll_query_in *ocqi = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ocqi->ocqi_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ocqi->ocqi_po_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, SCHED_REQ_FL_DEEP_STACK,
+				    &ocqi->ocqi_po_uuid);
 		break;
 	}
 	default:

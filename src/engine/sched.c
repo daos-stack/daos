@@ -746,12 +746,17 @@ static inline int
 req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 		     void (*func)(void *), void *arg)
 {
+	uint32_t flags = 0;
+
 	D_ASSERT(attr && func && arg);
 	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
 
-	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
-				   attr->sra_flags & SCHED_REQ_FL_PERIODIC ?
-					DSS_ULT_FL_PERIODIC : 0);
+	if (attr->sra_flags & SCHED_REQ_FL_PERIODIC)
+		flags |= DSS_ULT_FL_PERIODIC;
+	if (attr->sra_flags & SCHED_REQ_FL_DEEP_STACK)
+		flags |= DSS_ULT_DEEP_STACK;
+
+	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL, flags);
 }
 
 static int

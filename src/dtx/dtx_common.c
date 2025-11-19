@@ -473,7 +473,7 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 	struct dtx_tls			*tls = dtx_tls_get();
 
 	D_ASSERT(dbpa->dbpa_pool);
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &dbpa->dbpa_pool->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, 0, &dbpa->dbpa_pool->spc_uuid);
 
 	while (!dss_xstream_exiting(dmi->dmi_xstream)) {
 		struct dtx_stat		 stat = { 0 };
@@ -585,7 +585,7 @@ dtx_aggregation_main(void *arg)
 	uuid_t				 anonym_uuid;
 
 	uuid_clear(anonym_uuid);
-	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, 0, &anonym_uuid);
 
 	D_ASSERT(dmi->dmi_dtx_agg_req == NULL);
 	dmi->dmi_dtx_agg_req = sched_req_get(&attr, ABT_THREAD_NULL);
@@ -705,7 +705,7 @@ dtx_batched_commit(void *arg)
 	uuid_t				 anonym_uuid;
 
 	uuid_clear(anonym_uuid);
-	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, 0, &anonym_uuid);
 
 	D_ASSERT(dmi->dmi_dtx_cmt_req == NULL);
 	dmi->dmi_dtx_cmt_req = sched_req_get(&attr, ABT_THREAD_NULL);
@@ -757,7 +757,7 @@ dtx_batched_commit(void *arg)
 			dtx_get_dbca(dbca);
 
 			D_ASSERT(dbca->dbca_cont);
-			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
+			sched_req_attr_init(&attr, SCHED_REQ_GC, 0, &dbca->dbca_cont->sc_pool_uuid);
 			dbca->dbca_commit_req = sched_create_ult(&attr, dtx_batched_commit_one,
 								 dbca, 0);
 			if (dbca->dbca_commit_req == NULL) {
@@ -781,7 +781,7 @@ dtx_batched_commit(void *arg)
 			dtx_get_dbca(dbca);
 
 			D_ASSERT(dbca->dbca_cont);
-			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
+			sched_req_attr_init(&attr, SCHED_REQ_GC, 0, &dbca->dbca_cont->sc_pool_uuid);
 			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup, dbca, 0);
 			if (dbca->dbca_cleanup_req == NULL) {
 				D_WARN("Fail to start DTX ULT (3) for "DF_UUID"\n",

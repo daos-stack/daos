@@ -207,7 +207,7 @@ start_gc_ult(struct ds_pool_child *child)
 	D_DEBUG(DB_MGMT, DF_UUID"[%d]: starting GC ULT\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, 0, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
 	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, DSS_DEEP_STACK_SZ);
@@ -269,7 +269,7 @@ start_flush_ult(struct ds_pool_child *child)
 	D_ASSERT(child != NULL);
 	D_ASSERT(child->spc_flush_req == NULL);
 
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, 0, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
 	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, DSS_DEEP_STACK_SZ);
@@ -1226,7 +1226,7 @@ start_eph_report_ult(struct ds_pool *pool)
 
 	D_ASSERT(pool->sp_ec_ephs_req == NULL);
 	uuid_clear(anonym_uuid);
-	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, 0, &anonym_uuid);
 	pool->sp_ec_ephs_req = sched_create_ult(&attr, eph_report_ult, pool, DSS_DEEP_STACK_SZ);
 	if (pool->sp_ec_ephs_req == NULL) {
 		D_ERROR(DF_UUID ": Failed to create eph report ULT.\n", DP_UUID(pool->sp_uuid));

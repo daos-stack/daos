@@ -1630,7 +1630,7 @@ start_event_timer(struct event_timer_arg *arg)
 
 	D_ASSERT(events->pse_timer == NULL);
 	uuid_clear(uuid);
-	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, 0, &uuid);
 	events->pse_timer = sched_create_ult(&attr, event_timer, arg, 0);
 	if (events->pse_timer == NULL)
 		return -DER_NOMEM;

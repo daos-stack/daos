@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -242,7 +243,7 @@ ds_start_chkpt_ult(struct ds_pool_child *child)
 	/** We probably need something that runs with higher priority than GC but start with
 	 *  that for now.
 	 */
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, 0, &child->spc_uuid);
 	child->spc_chkpt_req = sched_create_ult(&attr, chkpt_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_chkpt_req == NULL) {
 		D_ERROR(DF_UUID "[%d]: Failed to create checkpoint ULT.\n",

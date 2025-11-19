@@ -602,7 +602,7 @@ cont_start_agg(struct ds_cont_child *cont)
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct sched_req_attr	 attr;
 
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &cont->sc_pool->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, 0, &cont->sc_pool->spc_uuid);
 
 	if (likely(!ec_agg_disabled)) {
 		D_ASSERT(cont->sc_ec_agg_req == NULL);
@@ -1277,7 +1277,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
 		DP_CONT(child->spc_uuid, co_uuid));
 
 	D_ASSERT(child != NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_FETCH, &child->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_FETCH, 0, &child->spc_uuid);
 	req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get sched req\n",
