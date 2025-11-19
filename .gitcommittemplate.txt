@@ -1,7 +1,6 @@
 #<ticket> <component>: <title> 
 # Valid components are: 'agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il',
 # 'md', 'mercury', 'packaging', 'pil4dfs', 'swim', 'test', 'tools', 'ddb'
-# Please refer to the installation instruction at the end of the file.
 
 #Doc-only: true
 #Cancel-prev-build: false
@@ -68,8 +67,3 @@
 #Skip-func-hw-test-large: true
 # Stage: Test Hardware - Functional Hardware Large MD on SSD
 #Skip-func-hw-test-large-md-on-ssd: true
-
-# To install this template, run the following command in your local repository folder:
-# `git config commit.template ./.gitcommittemplate.txt`.
-#
-# Ref: https://git-scm.com/docs/git-config#Documentation/git-config.txt-committemplate
