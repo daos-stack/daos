@@ -275,8 +275,7 @@ sha1_init(void **daos_mhash_ctx)
 	rc = isal_mh_sha1_init(&ctx->s1_ctx);
 	if (rc != 0) {
 		D_FREE(ctx);
-		D_ASSERTF(0, "rc = %d\n", rc);
-		return -DER_INVAL;
+		return HANDLE_ERROR(rc);
 	}
 	*daos_mhash_ctx = ctx;
 
@@ -347,8 +346,7 @@ sha256_init(void **daos_mhash_ctx)
 	rc = isal_mh_sha256_init(&ctx->s2_ctx);
 	if (rc != 0) {
 		D_FREE(ctx);
-		D_ASSERTF(0, "rc = %d\n", rc);
-		return -DER_INVAL;
+		return HANDLE_ERROR(rc);
 	}
 
 	*daos_mhash_ctx = ctx;
@@ -422,8 +420,7 @@ sha512_init(void **daos_mhash_ctx)
 	rc = isal_sha512_ctx_mgr_init(&ctx->s5_mgr);
 	if (rc != 0) {
 		D_FREE(ctx);
-		D_ASSERTF(0, "rc = %d\n", rc);
-		return -DER_INVAL;
+		return HANDLE_ERROR(rc);
 	}
 	isal_hash_ctx_init(&ctx->s5_ctx);
 	ctx->s5_updated = false;
@@ -463,17 +460,13 @@ sha512_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 		rc = isal_sha512_ctx_mgr_submit(&ctx->s5_mgr, &ctx->s5_ctx, &tmp, buf, buf_len,
 						ISAL_HASH_UPDATE);
 
-	if (rc != 0) {
-		D_ASSERTF(0, "rc = %d\n", rc);
-		return -DER_INVAL;
-	}
+	if (rc != 0)
+		return HANDLE_ERROR(rc);
 
 	if (tmp == NULL) {
 		rc = isal_sha512_ctx_mgr_flush(&ctx->s5_mgr, &tmp);
-		if (rc != 0) {
-			D_ASSERTF(0, "rc = %d\n", rc);
-			return -DER_INVAL;
-		}
+		if (rc != 0)
+			return HANDLE_ERROR(rc);
 	}
 
 	ctx->s5_updated = true;
@@ -491,17 +484,13 @@ sha512_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 
 		rc = isal_sha512_ctx_mgr_submit(&ctx->s5_mgr, &ctx->s5_ctx, &tmp, NULL, 0,
 						ISAL_HASH_LAST);
-		if (rc != 0) {
-			D_ASSERTF(0, "rc = %d\n", rc);
-			return -DER_INVAL;
-		}
+		if (rc != 0)
+			return HANDLE_ERROR(rc);
 
 		if (tmp == NULL) {
 			rc = isal_sha512_ctx_mgr_flush(&ctx->s5_mgr, &tmp);
-			if (rc != 0) {
-				D_ASSERTF(0, "rc = %d\n", rc);
-				return -DER_INVAL;
-			}
+			if (rc != 0)
+				return HANDLE_ERROR(rc);
 		}
 
 		memcpy(buf, ctx->s5_ctx.job.result_digest, buf_len);
