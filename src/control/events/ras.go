@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -343,6 +344,9 @@ func (evt *RASEvent) PrintRAS() string {
 	}
 	if evt.Rank != C.CRT_NO_RANK {
 		fmt.Fprintf(&b, " rank: [%d]", evt.Rank)
+	}
+	if evt.Incarnation != 0 {
+		fmt.Fprintf(&b, " incarnation: [%d]", evt.Incarnation)
 	}
 	if evt.JobID != "" {
 		fmt.Fprintf(&b, " jobid: [%s]", evt.JobID)
