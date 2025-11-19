@@ -847,6 +847,24 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
 
+    def rebuild_start(self, *args, **kwargs):
+        """Use dmg to start rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_start(self.identifier, *args, **kwargs)
+
+    def rebuild_stop(self, *args, **kwargs):
+        """Use dmg to stop rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
+
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
         """Set Property.
@@ -1344,7 +1362,7 @@ class TestPool(TestDaosApiBase):
             verbose (bool, optional): whether to display the pool query info. Defaults to True.
         """
         # Reset the rebuild data if rebuild completion was previously detected
-        if self._rebuild_data["check"] == "completed":
+        if self._rebuild_data["check"] in ("completed", "stopped"):
             self._reset_rebuild_data()
 
         # Use the current rebuild data to define the previous rebuild data
@@ -1387,6 +1405,9 @@ class TestPool(TestDaosApiBase):
             # If the current state is busy or idle w/o a version increase after previously being
             # busy then rebuild is running
             self._rebuild_data["check"] = "running"
+        elif self._rebuild_data["state"] == "idle" and self._rebuild_data["status"] == -2027:
+            # Rebuild was explicitly stopped
+            self._rebuild_data["check"] = "stopped"
         elif self._rebuild_data["check"] is None:
             # Otherwise rebuild has yet to start
             self._rebuild_data["check"] = "not yet started"
@@ -1398,22 +1419,24 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to start or end.
 
         Args:
-            expected (str): which rebuild data check to wait for: 'running' or 'completed'
+            expected (str/list): which rebuild data check to wait for: 'running' or 'completed'
             interval (int): number of seconds to wait in between rebuild completion checks
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
 
         """
+        if not isinstance(expected, (list, tuple)):
+            expected = [expected]
         self.log.info(
             "Waiting for rebuild to be %s%s ...",
-            expected,
+            ", ".join(expected),
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
         # If waiting for rebuild to start and it is detected as completed, stop waiting
         expected_set = set()
-        expected_set.add(expected)
+        expected_set.update(expected)
         expected_set.add("completed")
 
         start = time()
@@ -1425,7 +1448,7 @@ class TestPool(TestDaosApiBase):
                     raise DaosTestError(
                         "TIMEOUT detected after {} seconds while for waiting for rebuild to be {}. "
                         "This timeout can be adjusted via the 'pool/rebuild_timeout' test yaml "
-                        "parameter.".format(self.rebuild_timeout.value, expected))
+                        "parameter.".format(self.rebuild_timeout.value, ",".join(expected)))
             sleep(interval)
             self._update_rebuild_data()
 
@@ -1480,6 +1503,18 @@ class TestPool(TestDaosApiBase):
 
         """
         self._wait_for_rebuild("completed", interval)
+
+    def wait_for_rebuild_to_stop(self, interval=1):
+        """Wait for the rebuild to stop without completing.
+
+        Args:
+            interval (int): number of seconds to wait in between checks
+
+        Raises:
+            DaosTestError: if waiting for rebuild times out.
+
+        """
+        self._wait_for_rebuild(["failed", "stopped"], interval)
 
     def measure_rebuild_time(self, operation, interval=1):
         """Measure rebuild time.
