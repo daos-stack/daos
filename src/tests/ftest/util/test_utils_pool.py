@@ -847,23 +847,23 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
 
-    def rebuild_start(self):
+    def rebuild_start(self, *args, **kwargs):
         """Use dmg to start rebuild on this pool.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_rebuild_start(self.identifier)
+        return self.dmg.pool_rebuild_start(self.identifier, *args, **kwargs)
 
-    def rebuild_stop(self):
+    def rebuild_stop(self, *args, **kwargs):
         """Use dmg to stop rebuild on this pool.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_rebuild_stop(self.identifier)
+        return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
@@ -1405,6 +1405,8 @@ class TestPool(TestDaosApiBase):
             # If the current state is busy or idle w/o a version increase after previously being
             # busy then rebuild is running
             self._rebuild_data["check"] = "running"
+        elif self._rebuild_data["state"] == "failed":
+            self._rebuild_data["check"] = "failed"
         elif self._rebuild_data["check"] is None:
             # Otherwise rebuild has yet to start
             self._rebuild_data["check"] = "not yet started"
@@ -1498,6 +1500,19 @@ class TestPool(TestDaosApiBase):
 
         """
         self._wait_for_rebuild("completed", interval)
+
+    def wait_for_rebuild_to_fail(self, interval=1):
+        """Wait for the rebuild to fail.
+
+        Args:
+            interval (int): number of seconds to wait in between checks
+
+        Raises:
+            DaosTestError: if waiting for rebuild times out.
+
+        """
+        self._wait_for_rebuild("failed", interval)
+        
 
     def measure_rebuild_time(self, operation, interval=1):
         """Measure rebuild time.
