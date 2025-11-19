@@ -1,14 +1,15 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DDB_RUN_CMDS_H
 #define __DDB_RUN_CMDS_H
 
-
 #include <daos_types.h>
+#include <time.h>
 
 typedef int (*ddb_io_line_cb)(void *cb_args, char *line, uint32_t str_len);
 
@@ -88,6 +89,7 @@ struct ddb_ctx {
 	bool			 dc_should_quit;
 	bool			 dc_write_mode;
 	const char              *dc_pool_path;
+	const char              *dc_db_path;
 };
 
 void ddb_ctx_init(struct ddb_ctx *ctx);
@@ -121,6 +123,9 @@ enum ddb_cmd {
 	DDB_CMD_DTX_ACT_DISCARD_INVALID = 23,
 	DDB_CMD_DEV_LIST                = 24,
 	DDB_CMD_DEV_REPLACE             = 25,
+	DDB_CMD_DTX_STAT                = 26,
+	DDB_CMD_PROV_MEM                = 27,
+	DDB_CMD_DTX_AGGR                = 28,
 };
 
 /* option and argument structures for commands that need them */
@@ -133,6 +138,7 @@ struct ls_options {
 struct open_options {
 	bool write_mode;
 	char *path;
+	char *db_path;
 };
 
 struct value_dump_options {
@@ -193,6 +199,7 @@ struct feature_options {
 	uint64_t    clear_incompat_flags;
 	bool        show_features;
 	const char *path;
+	const char *db_path;
 };
 
 struct rm_pool_options {
@@ -209,54 +216,97 @@ struct dev_replace_options {
 	char *new_devid;
 };
 
+struct dtx_stat_options {
+	char *path;
+	bool  details;
+};
+
+struct prov_mem_options {
+	char        *db_path;
+	char        *tmpfs_mount;
+	unsigned int tmpfs_mount_size;
+};
+
+enum dtx_aggr_format { DDB_DTX_AGGR_NOW = 0, DDB_DTX_AGGR_CMT_TIME = 1, DDB_DTX_AGGR_CMT_DATE = 2 };
+
+struct dtx_aggr_options {
+	char                *path;
+	enum dtx_aggr_format format;
+	uint64_t             cmt_time;
+	char                *cmt_date;
+};
+
 struct ddb_cmd_info {
 	enum ddb_cmd dci_cmd;
 	union {
-		struct ls_options dci_ls;
-		struct open_options dci_open;
-		struct value_dump_options dci_value_dump;
-		struct rm_options dci_rm;
-		struct value_load_options dci_value_load;
-		struct ilog_dump_options dci_ilog_dump;
-		struct ilog_commit_options dci_ilog_commit;
-		struct ilog_clear_options dci_ilog_clear;
-		struct dtx_dump_options dci_dtx_dump;
+		struct ls_options            dci_ls;
+		struct open_options          dci_open;
+		struct value_dump_options    dci_value_dump;
+		struct rm_options            dci_rm;
+		struct value_load_options    dci_value_load;
+		struct ilog_dump_options     dci_ilog_dump;
+		struct ilog_commit_options   dci_ilog_commit;
+		struct ilog_clear_options    dci_ilog_clear;
+		struct dtx_dump_options      dci_dtx_dump;
 		struct dtx_cmt_clear_options dci_dtx_cmt_clear;
-		struct smd_sync_options dci_smd_sync;
-		struct vea_update_options     dci_vea_update;
-		struct feature_options        dci_feature;
-		struct rm_pool_options        dci_rm_pool;
-		struct dtx_act_options        dci_dtx_act;
-		struct dev_list_options       dci_dev_list;
-		struct dev_replace_options    dci_dev_replace;
+		struct smd_sync_options      dci_smd_sync;
+		struct vea_update_options    dci_vea_update;
+		struct feature_options       dci_feature;
+		struct rm_pool_options       dci_rm_pool;
+		struct dtx_act_options       dci_dtx_act;
+		struct dev_list_options      dci_dev_list;
+		struct dev_replace_options   dci_dev_replace;
+		struct dtx_stat_options      dci_dtx_stat;
+		struct prov_mem_options      dci_prov_mem;
+		struct dtx_aggr_options      dci_dtx_aggr;
 	} dci_cmd_option;
 };
 
-int ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info);
+int
+ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info);
 int
 ddb_parse_cmd_str(struct ddb_ctx *ctx, const char *cmd_str, bool *open);
 int
-     ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str);
+ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str);
 /* Run commands ... */
-int ddb_run_help(struct ddb_ctx *ctx);
-int ddb_run_quit(struct ddb_ctx *ctx);
-int ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt);
-bool ddb_pool_is_open(struct ddb_ctx *ctx);
-int ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt);
-int ddb_run_version(struct ddb_ctx *ctx);
-int ddb_run_close(struct ddb_ctx *ctx);
-int ddb_run_superblock_dump(struct ddb_ctx *ctx);
-int ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt);
-int ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt);
-int ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt);
-int ddb_run_ilog_dump(struct ddb_ctx *ctx, struct ilog_dump_options *opt);
-int ddb_run_ilog_commit(struct ddb_ctx *ctx, struct ilog_commit_options *opt);
-int ddb_run_ilog_clear(struct ddb_ctx *ctx, struct ilog_clear_options *opt);
-int ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt);
-int ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt);
-int ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt);
-int ddb_run_vea_dump(struct ddb_ctx *ctx);
-int ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt);
+int
+ddb_run_help(struct ddb_ctx *ctx);
+int
+ddb_run_quit(struct ddb_ctx *ctx);
+int
+ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt);
+bool
+ddb_pool_is_open(struct ddb_ctx *ctx);
+int
+ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt);
+int
+ddb_run_version(struct ddb_ctx *ctx);
+int
+ddb_run_close(struct ddb_ctx *ctx);
+int
+ddb_run_superblock_dump(struct ddb_ctx *ctx);
+int
+ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt);
+int
+ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt);
+int
+ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt);
+int
+ddb_run_ilog_dump(struct ddb_ctx *ctx, struct ilog_dump_options *opt);
+int
+ddb_run_ilog_commit(struct ddb_ctx *ctx, struct ilog_commit_options *opt);
+int
+ddb_run_ilog_clear(struct ddb_ctx *ctx, struct ilog_clear_options *opt);
+int
+ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt);
+int
+ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt);
+int
+ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt);
+int
+ddb_run_vea_dump(struct ddb_ctx *ctx);
+int
+ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt);
 int
 ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_options *opt);
 int
@@ -269,13 +319,21 @@ ddb_feature_string2flags(struct ddb_ctx *ctx, const char *string, uint64_t *comp
 int
 ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt);
 int
-     ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt);
+ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt);
 int
 ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt);
 int
-     ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt);
+ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt);
+int
+ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt);
+int
+ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt);
+int
+ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt);
 
-void ddb_program_help(struct ddb_ctx *ctx);
-void ddb_commands_help(struct ddb_ctx *ctx);
+void
+ddb_program_help(struct ddb_ctx *ctx);
+void
+ddb_commands_help(struct ddb_ctx *ctx);
 
 #endif /* __DDB_RUN_CMDS_H */

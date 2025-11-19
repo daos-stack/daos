@@ -26,15 +26,10 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/rsvc.h>
 
 /* Pool service (opaque) */
 struct ds_pool_svc;
-
-/**
- * Each individual object layout format, like oid layout, dkey to group,
- * dkey to EC group start.
- */
-#define DS_POOL_OBJ_VERSION		1
 
 /* age of an entry in svc_ops KVS before it may be evicted */
 #define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
@@ -75,12 +70,11 @@ struct ds_pool {
 	uint32_t		sp_data_thresh;
 	uint64_t                 sp_self_heal;
 	ABT_mutex		sp_mutex;
-	ABT_cond		sp_fetch_hdls_cond;
-	ABT_cond		sp_fetch_hdls_done_cond;
+	ABT_cond                 sp_fetch_hdls_cond;
 	struct ds_iv_ns		*sp_iv_ns;
 	uint32_t		*sp_states;	/* pool child state array */
 
-	/* structure related to EC aggregate epoch query */
+	/* Used for EC aggregation epoch reporting */
 	d_list_t		sp_ec_ephs_list;
 	struct sched_request	*sp_ec_ephs_req;
 
@@ -92,20 +86,18 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t		sp_stopping:1,
-				sp_cr_checked:1,
-				sp_immutable:1,
-				sp_fetch_hdls:1,
-				sp_need_discard:1,
-				sp_disable_rebuild:1,
-				sp_disable_dtx_resync:1,
-				sp_incr_reint:1;
+	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_need_discard : 1,
+	    sp_disable_rebuild : 1, sp_disable_dtx_resync : 1, sp_incr_reint : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
-	uint32_t		sp_rebuild_gen;
-
+	uint32_t                 sp_rebuild_gen;
 	int			sp_rebuilding;
+	/**
+	 * someone has already messaged this pool to for rebuild scan,
+	 * NB: all xstreams can do lockless-write on it but it's OK
+	 */
+	int                      sp_rebuild_scan;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -127,6 +119,8 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
 	uint32_t		 sp_reint_mode;
+	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
+	ABT_rwlock               sp_recov_lock;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -179,6 +173,7 @@ struct ds_pool_child {
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
+	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
 	 * vos aggregation can not cross this epoch during rebuild to avoid
@@ -218,6 +213,12 @@ struct ds_pool_svc_op_val {
 	int  ov_rc;
 	char ov_resvd[60];
 };
+
+static inline bool
+ds_pool_is_rebuilding(struct ds_pool *pool)
+{
+	return (pool->sp_rebuilding > 0 || pool->sp_rebuild_scan > 0);
+}
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.
  * allocates the byte-stream, caller must free with D_FREE().
@@ -286,7 +287,9 @@ int
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
 int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
-int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
+int
+     ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
+				uint32_t *reclaim_ver);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
@@ -556,6 +559,9 @@ int ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out);
 int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct rsvc_hint *hint);
 
 void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
+
+int
+ds_pool_prop_recov_cont_reset(struct rdb_tx *tx, struct ds_rsvc *rsvc);
 
 static inline bool
 is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)

@@ -387,7 +387,10 @@ int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgls_alloc(d_sg_list_t *dst, d_sg_list_t *src, int nr);
 int daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src);
-daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
+daos_size_t
+daos_sgl_data_len(d_sg_list_t *sgl, bool out);
+daos_size_t
+	    daos_sgl_out_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
@@ -789,9 +792,6 @@ enum {
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 #define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
 
-#define DAOS_REBUILD_ADMIN_STOP           (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1c)
-#define DAOS_REBUILD_ADMIN_START          (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1d)
-
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 #define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
 
@@ -822,6 +822,7 @@ enum {
  */
 #define DAOS_FAIL_PARITY_EPOCH_DIFF	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x29)
 #define DAOS_FAIL_SHARD_NONEXIST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2a)
+#define DAOS_REBUILD_ADMIN_STOP_RECLAIM   (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2b)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
@@ -913,6 +914,7 @@ enum {
 
 #define DAOS_POOL_EVICT_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa0)
 #define DAOS_POOL_RFCHECK_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa1)
+#define DAOS_POOL_REINT_SLOW            (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa2)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)
@@ -924,11 +926,35 @@ enum {
 #define DAOS_CHK_FAIL_REPORT_POOL1	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb7)
 #define DAOS_CHK_FAIL_REPORT_POOL2	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb8)
 #define DAOS_CHK_ENGINE_DEATH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb9)
+#define DAOS_CHK_VERIFY_CONT_SHARDS     (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xba)
+
+#define DAOS_MGMT_FAIL_CREATE_QUERY       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xe0)
 
 /* WAL && checkpoint failure inject */
 #define DAOS_WAL_NO_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x100)
 #define DAOS_WAL_FAIL_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x101)
 #define DAOS_MEM_FAIL_CHECKPOINT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x102)
+
+/** DLCK fault injection */
+#define DLCK_FAULT_CREATE_LOG_DIR         (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x100)
+#define DLCK_FAULT_CREATE_POOL_DIR        (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x101)
+#define DLCK_FAULT_ENGINE_START           (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x102)
+#define DLCK_FAULT_ENGINE_EXEC            (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x103)
+#define DLCK_FAULT_ENGINE_JOIN            (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x104)
+#define DLCK_FAULT_ENGINE_STOP            (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x105)
+
+/** Pool open fault injection */
+#define DAOS_FAULT_POOL_NVME_HEALTH       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x200)
+#define DAOS_FAULT_POOL_OPEN_BIO          (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x201)
+#define DAOS_FAULT_POOL_OPEN_UMEM         (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x202)
+#define DAOS_FAULT_POOL_OPEN_MAGIC        (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x203)
+#define DAOS_FAULT_POOL_OPEN_VERSION      (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x204)
+#define DAOS_FAULT_POOL_OPEN_UUID         (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x205)
+#define DAOS_FAULT_BTREE_OPEN_INV_CLASS   (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x206)
+#define DAOS_FAULT_BTREE_OPEN_UNREG_CLASS (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x207)
+#define DAOS_FAULT_BTREE_FEATURES         (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x208)
+#define DAOS_FAULT_POOL_EXT_PADDING       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x209)
+#define DAOS_FAULT_POOL_EXT_RESERVED      (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20a)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 

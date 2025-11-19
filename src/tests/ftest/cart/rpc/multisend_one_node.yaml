@@ -1,25 +1,17 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
-
-customENV:
-  MY_CUSTOM_ENV: "pineapple"
 ENV:
   default:
-    # !filter-only : /run/tests/proto_np
     - D_LOG_MASK: "INFO"
     - D_INTERFACE: "eth0"
-    - test_servers_CRT_CTX_NUM: "16"
-    - test_clients_CRT_CTX_NUM: "16"
-env_D_PROVIDER: !mux
+env_D_PROVIDER:
   ofi_tcp:
     D_PROVIDER: "ofi+tcp"
-hosts: !mux
+hosts:
   hosts_1:
     config: one_node
     test_servers: server-1
     test_clients: server-1
-# timeout: 600
-tests: !mux
+timeout: 600
+tests:
   multisend:
     name: multisend
     test_servers_bin: crt_launch

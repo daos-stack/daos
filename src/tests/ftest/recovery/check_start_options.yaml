@@ -2,7 +2,7 @@ hosts:
   test_servers: 1
   test_clients: 1
 
-timeout: 180
+timeout: 5M
 
 setup:
   start_servers_once: False
@@ -12,12 +12,14 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      targets: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      nr_xs_helpers: 1
       storage: auto
-  system_ram_reserved: 1
 
 pool:
-  size: 3G
+  size: 60G
 
 container:
   control_method: daos

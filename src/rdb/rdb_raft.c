@@ -1085,14 +1085,14 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry, rdb_vo
 
 	found = d_rank_list_find(replicas, rank, NULL);
 	if (found && entry->type == RAFT_LOGTYPE_ADD_NODE) {
-		D_WARN(DF_DB": %s: rank %u already exists\n", DP_DB(db),
-		       rdb_raft_entry_type_str(entry->type), rank);
-		rc = 0;
+		D_ERROR(DF_DB ": %s: rank %u already exists\n", DP_DB(db),
+			rdb_raft_entry_type_str(entry->type), rank);
+		rc = -DER_INVAL;
 		goto out_replicas;
 	} else if (!found && entry->type == RAFT_LOGTYPE_REMOVE_NODE) {
-		D_WARN(DF_DB": %s: rank %u does not exist\n", DP_DB(db),
-		       rdb_raft_entry_type_str(entry->type), rank);
-		rc = 0;
+		D_ERROR(DF_DB ": %s: rank %u does not exist\n", DP_DB(db),
+			rdb_raft_entry_type_str(entry->type), rank);
+		rc = -DER_INVAL;
 		goto out_replicas;
 	}
 
@@ -3070,8 +3070,7 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 		return;
 	}
 
-	D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n", DP_DB(db),
-		term);
+	D_INFO(DF_DB ": resigning from term " DF_U64 "\n", DP_DB(db), term);
 	rdb_raft_save_state(db, &state);
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
