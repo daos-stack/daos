@@ -52,6 +52,7 @@ dnf --nodocs install \
     ndctl-devel \
     numactl \
     numactl-devel \
+    openmpi-devel \
     openssl-devel \
     patch \
     patchelf \
@@ -66,12 +67,6 @@ dnf --nodocs install \
     valgrind-devel \
     which \
     yasm
-
-if [[ -z "${NO_OPENMPI_DEVEL+set}" ]]; then
-    # shellcheck disable=SC2086
-    dnf --nodocs install ${dnf_install_args} \
-    	openmpi-devel 
-fi
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
