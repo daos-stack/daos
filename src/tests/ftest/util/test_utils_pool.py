@@ -1362,7 +1362,8 @@ class TestPool(TestDaosApiBase):
             verbose (bool, optional): whether to display the pool query info. Defaults to True.
         """
         # Reset the rebuild data if rebuild completion was previously detected
-        if self._rebuild_data["check"] == "completed":
+        # TODO this will probably break some rebuild tests
+        if self._rebuild_data["check"] in ("completed", "failed", "stopped"):
             self._reset_rebuild_data()
 
         # Use the current rebuild data to define the previous rebuild data
@@ -1401,15 +1402,16 @@ class TestPool(TestDaosApiBase):
             # If the current status is 0, state is idle, and the map version has increased then
             # rebuild is complete
             self._rebuild_data["check"] = "completed"
+        elif self._rebuild_data["state"] == "idle" and self._rebuild_data["status"] == -2027:
+            # TODO idle or busy?
+            # Rebuild was explicitly stopped
+            self._rebuild_data["check"] = "stopped"
         elif self._rebuild_data["state"] == "busy" or previous_data["state"] == "busy":
             # If the current state is busy or idle w/o a version increase after previously being
             # busy then rebuild is running
             self._rebuild_data["check"] = "running"
         elif self._rebuild_data["state"] == "failed":
             self._rebuild_data["check"] = "failed"
-        elif self._rebuild_data["state"] == "idle" and self._rebuild_data["status"] == -2027:
-            # Rebuild was explicitly stopped
-            self._rebuild_data["check"] = "stopped"
         elif self._rebuild_data["check"] is None:
             # Otherwise rebuild has yet to start
             self._rebuild_data["check"] = "not yet started"

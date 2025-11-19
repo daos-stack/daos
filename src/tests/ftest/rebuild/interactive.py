@@ -1,0 +1,171 @@
+"""
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+"""
+import time
+
+from apricot import TestWithServers
+from ior_utils import get_ior
+from job_manager_utils import get_job_manager
+
+
+class RbldInteractive(TestWithServers):
+    """Test class for interactive rebuild tests.
+
+    :avocado: recursive
+    """
+
+    def test_rebuild_interactive(self):
+        """
+        Use Cases:
+            Pool rebuild with interactive start/stop.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=rebuild,pool
+        :avocado: tags=RbldInteractive,test_rebuild_interactive
+        """
+        num_ranks_to_exclude = 1
+
+        self.log_step("Setup pool")
+        pool = self.get_pool(connect=False)
+
+        # Collect server configuration information
+        server_count = len(self.hostlist_servers)
+        engines_per_host = int(self.server_managers[0].get_config_value("engines_per_host") or 1)
+        targets_per_engine = int(self.server_managers[0].get_config_value("targets"))
+        self.log.info(
+            "Running with %s servers, %s engines per server, and %s targets per engine",
+            server_count, engines_per_host, targets_per_engine)
+
+        self.log_step("Verify pool state before rebuild")
+        self.__verify_pool_query(
+            pool, rebuild_status=0, rebuild_state=["idle"], disabled_ranks=[])
+
+        self.log_step("Create container and run IOR")
+        cont_ior = self.get_container(pool, namespace="/run/cont_ior/*")
+        ior_flags_write = self.params.get("flags_write", '/run/ior/*')
+        ior_flags_read = self.params.get("flags_read", '/run/ior/*')
+        ior_ppn = self.params.get("ppn", '/run/ior/*')
+
+        job_manager = get_job_manager(self, subprocess=False)
+        ior = get_ior(
+            self, job_manager, self.hostlist_clients, self.workdir, None, namespace='/run/ior/*')
+        ior.manager.job.update_params(flags=ior_flags_write, dfs_oclass=cont_ior.oclass.value)
+        ior.run(cont_ior.pool, cont_ior, None, ior_ppn, display_space=False)
+
+        # TODO need to test exclude and drain, etc.
+        current_operation = "dmg pool exclude"
+        ranks_to_exclude = self.random.sample(
+            list(self.server_managers[0].ranks.keys()), k=num_ranks_to_exclude)
+        self.log_step(f"Exclude random rank {ranks_to_exclude}")
+        pool.exclude(ranks_to_exclude)
+
+        self.log_step(f"{current_operation} - Wait for rebuild to start")
+        pool.wait_for_rebuild_to_start(interval=1)
+
+        self.log_step(f"{current_operation} - Manually stop rebuild")
+        # Wait 4 seconds for rebuild to actually start
+        time.sleep(4)
+        pool.rebuild_stop()
+
+        self.log_step(f"{current_operation} - Wait for rebuild to stop")
+        pool.wait_for_rebuild_to_stop(interval=3)
+
+        self.log_step(f"{current_operation} - Verify pool state after rebuild stopped")
+        self.__verify_pool_query(
+            pool, rebuild_status=-2027, rebuild_state=["idle"],  # TODO idle or busy?
+            disabled_ranks=ranks_to_exclude)
+
+        self.log_step(f"{current_operation} - Verify IOR after rebuild stopped")
+        ior.manager.job.update_params(flags=ior_flags_read)
+        ior.run(cont_ior.pool, cont_ior, None, ior_ppn, display_space=False)
+
+        self.log_step(f"{current_operation} - Manually start rebuild")
+        pool.rebuild_start()
+
+        self.log_step(f"{current_operation} - Wait for rebuild to start")
+        pool.wait_for_rebuild_to_start(interval=1)
+
+        self.log_step(f"{current_operation} - Wait for rebuild to end")
+        pool.wait_for_rebuild_to_end(interval=3)
+
+        self.log_step(f"{current_operation} - Verify pool state after rebuild completed")
+        self.__verify_pool_query(
+            pool, rebuild_status=0, rebuild_state=["idle", "done"],
+            disabled_ranks=ranks_to_exclude)
+
+        self.log_step(f"{current_operation} - Verify IOR after rebuild completed")
+        ior.manager.job.update_params(flags=ior_flags_read)
+        ior.run(cont_ior.pool, cont_ior, None, ior_ppn, display_space=False)
+
+        current_operation = "dmg pool reintegrate"
+        self.log_step("Reintegrate excluded ranks")
+        pool.reintegrate(ranks_to_exclude)
+
+        self.log_step(f"{current_operation} - Wait for rebuild to start")
+        pool.wait_for_rebuild_to_start(interval=1)
+
+        self.log_step(f"{current_operation} - Manually stop rebuild")
+        # Wait 4 seconds for rebuild to actually start
+        time.sleep(4)
+        pool.rebuild_stop()
+
+        self.log_step(f"{current_operation} - Wait for rebuild to stop")
+        pool.wait_for_rebuild_to_stop(interval=3)
+
+        self.log_step(f"{current_operation} - Verify pool state after rebuild stopped")
+        self.__verify_pool_query(
+            pool, rebuild_status=-2027, rebuild_state=["idle"],  # TODO idle or busy?
+            disabled_ranks=[])
+
+        self.log_step(f"{current_operation} - Verify IOR after rebuild stopped")
+        ior.manager.job.update_params(flags=ior_flags_read)
+        ior.run(cont_ior.pool, cont_ior, None, ior_ppn, display_space=False)
+
+        self.log_step(f"{current_operation} - Manually start rebuild")
+        pool.rebuild_start()
+
+        self.log_step(f"{current_operation} - Wait for rebuild to start")
+        pool.wait_for_rebuild_to_start(interval=1)
+
+        self.log_step(f"{current_operation} - Wait for rebuild to end")
+        pool.wait_for_rebuild_to_end(interval=3)
+
+        self.log_step(f"{current_operation} - Verify pool state after rebuild completed")
+        self.__verify_pool_query(
+            pool, rebuild_status=0, rebuild_state=["idle", "done"], disabled_ranks=[])
+
+        self.log_step(f"{current_operation} - Verify IOR after rebuild completed")
+        ior.manager.job.update_params(flags=ior_flags_read)
+        ior.run(cont_ior.pool, cont_ior, None, ior_ppn, display_space=False)
+
+        self.log_step("Test Passed")
+
+    def __verify_pool_query(
+            self, pool, rebuild_status=None, rebuild_state=None, disabled_ranks=None):
+        """Verify pool query.
+
+        Args:
+            pool (TestPool): pool to query
+            rebuild_status (int, optional): expected rebuild status
+            rebuild_state (str/list, optional): expected rebuild state
+            disabled_ranks (list, optional): expected disabled ranks
+
+        """
+        response = pool.query()["response"]
+        if rebuild_status is not None:
+            actual_rebuild_status = response["rebuild"]["status"]
+            if actual_rebuild_status != rebuild_status:
+                self.fail(f"Rebuild status {actual_rebuild_status} != expected {rebuild_status}")
+        if rebuild_state is not None:
+            actual_rebuild_state = response["rebuild"]["state"]
+            if isinstance(rebuild_state, str):
+                rebuild_state = [rebuild_state]
+            if actual_rebuild_state not in rebuild_state:
+                self.fail(f"Rebuild state {actual_rebuild_state} not in expected {rebuild_state}")
+        if disabled_ranks is not None:
+            actual_disabled_ranks = response.get("disabled_ranks", [])
+            if actual_disabled_ranks != disabled_ranks:
+                self.fail(f"Disabled ranks {actual_disabled_ranks} != expected {disabled_ranks}")
