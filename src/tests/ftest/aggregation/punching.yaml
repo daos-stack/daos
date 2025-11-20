@@ -1,3 +1,6 @@
+launch:
+  !filter-only : /run/pool/default    # yamllint disable-line rule:colons
+
 hosts:
   test_servers: 2
   test_clients: 2
@@ -10,9 +13,11 @@ server_config:
       log_mask: INFO
       storage: auto
 pool:
-  scm_size: 8000000000
-  nvme_size: 80000000000
-  svcn: 1
+  default:
+    size: 100%
+  md_on_ssd_p2:
+    size: 100%
+    mem_ratio: 25
 container:
   type: POSIX
   control_method: daos
