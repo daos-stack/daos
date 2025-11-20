@@ -522,7 +522,7 @@ pipeline {
                 expression { !skip_build_stage() }
             }
             parallel {
-                stage('Build on EL 8.8') {
+                stage('Build on EL 8.10') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el8') }
@@ -537,7 +537,8 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=10 '
                         }
                     }
                     steps {
@@ -574,7 +575,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9') {
+                stage('Build on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -589,7 +590,9 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=6 '
+
                         }
                     }
                     steps {
