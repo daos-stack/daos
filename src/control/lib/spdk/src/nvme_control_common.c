@@ -197,10 +197,10 @@ get_controller(struct ctrlr_entry **entry, char *addr)
 struct ret_t *
 _discover(prober probe, bool detach, health_getter get_health)
 {
-	//	struct ctrlr_entry	*ctrlr_entry;
-	//	struct health_entry	*health_entry;
+	struct ctrlr_entry	*ctrlr_entry;
+	struct health_entry	*health_entry;
 	struct ret_t		*ret;
-	int                      rc = 0;
+	int			 rc;
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -209,42 +209,42 @@ _discover(prober probe, bool detach, health_getter get_health)
 	 *  called for each controller after the SPDK NVMe driver has completed
 	 *  initializing the controller we chose to attach.
 	 */
-	//	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
-	//	if (rc != 0)
-	//		goto fail;
-	//
-	//	if (!g_controllers || !g_controllers->ctrlr)
-	//		return init_ret(); /* no controllers */
+	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
+	if (rc != 0)
+		goto fail;
+
+	if (!g_controllers || !g_controllers->ctrlr)
+		return init_ret(); /* no controllers */
 
 	/*
 	 * Collect NVMe SSD health stats for each probed controller.
 	 * TODO: move to attach_cb?
 	 */
-	//	ctrlr_entry = g_controllers;
-	//
-	//	while (ctrlr_entry) {
-	//		health_entry = calloc(1, sizeof(struct health_entry));
-	//		if (health_entry == NULL) {
-	//			rc = -ENOMEM;
-	//			goto fail;
-	//		}
-	//
-	//		rc = get_health(ctrlr_entry->ctrlr, health_entry);
-	//		if (rc != 0) {
-	//			free(health_entry);
-	//			goto fail;
-	//		}
-	//
-	//		ctrlr_entry->health = health_entry;
-	//		ctrlr_entry = ctrlr_entry->next;
-	//	}
-	//
-	//	ret = collect();
-	//	cleanup(detach);
-	//	return ret;
-	//
-	// fail:
-	//	cleanup(detach);
+	ctrlr_entry = g_controllers;
+
+	while (ctrlr_entry) {
+		health_entry = calloc(1, sizeof(struct health_entry));
+		if (health_entry == NULL) {
+			rc = -ENOMEM;
+			goto fail;
+		}
+
+		rc = get_health(ctrlr_entry->ctrlr, health_entry);
+		if (rc != 0) {
+			free(health_entry);
+			goto fail;
+		}
+
+		ctrlr_entry->health = health_entry;
+		ctrlr_entry = ctrlr_entry->next;
+	}
+
+	ret = collect();
+	/* TODO: cleanup(detach); */
+	return ret;
+
+fail:
+	cleanup(detach);
 	ret = init_ret();
 	ret->rc = rc;
 	return ret;
@@ -459,19 +459,19 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 	ctrlr_entry = g_controllers;
 
-	fprintf(stderr, "begiy collect\n");
+	fprintf(stdout, "begiy collect\n");
 	while (ctrlr_entry) {
-		fprintf(stderr, "begiy collect, entry begin\n");
+		fprintf(stdout, "begiy collect, entry begin\n");
 		ctrlr_tmp = calloc(1, sizeof(struct nvme_ctrlr_t));
 		if (!ctrlr_tmp) {
 			rc = -ENOMEM;
 			goto fail;
 		}
 
-		fprintf(stderr, "spdk_nvme_ctrlr_get_data\n");
+		fprintf(stdout, "spdk_nvme_ctrlr_get_data\n");
 		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
-		fprintf(stderr, "copy_data\n");
+		fprintf(stdout, "copy_data\n");
 		rc = copy_data(ctrlr_tmp, cdata);
 		if (rc != 0)
 			goto fail;
@@ -482,7 +482,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			goto fail;
 		}
 
-		fprintf(stderr, "spdk_pci_addr_fmt\n");
+		fprintf(stdout, "spdk_pci_addr_fmt\n");
 		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr, SPDK_NVMF_TRADDR_MAX_LEN,
 				       &ctrlr_entry->pci_addr);
 		if (rc != 0) {
@@ -497,20 +497,20 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		/* Populate numa socket id & pci device type */
 
-		fprintf(stderr, "get_pci\n");
+		fprintf(stdout, "get_pci\n");
 		pci_dev = get_pci(ctrlr_entry->ctrlr);
 		if (!pci_dev) {
 			rc = -NVMEC_ERR_GET_PCI_DEV;
 			goto fail;
 		}
 
-		fprintf(stderr, "get_socket_id\n");
+		fprintf(stdout, "get_socket_id\n");
 		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
 
-		fprintf(stderr, "spdk_pci_device_get_type\n");
+		fprintf(stdout, "spdk_pci_device_get_type\n");
 		pci_type = get_pci_type(pci_dev);
 		free(pci_dev);
-		fprintf(stderr, "strndup: %s\n", pci_type);
+		fprintf(stdout, "strndup: %s\n", pci_type);
 		ctrlr_tmp->pci_type = strndup(pci_type, NVME_DETAIL_BUFLEN);
 		if (ctrlr_tmp->pci_type == NULL) {
 			rc = -NVMEC_ERR_GET_PCI_TYPE;
@@ -519,7 +519,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		/* Alloc linked list of namespaces per controller */
 		if (ctrlr_entry->nss) {
-			fprintf(stderr, "collect_namespaces\n");
+			fprintf(stdout, "collect_namespaces\n");
 			rc = collect_namespaces(ctrlr_entry->nss, ctrlr_tmp);
 			if (rc != 0)
 				goto fail;
@@ -533,28 +533,28 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 				goto fail;
 			}
 
-			fprintf(stderr, "populate_dev_health\n");
+			fprintf(stdout, "populate_dev_health\n");
 			/* Store device health stats for export */
 			populate_dev_health(cstats, &ctrlr_entry->health->page,
 				&ctrlr_entry->health->intel_smart_page, cdata);
 			ctrlr_tmp->stats = cstats;
 		}
 
-		fprintf(stderr, "ctrlr_tmp->next = ret->ctrlrs;\n");
+		fprintf(stdout, "ctrlr_tmp->next = ret->ctrlrs;\n");
 		ctrlr_tmp->next = ret->ctrlrs;
-		fprintf(stderr, "ret->ctrlrs = ctrlr_tmp;\n");
+		fprintf(stdout, "ret->ctrlrs = ctrlr_tmp;\n");
 		ret->ctrlrs = ctrlr_tmp;
 
-		fprintf(stderr, "ctrlr_entry = ctrlr_entry->next;\n");
+		fprintf(stdout, "ctrlr_entry = ctrlr_entry->next;\n");
 		ctrlr_entry = ctrlr_entry->next;
 
-		fprintf(stderr, "begiy collect, entry end\n");
+		fprintf(stdout, "begiy collect, entry end\n");
 	}
 
-	fprintf(stderr, "end collect\n");
+	fprintf(stdout, "end collect\n");
 	return;
 fail:
-	fprintf(stderr, "collect cleanup begin\n");
+	fprintf(stdout, "collect cleanup begin\n");
 	ret->rc = rc;
 	if (ret->rc == 0)
 		/* Catch unexpected failures */
@@ -564,7 +564,7 @@ fail:
 		free(ctrlr_tmp);
 	}
 	clean_ret(ret);
-	fprintf(stderr, "collect cleanup end\n");
+	fprintf(stdout, "collect cleanup end\n");
 	return;
 }
 
