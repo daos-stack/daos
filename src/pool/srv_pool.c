@@ -385,6 +385,11 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
 		return 0;
 
+	if (!daos_prop_valid(prop, true, true)) {
+		D_ERROR("invalid pool property\n");
+		return -DER_INVAL;
+	}
+
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
