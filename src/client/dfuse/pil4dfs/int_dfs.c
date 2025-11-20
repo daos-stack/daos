@@ -495,6 +495,8 @@ static int (*next_mpi_init)(int *argc, char ***argv);
 static int (*next_pmpi_init)(int *argc, char ***argv);
 static void *(*next_dlopen)(const char *filename, int flags);
 
+static void (*next_ucs_init)(void);
+
 /* to do!! */
 /**
  * static char * (*org_realpath)(const char *pathname, char *resolved_path);
@@ -1092,6 +1094,52 @@ new_dlopen(const char *filename, int flags)
 	rc = next_dlopen(filename, flags);
 	atomic_fetch_add_relaxed(&dlopen_count, -1);
 	return rc;
+}
+
+static size_t ucs_global_var_size;
+static char  *ucs_global_var_addr;
+
+static void
+reset_ucs_global_variable_after_fork(void)
+{
+	if (ucs_global_var_addr && ucs_global_var_size) {
+		printf("DBG> zero ucs_async_thread_global_context.\n");
+		memset(ucs_global_var_addr, 0, ucs_global_var_size);
+		fflush(stdout);
+	}
+}
+
+static int null_cnt = 0;
+void
+ucs_init(void)
+{
+	int rc;
+
+	if (next_ucs_init == NULL) {
+		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
+		if (next_ucs_init == NULL) {
+			null_cnt++;
+			printf("DBG> next_ucs_init = NULL\n");
+			fflush(stdout);
+			/* This function's name ends with _init. This is a special case. dl.so may
+			 * treat it as a constructor function sometimes.
+			 */
+			return;
+		}
+	}
+	printf("DBG> In ucs_init()\n");
+	rc = query_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
+				 &ucs_global_var_size, &ucs_global_var_addr);
+	if (rc == 0) {
+		printf("DBG> Found ucs_async_thread_global_context. call pthread_atfork()\n");
+		pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
+		fflush(stdout);
+	} else {
+		printf("DBG> failed to find ucs_async_thread_global_context.\n");
+		fflush(stdout);
+	}
+
+	next_ucs_init();
 }
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,

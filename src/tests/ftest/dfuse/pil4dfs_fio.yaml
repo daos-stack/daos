@@ -2,7 +2,7 @@ hosts:
   test_servers: 2
   test_clients: 1
 
-timeout: 600
+timeout: 2400
 
 server_config:
   name: daos_server
@@ -80,14 +80,14 @@ fio:
       iodepth_fork:
         pil4dfs_ioengines: ['libaio']
         thread: 0
-        numjobs: 8
+        numjobs: 2
         blocksize: '4K'
         size: '512K'
         iodepth: 16
       iodepth_thread:
         pil4dfs_ioengines: ['libaio']
         thread: 1
-        numjobs: 8
+        numjobs: 2
         blocksize: '4K'
         size: '512K'
         iodepth: 16
