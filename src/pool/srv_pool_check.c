@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -158,7 +159,7 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 	}
 
 	for (i = 0; i < dss_tgt_nr; i++) {
-		rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &i, &file);
+		rc = ds_mgmt_file(dss_storage_path, uuid, VOS_FILE, &i, &file);
 		if (file == NULL) {
 			D_ERROR(DF_UUIDF": failed to allocate file name for shards status %d\n",
 				DP_UUID(uuid), i);

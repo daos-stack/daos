@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -107,7 +108,7 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 			}
 
 			_, err := instance.CallDrpc(test.Context(t),
-				drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+				daos.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
 			test.CmpErr(t, tc.expErr, err)
 		})
 	}
@@ -205,7 +206,7 @@ func TestEngineInstance_CallDrpc_Parallel(t *testing.T) {
 	for i := 0; i < numClients; i++ {
 		go func(t *testing.T, j int) {
 			t.Logf("%d: CallDrpc", j)
-			_, err := instance.CallDrpc(test.Context(t), drpc.MethodPoolCreate, &mgmt.PoolCreateReq{})
+			_, err := instance.CallDrpc(test.Context(t), daos.MethodPoolCreate, &mgmt.PoolCreateReq{})
 			if err != nil {
 				t.Logf("%d: error: %s", j, err.Error())
 			}

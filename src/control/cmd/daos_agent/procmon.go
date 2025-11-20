@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,15 +16,15 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 const (
 	// Agent-internal methods not linked to engine handlers.
-	flushAllHandles drpc.MgmtMethod = drpc.MgmtMethod(^uint32(0) >> 1)
+	flushAllHandles daos.MgmtMethod = daos.MgmtMethod(^uint32(0) >> 1)
 )
 
 // dbgId returns a truncated representation of the UUID string.
@@ -34,7 +36,7 @@ type procMonRequest struct {
 	// Pid of the process that the request is for
 	pid int32
 	// Whether the message is an attach or disconnect. Uses drpc method identifiers.
-	action drpc.MgmtMethod
+	action daos.MgmtMethod
 	// The UUID of the pool if action is poolconnect/disconnect
 	poolUUID string
 	// The UUID of the pool handle associated with this request
@@ -64,6 +66,7 @@ func (phm poolHandleMap) add(poolUUID, handleUUID string) {
 type procInfo struct {
 	log       logging.Logger
 	pid       int32
+	numaNode  uint
 	name      string
 	cancelCtx func()
 	response  chan *procMonResponse
@@ -148,7 +151,7 @@ func NewProcMon(logger logging.Logger, ctlInvoker control.Invoker, systemName st
 func (p *procMon) AddPoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
 	req := &procMonRequest{
 		pid:            Pid,
-		action:         drpc.MethodNotifyPoolConnect,
+		action:         daos.MethodNotifyPoolConnect,
 		poolUUID:       poolReq.PoolUUID,
 		poolHandleUUID: poolReq.PoolHandleUUID,
 	}
@@ -158,7 +161,7 @@ func (p *procMon) AddPoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.
 func (p *procMon) RemovePoolHandle(ctx context.Context, Pid int32, poolReq *mgmtpb.PoolMonitorReq) {
 	req := &procMonRequest{
 		pid:            Pid,
-		action:         drpc.MethodNotifyPoolDisconnect,
+		action:         daos.MethodNotifyPoolDisconnect,
 		poolUUID:       poolReq.PoolUUID,
 		poolHandleUUID: poolReq.PoolHandleUUID,
 	}
@@ -168,7 +171,7 @@ func (p *procMon) RemovePoolHandle(ctx context.Context, Pid int32, poolReq *mgmt
 func (p *procMon) NotifyExit(ctx context.Context, Pid int32) {
 	req := &procMonRequest{
 		pid:    Pid,
-		action: drpc.MethodNotifyExit,
+		action: daos.MethodNotifyExit,
 	}
 	p.submitRequest(ctx, req)
 }
@@ -316,11 +319,11 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			return
 		case request := <-p.request:
 			switch request.action {
-			case drpc.MethodNotifyPoolConnect:
+			case daos.MethodNotifyPoolConnect:
 				p.handleNotifyPoolConnect(ctx, request)
-			case drpc.MethodNotifyPoolDisconnect:
+			case daos.MethodNotifyPoolDisconnect:
 				p.handleNotifyPoolDisconnect(request)
-			case drpc.MethodNotifyExit:
+			case daos.MethodNotifyExit:
 				p.handleNotifyExit(ctx, request)
 			case flushAllHandles:
 				p.flushAllHandles(ctx)

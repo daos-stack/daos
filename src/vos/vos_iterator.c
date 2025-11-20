@@ -1081,8 +1081,8 @@ bkt_iter_alloc(struct vos_pool *pool)
 }
 
 int
-vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
-		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
+vos_iterate_obj(vos_iter_param_t *param, struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+		vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
 	struct vos_bkt_iter	*bkt_iter;
@@ -1094,7 +1094,7 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 
 	cont = vos_hdl2cont(param->ip_hdl);
 	if (!vos_pool_is_evictable(cont->vc_pool))
-		return vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors, pre_cb,
+		return vos_iterate_internal(param, VOS_ITER_OBJ, true, false, anchors, pre_cb,
 					    post_cb, arg, dth);
 
 	/* The caller must provide a filter callback and call the oi_bkt_iter_skip() properly */
@@ -1114,8 +1114,8 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 		}
 
 		iter_cnt++;
-		rc = vos_iterate_internal(param, VOS_ITER_OBJ, recursive, false, anchors,
-					  pre_cb, post_cb, arg, dth);
+		rc = vos_iterate_internal(param, VOS_ITER_OBJ, true, false, anchors, pre_cb,
+					  post_cb, arg, dth);
 		if (rc) {
 			DL_CDEBUG(rc == ITER_EXIT, DB_TRACE, DLOG_ERR, rc,
 				  "Iterate bucket:%u failed.", i);

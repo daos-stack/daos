@@ -198,9 +198,7 @@ def scons():
         " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
-    aenv.AppendENVPath("CGO_CFLAGS",
-                       senv.subst("-I$SPDK_PREFIX/include/daos_srv -I$OFI_PREFIX/include"),
-                       sep=" ")
+    aenv.AppendENVPath("CGO_CFLAGS", aenv.subst("$_CPPINCFLAGS"), sep=" ")
 
     # Sets CGO_LDFLAGS for rpath
     aenv.d_add_rpaths(None, True, True)

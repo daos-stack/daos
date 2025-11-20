@@ -213,8 +213,9 @@ init_chk_cnt()
 }
 
 int
-bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
+bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
+		  unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect,
+		  bool init_spdk)
 {
 	char		*env;
 	int		 rc, fd;
@@ -326,6 +327,9 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		bio_numa_node = SPDK_ENV_SOCKET_ID_ANY;
 	}
 
+	if (!init_spdk)
+		return 0;
+
 	nvme_glb.bd_mem_size = mem_size;
 	if (nvme_conf) {
 		D_STRNDUP(nvme_glb.bd_nvme_conf, nvme_conf, strlen(nvme_conf));
@@ -363,6 +367,14 @@ free_mutex:
 	ABT_mutex_free(&nvme_glb.bd_mutex);
 
 	return rc;
+}
+
+int
+bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
+	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
+{
+	return bio_nvme_init_ext(nvme_conf, numa_node, mem_size, hugepage_size, tgt_nr,
+				 bypass_health_collect, true);
 }
 
 static void
@@ -1238,14 +1250,21 @@ static int
 assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 {
 	enum smd_dev_type	st, failed_st;
+	struct bio_dev_info    *b_info;
 	bool			assigned = false;
 	int			rc;
+
+	b_info = alloc_dev_info(d_bdev->bb_uuid, d_bdev, NULL);
+	if (b_info == NULL) {
+		D_ERROR("Failed to alloc bio_dev_info.");
+		return -DER_NOMEM;
+	}
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 
-		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st);
+		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st, b_info->bdi_ctrlr);
 		if (rc) {
 			D_ERROR("Failed to map dev "DF_UUID" type:%u to tgt %d. "DF_RC"\n",
 				DP_UUID(d_bdev->bb_uuid), st, tgt_id, DP_RC(rc));
@@ -1280,8 +1299,11 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 			break;
 	}
 
+	bio_free_dev_info(b_info);
+
 	return assigned ? 0 : -DER_INVAL;
 error:
+	bio_free_dev_info(b_info);
 	for (st = SMD_DEV_TYPE_DATA; st < failed_st; st++) {
 		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
@@ -1334,9 +1356,12 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	 */
 	d_bdev = lookup_dev_by_id(dev_info->sdi_id);
 	if (d_bdev == NULL)
-		D_ERROR("Device "DF_UUID" for target %d type %d isn't plugged or the "
-			"SMD table is stale/corrupted.\n",
-			DP_UUID(dev_info->sdi_id), tgt_id, st);
+		ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " "
+				  "[model:%s, serial:%s] for target:%d type:%d is unplugged\n",
+				  DP_UUID(dev_info->sdi_id), dev_info->sdi_model,
+				  dev_info->sdi_serial, tgt_id, st);
 	smd_dev_free_info(dev_info);
 
 	return d_bdev;
@@ -1518,6 +1543,8 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
 						bio_spdk_subsys_timeout);
 			DL_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR, rc, "SPDK subsystems finalized");
+			if (rc != 0)
+				ctxt->bxc_skip_draining = 1;
 
 			nvme_glb.bd_init_thread = NULL;
 
@@ -1529,18 +1556,21 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 
 	if (ctxt->bxc_thread != NULL) {
-		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d",
-			ctxt->bxc_tgt_id);
+		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d, skip_draining:%u",
+			ctxt->bxc_tgt_id, ctxt->bxc_skip_draining);
 
-		/* Don't drain events if spdk_subsystem_fini() timeout */
-		while (rc == 0 && !spdk_thread_is_idle(ctxt->bxc_thread))
+		/*
+		 * Don't drain events if we are asked to skip this (usually
+		 * due to an earlier error).
+		 */
+		while (!ctxt->bxc_skip_draining && !spdk_thread_is_idle(ctxt->bxc_thread))
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 		D_DEBUG(DB_MGMT, "SPDK thread finalized, tgt_id:%d",
 			ctxt->bxc_tgt_id);
 
 		spdk_thread_exit(ctxt->bxc_thread);
-		while (rc == 0 && !spdk_thread_is_exited(ctxt->bxc_thread))
+		while (!ctxt->bxc_skip_draining && !spdk_thread_is_exited(ctxt->bxc_thread))
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 		spdk_thread_destroy(ctxt->bxc_thread);
 		ctxt->bxc_thread = NULL;
@@ -1626,7 +1656,12 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
-			D_ERROR("failed to init bdevs, rc:%d\n", rc);
+			DL_ERROR(rc, "failed to init bdevs");
+			/*
+			 * We're afraid that draining the thread might never
+			 * complete (DAOS-17442).
+			 */
+			ctxt->bxc_skip_draining = 1;
 			goto out;
 		}
 

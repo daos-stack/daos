@@ -297,6 +297,64 @@ dtx_act_abort_options_parsing(void **state)
 	assert_non_null(options->dtx_id);
 }
 
+static void
+dtx_stat_parsing(void **state)
+{
+	struct ddb_cmd_info      info    = {0};
+	struct dtx_stat_options *options = &info.dci_cmd_option.dci_dtx_stat;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("dtx_stat", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("dtx_stat", "-z");            /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "dtx_stat", "path");
+	assert_non_null(options->path);
+
+	/* test all arguments */
+	test_run_cmd(&info, "dtx_stat");
+	assert_null(options->path);
+}
+
+static void
+dtx_aggr_parsing(void **state)
+{
+	struct ddb_cmd_info      info    = {0};
+	struct dtx_aggr_options *options = &info.dci_cmd_option.dci_dtx_aggr;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("dtx_aggr");
+	test_run_inval_cmd("dtx_aggr", "path");
+	test_run_inval_cmd("dtx_aggr", "path", "extra");
+	test_run_inval_cmd("dtx_aggr", "-z");
+	test_run_inval_cmd("dtx_aggr", "-t", "foo", "path");
+	test_run_inval_cmd("dtx_aggr", "-t", "666", "-t", "999", "path");
+	test_run_inval_cmd("dtx_aggr", "-d", "1970-01-01 00:00:00", "-d", "2000-01-01 00:00:00",
+			   "path");
+	test_run_inval_cmd("dtx_aggr", "-t", "42", "-d", "1970-01-01 00:00:00", "path");
+
+	/* test all options and arguments */
+	test_run_cmd(&info, "dtx_aggr", "-t", "42");
+	assert_null(options->path);
+	assert_non_null(options->cmt_time);
+	assert_null(options->cmt_date);
+
+	test_run_cmd(&info, "dtx_aggr", "-d", "1970-01-01 00:00:00");
+	assert_null(options->path);
+	assert_null(options->cmt_time);
+	assert_non_null(options->cmt_date);
+
+	test_run_cmd(&info, "dtx_aggr", "-t", "42", "path");
+	assert_non_null(options->path);
+	assert_non_null(options->cmt_time);
+	assert_null(options->cmt_date);
+
+	test_run_cmd(&info, "dtx_aggr", "-d", "1970-01-01 00:00:00", "path");
+	assert_non_null(options->path);
+	assert_null(options->cmt_time);
+	assert_non_null(options->cmt_date);
+}
+
 /*
  * -----------------------------------------------
  * Execute
@@ -307,20 +365,22 @@ int
 ddb_cmd_options_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
-		TEST(ls_options_parsing),
-		TEST(open_options_parsing),
-		TEST(value_dump_options_parsing),
-		TEST(rm_options_parsing),
-		TEST(value_load_options_parsing),
-		TEST(ilog_dump_options_parsing),
-		TEST(ilog_commit_options_parsing),
-		TEST(ilog_clear_options_parsing),
-		TEST(dtx_dump_options_parsing),
-		TEST(dtx_cmt_clear_options_parsing),
-		TEST(smd_sync_options_parsing),
-		TEST(vea_update_options_parsing),
-		TEST(dtx_act_commit_options_parsing),
-		TEST(dtx_act_abort_options_parsing),
+	    TEST(ls_options_parsing),
+	    TEST(open_options_parsing),
+	    TEST(value_dump_options_parsing),
+	    TEST(rm_options_parsing),
+	    TEST(value_load_options_parsing),
+	    TEST(ilog_dump_options_parsing),
+	    TEST(ilog_commit_options_parsing),
+	    TEST(ilog_clear_options_parsing),
+	    TEST(dtx_dump_options_parsing),
+	    TEST(dtx_cmt_clear_options_parsing),
+	    TEST(smd_sync_options_parsing),
+	    TEST(vea_update_options_parsing),
+	    TEST(dtx_act_commit_options_parsing),
+	    TEST(dtx_act_abort_options_parsing),
+	    TEST(dtx_stat_parsing),
+	    TEST(dtx_aggr_parsing),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands option parsing tests", tests,

@@ -136,7 +136,7 @@ daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out
 	int			rc;
 	uint32_t		result_nr;
 	uint32_t		i, result_i;
-	struct daos_prop_entry	*entry;
+	struct daos_prop_entry  *entry;
 
 	if (old_prop == NULL || new_prop == NULL) {
 		D_ERROR("NULL input\n");
@@ -144,8 +144,8 @@ daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out
 	}
 
 	/*
-	 * We might override some values in the old prop. Need to account for that in the final prop
-	 * count.
+	 * We might override some values in the old prop. Need to account for that in the
+	 * final prop count.
 	 */
 	result_nr = old_prop->dpp_nr;
 	for (i = 0; i < new_prop->dpp_nr; i++) {
@@ -163,8 +163,8 @@ daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out
 
 	result_i = 0;
 	for (i = 0; i < old_prop->dpp_nr; i++, result_i++) {
-		rc = daos_prop_entry_copy(&old_prop->dpp_entries[i],
-					  &result->dpp_entries[result_i]);
+		rc =
+		    daos_prop_entry_copy(&old_prop->dpp_entries[i], &result->dpp_entries[result_i]);
 		if (rc != 0)
 			goto err;
 	}
@@ -245,10 +245,14 @@ daos_prop_owner_group_valid(d_string_t owner)
 bool
 daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 {
-	uint32_t		type;
-	uint64_t		val;
-	struct daos_acl		*acl_ptr;
-	int			i;
+	uint32_t         type;
+	uint64_t         val;
+	struct daos_acl *acl_ptr;
+	int              i;
+	const uint32_t   seen_nr = pool ? DAOS_PROP_PO_NUM : DAOS_PROP_CO_NUM;
+	bool             seen[seen_nr];
+
+	memset(seen, 0, sizeof(seen));
 
 	if (prop == NULL) {
 		D_ERROR("NULL properties\n");
@@ -271,6 +275,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 	for (i = 0; i < prop->dpp_nr; i++) {
 		struct daos_co_status co_status;
 		int                   rc;
+		int                   type_min;
+		int                   type_idx;
 
 		type = prop->dpp_entries[i].dpe_type;
 		if (pool) {
@@ -279,6 +285,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				D_ERROR("invalid type %d for pool.\n", type);
 				return false;
 			}
+			type_min = DAOS_PROP_PO_MIN;
 		} else {
 			if (type <= DAOS_PROP_CO_MIN ||
 			    type >= DAOS_PROP_CO_MAX) {
@@ -286,7 +293,17 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 					type);
 				return false;
 			}
+			type_min = DAOS_PROP_CO_MIN;
 		}
+
+		/* detect duplicate types */
+		type_idx = type - type_min - 1;
+		if (seen[type_idx]) {
+			D_ERROR("type %d (idx=%d) appears more than once\n", type, type_idx);
+			return false;
+		}
+		seen[type_idx] = true;
+
 		/* for output parameter need not check entry value */
 		if (!input)
 			continue;

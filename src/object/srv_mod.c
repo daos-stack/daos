@@ -25,6 +25,8 @@ obj_mod_init(void)
 {
 	int	rc;
 
+	obj_init_iov_fragment_params();
+
 	rc = obj_utils_init();
 	if (rc)
 		goto out;
@@ -56,6 +58,25 @@ obj_mod_fini(void)
 	obj_ec_codec_fini();
 	obj_class_fini();
 	obj_utils_fini();
+	return 0;
+}
+
+static int
+obj_mod_setup(void)
+{
+	uint8_t        rpc_ver;
+	int            rc;
+	daos_version_t version = dss_get_join_version();
+	/*
+	 * Server reuse client stack to issue some rebuild migration rpc.
+	 */
+	rc = daos_get_rpc_version(DAOS_OBJ_MODULE, daos_version_get_protocol(&version), &rpc_ver);
+	if (rc) {
+		D_ERROR("failed to get rpc protocol: %d\n", rc);
+		return rc;
+	}
+	dc_obj_proto_version = rpc_ver;
+
 	return 0;
 }
 
@@ -469,16 +490,19 @@ struct daos_module_metrics obj_metrics = {
 };
 
 struct dss_module obj_module = {
-	.sm_name	= "obj",
-	.sm_mod_id	= DAOS_OBJ_MODULE,
-	.sm_ver		= DAOS_OBJ_VERSION,
-	.sm_init	= obj_mod_init,
-	.sm_fini	= obj_mod_fini,
-	.sm_proto_count	= 2,
-	.sm_proto_fmt	= {&obj_proto_fmt_v9, &obj_proto_fmt_v10},
-	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
-	.sm_handlers	= {obj_handlers_v9, obj_handlers_v10},
-	.sm_key		= &obj_module_key,
-	.sm_mod_ops	= &ds_obj_mod_ops,
-	.sm_metrics	= &obj_metrics,
+    .sm_name        = "obj",
+    .sm_mod_id      = DAOS_OBJ_MODULE,
+    .sm_ver         = DAOS_OBJ_VERSION,
+    .sm_init        = obj_mod_init,
+    .sm_fini        = obj_mod_fini,
+    .sm_setup       = obj_mod_setup,
+    .sm_proto_count = 2,
+    .sm_proto_fmt   = {&obj_proto_fmt_v9, &obj_proto_fmt_v10},
+    .sm_cli_count   = {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
+    .sm_handlers    = {obj_handlers_v9, obj_handlers_v10},
+    .sm_key         = &obj_module_key,
+    .sm_mod_ops     = &ds_obj_mod_ops,
+    .sm_metrics     = &obj_metrics,
 };
+
+DEFINE_DS_RPC_PROTOCOL(obj, DAOS_OBJ_MODULE);

@@ -587,7 +587,7 @@ rebuild_obj_ult(void *data)
 	struct rebuild_obj_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
-	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
+	ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
 			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
@@ -617,7 +617,7 @@ rebuild_object_local(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 	arg->tgt_index = tgt_index;
 	arg->shard = shard;
 
-	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_VOS, tgt_index, 0, NULL);
 	if (rc) {
 		D_FREE(arg);
 		rpt_put(rpt);
@@ -987,7 +987,7 @@ rebuild_scanner(void *data)
 {
 	struct rebuild_scan_arg		arg = { 0 };
 	struct rebuild_tgt_pool_tracker *rpt = data;
-	struct ds_pool_child		*child;
+	struct ds_pool_child            *child = NULL;
 	struct rebuild_pool_tls		*tls;
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
@@ -999,6 +999,17 @@ rebuild_scanner(void *data)
 				      rpt->rt_rebuild_gen);
 	if (tls == NULL)
 		return 0;
+
+	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	if (child == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
+
+	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
+	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_RB " skip scan\n", DP_RB_RPT(rpt));
@@ -1035,10 +1046,6 @@ rebuild_scanner(void *data)
 		}
 	}
 
-	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	if (child == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
-
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	arg.rpt = rpt;
@@ -1046,11 +1053,11 @@ rebuild_scanner(void *data)
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 rebuild_container_scan_cb, NULL, &arg, NULL);
 	if (rc < 0)
-		D_GOTO(put, rc);
+		D_GOTO(out, rc);
 	rc = 0; /* rc might be 1 if rebuild is aborted */
-put:
-	ds_pool_child_put(child);
 out:
+	if (child)
+		ds_pool_child_put(child);
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_free(&ult_send);
@@ -1108,7 +1115,7 @@ rebuild_scan_leader(void *data)
 		D_GOTO(out, rc);
 
 	if (wait)
-		D_INFO(DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
+		D_INFO(DF_RB " rebuild scan collective done\n", DP_RB_RPT(rpt));
 	else
 		D_DEBUG(DB_REBUILD, DF_RB "rebuild scan collective done\n", DP_RB_RPT(rpt));
 
@@ -1166,14 +1173,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 				/* If this is the old leader, then also stop the rebuild
 				 * tracking ULT.
 				 */
-				rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-						    -1, rpt->rt_leader_term);
+				rebuild_leader_abort(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, -1,
+						     rpt->rt_leader_term);
 			}
 		}
 	}
 
 	/* check if the rebuild with different leader is already started */
-	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1);
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1 /* gen */);
 	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
 		if (rpt->rt_global_done) {
 			D_WARN("previous not cleaned up yet " DF_RBF "\n", DP_RBF_RPT(rpt));
@@ -1221,8 +1228,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			rpt->rt_leader_rank = rsi->rsi_master_rank;
 
 			/* If this is the old leader, then also stop the rebuild tracking ULT. */
-			rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-					    -1, rpt->rt_leader_term);
+			rebuild_leader_abort(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, -1,
+					     rpt->rt_leader_term);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;

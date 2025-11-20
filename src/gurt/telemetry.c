@@ -1856,11 +1856,15 @@ double
 d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 			  double mean)
 {
+	double variance = sum_of_squares - (sample_size * mean * mean);
+
+	if (variance <= 0)
+		return 0;
+
 	if (sample_size < 2)
 		return 0;
 
-	return sqrtl((sum_of_squares - (sample_size * mean * mean)) /
-		     (sample_size - 1));
+	return sqrtl(variance / (sample_size - 1));
 }
 
 /**

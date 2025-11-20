@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -462,7 +463,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 		off = act->ac_assign.addr;
 		dst = base + off;
 		size = act->ac_assign.size;
-		ASSERT_rt(size == 1 || size == 2 || size == 4);
+		D_ASSERT(size == 1 || size == 2 || size == 4);
 		src = &act->ac_assign.val;
 		memcpy(dst, src, size);
 		break;
@@ -490,8 +491,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 		p = (uint64_t *)(base + off);
 		num = act->ac_op_bits.num;
 		pos = act->ac_op_bits.pos;
-		ASSERT_rt((pos >= 0) && (pos + num) <= 64);
-		mask = ((1ULL << num) - 1) << pos;
+		D_ASSERT((pos >= 0) && (pos + num) <= 64);
+		if (num == 64)
+			mask = UINT64_MAX;
+		else
+			mask = ((1ULL << num) - 1) << pos;
 		if (act->ac_opc == UMEM_ACT_SET_BITS)
 			*p |= mask;
 		else

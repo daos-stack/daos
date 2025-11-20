@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -296,11 +297,11 @@ wal_tst_pool_cont(void **state)
 
 	/* Create pool: Create meta & WAL blobs, write meta & WAL header */
 	rc = vos_pool_create(pool_name, pool_id, 0 /* scm_sz */, VPOOL_1G, 0 /* meta_sz */,
-			     0 /* flags */, 0 /* version */, NULL);
+			     VOS_POF_EXTERNAL_CHKPT, 0 /* version */, NULL);
 	assert_int_equal(rc, 0);
 
 	/* Create cont: write WAL */
-	rc = vos_pool_open(pool_name, pool_id, 0, &poh);
+	rc = vos_pool_open(pool_name, pool_id, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_int_equal(rc, 0);
 
 	rc = vos_cont_create(poh, cont_id);
@@ -333,7 +334,7 @@ wal_tst_pool_cont(void **state)
 		daos_fail_loc_set(DAOS_WAL_NO_REPLAY | DAOS_FAIL_ALWAYS);
 
 	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
-	rc = vos_pool_open(pool_name, pool_id, 0, &poh);
+	rc = vos_pool_open(pool_name, pool_id, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_int_equal(rc, 0);
 
 	/* Open cont */
@@ -417,14 +418,14 @@ wal_pool_refill(struct io_test_args *arg)
 		daos_fail_loc_set(DAOS_WAL_FAIL_REPLAY | DAOS_FAIL_ALWAYS);
 		daos_fail_value_set(1000);
 		poh = DAOS_HDL_INVAL;
-		rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
+		rc  = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, VOS_POF_EXTERNAL_CHKPT, &poh);
 		assert_rc_equal(rc, -DER_AGAIN);
 		daos_fail_loc_set(0);
 	}
 
 	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
 	poh = DAOS_HDL_INVAL;
-	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
+	rc  = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_rc_equal(rc, 0);
 	tcx->tc_po_hdl = poh;
 	tcx->tc_step = TCX_CO_CREATE;
@@ -622,31 +623,49 @@ setup_wal_io(void **state)
 	if (rc == -1)
 		return rc;
 
-	test_args_reset((struct io_test_args *)*state, VPOOL_2G);
+	test_args_reset((struct io_test_args *)*state, VPOOL_2G, 0, VPOOL_2G,
+			VOS_POF_EXTERNAL_CHKPT);
 	wal_args_reset((struct io_test_args *)*state);
 	return 0;
 }
 
 static struct io_test_args test_args;
 
-#define MDTEST_MIN_SOEMB_CNT  3
-#define MDTEST_MAX_NEMB_CNT   9
+#define MDTEST_NEMB_RSRV_CNT  4
+#define MDTEST_MAX_NEMB_CNT   6
 #define MDTEST_MAX_EMB_CNT    8
 #define MDTEST_MB_SIZE        (16 * 1024 * 1024UL)
-#define MDTEST_META_BLOB_SIZE                                                                      \
-	((MDTEST_MIN_SOEMB_CNT + MDTEST_MAX_NEMB_CNT + MDTEST_MAX_EMB_CNT) * MDTEST_MB_SIZE)
-#define MDTEST_VOS_SIZE   ((MDTEST_MIN_SOEMB_CNT + MDTEST_MAX_NEMB_CNT) * 10 / 8 * MDTEST_MB_SIZE)
-#define MDTEST_MB_VOS_CNT ((int)(MDTEST_VOS_SIZE / MDTEST_MB_SIZE))
-#define MDTEST_MB_CNT     ((int)(MDTEST_META_BLOB_SIZE / MDTEST_MB_SIZE))
+#define MDTEST_META_BLOB_SIZE ((MDTEST_MAX_NEMB_CNT + MDTEST_MAX_EMB_CNT) * MDTEST_MB_SIZE)
+#define MDTEST_VOS_SIZE       ((MDTEST_MAX_NEMB_CNT * 10 / 8 + 1) * MDTEST_MB_SIZE)
+#define MDTEST_DATA_BLOB_SIZE MDTEST_VOS_SIZE
+#define MDTEST_MB_VOS_CNT     ((int)(MDTEST_VOS_SIZE / MDTEST_MB_SIZE))
+#define MDTEST_MB_CNT         ((int)(MDTEST_META_BLOB_SIZE / MDTEST_MB_SIZE))
 
 static int
 setup_mb_io(void **state)
 {
 	int rc;
 
-	d_setenv("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", "2", true);
+	d_setenv("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", "1", true);
 	memset(&test_args, 0, sizeof(test_args));
-	rc     = vts_ctx_init_ex(&test_args.ctx, MDTEST_VOS_SIZE, MDTEST_META_BLOB_SIZE);
+	rc     = vts_ctx_init(&test_args.ctx, MDTEST_VOS_SIZE, MDTEST_META_BLOB_SIZE,
+			      MDTEST_DATA_BLOB_SIZE, VOS_POF_EXTERNAL_CHKPT);
+	*state = (void *)&test_args;
+	return rc;
+}
+
+#define MDTEST_VOS_SIZE_V2       (1ul * 1024 * 1024 * 1024)
+#define MDTEST_META_BLOB_SIZE_V2 (2ul * 1024 * 1024 * 1024)
+#define MDTEST_DATA_BLOB_SIZE_V2 MDTEST_META_BLOB_SIZE_V2
+static int
+setup_mb_io_v2(void **state)
+{
+	int rc;
+
+	d_setenv("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", "1", true);
+	memset(&test_args, 0, sizeof(test_args));
+	rc     = vts_ctx_init(&test_args.ctx, MDTEST_VOS_SIZE_V2, MDTEST_META_BLOB_SIZE_V2,
+			      MDTEST_DATA_BLOB_SIZE_V2, VOS_POF_EXTERNAL_CHKPT);
 	*state = (void *)&test_args;
 	return rc;
 }
@@ -1719,7 +1738,7 @@ out:
 	print_message("space used in non-evictable mbs = %u\n",
 		      ainfo[0].num_allocs * ainfo[0].alloc_size);
 	po = (ainfo[0].num_allocs * ainfo[0].alloc_size + ZONE_MAX_SIZE - 1) / ZONE_MAX_SIZE;
-	assert_true(po == MDTEST_MAX_NEMB_CNT);
+	assert_true(po == MDTEST_MAX_NEMB_CNT - 1); /* One of NEMB will be used as SOEMB */
 
 	/* Validate and free all allocations in evictable MBs */
 	for (j = 0; j < i; j++)
@@ -1752,7 +1771,8 @@ wal_mb_nemb_pct(void **state)
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
 	assert_true(rc == 0);
 	print_message("nemb space utilization is %lu max is %lu\n", cur_allocated, maxsz);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 40 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 40 / 100) * MDTEST_MB_SIZE);
+	assert_true(cur_allocated <= maxsz);
 
 	/* Reopen pool after setting DAOS_MD_ON_SSD_NEMB_PCT to 80%
 	 * It should not impact already created vos pool.
@@ -1765,7 +1785,7 @@ wal_mb_nemb_pct(void **state)
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated1, &maxsz);
 	assert_true(rc == 0);
 	print_message("nemb space utilization is %lu max is %lu\n", cur_allocated1, maxsz);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 40 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 40 / 100) * MDTEST_MB_SIZE);
 	assert_true(cur_allocated == cur_allocated1);
 
 	/* Allocate from Evictable Buckets. */
@@ -1810,7 +1830,7 @@ nemb_unused(void **state)
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &nemb_init_size, &maxsz);
 	assert_true(rc == 0);
 	print_message("phase0: nemb space utilization is %lu max is %lu\n", nemb_init_size, maxsz);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 	ainfo[0].mb_id       = 0;
 	ainfo[0].num_allocs  = 0;
 	ainfo[0].start_umoff = UMOFF_NULL;
@@ -1820,13 +1840,13 @@ nemb_unused(void **state)
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &nemb_full_size, &maxsz);
 	assert_true(rc == 0);
 	print_message("phase1: nemb space utilization is %lu max is %lu\n", nemb_full_size, maxsz);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 
 	free_bucket_by_pct(umm, &ainfo[0], 100, checkpoint_fn, &arg->ctx.tc_po_hdl);
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
 	assert_true(rc == 0);
 	print_message("phase2: nemb space utilization is %lu max is %lu\n", cur_allocated, maxsz);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 	assert_true(nemb_init_size == cur_allocated);
 
 	umem_heap_gc(umm);
@@ -1856,23 +1876,24 @@ nemb_unused(void **state)
 		if (umem_cache_offisloaded(&umm->umm_pool->up_store, ainfo[j].start_umoff))
 			found++;
 	print_message("phase3: Found %d evictable MBs loaded\n", found);
-	D_ASSERT(found > (MDTEST_MB_VOS_CNT - MDTEST_MAX_NEMB_CNT - MDTEST_MIN_SOEMB_CNT));
+	D_ASSERT(found == (MDTEST_MB_VOS_CNT - MDTEST_NEMB_RSRV_CNT - 2)); /* zone0 + 1 SOEMB */
 
 	for (i = 1; i <= MDTEST_MAX_EMB_CNT; i++)
 		free_bucket_by_pct(umm, &ainfo[i], 100, checkpoint_fn, &arg->ctx.tc_po_hdl);
 
+	umem_heap_gc(umm);
 	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
 	assert_true(rc == 0);
 	print_message("phase4: nemb space utilization is %lu max is %lu\n", cur_allocated, maxsz);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 	assert_true(nemb_full_size == cur_allocated);
 
 	free_bucket_by_pct(umm, &ainfo[0], 100, checkpoint_fn, &arg->ctx.tc_po_hdl);
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
 	assert_true(rc == 0);
 	print_message("phase5: nemb space utilization is %lu max is %lu\n", cur_allocated, maxsz);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 	assert_true(nemb_init_size == cur_allocated);
 
 	wal_pool_refill(arg);
@@ -1886,11 +1907,21 @@ nemb_unused(void **state)
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
 	assert_true(rc == 0);
 	print_message("phase6: nemb space utilization is %lu max is %lu\n", cur_allocated, maxsz);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 	assert_true(nemb_init_size == cur_allocated);
 
-	for (i = 1; i <= MDTEST_MAX_EMB_CNT; i++)
+	for (i = 1; i <= MDTEST_MAX_EMB_CNT; i++) {
+		/* Create an MB and fill it with allocs */
+		ainfo[i].mb_id = umem_allot_mb_evictable(umm, 0);
+		for (j = 1; j < i; j++)
+			assert_false(ainfo[i].mb_id == ainfo[j].mb_id);
+		ainfo[i].num_allocs  = 0;
+		ainfo[i].start_umoff = UMOFF_NULL;
+		ainfo[i].alloc_size  = 512 * 1024;
+		ainfo[i].allow_spill = 0;
+		assert_true(ainfo[i].mb_id != 0);
 		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	}
 
 	/* Make sure that we can only create MDTEST_MAX_EMB_CNT evictable MBs */
 	id = umem_allot_mb_evictable(umm, 0);
@@ -1905,8 +1936,20 @@ nemb_unused(void **state)
 			found++;
 
 	print_message("phase7: Found %d evictable MBs loaded\n", found);
-	D_ASSERT(found > (MDTEST_MB_VOS_CNT - MDTEST_MAX_NEMB_CNT - MDTEST_MIN_SOEMB_CNT));
+	/*
+	 * There exists a corner condition where if the last bucket is marked non-evictable
+	 * and is empty, the current heap reclaim code will not reclaim it. The below
+	 * assert made to handle this scenario to exclude zone0 + 1 SOEMB + last bucket.
+	 */
+	D_ASSERT((found == (MDTEST_MB_VOS_CNT - MDTEST_NEMB_RSRV_CNT - 2)) ||
+		 (found == (MDTEST_MB_VOS_CNT - MDTEST_NEMB_RSRV_CNT - 3)));
 
+	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
+	assert_true(rc == 0);
+	print_message("phase8: nemb space utilization is %lu max is %lu\n", cur_allocated, maxsz);
+	assert_true(nemb_full_size > cur_allocated);
+	umem_heap_gc(umm);
 	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
 	assert_true(rc == 0);
@@ -2017,7 +2060,7 @@ soemb_test(void **state)
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated);
 	assert_true(rc == 0);
-	assert_true(cur_allocated > (pg_alloc_sz * MDTEST_MAX_NEMB_CNT));
+	assert_true(cur_allocated > (pg_alloc_sz * (MDTEST_MAX_NEMB_CNT - 1)));
 
 	/*
 	 * After a spill to soe buckets, the total utilization should be near full.
@@ -2034,7 +2077,7 @@ soemb_test(void **state)
 	assert_true(rc == 0);
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated);
-	assert_true(cur_allocated > (pg_alloc_sz * (MDTEST_MAX_NEMB_CNT + MDTEST_MIN_SOEMB_CNT)));
+	assert_true(cur_allocated > (pg_alloc_sz * MDTEST_MAX_NEMB_CNT));
 
 	/*
 	 * Free the allocations in default bucket. Now further allocation in evictable bucket
@@ -2065,8 +2108,10 @@ soemb_test(void **state)
 	assert_true(rc == 0);
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated1);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 	/* 50% includes the evictable MB, hence cur_allocated1 is not exactly cur_allocated/2 */
+	print_message("expected: %lu < %lu\n", cur_allocated1,
+		      (cur_allocated / 2 + MDTEST_MB_SIZE));
 	assert_true(cur_allocated1 < (cur_allocated / 2 + MDTEST_MB_SIZE));
 
 	print_message("Triggering gc\n");
@@ -2086,8 +2131,9 @@ soemb_test(void **state)
 	assert_true(rc == 0);
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated2);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
-	assert_true(cur_allocated2 > (cur_allocated1 + 2 * pg_alloc_sz));
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
+	print_message("expected: %lu >= %lu\n", cur_allocated2, (cur_allocated1 + 2 * pg_alloc_sz));
+	assert_true(cur_allocated2 >= (cur_allocated1 + 2 * pg_alloc_sz));
 
 	/*
 	 * Restart the pool and check whether all of the soe buckets are accessible
@@ -2108,7 +2154,7 @@ soemb_test(void **state)
 	assert_true(rc == 0);
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated1);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 
 	print_message("Triggering gc\n");
 	umem_heap_gc(umm);
@@ -2121,7 +2167,8 @@ soemb_test(void **state)
 	assert_true(rc == 0);
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated2);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
+	print_message("expected: %lu > %lu\n", cur_allocated2, (pg_alloc_sz * MDTEST_MAX_NEMB_CNT));
 	assert_true(cur_allocated2 > (pg_alloc_sz * MDTEST_MAX_NEMB_CNT));
 
 	/*
@@ -2134,7 +2181,8 @@ soemb_test(void **state)
 	assert_true(rc == 0);
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated1);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
+	print_message("expected: %lu < MDTEST_MB_SIZE\n", cur_allocated1);
 	assert_true(cur_allocated1 < MDTEST_MB_SIZE);
 
 	print_message("Triggering gc\n");
@@ -2147,7 +2195,8 @@ soemb_test(void **state)
 	assert_true(rc == 0);
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated2);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
+	print_message("expected: %lu > %lu\n", cur_allocated2, (pg_alloc_sz * MDTEST_MAX_NEMB_CNT));
 	assert_true(cur_allocated2 > (pg_alloc_sz * MDTEST_MAX_NEMB_CNT));
 
 	/*
@@ -2168,7 +2217,7 @@ soemb_test(void **state)
 	assert_true(rc == 0);
 	print_message("non-evictable MBs max_size = %lu current utilization = %lu\n", maxsz,
 		      cur_allocated2);
-	assert_true(maxsz == MDTEST_VOS_SIZE * 80 / 100);
+	assert_true(maxsz == (MDTEST_MB_VOS_CNT * 80 / 100) * MDTEST_MB_SIZE);
 	assert_true(cur_allocated2 > (pg_alloc_sz * MDTEST_MAX_NEMB_CNT));
 }
 
@@ -2428,7 +2477,7 @@ wal_umempobj_mbusage_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
 
-	maxsz_exp = (MDTEST_MAX_NEMB_CNT + MDTEST_MIN_SOEMB_CNT) * MDTEST_MB_SIZE;
+	maxsz_exp = MDTEST_MAX_NEMB_CNT * MDTEST_MB_SIZE;
 
 	/* Allocate from NE Buckets. It should use 80% 360M i.e, 16 buckets */
 	ainfo[0].mb_id       = 0;
@@ -2623,7 +2672,7 @@ p2_basic_test(void **state)
 	daos_epoch_t		epoch = 1;
 	daos_size_t		io_size = 512;
 	struct vos_object	*obj;
-	uint32_t                 bkt_id = 1 + MDTEST_MIN_SOEMB_CNT, missed, loaded;
+	uint32_t                 bkt_id = 1, missed, loaded;
 	uint64_t		used[2], ne_init;
 	int			rc;
 
@@ -2900,6 +2949,126 @@ p2_fill_test(void **state)
 	D_FREE(buf);
 }
 
+/* Fill single evictable bucket with single array object */
+static void
+p2_fill_single(void **state)
+{
+	struct io_test_args  *arg  = *state;
+	struct vos_container *cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	struct umem_pool     *umm_pool;
+	struct vos_object    *obj;
+	daos_unit_oid_t       oid;
+	daos_epoch_t          epoch = 1;
+	uint64_t              dkey  = 0;
+	daos_key_t            dkey_iov;
+	daos_iod_t            iod  = {0};
+	daos_recx_t           recx = {0};
+	d_sg_list_t           sgl  = {0};
+	char                 *buf;
+	uint32_t              bkt_id = UMEM_DEFAULT_MBKT_ID;
+	uint32_t written = 0, total_written = 0, io_size = (4 << 10), chunk_size = (1 << 17);
+	uint64_t ne_used = 0, ne_init = 0, ne_total = 0;
+	uint64_t used = 0, total = 0, prev_used = 0;
+	int      rc;
+
+	D_ALLOC(buf, io_size);
+	assert_non_null(buf);
+	dts_buf_render(buf, io_size);
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	sgl.sg_iovs[0].iov_buf     = buf;
+	sgl.sg_iovs[0].iov_buf_len = io_size;
+	sgl.sg_iovs[0].iov_len     = io_size;
+
+	/* Get initial NE space usage */
+	rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, UMEM_DEFAULT_MBKT_ID, &ne_init,
+				  &ne_total);
+	assert_int_equal(rc, 0);
+
+	oid      = dts_unit_oid_gen(DAOS_OT_ARRAY, 0);
+	arg->oid = oid;
+
+	/* Fill one evictable bucket with single array object */
+	while (1) {
+		if ((written * io_size) >= chunk_size) {
+			dkey++;
+			written = 0;
+		}
+
+		d_iov_set(&dkey_iov, &dkey, sizeof(dkey));
+
+		iod.iod_name  = dkey_iov;
+		iod.iod_nr    = 1;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+		recx.rx_idx   = (written * io_size);
+		recx.rx_nr    = io_size;
+		iod.iod_recxs = &recx;
+
+		rc = io_test_obj_update(arg, epoch++, 0, &dkey_iov, &iod, &sgl, NULL, true);
+		if (rc != 0)
+			break;
+
+		if (bkt_id == UMEM_DEFAULT_MBKT_ID) {
+			rc = vos_obj_acquire(cont, oid, false, &obj);
+			assert_rc_equal(rc, 0);
+
+			bkt_id = obj->obj_bkt_ids[0];
+			vos_obj_release(obj, 0, false);
+			assert_true(bkt_id != UMEM_DEFAULT_MBKT_ID);
+		}
+
+		rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, bkt_id, &used, &total);
+		assert_int_equal(rc, 0);
+		assert_int_equal(total, MDTEST_MB_SIZE);
+
+		/* This evictable bucket is filled up */
+		if (used == prev_used)
+			break;
+
+		prev_used = used;
+		written += 1;
+		total_written += 1;
+	}
+
+	d_sgl_fini(&sgl, false);
+	D_FREE(buf);
+
+	/* Get NE usage */
+	rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, UMEM_DEFAULT_MBKT_ID, &ne_used,
+				  &ne_total);
+	assert_int_equal(rc, 0);
+	assert_true(ne_used > ne_init);
+
+	print_message("Bucket is filled. bkt_id:%u, io_size:%u, chunk_size:%u, written:%u, "
+		      "used:" DF_U64 "/" DF_U64 ", NE_used:" DF_U64 "/" DF_U64 "\n",
+		      bkt_id, io_size, chunk_size, total_written, used, total, ne_used - ne_init,
+		      ne_total);
+
+	assert_in_range(used * 100 / total, 97, 100);
+	checkpoint_fn(&arg->ctx.tc_po_hdl);
+	umm_pool = vos_cont2umm(cont)->umm_pool;
+	/* Close container */
+	rc = vos_cont_close(arg->ctx.tc_co_hdl);
+	assert_rc_equal(rc, 0);
+	arg->ctx.tc_step = TCX_CO_CREATE;
+
+	/* Destroy container */
+	rc = vos_cont_destroy(arg->ctx.tc_po_hdl, arg->ctx.tc_co_uuid);
+	assert_rc_equal(rc, 0);
+	arg->ctx.tc_step = TCX_PO_CREATE_OPEN;
+
+	gc_wait();
+
+	rc = umempobj_get_mbusage(umm_pool, bkt_id, &used, &total);
+	assert_int_equal(rc, 0);
+	assert_int_equal(total, MDTEST_MB_SIZE);
+	print_message("Bucket %u usage after cont destroy. " DF_U64 "/" DF_U64 "\n", bkt_id, used,
+		      total);
+}
+
 static const struct CMUnitTest wal_tests[] = {
     {"WAL01: Basic pool/cont create/destroy test", wal_tst_pool_cont, NULL, NULL},
     {"WAL02: Basic pool/cont create/destroy test with checkpointing", wal_tst_pool_cont,
@@ -2945,6 +3114,7 @@ static const struct CMUnitTest wal_MB_tests[] = {
     {"WAL40: nemb pct test", wal_mb_nemb_pct, setup_mb_io_nembpct, teardown_mb_io_nembpct},
     {"WAL41: nemb unused test", nemb_unused, setup_mb_io, teardown_mb_io},
     {"WAL42: soemb test", soemb_test, setup_mb_io, teardown_mb_io},
+    {"WAL43: P2 fill single", p2_fill_single, setup_mb_io_v2, teardown_mb_io},
 };
 
 int

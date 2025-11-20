@@ -216,6 +216,8 @@ key_equal(struct ds_iv_entry *entry, struct ds_iv_key *key1,
 {
 	struct ds_iv_class *class = entry->iv_class;
 
+	if (daos_version_get_protocol(&key1->version) != daos_version_get_protocol(&key2->version))
+		return false;
 	if (key1->class_id != key2->class_id)
 		return false;
 
@@ -311,6 +313,7 @@ iv_entry_alloc(struct ds_iv_ns *ns, struct ds_iv_class *class,
 	if (rc)
 		D_GOTO(free, rc);
 
+	entry->iv_key.version = key->version;
 	entry->ns = ns;
 	entry->iv_valid = false;
 	entry->iv_class = class;
@@ -877,6 +880,27 @@ ds_iv_ns_cleanup(struct ds_iv_ns *ns)
 	}
 }
 
+/* To prepare for reintegrate, cleanup some IVs' cache.
+ * May add more types later when needed.
+ */
+void
+ds_iv_ns_reint_prep(struct ds_iv_ns *ns)
+{
+	struct ds_iv_entry *entry;
+	struct ds_iv_entry *tmp;
+
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
+		if (entry->iv_key.class_id == IV_CONT_TRACK_EPOCH ||
+		    entry->iv_key.class_id == IV_CONT_PROP ||
+		    entry->iv_key.class_id == IV_CONT_SNAP) {
+			D_INFO(DF_UUID " delete IV class_id %d", DP_UUID(ns->iv_pool_uuid),
+			       entry->iv_key.class_id);
+			d_list_del(&entry->iv_link);
+			iv_entry_free(entry);
+		}
+	}
+}
+
 void
 ds_iv_ns_stop(struct ds_iv_ns *ns)
 {
@@ -1172,9 +1196,12 @@ static int
 iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
       crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
+	struct dss_module_info *dmi = dss_get_module_info();
+
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
 
+	key->version = dmi->dmi_version;
 	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY)
 		return iv_op_async(ns, key, value, sync, shortcut, retry, opc);
 

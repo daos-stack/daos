@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
@@ -575,22 +575,60 @@ out:
 	return rc;
 }
 
-/* Copy the RPC header from one descriptor to another */
-void
-crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
+/* Process header.
+ * Populate 'out' fields of rpc_priv struct based on incoming rpc header 'in'
+ *
+ * Treat incoming 'cch_src_deadline_sec' header value as either a timeout or a
+ * deadline based on a feature flag set in the RPC header.
+ *
+ *
+ * Returns 0 on success or -DER_TIMEDOUT if RPC is determined to be expired already.
+ */
+int
+crt_hg_process_header(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 {
-	out->crp_hg_addr = in->crp_hg_addr;
-	out->crp_hg_hdl = in->crp_hg_hdl;
-	out->crp_pub.cr_ctx = in->crp_pub.cr_ctx;
-	out->crp_flags = in->crp_flags;
+	int src_val;
+	int timeout;
+	int rc = 0;
 
-	out->crp_req_hdr = in->crp_req_hdr;
+	out->crp_hg_addr           = in->crp_hg_addr;
+	out->crp_hg_hdl            = in->crp_hg_hdl;
+	out->crp_pub.cr_ctx        = in->crp_pub.cr_ctx;
+	out->crp_flags             = in->crp_flags;
+	out->crp_req_hdr           = in->crp_req_hdr;
 	out->crp_reply_hdr.cch_hlc = in->crp_reply_hdr.cch_hlc;
 
+	src_val = in->crp_req_hdr.cch_src_deadline_sec;
+
+	/* Treat header value as a deadline or a timeout depending on the feat flag */
+	if (in->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
+		out->crp_deadline_sec = src_val;
+
+		timeout = crt_deadline_to_timeout(src_val);
+		/*
+		 * TODO: need a better way in future to handle an edge case where a client
+		 * can be running ahead of the server, but within hlc_epsilon allowed. Also
+		 * need to account for 1 second granularity of deadlines.
+		 */
+		if (timeout == 0)
+			timeout = 1;
+
+		if (timeout > 0)
+			out->crp_timeout_sec = timeout;
+		else
+			D_GOTO(exit, rc = -DER_TIMEDOUT);
+	} else {
+		out->crp_deadline_sec = crt_timeout_to_deadline(src_val);
+		out->crp_timeout_sec  = src_val;
+	}
+
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
-		return;
+		return 0;
 
 	out->crp_coreq_hdr = in->crp_coreq_hdr;
+
+exit:
+	return rc;
 }
 
 void
@@ -668,14 +706,18 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 		if (ENCODING(proc_op)) {
 			hdr = &rpc_priv->crp_req_hdr;
 
-			hdr->cch_flags = rpc_priv->crp_flags;
+			hdr->cch_flags    = rpc_priv->crp_flags;
 			hdr->cch_dst_rank = crt_grp_priv_get_primary_rank(
-						rpc_priv->crp_grp_priv,
-						rpc_priv->crp_pub.cr_ep.ep_rank
-						);
+			    rpc_priv->crp_grp_priv, rpc_priv->crp_pub.cr_ep.ep_rank);
 			hdr->cch_dst_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
-			hdr->cch_src_timeout = rpc_priv->crp_timeout_sec;
+			if (rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
+				hdr->cch_src_deadline_sec = rpc_priv->crp_deadline_sec;
+			} else {
+				/* Support forwarding of rpc timeout for deprecated clients */
+				hdr->cch_src_deadline_sec = rpc_priv->crp_timeout_sec;
+			}
+
 			if (crt_is_service()) {
 				hdr->cch_src_rank =
 					crt_grp_priv_get_primary_rank(

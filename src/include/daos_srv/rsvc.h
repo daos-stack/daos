@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,10 +88,11 @@ void ds_rsvc_class_unregister(enum ds_rsvc_class_id id);
 
 /** Replicated service state in ds_rsvc.s_term */
 enum ds_rsvc_state {
-	DS_RSVC_UP_EMPTY,	/**< up but DB newly-created and empty */
-	DS_RSVC_UP,		/**< up and ready to serve */
-	DS_RSVC_DRAINING,	/**< stepping down */
-	DS_RSVC_DOWN		/**< down */
+	DS_RSVC_STEPPING_UP,   /**< stepping up */
+	DS_RSVC_UP_EMPTY,      /**< up but DB newly-created and empty */
+	DS_RSVC_UP,            /**< up and ready to serve */
+	DS_RSVC_STEPPING_DOWN, /**< stepping down */
+	DS_RSVC_DOWN           /**< down */
 };
 
 char *ds_rsvc_state_str(enum ds_rsvc_state state);
@@ -116,6 +118,7 @@ struct ds_rsvc {
 	bool			s_map_dist;	/* has a queued map dist request? */
 	bool			s_map_dist_inp;	/* has a in-progress map dist request? */
 	uint32_t		s_map_dist_ver;	/* highest map version distributed */
+	ABT_mutex               s_map_dist_mutex;
 	ABT_cond		s_map_dist_cv;
 	ABT_thread		s_map_distd;
 	bool			s_map_distd_stop;
@@ -146,6 +149,10 @@ int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id, const d_rank_lis
 		      d_rank_list_t *excluded, uint64_t caller_term, bool destroy);
 enum ds_rsvc_state ds_rsvc_get_state(struct ds_rsvc *svc);
 void ds_rsvc_set_state(struct ds_rsvc *svc, enum ds_rsvc_state state);
+void
+ds_rsvc_begin_stepping_up(struct ds_rsvc *svc);
+int
+       ds_rsvc_end_stepping_up(struct ds_rsvc *svc, int rc_in, enum ds_rsvc_state state);
 int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 			   uint32_t vos_df_version);
 int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ranks,

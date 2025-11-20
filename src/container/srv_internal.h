@@ -69,6 +69,7 @@ struct cont_track_eph_leader {
 	uuid_t			cte_cont_uuid;
 	daos_epoch_t		cte_current_ec_agg_eph;
 	daos_epoch_t		cte_current_stable_eph;
+	daos_epoch_t             cte_rdb_ec_agg_eph; /* EC agg epoch in RDB */
 	struct rank_eph		*cte_server_ephs;
 	d_list_t		cte_list;
 	int			cte_servers_num;
@@ -94,6 +95,7 @@ struct cont_svc {
 	/* Manage the EC aggregation epoch and stable epoch */
 	struct sched_request   *cs_cont_ephs_leader_req;
 	d_list_t		cs_cont_ephs_leader_list; /* link cont_track_eph_leader */
+	ABT_mutex               cs_cont_ephs_mutex;       /* protect cs_cont_ephs_leader_list */
 };
 
 /* Container descriptor */
@@ -315,4 +317,7 @@ int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
 
 int ds_cont_hdl_rdb_lookup(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 			   struct container_hdl *chdl);
+int
+ds_cont_ec_agg_eph_rdb_lookup(uuid_t pool_uuid, uuid_t cont_uuid, uint64_t *ec_agg_eph);
+
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

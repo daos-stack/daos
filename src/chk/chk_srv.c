@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -144,7 +145,7 @@ ds_chk_act_hdlr(crt_rpc_t *rpc)
 	struct chk_act_out	*cao = crt_reply_get(rpc);
 	int			 rc;
 
-	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_cla, cai->cai_act, cai->cai_flags);
+	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_act);
 
 	cao->cao_status = rc;
 	rc = crt_reply_send(rpc);
@@ -270,6 +271,20 @@ ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 	D_FREE(pools);
 }
 
+static void
+ds_chk_set_policy_hdlr(crt_rpc_t *rpc)
+{
+	struct chk_set_policy_in  *cspi = crt_req_get(rpc);
+	struct chk_set_policy_out *cspo = crt_reply_get(rpc);
+	int                        rc;
+
+	cspo->cspo_status = chk_engine_set_policy(cspi->cspi_gen, cspi->cspi_policies.ca_count,
+						  cspi->cspi_policies.ca_arrays);
+	rc                = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("Failed to reply check set policy: " DF_RC "\n", DP_RC(rc));
+}
+
 static int
 ds_chk_init(void)
 {
@@ -365,15 +380,17 @@ static struct daos_rpc_handler chk_handlers[] = {
 #undef X
 
 struct dss_module chk_module = {
-	.sm_name		= "chk",
-	.sm_mod_id		= DAOS_CHK_MODULE,
-	.sm_ver			= DAOS_CHK_VERSION,
-	.sm_init		= ds_chk_init,
-	.sm_fini		= ds_chk_fini,
-	.sm_setup		= ds_chk_setup,
-	.sm_cleanup		= ds_chk_cleanup,
-	.sm_proto_count		= 1,
-	.sm_proto_fmt		= {&chk_proto_fmt},
-	.sm_cli_count		= {0},
-	.sm_handlers		= {chk_handlers},
+    .sm_name        = "chk",
+    .sm_mod_id      = DAOS_CHK_MODULE,
+    .sm_ver         = DAOS_CHK_VERSION,
+    .sm_init        = ds_chk_init,
+    .sm_fini        = ds_chk_fini,
+    .sm_setup       = ds_chk_setup,
+    .sm_cleanup     = ds_chk_cleanup,
+    .sm_proto_count = 1,
+    .sm_proto_fmt   = {&chk_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {chk_handlers},
 };
+
+DEFINE_RPC_PROTOCOL(chk, DAOS_CHK_MODULE);

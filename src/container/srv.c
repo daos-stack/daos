@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -159,3 +160,5 @@ struct dss_module cont_module = {
     .sm_key         = &cont_module_key,
     .sm_metrics     = &cont_metrics,
 };
+
+DEFINE_DS_RPC_PROTOCOL(cont, DAOS_CONT_MODULE);

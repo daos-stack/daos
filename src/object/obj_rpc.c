@@ -878,22 +878,11 @@ crt_proc_struct_daos_cpd_bulk(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc))
 		return rc;
 
-	if (DECODING(proc_op)) {
-		D_ALLOC_PTR(dcb->dcb_bulk);
-		if (dcb->dcb_bulk == NULL)
-			return -DER_NOMEM;
-	}
-
-	rc = crt_proc_crt_bulk_t(proc, proc_op, dcb->dcb_bulk);
-	if (unlikely(rc))
-		return rc;
-
-	if (FREEING(proc_op))
-		D_FREE(dcb->dcb_bulk);
+	rc = crt_proc_crt_bulk_t(proc, proc_op, &dcb->dcb_bulk);
 
 	/* The other fields will not be packed on-wire. */
 
-	return 0;
+	return rc;
 }
 
 static int
@@ -1069,6 +1058,18 @@ crt_proc_struct_daos_req_comm_in(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
+crt_proc_daos_version_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_version_t *ver)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &ver->raw);
+	if (unlikely(rc))
+		return rc;
+
+	return 0;
+}
+
+static int
 crt_proc_struct_daos_req_comm_out(crt_proc_t proc, crt_proc_op_t proc_op,
 				  struct daos_req_comm_out *drco)
 {
@@ -1078,7 +1079,14 @@ crt_proc_struct_daos_req_comm_out(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = crt_proc_uint64_t(proc, proc_op, &drco->req_out_enqueue_id);
 	if (unlikely(rc))
 		return rc;
-	for (i = 0; i < 4; i++) {
+	rc = crt_proc_daos_version_t(proc, proc_op, &drco->req_out_version);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_uint32_t(proc, proc_op, &drco->req_out_padding);
+	if (unlikely(rc))
+		return rc;
+
+	for (i = 0; i < 3; i++) {
 		rc = crt_proc_uint64_t(proc, proc_op, &drco->req_out_paddings[i]);
 		if (unlikely(rc))
 			return rc;

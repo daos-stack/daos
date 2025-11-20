@@ -55,8 +55,6 @@ targets=(
     '*README*'
     '*LICENSE*'
     '*NOTICE*'
-    '*.txt'
-    '*.md'
     # Entries without a wildcard
     'Makefile'
     'Jenkinsfile'

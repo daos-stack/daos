@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,8 +13,8 @@
 #include <daos_types.h>
 
 struct sys_db;
-typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,
-				void *args);
+typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key, void *args,
+				unsigned *acts);
 
 #define SYS_DB_NAME_SZ		32
 

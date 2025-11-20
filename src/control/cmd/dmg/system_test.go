@@ -388,6 +388,51 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("not provided"),
 		},
 		{
+			"system rebuild start",
+			"system rebuild start",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system rebuild start with force",
+			"system rebuild start --force",
+			"",
+			errors.New("unknown flag"),
+		},
+		{
+			"system rebuild stop",
+			"system rebuild stop",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system rebuild stop with force",
+			"system rebuild stop --force",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+					Force:  true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system self-heal evaluate",
+			"system self-heal eval",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSelfHealEvalReq{}),
+			}, " "),
+			nil,
+		},
+		{
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
@@ -552,6 +597,119 @@ func TestDmg_systemStartCmd(t *testing.T) {
 
 			gotErr := startCmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg  *control.Config
+		opCode  control.PoolRebuildOpCode
+		force   bool
+		verbose bool
+		resp    *mgmtpb.SystemRebuildManageResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"no config": {
+			opCode: control.PoolRebuildOpCodeStop,
+			expErr: errors.New("system rebuild stop failed: no configuration loaded"),
+		},
+		"ms failures": {
+			ctlCfg: &control.Config{},
+			resp:   &mgmtpb.SystemRebuildManageResp{},
+			msErr:  errors.New("failed"),
+			expErr: errors.New("failed"),
+		},
+		"no pools": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStop,
+			resp:    &mgmtpb.SystemRebuildManageResp{},
+			expInfo: "System-rebuild stop request succeeded on 0 pools",
+		},
+		"no pools; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStart,
+			verbose: true,
+			resp:    &mgmtpb.SystemRebuildManageResp{},
+			expInfo: "System-rebuild start request succeeded on 0 pools []",
+		},
+		"pool stop failed": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "failed",
+						Id:      "foo",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "failed",
+						Id:      "bar",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "baz",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr:  errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
+			expInfo: "System-rebuild stop request succeeded on 1 pool",
+		},
+		"pool start succeeded; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStart,
+			verbose: true,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "foo",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "bar",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "baz",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: "System-rebuild start request succeeded on 3 pools [foo bar baz]",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			rbldCmd := new(systemRebuildOpCmd)
+			rbldCmd.setInvoker(mi)
+			rbldCmd.SetLog(log)
+			rbldCmd.setConfig(tc.ctlCfg)
+			rbldCmd.Verbose = tc.verbose
+
+			gotErr := rbldCmd.execute(tc.opCode, tc.force)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if !strings.Contains(buf.String(), tc.expInfo) {
+				t.Fatalf("expected info log output to contain %s, got %s\n",
+					tc.expInfo, buf.String())
+			}
+			if tc.expInfo == "" && strings.Contains(buf.String(), "INFO") {
+				t.Fatalf("unexpected info log output printed, got %s\n",
+					buf.String())
+			}
 		})
 	}
 }

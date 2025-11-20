@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,8 +14,10 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -72,20 +75,12 @@ func nvmeBdevsFromCfg(cfg *config.Server) *storage.BdevDeviceList {
 	return bds
 }
 
-func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
+func updateNVMePrepReqAllowedFromCfg(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
 	if cfg == nil {
-		log.Debugf("skip updating request from config")
-		return nil
+		return errors.Errorf("nil %T", cfg)
 	}
-
-	if cfg.DisableHugepages {
-		return errors.New("hugepage usage has been disabled in the config file")
-	}
-
-	req.DisableVFIO = req.DisableVFIO || cfg.DisableVFIO
-
-	if req.HugepageCount == 0 && cfg.NrHugepages > 0 {
-		req.HugepageCount = cfg.NrHugepages
+	if req == nil {
+		return errors.Errorf("nil %T", req)
 	}
 
 	if req.PCIAllowList == "" {
@@ -94,6 +89,17 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 			log.Tracef("reading bdev_list entries (%q) from cfg", allowed)
 			req.PCIAllowList = strings.Join(allowed.Strings(), storage.BdevPciAddrSep)
 		}
+	}
+
+	return nil
+}
+
+func updateNVMePrepReqBlockedFromCfg(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
+	if cfg == nil {
+		return errors.Errorf("nil %T", cfg)
+	}
+	if req == nil {
+		return errors.Errorf("nil %T", req)
 	}
 
 	if req.PCIBlockList == "" && len(cfg.BdevExclude) > 0 {
@@ -105,6 +111,26 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 			log.Tracef("reading bdev_exclude entries (%q) from cfg", blocked)
 			req.PCIBlockList = strings.Join(blocked.Strings(), storage.BdevPciAddrSep)
 		}
+	}
+
+	return nil
+}
+
+func updateNVMePrepReqFromCfg(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
+	if cfg == nil {
+		return errors.Errorf("nil %T", cfg)
+	}
+	if req == nil {
+		return errors.Errorf("nil %T", req)
+	}
+
+	req.DisableVFIO = req.DisableVFIO || cfg.DisableVFIO
+
+	if err := updateNVMePrepReqAllowedFromCfg(log, cfg, req); err != nil {
+		return err
+	}
+	if err := updateNVMePrepReqBlockedFromCfg(log, cfg, req); err != nil {
+		return err
 	}
 
 	return nil
@@ -171,8 +197,10 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 		return errors.Wrap(err, "sanitizing cli input pci address lists")
 	}
 
-	if err := updateNVMePrepReqFromConfig(log, cfg, req); err != nil {
-		return errors.Wrap(err, "updating request parameters with config file settings")
+	if cfg != nil {
+		if err := updateNVMePrepReqFromCfg(log, cfg, req); err != nil {
+			return errors.Wrap(err, "updating request parameters with config file settings")
+		}
 	}
 
 	iommuEnabled, err := iommuChecker.IsIOMMUEnabled()
@@ -206,11 +234,61 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 	return nil
 }
 
-func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
+// Clean hugepages for non-existent processes. Remove lockfiles for any devices specified in request
+// or config. Clean all lockfiles if none have been specified on cli or in config. Honor both allow
+// and block lists when processing removal of lockfiles.
+func cleanSpdkResources(log logging.Logger, req storage.BdevPrepareRequest, cmd *nvmeCmd) {
+	cleanReq := storage.BdevPrepareRequest{
+		CleanSpdkHugepages: true,
+		CleanSpdkLockfiles: true,
+	}
+
+	// Differentiate between an empty allow list due to filter combinations (all allowed devices
+	// also present in block list) from situation where no devices are selected in cli or config
+	// lists. In the latter case, all lockfiles should be removed.
+	if req.PCIAllowList == "" && req.PCIBlockList == "" {
+		cleanReq.CleanSpdkLockfilesAny = true
+	} else {
+		cleanReq.PCIAllowList = req.PCIAllowList
+		cleanReq.PCIBlockList = req.PCIBlockList
+	}
+
+	msg := "cleanup spdk resources"
+
+	cleanResp, err := cmd.ctlSvc.NvmePrepare(cleanReq)
+	if err != nil {
+		log.Error(errors.Wrap(err, msg).Error())
+	} else {
+		log.Debugf("%s: %d hugepages and lockfiles %v removed", msg,
+			cleanResp.NrHugepagesRemoved, cleanResp.LockfilesRemoved)
+	}
+}
+
+func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, smi *common.SysMemInfo) error {
 	cmd.Debug("Prepare locally-attached NVMe storage...")
+
+	if cmd.config != nil && cmd.config.DisableHugepages {
+		return storage.FaultHugepagesDisabled
+	}
 
 	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
+	}
+
+	cleanSpdkResources(cmd.Logger, req, cmd)
+
+	// Set hugepage allocations in prepare request. As evaluating engine affinity requires
+	// various prerequisite steps to be performed (as in server service start-up) we don't want
+	// to incorrectly assign hugepages to NUMA nodes here (because of not having fully evaluated
+	// engine affinity). Instead skip hugepage config processing and simply ensure we have
+	// enough to perform NVMe discovery. This introduces some inconsistency in terms of ignoring
+	// config parameters but more importantly should prevent inaccurate allocations.
+
+	if req.HugepageCount < config.ScanMinHugepageCount {
+		req.HugepageCount = config.ScanMinHugepageCount
+	}
+	if err := server.SetHugeNodes(cmd.Logger, nil, smi, &req); err != nil {
+		return errors.Wrap(err, "setting hugenodes in bdev prep request")
 	}
 
 	cmd.Tracef("nvme prepare request parameters: %+v", req)
@@ -221,7 +299,7 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	return errors.Wrap(err, "nvme prepare backend")
 }
 
-func (cmd *prepareNVMeCmd) Execute(_ []string) (err error) {
+func (cmd *prepareNVMeCmd) Execute(_ []string) error {
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
 
 	req := storage.BdevPrepareRequest{
@@ -232,7 +310,12 @@ func (cmd *prepareNVMeCmd) Execute(_ []string) (err error) {
 		DisableVFIO:   cmd.DisableVFIO,
 	}
 
-	return prepareNVMe(req, &cmd.nvmeCmd)
+	smi, err := common.GetSysMemInfo()
+	if err != nil {
+		return errors.Wrap(err, "get meminfo")
+	}
+
+	return prepareNVMe(req, &cmd.nvmeCmd, smi)
 }
 
 type resetNVMeCmd struct {
@@ -265,34 +348,31 @@ func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
 	return cmd
 }
 
-func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
+func resetNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	cmd.Debug("Reset locally-attached NVMe storage...")
 
-	cleanReq := storage.BdevPrepareRequest{
-		CleanHugepagesOnly: true,
+	// For the moment assume that lockfile and hugepage cleanup should be skipped if hugepages
+	// have been disabled in the server config.
+	if cmd.config != nil && cmd.config.DisableHugepages {
+		return storage.FaultHugepagesDisabled
 	}
 
-	msg := "cleanup hugepages before nvme reset"
-
-	if resp, err := cmd.ctlSvc.NvmePrepare(cleanReq); err != nil {
-		cmd.Errorf("%s", errors.Wrap(err, msg))
-	} else {
-		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &resetReq); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
+	cleanSpdkResources(cmd.Logger, req, cmd)
+
 	// Apply request parameter field values required specifically for reset operation.
-	resetReq.HugepageCount = 0
-	resetReq.HugeNodes = ""
-	resetReq.CleanHugepagesOnly = false
-	resetReq.Reset_ = true
+	req.HugepageCount = 0
+	req.HugeNodes = ""
+	req.CleanSpdkHugepages = false
+	req.CleanSpdkLockfiles = false
+	req.Reset_ = true
 
-	cmd.Tracef("nvme reset request parameters: %+v", resetReq)
+	cmd.Tracef("nvme reset request parameters: %+v", req)
 
-	resetResp, err := cmd.ctlSvc.NvmePrepare(resetReq)
+	resetResp, err := cmd.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		return errors.Wrap(err, "nvme reset backend")
 	}
@@ -306,13 +386,13 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	//            inaccessible from both OS and SPDK. Workaround is to run nvme scan
 	//            --ignore-config to reset driver bindings.
 	if resetResp.VMDPrepared {
-		resetReq.PCIAllowList = ""
-		resetReq.PCIBlockList = ""
-		resetReq.EnableVMD = false // Prevents VMD endpoints being auto populated
+		req.PCIAllowList = ""
+		req.PCIBlockList = ""
+		req.EnableVMD = false // Prevents VMD endpoints being auto populated
 
-		cmd.Tracef("vmd second nvme reset request parameters: %+v", resetReq)
+		cmd.Tracef("vmd second nvme reset request parameters: %+v", req)
 
-		if _, err := cmd.ctlSvc.NvmePrepare(resetReq); err != nil {
+		if _, err := cmd.ctlSvc.NvmePrepare(req); err != nil {
 			return errors.Wrap(err, "nvme reset backend")
 		}
 	}
@@ -347,7 +427,7 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 	return isVMDEnabled(cmd.config)
 }
 
-func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
+func scanNVMe(cmd *scanNVMeCmd, smi *common.SysMemInfo) (_ *storage.BdevScanResponse, errOut error) {
 	if cmd.getVMDState() {
 		cmd.ctlSvc.WithVMDEnabled()
 	}
@@ -355,6 +435,9 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 	req := storage.BdevScanRequest{}
 
 	if cmd.config != nil {
+		if cmd.config.DisableHugepages {
+			return nil, storage.FaultHugepagesDisabled
+		}
 		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
 		if req.DeviceList.Len() > 0 {
 			cmd.Debugf("applying devices filter derived from config file: %s",
@@ -368,7 +451,7 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 	}
 
 	if !cmd.SkipPrep {
-		if err := prepareNVMe(reqPrep, &cmd.nvmeCmd); err != nil {
+		if err := prepareNVMe(reqPrep, &cmd.nvmeCmd, smi); err != nil {
 			return nil, errors.Wrap(err, "nvme prep before scan failed, try with "+
 				"--skip-prep after manual nvme prepare")
 		}
@@ -394,7 +477,12 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 func (cmd *scanNVMeCmd) Execute(_ []string) (err error) {
 	cmd.Debugf("executing scan nvme command: %+v", cmd)
 
-	resp, err := scanNVMe(cmd)
+	smi, err := common.GetSysMemInfo()
+	if err != nil {
+		return errors.Wrap(err, "get meminfo")
+	}
+
+	resp, err := scanNVMe(cmd, smi)
 	if err != nil {
 		return errors.Wrap(err, "nvme scan backend")
 	}

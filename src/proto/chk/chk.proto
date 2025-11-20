@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -190,6 +191,12 @@ enum CheckScanPhase {
 
 	CSP_DONE = 10; // All done.
 }
+
+// If not an error, these are values that can appear in the result field.
+enum CheckResult {
+	SUCCESS = 0;
+	DRY_RUN = 1;
+};
 
 // DAOS check engine reports the found inconsistency and repair result to control plane.
 // If the repair action is CIA_INTERACT, then the control plane will reply current dRPC

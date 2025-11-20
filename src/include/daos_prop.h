@@ -143,6 +143,8 @@ enum daos_pool_props {
 	DAOS_PROP_PO_MAX,
 };
 
+#define DAOS_PROP_PO_NUM                (DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
+
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
 
@@ -615,7 +617,7 @@ daos_label_is_valid(const char *label)
 	}
 
 	/** Check to see if it could be a valid UUID */
-	if (maybe_uuid && daos_is_valid_uuid_string(label))
+	if (maybe_uuid && daos_is_valid_uuid_string(label, UUID_SST_NONE))
 		return false;
 
 	return true;
