@@ -816,7 +816,7 @@ heap_reclaim_zone_garbage(struct palloc_heap *heap, struct bucket *bucket,
 		case CHUNK_TYPE_USED:
 			break;
 		default:
-			D_ASSERTF(0, "Encounted invalid chunk (%d) of type %d val = 0x%lx", i,
+			D_ASSERTF(0, "Encountered invalid chunk (%d) of type %u val = 0x%lx", i,
 				  hdr->type, *(uint64_t *)hdr);
 		}
 
