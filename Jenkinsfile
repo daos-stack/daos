@@ -539,7 +539,7 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=10 '
+                                                ' --build-arg POINT_RELEASE=.10 '
                         }
                     }
                     steps {
@@ -592,7 +592,7 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=6 '
+                                                ' --build-arg POINT_RELEASE=.6 '
 
                         }
                     }
@@ -645,7 +645,7 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
-                                                ' --build-arg POINT_RELEASE=5 '
+                                                ' --build-arg POINT_RELEASE=.5 '
 
                         }
                     }
@@ -696,7 +696,7 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-leap15-icc" +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg COMPILER=icc' +
-                                                ' --build-arg POINT_RELEASE=5 '
+                                                ' --build-arg POINT_RELEASE=.5 '
 
                         }
                     }
