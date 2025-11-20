@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -101,6 +102,12 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 
 	if err := setDaosHelperEnvs(cfg, osSetenv); err != nil {
 		return err
+	}
+
+	for _, ec := range cfg.Engines {
+		if err := ec.UpdateABTEnvarsUCX(); err != nil {
+			return err
+		}
 	}
 
 	for _, ec := range cfg.Engines {
