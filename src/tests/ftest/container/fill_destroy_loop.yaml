@@ -24,9 +24,9 @@ test_config:
 
 pool: !mux
   default:
-    size: 410M
+    size: 100%
   md_on_ssd_p2:
-    size: 410M
+    size: 100%
     mem_ratio: 50
 
 container:
