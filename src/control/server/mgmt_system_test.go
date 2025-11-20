@@ -595,6 +595,46 @@ func TestServer_MgmtSvc_getPoolRanks(t *testing.T) {
 			},
 			expDrpcCount: 2,
 		},
+		"two pools; bracketed zero disabled ranks": {
+			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
+			inRanks:    ranklist.MustCreateRankSet("1,8"),
+			getEnabled: false,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "0-4",
+						DisabledRanks: "[]",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "1-7",
+						DisabledRanks: "[]",
+					},
+				},
+			},
+			expDrpcCount: 2,
+		},
+		"two pools; bracketed zero enabled ranks": {
+			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
+			inRanks:    ranklist.MustCreateRankSet("1,8"),
+			getEnabled: true,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "[]",
+						DisabledRanks: "0-4",
+					},
+				},
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks:  "[]",
+						DisabledRanks: "1-7",
+					},
+				},
+			},
+			expDrpcCount: 2,
+		},
 		"match zero ranks; two pools": {
 			pools:      []string{test.MockUUID(1), test.MockUUID(2)},
 			inRanks:    ranklist.MustCreateRankSet("8-10"),

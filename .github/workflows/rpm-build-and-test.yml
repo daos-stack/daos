@@ -210,7 +210,7 @@ jobs:
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
-      OPERATIONS_EMAIL: john.malmberg@hpe.com
+      OPERATIONS_EMAIL: core-daos-devops@groups.int.hpe.com
       TEST_RPMS: true
       COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
       JENKINS_URL: https://jenkins-3.daos.hpc.amslabs.hpecorp.net/
@@ -500,7 +500,7 @@ jobs:
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
-      OPERATIONS_EMAIL: john.malmberg@hpe.com
+      OPERATIONS_EMAIL: core-daos-devops@groups.int.hpe.com
       TEST_RPMS: true
       COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
       JENKINS_URL: https://jenkins-3.daos.hpc.amslabs.hpecorp.net/
