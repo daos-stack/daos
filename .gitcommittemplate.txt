@@ -21,7 +21,7 @@
 # Stage: Unit Tests - Unit Test [bdev] on EL 8.8
 #Skip-unit-test: true
 # Stage: Unit Tests - NLT on EL 8.8
-#Skip-NLT: false
+#Skip-NLT: true
 # Stage: Unit Tests - Unit Test [bdev] with memcheck on EL 8.8
 #Skip-unit-test-memcheck: true
 
@@ -34,13 +34,13 @@
 # Stage: Test - use CI_FUNCTIONAL_TEST_SKIP parameter
 #Skip-func-vm: true
 # Stage: Test - Functional on EL 8.8 with Valgrind
-#Skip-func-test-vm-valgrind: true
+#Skip-func-test-vm-valgrind: false
 # Stage: Test - Functional on EL 8.8
 #Skip-func-test-el8: true
 # Stage: Test - Functional on EL 9
-#Skip-func-test-el9: true
+#Skip-func-test-el9: false
 # Stage: Test - Functional on Leap 15.6
-#Skip-func-test-leap15: true
+#Skip-func-test-leap15: false
 # Stage: Test - Fault injection testing on EL 8.8
 #Skip-fault-injection-test: true
 # Stage: Test - Test RPMs on EL 8.6'
@@ -52,18 +52,18 @@
 # Stage: Test Hardware
 #Skip-func-hw-test: true
 # Stage: Test Hardware - Functional Hardware Medium
-#Skip-func-hw-test-medium: true
+#Skip-func-hw-test-medium: false
 # Stage: Test Hardware - Functional Hardware Medium MD on SSD
 #Skip-func-hw-test-medium-md-on-ssd: true
 # Stage: Test Hardware - Functional Hardware Medium VMD
-#Skip-func-hw-test-medium-vmd: true
+#Skip-func-hw-test-medium-vmd: false
 # Stage: Test Hardware - Functional Hardware Medium Verbs Provider
-#Skip-func-hw-test-medium-verbs-provider: true
+#Skip-func-hw-test-medium-verbs-provider: false
 # Stage: Test Hardware - Functional Hardware Medium Verbs Provider MD on SSD
 #Skip-func-hw-test-medium-verbs-provider-md-on-ssd: true
 # Stage: Test Hardware - Functional Hardware Medium UCX Provider
-#Skip-func-hw-test-medium-ucx-provider: true
+#Skip-func-hw-test-medium-ucx-provider: false
 # Stage: Test Hardware - Functional Hardware Large
-#Skip-func-hw-test-large: true
+#Skip-func-hw-test-large: false
 # Stage: Test Hardware - Functional Hardware Large MD on SSD
 #Skip-func-hw-test-large-md-on-ssd: true
