@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -154,7 +153,6 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 			child.Env[i] = common.AppendToPathEnv(env, "/sbin", "/usr/sbin")
 		}
 	}
-	child.Env = append(child.Env, "GOTRACEBACK=crash")
 
 	if err := child.Start(); err != nil {
 		return nil, err
