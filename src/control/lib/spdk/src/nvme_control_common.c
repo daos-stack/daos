@@ -509,7 +509,6 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		fprintf(stdout, "spdk_pci_device_get_type\n");
 		pci_type = get_pci_type(pci_dev);
-		free(pci_dev);
 		fprintf(stdout, "strndup: %s\n", pci_type);
 		ctrlr_tmp->pci_type = strndup(pci_type, NVME_DETAIL_BUFLEN);
 		if (ctrlr_tmp->pci_type == NULL) {
