@@ -8,8 +8,8 @@
 #
 
 # Pull base image
-ARG POINT_RELEASE=
-ARG BASE_DISTRO=registry.opensuse.org/opensuse/leap-dnf:15$POINT_RELEASE
+ARG RELEASE=15
+ARG BASE_DISTRO=registry.opensuse.org/opensuse/leap-dnf:$RELEASE
 FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
