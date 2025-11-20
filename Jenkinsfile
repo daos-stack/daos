@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@grom72/SRE-3458-explicitly-build-on-el9.6') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -643,7 +644,9 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
+                                                ' --build-arg POINT_RELEASE=5 '
+
                         }
                     }
                     steps {
@@ -690,9 +693,11 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-icc" +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg COMPILER=icc'
+                                                ' --build-arg COMPILER=icc' +
+                                                ' --build-arg POINT_RELEASE=5 '
+
                         }
                     }
                     steps {
