@@ -113,6 +113,7 @@ differ by at least 100.
 
 1. Stop all DAOS client I/O.
 1. Evict client pool handles to ensure I/O has stopped.
+1. Stop all DAOS engines by running `dmg system stop`.
 1. Shut down all `daos_server` processes.
 1. Update the fabric provider and interfaces in all `daos_server` configuration files. All `daos_server` configurations must use the same fabric provider.
 1. Restart all `daos_server` processes to re-load the configuration file.
