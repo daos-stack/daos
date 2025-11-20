@@ -34,10 +34,10 @@ class BoundaryPoolContainerSpace(TestWithServers):
         """Set up each test case."""
         super().setUp()
 
-        self.test_loop = self.params.get("test_loop", "/run/pool/*", 0)
-        self.reclaim_props = self.params.get("reclaim_props", "/run/pool/*", [])
+        self.test_loop = self.params.get("test_loop", "/run/test_config/*", 0)
+        self.reclaim_props = self.params.get("reclaim_props", "/run/test_config/*", [])
 
-        delta = self.params.get("delta", "/run/pool/*", "0")
+        delta = self.params.get("delta", "/run/test_config/*", "0")
         self.delta_bytes = human_to_bytes(delta)
         self.log.info("==> Set pool delta to %s (%i bytes)", delta, self.delta_bytes)
 
