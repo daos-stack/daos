@@ -55,41 +55,46 @@ index 3aeae41ad..5e249aaa3 100644
  ifeq ($(CONFIG_VFIO_USER),y)
  VFIOUSERBUILD = vfiouserbuild
 diff --git a/configure b/configure
-index 26c9b0f4d..6b2a8e412 100755
+index 26c9b0f4d..8ef548fa8 100755
 --- a/configure
 +++ b/configure
-@@ -63,6 +63,9 @@ function usage() {
+@@ -62,6 +62,8 @@ function usage() {
+ 	echo " --without-idxd            Disabled while experimental. Only built for x86 when enabled."
  	echo " --with-crypto             Build isa-l-crypto and vbdev crypto module. No path required."
  	echo " --without-crypto          Disable isa-l-crypto and vbdev crypto module."
++	echo " --with-isal[=DIR]         Don't build isal, use external library"
++	echo " --with-isal-crypto[=DIR]  Don't build isal-crypto, use external library"
  	echo " --with-fio[=DIR]          Build fio_plugin."
-+	echo " --with-isal=DIR           Don't build isal, use external library"
-+	echo " --with-isal-crypto=DIR    Don't build isal-crypto, use external library"
-+	echo " --with-fio[=DIR]          Build fio_plugin."
  	echo " --without-fio             default: /usr/src/fio"
  	echo " --with-xnvme              Build xNVMe bdev module."
- 	echo " --without-xnvme           No path required."
-@@ -581,6 +584,20 @@ for i in "$@"; do
+@@ -581,6 +583,26 @@ for i in "$@"; do
  		--without-fio)
  			CONFIG[FIO_PLUGIN]=n
  			;;
++		--with-isal) ;&
 +		--with-isal=*)
-+			if [[ ${i#*=} != "$i" ]]; then
++			# if specified, set the default so we don't build it
++			CONFIG[ISAL_PATH]="/usr"
++			if [[ -n ${i#*=} ]] && [[ ${i#*=} != "$i" ]]; then
 +				CONFIG[ISAL_PATH]=${i#*=}
 +			fi
 +			check_dir "--with-isal=${CONFIG[ISAL_PATH]}"
 +			CONFIG[ISAL]=y
 +			;;
++		--with-isal-crypto) ;&
 +		--with-isal-crypto=*)
-+			if [[ ${i#*=} != "$i" ]]; then
++			# if specified, set the default so we don't build it
++			CONFIG[ISAL_CRYPTO_PATH]="/usr"
++			if [[ -n ${i#*=} ]] && [[ ${i#*=} != "$i" ]]; then
 +				CONFIG[ISAL_CRYPTO_PATH]=${i#*=}
 +			fi
-+			check_dir "--with-isal=${CONFIG[ISAL_CRYPTO_PATH]}"
++			check_dir "--with-isal-crypto=${CONFIG[ISAL_CRYPTO_PATH]}"
 +			CONFIG[ISAL_CRYPTO]=y
 +			;;
  		--with-vtune=*)
  			check_dir "$i"
  			CONFIG[VTUNE_DIR]="${i#*=}"
-@@ -1228,7 +1245,10 @@ if [[ "${CONFIG[FUZZER]}" = "y" && "$CC_TYPE" != "clang" ]]; then
+@@ -1228,7 +1250,10 @@ if [[ "${CONFIG[FUZZER]}" = "y" && "$CC_TYPE" != "clang" ]]; then
  	exit 1
  fi
  
@@ -101,7 +106,7 @@ index 26c9b0f4d..6b2a8e412 100755
  	CONFIG[ISAL]=y
  	# make sure the submodule is initialized
  	if [ ! -f "$rootdir"/isa-l/autogen.sh ]; then
-@@ -1266,35 +1286,40 @@ else
+@@ -1266,35 +1291,40 @@ else
  fi
  
  # now either configure ISA-L or disable unavailable features
