@@ -539,7 +539,7 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg RELEASE=8.8 '
+                                                ' --build-arg RELEASE=8 '
                         }
                     }
                     steps {
