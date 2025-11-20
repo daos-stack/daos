@@ -454,11 +454,10 @@ func bdevScanEngineAssigned(ctx context.Context, engine Engine, req *ctlpb.ScanN
 
 		resp, err := bdevScanToProtoResp(engine, engine.GetStorage().ScanBdevs, bdevCfgs)
 		if err != nil {
-			engine.Debugf("bdevScanToProtoResp() failed: %+v", err)
-			return nil, err
+			return nil, errors.Wrap(err, "bdevScanEngineAssigned: bdevScanToProtoResp")
 		}
 
-		engine.Debugf("bdevScanToProtoResp returned: %+v", resp)
+		engine.Debugf("bdevScanEngineAssigned: bdevScanToProtoResp returned: %+v", resp)
 		return resp, err
 	}
 

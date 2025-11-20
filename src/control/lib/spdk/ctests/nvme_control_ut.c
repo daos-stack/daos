@@ -211,17 +211,13 @@ test_collect(void **state)
 {
 	(void)state;
 
-	fprintf(stdout, "attach\n");
 	attach_mock_controllers();
 
-	fprintf(stdout, "init\n");
 	test_ret = init_ret();
 
 	assert_null(test_ret->ctrlrs);
-	fprintf(stdout, "before collect\n");
 	_collect(test_ret, &mock_copy_ctrlr_data, &mock_spdk_nvme_ctrlr_get_pci_device,
 		 &mock_spdk_pci_device_get_socket_id, &mock_spdk_pci_device_get_type);
-	fprintf(stdout, "after collect\n");
 
 	if (test_ret->rc != 0)
 		fprintf(stderr, "collect err: %s\n", test_ret->info);

@@ -459,19 +459,15 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 	ctrlr_entry = g_controllers;
 
-	fprintf(stdout, "begiy collect\n");
 	while (ctrlr_entry) {
-		fprintf(stdout, "begiy collect, entry begin\n");
 		ctrlr_tmp = calloc(1, sizeof(struct nvme_ctrlr_t));
 		if (!ctrlr_tmp) {
 			rc = -ENOMEM;
 			goto fail;
 		}
 
-		fprintf(stdout, "spdk_nvme_ctrlr_get_data\n");
 		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
-		fprintf(stdout, "copy_data\n");
 		rc = copy_data(ctrlr_tmp, cdata);
 		if (rc != 0)
 			goto fail;
@@ -482,7 +478,6 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			goto fail;
 		}
 
-		fprintf(stdout, "spdk_pci_addr_fmt\n");
 		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr, SPDK_NVMF_TRADDR_MAX_LEN,
 				       &ctrlr_entry->pci_addr);
 		if (rc != 0) {
@@ -497,19 +492,15 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		/* Populate numa socket id & pci device type */
 
-		fprintf(stdout, "get_pci\n");
 		pci_dev = get_pci(ctrlr_entry->ctrlr);
 		if (!pci_dev) {
 			rc = -NVMEC_ERR_GET_PCI_DEV;
 			goto fail;
 		}
 
-		fprintf(stdout, "get_socket_id\n");
 		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
 
-		fprintf(stdout, "spdk_pci_device_get_type\n");
-		pci_type = get_pci_type(pci_dev);
-		fprintf(stdout, "strndup: %s\n", pci_type);
+		pci_type            = get_pci_type(pci_dev);
 		ctrlr_tmp->pci_type = strndup(pci_type, NVME_DETAIL_BUFLEN);
 		if (ctrlr_tmp->pci_type == NULL) {
 			rc = -NVMEC_ERR_GET_PCI_TYPE;
@@ -518,7 +509,6 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		/* Alloc linked list of namespaces per controller */
 		if (ctrlr_entry->nss) {
-			fprintf(stdout, "collect_namespaces\n");
 			rc = collect_namespaces(ctrlr_entry->nss, ctrlr_tmp);
 			if (rc != 0)
 				goto fail;
@@ -532,28 +522,20 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 				goto fail;
 			}
 
-			fprintf(stdout, "populate_dev_health\n");
 			/* Store device health stats for export */
 			populate_dev_health(cstats, &ctrlr_entry->health->page,
 				&ctrlr_entry->health->intel_smart_page, cdata);
 			ctrlr_tmp->stats = cstats;
 		}
 
-		fprintf(stdout, "ctrlr_tmp->next = ret->ctrlrs;\n");
 		ctrlr_tmp->next = ret->ctrlrs;
-		fprintf(stdout, "ret->ctrlrs = ctrlr_tmp;\n");
 		ret->ctrlrs = ctrlr_tmp;
 
-		fprintf(stdout, "ctrlr_entry = ctrlr_entry->next;\n");
 		ctrlr_entry = ctrlr_entry->next;
-
-		fprintf(stdout, "begiy collect, entry end\n");
 	}
 
-	fprintf(stdout, "end collect\n");
 	return;
 fail:
-	fprintf(stdout, "collect cleanup begin\n");
 	ret->rc = rc;
 	if (ret->rc == 0)
 		/* Catch unexpected failures */
@@ -563,7 +545,6 @@ fail:
 		free(ctrlr_tmp);
 	}
 	clean_ret(ret);
-	fprintf(stdout, "collect cleanup end\n");
 	return;
 }
 
