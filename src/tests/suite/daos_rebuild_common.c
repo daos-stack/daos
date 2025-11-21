@@ -1376,12 +1376,10 @@ rebuild_resume_wait(void *data)
 		    "waiting rebuild state: rs_errno=%d (wait for %d), rs_state=%d (wait for %d)\n",
 		    rst->rs_errno, 0, rst->rs_state, DRS_COMPLETED);
 	} while (rst->rs_errno == -DER_OP_CANCELED);
-	print_message(
-	    "check: resumed rebuild is done: rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
-	    rst->rs_errno, 0, rst->rs_state, DRS_COMPLETED);
 	state_match = (rst->rs_errno == 0 && rst->rs_state == DRS_COMPLETED);
-	print_message("%sMATCHED check: rs_errno=%d, rs_state=%d\n", state_match ? "" : "NOT-",
-		      rst->rs_errno, rst->rs_state);
+	print_message(
+	    "check %s: resumed rebuild rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
+	    state_match ? "passed" : "FAILED", rst->rs_errno, 0, rst->rs_state, DRS_COMPLETED);
 	assert_int_equal(rst->rs_errno, 0);
 	assert_int_equal(rst->rs_state, DRS_COMPLETED);
 

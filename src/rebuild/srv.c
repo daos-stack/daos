@@ -565,6 +565,10 @@ rebuild_status_completed_update_partial(const uuid_t pool_uuid, int32_t rs_state
 
 	rs_inlist = rebuild_status_completed_lookup(pool_uuid);
 	if (rs_inlist != NULL) {
+		/* possible enhancement: only overwrite rs_inlist->rs_errno if rs_errno != 0
+		 * e.g., if marking a failed rebuild as done after Fail_reclaim, keep original
+		 * rs_errno.
+		 */
 		rs_inlist->rs_errno = rs_errno;
 		rs_inlist->rs_state = rs_state;
 		return 0;
@@ -1901,8 +1905,7 @@ complete:
 			  DP_RC(rgt->rgt_status.rs_errno));
 	} else if ((task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) &&
 		   (task->dst_retry_rebuild_op != RB_OP_NONE)) {
-		/* Fail_reclaim done (and a stop command wasn't received during) - retry original
-		 * rebuild */
+		/* Fail_reclaim done (and a stop command wasn't received during) - retry rebuild. */
 		rc1 = ds_rebuild_schedule(pool, task->dst_retry_map_ver, rgt->rgt_reclaim_epoch,
 					  task->dst_new_layout_version, &task->dst_tgts,
 					  task->dst_retry_rebuild_op,

@@ -38,9 +38,6 @@ int		dt_redun_fac;
 int		dt_incr_reint;
 bool            dt_no_punch; /* will remove later */
 
-/** rebuild test variants */
-bool            dt_rb_interactive = false;
-
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
  * ipool (optional): import pool: store info for an existing pool to arg->pool.
@@ -407,14 +404,6 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	/** Look at variables set by test arguments and configure testing */
-	arg->interactive_rebuild_cmdline = dt_rb_interactive;
-	if (dt_rb_interactive) {
-		print_message("\n-------\n"
-			      "Interactive rebuild (stop|start) is enabled in some tests!"
-			      "\n-------\n");
-		arg->interactive_rebuild =
-		    1; /* tests examine this or set (to override command-line) */
-	}
 
 	/** Look at variables set by test arguments and setup pool props */
 	if (dt_incr_reint) {
@@ -792,8 +781,9 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **eng
 	return rc;
 }
 
+/* Determine if pool rebuild is busy, and the rebuild version is > rs_version */
 static bool
-rebuild_pool_started(test_arg_t *arg)
+rebuild_pool_started(test_arg_t *arg, uint32_t rs_version)
 {
 	daos_pool_info_t            pinfo = {0};
 	struct daos_rebuild_status *rst;
@@ -808,10 +798,12 @@ rebuild_pool_started(test_arg_t *arg)
 			      rc, DP_UUID(arg->pool.pool_uuid));
 		return false;
 	} else {
-		bool started = (rst->rs_state == DRS_IN_PROGRESS);
-		print_message("rebuild for pool " DF_UUIDF "has %sstarted\n",
-			      DP_UUID(arg->pool.pool_uuid), started ? "" : "not yet ");
-		return started;
+		bool in_progress = (rst->rs_state == DRS_IN_PROGRESS);
+		print_message("rebuild for pool " DF_UUIDF "has %sstarted, rs_version=%u "
+			      "(waiting for > %d)\n",
+			      DP_UUID(arg->pool.pool_uuid), in_progress ? "" : "not yet ",
+			      rst->rs_version, rs_version);
+		return in_progress && (rst->rs_version > rs_version);
 	}
 }
 
@@ -918,7 +910,7 @@ test_get_last_svr_rank(test_arg_t *arg)
 }
 
 bool
-test_rebuild_started(test_arg_t **args, int args_cnt)
+test_rebuild_started(test_arg_t **args, int args_cnt, uint32_t rs_version)
 {
 	bool all_started = true;
 	int  i;
@@ -927,7 +919,7 @@ test_rebuild_started(test_arg_t **args, int args_cnt)
 		bool started = true;
 
 		if (!args[i]->pool.destroyed)
-			started = rebuild_pool_started(args[i]);
+			started = rebuild_pool_started(args[i], rs_version);
 
 		if (!started)
 			all_started = false;
@@ -938,7 +930,14 @@ test_rebuild_started(test_arg_t **args, int args_cnt)
 void
 test_rebuild_wait_to_start(test_arg_t **args, int args_cnt)
 {
-	while (!test_rebuild_started(args, args_cnt))
+	while (!test_rebuild_started(args, args_cnt, 0 /* don't care rs_version */))
+		sleep(2);
+}
+
+void
+test_rebuild_wait_to_start_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
+{
+	while (!test_rebuild_started(args, args_cnt, rs_version))
 		sleep(2);
 }
 
