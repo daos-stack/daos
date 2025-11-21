@@ -1,4 +1,4 @@
-* Thu Nov 6 2025 Jeff Olivier <jeffolivier@google.com> - 2.0.0-1
+* Fri Nov 21 2025 Jeff Olivier <jeffolivier@google.com> - 2.0.0-1
 - Upgrade to SPDK 24.09.
 - Restore missing changelog
 
