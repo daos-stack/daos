@@ -391,8 +391,9 @@ static int
 dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
-	struct vos_dtx_cmt_ent	*dce_new = val->iov_buf;
-	struct vos_dtx_cmt_ent	*dce_old;
+	struct vos_dtx_cmt_ent *dce_new = val->iov_buf;
+	struct vos_dtx_cmt_ent *dce_old;
+	int                     rc = 0;
 
 	dce_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
@@ -418,20 +419,11 @@ dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	if (dce_old->dce_invalid) {
 		rec->rec_off = umem_ptr2off(&tins->ti_umm, dce_new);
 		D_FREE(dce_old);
-	} else if (!dce_old->dce_reindex) {
-		/* If two client threads (such as non-initialized context after fork) use the same
-		 * DTX ID (by chance), then it is possible to arrive here. But once comes here, we
-		 * have no chance to require related client/application to restart the transaction
-		 * since related RPC may has already completed.
-		 * */
-		if (unlikely(dce_new->dce_reindex == 0))
-			D_WARN("Commit DTX " DF_DTI " for more than once, maybe reused\n",
-			       DP_DTI(&DCE_XID(dce_new)));
-		else
-			dce_new->dce_exist = 1;
+	} else {
+		rc = -DER_EXIST;
 	}
 
-	return 0;
+	return rc;
 }
 
 static btr_ops_t dtx_committed_btr_ops = {
@@ -944,11 +936,14 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 	*dae_p = dae;
 
 out:
-	if (rc != -DER_ALREADY && rc != -DER_NONEXIST)
-		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Commit the DTX " DF_DTI, DP_DTI(dti));
-
 	if (rc != 0)
 		D_FREE(dce);
+
+	if (rc == -DER_EXIST)
+		rc = 0;
+
+	if (rc != -DER_ALREADY && rc != -DER_NONEXIST)
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Commit the DTX " DF_DTI, DP_DTI(dti));
 
 	if (rm_cos != NULL &&
 	    ((rc == 0 && !keep_act) || rc == -DER_NONEXIST || (rc == -DER_ALREADY && dae == NULL)))
@@ -3058,10 +3053,11 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 		   struct vos_cont_df *cont_df, umem_off_t dbd_off, const uint64_t *cmt_time)
 {
 	struct vos_dtx_blob_df *dbd;
-	umem_off_t              dbd_next_off = UMOFF_NULL;
-	uint64_t                epoch;
-	int                     dtx_aggr_count;
-	bool                    is_dbd_freed = false;
+	umem_off_t              dbd_next_off   = UMOFF_NULL;
+	uint64_t                epoch          = cont_df->cd_newest_aggregated;
+	int                     dtx_aggr_count = 0;
+	int                     cached_count   = 0;
+	bool                    is_dbd_freed   = false;
 	int                     i;
 	int                     rc;
 
@@ -3078,8 +3074,6 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 		goto out;
 	}
 
-	dtx_aggr_count = 0;
-	epoch          = cont_df->cd_newest_aggregated;
 	for (i = 0; i < dbd->dbd_count; i++) {
 		struct vos_dtx_cmt_ent_df *dce_df;
 		d_iov_t                    kiov;
@@ -3091,6 +3085,8 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
+		if (rc == 0)
+			cached_count++;
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (unlikely(rc != 0)) {
@@ -3199,20 +3195,23 @@ out_tx_end:
 		goto out;
 	}
 
-	if (dtx_aggr_count > 0) {
-		cont->vc_dtx_committed_count -= dtx_aggr_count;
-		cont->vc_pool->vp_dtx_committed_count -= dtx_aggr_count;
-		d_tm_dec_gauge(tls->vtl_committed, dtx_aggr_count);
+	if (cached_count > 0) {
+		D_ASSERTF(cont->vc_dtx_committed_count >= cached_count,
+			  "Unexpected committed DTX entries count during aggregation: %u vs %u\n",
+			  cont->vc_dtx_committed_count, cached_count);
 
-		D_DEBUG(DB_IO,
-			"Release %i DTX committed entries of blob %p (" UMOFF_PF
-			") of cont " DF_UUID,
-			dtx_aggr_count, dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
+		cont->vc_dtx_committed_count -= cached_count;
+		cont->vc_pool->vp_dtx_committed_count -= cached_count;
+		d_tm_dec_gauge(tls->vtl_committed, cached_count);
 	}
+
+	D_DEBUG(DB_TRACE,
+		"Release %d/%d DTX committed entries of blob %p (" UMOFF_PF ") of cont " DF_UUID,
+		cached_count, dtx_aggr_count, dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 
 	if (is_dbd_freed) {
 		cont->vc_cmt_dtx_reindex_pos = dbd_next_off;
-		D_DEBUG(DB_IO,
+		D_DEBUG(DB_TRACE,
 			"Removed blob of DTX committed entries %p (" UMOFF_PF ") of cont " DF_UUID,
 			dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 		rc = 1;
@@ -3593,23 +3592,16 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		memcpy(&dce->dce_base, dce_df, sizeof(dce->dce_base));
-		dce->dce_reindex = 1;
 
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
 		d_iov_set(&riov, dce, sizeof(*dce));
 		rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 				   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 		if (rc != 0) {
+			if (rc == -DER_EXIST)
+				rc = 1;
 			D_FREE(dce);
 			goto out;
-		}
-
-		/* The committed DTX entry is already in the index.
-		 * Related re-index logic can stop.
-		 */
-		if (dce->dce_exist) {
-			D_FREE(dce);
-			D_GOTO(out, rc = 1);
 		}
 
 		cnt++;
