@@ -13,7 +13,9 @@ from ClusterShell.NodeSet import NodeSet
 from util.host_utils import get_local_host
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
                                 get_common_provider, get_fastest_interface)
-from util.run_utils import run_remote
+from util.run_utils import get_clush_command, run_local, run_remote
+
+EXCLUDED_DAOS_TEST_ENV_VARS = []
 
 
 class TestEnvironmentException(Exception):
@@ -115,6 +117,7 @@ class TestEnvironment():
         'control_config': 'DAOS_TEST_CONTROL_CONFIG',
         'agent_config': 'DAOS_TEST_AGENT_CONFIG',
         'server_config': 'DAOS_TEST_SERVER_CONFIG',
+        'env_file': 'DAOS_TEST_ENV_FILE',
     }
 
     def __init__(self):
@@ -192,6 +195,16 @@ class TestEnvironment():
             self.agent_config = os.path.join(self.log_dir, "configs", "daos_agent.yml")
         if self.server_config is None:
             self.server_config = os.path.join(self.log_dir, "configs", "daos_server.yml")
+        if self.env_file is None:
+            self.env_file = os.path.join(self.log_dir, "configs", "daos_test_env.txt")
+
+        if not os.path.exists(self.env_file):
+            os.makedirs(os.path.dirname(self.env_file), exist_ok=True)
+            # Write the current environment variables to the test environment file
+            with open(self.env_file, 'w', encoding='utf-8') as f:
+                for key, value in os.environ.items():
+                    if key not in EXCLUDED_DAOS_TEST_ENV_VARS:
+                        f.write(f"{key}={value}\n")
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -615,6 +628,24 @@ class TestEnvironment():
         """
         self.__set_value('server_config', value)
 
+    @property
+    def env_file(self):
+        """Get the test environment file.
+
+        Returns:
+            str: the test environment file
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['env_file'])
+
+    @env_file.setter
+    def env_file(self, value):
+        """Set the test environment file.
+
+        Args:
+            value (str): the test environment file
+        """
+        self.__set_value('env_file', value)
+
     def config_file_directories(self):
         """Get the unique list of directories for the client, control, and server config files.
 
@@ -684,6 +715,15 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         # Default agent socket dir to be accessible by agent user
         if os.environ.get("DAOS_AGENT_DRPC_DIR") is None and test_env.agent_user != 'root':
             os.environ["DAOS_AGENT_DRPC_DIR"] = os.path.join(test_env.log_dir, "daos_agent")
+
+        # Copy the test environment file to all the servers and clients
+        if test_env.env_file:
+            command = get_clush_command(
+                servers | clients,
+                args=" ".join(["--rcopy", test_env.env_file, "--dest", test_env.env_file]))
+            result = run_local(logger, command)
+            if not result.passed:
+                raise TestEnvironmentException("Failed to copy test environment file to all nodes")
 
     # Python paths required for functional testing
     set_python_environment(logger)
