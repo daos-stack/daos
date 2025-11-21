@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -227,12 +228,12 @@ class CartTest(TestWithoutServers):
 
         env += yaml_envs
 
-        if os.environ.get("PATH") is not None:
-            env += " -x PATH"
+        for _env_name in ["PATH", "COVFILE", "GCOV_PREFIX", "GCOV_PREFIX_STRP"]:
+            if os.environ.get(_env_name) is not None:
+                env += f" -x {_env_name}"
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
         env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
-        env += " -x COVFILE=/tmp/test.cov"
 
         self.attach_dir = daos_test_shared_dir
         self.log_path = log_path

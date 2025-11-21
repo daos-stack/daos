@@ -474,6 +474,12 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     task.set_info('fanout', fanout)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
+
+    # Support running remote commands with the test environment
+    _test_env_file = os.environ.get("DAOS_TEST_ENV_FILE", None)
+    if _test_env_file is not None:
+        command = f"source {_test_env_file} && {re.sub(r'\bsudo\b', 'sudo -E', command)}"
+
     if verbose:
         if timeout is None:
             log.debug("Running on %s without a timeout: %s", hosts, command)
@@ -519,20 +525,23 @@ def command_as_user(command, user, env=None):
     return " ".join(cmd_list)
 
 
-def find_command(source, pattern, depth, other=None):
+def find_command(source, pattern, depth=None, other=None):
     """Get the find command.
 
     Args:
         source (str): where the files are currently located
         pattern (str): pattern used to limit which files are processed
-        depth (int): max depth for find command
+        depth (int, optional): max depth for find command. Defaults to None, no depth limit.
         other (object, optional): other commands, as a list or str, to include at the end of the
             base find command. Defaults to None.
 
     Returns:
         str: the find command
     """
-    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    command = ["find", source]
+    if depth is not None:
+        command.extend(["-maxdepth", str(depth)])
+    command.extend(["-type", "f", "-name", f"'{pattern}'"])
     if isinstance(other, list):
         command.extend(other)
     elif isinstance(other, str):
