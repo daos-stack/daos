@@ -2186,7 +2186,7 @@ rdb_timerd(void *arg)
 	D_DEBUG(DB_MD, DF_DB": timerd starting\n", DP_DB(db));
 
 	uuid_clear(anonym_uuid);
-	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, 0, &anonym_uuid);
 	sched_req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (sched_req == NULL) {
 		D_ERROR(DF_DB": failed to get sched req.\n", DP_DB(db));

@@ -158,10 +158,11 @@ enum {
 };
 
 enum {
-	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
-	SCHED_REQ_FL_PERIODIC	= (1 << 1),
-	SCHED_REQ_FL_NO_REJECT	= (1 << 2),
-	SCHED_REQ_FL_RESENT	= (1 << 3),
+	SCHED_REQ_FL_NO_DELAY   = (1 << 0),
+	SCHED_REQ_FL_PERIODIC   = (1 << 1),
+	SCHED_REQ_FL_NO_REJECT  = (1 << 2),
+	SCHED_REQ_FL_RESENT     = (1 << 3),
+	SCHED_REQ_FL_DEEP_STACK = (1 << 4),
 };
 
 struct sched_req_attr {
@@ -174,11 +175,10 @@ struct sched_req_attr {
 };
 
 static inline void
-sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
-		    uuid_t *pool_id)
+sched_req_attr_init(struct sched_req_attr *attr, uint32_t type, uint32_t flags, uuid_t *pool_id)
 {
-	attr->sra_type = type;
-	attr->sra_flags = 0;
+	attr->sra_type  = type;
+	attr->sra_flags = flags;
 	uuid_copy(attr->sra_pool_id, *pool_id);
 }
 

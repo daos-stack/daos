@@ -116,7 +116,7 @@ dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 
 	/* Initialize sched_req for the backoffs below. */
 	uuid_clear(anonym_uuid);
-	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, 0, &anonym_uuid);
 	sched_req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (sched_req == NULL) {
 		D_ERROR("failed to get sched req\n");

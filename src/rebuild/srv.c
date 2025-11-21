@@ -944,7 +944,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 	if (rc)
 		return;
 
-	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rgt->rgt_pool_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, 0, &rgt->rgt_pool_uuid);
 	rgt->rgt_ult = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (rgt->rgt_ult == NULL)
 		return;
@@ -2777,7 +2777,7 @@ rebuild_tgt_status_check_ult(void *arg)
 	struct sched_req_attr	attr = { 0 };
 
 	D_ASSERT(rpt != NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rpt->rt_pool_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, 0, &rpt->rt_pool_uuid);
 	rpt->rt_ult = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (rpt->rt_ult == NULL) {
 		D_ERROR("Can not start rebuild status check\n");
@@ -3209,7 +3209,7 @@ rebuild_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	if (opc_get(rpc->cr_opc) == REBUILD_OBJECTS_SCAN) {
 		struct rebuild_scan_in *rsi = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &rsi->rsi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, 0, &rsi->rsi_pool_uuid);
 	}
 
 	return 0;

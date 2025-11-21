@@ -223,7 +223,7 @@ dss_sleep(uint64_t msec)
 	uuid_t			 anonym_uuid;
 
 	uuid_clear(anonym_uuid);
-	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, 0, &anonym_uuid);
 	req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (req == NULL)
 		return -DER_NOMEM;

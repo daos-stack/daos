@@ -382,7 +382,7 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 	/* There will be several levels iteration, such as pool, container, object, and lower,
 	 * and so on. Let's use DSS_DEEP_STACK_SZ to avoid ULT overflow.
 	 */
-	sched_req_attr_init(&attr, SCHED_REQ_SCRUB, &child->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_SCRUB, 0, &child->spc_uuid);
 	child->spc_scrubbing_req = sched_create_ult(&attr, scrubbing_ult, child,
 						    DSS_DEEP_STACK_SZ);
 	if (child->spc_scrubbing_req == NULL) {
