@@ -460,7 +460,6 @@ out:
 
 }
 
-
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
 {
@@ -496,8 +495,8 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 			goto out;
 		}
 
-		D_WARN("Lost pool "DF_UUIDF" shard %u on rank %u.\n",
-		       DP_UUID(child->spc_uuid), info->dmi_tgt_id, dss_self_rank());
+		D_WARN(DF_UUID ": Lost pool shard %u on rank %u.\n", DP_UUID(child->spc_uuid),
+		       info->dmi_tgt_id, dss_self_rank());
 		/*
 		 * Ignore the failure to allow subsequent logic (such as DAOS check)
 		 * to handle the trouble.
@@ -2438,8 +2437,13 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 put:
 	ds_cont_child_put(cont);
+	/* don't destroy vos container, to avoid ds_cont_tgt_refresh_agg_eph() failure,
+	 * later depend on container recovery process to handle it.
+	 */
+#if 0
 	if (rc == 0)
 		rc = ds_cont_child_destroy(arg->tgt_discard->pool_uuid, entry->ie_couuid);
+#endif
 	return rc;
 }
 
@@ -2600,7 +2604,7 @@ ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(v
 }
 
 /* Discard the objects by epoch in this pool */
-static void
+static int
 ds_pool_tgt_discard_ult(void *data)
 {
 	struct ds_pool		*pool;
@@ -2627,6 +2631,7 @@ ds_pool_tgt_discard_ult(void *data)
 	ds_pool_put(pool);
 free:
 	tgt_discard_arg_free(arg);
+	return rc;
 }
 
 void
@@ -2659,7 +2664,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 
 	pool->sp_need_discard = 1;
 	pool->sp_discard_status = 0;
-	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
 
 	ds_pool_put(pool);
 out:

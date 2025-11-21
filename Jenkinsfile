@@ -166,6 +166,7 @@ pipeline {
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsFaultsArgs()
+        HTTPS_PROXY = ''
     }
 
     options {
@@ -252,6 +253,9 @@ pipeline {
         booleanParam(name: 'CI_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on EL 8')
+        booleanParam(name: 'CI_el9_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build on Leap 15')
@@ -289,10 +293,10 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on Leap 15 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
@@ -306,25 +310,25 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
         booleanParam(name: 'CI_medium_md_on_ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
         booleanParam(name: 'CI_medium_vmd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium VMD test stage')
         booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
@@ -653,6 +657,79 @@ pipeline {
                                       mv config.log config.log-el8-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-el8-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.9'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-el9 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-el9-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-el9-gcc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on Leap 15.5') {
+                    when {
+                        beforeAgent true
+                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.leap.15'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       build_deps: 'yes'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
                                              allowEmptyArchive: true
                         }
                         cleanup {

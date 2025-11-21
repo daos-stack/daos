@@ -1885,7 +1885,9 @@ obj_ec_fetch_set_sgl(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 		uiod = &uiods[i];
 		riod = &riods[i];
 		usgl = &usgls[i];
-		usgl->sg_nr_out = 0;
+		/* for data recovery case, the sg_nr_out possibly already set by obj_ec_sgl_copy */
+		if (!reasb_req->orr_recov_data)
+			usgl->sg_nr_out = 0;
 		tail_hole_size = 0;
 		size_in_iod =  daos_iods_len(uiod, 1);
 		if (uiod->iod_size == 0)
@@ -1933,7 +1935,7 @@ tgt_check:
 			 * is set by obj_ec_recov_fill_back().
 			 */
 			if (!reasb_req->orr_recov_data ||
-			    (size_in_iod - tail_hole_size) > daos_sgl_data_len(usgl))
+			    (size_in_iod - tail_hole_size) > daos_sgl_data_len(usgl, true))
 				dc_sgl_out_set(usgl, size_in_iod - tail_hole_size);
 
 			return;
@@ -2677,6 +2679,11 @@ obj_ec_sgl_copy(d_sg_list_t *sgl, uint64_t off, void *buf, uint64_t size)
 	/* to copy data from [buf, buf + size) to sgl */
 	rc = daos_sgl_processor(sgl, true, &sgl_idx, size, oes_copy, &arg);
 	D_ASSERT(rc == 0);
+	if (sgl_idx.iov_offset == 0)
+		sgl->sg_nr_out = sgl_idx.iov_idx;
+	else
+		sgl->sg_nr_out = sgl_idx.iov_idx + 1;
+	;
 }
 
 /* copy the recovered data back to missed (to be recovered) recx list */

@@ -149,4 +149,6 @@ dc_cont_open_flags_valid(uint64_t flags)
 	return true;
 }
 
+int
+dc_cont_mark_all_slave(void);
 #endif /* __DD_CONT_H__ */
