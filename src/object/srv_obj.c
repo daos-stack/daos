@@ -5946,13 +5946,14 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 out:
-	D_DEBUG(DB_IO, "Handled collective query RPC %p %s forwarding for obj "DF_UOID
-		" on rank %u XS %u/%u epc "DF_X64" pmv %u, with dti "DF_DTI", dct_nr %u, "
-		"forward width %u, forward depth %u\n: "DF_RC"\n", rpc,
-		ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid),
-		myrank, dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
-		DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
-		ocqi->ocqi_disp_width, ocqi->ocqi_disp_depth, DP_RC(rc));
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS, DLOG_ERR, DB_IO, rc,
+		  "Handled collective query RPC %p %s forwarding for obj " DF_UOID " on rank %u XS "
+		  "%u/%u epc " DF_X64 " pmv %u, with dti " DF_DTI ", dct_nr %u, forward width %u, "
+		  "forward depth %u",
+		  rpc, ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid),
+		  myrank, dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
+		  DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
+		  ocqi->ocqi_disp_width, ocqi->ocqi_disp_depth);
 
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, version);
