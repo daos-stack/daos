@@ -12,7 +12,7 @@ server_config:
     0:
       log_mask: INFO
       storage: auto
-pool:
+pool: !mux
   default:
     size: 100%
   md_on_ssd_p2:
