@@ -179,6 +179,9 @@ build_package() {
   --architecture "${ARCH}" \
   --description "${DESCRIPTION}" \
   --url "${URL}" \
+  --vendor "" \
+  --maintainer "DAOS Foundation <daos@daos.groups.io>" \
+  --prefix "" \
   "${depends[@]}" \
   "${conflicts[@]}" \
   "${EXTRA_OPTS[@]}" \
