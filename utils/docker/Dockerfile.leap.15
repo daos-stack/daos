@@ -63,14 +63,16 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
 USER daos_server:daos_server
 
 # Setup a python venv so that python packages can be installed locally.
-RUN python3 -m venv /home/daos/venv
+ARG PYTHON_VERSION=3.11
+RUN python${PYTHON_VERSION} -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 COPY requirements-build.txt requirements-utest.txt ./
-RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+RUN source /home/daos/venv/bin/activate && \
+    pip --no-cache-dir install --upgrade pip && \
+    pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components

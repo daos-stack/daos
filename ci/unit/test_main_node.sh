@@ -80,18 +80,30 @@ fi
 
 rm -rf "$test_log_dir"
 
-# Use default python as that's where storage_estimator is installed.
-python3 -m venv venv
+: "${PYTHON_VERSION:=3.11}"
+"python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-# touch venv/pip.conf
-# pip config set global.progress_bar off
-# pip config set global.no_color true
-
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip config set global.no_color true
 pip install --upgrade pip
 pip install --requirement requirements-utest.txt
-
 pip install /opt/daos/lib/daos/python/
 
+WITH_CODE_COVERAGE="no"
+if [[ -n $(find build -name "*.gcda") ]]; then
+    WITH_CODE_COVERAGE="yes"
+fi
+
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
-    --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
+    --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG \
+    --with_code_coverage="$WITH_CODE_COVERAGE"
+
+# Generate code coverage report if at least one gcda file was generated
+if [ "$WITH_CODE_COVERAGE" = "true" ]; then
+    pip install --requirement requirements-code-coverage.txt
+    mkdir -p "${test_log_dir}/code_coverage"
+    gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors \
+        --gcov-ignore-errors=no_working_dir_found
+fi

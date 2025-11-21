@@ -543,6 +543,10 @@ class Suite():
             print(f"Skipped  suite {self.name}, running on GitHub Actions")
             raise SuiteSkipped()
 
+        if args.with_code_coverage == "yes" and config.get("skip_with_code_coverage", False):
+            print(f"Skipped  suite {self.name}, code coverage not supported")
+            raise SuiteSkipped()
+
         return False
 
     def needs_aio(self):
@@ -640,6 +644,8 @@ def get_args():
                         help="Device to use for AIO, will create file by default")
     parser.add_argument('--log_dir', default="/tmp/daos_utest",
                         help="Path to store test logs")
+    parser.add_argument('--with_code_coverage', choices=['yes', 'no'], default='no',
+                        help='Tests compiled with code coverage')
     return parser.parse_args()
 
 
