@@ -224,7 +224,7 @@ class PoolCreateAllTestBase(TestWithServers):
         first_pool_size = None
         for index in range(pool_count):
             self.log.info("Creating pool %d with all the available storage: size=100%%", index)
-            self.pool[index].size.update("100%", "pool[0].size")
+            self.pool[index].size.update("90%", "pool[0].size")
             self.pool[index].create()
             self.pool[index].get_info()
             s_total = self.pool[index].info.pi_space.ps_space.s_total
