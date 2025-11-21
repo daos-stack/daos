@@ -960,7 +960,7 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                 test_function: 'runTestFunctionalV2',
-                                stashes: get_functional_stashes('ubuntu'))
+                                stashes: get_functional_stashes('ubuntu')))
                     }
                     post {
                         always {
