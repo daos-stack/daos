@@ -23,13 +23,8 @@ then
     rm -rf venv
 fi
 
-: "${PYTHON_VERSION:=3.11}"
-"python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
-source venv/bin/activate
-
-pip install --upgrade pip
-pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
+source ${DAOS_FTEST_VENV}/bin/activate
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
@@ -45,13 +40,6 @@ else
     logs_prefix="$DAOS_BASE/install/lib/daos/TESTING"
     cd "$DAOS_BASE"
 fi
-
-# Copy the pydaos source locally and install it, in an ideal world this would install
-# from the read-only tree directly but for now that isn't working.
-# https://github.com/pypa/setuptools/issues/3237
-cp -a "$PREFIX"/lib/daos/python pydaos
-pip install ./pydaos
-rm -rf pydaos
 
 # Disable D_PROVIDER to allow launch.py to set it
 unset D_PROVIDER

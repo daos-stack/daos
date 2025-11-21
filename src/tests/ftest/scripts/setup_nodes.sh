@@ -2,6 +2,7 @@
 # shellcheck disable=SC1113
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -95,6 +96,20 @@ if ! $TEST_RPMS; then
 	    sudo chown root /usr/bin/daos_server_helper && \
 	    sudo chmod 4755 /usr/bin/daos_server_helper
 fi
+
+# Setup a python virtual environment for functional testing
+"python${PYTHON_VERSION}" -m venv ${DAOS_FTEST_VENV}
+# shellcheck disable=SC1091
+source ${DAOS_FTEST_VENV}/bin/activate
+pip install --upgrade pip
+pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
+# Copy the pydaos source locally and install it, in an ideal world this would install
+# from the read-only tree directly but for now that isn't working.
+# https://github.com/pypa/setuptools/issues/3237
+cp -a "$PREFIX"/lib/daos/python pydaos
+pip install ./pydaos
+rm -rf pydaos
+deactivate
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"
