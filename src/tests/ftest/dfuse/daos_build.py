@@ -8,6 +8,7 @@
 
 import os
 import re
+import sys
 import time
 
 from apricot import TestWithServers
@@ -127,14 +128,14 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    cmds = ['python3 -m venv {}/venv'.format(mount_dir),
+    cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
             f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
             'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
-            'python3 -m pip install pip --upgrade',
-            f'python3 -m pip install -r {build_dir}/requirements-build.txt',
+            f'{sys.executable} -m pip install pip --upgrade',
+            f'{sys.executable} -m pip install -r {build_dir}/requirements-build.txt',
             f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
             f'daos filesystem query {mount_dir}',
             f'daos filesystem evict {build_dir}',

@@ -14,6 +14,8 @@ arch=$(uname -i)
 
 dnf_install_args="${1:-}"
 
+: "${PYTHON_VERSION:=3.11}"
+
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
     boost-devel \
@@ -67,7 +69,7 @@ dnf --nodocs install ${dnf_install_args} \
     patchelf \
     pciutils \
     pciutils-devel \
-    python3-devel \
+    python${PYTHON_VERSION//./}-devel \
     rpm-build \
     scons \
     sg3_utils \
