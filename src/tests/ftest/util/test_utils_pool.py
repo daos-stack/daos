@@ -847,6 +847,24 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
 
+    def rebuild_start(self):
+        """Use dmg to start rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_start(self.identifier)
+
+    def rebuild_stop(self):
+        """Use dmg to stop rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_stop(self.identifier)
+
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
         """Set Property.
