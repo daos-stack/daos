@@ -98,9 +98,9 @@ if ! $TEST_RPMS; then
 fi
 
 # Setup a python virtual environment for functional testing
-"python${PYTHON_VERSION}" -m venv ${DAOS_FTEST_VENV}
+"python${PYTHON_VERSION}" -m venv "${DAOS_FTEST_VENV}"
 # shellcheck disable=SC1091
-source ${DAOS_FTEST_VENV}/bin/activate
+source "${DAOS_FTEST_VENV}"/bin/activate
 pip install --upgrade pip
 pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 # Copy the pydaos source locally and install it, in an ideal world this would install

@@ -24,7 +24,7 @@ then
 fi
 
 # shellcheck disable=SC1091
-source ${DAOS_FTEST_VENV}/bin/activate
+source "${DAOS_FTEST_VENV}"/bin/activate
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
