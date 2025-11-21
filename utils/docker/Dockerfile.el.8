@@ -8,8 +8,8 @@
 #
 
 # Pull base image
-ARG POINT_RELEASE=
-ARG BASE_DISTRO=rockylinux/rockylinux:8$POINT_RELEASE
+ARG RELEASE=8
+ARG BASE_DISTRO=rockylinux/rockylinux:$RELEASE
 FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
