@@ -417,15 +417,14 @@ def get_fastest_interfaces(logger, hosts, verbose=True):
                 interfaces_at_speed[min_speed] = []
             interfaces_at_speed[min_speed].append(interface)
 
+    fastest_interfaces = None
     logger.info("Active network interface speeds on %s:", hosts)
     for speed in sorted(interfaces_at_speed):
-        logger.info("  - speed: %6s => %s", speed, sorted(interfaces_at_speed[speed]))
+        fastest_interfaces = sorted(interfaces_at_speed[speed])
+        logger.info("  - speed: %7s => %s", speed, fastest_interfaces)
 
-    try:
-        fastest_speed = sorted(interfaces_at_speed)[-1]
-        fastest_interfaces = interfaces_at_speed[fastest_speed]
-    except IndexError as error:
-        raise NetworkException("Error obtaining a default interface!") from error
+    if fastest_interfaces is None:
+        raise NetworkException(f"Error obtaining default interfaces w/ equal speed on {hosts}!")
 
     logger.info("Fastest interfaces detected on %s: %s", hosts, fastest_interfaces)
     return fastest_interfaces

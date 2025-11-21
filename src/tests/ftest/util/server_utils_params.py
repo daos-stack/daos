@@ -486,13 +486,19 @@ class EngineYamlParameters(YamlParameters):
         self._max_storage_tiers = max_storage_tiers
         super().__init__(os.path.join(*namespace))
 
-        # Use environment variables to get default parameters
+        # Use environment variables to get default parameters. Supports lists to define values for
+        # multiple engines through comma-separated strings. If the index exceeds the list length
+        # then values are reused round-robin style.
         try:
             _defaults = os.environ.get("DAOS_TEST_FABRIC_IFACE").split(",")
-            default_interface = list(filter(None, _defaults))[index]
+            default_interface = list(filter(None, _defaults))[index % len(_defaults)]
         except (AttributeError, IndexError):
             default_interface = f"eth{index}"
-        default_port = int(os.environ.get("D_PORT", 31317 + (100 * index)))
+        try:
+            _defaults = [int(port) for port in os.environ.get("D_PORT").split(",")]
+            default_port = list(filter(None, _defaults))[index % len(_defaults)]
+        except (AttributeError, ValueError, IndexError):
+            default_port = 31317 + (100 * index)
 
         # All log files should be placed in the same directory on each host
         # to enable easy log file archiving by launch.py

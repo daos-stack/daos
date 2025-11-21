@@ -31,7 +31,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 daos_perf:
   test_command: 'U;p F;p V O;p'
