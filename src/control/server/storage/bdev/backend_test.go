@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +21,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -887,27 +889,34 @@ func TestBackend_hugepageWalkFn(t *testing.T) {
 	}
 }
 
-func TestBackend_Prepare(t *testing.T) {
+func TestBackend_prepare_reset(t *testing.T) {
 	const (
 		testNrHugepages       = 8192
 		nonexistentTargetUser = "nonexistentTargetUser"
 		username              = "bob"
+		msgRemFail            = "remove lockfile failed"
 	)
 
 	defaultHpCleanCall := hugepageDir
 
+	testDir, clean := test.CreateTestDir(t)
+	defer clean()
+
 	for name, tc := range map[string]struct {
-		reset          bool
-		req            storage.BdevPrepareRequest
-		mbc            *MockBackendConfig
-		vmdDetectRet   *hardware.PCIAddressSet
-		vmdDetectErr   error
-		hpRemCount     uint
-		hpCleanErr     error
-		expScriptCalls []scriptCall
-		expErr         error
-		expResp        *storage.BdevPrepareResponse
-		expHpCleanCall string
+		reset             bool
+		req               storage.BdevPrepareRequest
+		nvme              spdk.Nvme
+		mbc               *MockBackendConfig
+		vmdDetectRet      *hardware.PCIAddressSet
+		vmdDetectErr      error
+		hpRemCount        uint
+		hpCleanErr        error
+		lockfileAddrs     *hardware.PCIAddressSet
+		expScriptCalls    []scriptCall
+		expErr            error
+		expResp           *storage.BdevPrepareResponse
+		expHpCleanCall    string
+		expLocksRemaining []string
 	}{
 		"prepare reset; defaults": {
 			reset: true,
@@ -1264,9 +1273,9 @@ func TestBackend_Prepare(t *testing.T) {
 				VMDPrepared: true,
 			},
 		},
-		"prepare setup; huge page clean only": {
+		"prepare setup; clean hugepages": {
 			req: storage.BdevPrepareRequest{
-				CleanHugepagesOnly: true,
+				CleanSpdkHugepages: true,
 			},
 			hpRemCount: 555,
 			expResp: &storage.BdevPrepareResponse{
@@ -1274,21 +1283,147 @@ func TestBackend_Prepare(t *testing.T) {
 			},
 			expHpCleanCall: defaultHpCleanCall,
 		},
-		"prepare setup; huge page clean fail": {
+		"prepare setup; clean hugepages fail": {
 			req: storage.BdevPrepareRequest{
-				CleanHugepagesOnly: true,
+				CleanSpdkHugepages: true,
 			},
 			hpCleanErr:     errors.New("clean failed"),
 			expErr:         errors.New("clean failed"),
 			expHpCleanCall: defaultHpCleanCall,
+		},
+		"prepare setup; lockfile clean; block list cancels allowed; clean skipped": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       mockAddrListStr(1, 2, 3),
+				PCIBlockList:       mockAddrListStr(1, 2, 3, 4),
+			},
+			lockfileAddrs: mockAddrList(1, 2, 3),
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: nil,
+			},
+			expLocksRemaining: []string{
+				spdk.LockfilePrefix + "0000:01:00.0",
+				spdk.LockfilePrefix + "0000:02:00.0",
+				spdk.LockfilePrefix + "0000:03:00.0",
+			},
+		},
+		"prepare setup; lockfile clean; empty allow and block lists; clean skipped": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+			},
+			lockfileAddrs: mockAddrList(1, 2, 3),
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: nil,
+			},
+			expLocksRemaining: []string{
+				spdk.LockfilePrefix + "0000:01:00.0",
+				spdk.LockfilePrefix + "0000:02:00.0",
+				spdk.LockfilePrefix + "0000:03:00.0",
+			},
+		},
+		"prepare setup; lockfile clean all; filter lists ignored": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles:    true,
+				CleanSpdkLockfilesAny: true,
+				PCIAllowList:          mockAddrListStr(1, 2, 3),
+				PCIBlockList:          mockAddrListStr(1, 2),
+			},
+			lockfileAddrs: mockAddrList(1, 2, 3),
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: []string{
+					filepath.Join(testDir, spdk.LockfilePrefix+"0000:01:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"0000:02:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"0000:03:00.0"),
+				},
+			},
+		},
+		"prepare setup; lockfile clean": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       mockAddrListStr(1, 2, 3),
+				PCIBlockList:       mockAddrListStr(1),
+			},
+			lockfileAddrs: mockAddrList(1, 2, 3),
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: []string{
+					filepath.Join(testDir, spdk.LockfilePrefix+"0000:02:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"0000:03:00.0"),
+				},
+			},
+			expLocksRemaining: []string{
+				spdk.LockfilePrefix + "0000:01:00.0",
+			},
+		},
+		"prepare setup; clean lockfiles fail": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       mockAddrListStr(1, 2, 3),
+			},
+			lockfileAddrs: mockAddrList(1, 2, 3),
+			nvme: &spdk.MockNvmeImpl{
+				Cfg: spdk.MockNvmeCfg{
+					CleanErr: errors.New(msgRemFail),
+				},
+			},
+			expResp: &storage.BdevPrepareResponse{},
+			expErr:  errors.New("clean spdk lockfiles: " + msgRemFail),
+			expLocksRemaining: []string{
+				spdk.LockfilePrefix + "0000:01:00.0",
+				spdk.LockfilePrefix + "0000:02:00.0",
+				spdk.LockfilePrefix + "0000:03:00.0",
+			},
+		},
+		"prepare setup; lockfile clean; vmd enabled": {
+			req: storage.BdevPrepareRequest{
+				CleanSpdkLockfiles: true,
+				PCIAllowList:       "0000:05:05.5 0000:d5:05.5",
+				EnableVMD:          true,
+			},
+			lockfileAddrs: hardware.MustNewPCIAddressSet(
+				"050505:07:00.0", "050505:09:00.0", "050505:11:00.0", "050505:14:00.0",
+				"5d0505:03:00.0", "d50505:01:00.0",
+			),
+			expResp: &storage.BdevPrepareResponse{
+				LockfilesRemoved: []string{
+					filepath.Join(testDir, spdk.LockfilePrefix+"050505:07:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"050505:09:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"050505:11:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"050505:14:00.0"),
+					filepath.Join(testDir, spdk.LockfilePrefix+"d50505:01:00.0"),
+				},
+			},
+			expLocksRemaining: []string{
+				spdk.LockfilePrefix + "5d0505:03:00.0",
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
+			if err := test.RemoveContents(t, testDir); err != nil {
+				t.Fatal(err)
+			}
+
 			sss, calls := mockScriptRunner(t, log, tc.mbc)
-			b := newBackend(log, sss)
+			if tc.nvme == nil {
+				if tc.lockfileAddrs != nil {
+					tc.nvme = &spdk.NvmeImpl{
+						LocksDir: testDir,
+					}
+				} else {
+					tc.nvme = &spdk.MockNvmeImpl{
+						Cfg: spdk.MockNvmeCfg{},
+					}
+				}
+			}
+			sb := &spdkBackend{
+				log: log,
+				binding: &spdkWrapper{
+					Nvme: tc.nvme,
+				},
+				script: sss,
+			}
 
 			if tc.expResp == nil {
 				tc.expResp = &storage.BdevPrepareResponse{}
@@ -1305,9 +1440,19 @@ func TestBackend_Prepare(t *testing.T) {
 			var gotErr error
 			var gotResp *storage.BdevPrepareResponse
 			if tc.reset {
-				gotResp, gotErr = b.reset(tc.req, mockVmdDetect)
+				gotResp, gotErr = sb.reset(tc.req, mockVmdDetect)
 			} else {
-				gotResp, gotErr = b.prepare(tc.req, mockVmdDetect, mockHpClean)
+				if tc.req.CleanSpdkLockfiles {
+					for _, addrStr := range tc.lockfileAddrs.Strings() {
+						fName := filepath.Join(testDir,
+							spdk.LockfilePrefix+addrStr)
+						if _, err := os.Create(fName); err != nil {
+							t.Fatalf("error creating %s", fName)
+						}
+					}
+				}
+
+				gotResp, gotErr = sb.prepare(tc.req, mockVmdDetect, mockHpClean)
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
@@ -1329,6 +1474,17 @@ func TestBackend_Prepare(t *testing.T) {
 				}
 			}
 			test.AssertEqual(t, tc.expHpCleanCall, hpCleanCall, "unexpected clean hugepages call")
+
+			locksRemaining, err := common.GetFilenames(testDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.expLocksRemaining == nil {
+				tc.expLocksRemaining = []string{}
+			}
+			if diff := cmp.Diff(tc.expLocksRemaining, locksRemaining); diff != "" {
+				t.Fatalf("\nunexpected list of lockfiles remaining (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
