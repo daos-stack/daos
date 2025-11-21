@@ -349,3 +349,14 @@ func ddbDtxAggr(ctx *DdbContext, path string, cmt_time uint64, cmt_date string) 
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_aggr(&ctx.ctx, &options))
 }
+
+func ddbCsumDump(ctx *DdbContext, path string, dst string) error {
+	/* Set up the options */
+	options := C.struct_csum_dump_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	options.dst = C.CString(dst)
+	defer freeString(options.dst)
+	/* Run the c code command */
+	return daosError(C.ddb_run_csum_dump(&ctx.ctx, &options))
+}

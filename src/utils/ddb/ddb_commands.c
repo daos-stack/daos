@@ -366,6 +366,150 @@ ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt)
 	return rc;
 }
 
+struct dump_csum_args {
+	struct ddb_ctx              *dca_ctx;
+	struct dv_indexed_tree_path *dca_vtp;
+	char                        *dca_dst_path;
+};
+
+struct dump_csum_value {
+	char    *dcv_type;
+	uint16_t dcv_length;
+	uint8_t *dcv_buf;
+};
+
+static int
+dump_csum_wrap(struct dump_csum_args *args, struct dcs_ci_list *cil, struct dump_csum_value *dcv)
+{
+	struct dcs_csum_info *ci;
+	struct hash_ft       *hf;
+
+	if (cil->dcl_csum_infos_nr == 0)
+		return -DER_NONEXIST;
+	D_ASSERT(cil->dcl_csum_infos_nr == 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	D_ASSERT(ci_is_valid(ci));
+	D_ASSERT(ci->cs_nr == 1);
+	hf = daos_mhash_type2algo(ci->cs_type);
+
+	dcv->dcv_type   = hf->cf_name;
+	dcv->dcv_length = ci->cs_len;
+	dcv->dcv_buf    = ci_idx2csum(ci, 0);
+
+	return 0;
+}
+
+static int
+print_csum_cb(void *cb_args, struct dcs_ci_list *cil)
+{
+	struct dump_csum_args *args;
+	struct ddb_ctx        *ctx;
+	struct dump_csum_value dcv;
+	int                    i;
+	int                    rc;
+
+	args = cb_args;
+	ctx  = args->dca_ctx;
+
+	rc = dump_csum_wrap(cb_args, cil, &dcv);
+	if (!SUCCESS(rc)) {
+		D_ASSERT(-DER_NONEXIST);
+
+		ddb_print(ctx, "No check-sum at: ");
+		itp_print_full(ctx, args->dca_vtp);
+		ddb_print(ctx, "\n");
+		return 0;
+	}
+
+	itp_print_full(ctx, args->dca_vtp);
+	ddb_print(ctx, "\n");
+	ddb_printf(ctx, "Type: %s, Length: %" PRIu16 ", Value: 0x", dcv.dcv_type, dcv.dcv_length);
+	for (i = 0; i < dcv.dcv_length; i++)
+		ddb_printf(ctx, "%02" PRIx8, dcv.dcv_buf[i]);
+	ddb_print(ctx, "\n");
+
+	return 0;
+}
+
+static int
+write_file_csum_cb(void *cb_args, struct dcs_ci_list *cil)
+{
+	struct dump_csum_args *args;
+	struct ddb_ctx        *ctx;
+	struct dump_csum_value dcv;
+	d_iov_t                value;
+	int                    rc;
+
+	args = cb_args;
+	ctx  = args->dca_ctx;
+
+	D_ASSERT(ctx->dc_io_ft.ddb_write_file);
+
+	rc = dump_csum_wrap(cb_args, cil, &dcv);
+	if (!SUCCESS(rc)) {
+		D_ASSERT(-DER_NONEXIST);
+
+		ddb_print(ctx, "No check-sum at: ");
+		itp_print_full(ctx, args->dca_vtp);
+		ddb_print(ctx, "\n");
+		return 0;
+	}
+	value.iov_buf     = dcv.dcv_buf;
+	value.iov_len     = dcv.dcv_length;
+	value.iov_buf_len = dcv.dcv_length;
+
+	ddb_printf(ctx, "Dumping chekck-sum (type: %s, length: %" PRIu16 ") to %s\n", dcv.dcv_type,
+		   dcv.dcv_length, args->dca_dst_path);
+	rc = ctx->dc_io_ft.ddb_write_file(args->dca_dst_path, &value);
+	return rc;
+}
+
+int
+ddb_run_csum_dump(struct ddb_ctx *ctx, struct csum_dump_options *opt)
+{
+	struct dv_indexed_tree_path itp = {0};
+	struct dv_tree_path         vtp;
+	struct dump_csum_args       dca = {0};
+	dv_dump_csum_cb             cb  = NULL;
+	int                         rc;
+
+	if (!opt->path) {
+		ddb_error(ctx, "A VOS path to dump is required.\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = init_path(ctx, opt->path, &itp);
+	if (!SUCCESS(rc))
+		goto out;
+
+	if (!itp_has_value(&itp)) {
+		ddb_errorf(ctx, "Path [%s] is incomplete.\n", opt->path);
+		rc = -DDBER_INCOMPLETE_PATH_VALUE;
+		goto out_itp;
+	}
+
+	if (opt->dst && opt->dst[0] != '\0')
+		cb = write_file_csum_cb;
+	else
+		cb = print_csum_cb;
+
+	dca.dca_dst_path = opt->dst;
+	dca.dca_ctx      = ctx;
+	dca.dca_vtp      = &itp;
+
+	itp_to_vos_path(&itp, &vtp);
+
+	rc = dv_dump_csum(ctx->dc_poh, &vtp, cb, &dca);
+
+out_itp:
+	itp_free(&itp);
+
+out:
+	return rc;
+}
+
 static int
 dump_ilog_entry_cb(void *cb_arg, struct ddb_ilog_entry *entry)
 {

@@ -236,6 +236,11 @@ struct dtx_aggr_options {
 	char                *cmt_date;
 };
 
+struct csum_dump_options {
+	char *path;
+	char *dst;
+};
+
 struct ddb_cmd_info {
 	enum ddb_cmd dci_cmd;
 	union {
@@ -330,6 +335,8 @@ int
 ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt);
 int
 ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt);
+int
+ddb_run_csum_dump(struct ddb_ctx *ctx, struct csum_dump_options *opt);
 
 void
 ddb_program_help(struct ddb_ctx *ctx);
