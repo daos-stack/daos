@@ -6,8 +6,7 @@
 import time
 
 from apricot import TestWithServers
-from general_utils import check_file_exists
-from recovery_utils import query_detect
+from recovery_utils import check_ram_used, query_detect
 from run_utils import command_as_user, run_remote
 
 
@@ -51,6 +50,15 @@ class DMGCheckStartOptionsTest(TestWithServers):
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_reset
         """
+        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
+        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
+        # cluster, the "class" would be "dcpm").
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         # 1. Create a pool.
         self.log_step("Create a pool")
         pool = self.get_pool(connect=False)
@@ -78,15 +86,6 @@ class DMGCheckStartOptionsTest(TestWithServers):
         # 6. Remove the pool directory from the mount point.
         self.log_step("Remove the pool directory from the mount point.")
         pool_path = self.server_managers[0].get_vos_path(pool)
-        pool_out = check_file_exists(
-            hosts=self.hostlist_servers, filename=pool_path, sudo=True)
-        if not pool_out[0]:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control "
-                   "plane after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
         command = command_as_user(command=f"rm -rf {pool_path}", user="root")
         remove_result = run_remote(
             log=self.log, hosts=self.hostlist_servers, command=command)
@@ -165,6 +164,12 @@ class DMGCheckStartOptionsTest(TestWithServers):
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_failout
         """
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         # 1. Create a pool.
         self.log_step("Create a pool")
         pool = self.get_pool(connect=False)
@@ -191,15 +196,6 @@ class DMGCheckStartOptionsTest(TestWithServers):
         # 6. Remove the pool directory from the mount point.
         self.log_step("Remove the pool directory from the mount point.")
         pool_path = self.server_managers[0].get_vos_path(pool)
-        pool_out = check_file_exists(
-            hosts=self.hostlist_servers, filename=pool_path, sudo=True)
-        if not pool_out[0]:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control "
-                   "plane after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
         command = command_as_user(command=f"rm -rf {pool_path}", user="root")
         remove_result = run_remote(
             log=self.log, hosts=self.hostlist_servers, command=command)
@@ -263,6 +259,12 @@ class DMGCheckStartOptionsTest(TestWithServers):
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_find_orphans
         """
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         # 1. Create a pool and a container.
         self.log_step("Create a pool and a container.")
         pool_1 = self.get_pool(connect=False)

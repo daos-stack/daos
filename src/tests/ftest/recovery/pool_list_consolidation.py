@@ -303,14 +303,6 @@ class PoolListConsolidationTest(TestWithServers):
                 count += 1
                 if count > 1:
                     break
-        using_control_metadata = self.server_managers[0].manager.job.using_control_metadata
-        if count == 0 or using_control_metadata:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
 
         self.log_step("Start servers.")
         dmg_command.system_start()
@@ -383,15 +375,6 @@ class PoolListConsolidationTest(TestWithServers):
             "scm_mount")
         rdb_pool_paths = [f"{scm}/{pool.uuid.lower()}/rdb-pool" for scm in scm_mounts]
         self.log.info("rdb_pool_paths: %s", rdb_pool_paths)
-        rdb_pool_exists = [check_file_exists(
-            self.hostlist_servers, path, sudo=True)[0] for path in rdb_pool_paths]
-        if not all(rdb_pool_exists):
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
         for rdb_pool_path in rdb_pool_paths:
             command = command_as_user(command=f"rm {rdb_pool_path}", user="root")
             remove_result = run_remote(
