@@ -415,6 +415,11 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 	int			 enabled = 1;
 	int			 rc;
 
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_UMEM)) { /** fault injection */
+		errno = daos_fail_value_get();
+		return NULL;
+	}
+
 	D_ALLOC(umm_pool, sizeof(*umm_pool) + sizeof(umm_pool->up_slabs[0]) * UMM_SLABS_CNT);
 	if (umm_pool == NULL)
 		return NULL;

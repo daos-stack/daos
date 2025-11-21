@@ -1717,35 +1717,43 @@ dc_obj_layout_refresh(daos_handle_t oh)
 }
 
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint16_t *retry_cnt,
-		   uint16_t *inprogress_cnt, uint32_t timeout_sec)
+dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
+		   uint32_t timeout_sec, bool long_delay)
 {
 	uint32_t delay = 0;
 
-	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN)
-		++(*inprogress_cnt);
-
-	if (++(*retry_cnt) > 1) {
+	/* Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case. */
+	if (err == -DER_OVERLOAD_RETRY) {
+		delay = daos_rpc_rand_delay(timeout_sec) << 20;
+	} else if (++(*retry_cnt) > 1) {
 		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
 		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
 		/* Rebuild is being established on the server side, wait a bit longer */
-		if (err == -DER_UPDATE_AGAIN)
+		if (err == -DER_UPDATE_AGAIN || long_delay) {
 			delay <<= 10;
-		else if (opc == DAOS_OBJ_RPC_COLL_PUNCH)
-			/* 128 times of the delay for collective object RPC. */
-			delay <<= 7;
-		else if (opc == DAOS_OBJ_RPC_CPD)
-			/* 8 times of the delay for compounded RPC. */
-			delay <<= 3;
-		D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u/%u times with %u us delay\n",
-			task, opc, *inprogress_cnt, *retry_cnt, delay);
+		} else {
+			switch (opc) {
+			case DAOS_OBJ_RPC_COLL_PUNCH:
+			case DAOS_OBJ_RPC_COLL_QUERY:
+				/* 256 times of the delay for collective object RPC. */
+				delay <<= 8;
+				break;
+			case DAOS_OBJ_RPC_CPD:
+				/* 8 times of the delay for compounded RPC. */
+				delay <<= 3;
+				break;
+			default:
+				break;
+			}
+
+			/* Increase delay after multiple times retry. */
+			if (*retry_cnt >= 5)
+				delay <<= 1;
+		}
 	}
 
-	/*
-	 * Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case.
-	 */
-	if (err == -DER_OVERLOAD_RETRY)
-		delay = daos_rpc_rand_delay(timeout_sec) << 20;
+	D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u times with %u us delay\n", task, opc,
+		*retry_cnt, delay);
 
 	return delay;
 }
@@ -1755,10 +1763,12 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
 	     bool *io_task_reinited)
 {
-	tse_sched_t	 *sched = tse_task2sched(task);
-	tse_task_t       *pool_task = NULL;
-	int		  result = task->dt_result;
-	int		  rc;
+	tse_sched_t *sched     = tse_task2sched(task);
+	tse_task_t  *pool_task = NULL;
+	uint32_t     delay     = 0;
+	uint32_t     opc       = obj_auxi->opc;
+	int          result    = task->dt_result;
+	int          rc;
 
 	if (pmap_stale) {
 		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
@@ -1767,8 +1777,6 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	}
 
 	if (obj_auxi->io_retry) {
-		uint32_t delay = 0;
-
 		if (pool_task != NULL) {
 			rc = dc_task_depend(task, 1, &pool_task);
 			if (rc != 0) {
@@ -1778,19 +1786,24 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			}
 		}
 
+		if (obj_is_modification_opc(opc) && result == -DER_TIMEDOUT)
+			obj_auxi->long_retry_delay = 1;
+		else if (result != -DER_INPROGRESS)
+			obj_auxi->long_retry_delay = 0;
+
 		if (!pmap_stale) {
 			uint32_t now = daos_gettime_coarse();
 
-			delay =
-			    dc_obj_retry_delay(task, obj_auxi->opc, result, &obj_auxi->retry_cnt,
-					       &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+			delay = dc_obj_retry_delay(task, opc, result, &obj_auxi->retry_cnt,
+						   obj_auxi->max_delay,
+						   obj_auxi->long_retry_delay == 1 ? true : false);
 			if (result == -DER_INPROGRESS &&
-			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->inprogress_cnt >= 10) ||
+			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->retry_cnt >= 10) ||
 			     (obj_auxi->retry_warn_ts > 0 && obj_auxi->retry_warn_ts + 10 < now))) {
 				obj_auxi->retry_warn_ts = now;
 				obj_auxi->flags |= ORF_MAYBE_STARVE;
 				D_WARN("The task %p has been retried for %u times, maybe starve\n",
-				       task, obj_auxi->inprogress_cnt);
+				       task, obj_auxi->retry_cnt);
 			}
 		}
 
@@ -3774,9 +3787,9 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 	 * 2) if any shard failed, store it in obj_auxi->result, the
 	 *    un-retryable error with higher priority.
 	 */
+	if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
+		obj_auxi->map_ver_reply = shard_auxi->map_ver;
 	if (ret == 0) {
-		if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
-			obj_auxi->map_ver_reply = shard_auxi->map_ver;
 		if (obj_req_is_ec_cond_fetch(obj_auxi)) {
 			iter_arg->cond_fetch_exist = true;
 			if (obj_auxi->result == -DER_NONEXIST)
