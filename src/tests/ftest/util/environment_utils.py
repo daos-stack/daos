@@ -199,12 +199,12 @@ class TestEnvironment():
             self.env_file = os.path.join(self.log_dir, "configs", "daos_test_env.txt")
 
         if not os.path.exists(self.env_file):
-            os.makedirs(os.path.dirname(self.env_file), exist_ok=True)
             # Write the current environment variables to the test environment file
-            with open(self.env_file, 'w', encoding='utf-8') as f:
+            os.makedirs(os.path.dirname(self.env_file), exist_ok=True)
+            with open(self.env_file, 'w', encoding='utf-8') as _env_file:
                 for key, value in os.environ.items():
                     if key not in EXCLUDED_DAOS_TEST_ENV_VARS:
-                        f.write(f"{key}={value}\n")
+                        _env_file.write(f"{key}={value}\n")
 
     def __set_value(self, key, value):
         """Set the test environment variable.
