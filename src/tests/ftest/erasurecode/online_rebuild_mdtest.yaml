@@ -24,12 +24,21 @@ server_config:
       log_file: daos_server0.log
       log_mask: INFO
       storage: auto
+      env_vars:
+        - NA_OFI_UNEXPECTED_TAG_MSG=0
+
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       log_file: daos_server1.log
       log_mask: INFO
       storage: auto
+      env_vars:
+        - NA_OFI_UNEXPECTED_TAG_MSG=0
+
+client:
+  env_vars:
+    - NA_OFI_UNEXPECTED_TAG_MSG=0
 
 pool:
   size: 93%

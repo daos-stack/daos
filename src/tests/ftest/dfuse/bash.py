@@ -130,6 +130,7 @@ class DfuseBashCmd(TestWithServers):
             f"cksum {fuse_root_dir}/src.c",
             f"bzip2 -z {fuse_root_dir}/lib.a",
             f"chmod u-r {fuse_root_dir}/lib.a.bz2",
+            f"sed -i 's/abcd/bbcd/g' {fuse_root_dir}/src.c",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=0'
             "--group_reporting --exitall_on_error --continue_on_error=none",
@@ -145,6 +146,8 @@ class DfuseBashCmd(TestWithServers):
             self.log_step(f'Running command: {cmd}')
             result = run_remote(self.log, dfuse_hosts, env_str + cmd)
             if not result.passed:
+                self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+            if result.joined_stdout.find('Bad file descriptor') >= 0:
                 self.fail(f'"{cmd}" failed on {result.failed_hosts}')
         self.log.info('Test passed')
 

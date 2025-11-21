@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
+
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
@@ -790,6 +792,8 @@ class DmgCommandBase(YamlCommand):
                 def __init__(self):
                     """Create a dmg storage query usage object."""
                     super().__init__("/run/dmg/storage/query/usage/*", "usage")
+                    self.mem_ratio = FormattedParameter("--mem-ratio={}", None)
+                    self.show_usable = FormattedParameter("--show-usable", False)
 
         class ScanSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage scan command."""

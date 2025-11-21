@@ -517,11 +517,8 @@ struct vos_dtx_act_ent {
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
-	struct vos_dtx_cmt_ent_df	 dce_base;
-
-	uint32_t			 dce_reindex:1,
-					 dce_exist:1,
-					 dce_invalid:1;
+	struct vos_dtx_cmt_ent_df dce_base;
+	uint32_t                  dce_invalid : 1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
@@ -1376,6 +1373,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
+int
+vos_tree_mark_corruption(struct vos_container *cont, struct vos_object *obj, daos_handle_t toh,
+			 enum vos_tree_class tclass, daos_epoch_t epoch, uint32_t pm_ver,
+			 bool is_dkey, daos_key_t *key, daos_handle_t *sub_toh);
 
 /* vos_io.c */
 int
@@ -1454,7 +1455,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(struct vos_pool *pool, daos_size_t *rsrvd);
 int
-gc_open_pool(struct vos_pool *pool);
+gc_open_pool(struct vos_pool *pool, struct checker *ck);
 void
 gc_close_pool(struct vos_pool *pool);
 int

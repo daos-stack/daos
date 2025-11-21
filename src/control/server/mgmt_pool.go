@@ -29,6 +29,13 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+/*
+#include <stdint.h>
+
+#include <daos_pool.h>
+*/
+import "C"
+
 const (
 	// DefaultPoolScmRatio defines the default SCM:NVMe ratio for
 	// requests that do not specify one.
@@ -972,6 +979,20 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
+	// Retrieve system self-heal property. Assume default value where all flags are set if
+	// property isn't present.
+	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
+	if req.QueryMask&C.DPI_SELF_HEAL_POLICY != 0 {
+		if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
+			svc.log.Debugf(err.Error())
+		} else if err != nil {
+			return nil, err
+		} else {
+			svc.log.Debugf("system self-heal: %s", selfHeal)
+			resp.SysSelfHealPolicy = selfHeal
+		}
+	}
+
 	return resp, nil
 }
 
@@ -994,23 +1015,29 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 	return resp, nil
 }
 
-// PoolUpgrade forwards a pool upgrade request to the I/O Engine.
-func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq) (*mgmtpb.PoolUpgradeResp, error) {
+// poolServiceSimple is a helper that implements forwarding a pool service request and returns
+// DaosResp.
+func (svc *mgmtSvc) poolServiceSimple(ctx context.Context, req poolServiceReq, meth daos.MgmtMethod) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 
-	dResp, err := svc.makeLockedPoolServiceCall(ctx, daos.MethodPoolUpgrade, req)
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, meth, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolUpgradeResp{}
+	resp := &mgmtpb.DaosResp{}
 	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
 		return nil, err
 	}
 
 	return resp, nil
+}
+
+// PoolUpgrade forwards a pool upgrade request to the I/O Engine.
+func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq) (*mgmtpb.DaosResp, error) {
+	return svc.poolServiceSimple(ctx, req, daos.MethodPoolUpgrade)
 }
 
 func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.UUID, prop *mgmtpb.PoolProperty) error {
@@ -1266,57 +1293,15 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 
 // PoolRebuildStart forwards a pool interactive rebuild start request to the I/O Engine.
 func (svc *mgmtSvc) PoolRebuildStart(ctx context.Context, req *mgmtpb.PoolRebuildStartReq) (*mgmtpb.DaosResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
-		return nil, err
-	}
-
-	dResp, err := svc.makeLockedPoolServiceCall(ctx, daos.MethodPoolRebuildStart, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
-		return nil, err
-	}
-
-	return resp, nil
+	return svc.poolServiceSimple(ctx, req, daos.MethodPoolRebuildStart)
 }
 
 // PoolRebuildStop forwards a pool interactive rebuild stop request to the I/O Engine.
 func (svc *mgmtSvc) PoolRebuildStop(ctx context.Context, req *mgmtpb.PoolRebuildStopReq) (*mgmtpb.DaosResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
-		return nil, err
-	}
-
-	dResp, err := svc.makeLockedPoolServiceCall(ctx, daos.MethodPoolRebuildStop, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
-		return nil, err
-	}
-
-	return resp, nil
+	return svc.poolServiceSimple(ctx, req, daos.MethodPoolRebuildStop)
 }
 
 // PoolSelfHealEval forwards a pool self-heal evaluate request to the I/O Engine.
 func (svc *mgmtSvc) PoolSelfHealEval(ctx context.Context, req *mgmtpb.PoolSelfHealEvalReq) (*mgmtpb.DaosResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
-		return nil, err
-	}
-
-	dResp, err := svc.makeLockedPoolServiceCall(ctx, daos.MethodPoolSelfHealEval, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
-		return nil, err
-	}
-
-	return resp, nil
+	return svc.poolServiceSimple(ctx, req, daos.MethodPoolSelfHealEval)
 }

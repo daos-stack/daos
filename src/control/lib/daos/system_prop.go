@@ -331,45 +331,6 @@ func (sp *SystemPropertyKey) FromString(val string) error {
 	return errors.Errorf("unknown system property key %q", val)
 }
 
-// SelfHealFlag defines a type to be used to represent an individual self-heal flag.
-type SelfHealFlag int
-
-// IsValid returns a boolean indicating whether or not the self-heal flag is valid.
-func (shf SelfHealFlag) IsValid() bool {
-	return shf > selfHealFlagUnknown && shf < selfHealFlagMax
-}
-
-func (shf SelfHealFlag) String() string {
-	if str, found := map[SelfHealFlag]string{
-		SelfHealFlagExclude:     "exclude",
-		SelfHealFlagPoolRebuild: "pool_rebuild",
-		SelfHealFlagPoolExclude: "pool_exclude",
-	}[shf]; found {
-		return str
-	}
-
-	return "unknown"
-}
-
-// FromString initializes a SelfHealFlag from a string.
-func (shf *SelfHealFlag) FromString(val string) error {
-	if shf == nil {
-		return errors.Errorf("%T is nil", shf)
-	}
-	if val == "" {
-		return errors.New("empty string")
-	}
-
-	for i := selfHealFlagUnknown + 1; i < selfHealFlagMax; i++ {
-		if strings.EqualFold(val, i.String()) {
-			*shf = i
-			return nil
-		}
-	}
-
-	return errors.Errorf("unknown self heal flag %q", val)
-}
-
 // NB: System properties are not tied to engine constants, but are defined
 // here for consistency.
 const (
@@ -386,16 +347,46 @@ const (
 	SystemPropertySelfHeal
 	// NB: This must be the last entry.
 	systemPropertyMax
+)
 
-	selfHealFlagUnknown SelfHealFlag = iota
-	// SelfHealFlagExclude indicates system-level exclusion is enabled.
-	SelfHealFlagExclude
-	// SelfHealFlagPoolRebuild indicates pool rebuild is enabled.
-	SelfHealFlagPoolRebuild
-	// SelfHealFlagPoolExclude indicates pool-level exclusion is enabled.
-	SelfHealFlagPoolExclude
-	// NB: This must be the last entry.
-	selfHealFlagMax
+// SysSelfHealFlag defines a type to be used to represent an individual self-heal flag.
+type SysSelfHealFlag string
+
+// IsValid returns a boolean indicating whether or not the self-heal flag is valid.
+func (shf SysSelfHealFlag) IsValid() bool {
+	return map[SysSelfHealFlag]bool{
+		SysSelfHealFlagExclude:     true,
+		SysSelfHealFlagPoolExclude: true,
+		SysSelfHealFlagPoolRebuild: true,
+	}[shf]
+}
+
+const (
+	propValSep         = ";"
+	selfHealFlagsEmpty = "none"
+
+	// SysSelfHealFlagExclude indicates system-level exclusion is enabled.
+	SysSelfHealFlagExclude SysSelfHealFlag = "exclude"
+	// SysSelfHealFlagPoolExclude indicates pool-level exclusion is enabled.
+	SysSelfHealFlagPoolExclude SysSelfHealFlag = "pool_exclude"
+	// SysSelfHealFlagPoolRebuild indicates pool rebuild is enabled.
+	SysSelfHealFlagPoolRebuild SysSelfHealFlag = "pool_rebuild"
+)
+
+var (
+	allSysSelfHealFlags = []SysSelfHealFlag{
+		SysSelfHealFlagExclude, SysSelfHealFlagPoolExclude, SysSelfHealFlagPoolRebuild,
+	}
+
+	// DefaultSysSelfHealFlagsStr will be used as self-heal system property default value and includes all
+	// possible flags set.
+	DefaultSysSelfHealFlagsStr = func() string {
+		var strs []string
+		for _, f := range allSysSelfHealFlags {
+			strs = append(strs, string(f))
+		}
+		return strings.Join(strs, propValSep)
+	}()
 )
 
 type (
@@ -541,20 +532,27 @@ func pph2sp(key SystemPropertyKey, pph *PoolPropHandler, def string) SystemPrope
 
 // SystemPropertySelfHealHasFlag returns true if the given self-heal property
 // value contains the specified flag.
-func SystemPropertySelfHealHasFlag(value string, flag SelfHealFlag) bool {
-	if value == "none" {
-		return false
-	}
-
-	strFlags := strings.Split(value, ";")
-	for _, strFlag := range strFlags {
-		var f SelfHealFlag
-		if err := f.FromString(strFlag); err == nil && f == flag {
+func SystemPropertySelfHealHasFlag(value string, flag SysSelfHealFlag) bool {
+	for _, strFlag := range strings.Split(value, propValSep) {
+		if SysSelfHealFlag(strFlag) == flag {
 			return true
 		}
 	}
 
 	return false
+}
+
+// SystemPropertySelfHealUnsetFlags returns disabled flags in the self-heal system property as a
+// string slice.
+func SystemPropertySelfHealUnsetFlags(value string) []string {
+	offFlags := []string{}
+	for _, flag := range allSysSelfHealFlags {
+		if !SystemPropertySelfHealHasFlag(value, flag) {
+			offFlags = append(offFlags, string(flag))
+		}
+	}
+
+	return offFlags
 }
 
 // subsets returns a slice of all subsets of strings, including the empty set
@@ -587,11 +585,6 @@ func subsets(strings []string, sep string, empty string) []string {
 // SystemProperties returns the map of standard system properties.
 func SystemProperties() SystemPropertyMap {
 	poolProps := PoolProperties()
-	healFlagStrs := []string{}
-	for i := selfHealFlagUnknown + 1; i < selfHealFlagMax; i++ {
-		healFlagStrs = append(healFlagStrs, i.String())
-	}
-	defSelfHealFlagsStr := strings.Join(healFlagStrs, ";")
 
 	return SystemPropertyMap{
 		SystemPropertyDaosVersion: SystemProperty{
@@ -614,8 +607,9 @@ func SystemProperties() SystemPropertyMap {
 			"off"),
 		SystemPropertySelfHeal: SystemProperty{
 			Key: SystemPropertySelfHeal,
-			Value: NewStringPropVal(defSelfHealFlagsStr,
-				subsets(healFlagStrs, ";", "none")...),
+			Value: NewStringPropVal(DefaultSysSelfHealFlagsStr,
+				subsets(strings.Split(DefaultSysSelfHealFlagsStr, propValSep),
+					propValSep, selfHealFlagsEmpty)...),
 			Description: "Self-heal policy for the system",
 		},
 	}

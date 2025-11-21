@@ -129,7 +129,7 @@ type MgmtSvcClient interface {
 	// Delete an entry from a DAOS pool's Access Control List.
 	PoolDeleteACL(ctx context.Context, in *DeleteACLReq, opts ...grpc.CallOption) (*ACLResp, error)
 	// PoolUpgrade upgrades a DAOS pool.
-	PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*PoolUpgradeResp, error)
+	PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// PoolRebuildStart starts an interactive rebuild on a DAOS pool.
 	PoolRebuildStart(ctx context.Context, in *PoolRebuildStartReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
@@ -382,9 +382,9 @@ func (c *mgmtSvcClient) PoolDeleteACL(ctx context.Context, in *DeleteACLReq, opt
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*PoolUpgradeResp, error) {
+func (c *mgmtSvcClient) PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*DaosResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PoolUpgradeResp)
+	out := new(DaosResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolUpgrade_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -751,7 +751,7 @@ type MgmtSvcServer interface {
 	// Delete an entry from a DAOS pool's Access Control List.
 	PoolDeleteACL(context.Context, *DeleteACLReq) (*ACLResp, error)
 	// PoolUpgrade upgrades a DAOS pool.
-	PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error)
+	PoolUpgrade(context.Context, *PoolUpgradeReq) (*DaosResp, error)
 	// PoolRebuildStart starts an interactive rebuild on a DAOS pool.
 	PoolRebuildStart(context.Context, *PoolRebuildStartReq) (*DaosResp, error)
 	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
@@ -878,7 +878,7 @@ func (UnimplementedMgmtSvcServer) PoolUpdateACL(context.Context, *ModifyACLReq) 
 func (UnimplementedMgmtSvcServer) PoolDeleteACL(context.Context, *DeleteACLReq) (*ACLResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolDeleteACL not implemented")
 }
-func (UnimplementedMgmtSvcServer) PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error) {
+func (UnimplementedMgmtSvcServer) PoolUpgrade(context.Context, *PoolUpgradeReq) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolUpgrade not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolRebuildStart(context.Context, *PoolRebuildStartReq) (*DaosResp, error) {

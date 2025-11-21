@@ -95,10 +95,12 @@ def check(reqs, name, built_str, installed_str=""):
 def ofi_config(config):
     """Check ofi version"""
     if not GetOption('silent'):
-        print('Checking for libfabric > 1.11...', end=' ')
+        print('Checking for libfabric >= 1.20...', end=' ')
     code = """#include <rdma/fabric.h>
-_Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
-               "libfabric must be >= 1.11");"""
+_Static_assert(FI_VERSION_GE(
+               FI_VERSION(FI_MAJOR_VERSION, FI_MINOR_VERSION),
+               FI_VERSION(1, 20)),
+               "libfabric must be >= 1.20");"""
     rc = config.TryCompile(code, ".c")
     if not GetOption('silent'):
         print('yes' if rc else 'no')

@@ -120,4 +120,16 @@
 			fail_msg("'%s' regex not matched in '%s'", regex, str);                    \
 	} while (0)
 
+#define assert_nl_equal(str, cnt)                                                                  \
+	do {                                                                                       \
+		int _i;                                                                            \
+		int _nl_cnt;                                                                       \
+		_nl_cnt = 0;                                                                       \
+		for (_i = 0; _i <= strlen(str); _i++) {                                            \
+			if (str[_i] == '\n')                                                       \
+				_nl_cnt++;                                                         \
+		}                                                                                  \
+		assert_int_equal(_nl_cnt++, cnt);                                                  \
+	} while (0)
+
 #endif /* DAOS_DDB_CMOCKA_H */
