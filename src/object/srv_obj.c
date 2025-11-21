@@ -2426,7 +2426,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		if (ds_cont_child_ec_aggregating(child)) {
 			D_ERROR(DF_CONT " ec aggregate still active, rebuilding %d\n",
 				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
-				atomic_load_relaxed(&child->sc_pool->spc_pool->sp_rebuilding));
+				atomic_load(&child->sc_pool->spc_pool->sp_rebuilding));
 			return -DER_UPDATE_AGAIN;
 		}
 	}
@@ -2434,7 +2434,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	if (!obj_is_modification_opc(opc) && (opc != DAOS_OBJ_RPC_CPD || flags & ORF_CPD_RDONLY))
 		return 0;
 
-	if (atomic_load_relaxed(&child->sc_pool->spc_pool->sp_rebuilding)) {
+	if (atomic_load(&child->sc_pool->spc_pool->sp_rebuilding)) {
 		uint32_t version;
 
 		ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD,

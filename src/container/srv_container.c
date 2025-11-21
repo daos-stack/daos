@@ -2178,7 +2178,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		}
 		eph_ldr->cte_current_ec_agg_eph = min_ec_agg_eph;
 		eph_ldr->cte_current_stable_eph = min_stable_eph;
-		if (pool->sp_rebuilding)
+		if (atomic_load(&pool->sp_rebuilding))
 			break;
 	}
 	ABT_mutex_unlock(svc->cs_cont_ephs_mutex);

@@ -2290,7 +2290,7 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
 		D_INFO(DF_UUID ": abort ec aggregation, sp_rebuilding %d\n",
 		       DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
-		       atomic_load_relaxed(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
+		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
 		return true;
 	}
 
@@ -2504,7 +2504,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_INFO(DF_CONT " abort as rebuild started, sp_rebuilding %d\n",
 		       DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
 			       agg_param->ap_pool_info.api_cont_uuid),
-		       atomic_load_relaxed(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
+		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
 		return -1;
 	}
 
@@ -2531,8 +2531,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc < 0) {
 		D_ERROR(DF_UUID " EC aggregation (rebuilding %d) failed: " DF_RC "\n",
 			DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
-			atomic_load_relaxed(&agg_param->ap_pool_info.api_pool->sp_rebuilding),
-			DP_RC(rc));
+			atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding), DP_RC(rc));
 		return rc;
 	}
 

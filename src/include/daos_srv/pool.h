@@ -218,7 +218,7 @@ struct ds_pool_svc_op_val {
 static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
-	return (atomic_load_relaxed(&pool->sp_rebuilding) > 0 || pool->sp_rebuild_scan > 0);
+	return (atomic_load(&pool->sp_rebuilding) > 0 || pool->sp_rebuild_scan > 0);
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.

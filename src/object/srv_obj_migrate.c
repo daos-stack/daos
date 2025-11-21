@@ -694,8 +694,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	}
 
 out:
-	if (tls)
-		migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2459,8 +2458,7 @@ free:
 		migrate_one_destroy(mrone);
 	}
 put:
-	if (tls)
-		migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2616,8 +2614,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 put:
 	if (obj)
 		obj_decref(obj);
-	if (tls != NULL)
-		migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2704,8 +2701,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 	}
 
 put:
-	if (tls)
-		migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -3056,8 +3052,8 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
-	D_ASSERT(atomic_load_relaxed(&pool->sp_rebuilding) >= arg.stop_count);
-	atomic_fetch_sub_relaxed(&pool->sp_rebuilding, arg.stop_count);
+	D_ASSERT(atomic_load(&pool->sp_rebuilding) >= arg.stop_count);
+	atomic_fetch_sub(&pool->sp_rebuilding, arg.stop_count);
 	ABT_mutex_free(&arg.stop_lock);
 
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
@@ -3739,7 +3735,7 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 		goto skip_create;
 	}
 
-	atomic_fetch_add_relaxed(&arg.pma_pool->sp_rebuilding, 1);
+	atomic_fetch_add(&arg.pma_pool->sp_rebuilding, 1);
 
 	rc = migrate_pool_tls_create(pool_uuid, version, generation, po_hdl, co_hdl, max_eph,
 				     new_layout_ver, opc, &tls, svc_list, arg.pma_tgt_status,
@@ -3788,8 +3784,7 @@ skip_create:
 	}
 
 out:
-	if (tls)
-		migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
 	if (arg.pma_pool)
 		D_ASSERT(dss_ult_execute(ds_migrate_end_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0) ==
 			 0);
