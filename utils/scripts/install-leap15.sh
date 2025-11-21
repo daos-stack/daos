@@ -60,6 +60,7 @@ dnf --nodocs install ${dnf_install_args} \
     lua-lmod \
     make \
     maven \
+    nasm \
     numactl \
     openmpi3-devel \
     pandoc \

@@ -1,4 +1,5 @@
 # Uncomment a fault you would like to trigger
+# yamllint disable rule:comments-indentation
 fault_config:
   # - id: 131328 # DLCK_FAULT_CREATE_LOG_DIR
   # - id: 131329 # DLCK_FAULT_CREATE_POOL_DIR

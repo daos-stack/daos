@@ -59,6 +59,7 @@ dnf --nodocs install ${dnf_install_args} \
     lz4-devel \
     Lmod \
     make \
+    nasm \
     ndctl \
     ndctl-devel \
     numactl \
