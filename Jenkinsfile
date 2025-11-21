@@ -220,6 +220,7 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
 }
 
 Boolean is_code_coverage() {
+    // Determine if code coverage is enabled.  Timed builds automatically enable it.
     if (startedByTimer()) {
         return true
     }
@@ -227,6 +228,7 @@ Boolean is_code_coverage() {
 }
 
 List get_functional_stashes(String target, String compiler='gcc') {
+    // Get stash names containing code coverage files required in the functional test stages
     if (is_code_coverage()) {
         return ["${target}-${compiler}-build-vars"]
     }
