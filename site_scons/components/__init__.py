@@ -336,13 +336,15 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
+    fix_fused = os.path.join(Dir('#').abspath, 'utils/scripts/fix_fused.sh')
     reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever(),
                 commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
                            '--default-library', 'static', '../fused'],
                           ['meson', 'setup', '--reconfigure', '../fused'],
-                          ['ninja', 'install']],
+                          ['ninja', 'install'],
+                          [fix_fused, '$FUSED_PREFIX']],
                 pkgconfig='fused',
                 headers=['fused/fuse.h'],
                 required_progs=['libtoolize', 'ninja', 'meson'],
