@@ -47,6 +47,7 @@ struct migrate_one {
 	daos_unit_oid_t		 mo_oid;
 	daos_epoch_t		 mo_obj_punch_eph;
 	daos_epoch_t		 mo_dkey_punch_eph;
+	uint32_t                 *mo_ult_cnt_ptr;
 
 	/* minimum epoch from mo_iods & mo_iods_from_parity, used
 	 * as the updated epoch for replication extent rebuild.
@@ -105,6 +106,7 @@ struct iter_cont_arg {
 	uuid_t			cont_uuid;
 	uuid_t			cont_hdl_uuid;
 	struct tree_cache_root	*cont_root;
+	uint32_t                *ica_ult_cnt_ptr;
 	unsigned int		yield_freq;
 	uint64_t		*snaps;
 	uint32_t		snap_cnt;
@@ -119,6 +121,7 @@ struct iter_obj_arg {
 	daos_unit_oid_t		oid;
 	daos_epoch_t		epoch;
 	daos_epoch_t		punched_epoch;
+	uint32_t                *ioa_ult_cnt_ptr;
 	unsigned int		shard;
 	unsigned int		tgt_idx;
 	uint64_t		*snaps;
@@ -1769,6 +1772,15 @@ enum {
 	DKEY_ULT = 2,
 };
 
+static inline uint32_t *
+migrate_tgt_ult_cnt_ptr(struct migrate_pool_tls *tls, int ult_type)
+{
+	if (ult_type == OBJ_ULT)
+		return &tls->mpt_tgt_obj_ult_cnt;
+	else
+		return &tls->mpt_tgt_dkey_ult_cnt;
+}
+
 static inline uint32_t
 migrate_tgt_ult_cnt(struct migrate_pool_tls *tls, int ult_type)
 {
@@ -1812,9 +1824,8 @@ out:
 static void
 migrate_tgt_try_wakeup(struct migrate_pool_tls *tls, int ult_type)
 {
-	uint32_t ult_cnt = 0;
+	uint32_t ult_cnt = migrate_tgt_ult_cnt(tls, ult_type);
 
-	ult_cnt = migrate_tgt_ult_cnt(tls, ult_type);
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	if (tls->mpt_inflight_max_ult / 2 > ult_cnt) {
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
@@ -1824,17 +1835,14 @@ migrate_tgt_try_wakeup(struct migrate_pool_tls *tls, int ult_type)
 }
 
 static void
-migrate_tgt_exit(struct migrate_pool_tls *tls, int ult_type)
+migrate_tgt_exit(struct migrate_pool_tls *tls, uint32_t *ult_cnt_ptr, int ult_type)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	if (ult_type == OBJ_ULT) {
-		D_ASSERT(tls->mpt_tgt_obj_ult_cnt > 0);
-		tls->mpt_tgt_obj_ult_cnt--;
-	} else {
-		D_ASSERT(tls->mpt_tgt_dkey_ult_cnt > 0);
-		tls->mpt_tgt_dkey_ult_cnt--;
-	}
-	migrate_tgt_try_wakeup(tls, ult_type);
+	D_ASSERT(*ult_cnt_ptr > 0);
+	(*ult_cnt_ptr)--;
+
+	if (tls)
+		migrate_tgt_try_wakeup(tls, ult_type);
 }
 
 static void
@@ -1906,11 +1914,10 @@ migrate_one_ult(void *arg)
 		tls->mpt_fini = 1;
 	}
 out:
+	migrate_tgt_exit(tls, mrone->mo_ult_cnt_ptr, DKEY_ULT);
 	migrate_one_destroy(mrone);
-	if (tls != NULL) {
-		migrate_tgt_exit(tls, DKEY_ULT);
+	if (tls != NULL)
 		migrate_pool_tls_put(tls);
-	}
 }
 
 /* If src_iod is NULL, it will try to merge the recxs inside dst_iod */
@@ -2682,10 +2689,11 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 		if (rc)
 			break;
 		d_list_del_init(&mrone->mo_list);
+		mrone->mo_ult_cnt_ptr = migrate_tgt_ult_cnt_ptr(tls, DKEY_ULT);
 		rc = dss_ult_create(migrate_one_ult, mrone, DSS_XS_VOS,
 				    arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
 		if (rc) {
-			migrate_tgt_exit(tls, DKEY_ULT);
+			migrate_tgt_exit(tls, mrone->mo_ult_cnt_ptr, DKEY_ULT);
 			migrate_one_destroy(mrone);
 			break;
 		}
@@ -3206,9 +3214,7 @@ out:
 		DP_RB_MPT(tls), DP_UOID(arg->oid), arg->shard, tls->mpt_tgt_obj_ult_cnt,
 		tls->mpt_tgt_dkey_ult_cnt, tls->mpt_obj_count, DP_RC(rc));
 free_notls:
-	if (tls != NULL)
-		migrate_tgt_exit(tls, OBJ_ULT);
-
+	migrate_tgt_exit(tls, arg->ioa_ult_cnt_ptr, OBJ_ULT);
 	D_FREE(arg->snaps);
 	D_FREE(arg);
 	migrate_pool_tls_put(tls);
@@ -3249,6 +3255,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	uuid_copy(obj_arg->cont_uuid, cont_arg->cont_uuid);
 	obj_arg->version = cont_arg->pool_tls->mpt_version;
 	obj_arg->generation = cont_arg->pool_tls->mpt_generation;
+	obj_arg->ioa_ult_cnt_ptr = cont_arg->ica_ult_cnt_ptr;
 	if (cont_arg->snaps) {
 		D_ALLOC(obj_arg->snaps,
 			sizeof(*cont_arg->snaps) * cont_arg->snap_cnt);
@@ -3312,11 +3319,12 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 		return rc;
 	}
 
+	arg->ica_ult_cnt_ptr = migrate_tgt_ult_cnt_ptr(arg->pool_tls, OBJ_ULT);
 	rc = migrate_one_object(*oid, epoch, punched_epoch, shard, tgt_idx, arg);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB ": obj " DF_UOID " migration failed", DP_RB_MPT(arg->pool_tls),
 			 DP_UOID(*oid));
-		migrate_tgt_exit(arg->pool_tls, OBJ_ULT);
+		migrate_tgt_exit(arg->pool_tls, arg->ica_ult_cnt_ptr, OBJ_ULT);
 		return rc;
 	}
 
