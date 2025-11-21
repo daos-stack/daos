@@ -405,6 +405,14 @@
    fun:bdev_aio_writev
 }
 {
+   bdev_aio_rw param error
+   Memcheck:Param
+   io_submit(PWRITEV(iov[i]))
+   fun:syscall
+   ...
+   fun:bdev_aio_rw
+}
+{
    <insert_a_suppression_name_here>
    Memcheck:Param
    writev(vector[...])

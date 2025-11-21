@@ -452,7 +452,13 @@ func bdevScanEngineAssigned(ctx context.Context, engine Engine, req *ctlpb.ScanN
 	if !*isStarted {
 		engine.Debugf("scanning engine-%d bdevs while engine is down", engine.Index())
 
-		return bdevScanToProtoResp(engine.GetStorage().ScanBdevs, bdevCfgs)
+		resp, err := bdevScanToProtoResp(engine, engine.GetStorage().ScanBdevs, bdevCfgs)
+		if err != nil {
+			return nil, errors.Wrap(err, "bdevScanEngineAssigned: bdevScanToProtoResp")
+		}
+
+		engine.Debugf("bdevScanEngineAssigned: bdevScanToProtoResp returned: %+v", resp)
+		return resp, err
 	}
 
 	engine.Debugf("scanning engine-%d bdevs while engine is up", engine.Index())

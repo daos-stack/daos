@@ -275,14 +275,15 @@ def define_components(reqs):
     reqs.define('isal',
                 retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib64'],
+                          ['./configure', '--disable-static', '--prefix=$ISAL_PREFIX',
+                           '--libdir=$ISAL_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'])
     reqs.define('isal_crypto',
                 retriever=GitRepoRetriever(),
-                commands=[['./autogen.sh'],
-                          ['./configure',
+                commands=[['./autogen.sh', '--no-oshmem'],
+                          ['./configure', '--disable-static',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
                            '--libdir=$ISAL_CRYPTO_PREFIX/lib64'],
                           ['make'],
@@ -359,8 +360,12 @@ def define_components(reqs):
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
 
+    spdk_reqs = ['isal', 'isal_crypto']
+    spdk_conf = ['--with-isal=$ISAL_PREFIX', '--with-isal-crypto=$ISAL_CRYPTO_PREFIX']
     if ARM_PLATFORM:
         spdk_arch = 'native'
+        spdk_reqs = []
+        spdk_conf = []
     elif dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
@@ -376,25 +381,24 @@ def define_components(reqs):
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
                            '--disable-unit-tests',
-                           '--disable-apps',
                            '--without-vhost',
-                           '--without-crypto',
-                           '--without-pmdk',
                            '--without-rbd',
                            '--without-iscsi-initiator',
-                           '--without-isal',
                            '--without-vtune',
                            '--with-shared',
-                           f'--target-arch={spdk_arch}'],
+                           '--without-nvme-cuse',
+                           '--without-crypto',
+                           f'--target-arch={spdk_arch}'] + spdk_conf,
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
                            'includedir=$SPDK_PREFIX/include/daos_srv', 'install'],
                           [copy_files, 'dpdk/build/lib', '$SPDK_PREFIX/lib64/daos_srv'],
+                          ['rm', '-rf', '$SPDK_PREFIX/lib'],
                           [copy_files, 'dpdk/build/include', '$SPDK_PREFIX/include/daos_srv/dpdk'],
                           [copy_files, 'include', '$SPDK_PREFIX/share/daos/spdk/include'],
                           [copy_files, 'scripts', '$SPDK_PREFIX/share/daos/spdk/scripts'],
-                          ['mv', '$SPDK_PREFIX/bin/spdk_nvme_discovery_aer',
-                           '$SPDK_PREFIX/bin/daos_spdk_nvme_discovery_aer'],
+                          ['mv', '$SPDK_PREFIX/bin/spdk_nvme_discover',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_discover'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/daos_spdk_nvme_lsvmd'],
                           ['cp', 'build/examples/nvme_manage',
                            '$SPDK_PREFIX/bin/daos_spdk_nvme_manage'],
@@ -406,7 +410,8 @@ def define_components(reqs):
                 extra_lib_path=['lib64/daos_srv'],
                 headers=['spdk/nvme.h'],
                 pkgconfig='daos_spdk',
-                patch_rpath=['lib64/daos_srv', 'bin'])
+                patch_rpath=['lib64/daos_srv', 'bin'],
+                requires=spdk_reqs)
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever(),
