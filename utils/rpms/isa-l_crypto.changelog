@@ -2,7 +2,7 @@
 - Update DAOS to 2.25.0 release
 - Restore change log missing since 2.24.0-1
 
-* Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> - 2.25.0-2
+* Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> - 2.24.0-2
 - Use fpm to build isa-l_crypto
 
 * Thu Jun 22 2023 Brian J. Murrell <brian.murrell@intel> - 2.24.0-1
