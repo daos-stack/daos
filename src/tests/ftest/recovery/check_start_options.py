@@ -30,6 +30,8 @@ class DMGCheckStartOptionsTest(TestWithServers):
     :avocado: recursive
     """
 
+    MAX_QUERY_RETRY = 8  # max retries for check query
+
     def test_check_start_reset(self):
         """Test dmg check start --reset.
 
@@ -362,6 +364,36 @@ class DMGCheckStartOptionsTest(TestWithServers):
         # The pool is orphan pool, so skip the cleanup.
         pool.skip_cleanup()
 
+    def query_nr_reports(self, dmg_command, nr_exp_reports):
+        """
+        Query until the number of expected reports are found or max retries reached.
+        """
+        QUERY_WAIT = 10  # initial wait after starting the check, in seconds
+        QUERY_SLEEP = 5  # wait period between retries in seconds
+
+        time.sleep(QUERY_WAIT)
+        query_reports = None
+        for _ in range(self.MAX_QUERY_RETRY):
+            check_query_out = dmg_command.check_query()
+            # Even if "status" is RUNNING, "reports" may be null/None, so check both.
+            status = check_query_out["response"]["status"]
+            query_reports = check_query_out["response"]["reports"]
+            if len(query_reports) > 0:
+                self.log.debug(f"found {len(query_reports)} reports, need {nr_exp_reports}")
+            if status == "RUNNING" and query_reports and len(query_reports) >= nr_exp_reports:
+                break
+            time.sleep(QUERY_SLEEP)
+
+        if not query_reports:
+            if nr_exp_reports > 0:
+                self.fail("Checker didn't detect any inconsistency!")
+            else:
+                return query_reports
+
+        if len(query_reports) < nr_exp_reports:
+            self.fail(f"Expected at least {nr_exp_reports} reports, but found {len(query_reports)}")
+        return query_reports
+
     def test_check_start_find_orphans(self):
         """Test dmg check start --find-orphans.
 
@@ -415,16 +447,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # 4. Check that orphan container is detected.
         self.log_step("Check that orphan container is detected.")
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            # Even if "status" is RUNNING, "reports" may be null/None, so check both.
-            status = check_query_out["response"]["status"]
-            query_reports = check_query_out["response"]["reports"]
-            if status == "RUNNING" and query_reports:
-                break
-            time.sleep(5)
-        if not query_reports:
-            self.fail("Checker didn't detect any inconsistency!")
+        query_reports = self.query_nr_reports(dmg_command, 1)
         fault_msg = query_reports[0]["msg"]
         orphan_container = "orphan container"
         if orphan_container not in fault_msg:
@@ -450,14 +473,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # 8. Check that orphan pool isn't detected.
         self.log_step("Check that orphan pool isn't detected.")
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "RUNNING" and query_reports:
-                query_reports = check_query_out["response"]["reports"]
-                break
-            time.sleep(5)
-        if not query_reports:
-            self.fail("Checker didn't detect any inconsistency!")
+        query_reports = self.query_nr_reports(dmg_command, 1)
         orphan_pool = "orphan pool"
         # Now we have multiple faults, so iterate query_reports.
         for query_report in query_reports:
@@ -472,14 +488,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # 10. Verify that the orphan pool is detected this time.
         self.log_step("Verify that the orphan pool is detected this time.")
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "RUNNING":
-                query_reports = check_query_out["response"]["reports"]
-                break
-            time.sleep(5)
-        if not query_reports:
-            self.fail("Checker didn't detect any inconsistency!")
+        query_reports = self.query_nr_reports(dmg_command, 2)
         orphan_pool_found = False
         pool_2_seq_num = None
         for query_report in query_reports:
@@ -499,7 +508,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
         dmg_command.check_repair(seq_num=pool_2_seq_num, action="0")
         repair_phase = None
         orphan_pool_repaired = False
-        for _ in range(8):
+        for _ in range(self.MAX_QUERY_RETRY):
             check_query_out = dmg_command.check_query()
             if check_query_out["response"]["status"] == "RUNNING":
                 # Check the "phase" field of pool_2. Look for CSP_DONE.
