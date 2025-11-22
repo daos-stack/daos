@@ -379,7 +379,7 @@ const ProtobufCEnumDescriptor chk__check_inconsist_class__descriptor =
   chk__check_inconsist_class__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue chk__check_inconsist_action__enum_values_by_number[13] =
+static const ProtobufCEnumValue chk__check_inconsist_action__enum_values_by_number[14] =
 {
   { "CIA_DEFAULT", "CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT", 0 },
   { "CIA_INTERACT", "CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT", 1 },
@@ -394,17 +394,19 @@ static const ProtobufCEnumValue chk__check_inconsist_action__enum_values_by_numb
   { "CIA_TRUST_OLDEST", "CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_OLDEST", 10 },
   { "CIA_TRUST_EC_PARITY", "CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_EC_PARITY", 11 },
   { "CIA_TRUST_EC_DATA", "CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_EC_DATA", 12 },
+  { "CIA_STALE", "CHK__CHECK_INCONSIST_ACTION__CIA_STALE", 65535 },
 };
 static const ProtobufCIntRange chk__check_inconsist_action__value_ranges[] = {
-{0, 0},{0, 13}
+{0, 0},{65535, 13},{0, 14}
 };
-static const ProtobufCEnumValueIndex chk__check_inconsist_action__enum_values_by_name[13] =
+static const ProtobufCEnumValueIndex chk__check_inconsist_action__enum_values_by_name[14] =
 {
   { "CIA_DEFAULT", 0 },
   { "CIA_DISCARD", 3 },
   { "CIA_IGNORE", 2 },
   { "CIA_INTERACT", 1 },
   { "CIA_READD", 4 },
+  { "CIA_STALE", 13 },
   { "CIA_TRUST_EC_DATA", 12 },
   { "CIA_TRUST_EC_PARITY", 11 },
   { "CIA_TRUST_LATEST", 9 },
@@ -421,11 +423,11 @@ const ProtobufCEnumDescriptor chk__check_inconsist_action__descriptor =
   "CheckInconsistAction",
   "Chk__CheckInconsistAction",
   "chk",
-  13,
+  14,
   chk__check_inconsist_action__enum_values_by_number,
-  13,
+  14,
   chk__check_inconsist_action__enum_values_by_name,
-  1,
+  2,
   chk__check_inconsist_action__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
