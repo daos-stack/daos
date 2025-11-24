@@ -260,6 +260,7 @@ get_hae(struct ds_cont_child *cont, bool vos_agg)
 	/* EC aggregation */
 	if (!vos_agg)
 		return cont->sc_ec_agg_eph;
+
 	/*
 	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
 	 * in vos_aggregate()
@@ -2795,9 +2796,17 @@ ds_cont_eph_report(struct ds_pool *pool)
 			}
 		}
 
-		if (min_ec_agg_eph == 0 || min_ec_agg_eph == DAOS_EPOCH_MAX ||
-		    min_stable_eph == 0 || min_stable_eph == DAOS_EPOCH_MAX ||
-		    (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
+		if (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
+		    min_stable_eph <= ec_eph->cte_last_stable_epoch &&
+		    pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+			continue;
+
+		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
+		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
+		 */
+		if (min_ec_agg_eph == DAOS_EPOCH_MAX || min_stable_eph == DAOS_EPOCH_MAX ||
+		    (ec_eph->cte_last_ec_agg_epoch != 0 &&
+		     min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
 		     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
 			if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&
 			    (min_ec_agg_eph < ec_eph->cte_last_ec_agg_epoch ||
