@@ -63,10 +63,7 @@ else
     counter=0
     for ib_path in /sys/class/net/ib*; do
         ((counter++)) || true
-- ib=$(basename "$ib_path")
-- ip addr show "$ib"
-+ ip addr show $(basename "$ib_path")
-        ip addr show "$ib"
+        ip addr show $(basename "$ib_path")
     done
     if "$counter" -ge 2; then
         # All of our CI nodes with two ib adapters should have PMEM DIMMs
