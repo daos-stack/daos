@@ -25,11 +25,7 @@ func init() {
 	}
 }
 
-func fixBrackets(stringRanks string, remove bool) string {
-	if remove {
-		return strings.Trim(stringRanks, "[]")
-	}
-
+func addBrackets(stringRanks string) string {
 	if !strings.HasPrefix(stringRanks, "[") {
 		stringRanks = "[" + stringRanks
 	}
@@ -38,6 +34,10 @@ func fixBrackets(stringRanks string, remove bool) string {
 	}
 
 	return stringRanks
+}
+
+func removeBrackets(stringRanks string) string {
+	return strings.Trim(stringRanks, "[]")
 }
 
 // RankList provides convenience methods for working with Rank slices.
@@ -65,7 +65,7 @@ func (rs *RankSet) String() string {
 	if rs == nil || rs.ns == nil {
 		return ""
 	}
-	return fixBrackets(rs.ns.String(), true)
+	return removeBrackets(rs.ns.String())
 }
 
 // RangedString returns a ranged string representation of the RankSet.
@@ -201,14 +201,11 @@ func MustCreateRankSet(stringRanks string) *RankSet {
 func CreateRankSet(stringRanks string) (*RankSet, error) {
 	rs := NewRankSet()
 
-	if len(stringRanks) < 1 {
+	if len(removeBrackets(stringRanks)) < 1 {
 		return rs, nil
 	}
 
-	stringRanks = fixBrackets(stringRanks, false)
-
-	// add enclosing brackets to input so CreateSet works without hostnames
-	ns, err := hostlist.CreateNumericSet(stringRanks)
+	ns, err := hostlist.CreateNumericSet(addBrackets(stringRanks))
 	if err != nil {
 		return nil, err
 	}

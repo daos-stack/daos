@@ -2110,7 +2110,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			min_ec_agg_eph = eph_ldr->cte_rdb_ec_agg_eph;
 
 		if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
-		    min_stable_eph == eph_ldr->cte_current_stable_eph)
+		    min_stable_eph == eph_ldr->cte_current_stable_eph &&
+		    eph_ldr->cte_current_ec_agg_eph != 0)
 			continue;
 
 		/**

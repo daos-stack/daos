@@ -1,5 +1,8 @@
 %changelog
-* Wed Nov 05 2025  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.7-101-17
+* Fri Nov 17 2025 Phillip Henderson <phillip.henderson@intel.com> 2.7.102-1
+- Bump version to 2.7.102
+
+* Wed Nov 05 2025  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.7.101-17
 - Update PMDK to release 2.1.2
 
 * Thu Oct 16 2025  Jeff Olivier <jeffolivier@google.com> 2.7.101-16
