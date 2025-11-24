@@ -2458,19 +2458,6 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		return -DER_UPDATE_AGAIN;
 	}
 
-	/* All I/O during rebuilding, needs to wait for the rebuild fence to
-	 * be generated (see rebuild_prepare_one()), which will create a boundary
-	 * for rebuild, so the data after boundary(epoch) should not be rebuilt,
-	 * which otherwise might be written duplicately, which might cause
-	 * the failure in VOS.
-	 */
-	if ((flags & ORF_REBUILDING_IO) &&
-	    (is_pool_rebuild_allowed(child->sc_pool->spc_pool, false) &&
-	     child->sc_pool->spc_rebuild_fence == 0)) {
-		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
-		return -DER_UPDATE_AGAIN;
-	}
-
 	return 0;
 }
 
@@ -5996,13 +5983,14 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 out:
-	D_DEBUG(DB_IO, "Handled collective query RPC %p %s forwarding for obj "DF_UOID
-		" on rank %u XS %u/%u epc "DF_X64" pmv %u, with dti "DF_DTI", dct_nr %u, "
-		"forward width %u, forward depth %u\n: "DF_RC"\n", rpc,
-		ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid),
-		myrank, dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
-		DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
-		ocqi->ocqi_disp_width, ocqi->ocqi_disp_depth, DP_RC(rc));
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS, DLOG_ERR, DB_IO, rc,
+		  "Handled collective query RPC %p %s forwarding for obj " DF_UOID " on rank %u XS "
+		  "%u/%u epc " DF_X64 " pmv %u, with dti " DF_DTI ", dct_nr %u, forward width %u, "
+		  "forward depth %u",
+		  rpc, ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid),
+		  myrank, dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
+		  DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
+		  ocqi->ocqi_disp_width, ocqi->ocqi_disp_depth);
 
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, version);
