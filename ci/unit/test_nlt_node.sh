@@ -25,21 +25,35 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 #			   --server-valgrind all
 
 # Use the latest version that CI has available.
-python3.11 -m venv venv
+: "${PYTHON_VERSION:=3.11}"
+"python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 touch venv/pip.conf
 pip config set global.progress_bar off
 pip config set global.no_color true
-
 pip install --upgrade pip
 pip install --requirement requirements-utest.txt
-
 pip install /opt/daos/lib/daos/python/
 
 # set high open file limit in the shell to avoid extra warning
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py --max-log-size 1950MiB \
-    --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
+cwd="$(pwd)"
+# export GCOV_PREFIX="${cwd}"
+# export GCOV_PREFIX_STRIP="7"
+# HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py --max-log-size 1950MiB \
+#    --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
+
+GCOV_PREFIX="${cwd}" GCOV_PREFIX_STRIP="7" HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+    ./utils/node_local_test.py --max-log-size 1950MiB --dfuse-dir /localhome/jenkins/ \
+    --log-usage-save nltir.xml --log-usage-export nltr.json all
+
+# Generate code coverage report if at least one gcda file was generated
+if [[ -n $(find build -name "*.gcda") ]]; then
+    pip install --requirement requirements-code-coverage.txt
+
+    mkdir -p /tmp/code_coverage
+    gcovr --json /tmp/code_coverage/code_coverage.json --gcov-ignore-parse-errors
+fi

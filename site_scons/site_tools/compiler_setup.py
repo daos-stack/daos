@@ -122,6 +122,11 @@ def _base_setup(env):
 
     env['BSETUP'] = compiler
 
+    if GetOption('code_coverage'):
+        env.AppendUnique(CXXFLAGS=['-fprofile-arcs', '-ftest-coverage'])
+        env.AppendUnique(CCFLAGS=['-fprofile-arcs', '-ftest-coverage'])
+        env.AppendUnique(CGO_CFLAGS=['-fprofile-arcs', '-ftest-coverage'])
+
 
 def _check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
