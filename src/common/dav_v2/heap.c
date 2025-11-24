@@ -703,6 +703,26 @@ heap_mbrt_log_alloc_failure(struct palloc_heap *heap, uint32_t zone_id)
 	}
 }
 
+/*
+ * heap_touch_umem_cache -- touch the cache page for a memory address
+ *			  if the memory bucket is evictable
+ */
+void
+heap_touch_umem_cache(struct palloc_heap *heap, void *addr, size_t size)
+{
+	uint64_t     offset  = HEAP_PTR_TO_OFF(heap, addr);
+	uint32_t     zone_id = OFFSET_TO_ZID(offset);
+	struct mbrt *mb      = heap_mbrt_get_mb(heap, zone_id);
+	dav_obj_t   *dav_hdl = (dav_obj_t *)heap->p_ops.base;
+
+	D_ASSERT((mb != NULL) && (dav_hdl != NULL) && (dav_hdl->do_utx != NULL));
+
+	if (!mb->is_evictable)
+		return;
+
+	umem_cache_touch(dav_hdl->do_store, dav_hdl->do_utx->utx_id, offset, size);
+}
+
 void
 heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage)
 {
@@ -1312,7 +1332,8 @@ heap_reclaim_zone_garbage(struct palloc_heap *heap, struct bucket *bucket,
 		case CHUNK_TYPE_USED:
 			break;
 		default:
-			ASSERT(0);
+			D_ASSERTF(0, "Encountered invalid chunk (%d) of type %u val = 0x%lx", i,
+				  hdr->type, *(uint64_t *)hdr);
 		}
 
 		i = m.chunk_id + m.size_idx; /* hdr might have changed */
