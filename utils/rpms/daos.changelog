@@ -1,5 +1,8 @@
 %changelog
-* Fri Nov 17 2025 Phillip Henderson <phillip.henderson@intel.com> 2.7.102-1
+* Mon Nov 24 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.7.102-2
+- Installing mpi4py via pip.
+
+* Fri Nov 17 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.7.102-1
 - Bump version to 2.7.102
 
 * Wed Nov 05 2025  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.7.101-17
