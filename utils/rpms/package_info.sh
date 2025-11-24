@@ -36,13 +36,13 @@ daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
 export daos_release
 
 export libfabric_version="1.22.0"
-export libfabric_release="4${distro_name}"
+export libfabric_release="5${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.0"
 export mercury_release="8${distro_name}"
 export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
-export argobots_release="3${distro_name}"
+export argobots_release="4${distro_name}"
 export argobots_full="${argobots_version}-${argobots_release}"
 export pmdk_version="2.1.2"
 export pmdk_release="1${distro_name}"

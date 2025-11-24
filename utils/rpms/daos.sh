@@ -65,6 +65,7 @@ install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
 DEPENDS=( "mercury >= ${mercury_full}" "${libfabric_lib} >= ${libfabric_full}" )
+DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
 build_package "daos"
 
 # Only build server RPMs if we built the server
@@ -180,7 +181,7 @@ EOF
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${daos_spdk_full}" )
   DEPENDS+=( "${pmemobj_lib} >= ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
-  DEPENDS+=( "numactl" "pciutils" )
+  DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" "numactl" "pciutils" )
   build_package "daos-server"
 
   TARGET_PATH="${bindir}"
