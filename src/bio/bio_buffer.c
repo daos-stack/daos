@@ -272,6 +272,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, struct umem_instance *umem,
 		return NULL;
 
 	D_ASSERT(type < BIO_IOD_TYPE_MAX);
+	bio_io_lug_init(&biod->bd_io_lug);
 	biod->bd_umem = umem;
 	biod->bd_ctxt = ctxt;
 	biod->bd_type = type;
@@ -328,6 +329,7 @@ bio_iod_free(struct bio_desc *biod)
 		bio_sgl_fini(&biod->bd_sgls[i]);
 
 	D_FREE(biod->bd_bulk_hdls);
+	bio_io_lug_fini(&biod->bd_io_lug);
 
 	D_FREE(biod);
 }
@@ -1030,8 +1032,7 @@ rw_completion(void *cb_arg, int err)
 
 	bxb = biod->bd_ctxt->bic_xs_blobstore;
 	D_ASSERT(bxb != NULL);
-	D_ASSERT(bxb->bxb_blob_rw > 0);
-	bxb->bxb_blob_rw--;
+	bio_io_lug_dequeue(bxb, &biod->bd_io_lug);
 
 	io_ctxt = biod->bd_ctxt;
 	D_ASSERT(io_ctxt != NULL);
@@ -1173,7 +1174,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 
 		biod->bd_dma_issued = 1;
 		biod->bd_inflights++;
-		bxb->bxb_blob_rw++;
+		bio_io_lug_enqueue(xs_ctxt, bxb, &biod->bd_io_lug);
 		biod->bd_ctxt->bic_inflight_dmas++;
 
 		rw_cnt = (pg_cnt > bio_chk_sz) ? bio_chk_sz : pg_cnt;
@@ -1970,4 +1971,43 @@ bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	rc = bio_copy_post(copy_desc, rc);
 
 	return rc;
+}
+
+#define IO_MONITOR_INTVL 1000000 /* us, 1 second */
+
+void
+bio_io_monitor(struct bio_xs_context *xs_ctxt, uint64_t now)
+{
+	enum smd_dev_type        st;
+	struct bio_xs_blobstore *bxb;
+	struct bio_io_lug       *io_lug;
+	struct media_error_msg  *mem;
+
+	if ((xs_ctxt->bxc_io_monitor_ts + IO_MONITOR_INTVL) > now)
+		return;
+
+	xs_ctxt->bxc_io_monitor_ts = now;
+
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = xs_ctxt->bxc_xs_blobstores[st];
+
+		if (!bxb || d_list_empty(&bxb->bxb_pending_ios))
+			continue;
+
+		io_lug = d_list_entry(bxb->bxb_pending_ios.next, struct bio_io_lug, bil_link);
+		D_ASSERT(io_lug->bil_submit_ts != 0);
+
+		if ((io_lug->bil_submit_ts + bio_io_timeout) >= now)
+			continue;
+
+		D_ALLOC_PTR(mem);
+		if (mem == NULL) {
+			D_ERROR("Out of memory: NVMe stalled I/O report is skipped\n");
+			continue;
+		}
+		mem->mem_err_type = MET_IO_STALLED;
+		mem->mem_bs       = bxb->bxb_blobstore;
+		mem->mem_tgt_id   = xs_ctxt->bxc_tgt_id;
+		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
+	}
 }

@@ -63,6 +63,7 @@ unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
+unsigned int        bio_io_timeout         = 120000000; /* us, 120 seconds */
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -211,7 +212,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 {
 	char		*env;
 	int		 rc, fd;
-	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
+	unsigned int     size_mb = DAOS_DMA_CHUNK_MB, io_timeout_secs = 0;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -268,6 +269,16 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	d_getenv_uint("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
+
+	d_getenv_uint("DAOS_SPDK_IO_TIMEOUT", &io_timeout_secs);
+	if (io_timeout_secs > 0) {
+		if (io_timeout_secs < 30 || io_timeout_secs > 300)
+			D_WARN("DAOS_SPDK_IO_TIMEOUT(%u) is invalid. Min:30,Max:300,Default:120\n",
+			       io_timeout_secs);
+		else
+			bio_io_timeout = io_timeout_secs * 1000000; /* convert to us */
+	}
+	D_INFO("SPDK IO timeout set to %u us\n", bio_io_timeout);
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
@@ -1217,6 +1228,7 @@ alloc_xs_blobstore(void)
 	if (bxb == NULL)
 		return NULL;
 
+	D_INIT_LIST_HEAD(&bxb->bxb_pending_ios);
 	D_INIT_LIST_HEAD(&bxb->bxb_io_ctxts);
 
 	return bxb;
@@ -1722,8 +1734,10 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 static inline void
 reset_media_errors(struct bio_blobstore *bbs)
 {
-	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
+	struct bio_dev_health *bdh       = &bbs->bb_dev_health;
+	struct nvme_stats     *dev_stats = &bdh->bdh_health_state;
 
+	bdh->bdh_io_stalled       = 0;
 	dev_stats->bio_read_errs = 0;
 	dev_stats->bio_write_errs = 0;
 	dev_stats->bio_unmap_errs = 0;
@@ -1952,6 +1966,9 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		scan_bio_bdevs(ctxt, now);
 		bio_led_event_monitor(ctxt, now);
 	}
+
+	/* Detect stalled I/Os */
+	bio_io_monitor(ctxt, now);
 
 	return rc;
 }

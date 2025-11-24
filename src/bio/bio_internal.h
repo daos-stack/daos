@@ -278,7 +278,7 @@ struct bio_dev_health {
 	void		       *bdh_intel_smart_buf; /*Intel SMART attributes*/
 	uint64_t		bdh_stat_age;
 	unsigned int		bdh_inflights;
-	unsigned int		bdh_stopping:1;
+	unsigned int             bdh_stopping : 1, bdh_io_stalled : 1;
 	uint16_t		bdh_vendor_id; /* PCI vendor ID */
 
 	/**
@@ -365,10 +365,21 @@ struct bio_blobstore {
 				 bb_faulty_done:1;	/* Faulty reaction is done */
 };
 
+struct bio_io_lug {
+	/* Link to bio_xs_blobstore::bxb_pending_ios */
+	d_list_t bil_link;
+	/* When the I/O is submitted */
+	uint64_t bil_submit_ts;
+	/* Reference count */
+	uint32_t bil_ref;
+};
+
 /* Per-xstream blobstore */
 struct bio_xs_blobstore {
 	/* In-flight blob read/write */
 	unsigned int		 bxb_blob_rw;
+	/* Pending I/Os */
+	d_list_t                 bxb_pending_ios;
 	/* spdk io channel */
 	struct spdk_io_channel	*bxb_io_channel;
 	/* per bio blobstore */
@@ -381,12 +392,59 @@ struct bio_xs_blobstore {
 /* Per-xstream NVMe context */
 struct bio_xs_context {
 	int			 bxc_tgt_id;
+	uint64_t                 bxc_io_monitor_ts;
 	struct spdk_thread	*bxc_thread;
 	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
 	unsigned int		 bxc_self_polling:1;	/* for standalone VOS */
 	unsigned int             bxc_skip_draining : 1;
 };
+
+static inline void
+bio_io_lug_init(struct bio_io_lug *io_lug)
+{
+	D_INIT_LIST_HEAD(&io_lug->bil_link);
+	io_lug->bil_submit_ts = 0;
+	io_lug->bil_ref       = 0;
+}
+
+static inline void
+bio_io_lug_fini(struct bio_io_lug *io_lug)
+{
+	D_ASSERT(io_lug->bil_ref == 0);
+	D_ASSERT(d_list_empty(&io_lug->bil_link));
+}
+
+static inline void
+bio_io_lug_dequeue(struct bio_xs_blobstore *bxb, struct bio_io_lug *io_lug)
+{
+	D_ASSERT(bxb->bxb_blob_rw > 0);
+	bxb->bxb_blob_rw--;
+
+	D_ASSERT(!d_list_empty(&io_lug->bil_link));
+	D_ASSERT(io_lug->bil_submit_ts != 0);
+	D_ASSERT(io_lug->bil_ref > 0);
+	io_lug->bil_ref--;
+	if (io_lug->bil_ref == 0)
+		d_list_del_init(&io_lug->bil_link);
+}
+
+static inline void
+bio_io_lug_enqueue(struct bio_xs_context *xs_ctxt, struct bio_xs_blobstore *bxb,
+		   struct bio_io_lug *io_lug)
+{
+	bxb->bxb_blob_rw++;
+	if (io_lug->bil_ref == 0) {
+		if (xs_ctxt->bxc_io_monitor_ts)
+			io_lug->bil_submit_ts = xs_ctxt->bxc_io_monitor_ts;
+		else
+			io_lug->bil_submit_ts = d_timeus_secdiff(0);
+
+		D_ASSERT(d_list_empty(&io_lug->bil_link));
+		d_list_add_tail(&io_lug->bil_link, &bxb->bxb_pending_ios);
+	}
+	io_lug->bil_ref++;
+}
 
 /* Per VOS instance I/O context */
 struct bio_io_context {
@@ -437,6 +495,7 @@ struct bio_rsrvd_dma {
 
 /* I/O descriptor */
 struct bio_desc {
+	struct bio_io_lug        bd_io_lug;
 	struct umem_instance	*bd_umem;
 	struct bio_io_context	*bd_ctxt;
 	/* DMA buffers reserved by this io descriptor */
@@ -546,6 +605,7 @@ extern unsigned int	bio_chk_cnt_max;
 extern unsigned int	bio_numa_node;
 extern unsigned int	bio_spdk_max_unmap_cnt;
 extern unsigned int	bio_max_async_sz;
+extern unsigned int                     bio_io_timeout;
 
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		       uint64_t timeout);
@@ -583,6 +643,8 @@ int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 		   uint64_t end, uint8_t media);
 int dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt);
 void iod_dma_wait(struct bio_desc *biod);
+void
+bio_io_monitor(struct bio_xs_context *xs_ctxt, uint64_t now);
 
 static inline struct bio_dma_buffer *
 iod_dma_buf(struct bio_desc *biod)
