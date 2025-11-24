@@ -2511,6 +2511,223 @@ test_d_setenv(void **state)
 	assert_false(d_isenv_def("foo"));
 }
 
+static void
+test_d_rank_list_to_str(void **state)
+{
+	d_rank_list_t *ranks;
+	char          *ranks_str = NULL;
+	int            i;
+	char          *line;
+	char          *buf;
+	int            rc;
+
+	// Test with null list
+	rc = d_rank_list_to_str(NULL, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_null(ranks_str);
+
+	// Test with empty list
+	ranks = d_rank_list_alloc(0);
+	assert_non_null(ranks);
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(ranks_str, "[]");
+
+	D_FREE(ranks_str);
+	d_rank_list_free(ranks);
+
+	// Test with one rank
+	ranks = d_rank_list_alloc(1);
+	assert_non_null(ranks);
+	ranks->rl_ranks[0] = 2;
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(ranks_str, "[2]");
+
+	D_FREE(ranks_str);
+	d_rank_list_free(ranks);
+
+	// Test with 4 ranks and two ranges
+	ranks = d_rank_list_alloc(4);
+	assert_non_null(ranks);
+	ranks->rl_ranks[0] = 2;
+	ranks->rl_ranks[1] = 1;
+	ranks->rl_ranks[2] = 5;
+	ranks->rl_ranks[3] = 3;
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(ranks_str, "[1-3,5]");
+
+	D_FREE(ranks_str);
+	d_rank_list_free(ranks);
+
+	// Test with long list
+	ranks = d_rank_list_alloc(1024);
+	assert_non_null(ranks);
+	D_ALLOC(line, 1024 * 5);
+	assert_non_null(line);
+	buf    = line;
+	buf[0] = '[';
+	buf++;
+	for (i = 0; i < 1024; ++i) {
+		int len;
+
+		ranks->rl_ranks[i] = 2 * i + 1;
+		len                = sprintf(buf, "%d,", ranks->rl_ranks[i]);
+		assert_true(len > 0);
+		buf += len;
+	}
+	memcpy(buf - 1, "]", sizeof("]"));
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_non_null(ranks_str);
+	assert_string_equal(ranks_str, line);
+
+	D_FREE(line);
+	D_FREE(ranks_str);
+	d_rank_list_free(ranks);
+}
+
+static void
+test_d_rank_range_list_create_from_ranks(void **state)
+{
+	d_rank_list_t       *ranks;
+	d_rank_range_list_t *range_list;
+
+	// Test with null list
+	range_list = d_rank_range_list_create_from_ranks(NULL);
+	assert_non_null(range_list);
+	assert_int_equal(range_list->rrl_nr, 0);
+
+	d_rank_range_list_free(range_list);
+
+	// Test with empty list
+	ranks = d_rank_list_alloc(0);
+	assert_non_null(ranks);
+
+	range_list = d_rank_range_list_create_from_ranks(ranks);
+	assert_non_null(range_list);
+	assert_int_equal(range_list->rrl_nr, 0);
+
+	d_rank_range_list_free(range_list);
+	d_rank_list_free(ranks);
+
+	// Test with one rank
+	ranks = d_rank_list_alloc(1);
+	assert_non_null(ranks);
+	ranks->rl_ranks[0] = 2;
+
+	range_list = d_rank_range_list_create_from_ranks(ranks);
+	assert_non_null(range_list);
+	assert_int_equal(range_list->rrl_nr, 1);
+	assert_int_equal(range_list->rrl_ranges[0].lo, 2);
+	assert_int_equal(range_list->rrl_ranges[0].hi, 2);
+
+	d_rank_range_list_free(range_list);
+	d_rank_list_free(ranks);
+
+	// Test with 4 ranks and two ranges
+	ranks = d_rank_list_alloc(4);
+	assert_non_null(ranks);
+	ranks->rl_ranks[0] = 2;
+	ranks->rl_ranks[1] = 1;
+	ranks->rl_ranks[2] = 5;
+	ranks->rl_ranks[3] = 3;
+
+	range_list = d_rank_range_list_create_from_ranks(ranks);
+	assert_non_null(range_list);
+	assert_int_equal(range_list->rrl_nr, 2);
+	assert_int_equal(range_list->rrl_ranges[0].lo, 1);
+	assert_int_equal(range_list->rrl_ranges[0].hi, 3);
+	assert_int_equal(range_list->rrl_ranges[1].lo, 5);
+	assert_int_equal(range_list->rrl_ranges[1].hi, 5);
+
+	d_rank_range_list_free(range_list);
+	d_rank_list_free(ranks);
+}
+
+static void
+test_d_rank_range_list_str(void **state)
+{
+	d_rank_range_list_t *range_list;
+	char                *ranks_str = NULL;
+	int                  i;
+	char                *line;
+	char                *buf;
+	int                  rc;
+
+	// Test with empty list
+	range_list = d_rank_range_list_alloc(0);
+	assert_non_null(range_list);
+
+	rc = d_rank_range_list_str(range_list, &ranks_str);
+	assert_int_equal(rc, 0);
+	assert_string_equal(ranks_str, "[]");
+
+	D_FREE(ranks_str);
+	d_rank_range_list_free(range_list);
+
+	// Test with one rank
+	range_list = d_rank_range_list_alloc(1);
+	assert_non_null(range_list);
+	range_list->rrl_ranges[0].lo = 2;
+	range_list->rrl_ranges[0].hi = 2;
+
+	rc = d_rank_range_list_str(range_list, &ranks_str);
+	assert_int_equal(rc, 0);
+	assert_string_equal(ranks_str, "[2]");
+
+	D_FREE(ranks_str);
+	d_rank_range_list_free(range_list);
+
+	// Test with 4 ranks and two ranges
+	range_list = d_rank_range_list_alloc(2);
+	assert_non_null(range_list);
+	range_list->rrl_ranges[0].lo = 1;
+	range_list->rrl_ranges[0].hi = 3;
+	range_list->rrl_ranges[1].lo = 5;
+	range_list->rrl_ranges[1].hi = 5;
+
+	rc = d_rank_range_list_str(range_list, &ranks_str);
+	assert_int_equal(rc, 0);
+	assert_string_equal(ranks_str, "[1-3,5]");
+
+	D_FREE(ranks_str);
+	d_rank_range_list_free(range_list);
+
+	// Test with lot of ranks
+	range_list = d_rank_range_list_alloc(1024);
+	assert_non_null(range_list);
+	D_ALLOC(line, 1024 * 5);
+	assert_non_null(line);
+	buf    = line;
+	buf[0] = '[';
+	buf++;
+	for (i = 0; i < 1024; ++i) {
+		int len;
+
+		range_list->rrl_ranges[i].lo = i;
+		range_list->rrl_ranges[i].hi = i;
+		len                          = sprintf(buf, "%d,", i);
+		assert_true(len > 0);
+		buf += len;
+	}
+	memcpy(buf - 1, "]", sizeof("]"));
+
+	rc = d_rank_range_list_str(range_list, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_non_null(ranks_str);
+	assert_string_equal(ranks_str, line);
+
+	D_FREE(line);
+	D_FREE(ranks_str);
+	d_rank_range_list_free(range_list);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2547,7 +2764,10 @@ main(int argc, char **argv)
 					    teardown_getenv_mocks),
 	    cmocka_unit_test_setup_teardown(test_d_getenv_uint64_t, setup_getenv_mocks,
 					    teardown_getenv_mocks),
-	    cmocka_unit_test(test_d_setenv)};
+	    cmocka_unit_test(test_d_setenv),
+	    cmocka_unit_test(test_d_rank_list_to_str),
+	    cmocka_unit_test(test_d_rank_range_list_create_from_ranks),
+	    cmocka_unit_test(test_d_rank_range_list_str)};
 
 	d_register_alt_assert(mock_assert);
 

@@ -460,7 +460,6 @@ out:
 
 }
 
-
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
 {
@@ -496,8 +495,8 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 			goto out;
 		}
 
-		D_WARN("Lost pool "DF_UUIDF" shard %u on rank %u.\n",
-		       DP_UUID(child->spc_uuid), info->dmi_tgt_id, dss_self_rank());
+		D_WARN(DF_UUID ": Lost pool shard %u on rank %u.\n", DP_UUID(child->spc_uuid),
+		       info->dmi_tgt_id, dss_self_rank());
 		/*
 		 * Ignore the failure to allow subsequent logic (such as DAOS check)
 		 * to handle the trouble.
