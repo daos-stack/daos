@@ -517,11 +517,8 @@ struct vos_dtx_act_ent {
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
-	struct vos_dtx_cmt_ent_df	 dce_base;
-
-	uint32_t			 dce_reindex:1,
-					 dce_exist:1,
-					 dce_invalid:1;
+	struct vos_dtx_cmt_ent_df dce_base;
+	uint32_t                  dce_invalid : 1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)

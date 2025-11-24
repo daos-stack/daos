@@ -16,6 +16,7 @@ DESCRIPTION="Argobots is a lightweight, low-level threading and tasking framewor
 This release is an experimental version of Argobots that contains
 features related to user-level threads, tasklets, and some schedulers."
 URL="https://argobots.org"
+RPM_CHANGELOG="argobots.changelog"
 
 files=()
 TARGET_PATH="${libdir}"
