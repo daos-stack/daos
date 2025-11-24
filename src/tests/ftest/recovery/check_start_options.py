@@ -378,7 +378,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
             # Even if "status" is RUNNING, "reports" may be null/None, so check both.
             status = check_query_out["response"]["status"]
             query_reports = check_query_out["response"]["reports"]
-            if len(query_reports) > 0:
+            if query_reports and len(query_reports) > 0:
                 self.log.debug(f"found {len(query_reports)} reports, need {nr_exp_reports}")
             if status == "RUNNING" and query_reports and len(query_reports) >= nr_exp_reports:
                 break
