@@ -10,7 +10,7 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, report_errors
-from recovery_utils import wait_for_check_complete
+from recovery_utils import check_ram_used, wait_for_check_complete
 from run_utils import command_as_user, run_remote
 
 
@@ -268,10 +268,9 @@ class PoolListConsolidationTest(TestWithServers):
         1. Create a pool with --nsvc=3. Rank 0, 1, and 2 will be pool service replicas.
         2. Stop servers.
         3. Remove <scm_mount>/<pool_uuid>/rdb-pool from rank 0 and 2.
-        4. Start servers.
-        5. Run DAOS checker under kinds of mode.
-        6. Try creating a container. The pool can be started now, so create should succeed.
-        7. Show that rdb-pool are recovered. i.e., at least three out of four ranks
+        4. Run DAOS checker under kinds of mode.
+        5. Try creating a container. The pool can be started now, so create should succeed.
+        6. Show that rdb-pool are recovered. i.e., at least three out of four ranks
         should have rdb-pool.
 
         Jira ID: DAOS-12029
@@ -281,8 +280,20 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
+        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
+        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
+        # cluster, the "class" would be "dcpm".)
+        # This test is skipped on MD-on-SSD because if the system is stopped, the data
+        # under mount point will be removed, but the test expects the pool dir to exist
+        # there.
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         self.log_step("Create a pool with --nsvc=3.")
-        pool = self.get_pool(svcn=3)
+        pool = self.get_pool(connect=False, svcn=3)
 
         self.log_step("Stop servers")
         dmg_command = self.get_dmg_command()
@@ -303,9 +314,10 @@ class PoolListConsolidationTest(TestWithServers):
                 count += 1
                 if count > 1:
                     break
-
-        self.log_step("Start servers.")
-        dmg_command.system_start()
+        if count < len(hosts):
+            msg = (f"Unexpected number of removals! Expected = {len(hosts)}; "
+                   f"Actual = {count}")
+            self.fail(msg)
 
         self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
@@ -363,6 +375,18 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
+        # If the test runs on MD-on-SSD cluster, the "class" field under "storage" would
+        # be "ram". If so, skip (pass) the test. (If the test runs on a normal HW Medium
+        # cluster, the "class" would be "dcpm".)
+        # This test is skipped on MD-on-SSD because if the system is stopped, the data
+        # under mount point will be removed, but the test expects the pool dir to exist
+        # there.
+        ram_used = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        if ram_used:
+            self.log.info("MD-on-SSD cluster isn't currently supported.")
+            # return results in PASS.
+            return
+
         self.log_step("Create a pool.")
         pool = self.get_pool(connect=False)
 
