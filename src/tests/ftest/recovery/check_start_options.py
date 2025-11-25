@@ -368,10 +368,10 @@ class DMGCheckStartOptionsTest(TestWithServers):
         """
         Query until the number of expected reports are found or max retries reached.
         """
-        QUERY_WAIT = 10  # initial wait after starting the check, in seconds
-        QUERY_SLEEP = 5  # wait period between retries in seconds
+        query_wait = 10  # initial wait after starting the check, in seconds
+        query_sleep = 5  # wait period between retries in seconds
 
-        time.sleep(QUERY_WAIT)
+        time.sleep(query_wait)
         query_reports = None
         for _ in range(self.MAX_QUERY_RETRY):
             check_query_out = dmg_command.check_query()
@@ -379,10 +379,10 @@ class DMGCheckStartOptionsTest(TestWithServers):
             status = check_query_out["response"]["status"]
             query_reports = check_query_out["response"]["reports"]
             if query_reports and len(query_reports) > 0:
-                self.log.debug(f"found {len(query_reports)} reports, need {nr_exp_reports}")
+                self.log.debug("found %d reports, need %d", len(query_reports), nr_exp_reports)
             if status == "RUNNING" and query_reports and len(query_reports) >= nr_exp_reports:
                 break
-            time.sleep(QUERY_SLEEP)
+            time.sleep(query_sleep)
 
         if not query_reports:
             if nr_exp_reports > 0:
