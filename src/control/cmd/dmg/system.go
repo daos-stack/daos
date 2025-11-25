@@ -700,6 +700,14 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		Force:  force,
 	}
 
+	// Safe to set host list on request because cmd is not a hostListCmd. Need to do this so
+	// hostList can be used when server config is not available to derive it from.
+	hosts, err := common.ParseHostList(cmd.config.HostList, cmd.config.ControlPort)
+	if err != nil {
+		return err
+	}
+	req.SetHostList(hosts)
+
 	resp, err := control.SystemRebuildManage(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response

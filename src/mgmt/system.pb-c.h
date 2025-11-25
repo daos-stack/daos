@@ -327,10 +327,15 @@ struct  _Mgmt__SystemRebuildManageReq
    * Flag to indicate a forced operation
    */
   protobuf_c_boolean force;
+  /*
+   * Hosts to fan-out request to.
+   */
+  size_t n_request_hosts;
+  char **request_hosts;
 };
 #define MGMT__SYSTEM_REBUILD_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_rebuild_manage_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0, 0, 0,NULL }
 
 
 /*

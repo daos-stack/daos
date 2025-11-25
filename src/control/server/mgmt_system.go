@@ -1441,6 +1441,11 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 			OpCode: opCode,
 			Force:  pbReq.Force,
 		}
+		// Set request hostlist from system request so control-API pool call reaches
+		// MS-replicas and includes any custom server port assignments (as we don't have
+		// access to the server config from here).
+		req.SetHostList(pbReq.RequestHosts)
+
 		svc.log.Tracef("%T: %+v", req, req)
 
 		result := &control.PoolRebuildManageResult{

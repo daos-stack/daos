@@ -1244,7 +1244,7 @@ func SystemGetProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetPr
 	return resp, nil
 }
 
-// SystemRebuildManageReq sends an interactive pool rebuild request to each pool in a DAOS system.
+// SystemRebuildanageReq sends an interactive pool rebuild request to each pool in a DAOS system.
 type SystemRebuildManageReq struct {
 	unaryRequest
 	msRequest
@@ -1296,9 +1296,10 @@ func SystemRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *Syste
 	}
 
 	pbReq := &mgmtpb.SystemRebuildManageReq{
-		Sys:    req.getSystem(rpcClient),
-		OpCode: uint32(req.OpCode),
-		Force:  req.Force,
+		Sys:          req.getSystem(rpcClient),
+		OpCode:       uint32(req.OpCode),
+		Force:        req.Force,
+		RequestHosts: req.getHostList(),
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemRebuildManage(ctx, pbReq)

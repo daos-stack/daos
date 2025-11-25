@@ -110,6 +110,7 @@ message SystemRebuildManageReq
 	string sys     = 1; // DAOS system name
 	uint32 op_code = 2; // pool-rebuild operation to run on all pools
 	bool   force   = 3; // Flag to indicate a forced operation
+	repeated string request_hosts = 4; // Hosts to fan-out request to.
 }
 
 // PoolRebuildManageResult returns the result of a pool-rebuild-manage operation.

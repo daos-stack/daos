@@ -42,6 +42,14 @@ func TestDmg_SystemCommands(t *testing.T) {
 		return req
 	}
 
+	withHostList := func(req control.UnaryRequest, hosts ...string) control.UnaryRequest {
+		if rs, ok := req.(interface{ SetHostList([]string) }); ok {
+			rs.SetHostList(hosts)
+		}
+
+		return req
+	}
+
 	withSystem := func(req control.UnaryRequest, sys string) control.UnaryRequest {
 		if rs, ok := req.(interface{ SetSystem(string) }); ok {
 			rs.SetSystem(sys)
@@ -391,9 +399,10 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system rebuild start",
 			"system rebuild start",
 			strings.Join([]string{
-				printRequest(t, &control.SystemRebuildManageReq{
-					OpCode: control.PoolRebuildOpCodeStart,
-				}),
+				printRequest(t, withHostList(
+					&control.SystemRebuildManageReq{
+						OpCode: control.PoolRebuildOpCodeStart,
+					}, "localhost:10001")),
 			}, " "),
 			nil,
 		},
@@ -407,9 +416,10 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system rebuild stop",
 			"system rebuild stop",
 			strings.Join([]string{
-				printRequest(t, &control.SystemRebuildManageReq{
-					OpCode: control.PoolRebuildOpCodeStop,
-				}),
+				printRequest(t, withHostList(
+					&control.SystemRebuildManageReq{
+						OpCode: control.PoolRebuildOpCodeStop,
+					}, "localhost:10001")),
 			}, " "),
 			nil,
 		},
@@ -417,10 +427,11 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system rebuild stop with force",
 			"system rebuild stop --force",
 			strings.Join([]string{
-				printRequest(t, &control.SystemRebuildManageReq{
-					OpCode: control.PoolRebuildOpCodeStop,
-					Force:  true,
-				}),
+				printRequest(t, withHostList(
+					&control.SystemRebuildManageReq{
+						OpCode: control.PoolRebuildOpCodeStop,
+						Force:  true,
+					}, "localhost:10001")),
 			}, " "),
 			nil,
 		},
