@@ -1297,6 +1297,10 @@ class TestGroup():
         if not code_coverage.setup(logger, result.tests[0]):
             return_code |= 128
 
+        # ignore return code from coverage setup as tests can still run until first failure
+        if repeat > 1:
+            return_code = 0
+
         self._details["tests"] = []
 
         # Run each test for as many repetitions as requested
@@ -1345,6 +1349,10 @@ class TestGroup():
 
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)
+
+            if repeat > 1 and return_code != 0:
+                logger.info("Failure at test repetition %s/%s. No more repetitions.", loop, repeat)
+                break
 
         # Cleanup any specified files at the end of testing
         for file, info in cleanup_files.items():
