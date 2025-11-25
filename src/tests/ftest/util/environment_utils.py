@@ -16,7 +16,7 @@ from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkExce
                                 get_common_provider, get_fastest_interface)
 from util.run_utils import copy, run_remote
 
-DEFAULT_DAOS_TEST_ENV_VARS = [r"D_*", r"DAOS_*", "COVFILE"]
+DEFAULT_DAOS_TEST_ENV_VARS = [r"D_.*", r"DAOS_.*", "COVFILE", r"GCOV_.*"]
 
 
 class TestEnvironmentException(Exception):
@@ -676,7 +676,7 @@ class TestEnvironment():
             return
 
         _export_keys = os.environ.get("EXPORT_DAOS_TEST_ENV_VARS", DEFAULT_DAOS_TEST_ENV_VARS)
-        _key_pattern = re.compile(fr"({'|'.join(re.escape(s) for s in _export_keys)})")
+        _key_pattern = re.compile(f"({'|'.join(_export_keys)})")
         _export_env = []
         for _key, _value in os.environ.items():
             if _key_pattern.match(_key):
