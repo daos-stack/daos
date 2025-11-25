@@ -34,4 +34,6 @@ pool_100:
 pool_small:
   size: 2%
   # If we use --size=2% during pool create, we can only create up to 49 pools.
-  quantity: 49
+  # quantity: 49
+  # For MD-on-SSD cluster, use 43.
+  quantity: 43
