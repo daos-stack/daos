@@ -174,12 +174,11 @@ update-ca-certificates
 if [ -n "$REPO_FILE_URL" ]; then
     trusted_host="${REPO_FILE_URL##*//}"
     trusted_host="${trusted_host%%/*}"; \
-    {
-        echo "[global]"
-        echo "trusted-host = ${trusted_host}"
-        echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
-        echo "proxy = "
-        echo "progress_bar = off"
-        echo "no_color = true"
-     } > /etc/pip.conf
+    cat <<EOF > /etc/pip.conf
+[global]
+    trusted-host = ${trusted_host}
+    index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple
+    progress_bar = off
+    no_color = true
+EOF
 fi
