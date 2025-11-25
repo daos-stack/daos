@@ -159,6 +159,12 @@ class TelemetryUtils():
         "engine_pool_vos_wal_replay_size",
         "engine_pool_vos_wal_replay_time",
         "engine_pool_vos_wal_replay_transactions"]
+    ENGINE_POOL_VOS_CACHE_METRICS = [
+        "engine_pool_vos_wal_page_evict",
+        "engine_pool_vos_wal_page_flush",
+        "engine_pool_vos_wal_page_hit",
+        "engine_pool_vos_wal_page_miss",
+        "engine_pool_vos_wal_page_ne"]
     ENGINE_POOL_SVC_METRICS = [
         "engine_pool_svc_degraded_ranks",
         "engine_pool_svc_disabled_targets",

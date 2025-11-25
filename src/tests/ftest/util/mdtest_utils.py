@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,20 +9,103 @@ import os
 import re
 
 from command_utils import ExecutableCommand
-from command_utils_base import FormattedParameter, LogParameter
+from command_utils_base import BasicParameter, FormattedParameter, LogParameter
+from exception_utils import CommandFailure
 from general_utils import get_log_file
+from job_manager_utils import get_job_manager
+
+MDTEST_NAMESPACE = "/run/mdtest/*"
+
+
+def get_mdtest(test, hosts, manager=None, path=None, slots=None, namespace=MDTEST_NAMESPACE,
+               mdtest_params=None):
+    """Get a Mdtest object.
+
+    Args:
+        test (Test): avocado Test object
+        hosts (NodeSet): hosts on which to run the mdtest command
+        manager (JobManager, optional): command to manage the multi-host execution of mdtest.
+            Defaults to None, which will get a default job manager.
+        path (str, optional): hostfile path. Defaults to None.
+        slots (int, optional): hostfile number of slots per host. Defaults to None.
+        namespace (str, optional): path to yaml parameters. Defaults to MDTEST_NAMESPACE.
+        mdtest_params (dict, optional): parameters to update the mdtest command. Defaults to None.
+
+    Returns:
+        Mdtest: the Mdtest object requested
+    """
+    mdtest = Mdtest(test, hosts, manager, path, slots, namespace)
+    if mdtest_params:
+        for name, value in mdtest_params.items():
+            mdtest.update(name, value)
+    return mdtest
+
+
+def get_mdtest_container(test, mdtest, pool):
+    """Create a container to use with mdtest.
+
+    Args:
+        test (Test): avocado Test object
+        mdtest (MdtestCommand): mdtest command object
+        pool (TestPool): pool to create container in
+
+    Returns:
+        TestContainer: the new container
+    """
+    params = {}
+    if mdtest.dfs_oclass.value:
+        params['oclass'] = mdtest.dfs_oclass.value
+    if mdtest.dfs_dir_oclass.value:
+        params['dir_oclass'] = mdtest.dfs_dir_oclass.value
+    return test.get_container(pool, **params)
+
+
+def run_mdtest(test, log, hosts, path, slots, pool, container, processes, ppn=None, manager=None,
+               display_space=True, namespace=MDTEST_NAMESPACE, mdtest_params=None):
+    # pylint: disable=too-many-arguments
+    """Run Mdtest on multiple hosts.
+
+    Args:
+        test (Test): avocado Test object
+        log (str): log file.
+        hosts (NodeSet): hosts on which to run the mdtest command
+        path (str): hostfile path.
+        slots (int): hostfile number of slots per host.
+        pool (TestPool): DAOS test pool object
+        container (TestContainer): DAOS test container object.
+        processes (int): number of processes to run
+        ppn (int, optional): number of processes per node to run.  If specified it will override
+            the processes input. Defaults to None.
+        manager (JobManager, optional): command to manage the multi-host execution of mdtest.
+            Defaults to None, which will get a default job manager.
+        display_space (bool, optional): Whether to display the pool space. Defaults to True.
+        namespace (str, optional): path to yaml parameters. Defaults to MDTEST_NAMESPACE.
+        mdtest_params (dict, optional): dictionary of MdtestCommand attributes to override from
+            get_params(). Defaults to None.
+
+    Raises:
+        CommandFailure: if there is an error running the mdtest command
+
+    Returns:
+        CmdResult: result of the ior command
+
+    """
+    mdtest = get_mdtest(test, hosts, manager, path, slots, namespace, mdtest_params)
+    mdtest.update_log_file(log)
+    return mdtest.run(pool, container, processes, ppn, display_space, False)
 
 
 class MdtestCommand(ExecutableCommand):
     """Defines a object representing a mdtest command."""
 
-    def __init__(self, log_dir):
+    def __init__(self, log_dir, namespace="/run/mdtest/*"):
         """Create an MdtestCommand object.
 
         Args:
             log_dir (str): directory in which to put log files
+            namespace (str, optional): path to yaml parameters. Defaults to "/run/mdtest/*".
         """
-        super().__init__("/run/mdtest/*", "mdtest")
+        super().__init__(namespace, "mdtest")
 
         self._log_dir = log_dir
 
@@ -135,6 +219,141 @@ class MdtestCommand(ExecutableCommand):
             env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
 
         return env
+
+
+class Mdtest:
+    """Defines a class that runs the mdtest command through a job manager, e.g. mpirun."""
+
+    def __init__(self, test, hosts, manager=None, path=None, slots=None,
+                 namespace=MDTEST_NAMESPACE):
+        """Initialize an Mdtest object.
+
+        Args:
+            test (Test): avocado Test object
+            hosts (NodeSet): hosts on which to run the mdtest command
+            manager (JobManager, optional): command to manage the multi-host execution of mdtest.
+                Defaults to None, which will get a default job manager.
+            path (str, optional): hostfile path. Defaults to None.
+            slots (int, optional): hostfile number of slots per host. Defaults to None.
+            namespace (str, optional): path to yaml parameters. Defaults to MDTEST_NAMESPACE.
+        """
+        if manager is None:
+            manager = get_job_manager(test, subprocess=False, timeout=60)
+        self.manager = manager
+        self.manager.assign_hosts(hosts, path, slots)
+        self.manager.job = MdtestCommand(test.test_env.log_dir, namespace)
+        self.manager.job.get_params(test)
+        self.manager.output_check = "both"
+        self.timeout = test.params.get("timeout", namespace, None)
+        self.label_generator = test.label_generator
+        self.test_id = test.test_id
+        self.env = self.command.get_default_env(str(self.manager))
+
+    @property
+    def command(self):
+        """Get the MdtestCommand object.
+
+        Returns:
+            MdtestCommand: the MdtestCommand object managed by the JobManager
+
+        """
+        return self.manager.job
+
+    def update(self, name, value):
+        """Update a MdtestCommand BasicParameter with a new value.
+
+        Args:
+            name (str): name of the MdtestCommand BasicParameter to update
+            value (str): value to assign to the MdtestCommand BasicParameter
+        """
+        param = getattr(self.command, name, None)
+        if param:
+            if isinstance(param, BasicParameter):
+                param.update(value, ".".join([self.command.command, name]))
+
+    def update_log_file(self, log_file):
+        """Update the log file for the mdtest command.
+
+        Args:
+            log_file (str): new mdtest log file
+        """
+        self.command.env["D_LOG_FILE"] = get_log_file(
+            log_file or f"{self.command.command}_daos.log")
+
+    def get_unique_log(self, container):
+        """Get a unique mdtest log file name.
+
+        Args:
+            container (TestContainer): container involved with the command
+
+        Returns:
+            str: a log file name
+        """
+        label = self.label_generator.get_label("mdtest")
+        parts = [self.test_id, container.pool.identifier, container.identifier, label]
+        return '.'.join(['_'.join(parts), 'log'])
+
+    def run(self, pool, container, processes, ppn=None, intercept=None, display_space=True,
+            unique_log=True):
+        # pylint: disable=too-many-arguments
+        """Run mdtest.
+
+        Args:
+            pool (TestPool): DAOS test pool object
+            container (TestContainer): DAOS test container object.
+            processes (int): number of processes to run
+            ppn (int, optional): number of processes per node to run.  If specified it will override
+                the processes input. Defaults to None.
+            intercept (str, optional): path to interception library. Defaults to None.
+            display_space (bool, optional): Whether to display the pool space. Defaults to True.
+            unique_log (bool, optional): whether or not to update the log file with a new unique log
+                file name. Defaults to True.
+
+        Raises:
+            CommandFailure: if there is an error running the mdtest command
+
+        Returns:
+            CmdResult: result of the mdtest command
+        """
+        result = None
+        error_message = None
+
+        self.command.update_params(dfs_pool=pool.identifier, dfs_cont=container.identifier)
+
+        if intercept:
+            self.env["LD_PRELOAD"] = intercept
+            if "D_LOG_MASK" not in self.env:
+                self.env["D_LOG_MASK"] = "INFO"
+            # if "D_IL_REPORT" not in self.env and il_report is not None:
+            #     self.env["D_IL_REPORT"] = str(il_report)
+
+        # Pass only processes or ppn to be compatible with previous behavior
+        if ppn is not None:
+            self.manager.assign_processes(ppn=ppn)
+        else:
+            self.manager.assign_processes(processes=processes)
+
+        self.manager.assign_environment(self.env)
+
+        if unique_log:
+            self.update_log_file(self.get_unique_log(container))
+
+        try:
+            if display_space:
+                pool.display_space()
+            result = self.manager.run()
+
+        except CommandFailure as error:
+            error_message = "Mdtest Failed:\n  {}".format("\n  ".join(str(error).split("\n")))
+
+        finally:
+            if not self.manager.run_as_subprocess and display_space:
+                pool.display_space()
+
+        if error_message:
+            raise CommandFailure(error_message)
+
+        return result
 
 
 class MdtestMetrics():
