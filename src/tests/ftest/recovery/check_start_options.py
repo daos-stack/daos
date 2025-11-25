@@ -130,12 +130,12 @@ class DMGCheckStartOptionsTest(TestWithServers):
         dmg_command.check_disable()
 
     def get_reports(self, cmd):
-        'Helper function - get the reports from the check query'
+        """Helper function - get the reports from the check query"""
         check_query_out = cmd.check_query()
         return check_query_out["response"]["reports"]
 
     def expect_reports(self, query_reports, exp_reports):
-        'Helper function - verify expected check reports are found in actual query reports'
+        """Helper function - verify expected check reports are found in actual query reports"""
         if not query_reports:
             self.fail("Checker didn't detect any inconsistency!")
         for exp in exp_reports:
