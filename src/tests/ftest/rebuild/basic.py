@@ -76,7 +76,7 @@ class RbldBasic(TestWithServers):
             rs_obj_nr.append(rebuild_qty)
             self.log.info(
                 "Expecting %s/%s rebuilt objects in container %s after excluding rank %s",
-                rs_obj_nr[-1], len(target_rank_lists), container, rank)
+                rs_obj_nr[-1], len(container.written_data), container, rank)
             rs_rec_nr.append(rs_obj_nr[-1] * container.record_qty.value)
             self.log.info(
                 "Expecting %s/%s rebuilt records in container %s after excluding rank %s",
