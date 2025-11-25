@@ -30,7 +30,7 @@ distro_custom() {
 
     # Use a more recent python version for unit testing, this allows us to also test installing
     # pydaos into virtual environments.
-    dnf -y install python39 python39-devel
+    dnf -y install python3.9 python3.9-devel
     dnf -y install python3.11 python3.11-devel
 }
 
