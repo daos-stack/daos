@@ -1136,29 +1136,62 @@ cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_ag
 	}
 
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
-			    shortcut, sync_mode, true /* retry */);
+			    shortcut, sync_mode, false);
 	if (rc)
 		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
 			DP_UUID(cont_uuid), op, DP_RC(rc));
 	return rc;
 }
 
+static int
+cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+			daos_epoch_t stable_eph, unsigned int shortcut,
+			unsigned int sync_mode, uint32_t op, struct sched_request *req)
+{
+	int sleep_ms = 1000; /* 1 second retry interval */
+	int rc = 0;
+
+	while (1) {
+		if (req && dss_ult_exiting(req)) {
+			rc = -DER_SHUTDOWN;
+			break;
+		}
+
+		rc = cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
+						       shortcut, sync_mode, op);
+		if (rc == 0)
+			break;
+
+		/* Only retry on specific errors */
+		if (!daos_rpc_retryable_rc(rc) && rc != -DER_NOTLEADER && rc != -DER_BUSY)
+			break;
+
+		if (req && dss_ult_exiting(req)) {
+			rc = -DER_SHUTDOWN;
+			break;
+		}
+
+		dss_sleep(sleep_ms);
+	}
+
+	return rc;
+}
+
 int
 cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			 daos_epoch_t stable_eph)
+			 daos_epoch_t stable_eph, struct sched_request *req)
 {
-	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
-						 CRT_IV_SHORTCUT_TO_ROOT,
-						 CRT_IV_SYNC_NONE,
-						 IV_CONT_TRACK_EPOCH_REPORT);
+	return cont_iv_track_eph_retry(ns, cont_uuid, ec_agg_eph, stable_eph,
+				       CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE,
+				       IV_CONT_TRACK_EPOCH_REPORT, req);
 }
 
 int
 cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			  daos_epoch_t stable_eph)
+			  daos_epoch_t stable_eph, struct sched_request *req)
 {
-	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph, 0,
-						 CRT_IV_SYNC_EAGER, IV_CONT_TRACK_EPOCH);
+	return cont_iv_track_eph_retry(ns, cont_uuid, ec_agg_eph, stable_eph, 0,
+				       CRT_IV_SYNC_EAGER, IV_CONT_TRACK_EPOCH, req);
 }
 
 int
