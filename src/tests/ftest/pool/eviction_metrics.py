@@ -17,7 +17,7 @@ class EvictionMetrics(TestWithTelemetry):
     def test_eviction_metrics(self):
         """Verify page eviction on the pool
 
-        1. Create a pool with a mem ratio of 100% (for pmeme or phase 1) or 25% (for phase 2)
+        1. Create a pool with a mem ratio of 100% (for pmem or phase 1) or 25% (for phase 2)
         2. Collect a baseline for the pool eviction metrics
         3. Run mdtest -a DFS to generate many small files larger than mem size
         4. Collect new page eviction metrics
@@ -28,7 +28,7 @@ class EvictionMetrics(TestWithTelemetry):
         :avocado: tags=pool
         :avocado: tags=EvictionMetrics,test_eviction_metrics
         """
-        evict_metrics = list(self.ENGINE_POOL_VOS_CACHE_METRICS)
+        evict_metrics = list(self.telemetry.ENGINE_POOL_VOS_CACHE_METRICS)
 
         self.log_step('Creating a pool (dmg pool create)')
         pool = self.get_pool(connect=False)
