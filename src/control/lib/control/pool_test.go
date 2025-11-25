@@ -1461,6 +1461,92 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestControl_PoolQueryResp_UpdateSelfHealPolicy(t *testing.T) {
+	type prop struct {
+		number uint32
+		value  interface{}
+	}
+	makePropResp := func(props ...prop) *mgmtpb.PoolGetPropResp {
+		pbProps := make([]*mgmtpb.PoolProperty, 0, len(props))
+		for _, p := range props {
+			switch v := p.value.(type) {
+			case string:
+				pbProps = append(pbProps, &mgmtpb.PoolProperty{
+					Number: p.number,
+					Value:  &mgmtpb.PoolProperty_Strval{Strval: v},
+				})
+			case int:
+				pbProps = append(pbProps, &mgmtpb.PoolProperty{
+					Number: p.number,
+					Value:  &mgmtpb.PoolProperty_Numval{Numval: uint64(v)},
+				})
+			}
+		}
+		return &mgmtpb.PoolGetPropResp{
+			Properties: pbProps,
+		}
+	}
+	selfHealPropNum := propWithVal("self_heal", "").Number
+
+	for name, tc := range map[string]struct {
+		getPropResp *mgmtpb.PoolGetPropResp
+		getPropErr  error
+		expValue    string
+		expErr      string
+	}{
+		"no properties returned": {
+			getPropResp: makePropResp(), // no properties
+			expValue:    "exclude;rebuild",
+		},
+		"single string value; not set value ignored": {
+			getPropResp: makePropResp(prop{selfHealPropNum, "rebuild"}),
+			expValue:    "exclude;rebuild",
+		},
+		"single num value": {
+			getPropResp: makePropResp(prop{selfHealPropNum, daos.PoolSelfHealingAutoRebuild}),
+			expValue:    "rebuild",
+		},
+		"multiple properties returned": {
+			getPropResp: makePropResp(
+				prop{selfHealPropNum, daos.PoolSelfHealingAutoRebuild},
+				prop{selfHealPropNum, daos.PoolSelfHealingAutoExclude},
+			),
+			expErr: "> 1 occurrences of prop 4",
+		},
+		"get-prop returns error": {
+			getPropErr: errors.New("something bad"),
+			expErr:     "something bad",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", tc.getPropErr, tc.getPropResp),
+				},
+			}
+			resp := &PoolQueryResp{}
+			gotErr := resp.UpdateSelfHealPolicy(context.Background(),
+				NewMockInvoker(log, mic))
+
+			var expErr error
+			if tc.expErr != "" {
+				expErr = errors.New(tc.expErr)
+			}
+			test.CmpErr(t, expErr, gotErr)
+			if expErr != nil {
+				return
+			}
+
+			if resp.SelfHealPolicy != tc.expValue {
+				t.Errorf("expected SelfHealPolicy %q, got %q", tc.expValue, resp.SelfHealPolicy)
+			}
+		})
+	}
+}
+
 func TestControl_PoolQuery(t *testing.T) {
 	poolUUID := test.MockPoolUUID()
 
@@ -1776,10 +1862,6 @@ func TestControl_PoolQuery(t *testing.T) {
 				},
 			},
 		},
-		// TODO DAOS-18128: Add more test cases
-		//	sys-prop but no pool-prop
-		//	pool-prop but no sys-prop
-		//	neither pool or sys props
 		"query succeeds self_heal policies provided; missing pool self_heal property": {
 			req: &PoolQueryReq{
 				ID:        poolUUID.String(),
@@ -1888,6 +1970,43 @@ func TestControl_PoolQuery(t *testing.T) {
 				},
 				SysSelfHealPolicy: "exclude;pool_exclude;pool_rebuild",
 			},
+		},
+		"pool get-prop returns error": {
+			req: &PoolQueryReq{
+				ID:        poolUUID.String(),
+				QueryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", errors.New("get-prop failure"), nil),
+				},
+			},
+			expErr: errors.New("pool get-prop self_heal failed"),
+		},
+		"pool get-prop returns multiple properties": {
+			req: &PoolQueryReq{
+				ID:        poolUUID.String(),
+				QueryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+						Properties: []*mgmtpb.PoolProperty{
+							{
+								Number: propWithVal("self_heal", "").Number,
+								Value:  &mgmtpb.PoolProperty_Strval{Strval: "exclude"},
+							},
+							{
+								Number: propWithVal("self_heal", "").Number,
+								Value:  &mgmtpb.PoolProperty_Strval{Strval: "rebuild"},
+							},
+						},
+					}),
+				},
+			},
+			expErr: errors.New("> 1 occurrences of prop 4 in resp"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
