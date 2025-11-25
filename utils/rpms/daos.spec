@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.102
-Release:       2%{?relval}%{?dist}
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -287,6 +287,7 @@ Requires: hdf5-vol-daos-mpich-tests
 Requires: MACSio-mpich
 Requires: simul-mpich
 Requires: romio-tests
+Requires: python3-mpi4py-tests >= 3.1.6
 
 %description client-tests-mpich
 This is the package needed to run the DAOS client test suite mpich tools
