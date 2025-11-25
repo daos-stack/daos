@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import re
 import shutil
 import site
 
@@ -13,9 +14,9 @@ from ClusterShell.NodeSet import NodeSet
 from util.host_utils import get_local_host
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
                                 get_common_provider, get_fastest_interface)
-from util.run_utils import get_clush_command, run_local, run_remote
+from util.run_utils import copy, run_remote
 
-EXCLUDED_DAOS_TEST_ENV_VARS = []
+DEFAULT_DAOS_TEST_ENV_VARS = [r"D_*", r"DAOS_*", "COVFILE"]
 
 
 class TestEnvironmentException(Exception):
@@ -198,13 +199,8 @@ class TestEnvironment():
         if self.env_file is None:
             self.env_file = os.path.join(self.log_dir, "configs", "daos_test_env.txt")
 
-        if not os.path.exists(self.env_file):
-            # Write the current environment variables to the test environment file
-            os.makedirs(os.path.dirname(self.env_file), exist_ok=True)
-            with open(self.env_file, 'w', encoding='utf-8') as _env_file:
-                for key, value in os.environ.items():
-                    if key not in EXCLUDED_DAOS_TEST_ENV_VARS:
-                        _env_file.write(f"{key}={value}\n")
+        # Update the environment file with the current environment variables
+        self.update_environment_file(logger)
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -658,6 +654,57 @@ class TestEnvironment():
         directories.add(os.path.dirname(self.server_config))
         return list(directories)
 
+    def update_environment_file(self, logger):
+        """Create, update, or remove the test environment file based upon the export variables.
+
+        Situations:
+           Environment File    Export Variables    Action
+           ----------------    ----------------    -----------------------------
+           Does not exist      None defined        None
+           Does not exist      Defined             Create file and write exports
+           Already exists      Defined             Overwrite file with exports
+           Already exists      None defined        Remove file
+
+        Which environment variables are exported can be exteranally controlled by the
+        EXPORT_DAOS_TEST_ENV_VARS environment variable.  If this is not defined the
+        DEFAULT_DAOS_TEST_ENV_VARS list is used.  Either can contain regular expressions.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+        """
+        if logger is None:
+            return
+
+        _export_keys = os.environ.get("EXPORT_DAOS_TEST_ENV_VARS", DEFAULT_DAOS_TEST_ENV_VARS)
+        _key_pattern = re.compile(fr"({'|'.join(re.escape(s) for s in _export_keys)})")
+        _export_env = []
+        for _key, _value in os.environ.items():
+            if _key_pattern.match(_key):
+                _export_env.append(f"export {_key}={_value}")
+
+        logger.debug("Updating environment file %s with %s", self.env_file, _export_env)
+
+        # Nothing to do if the environment file does not exist and there are no exports
+        if not _export_env and not os.path.exists(self.env_file):
+            return
+
+        # Remove the environment file if there are no exports and the file exists
+        if not _export_env and os.path.exists(self.env_file):
+            logger.debug("Removing environment file %s", self.env_file)
+            os.remove(self.env_file)
+            return
+
+        # Create the directory for the environment file if it does not exist
+        if not os.path.exists(self.env_file):
+            os.makedirs(os.path.dirname(self.env_file), exist_ok=True)
+
+        # Write the current environment variables to the test environment file
+        with open(self.env_file, 'w', encoding='utf-8') as _env_file:
+            for _key, _value in os.environ.items():
+                if _key_pattern.match(_key):
+                    _env_file.write(f"export {_key}={_value}\n")
+            logger.debug("Wrote environment file %s", self.env_file)
+
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
                          insecure_mode=False, details=None, agent_user=None, log_dir=None,
@@ -718,12 +765,16 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
 
         # Copy the test environment file to all the servers and clients
         if test_env.env_file:
-            command = get_clush_command(
-                servers | clients,
-                args=" ".join(["--rcopy", test_env.env_file, "--dest", test_env.env_file]))
-            result = run_local(logger, command)
+            command = f"mkdir -p {os.path.dirname(test_env.env_file)}"
+            result = run_remote(logger, servers | clients, command, export_test_env=False)
             if not result.passed:
-                raise TestEnvironmentException("Failed to copy test environment file to all nodes")
+                raise TestEnvironmentException(
+                    f"Failed to create test environment file directory on {result.failed_hosts}")
+            result = copy(
+                logger, servers | clients, test_env.env_file, os.path.dirname(test_env.env_file))
+            if not result.passed:
+                raise TestEnvironmentException(
+                    f"Failed to copy test environment file to {result.failed_hosts}")
 
     # Python paths required for functional testing
     set_python_environment(logger)
