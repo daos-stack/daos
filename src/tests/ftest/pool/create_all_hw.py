@@ -109,17 +109,20 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         pool_half_deltas_bytes = self.get_deltas("test_two_pools_hw", "pool_half")
         pool_full_deltas_bytes = self.get_deltas("test_two_pools_hw", "pool_full")
         distribution_deltas_bytes = self.get_deltas("test_two_pools_hw", "distribution")
+        # pylint: disable-next=logging-too-few-args
         self.log.info(
-r"Test pool creation of two pools with 50% and 100% of the available storage")
+            "Test pool creation of two pools with 50% and 100% of the available storage")
         for name in ('pool_half', 'pool_full', 'distribution'):
             val = locals()["{}_deltas_bytes".format(name)]
             self.log_deltas(*val, prefix=name)
 
-        self.log.info(r"Creating first pool with half of the available storage: size=50%")
+        # pylint: disable-next=logging-format-truncated
+        self.log.info("Creating first pool with half of the available storage: size=50%")
         self.check_pool_half_storage(*pool_half_deltas_bytes)
 
         self.log.info("Checking data distribution among the different engines")
         self.check_pool_distribution(*distribution_deltas_bytes)
 
-        self.log.info(r"Creating second pool with all the available storage: size=100%")
+        # pylint: disable-next=logging-format-truncated
+        self.log.info("Creating second pool with all the available storage: size=100%")
         self.check_pool_full_storage(*pool_full_deltas_bytes)
