@@ -110,7 +110,8 @@ class PoolCreateAllTestBase(TestWithServers):
         self.add_pool_qty(pool_count, create=False)
         pool_idx = len(self.pool) - pool_count
 
-        self.log.info(r"Creating a pool with all the available storage: size=100%")
+        # pylint: disable-next=logging-format-truncated
+        self.log.info("Creating a pool with all the available storage: size=100%")
         self.pool[pool_idx].size.update("100%", "pool[{}].size".format(pool_idx))
         if ranks is not None:
             self.pool[pool_idx].target_list.update(ranks, "pool[{}].target_list".format(pool_idx))
@@ -363,7 +364,8 @@ class PoolCreateAllTestBase(TestWithServers):
         usable_bytes = self.get_usable_bytes()
         self.log.info("Usable bytes: scm_size=%d, nvme_size=%d", *usable_bytes)
 
-        self.log.info(r"Creating pool with half of the available storage: size=50%")
+        # pylint: disable-next=logging-format-truncated
+        self.log.info("Creating pool with half of the available storage: size=50%")
         self.pool[0].size.update("50%")
         self.pool[0].create()
         self.pool[0].get_info()

@@ -110,7 +110,7 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         pool_full_deltas_bytes = self.get_deltas("test_two_pools_hw", "pool_full")
         distribution_deltas_bytes = self.get_deltas("test_two_pools_hw", "distribution")
         self.log.info(
-            r"Test pool creation of two pools with 50% and 100% of the available storage")
+r"Test pool creation of two pools with 50% and 100% of the available storage")
         for name in ('pool_half', 'pool_full', 'distribution'):
             val = locals()["{}_deltas_bytes".format(name)]
             self.log_deltas(*val, prefix=name)
