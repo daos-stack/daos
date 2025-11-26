@@ -1894,7 +1894,7 @@ need_nvme_poll(struct dss_xstream *dx, struct sched_cycle *cycle)
 	 * If SPDK I/O stalls indefinitely due to a hardware fault (or software bug),
 	 * the resulting backlog of undrained I/Os will cause bio_need_nvme_poll() to
 	 * consistently return true. To prevent starvation and ensure system progress,
-	 * schedule the NVMe polling ULT and other ULTs intverleavingly.
+	 * schedule the NVMe polling ULT and other ULTs interleavingly.
 	 */
 	return !cycle->sc_age_nvme && bio_need_nvme_poll(dmi->dmi_nvme_ctxt);
 }
