@@ -461,8 +461,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Fill 75% of current SCM free space. Aggregation is Enabled so NVMe space will
         # start to fill up.
-        # pylint: disable-next=logging-too-few-args
-        self.log.info('--Filling 75% of the current SCM free space--')
+        self.log.info(r'--Filling 75% of the current SCM free space--')
         try:
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
         finally:
@@ -478,8 +477,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
         # not be moved to NVMe and continue to fill up SCM. SCM will be full and this
         # command is expected to fail with DER_NOSPACE.
-        # pylint: disable-next=logging-too-few-args
-        self.log.info('--Filling 60% of the current SCM free space--')
+        self.log.info(r'--Filling 60% of the current SCM free space--')
         try:
             self.start_ior_load(
                 storage='SCM', operation="Auto_Write", percent=60, log_file=log_file)
