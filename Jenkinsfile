@@ -665,11 +665,12 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: false) +
+                                                                deps_build: false,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
@@ -680,10 +681,12 @@ pipeline {
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
-                                           scons_args: sconsFaultsArgs() +
-                                                       ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                           code_coverage: is_code_coverage(),
-                                           build_deps: 'yes'))
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_args: sconsArgs() +
+                                                      ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                           code_coverage: is_code_coverage()))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
                         }
@@ -929,7 +932,7 @@ pipeline {
                                 inst_repos: daosRepos(),
                                     inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
                                     test_function: 'runTestFunctionalV2',
-                                    stashes: get_functional_stashes('el8')))
+                                    stashes: get_functional_stashes('el8.8')))
                     }
                     post {
                         always {
