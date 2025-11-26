@@ -734,7 +734,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages(),
+                                     image_version: 'el8.8'))
                     }
                     post {
                         always {
@@ -756,7 +757,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages(),
+                                     image_version: 'el8.8'))
                     }
                     post {
                         always {
