@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -81,10 +81,10 @@ BuildRequires: spdk-devel >= 22.01.2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
-BuildRequires: libisa-l_crypto-devel >= 2.24.0-1
+BuildRequires: libisa-l_crypto-devel >= 2.24.0-1, libisa-l_crypto-devel < 2.25.0
 %else
 BuildRequires: libisal-devel >= 2.31.1-7
-BuildRequires: libisal_crypto-devel >= 2.24.0-3
+BuildRequires: libisal_crypto-devel >= 2.24.0-3, libisal_crypto-devel < 2.25.0
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -635,6 +635,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Nov 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-8
+- Pin isa-l_crypto at 2.24 since 2.25 is incompatible
+
 * Fri Oct 31 2025 Mohamad Chaarawi <mohamad.chaarawi@hpe.com> 2.6.4-7
 - Revert bump of libfabric to 1.20
 

@@ -1,8 +1,14 @@
-daos (2.6.4-8) unstable; urgency=medium
+daos (2.6.4-9) unstable; urgency=medium
   [ Jan Michalski ]
   * Add ddb_ut and dtx_ut to the server-tests package
 
- -- Jan Michalski <jan-marian.michalski@hpe.com>  Fri, 21 Nov 2025 15:00:00 +0000
+ -- Jan Michalski <jan-marian.michalski@hpe.com>  Wed, 26 Nov 2025 10:00:00 +0000
+
+daos (2.6.4-8) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Pin isa-l_crypto at 2.24 since 2.25 is incompatible
+
+ -- Jeff Olivier <jeffolivier@google.com>  Fri, 21 Nov 2025 20:00:00 -0500
 
 daos (2.6.4-7) unstable; urgency=medium
   [ Mohamad Chaarawi ]
