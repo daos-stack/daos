@@ -470,8 +470,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     if export_test_env:
         _test_env_file = os.environ.get("DAOS_TEST_ENV_FILE", None)
         if _test_env_file is not None and os.path.exists(_test_env_file):
-            _command = re.sub(r'\bsudo\b', 'sudo -E', command)
-            command = f"source {_test_env_file} && {_command}"
+            command = f"source {_test_env_file} && {command}"
 
     __log_command(log, hosts, command, verbose, timeout)
     task.run(command=command, nodes=hosts, timeout=timeout)
@@ -612,7 +611,7 @@ def command_as_user(command, user, env=None):
             return command
         return " ".join([env.to_export_str(), command]).strip()
 
-    cmd_list = ["sudo"]
+    cmd_list = ["sudo", "-E"]
     if env:
         cmd_list.extend(env.to_list())
     cmd_list.append("-n")
