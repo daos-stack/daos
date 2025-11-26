@@ -1,5 +1,5 @@
 %changelog
-* Mon Nov 24 2025 Jeff Olivier <jeffolivier@google.com> 2.7.102-3
+* Tue Nov 25 2025 Jeff Olivier <jeffolivier@google.com> 2.7.102-3
 - Upgrade spdk
 - Add some missing dependencies numactl and pcituils
 
