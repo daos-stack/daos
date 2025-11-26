@@ -6,6 +6,7 @@
 """
 import os
 import re
+import shlex
 import shutil
 import site
 
@@ -702,7 +703,7 @@ class TestEnvironment():
         with open(self.env_file, 'w', encoding='utf-8') as _env_file:
             for _key, _value in os.environ.items():
                 if _key_pattern.match(_key):
-                    _env_file.write(f"export {_key}={_value}\n")
+                    _env_file.write(f"export {shlex.quote(f'{_key}={_value}')}\n")
             logger.debug("Wrote environment file %s", self.env_file)
 
 
