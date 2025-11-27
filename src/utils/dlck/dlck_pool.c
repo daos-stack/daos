@@ -61,11 +61,16 @@ dlck_pool_mkdir_all(const char *storage_path, d_list_t *files, struct checker *c
 	return DER_SUCCESS;
 }
 
-static int
-dlck_file_preallocate(const char *storage_path, uuid_t po_uuid, int tgt_id)
+int
+dlck_pool_file_preallocate(const char *storage_path, uuid_t po_uuid, int tgt_id)
 {
 	struct smd_pool_info *pool_info = NULL;
 	int                   rc;
+
+	/** no MD-on-SSD mode means no file preallocation is necessary */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		return DER_SUCCESS;
+	}
 
 	rc = smd_pool_get_info(po_uuid, &pool_info);
 	if (rc != 0) {
@@ -90,12 +95,9 @@ dlck_pool_open(const char *storage_path, uuid_t po_uuid, int tgt_id, daos_handle
 		return rc;
 	}
 
-	/** no MD-on-SSD mode means no file preallocation is necessary */
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = dlck_file_preallocate(storage_path, po_uuid, tgt_id);
-		if (rc != 0) {
-			goto fail;
-		}
+	rc = dlck_pool_file_preallocate(storage_path, po_uuid, tgt_id);
+	if (rc != DER_SUCCESS) {
+		goto fail;
 	}
 
 	rc = vos_pool_open(path, po_uuid, DLCK_POOL_OPEN_FLAGS, poh);
