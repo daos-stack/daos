@@ -259,11 +259,30 @@ def define_common(reqs):
     else:
         reqs.define('ipmctl', headers=['nvm_management.h'], package='libipmctl-devel')
 
+    reqs.define('hdf5', libs=['libhdf5'], headers=['hdf5.h'], package='hdf5-devel')
+    reqs.define('hdf5-mpich', libs=['libhdf5'], headers=['hdf5.h'], package='hdf5-mpich-devel')
+
 
 def define_ompi(reqs):
     """OMPI and related components"""
     reqs.define('ompi', pkgconfig='ompi', package='ompi-devel')
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
+
+
+def define_benchmarks(reqs):
+    # pylint: disable=fixme
+    """Define benchmark related components"""
+    reqs.define('e3smio',
+                retriever=GitRepoRetriever(),
+                requires=['mpich', 'hdf5-mpich'],
+                progs=['e3sm_io'],
+                build_env={'CC': 'mpicc', 'CXX': 'mpicxx', 'CPPFLAGS': "-fPIC", 'CFLAGS': "-fPIC"},
+                commands=[['autoreconf', '-i'],
+                          ['./configure',
+                           '--with-hdf5=/usr/lib64/mpich',  # TODO fix upstream to work w/o path
+                           '--prefix=$E3SMIO_PREFIX'],
+                          ['make', 'install']],
+                package='e3smio')
 
 
 def define_components(reqs):
@@ -431,6 +450,8 @@ def define_components(reqs):
     reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
                 package=capstone_pkg)
     reqs.define('aio', libs=['aio'], headers=['libaio.h'], package=libaio_pkg)
+
+    define_benchmarks(reqs)
 
 
 __all__ = ['define_components']

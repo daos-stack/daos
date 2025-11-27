@@ -32,4 +32,10 @@ fi
 utils/rpms/build_packages.sh daos
 mkdir -p /home/daos/rpms/daos
 cp ./*.rpm /home/daos/rpms/daos
+utils/rpms/build_packages.sh benchmarks
+if ls -1 ./*.rpm; then
+  mkdir -p /home/daos/rpms/benchmarks
+  cp ./*.rpm /home/daos/rpms/benchmarks
+  rm -f ./*.rpm
+fi
 popd || exit 1
