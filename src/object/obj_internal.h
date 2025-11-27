@@ -1186,5 +1186,7 @@ int
 obj_pl_place(struct pl_map *map, uint16_t layout_ver, struct daos_obj_md *md,
 	     unsigned int mode, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp);
+void
+obj_ec_recov_reset(struct obj_reasb_req *reasb_req);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
