@@ -3329,18 +3329,18 @@ const ProtobufCMessageDescriptor mgmt__storage_usage_stats__descriptor =
 };
 static const ProtobufCEnumValue mgmt__pool_rebuild_status__state__enum_values_by_number[3] =
 {
-  { "IDLE", "MGMT__POOL_REBUILD_STATUS__STATE__IDLE", 0 },
-  { "DONE", "MGMT__POOL_REBUILD_STATUS__STATE__DONE", 1 },
-  { "BUSY", "MGMT__POOL_REBUILD_STATUS__STATE__BUSY", 2 },
+  { "BUSY", "MGMT__POOL_REBUILD_STATUS__STATE__BUSY", 0 },
+  { "IDLE", "MGMT__POOL_REBUILD_STATUS__STATE__IDLE", 1 },
+  { "DONE", "MGMT__POOL_REBUILD_STATUS__STATE__DONE", 2 },
 };
 static const ProtobufCIntRange mgmt__pool_rebuild_status__state__value_ranges[] = {
 {0, 0},{0, 3}
 };
 static const ProtobufCEnumValueIndex mgmt__pool_rebuild_status__state__enum_values_by_name[3] =
 {
-  { "BUSY", 2 },
-  { "DONE", 1 },
-  { "IDLE", 0 },
+  { "BUSY", 0 },
+  { "DONE", 2 },
+  { "IDLE", 1 },
 };
 const ProtobufCEnumDescriptor mgmt__pool_rebuild_status__state__descriptor =
 {
