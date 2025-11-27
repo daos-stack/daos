@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,7 +150,7 @@ print_sv_test(void **state)
 	struct ddb_sv sv = {.ddbs_record_size = 19089555};
 
 	ddb_print_sv(&g_ctx, &sv, 0);
-	assert_printed_exact("[0] Single Value (Length: 19089555 bytes)\n");
+	assert_printed_exact("[0] Single Value (Length: 19089555 bytes, Epoch: 0)\n");
 }
 
 static void
@@ -164,7 +165,7 @@ print_array_test(void **state)
 
 	ddb_print_array(&g_ctx, &array, 0);
 	assert_printed_exact("[8] Array Value (Length: 128 records, "
-		   "Record Indexes: {64-191}, Record Size: 3)\n");
+			     "Record Indexes: {64-191}, Record Size: 3, Epoch: 0)\n");
 }
 
 #define assert_hr_bytes(expected_str, bytes) \
