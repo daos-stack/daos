@@ -680,7 +680,7 @@ huge_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	 * The footer entry change is updated as transient because it will
 	 * be recreated at heap boot regardless - it's just needed for runtime
 	 * operations.
-	 * Note on DAV_v2:
+	 * Note:
 	 * If a footer is added as part of a tx, creating a transient entry
 	 * and marking the page as dirty at commit time does not justify the
 	 * added complexity and occurs less frequently. Therefore, for now,
