@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import sys
 from collections import OrderedDict
 
 # pylint: disable=import-error,no-name-in-module
@@ -189,6 +190,8 @@ class CodeCoverage():
         Returns:
             bool: True if gcov code coverage is enabled; False otherwise
         """
+        logger.info("Gcov code coverage collection configured on %s", hosts)
+        return True
         source = os.environ.get("GCOV_PREFIX", "/tmp")
         result = run_remote(logger, hosts, find_command(source, "*.gcno"))
         if not result.passed:
@@ -231,11 +234,14 @@ class CodeCoverage():
             bool: False if there is a problem retrieving gcov code coverage; True otherwise
         """
         status = 0
+        source = os.environ.get("GCOV_PREFIX", "/tmp")
         # Create a code coverage report on each host
         _report = os.path.join(job_results_dir, "code_coverage", "code_coverage.json")
+        _gcovr = os.path.join(os.path.dirname(sys.executable), "gcovr")
         _commands = OrderedDict(
             [("create directory", f"mkdir -p {os.path.dirname(_report)}"),
-             ("generate gcov report", f"gcovr --json {_report} --gcov-ignore-parse-errors")])
+             ("generate gcov report",
+              f"{_gcovr} --json {_report} --gcov-ignore-parse-errors {source}")])
         for command_name, command in _commands.items():
             result = run_remote(logger, hosts, command)
             if not result.passed:

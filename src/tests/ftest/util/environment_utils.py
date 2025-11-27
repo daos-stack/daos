@@ -17,7 +17,7 @@ from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkExce
                                 get_common_provider, get_fastest_interface)
 from util.run_utils import copy, run_remote
 
-DEFAULT_DAOS_TEST_ENV_VARS = [r"D_.*", r"DAOS_.*", "COVFILE", r"GCOV_.*"]
+DEFAULT_DAOS_TEST_ENV_VARS = [r"D_.*", r"DAOS_.*", "COVFILE", r"GCOV_PREFIX.*"]
 
 
 class TestEnvironmentException(Exception):
@@ -112,6 +112,8 @@ class TestEnvironment():
         'insecure_mode': 'DAOS_TEST_INSECURE_MODE',
         'bullseye_src': 'DAOS_TEST_BULLSEYE_SRC',
         'bullseye_file': 'COVFILE',
+        'gcov_prefix': 'GCOV_PREFIX',
+        'gcov_prefix_strip': 'GCOV_PREFIX_STRIP',
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
         'systemd_path': 'DAOS_TEST_SYSTEMD_PATH',
@@ -187,6 +189,10 @@ class TestEnvironment():
                 os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
         if self.bullseye_file is None:
             self.bullseye_file = os.path.join(os.sep, "tmp", "test.cov")
+        if self.gcov_prefix is None:
+            self.gcov_prefix = os.path.join(self.log_dir, "gcov")
+        if self.gcov_prefix_strip is None:
+            self.gcov_prefix_strip = "7"
         if self.daos_prefix is None:
             self.daos_prefix = self._default_daos_prefix(logger)
         if self.agent_user is None:
@@ -474,6 +480,42 @@ class TestEnvironment():
         self.__set_value('bullseye_file', value)
 
     @property
+    def gcov_prefix(self):
+        """Get the gcov prefix directory.
+
+        Returns:
+            str: the gcov prefix directory
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['gcov_prefix'])
+
+    @gcov_prefix.setter
+    def gcov_prefix(self, value):
+        """Set the gcov prefix directory.
+
+        Args:
+            value (str): the gcov prefix directory
+        """
+        self.__set_value('gcov_prefix', value)
+
+    @property
+    def gcov_prefix_strip(self):
+        """Get the gcov prefix strip number.
+
+        Returns:
+            str: the gcov prefix strip number
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['gcov_prefix_strip'])
+
+    @gcov_prefix_strip.setter
+    def gcov_prefix_strip(self, value):
+        """Set the gcov prefix strip number.
+
+        Args:
+            value (str, int): the gcov prefix strip number
+        """
+        self.__set_value('gcov_prefix_strip', value)
+
+    @property
     def daos_prefix(self):
         """Get the daos_prefix.
 
@@ -703,7 +745,7 @@ class TestEnvironment():
         with open(self.env_file, 'w', encoding='utf-8') as _env_file:
             for _key, _value in os.environ.items():
                 if _key_pattern.match(_key):
-                    _env_file.write(f"export {_key}={shlex.quote({_value})}\n")
+                    _env_file.write(f"export {_key}={shlex.quote(_value)}\n")
             logger.debug("Wrote environment file %s", self.env_file)
 
 
