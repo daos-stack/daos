@@ -1152,11 +1152,6 @@ cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 	int rc       = 0;
 
 	while (1) {
-		if (req && dss_ult_exiting(req)) {
-			rc = -DER_SHUTDOWN;
-			break;
-		}
-
 		rc = cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
 						       shortcut, sync_mode, op);
 		if (rc == 0)
