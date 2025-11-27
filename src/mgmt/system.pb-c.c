@@ -1824,7 +1824,7 @@ const ProtobufCMessageDescriptor mgmt__system_exclude_resp__descriptor =
   (ProtobufCMessageInit) mgmt__system_exclude_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__system_drain_req__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__system_drain_req__field_descriptors[5] =
 {
   {
     "sys",
@@ -1874,17 +1874,30 @@ static const ProtobufCFieldDescriptor mgmt__system_drain_req__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "request_hosts",
+    5,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Mgmt__SystemDrainReq, n_request_hosts),
+    offsetof(Mgmt__SystemDrainReq, request_hosts),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__system_drain_req__field_indices_by_name[] = {
   2,   /* field[2] = hosts */
   1,   /* field[1] = ranks */
   3,   /* field[3] = reint */
+  4,   /* field[4] = request_hosts */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__system_drain_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__system_drain_req__descriptor =
 {
@@ -1894,7 +1907,7 @@ const ProtobufCMessageDescriptor mgmt__system_drain_req__descriptor =
   "Mgmt__SystemDrainReq",
   "mgmt",
   sizeof(Mgmt__SystemDrainReq),
-  4,
+  5,
   mgmt__system_drain_req__field_descriptors,
   mgmt__system_drain_req__field_indices_by_name,
   1,  mgmt__system_drain_req__number_ranges,
@@ -2195,7 +2208,7 @@ const ProtobufCMessageDescriptor mgmt__system_rebuild_manage_resp__descriptor =
   (ProtobufCMessageInit) mgmt__system_rebuild_manage_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__system_self_heal_eval_req__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__system_self_heal_eval_req__field_descriptors[2] =
 {
   {
     "sys",
@@ -2209,14 +2222,27 @@ static const ProtobufCFieldDescriptor mgmt__system_self_heal_eval_req__field_des
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "request_hosts",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Mgmt__SystemSelfHealEvalReq, n_request_hosts),
+    offsetof(Mgmt__SystemSelfHealEvalReq, request_hosts),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__system_self_heal_eval_req__field_indices_by_name[] = {
+  1,   /* field[1] = request_hosts */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__system_self_heal_eval_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__system_self_heal_eval_req__descriptor =
 {
@@ -2226,7 +2252,7 @@ const ProtobufCMessageDescriptor mgmt__system_self_heal_eval_req__descriptor =
   "Mgmt__SystemSelfHealEvalReq",
   "mgmt",
   sizeof(Mgmt__SystemSelfHealEvalReq),
-  1,
+  2,
   mgmt__system_self_heal_eval_req__field_descriptors,
   mgmt__system_self_heal_eval_req__field_indices_by_name,
   1,  mgmt__system_self_heal_eval_req__number_ranges,

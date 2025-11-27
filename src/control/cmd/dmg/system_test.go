@@ -614,14 +614,15 @@ func TestDmg_systemStartCmd(t *testing.T) {
 
 func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 	for name, tc := range map[string]struct {
-		ctlCfg  *control.Config
-		opCode  control.PoolRebuildOpCode
-		force   bool
-		verbose bool
-		resp    *mgmtpb.SystemRebuildManageResp
-		msErr   error
-		expErr  error
-		expInfo string
+		ctlCfg   *control.Config
+		opCode   control.PoolRebuildOpCode
+		force    bool
+		verbose  bool
+		resp     *mgmtpb.SystemRebuildManageResp
+		msErr    error
+		expErr   error
+		expInfo  string
+		expDebug string
 	}{
 		"no config": {
 			opCode: control.PoolRebuildOpCodeStop,
@@ -646,7 +647,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			resp:    &mgmtpb.SystemRebuildManageResp{},
 			expInfo: "System-rebuild start request succeeded on 0 pools []",
 		},
-		"pool stop failed": {
+		"rebuild stop failed": {
 			ctlCfg: &control.Config{},
 			opCode: control.PoolRebuildOpCodeStop,
 			resp: &mgmtpb.SystemRebuildManageResp{
@@ -672,7 +673,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			expErr:  errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
 			expInfo: "System-rebuild stop request succeeded on 1 pool",
 		},
-		"pool start succeeded; verbose": {
+		"rebuild start succeeded; verbose": {
 			ctlCfg:  &control.Config{},
 			opCode:  control.PoolRebuildOpCodeStart,
 			verbose: true,
@@ -694,6 +695,24 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			},
 			expInfo: "System-rebuild start request succeeded on 3 pools [foo bar baz]",
 		},
+		"hostlist with custom port parsed and set": {
+			ctlCfg: &control.Config{
+				HostList:    []string{"host-[1-3]"},
+				ControlPort: 10002,
+			},
+			opCode:   control.PoolRebuildOpCodeStop,
+			resp:     &mgmtpb.SystemRebuildManageResp{},
+			expInfo:  "System-rebuild stop request succeeded on 0 pools",
+			expDebug: "request_hosts:\"host-3:10002\"",
+		},
+		"hostlist parse error": {
+			ctlCfg: &control.Config{
+				HostList:    []string{"host-[1-3"},
+				ControlPort: 10001,
+			},
+			opCode: control.PoolRebuildOpCodeStart,
+			expErr: errors.New("invalid rang"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -711,6 +730,71 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			rbldCmd.Verbose = tc.verbose
 
 			gotErr := rbldCmd.execute(tc.opCode, tc.force)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			// Note this doesn't verify that the text is on an INFO or DEBUG line
+			// specifically, just that it appears in log output.
+
+			if !strings.Contains(buf.String(), tc.expInfo) {
+				t.Fatalf("expected info log output to contain %s, got %s\n",
+					tc.expInfo, buf.String())
+			}
+			if tc.expInfo == "" && strings.Contains(buf.String(), "INFO") {
+				t.Fatalf("unexpected info log output printed, got %s\n",
+					buf.String())
+			}
+			if !strings.Contains(buf.String(), tc.expDebug) {
+				t.Fatalf("expected debug log output to contain %s, got %s\n",
+					tc.expDebug, buf.String())
+			}
+		})
+	}
+}
+
+func TestDmg_systemSelfHealEvalCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg  *control.Config
+		resp    *mgmtpb.DaosResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"no config": {
+			expErr: errors.New("system self-heal eval failed: no configuration loaded"),
+		},
+		"ms failures": {
+			ctlCfg: &control.Config{},
+			msErr:  errors.New("failed"),
+			expErr: errors.New("failed"),
+		},
+		"success": {
+			ctlCfg:  &control.Config{},
+			resp:    &mgmtpb.DaosResp{},
+			expInfo: "System self-heal eval request succeeded",
+		},
+		"daos error": {
+			ctlCfg: &control.Config{},
+			resp: &mgmtpb.DaosResp{
+				Status: -1,
+			},
+			expErr: errors.New("DER_UNKNOWN"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			cmd := new(systemSelfHealEvalCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.setConfig(tc.ctlCfg)
+
+			gotErr := cmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			if !strings.Contains(buf.String(), tc.expInfo) {

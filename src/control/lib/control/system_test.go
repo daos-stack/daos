@@ -9,6 +9,7 @@ package control
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -1896,6 +1897,7 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 		expErr     error
 		expResp    *SystemRebuildManageResp
 		expRespErr error
+		expDebug   string
 	}{
 		"nil req": {
 			req:    nil,
@@ -1985,6 +1987,18 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 				"stop failed on pool %s: %s", test.MockUUID(1), "fail1", test.MockUUID(2),
 				"fail2"),
 		},
+		"rebuild-start with custom hostlist": {
+			req: func() *SystemRebuildManageReq {
+				req := &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart}
+				req.SetHostList([]string{"host-1:10002", "host-2:10002"})
+				return req
+			}(),
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{}),
+			expResp: &SystemRebuildManageResp{},
+			// Verify hostlist get transferred to protobuf req which gets printed by the
+			// rpcClient debug logger.
+			expDebug: "request_hosts:\"host-2:10002\"",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2009,6 +2023,11 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 			}
 
 			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+
+			if !strings.Contains(buf.String(), tc.expDebug) {
+				t.Fatalf("expected debug log output to contain %s, got %s\n",
+					tc.expDebug, buf.String())
+			}
 		})
 	}
 }

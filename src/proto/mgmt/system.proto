@@ -88,6 +88,7 @@ message SystemDrainReq
 	string ranks = 2; // rankset to drain on all pools
 	string hosts = 3; // hostset to drain on all pools
 	bool   reint = 4; // Flag to indicate if request is for drain or reint.
+	repeated string request_hosts = 5; // Hosts to fan-out request to.
 }
 
 // PoolRanksResp describes a response from pool-ranks operation.
@@ -132,6 +133,7 @@ message SystemRebuildManageResp
 message SystemSelfHealEvalReq
 {
 	string sys = 1; // DAOS system name
+	repeated string request_hosts = 2; // Hosts to fan-out request to.
 }
 
 // SystemQueryReq supplies system query parameters.

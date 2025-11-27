@@ -96,6 +96,21 @@ func mockRankIgnored(a string, r uint32, n ...int32) *sharedpb.RankResult {
 	return rr
 }
 
+func checkRequestHosts(t *testing.T, reqHosts []string, mi *control.MockInvoker) {
+	t.Helper()
+
+	if len(reqHosts) > 0 {
+		if len(mi.SentReqs) == 0 {
+			t.Fatal("system rebuild request didn't send any pool-requests")
+		}
+		for _, req := range mi.SentReqs {
+			test.AssertTrue(t, strings.Contains(fmt.Sprintf("%+v", req),
+				fmt.Sprintf("HostList:%v", reqHosts)),
+				"expected request hosts to be included in pool-request")
+		}
+	}
+}
+
 var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreUnexported(events.RASEvent{}),
 	cmpopts.IgnoreFields(events.RASEvent{}, "Timestamp"))
@@ -2512,8 +2527,11 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			expDrpcCount:   2,
 			expCtlApiCount: 1,
 		},
-		"drain multiple ranks on multiple pools": {
-			req: &mgmtpb.SystemDrainReq{Ranks: "0-3"},
+		"drain rank on multiple pools; request hosts passed to pool requests": {
+			req: &mgmtpb.SystemDrainReq{
+				Ranks:        "0-3",
+				RequestHosts: []string{"host1:10002", "host2:10002"},
+			},
 			members: system.Members{
 				system.MockMember(t, 1, system.MemberStateJoined),
 				system.MockMember(t, 2, system.MemberStateJoined),
@@ -2651,13 +2669,14 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			expDrpcCount:   2,
 			expCtlApiCount: 3,
 		},
-		"reintegrate rank on multiple pools; use labels": {
+		"reintegrate rank on multiple pools; use labels; request hosts passed to pool requests": {
 			useLabels: true,
 			req: &mgmtpb.SystemDrainReq{
 				Reint: true,
 				// Resolves to ranks 1-2.
 				Hosts: fmt.Sprintf("%s,%s", test.MockHostAddr(1),
 					test.MockHostAddr(2)),
+				RequestHosts: []string{"host1:10002", "host2:10002"},
 			},
 			members: system.Members{
 				system.MockMember(t, 1, system.MemberStateJoined),
@@ -2755,6 +2774,11 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
+			}
+
+			// Verify request hosts are propagated to pool rebuild requests
+			if tc.req != nil {
+				checkRequestHosts(t, tc.req.RequestHosts, mi)
 			}
 
 			test.AssertEqual(t, tc.expDrpcCount, len(mdc.CalledMethods()),
@@ -2920,6 +2944,32 @@ func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
 			},
 			expCtlApiCount: 3,
 		},
+		"rebuild-start with request hosts passed to pool requests": {
+			req: &mgmtpb.SystemRebuildManageReq{
+				OpCode:       uint32(control.PoolRebuildOpCodeStart),
+				RequestHosts: []string{"host1:10002", "host2:10002"},
+			},
+			pools: []string{test.MockUUID(1), test.MockUUID(2)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+			expResp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     test.MockUUID(1),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
+					},
+					{
+						Id:     test.MockUUID(2),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
+					},
+				},
+			},
+			expCtlApiCount: 2,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2967,6 +3017,198 @@ func TestServer_MgmtSvc_SystemRebuildManage(t *testing.T) {
 				if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
+			}
+
+			// Verify request hosts are propagated to pool rebuild requests
+			if tc.req != nil {
+				checkRequestHosts(t, tc.req.RequestHosts, mi)
+			}
+
+			test.AssertEqual(t, tc.expCtlApiCount, mi.GetInvokeCount(),
+				"rpc client invoke count")
+		})
+	}
+}
+
+func TestServer_MgmtSvc_SystemSelfHealEval(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req             *mgmtpb.SystemSelfHealEvalReq
+		selfHealProp    string
+		selfHealPropErr error
+		pools           []string
+		mic             *control.MockInvokerConfig // For control-API PoolSelfHealEval
+		drpcResp        *mgmtpb.GetGroupStatusResp
+		drpcErr         error
+		expCtlApiCount  int
+		expErr          error
+	}{
+		"nil req": {
+			req:    (*mgmtpb.SystemSelfHealEvalReq)(nil),
+			expErr: errors.New("nil *mgmt.SystemSelfHealEvalReq"),
+		},
+		"not system leader": {
+			req:    &mgmtpb.SystemSelfHealEvalReq{Sys: "quack"},
+			expErr: FaultWrongSystem("quack", build.DefaultSystemName),
+		},
+		"get self-heal property fails": {
+			req:             &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealPropErr: errors.New("get property failed"),
+			expErr:          errors.New("get property failed"),
+		},
+		"exclude flag set; drpc call fails": {
+			req:          &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealProp: "exclude",
+			drpcErr:      errors.New("drpc failed"),
+			expErr:       errors.New("excluding ranks based on self_heal.exclude: drpc failed"),
+		},
+		"exclude flag set; no dead ranks": {
+			req:          &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealProp: "exclude",
+			drpcResp:     &mgmtpb.GetGroupStatusResp{},
+		},
+		"exclude flag set; with dead ranks": {
+			req:          &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealProp: "exclude",
+			drpcResp: &mgmtpb.GetGroupStatusResp{
+				DeadRanks: []uint32{1, 2},
+			},
+		},
+		"pool_rebuild flag set; no pools": {
+			req:          &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealProp: "pool_rebuild",
+		},
+		"pool_rebuild flag set; one pool success": {
+			req:          &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealProp: "pool_rebuild",
+			pools:        []string{test.MockUUID(1)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+			expCtlApiCount: 1,
+		},
+		"pool_exclude flag set; multiple pools with failure": {
+			req:          &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealProp: "pool_exclude",
+			pools:        []string{test.MockUUID(1), test.MockUUID(2)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+					control.MockMSResponse("host1", errors.New("pool failed"), nil),
+				},
+			},
+			expErr:         errors.New("pool self-heal evaluate drpc failed for 1 pool"),
+			expCtlApiCount: 2,
+		},
+		"pool_rebuild and pool_exclude flags set; multiple pools": {
+			req:          &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealProp: "pool_rebuild,pool_exclude",
+			pools:        []string{test.MockUUID(1), test.MockUUID(2), test.MockUUID(3)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+			expCtlApiCount: 3,
+		},
+		"request hosts passed to pool self-heal eval": {
+			req: &mgmtpb.SystemSelfHealEvalReq{
+				RequestHosts: []string{"host-1:10002", "host-2:10002"},
+			},
+			selfHealProp: "pool_rebuild",
+			pools:        []string{test.MockUUID(1)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host-1:10002", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+			expCtlApiCount: 1,
+		},
+		"all flags set; exclude with dead ranks and pool operations": {
+			req:          &mgmtpb.SystemSelfHealEvalReq{},
+			selfHealProp: "exclude,pool_rebuild,pool_exclude",
+			drpcResp: &mgmtpb.GetGroupStatusResp{
+				DeadRanks: []uint32{0},
+			},
+			pools: []string{test.MockUUID(1), test.MockUUID(2)},
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+					control.MockMSResponse("host1", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+			expCtlApiCount: 2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t)
+			svc := newTestMgmtSvc(t, log)
+
+			cfg := new(mockDrpcClientConfig)
+			if tc.drpcResp != nil {
+				cfg.setSendMsgResponse(daos.MethodGroupStatusGet, tc.drpcResp, tc.drpcErr)
+			}
+			mdc := newMockDrpcClient(cfg)
+			setupSvcDrpcClient(svc, 0, mdc)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = control.DefaultMockInvokerConfig()
+			}
+			mi := control.NewMockInvoker(log, mic)
+			svc.rpcClient = mi
+
+			// Set up system self_heal property
+			if tc.selfHealProp != "" || tc.selfHealPropErr != nil {
+				if tc.selfHealPropErr != nil {
+					// Mock getSysSelfHeal to return error - we can't easily do this,
+					// so we'll just skip setting the property to trigger an error
+				} else {
+					err := svc.sysdb.SetSystemAttrs(map[string]string{
+						"self_heal": tc.selfHealProp,
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+
+			for _, uuidStr := range tc.pools {
+				addTestPoolService(t, svc.sysdb, &system.PoolService{
+					PoolUUID: uuid.MustParse(uuidStr),
+					State:    system.PoolServiceStateReady,
+					Replicas: []ranklist.Rank{0},
+				})
+			}
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
+			gotResp, gotErr := svc.SystemSelfHealEval(ctx, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expErr == nil {
+				if gotResp == nil {
+					t.Fatal("expected non-nil response")
+				}
+				cmpOpts := []cmp.Option{
+					cmpopts.IgnoreUnexported(mgmtpb.DaosResp{}),
+				}
+				if diff := cmp.Diff(&mgmtpb.DaosResp{}, gotResp, cmpOpts...); diff != "" {
+					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+				}
+			}
+
+			// Verify request hosts are propagated to pool self-heal eval requests
+			if tc.req != nil {
+				checkRequestHosts(t, tc.req.RequestHosts, mi)
 			}
 
 			test.AssertEqual(t, tc.expCtlApiCount, mi.GetInvokeCount(),

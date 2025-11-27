@@ -1313,7 +1313,7 @@ func (svc *mgmtSvc) getPoolRanksDisabled(ctx context.Context, ranks *ranklist.Ra
 type poolRanksOpSig func(context.Context, control.UnaryInvoker, *control.PoolRanksReq) (*control.PoolRanksResp, error)
 
 // Generate operation results by iterating through pool's ranks and calling supplied fn on each.
-func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, ctlApiCall poolRanksOpSig) ([]*control.PoolRanksResp, error) {
+func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, requestHosts []string, ctlApiCall poolRanksOpSig) ([]*control.PoolRanksResp, error) {
 	resps := []*control.PoolRanksResp{}
 
 	for _, id := range poolIDs {
@@ -1327,6 +1327,10 @@ func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs [
 			Ranks: rs.Ranks(),
 		}
 		req.Sys = sys
+		// Set request hostlist from system request so control-API pool call reaches
+		// MS-replicas and includes any custom server port assignments (as we don't have
+		// access to the server config from here).
+		req.SetHostList(requestHosts)
 
 		svc.log.Tracef("%T: %+v", req, req)
 
@@ -1392,7 +1396,8 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainRe
 	}
 
 	// Generate results from dRPC calls to operate on pool ranks.
-	resps, err := svc.getPoolRanksResps(ctx, pbReq.Sys, poolIDs, poolRanks, apiCall)
+	resps, err := svc.getPoolRanksResps(ctx, pbReq.Sys, poolIDs, poolRanks, pbReq.RequestHosts,
+		apiCall)
 	if err != nil {
 		return nil, err
 	}
@@ -1473,7 +1478,7 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 // selfHealExcludeRanks fetches a list of detected dead ranks from the leader's engine and updates
 // states within the control-plane membership appropriately.
 func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
-	// TODO: Pass a real, nonzero map version.
+	// DAOS-18163 TODO: Pass a real, nonzero map version.
 	req := &mgmtpb.GetGroupStatusReq{}
 
 	// Fetch dead rank list from leader's engine with group status dRPC call.
@@ -1522,7 +1527,7 @@ func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
 // selfHealNotifyPSes calls into each pool service with the current value of self_heal system
 // property so that the appropriate actions can be performed across the pool (e.g. rebuild or
 // exclude).
-func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) error {
+func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string, requestHosts []string) error {
 	poolIDs, err := svc.getPoolIDs()
 	if err != nil {
 		return err
@@ -1539,6 +1544,11 @@ func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) erro
 			ID:         id,
 			SysPropVal: propVal,
 		}
+		// Set request hostlist from system request so control-API pool call reaches
+		// MS-replicas and includes any custom server port assignments (as we don't have
+		// access to the server config from here).
+		req.SetHostList(requestHosts)
+
 		svc.log.Tracef("%T: %+v", req, req)
 
 		if err := control.PoolSelfHealEval(ctx, svc.rpcClient, req); err != nil {
@@ -1597,7 +1607,7 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		return new(mgmtpb.DaosResp), nil
 	}
 
-	if err := svc.selfHealNotifyPSes(ctx, selfHeal); err != nil {
+	if err := svc.selfHealNotifyPSes(ctx, selfHeal, pbReq.RequestHosts); err != nil {
 		return nil, errors.Wrapf(err, "notify pool services of self_heal=%q", selfHeal)
 	}
 
