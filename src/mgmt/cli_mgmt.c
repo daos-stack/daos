@@ -27,6 +27,7 @@
 #include <numa.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
+#include <time.h>
 
 char agent_sys_name[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 
@@ -35,6 +36,55 @@ static Mgmt__GetAttachInfoResp *resp_g;
 
 bool                            d_dynamic_ctx_g;
 int	dc_mgmt_proto_version;
+static int                      dc_mgmt_retry_timeout;
+
+/**
+ * Get retry timeout from environment variable with default
+ * Returns: 0=no retry, -1=indefinite, >0=timeout seconds
+ */
+static int
+get_retry_timeout(void)
+{
+	char *retry_env = NULL;
+
+	if (dc_mgmt_retry_timeout)
+		return dc_mgmt_retry_timeout;
+
+	dc_mgmt_retry_timeout = DAOS_CLI_CONNECT_RETRY_TIMEOUT_DEFAULT;
+	if (d_agetenv_str(&retry_env, "DAOS_CLI_CONNECT_RETRY_TIMEOUT") == 0) {
+		dc_mgmt_retry_timeout = atoi(retry_env);
+		d_freeenv_str(&retry_env);
+	}
+
+	return dc_mgmt_retry_timeout;
+}
+
+/**
+ * Check if retry should continue based on timeout and elapsed time
+ * Returns: true if should continue retrying, false if should stop
+ */
+static bool
+should_retry(int retry_timeout, time_t start_time, const char *operation_name)
+{
+	if (retry_timeout == 0)
+		return false; /* No retry */
+
+	if (retry_timeout > 0) { /* Finite timeout */
+		time_t elapsed = time(NULL) - start_time;
+		if (elapsed >= retry_timeout) {
+			D_ERROR("%s retry timeout (%d seconds) exceeded\n", operation_name,
+				retry_timeout);
+			return false;
+		}
+		D_WARN("%s failed, retrying (%ld/%d seconds)...\n", operation_name, elapsed,
+		       retry_timeout);
+	} else { /* retry_timeout == -1, indefinite retry */
+		D_WARN("%s failed, retrying...\n", operation_name);
+	}
+
+	sleep(1);
+	return true;
+}
 
 int
 dc_cp(tse_task_t *task, void *data)
@@ -310,18 +360,31 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	char                    *interface = NULL;
 	char                    *domain    = NULL;
 	int			 rc;
+	int                      retry_timeout = get_retry_timeout();
+	time_t                   start_time    = time(NULL);
 
 	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
 
-	/* Connect to daos_agent. */
+	/* Connect to daos_agent with retry based on environment variable. */
 	D_ASSERT(dc_agent_sockpath != NULL);
-	rc = drpc_connect(dc_agent_sockpath, &ctx);
-	if (rc != -DER_SUCCESS) {
-		D_ERROR("failed to connect to %s " DF_RC "\n",
-			dc_agent_sockpath, DP_RC(rc));
-		if (rc == -DER_NONEXIST)
-			rc = -DER_AGENT_COMM;
-		D_GOTO(out, rc);
+
+	while (1) {
+		rc = drpc_connect(dc_agent_sockpath, &ctx);
+		if (rc == -DER_SUCCESS) {
+			D_DEBUG(DB_MGMT, "successfully connected to %s\n", dc_agent_sockpath);
+			break;
+		}
+
+		/*
+		 * DAOS agent should be configured prior to pool connection establishment.
+		 * Temporarily disable connection retry mechanism.
+		 */
+		retry_timeout = 0;
+		if (!should_retry(retry_timeout, start_time, "daos_agent connect")) {
+			if (rc == -DER_NONEXIST)
+				rc = -DER_AGENT_COMM;
+			D_GOTO(out, rc);
+		}
 	}
 
 	if (get_env_deprecated(&interface, "D_INTERFACE", "OFI_INTERFACE") == 0)
@@ -417,13 +480,25 @@ dc_get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *in
 int
 dc_mgmt_cache_attach_info(const char *name)
 {
-	int rc;
+	int    rc;
+	int    retry_timeout = get_retry_timeout();
+	time_t start_time    = time(NULL);
 
 	if (name != NULL && strcmp(name, agent_sys_name) != 0)
 		return -DER_INVAL;
-	rc = get_attach_info(name, true, &info_g, &resp_g);
-	if (rc)
-		return rc;
+
+	while (true) {
+		rc = get_attach_info(name, true, &info_g, &resp_g);
+		if (rc == 0) {
+			break;
+		}
+		if (rc != -DER_UNREACH && rc != -DER_MISC) {
+			D_ERROR("dc_get_attach_info failed: " DF_RC "\n", DP_RC(rc));
+			return rc;
+		}
+		if (!should_retry(retry_timeout, start_time, "get_attach_info"))
+			return rc;
+	}
 
 	info_g.numa_entries_nr = resp_g->n_numa_fabric_interfaces;
 	D_ALLOC_ARRAY(info_g.numa_iface_idx_rr, info_g.numa_entries_nr);
@@ -486,7 +561,7 @@ dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **out)
 
 	rc = dc_get_attach_info(sys, true, &internal, &resp);
 	if (rc != 0) {
-		D_ERROR("dc_get_attach_info failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("dc_get_attach_info failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1635,11 +1710,24 @@ int
 dc_mgmt_init()
 {
 	int		rc;
-	uint32_t        ver_array[2] = {DAOS_MGMT_VERSION - 1, DAOS_MGMT_VERSION};
+	uint32_t        ver_array[2]  = {DAOS_MGMT_VERSION - 1, DAOS_MGMT_VERSION};
+	time_t          start_time    = time(NULL);
+	int             retry_timeout = get_retry_timeout();
 
-	rc = daos_rpc_proto_query(mgmt_proto_fmt_v3.cpf_base, ver_array, 2, &dc_mgmt_proto_version);
-	if (rc)
-		return rc;
+	while (1) {
+		rc = daos_rpc_proto_query(mgmt_proto_fmt_v3.cpf_base, ver_array, 2,
+					  &dc_mgmt_proto_version);
+		if (rc == 0)
+			break;
+		/* Check if this is a retryable error (server unavailable) */
+		if (rc != -DER_UNREACH && rc != -DER_TIMEDOUT && rc != -DER_HG) {
+			D_ERROR("dao_rpc_proto_query failed with non-retryable error: " DF_RC "\n",
+				DP_RC(rc));
+			return rc;
+		}
+		if (!should_retry(retry_timeout, start_time, "daos_rpc_proto_query"))
+			return rc;
+	}
 
 	if (dc_mgmt_proto_version == DAOS_MGMT_VERSION - 1) {
 		rc = daos_rpc_register(&mgmt_proto_fmt_v3, MGMT_PROTO_CLI_COUNT, NULL,

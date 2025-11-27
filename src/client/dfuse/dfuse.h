@@ -91,6 +91,11 @@ struct dfuse_eq {
 	struct d_slab_type *de_read_slab;
 	struct d_slab_type *de_pre_read_slab;
 	struct d_slab_type *de_write_slab;
+
+	/* Adaptive polling state */
+	uint64_t            de_last_event_time;
+	uint32_t            de_consecutive_empty_polls;
+	uint64_t            de_last_poll_time;
 };
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected

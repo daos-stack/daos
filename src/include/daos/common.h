@@ -1182,6 +1182,9 @@ daos_anchor_is_zero(daos_anchor_t *anchor)
 /* default debug log file */
 #define DAOS_LOG_DEFAULT	"/tmp/daos.log"
 
+/* default pool connect retry timeout in seconds (20 minutes) */
+#define DAOS_CLI_CONNECT_RETRY_TIMEOUT_DEFAULT 1200
+
 #ifdef NEED_EXPLICIT_BZERO
 /* Secure memory scrub */
 static inline void
