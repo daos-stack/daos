@@ -252,7 +252,7 @@ pipeline {
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
                             'Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
-               defaultValue: '20',
+               defaultValue: '10',
                description: 'Test-repeat to use for this run.  Specifies the ' +
                             'number of times to repeat each functional test. ' +
                             'CAUTION: only use in combination with a reduced ' +
@@ -1153,7 +1153,6 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
-                            image_version: 'el9.5',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
