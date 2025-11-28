@@ -185,13 +185,6 @@ parse_vos_file_parts_test_success(void **state)
 	assert_int_equal(0, parts.vf_target_idx);
 }
 
-#define assert_invalid_path(path) \
-do { \
-	struct dv_tree_path_builder __vt = {0}; \
-		daos_handle_t poh = {0}; \
-		assert_rc_equal(-DER_INVAL, ddb_vtp_init(poh, path, &__vt)); \
-} while (0)
-
 #define assert_invalid_parse_dtx_id(str) \
 	do { \
 		struct dtx_id __dtx_id = {0}; \
