@@ -8,6 +8,7 @@ set -eu
 
 OPENMPI_VER=""
 PY_MINOR_VER=""
+image_version="${image_version-}"
 distro="${image_version%%.*}"
 
 export DISTRO="${distro:-el8}"
