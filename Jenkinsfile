@@ -303,7 +303,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Do not build sources and RPMs on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
