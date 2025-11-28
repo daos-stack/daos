@@ -877,6 +877,27 @@ ds_iv_ns_cleanup(struct ds_iv_ns *ns)
 	}
 }
 
+/* To prepare for reintegrate, cleanup some IVs' cache.
+ * May add more types later when needed.
+ */
+void
+ds_iv_ns_reint_prep(struct ds_iv_ns *ns)
+{
+	struct ds_iv_entry *entry;
+	struct ds_iv_entry *tmp;
+
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
+		if (entry->iv_key.class_id == IV_CONT_AGG_EPOCH_BOUNDRY ||
+		    entry->iv_key.class_id == IV_CONT_PROP ||
+		    entry->iv_key.class_id == IV_CONT_SNAP) {
+			D_INFO(DF_UUID " delete IV class_id %d", DP_UUID(ns->iv_pool_uuid),
+			       entry->iv_key.class_id);
+			d_list_del(&entry->iv_link);
+			iv_entry_free(entry);
+		}
+	}
+}
+
 void
 ds_iv_ns_stop(struct ds_iv_ns *ns)
 {
