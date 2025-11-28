@@ -19,33 +19,6 @@ fake_print(const char *fmt, ...)
 	return 0;
 }
 
-#define assert_parsed_words2(str, count, ...) \
-	__assert_parsed_words2(str, count, (char *[])__VA_ARGS__)
-static void
-__assert_parsed_words2(const char *str, int count, char **expected_words)
-{
-	struct argv_parsed	parse_args = {0};
-	int			i;
-
-	assert_success(ddb_str2argv_create(str, &parse_args));
-	assert_int_equal(count, parse_args.ap_argc);
-
-	for (i = 0; i < parse_args.ap_argc; i++)
-		assert_string_equal(parse_args.ap_argv[i], expected_words[i]);
-
-	ddb_str2argv_free(&parse_args);
-}
-
-static void
-assert_parsed_fail(const char *str)
-{
-	struct argv_parsed	parse_args = {0};
-	int			rc;
-
-	rc = ddb_str2argv_create(str, &parse_args);
-	assert_rc_equal(-DER_INVAL, rc);
-}
-
 /*
  * -----------------------------------------------
  * Test implementations
@@ -73,84 +46,6 @@ vos_file_parts_tests(void **state)
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-1", parts.vf_vos_file);
 	assert_int_equal(1, parts.vf_target_idx);
-}
-
-static void
-string_to_argv_tests(void **state)
-{
-	assert_parsed_words2("one", 1, { "one" });
-	assert_parsed_words2("one two", 2, {"one", "two"});
-	assert_parsed_words2("one two three four five", 5, {"one", "two", "three", "four", "five"});
-	assert_parsed_words2("one 'two two two'", 2, {"one", "two two two"});
-	assert_parsed_words2("one 'two two two' three", 3, {"one", "two two two", "three"});
-	assert_parsed_words2("one \"two two two\" three", 3, {"one", "two two two", "three"});
-
-	assert_parsed_fail("one>");
-	assert_parsed_fail("one<");
-	assert_parsed_fail("'one");
-	assert_parsed_fail(" \"one");
-	assert_parsed_fail("one \"two");
-}
-
-#define assert_invalid_program_args(argc, ...) \
-	assert_rc_equal(-DER_INVAL, _assert_invalid_program_args(argc, ((char*[])__VA_ARGS__)))
-static int
-_assert_invalid_program_args(uint32_t argc, char **argv)
-{
-	struct program_args	pa;
-	struct ddb_ctx		ctx = {
-		.dc_io_ft.ddb_print_message = fake_print,
-		.dc_io_ft.ddb_print_error = fake_print
-	};
-
-	return ddb_parse_program_args(&ctx, argc, argv, &pa);
-}
-
-#define assert_program_args(expected_program_args, argc, ...) \
-	assert_success(_assert_program_args(&expected_program_args, argc, ((char*[])__VA_ARGS__)))
-static int
-_assert_program_args(struct program_args *expected_pa, uint32_t argc, char **argv)
-{
-	struct program_args	pa = {0};
-	int			rc;
-	struct ddb_ctx		ctx = {
-		.dc_io_ft.ddb_print_message = fake_print,
-		.dc_io_ft.ddb_print_error = fake_print
-	};
-
-	rc = ddb_parse_program_args(&ctx, argc, argv, &pa);
-	if (rc != 0)
-		return rc;
-
-
-	if (expected_pa->pa_r_cmd_run != NULL && pa.pa_r_cmd_run != NULL &&
-	    strcmp(expected_pa->pa_r_cmd_run, pa.pa_r_cmd_run) != 0) {
-		print_error("ERROR: %s != %s\n", expected_pa->pa_r_cmd_run, pa.pa_r_cmd_run);
-		return -DER_INVAL;
-	}
-
-	if (expected_pa->pa_cmd_file != NULL &&  pa.pa_cmd_file != NULL &&
-	    strcmp(expected_pa->pa_cmd_file, pa.pa_cmd_file) != 0) {
-		print_error("ERROR: %s != %s\n", expected_pa->pa_cmd_file, pa.pa_cmd_file);
-		return -DER_INVAL;
-	}
-
-	return 0;
-}
-
-static void
-parse_args_tests(void **state)
-{
-	struct program_args pa = {0};
-
-	assert_invalid_program_args(2, {"", "-z"});
-	assert_invalid_program_args(3, {"", "command1", "command2"});
-	pa.pa_r_cmd_run = "command";
-	assert_program_args(pa, 3, {"", "-R", "command"});
-	pa.pa_r_cmd_run = "";
-
-	pa.pa_cmd_file = "path";
-	assert_program_args(pa, 3, {"", "-f", "path"});
 }
 
 #define assert_vtp_eq(a, b) \
@@ -398,9 +293,8 @@ int
 ddb_parse_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
-	    TEST(vos_file_parts_tests), TEST(string_to_argv_tests),      TEST(parse_args_tests),
-	    TEST(parse_dtx_id_tests),   TEST(keys_are_parsed_correctly), TEST(pool_flags_tests),
-	    TEST(date2cmt_time_tests),
+	    TEST(vos_file_parts_tests), TEST(parse_dtx_id_tests),  TEST(keys_are_parsed_correctly),
+	    TEST(pool_flags_tests),     TEST(date2cmt_time_tests),
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);

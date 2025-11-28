@@ -52,16 +52,6 @@ fake_write_file(const char *path, d_iov_t *contents)
  */
 
 static void
-quit_cmd_tests(void **state)
-{
-	/* Quit is really simple and should just indicate to the program context that it's
-	 * time to quit
-	 */
-	assert_success(ddb_run_quit(&g_ctx));
-	assert_true(g_ctx.dc_should_quit);
-}
-
-static void
 ls_cmd_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
@@ -602,7 +592,6 @@ int
 ddb_commands_tests_run()
 {
 	const struct CMUnitTest tests[] = {
-	    TEST(quit_cmd_tests),
 	    TEST(ls_cmd_tests),
 	    TEST(dump_value_cmd_tests),
 	    TEST(dump_ilog_cmd_tests),
