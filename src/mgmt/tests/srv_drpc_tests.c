@@ -1517,9 +1517,8 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info,
-				    MGMT__POOL_REBUILD_STATUS__STATE__IDLE,
-				    &resp);
+	/* Expect zero value rebuild status on failure */
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
