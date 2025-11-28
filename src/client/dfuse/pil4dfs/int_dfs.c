@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <assert.h>
 #include <sys/ucontext.h>
 #include <sys/user.h>
 #include <linux/binfmts.h>
@@ -1109,35 +1110,47 @@ reset_ucs_global_variable_after_fork(void)
 	}
 }
 
-static int null_cnt = 0;
 void
 ucs_init(void)
 {
-	int rc;
+	int   rc;
+	char *func_addr = NULL;
+	volatile int flag = 1;
 
 	if (next_ucs_init == NULL) {
 		next_ucs_init = dlsym(RTLD_NEXT, "ucs_init");
 		if (next_ucs_init == NULL) {
-			null_cnt++;
-			printf("DBG> next_ucs_init = NULL\n");
-			fflush(stdout);
-			/* This function's name ends with _init. This is a special case. dl.so may
-			 * treat it as a constructor function sometimes.
-			 */
+			rc = query_var_addr_size("libucs.so", "ucs_init", &func_addr,
+						 "ucs_async_thread_global_context",
+						 &ucs_global_var_size, &ucs_global_var_addr);
+//			assert(rc == 0);
+			if (rc != 0) {
+				printf("DBG> rc = %d\n", rc);
+				fflush(stdout);
+				while (flag) {
+					sleep(1);
+				}
+				rc = query_var_addr_size("libucs.so", "ucs_init", &func_addr,
+							 "ucs_async_thread_global_context",
+							 &ucs_global_var_size,
+							 &ucs_global_var_addr);
+				assert(rc == 0);
+			}
+			next_ucs_init = (void *)func_addr;
+			/* daos_debug_init() may be not called yet, D_ASSERT() is not applicable. */
+			assert(next_ucs_init != NULL);
+			pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
+			next_ucs_init();
 			return;
 		}
 	}
-	printf("DBG> In ucs_init()\n");
-	rc = query_var_addr_size(next_ucs_init, "ucs_init", "ucs_async_thread_global_context",
-				 &ucs_global_var_size, &ucs_global_var_addr);
-	if (rc == 0) {
-		printf("DBG> Found ucs_async_thread_global_context. call pthread_atfork()\n");
+
+	func_addr = (char *)next_ucs_init;
+	rc        = query_var_addr_size("libucs.so", "ucs_init", &func_addr,
+					"ucs_async_thread_global_context", &ucs_global_var_size,
+					&ucs_global_var_addr);
+	if (rc == 0)
 		pthread_atfork(NULL, NULL, reset_ucs_global_variable_after_fork);
-		fflush(stdout);
-	} else {
-		printf("DBG> failed to find ucs_async_thread_global_context.\n");
-		fflush(stdout);
-	}
 
 	next_ucs_init();
 }
@@ -1703,7 +1716,6 @@ find_next_available_map(int *idx)
 	return 0;
 }
 
-/* May need to support duplicated fd as duplicated dirfd too. */
 static void
 free_fd(int idx, bool closing_dup_fd)
 {
@@ -1724,7 +1736,7 @@ free_fd(int idx, bool closing_dup_fd)
 	d_file_list[idx]->ref_count--;
 	if (d_file_list[idx]->ref_count == 0)
 		saved_obj = d_file_list[idx];
-	if (dup_ref_count[idx] > 0 || ((d_file_list[idx]->ref_count > 0) && !d_compatible_mode)) {
+	if ((dup_ref_count[idx] > 0) || (closing_dup_fd && (d_file_list[idx]->ref_count > 0))) {
 		D_MUTEX_UNLOCK(&lock_fd);
 		return;
 	}
