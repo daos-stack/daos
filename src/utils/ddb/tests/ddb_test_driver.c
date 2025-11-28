@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -651,12 +651,10 @@ int main(int argc, char *argv[])
 		cmocka_set_test_filter("**");
 #endif
 		RUN_TEST_SUIT('a', ddb_parse_tests_run);
-		RUN_TEST_SUIT('b', ddb_cmd_options_tests_run);
-		RUN_TEST_SUIT('c', ddb_vos_tests_run);
-		RUN_TEST_SUIT('d', ddb_commands_tests_run);
-		RUN_TEST_SUIT('e', ddb_main_tests_run);
-		RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
-		RUN_TEST_SUIT('g', ddb_path_tests_run);
+		RUN_TEST_SUIT('b', ddb_vos_tests_run);
+		RUN_TEST_SUIT('c', ddb_commands_tests_run);
+		RUN_TEST_SUIT('d', ddb_commands_print_tests_run);
+		RUN_TEST_SUIT('e', ddb_path_tests_run);
 
 done:
 	ddb_fini();

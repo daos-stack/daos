@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
  * (C) Copyright 2025 Vdura Inc.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,21 +35,6 @@ ddb_run_version(struct ddb_ctx *ctx)
 		   DAOS_VERSION_MINOR,
 		   DAOS_VERSION_FIX);
 
-	return 0;
-}
-
-int
-ddb_run_help(struct ddb_ctx *ctx)
-{
-	ddb_commands_help(ctx);
-
-	return 0;
-}
-
-int
-ddb_run_quit(struct ddb_ctx *ctx)
-{
-	ctx->dc_should_quit = true;
 	return 0;
 }
 

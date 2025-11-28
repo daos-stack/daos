@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,7 +13,6 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos.h>
 #include <ddb_common.h>
-#include <ddb_main.h>
 #include <fcntl.h>
 #include <gurt/debug.h>
 #include <libgen.h>
