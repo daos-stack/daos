@@ -16,14 +16,6 @@
 #include "ddb_common.h"
 #include "ddb_parse.h"
 
-void
-safe_strcat(char *dst, const char *src, size_t dst_size)
-{
-	size_t remaining_space = dst_size - strlen(dst) - 1; // Subtract 1 for null terminator
-
-	strncat(dst, src, remaining_space);
-}
-
 /**
  * Define the regex match group indices for the different parts of the VOS path. The regex is
  * defined in the init_regex_vos_file_parts function. The regex is used to parse a VOS path into its

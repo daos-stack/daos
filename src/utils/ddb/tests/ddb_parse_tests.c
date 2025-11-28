@@ -185,26 +185,6 @@ parse_vos_file_parts_test_success(void **state)
 	assert_int_equal(0, parts.vf_target_idx);
 }
 
-#define assert_vtp_eq(a, b) \
-do { \
-	assert_uuid_equal(a.vtp_path.vtp_cont, b.vtp_path.vtp_cont); \
-	assert_int_equal(a.vtp_cont_idx, b.vtp_cont_idx); \
-	assert_int_equal(a.vtp_oid_idx, b.vtp_oid_idx); \
-	assert_int_equal(a.vtp_dkey_idx, b.vtp_dkey_idx); \
-	assert_int_equal(a.vtp_akey_idx, b.vtp_akey_idx); \
-	assert_int_equal(a.vtp_recx_idx, b.vtp_recx_idx); \
-	assert_int_equal(a.vtp_path.vtp_oid.id_pub.hi, b.vtp_path.vtp_oid.id_pub.hi); \
-	assert_int_equal(a.vtp_path.vtp_oid.id_pub.lo, b.vtp_path.vtp_oid.id_pub.lo); \
-	assert_int_equal(a.vtp_path.vtp_dkey.iov_len, b.vtp_path.vtp_dkey.iov_len); \
-	if (a.vtp_path.vtp_dkey.iov_len > 0) \
-		assert_memory_equal(a.vtp_path.vtp_dkey.iov_buf, b.vtp_path.vtp_dkey.iov_buf, \
-					a.vtp_path.vtp_dkey.iov_len); \
-	assert_int_equal(a.vtp_path.vtp_akey.iov_len, b.vtp_path.vtp_akey.iov_len); \
-	if (a.vtp_path.vtp_akey.iov_len > 0) \
-		assert_memory_equal(a.vtp_path.vtp_akey.iov_buf, b.vtp_path.vtp_akey.iov_buf, \
-					a.vtp_path.vtp_akey.iov_len); \
-	} while (0)
-
 #define assert_invalid_path(path) \
 do { \
 	struct dv_tree_path_builder __vt = {0}; \
