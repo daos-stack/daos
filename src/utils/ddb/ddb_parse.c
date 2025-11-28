@@ -6,8 +6,6 @@
  */
 #define D_LOGFAC DD_FAC(ddb)
 
-#include <wordexp.h>
-#include <getopt.h>
 #include <regex.h>
 #include <errno.h>
 #include <string.h>

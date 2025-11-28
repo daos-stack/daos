@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -44,11 +45,5 @@
 		else                                                                               \
 			printf("At %s:%d: " fmt, __FILE__, __LINE__, __VA_ARGS__);                 \
 	} while (0)
-
-struct argv_parsed {
-	char		**ap_argv;
-	void		 *ap_ctx;
-	uint32_t	  ap_argc;
-};
 
 #endif /* __DAOS_DDB_COMMON_H */

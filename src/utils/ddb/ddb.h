@@ -11,8 +11,6 @@
 #include <daos_types.h>
 #include <time.h>
 
-typedef int (*ddb_io_line_cb)(void *cb_args, char *line, uint32_t str_len);
-
 struct ddb_io_ft {
 	/**
 	 * Print a message.
