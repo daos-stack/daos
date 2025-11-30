@@ -10,6 +10,8 @@ OPENMPI_VER=""
 PY_MINOR_VER=""
 image_version="${image_version-}"
 distro="${image_version%%.*}"
+echo "\n image_version is: $image_version \n"
+echo "then distro is: $distro\n"
 
 export DISTRO="${distro:-el8}"
 pkgs="boost-python3$PY_MINOR_VER-devel                               \
