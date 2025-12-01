@@ -17,6 +17,7 @@ DESCRIPTION="The Storage Performance Development Kit provides a set of tools
 and libraries for writing high performance, scalable, user-mode storage
 applications."
 URL="https://spdk.io"
+RPM_CHANGELOG="spdk.changelog"
 
 files=()
 TARGET_PATH="${bindir}"
@@ -35,8 +36,8 @@ list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/libspdk*.so.*" \
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-22.0"
-list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-22.0/lib*.so.*"
+TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-24.1"
+list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-24.1/lib*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
@@ -65,8 +66,8 @@ list_files files "${SL_SPDK_PREFIX}/lib64/pkgconfig/daos_spdk.pc"
 replace_paths "${SL_SPDK_PREFIX}" "${files[@]}"
 append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-22.0"
-list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-22.0/lib*.so"
+TARGET_PATH="${libdir}/daos_srv/dpdk/pmds-24.1"
+list_files files "${SL_SPDK_PREFIX}/lib64/daos_srv/dpdk/pmds-24.1/lib*.so"
 append_install_list "${files[@]}"
 
 TARGET_PATH="${includedir}/daos_srv/spdk"

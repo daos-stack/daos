@@ -36,10 +36,10 @@ func (ei *EngineInstance) format(ctx context.Context) error {
 
 	ei.log.Debugf("instance %d: checking if storage is formatted", idx)
 	if err := ei.awaitStorageReady(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "awaitStorageReady")
 	}
 	if err := ei.createSuperblock(); err != nil {
-		return err
+		return errors.Wrap(err, "createSuperblock")
 	}
 
 	if !ei.hasSuperblock() {
@@ -50,7 +50,7 @@ func (ei *EngineInstance) format(ctx context.Context) error {
 	// any callbacks that were waiting for this state.
 	for _, readyFn := range ei.onStorageReady {
 		if err := readyFn(ctx); err != nil {
-			return err
+			return errors.Wrap(err, "onStorageReady readyFn")
 		}
 	}
 
@@ -82,10 +82,11 @@ func (ei *EngineInstance) start(ctx context.Context) (chan *engine.RunnerExitInf
 	}
 
 	if err := ei.initIncarnationFromSuperblock(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "initIncarnationFromSuperblock")
 	}
 
-	return ei.runner.Start(ctx)
+	ch, err := ei.runner.Start(ctx)
+	return ch, errors.Wrap(err, "runner Start")
 }
 
 // waitReady awaits ready signal from I/O Engine before starting
@@ -235,7 +236,7 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 
 				runnerExitCh, err = ei.startRunner(ctx)
 				if err != nil {
-					ei.log.Errorf("runner exited without starting process: %s", err)
+					ei.log.Errorf("runner exited without starting process: %+v", err)
 					ei.handleExit(ctx, 0, err)
 					continue
 				}

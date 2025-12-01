@@ -74,8 +74,8 @@ if [ -n "$REPO_FILE_URL" ]; then
     popd
     # These may have been created in the Dockerfile must be removed
     # when using a local repository.
-    unset HTTPS_PROXY
-    unset https_proxy
+    # unset HTTPS_PROXY
+    # unset https_proxy
 fi
 dnf -y --disablerepo \*epel\* install dnf-plugins-core
 dnf -y config-manager --save --setopt=assumeyes=True
@@ -130,10 +130,9 @@ disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
 if [ -n "$REPO_FILE_URL" ]; then
     trusted_host="${REPO_FILE_URL##*//}"
     trusted_host="${trusted_host%%/*}"; \
-    {
-        echo "[global]"
-        echo "trusted-host = ${trusted_host}"
-        echo "index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
-        echo "proxy = \"\""
-    } > /etc/pip.conf
+    cat <<EOF > /etc/pip.conf
+[global]
+    trusted-host = ${trusted_host}
+    index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple
+EOF
 fi
