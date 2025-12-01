@@ -1255,7 +1255,7 @@ class ValgrindHelper():
         src_dir = os.path.realpath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.src_dir = f'{src_dir}/'
 
-    def get_cmd_prefix(self, is_dfuse=False):
+    def get_cmd_prefix(self):
         """Return the command line prefix"""
         if not self.use_valgrind:
             return []
@@ -1273,9 +1273,6 @@ class ValgrindHelper():
                '--fair-sched=yes',
                '--gen-suppressions=all',
                '--error-exitcode=42']
-
-        if is_dfuse:
-            cmd.append('--trace-children=yes')
 
         if self.conf.args.valgrind_verbose:
             cmd.append('--verbose')
@@ -1398,7 +1395,7 @@ class DFuse():
         else:
             cmd = []
 
-        cmd.extend(self.valgrind.get_cmd_prefix(is_dfuse=True))
+        cmd.extend(self.valgrind.get_cmd_prefix())
 
         cmd.extend([dfuse_bin, '--mountpoint', self.dir, '--foreground'])
 
