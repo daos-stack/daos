@@ -906,7 +906,7 @@ server_init(int argc, char *argv[])
 	if (rc)
 		D_GOTO(exit_init_state, rc);
 
-	dss_xstreams_open_barrier();
+	dss_xstreams_open_barrier(false);
 	D_INFO("Service fully up\n");
 
 	/** Report timestamp when engine was open for business */
