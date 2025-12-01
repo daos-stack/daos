@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -286,8 +287,10 @@ __shim_handle__cont_get(PyObject *self, PyObject *args)
 	struct open_handle	*hdl;
 	char			*name;
 	struct pydaos_df	entry;
-	size_t			size = sizeof(entry);
-	daos_obj_id_t		oid = {0, };
+	size_t                   size = sizeof(entry);
+	daos_obj_id_t            oid  = {
+            0,
+        };
 	unsigned int		otype = 0;
 	int			rc;
 
@@ -386,6 +389,64 @@ out:
 	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
 
 	return return_list;
+}
+
+static PyObject *
+__shim_handle__cont_destroyobj(PyObject *self, PyObject *args)
+{
+	struct open_handle *hdl;
+	char               *name;
+	struct pydaos_df    entry;
+	size_t              size = sizeof(entry);
+	daos_obj_id_t       oid  = {
+            0,
+        };
+	daos_handle_t oh;
+	unsigned int  otype = 0;
+	int           rc;
+
+	/* Parse arguments */
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ks", &hdl, &name);
+
+	/** Lookup name in root kv */
+	rc = daos_kv_get(hdl->oh, DAOS_TX_NONE, 0, name, &size, &entry, NULL);
+	if (rc != -DER_SUCCESS)
+		goto out;
+
+	/** Check if entry actually exists */
+	if (size == 0) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+
+	/** If we fetched a value which isn't an entry ... we have a problem */
+	if (size != sizeof(entry)) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	oid   = entry.oid;
+	otype = entry.otype;
+
+	/** we do not support arrays anyway, so we would not be here */
+	if (otype == PYDAOS_ARRAY)
+		goto out;
+
+	/* Remove name from root kv, use conditional to fail if not exist */
+	rc = daos_kv_remove(hdl->oh, DAOS_TX_NONE, DAOS_COND_PUNCH, name, NULL);
+	if (rc != -DER_SUCCESS)
+		goto out;
+
+	rc = daos_kv_open(hdl->coh, oid, DAOS_OO_RW, &oh, NULL);
+	if (rc != -DER_SUCCESS)
+		goto out;
+	rc = daos_kv_destroy(oh, DAOS_TX_NONE, NULL);
+	if (rc != -DER_SUCCESS)
+		goto out;
+	rc = daos_kv_close(oh, NULL);
+
+out:
+	return PyLong_FromLong(rc);
 }
 
 static PyObject *
@@ -744,6 +805,7 @@ do {				\
 	DEFINE_OC_EXPL(EC_8P2G);	/** OC_EC_8P2G1, OC_EC_8P2G2, ... */
 	DEFINE_OC_EXPL(EC_16P1G);	/** OC_EC_16P1G1, OC_EC_16P1G2, ... */
 	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
+	DEFINE_OC_EXPL(EC_16P3G);       /** OC_EC_16P3G1, OC_EC_16P3G2, ... */
 
 #define DEFINE_OC_INTERNAL(name)\
 do {				\
@@ -1393,6 +1455,7 @@ static PyMethodDef daosMethods[] = {
     EXPORT_PYTHON_METHOD(cont_open_by_path),
     EXPORT_PYTHON_METHOD(cont_get),
     EXPORT_PYTHON_METHOD(cont_newobj),
+    EXPORT_PYTHON_METHOD(cont_destroyobj),
     EXPORT_PYTHON_METHOD(cont_close),
     EXPORT_PYTHON_METHOD(cont_check),
     EXPORT_PYTHON_METHOD(cont_check_by_path),
