@@ -1702,11 +1702,12 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	memset(&tcx->tc_traces[0], 0,
 	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 
-	/* depth could be changed by dbtree_delete/dbtree_iter_delete from
-	 * a different btr_context, so we always reinitialize both depth
-	 * and start point of trace for the context.
+	/* depth & feats could be changed by dbtree_delete/dbtree_iter_delete
+	 * from a different btr_context, so we always reinitialize both depth,
+	 * feats and start point of trace for the context.
 	 */
 	btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
+	tcx->tc_feats = tcx->tc_tins.ti_root->tr_feats;
 
 	if (btr_root_empty(tcx)) { /* empty tree */
 		D_DEBUG(DB_TRACE, "Empty tree\n");
