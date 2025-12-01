@@ -139,6 +139,9 @@ heap_mbrt_get_mb(struct palloc_heap *heap, uint32_t zone_id);
 void
 heap_mbrt_log_alloc_failure(struct palloc_heap *heap, uint32_t zone_id);
 
+void
+heap_touch_umem_cache(struct palloc_heap *heap, void *addr, size_t size);
+
 int
 heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *zone_id);
 

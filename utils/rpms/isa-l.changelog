@@ -1,0 +1,41 @@
+%changelog
+* Wed Nov 19 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 2.31.1-8
+- Restore the RPM changelog, which has not been available since version 2.30.0-2
+
+* Fri Sep 12 2025  Jeff Olivier <jeffolivier@google.com> - 2.31.1-7
+- Fix leap package name
+
+* Mon Aug 11 2025  Jeff Olivier <jeffolivier@google.com> - 2.31.1-6
+- Switch to fpm build for RPMs
+- Update isa-l to 2.31.1
+
+* Fri May 19 2023 Brian J. Murrell <brian.murrell@intel> - 2.30.0-2
+- Disable static library build
+- Add debuginfo generation for Leap 15
+- Add hardened build flags for CentOS 7 and Leap 15
+
+* Thu Jan 28 2021 Brian J. Murrell <brian.murrell@intel> - 2.30.0-1
+- Update to latest
+- Add %%{_libdir}/pkgconfig/libisal.pc to -devel package
+
+* Tue Jun 16 2020 Brian J. Murrell <brian.murrell@intel> - 2.26.0-3
+- Add %%license files
+
+* Wed Oct 02 2019 John E. Malmberg <john.e.malmberg@intel> - 2.26.0-2
+- Fix some SUSE rpmlint packaging complaints
+
+* Wed May 15 2019 Brian J. Murrell <brian.murrell@intel> - 2.26.0-1
+- Update to latest
+- Split into a man utilities package with igizp and a library
+  package
+  - Obsoletes: the older isa-l packages accordingly
+
+* Tue May 07 2019 Brian J. Murrell <brian.murrell@intel> - 2.21.0-3
+- Bump release for RPM cache coherency
+
+* Fri May 03 2019 Brian J. Murrell <brian.murrell@intel> - 2.21.0-2
+- Use the more stable "archive" URL for the source
+- Define a make_build macro for SLES 12.3
+
+* Fri Apr 05 2019 Brian J. Murrell <brian.murrell@intel> - 2.21.0-1
+- initial package

@@ -1,4 +1,5 @@
 #!/bin/bash
+# (C) Copyright 2025 Google LLC
 root="$(realpath "$(dirname "$(dirname "$(dirname "${BASH_SOURCE[0]}")")")")"
 set_lib_name() {
   comp="$1"; shift
@@ -35,25 +36,25 @@ daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
 export daos_release
 
 export libfabric_version="1.22.0"
-export libfabric_release="4${distro_name}"
+export libfabric_release="5${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.0"
 export mercury_release="8${distro_name}"
 export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
-export argobots_release="3${distro_name}"
+export argobots_release="4${distro_name}"
 export argobots_full="${argobots_version}-${argobots_release}"
 export pmdk_version="2.1.2"
 export pmdk_release="1${distro_name}"
 export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.31.1"
-export isal_release="7${distro_name}"
+export isal_release="8${distro_name}"
 export isal_full="${isal_version}-${isal_release}"
-export isal_crypto_version="2.24.0"
-export isal_crypto_release="3${distro_name}"
+export isal_crypto_version="2.25.0"
+export isal_crypto_release="1${distro_name}"
 export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
-export daos_spdk_version="1.0.0"
-export daos_spdk_release="4${distro_name}"
+export daos_spdk_version="2.0.0"
+export daos_spdk_release="1${distro_name}"
 export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
 export fused_version="1.0.0"
 export fused_release="3${distro_name}"
