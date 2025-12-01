@@ -6106,8 +6106,10 @@ out_err:
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	int  idx_dfs, error = 0, rc;
-	char *full_path = NULL;
+	int              idx_dfs, error = 0, rc;
+	char            *full_path = NULL;
+	struct timespec  times_loc[2];
+	struct timespec *times_ptr;
 
 	if (next_utimensat == NULL) {
 		next_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -6125,18 +6127,27 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	}
 	_Pragma("GCC diagnostic pop")
 
+	if (times == NULL) {
+		clock_gettime(CLOCK_REALTIME, &times_loc[0]);
+		times_loc[1].tv_sec = times_loc[0].tv_sec;
+		times_loc[1].tv_nsec = times_loc[0].tv_nsec;
+		times_ptr = times_loc;
+	} else {
+		times_ptr = (struct timespec *)times;
+	}
+
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
-		return utimens_timespec(path, times, flags);
+		return utimens_timespec(path, times_ptr, flags);
 
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
 		goto out_err;
 
 	if (idx_dfs >= 0)
-		rc = utimens_timespec(full_path, times, flags);
+		rc = utimens_timespec(full_path, times_ptr, flags);
 	else
-		rc = next_utimensat(dirfd, path, times, flags);
+		rc = next_utimensat(dirfd, path, times_ptr, flags);
 
 	error = errno;
 	if (full_path) {
