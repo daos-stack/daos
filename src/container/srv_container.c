@@ -1992,7 +1992,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	int                 i;
 	int                 rc;
 
-	rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN, &fail_ranks);
+	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
 	if (rc) {
 		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
 		return;
@@ -2032,7 +2032,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_eph < ec_agg->ea_rdb_eph)
 			min_eph = ec_agg->ea_rdb_eph;
 
-		if (min_eph == ec_agg->ea_current_eph)
+		if (min_eph == ec_agg->ea_current_eph && ec_agg->ea_current_eph != 0)
 			continue;
 
 		/**
