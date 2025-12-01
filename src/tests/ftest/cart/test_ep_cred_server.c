@@ -1,10 +1,12 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #include <semaphore.h>
 
+#include <daos/dpar.h>
 #include "crt_utils.h"
 #include "test_ep_cred_common.h"
 
@@ -32,6 +34,9 @@ test_run(d_rank_t my_rank)
 
 	rc = crt_proto_register(&my_proto_fmt_0);
 	D_ASSERT(rc == 0);
+
+	if (grp_size > 1)
+		par_barrier(PAR_COMM_WORLD);
 
 	if (my_rank == 0) {
 		rc = crt_group_config_save(NULL, true);
