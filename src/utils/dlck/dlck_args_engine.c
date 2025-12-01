@@ -37,6 +37,10 @@ args_engine_init(struct dlck_args_engine *args)
 static int
 args_engine_check(struct argp_state *state, struct dlck_args_engine *args)
 {
+	if (args->storage_path == NULL) {
+		RETURN_FAIL(state, EINVAL, "Storage path not provided");
+	}
+
 	return 0;
 }
 

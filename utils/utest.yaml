@@ -190,6 +190,10 @@
   tests:
     - cmd: ["bin/ddb_tests"]
     - cmd: ["bin/ddb_ut"]
+- name: dlck
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/utils/dlck/tests/dlck_args_ut"]
 - name: Source metadata testing
   gha: True
   memcheck: False
