@@ -38,7 +38,7 @@ def build_tests(env, prereqs):
         tenv = denv.Clone()
         tenv.require('argobots', 'pmdk')
 
-        libs_server += ['vos', 'bio', 'abt', 'numa']
+        libs_server += ['vos', 'bio', 'ssl', 'abt', 'numa']
         vos_engine = tenv.StaticObject(['vos_engine.c'])
 
         vos_perf = tenv.d_program('vos_perf',

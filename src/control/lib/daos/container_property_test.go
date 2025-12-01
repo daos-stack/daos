@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -201,13 +202,13 @@ func TestDaos_ContainerProperty_RedunLevel(t *testing.T) {
 			var expStr string
 			switch inputKey {
 			case "1":
-				expStr = "rank (1)"
+				expStr = "rank"
 			case "2":
-				expStr = "node (2)"
+				expStr = "node"
 			case "rank":
-				expStr = "rank (1)"
+				expStr = "rank"
 			case "node":
-				expStr = "node (2)"
+				expStr = "node"
 			default:
 				t.Fatalf("untested key %q", inputKey)
 			}
@@ -218,7 +219,7 @@ func TestDaos_ContainerProperty_RedunLevel(t *testing.T) {
 	t.Run("unexpected level", func(t *testing.T) {
 		testProp := newTestContainerProperty(ContainerPropRedunLevel)
 		testProp.SetValue(42)
-		test.AssertEqual(t, "(42)", testProp.StringValue(), "unexpected string value")
+		test.AssertEqual(t, fmt.Sprintf("property %q: invalid value 0x2a", testProp.Name), testProp.StringValue(), "unexpected string value")
 	})
 }
 
@@ -233,15 +234,15 @@ func TestDaos_ContainerProperty_RedunFactor(t *testing.T) {
 			var expStr string
 			switch inputKey {
 			case "0":
-				expStr = "rd_fac0"
+				expStr = "0"
 			case "1":
-				expStr = "rd_fac1"
+				expStr = "1"
 			case "2":
-				expStr = "rd_fac2"
+				expStr = "2"
 			case "3":
-				expStr = "rd_fac3"
+				expStr = "3"
 			case "4":
-				expStr = "rd_fac4"
+				expStr = "4"
 			default:
 				t.Fatalf("untested key %q", inputKey)
 			}
@@ -323,19 +324,64 @@ func testReadOnlyContainerProperty(t *testing.T, propType ContainerPropType) {
 	test.CmpErr(t, errors.Errorf("property %q is read-only", testProp.Name), testProp.Set("whoops"))
 }
 
-func TestDaos_ContainerProperty_Layout(t *testing.T) {
+func TestDaos_ContainerProperty_LayoutValues(t *testing.T) {
 	testReadOnlyContainerProperty(t, ContainerPropLayoutType)
 
-	t.Run("valid layout", func(t *testing.T) {
-		testProp := newTestContainerProperty(ContainerPropLayoutType)
-		testProp.SetValue(uint64(ContainerLayoutPOSIX))
-		test.AssertEqual(t, testProp.StringValue(), fmt.Sprintf("%s (%d)", ContainerLayoutPOSIX, ContainerLayoutPOSIX), "unexpected string value")
-	})
-	t.Run("unknown layout", func(t *testing.T) {
-		testProp := newTestContainerProperty(ContainerPropLayoutType)
-		testProp.SetValue(uint64(ContainerLayoutUnknown))
-		test.AssertEqual(t, testProp.StringValue(), "unknown (0)", "unexpected string value")
-	})
+	for name, tc := range map[string]struct {
+		propVal uint64
+		expStr  string
+	}{
+		"Valid unknown layout": {
+			propVal: uint64(ContainerLayoutUnknown),
+			expStr:  "unknown",
+		},
+		"Valid POSIX layout": {
+			propVal: uint64(ContainerLayoutPOSIX),
+			expStr:  "POSIX",
+		},
+		"Valid HDF5 layout": {
+			propVal: uint64(ContainerLayoutHDF5),
+			expStr:  "HDF5",
+		},
+		"Valid PYTHON layout": {
+			propVal: uint64(ContainerLayoutPython),
+			expStr:  "PYTHON",
+		},
+		"Valid SPARK layout": {
+			propVal: uint64(ContainerLayoutSpark),
+			expStr:  "SPARK",
+		},
+		"Valid DATABASE layout": {
+			propVal: uint64(ContainerLayoutDatabase),
+			expStr:  "DATABASE",
+		},
+		"Valid ROOT layout": {
+			propVal: uint64(ContainerLayoutRoot),
+			expStr:  "ROOT",
+		},
+		"Valid SEISMIC layout": {
+			propVal: uint64(ContainerLayoutSeismic),
+			expStr:  "SEISMIC",
+		},
+		"Valid METEO layout": {
+			propVal: uint64(ContainerLayoutMeteo),
+			expStr:  "METEO",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testProp := newTestContainerProperty(ContainerPropLayoutType)
+			testProp.SetValue(tc.propVal)
+
+			test.AssertEqual(t, tc.expStr, testProp.StringValue(), "unexpected string value")
+		})
+	}
+}
+
+func TestDaos_ContainerProperty_LayoutDescription(t *testing.T) {
+	testReadOnlyContainerProperty(t, ContainerPropLayoutType)
+
+	testProp := newTestContainerProperty(ContainerPropLayoutType)
+	test.AssertEqual(t, testProp.Description, "Layout Type (unknown, POSIX, HDF5, PYTHON, SPARK, DATABASE, ROOT, SEISMIC, METEO)", "unexpected description")
 }
 
 func TestDaos_ContainerProperty_ACL(t *testing.T) {
