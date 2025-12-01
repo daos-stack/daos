@@ -1,12 +1,13 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 from apricot import TestWithServers
+from ior_utils import write_data
+from exception_utils import CommandFailure
 from general_utils import DaosTestError, bytes_to_human, human_to_bytes
 from run_utils import run_remote
 
@@ -21,6 +22,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
     :avocado: recursive
     """
 
+    IOR_NOSPACE = "No space left on device"
     DER_NOSPACE = "-1007"
 
     def __init__(self, *args, **kwargs):
@@ -60,7 +62,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         err_regex += r"gc_reclaim_pool failed DER_NOSPACE.+$'"
         log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
 
-        cmd = "find {} -type f -regextype egrep ".format(log_dir)
+        cmd = "find {} -path {}/control_metadata -prune -type f -regextype egrep ".format(log_dir, log_dir)
         cmd += r"-regex '.*/daos_server\.log\.[[:digit:]]+' "
         cmd += r"-exec grep -q -E -e " + err_regex + r" {} ';' -print"
         result = run_remote(self.log, self.hostlist_servers, cmd)
@@ -87,25 +89,24 @@ class BoundaryPoolContainerSpace(TestWithServers):
         self.log.info("--%i.(3)Pool free space before writing data to container %s (%i bytes)",
                       test_loop, bytes_to_human(free_space_init), free_space_init)
 
+
         # Write random data to container until pool out of space
-        base_data_size = container.data_size.value
+        # base_data_size = container.data_size.value
+        base_data_size = int(self.params.get("block_size", "/run/ior/*"))
+        num_of_processes = int(self.params.get("processes", "/run/ior/*"))
         data_written = 0
         while True:
-            new_data_size = self.random.randint(base_data_size * 0.5, base_data_size * 1.5)  # nosec
-            container.data_size.update(new_data_size, "data_size")
-
             try:
-                container.write_objects()
-            except DaosTestError as excep:
-                if self.DER_NOSPACE in str(excep):
+                # container.write_objects()
+                result = write_data(self, container)
+            except CommandFailure as excep:
+                if self.IOR_NOSPACE in str(excep):
                     self.log.info(
-                        "--%i.(4)DER_NOSPACE %s detected, pool is unable for an additional"
-                        " %s (%i bytes) object", test_loop, self.DER_NOSPACE,
-                        bytes_to_human(container.data_size.value), container.data_size.value)
+                        "--%i.(4)DER_NOSPACE %s detected",test_loop, self.IOR_NOSPACE)
                     break
                 self.fail("Test-loop {0} exception while writing object: {1}".format(
                     test_loop, repr(excep)))
-            data_written += new_data_size
+            data_written += (base_data_size * num_of_processes)
 
         # display free space and data written
         free_space_before_destroy = self.pool.get_pool_free_space()
