@@ -6127,6 +6127,7 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	}
 	_Pragma("GCC diagnostic pop")
 
+	/* clang-format off */
 	if (times == NULL) {
 		clock_gettime(CLOCK_REALTIME, &times_loc[0]);
 		times_loc[1].tv_sec = times_loc[0].tv_sec;
@@ -6135,6 +6136,7 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	} else {
 		times_ptr = (struct timespec *)times;
 	}
+	/* clang-format on */
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
