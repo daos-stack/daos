@@ -2327,9 +2327,12 @@ org_func:
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	if (two_args)
-		return real_open(pathname, oflags);
+		fd_kernel = real_open(pathname, oflags);
 	else
-		return real_open(pathname, oflags, mode);
+		fd_kernel = real_open(pathname, oflags, mode);
+	if (fd_kernel >= FD_FILE_BASE && fd_kernel < (FD_DIR_BASE + MAX_OPENED_DIR))
+		D_WARN("Large fd allocated by kernel may be conflicting with fake fd\n");
+	return fd_kernel;
 
 out_error:
 	if (dfs_mt != NULL)
@@ -2346,6 +2349,8 @@ out_compatible:
 	if (dfs_mt != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
+	if (fd_kernel >= FD_FILE_BASE && fd_kernel < (FD_DIR_BASE + MAX_OPENED_DIR))
+		D_WARN("Large fd allocated by kernel may be conflicting with fake fd\n");
 	return fd_kernel;
 }
 
