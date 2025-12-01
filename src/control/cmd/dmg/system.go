@@ -343,6 +343,10 @@ func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
 		errOut = errors.Wrapf(errOut, "system %s failed", opStr)
 	}()
 
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
@@ -355,6 +359,14 @@ func (cmd *systemDrainCmd) execute(reint bool) (errOut error) {
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
 	req.Reint = reint
+
+	// Safe to set host list on request because cmd is not a hostListCmd. Need to do this so
+	// hostList can be used when server config is not available to derive it from.
+	hosts, err := common.ParseHostList(cmd.config.HostList, cmd.config.ControlPort)
+	if err != nil {
+		return err
+	}
+	req.SetHostList(hosts)
 
 	resp, err := control.SystemDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -775,6 +787,14 @@ func (cmd *systemSelfHealEvalCmd) Execute(_ []string) (errOut error) {
 	}
 
 	req := &control.SystemSelfHealEvalReq{}
+
+	// Safe to set host list on request because cmd is not a hostListCmd. Need to do this so
+	// hostList can be used when server config is not available to derive it from.
+	hosts, err := common.ParseHostList(cmd.config.HostList, cmd.config.ControlPort)
+	if err != nil {
+		return err
+	}
+	req.SetHostList(hosts)
 
 	resp, err := control.SystemSelfHealEval(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {

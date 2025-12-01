@@ -649,10 +649,11 @@ func SystemDrain(ctx context.Context, rpcClient UnaryInvoker, req *SystemDrainRe
 	}
 
 	pbReq := &mgmtpb.SystemDrainReq{
-		Hosts: req.Hosts.String(),
-		Ranks: req.Ranks.String(),
-		Sys:   req.Sys, // getSystem() used in control API drain/reint later in call-stack.
-		Reint: req.Reint,
+		Hosts:        req.Hosts.String(),
+		Ranks:        req.Ranks.String(),
+		Sys:          req.Sys, // getSystem() used in control API drain/reint later in call-stack.
+		Reint:        req.Reint,
+		RequestHosts: req.getHostList(),
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemDrain(ctx, pbReq)
@@ -1244,7 +1245,7 @@ func SystemGetProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetPr
 	return resp, nil
 }
 
-// SystemRebuildanageReq sends an interactive pool rebuild request to each pool in a DAOS system.
+// SystemRebuildManageReq sends an interactive pool rebuild request to each pool in a DAOS system.
 type SystemRebuildManageReq struct {
 	unaryRequest
 	msRequest
@@ -1337,7 +1338,8 @@ func SystemSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *System
 	}
 
 	pbReq := &mgmtpb.SystemSelfHealEvalReq{
-		Sys: req.getSystem(rpcClient),
+		Sys:          req.getSystem(rpcClient),
+		RequestHosts: req.getHostList(),
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemSelfHealEval(ctx, pbReq)

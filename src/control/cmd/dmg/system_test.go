@@ -331,9 +331,13 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system drain with multiple hosts",
 			"system drain --rank-hosts foo-[0,1,4]",
 			strings.Join([]string{
-				printRequest(t, withSystem(
-					withHosts(&control.SystemDrainReq{}, "foo-[0-1,4]"),
-					"daos_server")),
+				printRequest(t,
+					withHostList(
+						withSystem(
+							withHosts(&control.SystemDrainReq{},
+								"foo-[0-1,4]"),
+							"daos_server"),
+						"localhost:10001")),
 			}, " "),
 			nil,
 		},
@@ -341,9 +345,12 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system drain with multiple ranks",
 			"system drain --ranks 0,1,4",
 			strings.Join([]string{
-				printRequest(t, withSystem(
-					withRanks(&control.SystemDrainReq{}, 0, 1, 4),
-					"daos_server")),
+				printRequest(t,
+					withHostList(
+						withSystem(
+							withRanks(&control.SystemDrainReq{}, 0, 1, 4),
+							"daos_server"),
+						"localhost:10001")),
 			}, " "),
 			nil,
 		},
@@ -357,9 +364,13 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system reintegrate with multiple hosts",
 			"system reintegrate --rank-hosts foo-[0,1,4]",
 			strings.Join([]string{
-				printRequest(t, withSystem(
-					withHosts(&control.SystemDrainReq{Reint: true}, "foo-[0-1,4]"),
-					"daos_server")),
+				printRequest(t,
+					withHostList(
+						withSystem(
+							withHosts(&control.SystemDrainReq{Reint: true},
+								"foo-[0-1,4]"),
+							"daos_server"),
+						"localhost:10001")),
 			}, " "),
 			nil,
 		},
@@ -367,9 +378,13 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system reintegrate with multiple ranks",
 			"system reintegrate --ranks 0,1,4",
 			strings.Join([]string{
-				printRequest(t, withSystem(
-					withRanks(&control.SystemDrainReq{Reint: true}, 0, 1, 4),
-					"daos_server")),
+				printRequest(t,
+					withHostList(
+						withSystem(
+							withRanks(&control.SystemDrainReq{Reint: true},
+								0, 1, 4),
+							"daos_server"),
+						"localhost:10001")),
 			}, " "),
 			nil,
 		},
@@ -439,7 +454,8 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system self-heal evaluate",
 			"system self-heal eval",
 			strings.Join([]string{
-				printRequest(t, &control.SystemSelfHealEvalReq{}),
+				printRequest(t, withHostList(
+					&control.SystemSelfHealEvalReq{}, "localhost:10001")),
 			}, " "),
 			nil,
 		},

@@ -1606,7 +1606,6 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagPoolExclude) {
 		return new(mgmtpb.DaosResp), nil
 	}
-
 	if err := svc.selfHealNotifyPSes(ctx, selfHeal, pbReq.RequestHosts); err != nil {
 		return nil, errors.Wrapf(err, "notify pool services of self_heal=%q", selfHeal)
 	}

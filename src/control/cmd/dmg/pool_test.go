@@ -138,7 +138,7 @@ func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) str
 	return test.CreateTestFile(t, dir, control.FormatACLDefault(acl))
 }
 
-func TestPoolCommands(t *testing.T) {
+func TestDmg_PoolCommands(t *testing.T) {
 	testSizeStr := "512GiB"
 	testSize := 549755813888
 	eUsr, err := user.Current()
