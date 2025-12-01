@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -718,6 +719,14 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
+	// Verify bdev_exclude doesn't clash with any configured bdev.
+	pciAddrs := cfg.GetBdevConfigs().NVMeBdevs().Devices()
+	for _, a := range pciAddrs {
+		if common.Includes(cfg.BdevExclude, a) {
+			return FaultConfigBdevExcludeClash
+		}
+	}
+
 	return nil
 }
 
@@ -911,4 +920,17 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	}
 
 	return nil
+}
+
+// GetBdevConfigs retrieves all engine bdev storage tier configs from a server configuration.
+func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
+	if cfg == nil {
+		return
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
+	}
+
+	return
 }
