@@ -1115,6 +1115,12 @@ out_eventual:
 	return rc;
 }
 
+static inline bool
+cont_iv_retryable_error(int rc)
+{
+	return daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY;
+}
+
 static int
 cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 				  daos_epoch_t stable_eph, unsigned int shortcut,
@@ -1137,7 +1143,7 @@ cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_ag
 
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry), shortcut, sync_mode,
 			    false);
-	if (rc)
+	if (rc && !cont_iv_retryable_error(rc))
 		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
 			DP_UUID(cont_uuid), op, DP_RC(rc));
 	return rc;
@@ -1158,7 +1164,7 @@ cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 			break;
 
 		/* Only retry on specific errors */
-		if (!daos_rpc_retryable_rc(rc) && rc != -DER_NOTLEADER && rc != -DER_BUSY)
+		if (!cont_iv_retryable_error(rc))
 			break;
 
 		if (req && dss_ult_exiting(req)) {
