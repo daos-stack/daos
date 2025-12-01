@@ -212,11 +212,15 @@ class CodeCoverage():
         Returns:
             bool: False if there is a problem setting up gcov code coverage; True otherwise
         """
-        source = os.environ.get("GCOV_PREFIX", "/tmp")
-        other = ["-print", "-delete"]
-        logger.debug("Removing any existing *.gcda files in %s", source)
-        if not run_remote(logger, hosts, find_command(source, "*.gcda", None, other)).passed:
-            message = "Error removing gcov code coverage data files on at least one host"
+        prefix = os.environ.get("GCOV_PREFIX", "/tmp/gcov")
+        result = run_remote(logger, hosts, f"rm -fr {prefix}")
+        if not result.passed:
+            message = f"Error removing existing gcov directory on {result.failed_hosts}"
+            result.fail_test(logger, "Run", message, None)
+            return False
+        result = run_remote(logger, hosts, f"mkdir -p {prefix}")
+        if not result.passed:
+            message = f"Error creating gcov directory on {result.failed_hosts}"
             result.fail_test(logger, "Run", message, None)
             return False
         return True
@@ -234,7 +238,13 @@ class CodeCoverage():
             bool: False if there is a problem retrieving gcov code coverage; True otherwise
         """
         status = 0
-        source = os.environ.get("GCOV_PREFIX", "/tmp")
+        source = os.environ.get("GCOV_PREFIX", "/tmp/gcov")
+
+        # Log any generated *.gcda files
+        other = ["-print", "-delete"]
+        logger.debug("Listing any *.gcda files in %s", source)
+        run_remote(logger, hosts, find_command(source, "*.gcda", None, other))
+
         # Create a code coverage report on each host
         _report = os.path.join(job_results_dir, "code_coverage", "code_coverage.json")
         _gcovr = os.path.join(os.path.dirname(sys.executable), "gcovr")
