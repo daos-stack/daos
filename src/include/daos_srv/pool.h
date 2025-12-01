@@ -371,7 +371,8 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 
 int
 map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
-
+int
+map_ranks_failed(const struct pool_map *map, d_rank_list_t *ranks);
 void
 map_ranks_fini(d_rank_list_t *ranks);
 
@@ -479,7 +480,8 @@ enum ds_pool_dir {
 enum ds_pool_tgt_status {
 	DS_POOL_TGT_NONEXIST,
 	DS_POOL_TGT_EMPTY,
-	DS_POOL_TGT_NORMAL
+	DS_POOL_TGT_NORMAL,
+	DS_POOL_TGT_ORPHAN
 };
 
 int

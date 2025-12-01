@@ -255,6 +255,7 @@ get_hae(struct ds_cont_child *cont, bool vos_agg)
 	/* EC aggregation */
 	if (!vos_agg)
 		return cont->sc_ec_agg_eph;
+
 	/*
 	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
 	 * in vos_aggregate()
@@ -2582,8 +2583,15 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 					min_eph = min(min_eph, ec_eph->ce_ephs[i]);
 			}
 
-			if (min_eph == 0 || min_eph == DAOS_EPOCH_MAX ||
-			    min_eph <= ec_eph->ce_last_eph) {
+			if (min_eph <= ec_eph->ce_last_eph &&
+			    pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+				continue;
+
+			/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
+			 * when min_eph and ce_last_eph are both zero.
+			 */
+			if (min_eph == DAOS_EPOCH_MAX ||
+			    (ec_eph->ce_last_eph != 0 && min_eph <= ec_eph->ce_last_eph)) {
 				if (min_eph > 0 && min_eph < ec_eph->ce_last_eph)
 					D_ERROR("ignore for now "DF_X64" < "DF_X64
 						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,

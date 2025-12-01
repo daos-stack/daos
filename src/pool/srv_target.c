@@ -489,7 +489,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	D_FREE(path);
 
 	if (rc != 0) {
-		if (!engine_in_check() || rc != -DER_NONEXIST) {
+		if (rc != -DER_NONEXIST) {
 			DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
 				  DF_UUID": Open VOS pool failed.", DP_UUID(child->spc_uuid));
 			goto out;

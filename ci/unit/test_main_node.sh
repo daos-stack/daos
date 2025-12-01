@@ -93,5 +93,5 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
-HTTPS_PROXY="${HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
+HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
