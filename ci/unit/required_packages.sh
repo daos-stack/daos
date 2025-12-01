@@ -3,17 +3,11 @@
 set -eu
 
 # No longer used but provided by pipeline-lib
-# distro="$1"
+distro="$1"
 # quick_build="${2:-false}"
 
 OPENMPI_VER=""
 PY_MINOR_VER=""
-image_version="${image_version-}"
-distro="${image_version%%.*}"
-DISTRO_VERSION="${DISTRO_VERSION-}"
-echo "\n image_version is: $image_version \n"
-echo "then distro is: $distro\n"
-echo "DISTRO_VERSION is $DISTRO_VERSION"
 
 export DISTRO="${distro:-el8}"
 pkgs="boost-python3$PY_MINOR_VER-devel                               \
@@ -48,4 +42,5 @@ pkgs="boost-python3$PY_MINOR_VER-devel                               \
 
 # output with trailing newline suppressed
 echo  -e "$pkgs\c"
+echo "DISTRO is: $DISTRO"
 exit 0
