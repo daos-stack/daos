@@ -42,5 +42,4 @@ pkgs="boost-python3$PY_MINOR_VER-devel                               \
 
 # output with trailing newline suppressed
 echo  -e "$pkgs\c"
-echo "DISTRO is: $DISTRO"
 exit 0
