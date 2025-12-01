@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
   Copyright 2023-2024 Intel Corporation.
+  Copyright 2025 Google LLC
   Copyright 2025 Hewlett Packard Enterprise Development LP
   All rights reserved.
 
@@ -270,7 +271,7 @@ class AIO():
         }},
         {{
           "params": {{
-            "retry_count": 4,
+            "bdev_retry_count": 4,
             "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
             "action_on_timeout": "none",
