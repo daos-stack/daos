@@ -2606,7 +2606,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			D_DEBUG(DB_MD, "Update eph "DF_X64" "DF_UUID"\n",
 				min_eph, DP_UUID(ec_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns, ec_eph->ce_cont_uuid,
-						       min_eph);
+						       min_eph, pool->sp_ec_ephs_req);
 			if (rc == 0)
 				ec_eph->ce_last_eph = min_eph;
 			else
