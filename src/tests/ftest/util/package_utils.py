@@ -32,7 +32,7 @@ def find_packages(log, hosts, pattern, user=None):
     return installed
 
 
-def install_packages(log, hosts, packages, user=None, timeout=600):
+def install_packages(log, hosts, packages, user=None, timeout=600, allowerasing=False):
     """Install the packages on the hosts.
 
     Args:
@@ -41,12 +41,17 @@ def install_packages(log, hosts, packages, user=None, timeout=600):
         packages (list): a list of packages to install
         user (str, optional): user to use when installing the packages. Defaults to None.
         timeout (int, optional): timeout for the dnf install command. Defaults to 600.
+        allowerasing (bool, optional): whether to use dnf --allowerasing. Defaults to False.
 
     Returns:
         CommandResult: the 'dnf install' command results
     """
     log.info('Installing packages on %s: %s', hosts, ', '.join(packages))
-    command = command_as_user(' '.join(['dnf', 'install', '-y'] + packages), user)
+    command = ['dnf', 'install', '-y']
+    if allowerasing:
+        command.append('--allowerasing')
+    command.extend(packages)
+    command = command_as_user(' '.join(command), user)
     return run_remote(log, hosts, command, timeout=timeout)
 
 

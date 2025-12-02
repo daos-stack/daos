@@ -514,6 +514,10 @@ bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt, bool log_err, bool updat
 	if (xs_ctxt == NULL)
 		return 0;
 
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_NVME_HEALTH)) { /** fault injection */
+		return daos_errno2der(daos_fail_value_get());
+	}
+
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = xs_ctxt->bxc_xs_blobstores[st];
 
@@ -693,11 +697,20 @@ bio_media_error(void *msg_arg)
 			 "Device: "DF_UUID" csum error logged from tgt_id:%d\n",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
+	case MET_IO_STALLED:
+		/* I/O stalling has been reported for this device */
+		if (bdh->bdh_io_stalled)
+			goto out;
+		bdh->bdh_io_stalled = 1;
+		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
+			 "Device: " DF_UUID " stalled I/O logged from tgt_id:%d\n",
+			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
+		break;
 	}
 
 	ras_notify_event(RAS_DEVICE_MEDIA_ERROR, err_str, RAS_TYPE_INFO, RAS_SEV_ERROR,
 			 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+out:
 	auto_faulty_detect(mem->mem_bs);
-
 	D_FREE(mem);
 }

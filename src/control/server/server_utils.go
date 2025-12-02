@@ -735,7 +735,7 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
-func isSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
+func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
 	selfHeal, err := svc.getSysSelfHeal()
 	if err != nil {
 		if system.IsErrSystemAttrNotFound(err) {
@@ -747,7 +747,7 @@ func isSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
 
 	svc.log.Tracef("system property self_heal='%+v'", selfHeal)
 
-	return daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagExclude), nil
+	return daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagExclude), nil
 }
 
 func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
@@ -760,7 +760,7 @@ func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
 	msg := fmt.Sprintf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation,
 		ts)
 
-	isSet, err := isSelfHealExcludeSet(srv.mgmtSvc)
+	isSet, err := isSysSelfHealExcludeSet(srv.mgmtSvc)
 	if err != nil {
 		srv.log.Errorf("handle rank dead: %s (%s)", err, msg)
 		return

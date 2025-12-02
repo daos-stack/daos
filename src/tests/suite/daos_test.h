@@ -42,10 +42,21 @@
 #include <daos/tests_lib.h>
 #include <daos.h>
 #include <daos_mgmt.h>
+#include <daos_fs.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
+
+#define T_BEGIN()                                                                                  \
+	do {                                                                                       \
+		printf("BEGIN %s()\n", __FUNCTION__);                                              \
+	} while (0)
+
+#define T_END()                                                                                    \
+	do {                                                                                       \
+		printf("END %s() success\n", __FUNCTION__);                                        \
+	} while (0)
 
 /** Server crt group ID */
 extern const char *server_group;
@@ -53,9 +64,6 @@ extern const char *server_group;
 /** pool incremental reintegration rebuild */
 extern int dt_incr_reint;
 extern bool dt_no_punch;
-
-/** pool interactive rebuild */
-extern bool         dt_rb_interactive;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
@@ -379,6 +387,7 @@ int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_extend_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_int_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_inc_reint_test(int rank, int size, int *tests, int test_size);
 int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
@@ -411,6 +420,8 @@ bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
 void
 test_rebuild_wait_to_start(test_arg_t **args, int args_cnt);
+void
+test_rebuild_wait_to_start_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_version);
 void
     test_rebuild_wait_to_error(test_arg_t **args, int args_cnt);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
@@ -500,6 +511,8 @@ int
 rebuild_start_with_dmg(void *data);
 int
      rebuild_resume_wait(void *data);
+int
+     rebuild_resume_wait_to_start(void *data);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,
@@ -539,8 +552,10 @@ void make_buffer(char *buffer, char start, int total);
 
 bool oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr);
 uint32_t test_ec_get_parity_off(daos_key_t *dkey, struct daos_oclass_attr *oca);
+
 int reintegrate_inflight_io(void *data);
-int reintegrate_inflight_io_verify(void *data);
+int
+reintegrate_inflight_io_verify(void *data);
 
 static inline void
 daos_test_print(int rank, char *message)
@@ -749,5 +764,73 @@ void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fa
 
 void
 test_verify_cont(test_arg_t *arg, struct test_pool *pool, struct test_cont *conts, int cont_nr);
+
+/* Common types and functions for drain rebuild tests */
+
+#define EXTEND_DRAIN_OBJ_NR 5
+#define WRITE_SIZE          (1048576 * 5)
+
+struct extend_drain_cb_arg {
+	daos_obj_id_t *oids;
+	dfs_t         *dfs_mt;
+	dfs_obj_t     *dir;
+	d_rank_t       rank;
+	uint32_t       objclass;
+	int            opc;
+};
+
+enum extend_drain_opc {
+	EXTEND_DRAIN_PUNCH,
+	EXTEND_DRAIN_STAT,
+	EXTEND_DRAIN_ENUMERATE,
+	EXTEND_DRAIN_FETCH,
+	EXTEND_DRAIN_UPDATE,
+	EXTEND_DRAIN_OVERWRITE,
+	EXTEND_DRAIN_WRITELOOP,
+};
+
+extern const char *extend_drain_opstrs[];
+
+void
+extend_drain_read_check(dfs_t *dfs_mt, dfs_obj_t *dir, uint32_t objclass, uint32_t objcnt,
+			daos_size_t total_size, char start_char);
+void
+extend_drain_write(dfs_t *dfs_mt, dfs_obj_t *dir, uint32_t objclass, uint32_t objcnt,
+		   daos_size_t total_size, char write_char, daos_obj_id_t *oids);
+void
+extend_drain_check(dfs_t *dfs_mt, dfs_obj_t *dir, int objclass, int opc);
+void
+dfs_extend_drain_common(void **state, int opc, uint32_t objclass,
+			test_rebuild_cb_t extend_drain_cb_fn);
+
+/* Common types and functions for extend rebuild tests */
+
+#define EXTEND_OBJ_NR 1000
+
+struct extend_cb_arg {
+	daos_obj_id_t *oids;
+	dfs_t         *dfs_mt;
+	dfs_obj_t     *dir;
+	d_rank_t       rank;
+	int            opc;
+	bool           kill;
+};
+
+enum extend_opc {
+	EXTEND_PUNCH,
+	EXTEND_STAT,
+	EXTEND_ENUMERATE,
+	EXTEND_FETCH,
+	EXTEND_UPDATE,
+};
+
+extern const char *extend_opstrs[];
+
+void
+dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kill);
+void
+extend_read_check(dfs_t *dfs_mt, dfs_obj_t *dir);
+void
+extend_write(dfs_t *dfs_mt, dfs_obj_t *dir);
 
 #endif

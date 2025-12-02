@@ -100,8 +100,54 @@ Commands:
   load             Load a value to a vos path.
   ls               List containers, objects, dkeys, akeys, and values
   open             Opens the vos file at <path>
+  prov_mem         Prepare memory environment for md-on-ssd mode
   rm               Remove a branch of the VOS tree.
   rm_ilog          Remove all the ilog entries
   smd_sync         Restore the SMD file with backup from blob
   update_vea       Alter the VEA tree to mark a region as free.
+```
+
+## prov_mem Command
+
+The `prov_mem` command prepares the memory environment for md-on-ssd mode by setting up a tmpfs mount and recreating VOS files on it.
+
+### Usage
+
+```
+prov_mem [Options] <db_path> <tmpfs_mount>
+```
+
+### Arguments
+
+- `<db_path>` - Path to the sys db
+- `<tmpfs_mount>` - Path to the tmpfs mountpoint
+
+### Options
+
+- `-s, --tmpfs_size` - Specify tmpfs size in GiB for tmpfs_mount. By default, the total size of all VOS files will be automatically calculated and used.
+
+### Description
+
+This command is used when working with DAOS in md-on-ssd (metadata-on-SSD) mode. It:
+
+1. Verifies the system is running in MD-on-SSD mode
+2. Creates a tmpfs mount at the specified path (if not already mounted)
+3. Sets up the necessary directory structure
+4. Recreates VOS pool target files on the tmpfs mount
+
+### Examples
+
+```bash
+# Prepare memory environment with auto-calculated tmpfs size
+ddb -R "prov_mem /path/to/sys/db /mnt/tmpfs"
+
+# Prepare memory environment with specific tmpfs size of 16 GiB
+ddb -R "prov_mem -s 16 /path/to/sys/db /mnt/tmpfs"
+```
+
+### Notes
+
+- The tmpfs_mount path must not already be a mountpoint, otherwise the command will fail with a busy error
+- If tmpfs_size is not specified, the size will be automatically calculated based on the total size of all VOS files
+- This command requires the system to be configured for MD-on-SSD mode
 ```

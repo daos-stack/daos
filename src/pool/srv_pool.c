@@ -3968,10 +3968,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/*
-	 * Simply serialize this whole RPC with rsvc_step_{up,down}_cb() and
-	 * ds_rsvc_stop().
-	 */
 	ABT_mutex_lock(svc->ps_rsvc.s_mutex);
 
 	if (svc->ps_rsvc.s_stop) {
@@ -3990,9 +3986,22 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_MD, DF_UUID": campaign: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 	}
 
+	if (ds_rsvc_get_state(&svc->ps_rsvc) == DS_RSVC_UP) {
+		D_DEBUG(DB_MD, DF_UUID ": already UP\n", DP_UUID(svc->ps_uuid));
+		rc = 0;
+		goto out_mutex;
+	} else if (ds_rsvc_get_state(&svc->ps_rsvc) != DS_RSVC_UP_EMPTY) {
+		D_DEBUG(DB_MD, DF_UUID ": not yet UP_EMPTY: state=%s\n", DP_UUID(svc->ps_uuid),
+			ds_rsvc_state_str(ds_rsvc_get_state(&svc->ps_rsvc)));
+		rc = -DER_NOTLEADER;
+		goto out_mutex;
+	}
+
+	ds_rsvc_begin_stepping_up(&svc->ps_rsvc);
+
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, RDB_NIL_TERM, &tx);
 	if (rc != 0)
-		D_GOTO(out_mutex, rc);
+		goto out_stepping_up;
 	ABT_rwlock_wrlock(svc->ps_lock);
 	ds_cont_wrlock_metadata(svc->ps_cont_svc);
 
@@ -4064,32 +4073,14 @@ out_tx:
 	ds_cont_unlock_metadata(svc->ps_cont_svc);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-	if (rc != 0)
-		D_GOTO(out_mutex, rc);
 
-	if (ds_rsvc_get_state(&svc->ps_rsvc) == DS_RSVC_UP_EMPTY) {
-		/*
-		 * The DB is no longer empty. Since the previous
-		 * pool_svc_step_up_cb() call didn't finish stepping up due to
-		 * an empty DB, and there hasn't been a pool_svc_step_down_cb()
-		 * call yet, we should call pool_svc_step_up() to finish
-		 * stepping up.
-		 */
-		D_DEBUG(DB_MD, DF_UUID": trying to finish stepping up\n",
-			DP_UUID(in->pri_op.pi_uuid));
-		ABT_mutex_unlock(svc->ps_rsvc.s_mutex);
-		if (DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_STEP_UP))
-			rc = -DER_GRPVER;
-		else
-			rc = pool_svc_step_up_cb(&svc->ps_rsvc);
-		ABT_mutex_lock(svc->ps_rsvc.s_mutex);
-		if (rc != 0) {
-			D_ASSERT(rc != DER_UNINIT);
-			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
-			D_GOTO(out_mutex, rc);
-		}
-		ds_rsvc_set_state(&svc->ps_rsvc, DS_RSVC_UP);
-	}
+out_stepping_up:
+	rc = ds_rsvc_end_stepping_up(&svc->ps_rsvc, rc, DS_RSVC_UP_EMPTY);
+	if (rc != 0)
+		goto out_mutex;
+	D_ASSERTF(ds_rsvc_get_state(&svc->ps_rsvc) == DS_RSVC_UP,
+		  DF_UUID ": stepped up from UP_EMPTY: %s\n", DP_UUID(svc->ps_uuid),
+		  ds_rsvc_state_str(ds_rsvc_get_state(&svc->ps_rsvc)));
 
 out_mutex:
 	ABT_mutex_unlock(svc->ps_rsvc.s_mutex);
@@ -7243,7 +7234,7 @@ log_unavailable_targets(struct pool_svc *svc, struct pool_map *map)
 		if (doms[i].do_comp.co_status & PO_COMP_ST_DOWN) {
 			D_ERROR(DF_UUID ":  rank %u\n", DP_UUID(svc->ps_uuid),
 				doms[i].do_comp.co_rank);
-		} else if (doms[i].do_comp.co_status & PO_COMP_ST_UPIN) { // XXX: ask Xuezhao
+		} else if (doms[i].do_comp.co_status & PO_COMP_ST_UPIN) {
 			int j;
 
 			for (j = 0; j < doms[i].do_target_nr; j++)
@@ -7710,10 +7701,11 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 }
 
 int
-ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
+ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
+			   uint32_t *reclaim_ver)
 {
 	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, true, list, NULL, NULL, NULL,
-					NULL, NULL, NULL);
+					NULL, reclaim_ver, NULL);
 }
 
 int

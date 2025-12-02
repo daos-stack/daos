@@ -14,12 +14,17 @@
 #ifndef __ILOG_INTERNAL_H__
 #define __ILOG_INTERNAL_H__
 
-/* 4 bit magic number + version */
+/* 4-bit magic number + 24-bits version + 4-bits flags */
 #define ILOG_MAGIC              0x00000006
 #define ILOG_MAGIC_BITS         4
 #define ILOG_MAGIC_MASK         ((1 << ILOG_MAGIC_BITS) - 1)
+#define ILOG_VERSION_BITS       24
 #define ILOG_VERSION_INC        (1 << ILOG_MAGIC_BITS)
-#define ILOG_VERSION_MASK       ~(ILOG_VERSION_INC - 1)
+#define ILOG_FLAGS_SHIFT        (ILOG_MAGIC_BITS + ILOG_VERSION_BITS)
+#define ILOG_FLAGS_BITS         (32 - ILOG_FLAGS_SHIFT)
+#define ILOG_FLAGS_MAX          ((1 << ILOG_FLAGS_BITS) - 1)
+#define ILOG_FLAGS_MASK         (~((1 << ILOG_FLAGS_SHIFT) - 1))
+#define ILOG_VERSION_MASK       ((~(ILOG_VERSION_INC - 1)) & (~ILOG_FLAGS_MASK))
 #define ILOG_MAGIC_VALID(magic) (((magic)&ILOG_MAGIC_MASK) == ILOG_MAGIC)
 
 /** The ilog is split into two parts.   If there is one entry, the ilog
