@@ -2059,7 +2059,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	int				 i;
 	int				 rc = 0;
 
-	rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN, &fail_ranks);
+	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
 	if (rc) {
 		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
 		return;
@@ -2159,11 +2159,16 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		}
 
 		rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->cte_cont_uuid,
-					       min_ec_agg_eph, min_stable_eph);
+					       min_ec_agg_eph, min_stable_eph,
+					       svc->cs_cont_ephs_leader_req);
 		if (rc) {
 			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
 				  DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+
+			/* If ULT is exiting, break out */
+			if (rc == -DER_SHUTDOWN)
+				break;
 
 			/* If there are network error or pool map inconsistency,
 			 * let's skip the following eph sync, which will fail

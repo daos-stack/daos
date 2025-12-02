@@ -23,7 +23,7 @@ def scons():
     libs += ['rte_mempool_ring', 'rte_bus_pci', 'nvme_control']
 
     # Other libs
-    libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread']
+    libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread', 'ssl']
 
     if GetOption('help'):
         return

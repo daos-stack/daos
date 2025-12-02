@@ -680,14 +680,20 @@ huge_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	 * The footer entry change is updated as transient because it will
 	 * be recreated at heap boot regardless - it's just needed for runtime
 	 * operations.
+	 * Note:
+	 * If a footer is added as part of a tx, creating a transient entry
+	 * and marking the page as dirty at commit time does not justify the
+	 * added complexity and occurs less frequently. Therefore, for now,
+	 * we commit footer in the same way as header when called under a tx.
 	 */
+
 	if (ctx == NULL) {
 		util_atomic_store_explicit64((uint64_t *)footer, val,
 			memory_order_relaxed);
+		heap_touch_umem_cache(m->heap, footer, sizeof(*footer));
 		VALGRIND_SET_CLEAN(footer, sizeof(*footer));
 	} else {
-		operation_add_typed_entry(ctx,
-			footer, val, ULOG_OPERATION_SET, LOG_TRANSIENT);
+		operation_add_entry(ctx, footer, val, ULOG_OPERATION_SET);
 	}
 }
 
@@ -1234,8 +1240,8 @@ huge_reinit_chunk(const struct memory_block *m)
 {
 	struct chunk_header *hdr = heap_get_chunk_hdr(m->heap, m);
 
-	if (hdr->type == CHUNK_TYPE_USED)
-		huge_write_footer(hdr, hdr->size_idx);
+	D_ASSERT((hdr->type == CHUNK_TYPE_USED) || (hdr->type == CHUNK_TYPE_FREE));
+	huge_write_footer(hdr, hdr->size_idx);
 }
 
 /*
