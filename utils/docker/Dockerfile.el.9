@@ -8,7 +8,7 @@
 #
 
 # Pull base image
-ARG RELEASE=
+ARG RELEASE=9
 ARG BASE_DISTRO=rockylinux:$RELEASE
 FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
@@ -33,7 +33,13 @@ RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
 
 FROM basic
 # Install OS updates and package.  Include basic tools and daos dependencies
-RUN dnf upgrade &&        \
+# The proxy variables are currently needed for the combination of running
+# with a local repository, yet needing a proxy to reach outside repositories.
+# This needs to be moved to a shell script like above in the future to
+# properly only remove the proxy variables only when they need to be removed
+RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
+        direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
+    dnf upgrade &&        \
     /tmp/install.sh &&    \
     dnf clean all &&      \
     rm -f /tmp/install.sh
@@ -52,6 +58,8 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
+
+ARG JENKINS_URL
 
 USER daos_server:daos_server
 
@@ -88,6 +96,8 @@ ARG DAOS_PACKAGES_BUILD=yes
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                               \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "              \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;                   \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         dnf clean all;                                                                 \
     }
@@ -96,6 +106,8 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
         scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
               TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
@@ -106,7 +118,9 @@ COPY --chown=daos_server:daos_server utils/sl utils/sl
 
 # Build third party RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-	export DISTRO="el9" &&                                                  \
+    if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
+        direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
+    export DISTRO="el9" &&                                                  \
 	utils/rpms/build_packages.sh deps &&                                    \
 	mkdir -p /home/daos/rpms &&                                             \
 	mv *.rpm /home/daos/rpms;                                               \
@@ -115,9 +129,12 @@ USER root:root
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1
-RUN [ -z "$CB1" ] || {                                                           \
-        dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        dnf clean all;                                                                 \
+RUN [ -z "$CB1" ] || {                                                     \
+    if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "      \
+        direct="${direct%%/*}"; export no_proxy="${direct}"; fi;           \
+    dnf upgrade                                                            \
+        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all;                                                         \    
     }
 USER daos_server:daos_server
 
@@ -142,6 +159,8 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;      \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
               FIRMWARE_MGMT=1 BUILD_TYPE=$DAOS_BUILD_TYPE                  \
 	      TARGET_TYPE=$DAOS_TARGET_TYPE &&                             \
@@ -154,6 +173,8 @@ COPY --chown=daos_server:daos_server utils utils
 
 # Build DAOS RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
+	    if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
 	export DISTRO="el9" &&                                             \
 	utils/rpms/build_packages.sh daos &&                               \
 	mkdir -p /home/daos/rpms &&                                        \
