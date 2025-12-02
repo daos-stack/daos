@@ -63,6 +63,7 @@ const (
 	StorageTargetAlreadyMounted
 	StoragePathAccessDenied
 	StorageDeviceWithFsNoMountpoint
+	StorageHugepagesDisabled
 )
 
 // SCM fault codes
@@ -155,7 +156,6 @@ const (
 	ServerIncompatibleComponents
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
-	ServerHugepagesDisabled
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
 )
@@ -197,6 +197,7 @@ const (
 	ServerConfigScmDiffClass
 	ServerConfigEngineBdevRolesMismatch
 	ServerConfigSysRsvdZero
+	ServerConfigBdevExcludeClash
 )
 
 // SPDK library bindings codes

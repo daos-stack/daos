@@ -4,7 +4,7 @@ on:
   pull_request:
 
 concurrency:
-  group: ci2-${{ github.head_ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 permissions: {}
@@ -26,7 +26,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:oracular
+            with: ubuntu:noble
     env:
       DEPS_JOBS: 10
       COMPILER: clang
@@ -34,7 +34,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
         with:
           submodules: true
           fetch-depth: 500
@@ -68,7 +68,7 @@ jobs:
       - name: Publish NLT test results
         if: always()
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@3a74b2957438d0b6e2e61d67b05318aa25c9e6c6  # v2.20.0
+        uses: EnricoMi/publish-unit-test-result-action@34d7c956a59aed1bfebf31df77b8de55db9bbaaf  # v2.21.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
@@ -100,7 +100,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
         with:
           submodules: true
           fetch-depth: 500

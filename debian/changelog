@@ -1,3 +1,33 @@
+daos (2.6.4-8) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Pin isa-l_crypto at 2.24 since 2.25 is incompatible
+
+ -- Jeff Olivier <jeffolivier@google.com>  Fri, 21 Nov 2025 20:00:00 -0500
+
+daos (2.6.4-7) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Fix libfabric packaging
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@hpe.com>  Fri, 31 Oct 2025 20:00:00 -0500
+
+daos (2.6.4-6) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Fourth release candidate for 2.6.4
+
+ -- Phillip Henderson <phillip.henderson@hpe.com>  Thu, 23 Oct 2025 16:23:00 -0500
+
+daos (2.6.4-4) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Third release candidate for 2.6.4
+
+ -- Phillip Henderson <phillip.henderson@hpe.com>  Fri, 17 Oct 2025 15:09:00 -0500
+
+daos (2.6.4-2) unstable; urgency=medium
+  [ Dalton Bohning ]
+  * Second release candidate for 2.6.4
+
+ -- Dalton Bohning <dalton.bohning@hpe.com>  Tue, 05 Aug 2025 08:30:00 -0800
+ 
 daos (2.6.4-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * First release candidate for 2.6.4

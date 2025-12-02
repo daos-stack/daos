@@ -348,7 +348,7 @@ func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TC
 }
 
 func publishJoinFailedEvent(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher, msg string) {
-	publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
+	publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, req.Incarnation, msg))
 }
 
 func getProviderFromURI(uri string) (string, error) {

@@ -711,6 +711,11 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 		return
 	}
 
+	if evt.Incarnation != 0 && evt.Incarnation < member.Incarnation {
+		m.log.Debugf("ignoring event for incarnation = %d, current member incarnation = %d: %s", evt.Incarnation, member.Incarnation, evt.String())
+		return
+	}
+
 	// TODO DAOS-7261: sanity check that the correct member is being
 	//                 updated by performing lookup on provided hostname
 	//                 and matching returned addresses with the address

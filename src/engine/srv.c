@@ -126,9 +126,33 @@ struct dss_xstream_data {
 	/** barrier for all ULTs to enter handling loop */
 	ABT_cond		  xd_ult_barrier;
 	ABT_mutex		  xd_mutex;
+	bool                      xd_monitor_running;
+	bool                      xd_monitor_runnable;
 };
 
 static struct dss_xstream_data	xstream_data;
+
+bool
+dss_sched_monitor_enter(void)
+{
+	ABT_mutex_lock(xstream_data.xd_mutex);
+	if (!xstream_data.xd_monitor_runnable) {
+		ABT_mutex_unlock(xstream_data.xd_mutex);
+		return false;
+	}
+	xstream_data.xd_monitor_running = true;
+	ABT_mutex_unlock(xstream_data.xd_mutex);
+
+	return true;
+}
+
+void
+dss_sched_monitor_exit(void)
+{
+	ABT_mutex_lock(xstream_data.xd_mutex);
+	xstream_data.xd_monitor_running = false;
+	ABT_mutex_unlock(xstream_data.xd_mutex);
+}
 
 int
 dss_xstream_set_affinity(struct dss_xstream *dxs)
@@ -417,7 +441,6 @@ dss_srv_handler(void *arg)
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_open_list);
-	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_close_list);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_pool_list);
 
 	(void)pthread_setname_np(pthread_self(), dx->dx_name);
@@ -571,8 +594,10 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx))
+		if (dss_xstream_exiting(dx)) {
+			rc = 0;
 			break;
+		}
 
 		ABT_thread_yield();
 	}
@@ -609,6 +634,7 @@ signal:
 		ABT_cond_signal(xstream_data.xd_ult_init);
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 	}
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc, "stopping");
 }
 
 static inline struct dss_xstream *
@@ -902,7 +928,7 @@ dss_xstreams_fini(bool force)
 	bool			 started = false;
 
 	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
-	dss_xstreams_open_barrier();
+	dss_xstreams_open_barrier(true);
 	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
 	D_ASSERT(rc == 0);
 
@@ -959,11 +985,26 @@ dss_xstreams_fini(bool force)
 }
 
 void
-dss_xstreams_open_barrier(void)
+dss_xstreams_open_barrier(bool stopping)
 {
+	bool monitor_running = false;
+
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	ABT_cond_broadcast(xstream_data.xd_ult_barrier);
+	if (stopping) {
+		monitor_running                  = xstream_data.xd_monitor_running;
+		xstream_data.xd_monitor_runnable = false;
+	} else {
+		xstream_data.xd_monitor_runnable = true;
+	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
+
+	while (monitor_running) {
+		usleep(1000); /* sleep 1 ms */
+		ABT_mutex_lock(xstream_data.xd_mutex);
+		monitor_running = xstream_data.xd_monitor_running;
+		ABT_mutex_unlock(xstream_data.xd_mutex);
+	}
 }
 
 static bool
@@ -1067,8 +1108,10 @@ dss_start_xs_id(int tag, int xs_id)
 	}
 
 	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);
-	if (rc)
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to start one xstream: tag=%x xs_id=%d", tag, xs_id);
 		return rc;
+	}
 
 	return 0;
 }
@@ -1118,6 +1161,12 @@ dss_xstreams_init(void)
 
 	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
 	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
+
+	d_getenv_uint("DAOS_SCHED_INACTIVE_MAX", &sched_inactive_max);
+	d_getenv_bool("DAOS_SCHED_MONITOR_KILL", &sched_monitor_kill);
+
+	D_INFO("Watchdog [runtime_max:%u ms, all:%d], Monitor [inactive_max:%u ms, kill:%d]\n",
+	       sched_unit_runtime_max, sched_watchdog_all, sched_inactive_max, sched_monitor_kill);
 
 	dss_chore_credits = DSS_CHORE_CREDITS_DEF;
 	d_getenv_uint("DAOS_IO_CHORE_CREDITS", &dss_chore_credits);
@@ -1318,7 +1367,6 @@ enum {
 	XD_INIT_MUTEX,
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
-	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
 	XD_INIT_SYS_DB,
 	XD_INIT_XSTREAMS,
@@ -1355,9 +1403,6 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		vos_standalone_tls_fini();
-		/* fall through */
-	case XD_INIT_TLS_REG:
-		ds_tls_key_delete();
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1428,6 +1473,8 @@ dss_srv_init(void)
 		D_GOTO(failed, rc = -DER_NOMEM);
 	}
 	xstream_data.xd_xs_nr = 0;
+	xstream_data.xd_monitor_runnable = false;
+	xstream_data.xd_monitor_running  = false;
 
 	rc = ABT_mutex_create(&xstream_data.xd_mutex);
 	if (rc != ABT_SUCCESS) {
@@ -1452,15 +1499,6 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
-
-	/* register xstream-local storage key */
-	rc = ds_tls_key_create();
-	if (rc) {
-		rc = dss_abterr2der(rc);
-		D_ERROR("Failed to register storage key: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(failed, rc);
-	}
-	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
 	rc = vos_standalone_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG);

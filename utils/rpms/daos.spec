@@ -10,9 +10,9 @@
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4
-%global libfabric_version 1.15.1-1
-%global argobots_version 1.2
+%global mercury_version   2.4.0-7
+%global libfabric_version 1.20
+%global argobots_version 1.2-3
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       1%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -81,10 +81,10 @@ BuildRequires: spdk-devel >= 22.01.2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
-BuildRequires: libisa-l_crypto-devel
+BuildRequires: libisa-l_crypto-devel >= 2.24.0-1, libisa-l_crypto-devel < 2.25.0
 %else
-BuildRequires: libisal-devel
-BuildRequires: libisal_crypto-devel
+BuildRequires: libisal-devel >= 2.31.1-7
+BuildRequires: libisal_crypto-devel >= 2.24.0-3, libisal_crypto-devel < 2.25.0
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -151,15 +151,16 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: spdk-tools >= 22.01.2
+Conflicts: daos-spdk
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.0-1.suse1500
+Requires: libpmemobj1 >= 2.1.0-3.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.0-1%{?dist}
+Requires: libpmemobj >= 2.1.0-6%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
@@ -396,7 +397,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
+sed -i -e '1s/env //' %{buildroot}%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
 %if %{with server}
 sed -i -e '1s/env //' %{buildroot}%{_bindir}/daos_storage_estimator.py
 %endif
@@ -632,6 +633,33 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Nov 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-8
+- Pin isa-l_crypto at 2.24 since 2.25 is incompatible
+
+* Fri Oct 31 2025 Mohamad Chaarawi <mohamad.chaarawi@hpe.com> 2.6.4-7
+- Revert bump of libfabric to 1.20
+
+* Thu Oct 23 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-6
+- Fourth release candidate for 2.6.4
+
+* Tue Oct 21 2025 Ryon Jensen <ryon.jensen@hpe.com> 2.6.4-5
+- Bump libfabric version >= 1.22.0-4
+- Bump mercury version >= 2.4.0-7
+- Bump argobots version >= 1.2-3
+- Bump libisal version >= 2.31.1-7
+- Bump libisal_crypto version >= 2.24.0-3
+- Bump pmemobj1 >= 2.1.0-3
+- Bump pmemobj >= 2.1.0-6
+
+* Fri Oct 17 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-4
+- Third release candidate for 2.6.4
+
+* Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-3
+- Ensure daos-server installs spdk
+
+* Tue Aug 05 2025 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-2
+- Second release candidate for 2.6.4
+
 * Tue Jun 17 2025 Phillip Henderson <phillip.henderson@intel.com> 2.6.4-1
 - First release candidate for 2.6.4
 

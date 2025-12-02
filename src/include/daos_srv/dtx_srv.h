@@ -436,9 +436,13 @@ dtx_is_real_handle(const struct dtx_handle *dth)
 struct dtx_scan_args {
 	uuid_t		pool_uuid;
 	uint32_t	version;
+	bool            for_orphan;
 };
 
-int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, bool block);
+/* clang-format off */
+int dtx_cleanup_orphan(uuid_t po_uuid, uint32_t pm_ver);
+int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block);
 void dtx_resync_ult(void *arg);
+/* clang-format on */
 
 #endif /* __DAOS_DTX_SRV_H__ */

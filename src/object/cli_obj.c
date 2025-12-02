@@ -1715,35 +1715,43 @@ dc_obj_layout_refresh(daos_handle_t oh)
 }
 
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint16_t *retry_cnt,
-		   uint16_t *inprogress_cnt, uint32_t timeout_sec)
+dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
+		   uint32_t timeout_sec, bool long_delay)
 {
 	uint32_t delay = 0;
 
-	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN)
-		++(*inprogress_cnt);
-
-	if (++(*retry_cnt) > 1) {
+	/* Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case. */
+	if (err == -DER_OVERLOAD_RETRY) {
+		delay = daos_rpc_rand_delay(timeout_sec) << 20;
+	} else if (++(*retry_cnt) > 1) {
 		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
 		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
 		/* Rebuild is being established on the server side, wait a bit longer */
-		if (err == -DER_UPDATE_AGAIN)
+		if (err == -DER_UPDATE_AGAIN || long_delay) {
 			delay <<= 10;
-		else if (opc == DAOS_OBJ_RPC_COLL_PUNCH)
-			/* 128 times of the delay for collective object RPC. */
-			delay <<= 7;
-		else if (opc == DAOS_OBJ_RPC_CPD)
-			/* 8 times of the delay for compounded RPC. */
-			delay <<= 3;
-		D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u/%u times with %u us delay\n",
-			task, opc, *inprogress_cnt, *retry_cnt, delay);
+		} else {
+			switch (opc) {
+			case DAOS_OBJ_RPC_COLL_PUNCH:
+			case DAOS_OBJ_RPC_COLL_QUERY:
+				/* 256 times of the delay for collective object RPC. */
+				delay <<= 8;
+				break;
+			case DAOS_OBJ_RPC_CPD:
+				/* 8 times of the delay for compounded RPC. */
+				delay <<= 3;
+				break;
+			default:
+				break;
+			}
+
+			/* Increase delay after multiple times retry. */
+			if (*retry_cnt >= 5)
+				delay <<= 1;
+		}
 	}
 
-	/*
-	 * Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case.
-	 */
-	if (err == -DER_OVERLOAD_RETRY)
-		delay = daos_rpc_rand_delay(timeout_sec) << 20;
+	D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u times with %u us delay\n", task, opc,
+		*retry_cnt, delay);
 
 	return delay;
 }
@@ -1756,6 +1764,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
 	uint32_t          delay     = 0;
+	uint32_t          opc       = obj_auxi->opc;
 	int		  result = task->dt_result;
 	int		  rc;
 
@@ -1775,19 +1784,24 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			}
 		}
 
+		if (obj_is_modification_opc(opc) && result == -DER_TIMEDOUT)
+			obj_auxi->long_retry_delay = 1;
+		else if (result != -DER_INPROGRESS)
+			obj_auxi->long_retry_delay = 0;
+
 		if (!pmap_stale) {
 			uint32_t now = daos_gettime_coarse();
 
-			delay =
-			    dc_obj_retry_delay(task, obj_auxi->opc, result, &obj_auxi->retry_cnt,
-					       &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+			delay = dc_obj_retry_delay(task, opc, result, &obj_auxi->retry_cnt,
+						   obj_auxi->max_delay,
+						   obj_auxi->long_retry_delay == 1 ? true : false);
 			if (result == -DER_INPROGRESS &&
-			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->inprogress_cnt >= 10) ||
+			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->retry_cnt >= 10) ||
 			     (obj_auxi->retry_warn_ts > 0 && obj_auxi->retry_warn_ts + 10 < now))) {
 				obj_auxi->retry_warn_ts = now;
 				obj_auxi->flags |= ORF_MAYBE_STARVE;
 				D_WARN("The task %p has been retried for %u times, maybe starve\n",
-				       task, obj_auxi->inprogress_cnt);
+				       task, obj_auxi->retry_cnt);
 			}
 		}
 
@@ -3771,9 +3785,9 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 	 * 2) if any shard failed, store it in obj_auxi->result, the
 	 *    un-retryable error with higher priority.
 	 */
+	if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
+		obj_auxi->map_ver_reply = shard_auxi->map_ver;
 	if (ret == 0) {
-		if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
-			obj_auxi->map_ver_reply = shard_auxi->map_ver;
 		if (obj_req_is_ec_cond_fetch(obj_auxi)) {
 			iter_arg->cond_fetch_exist = true;
 			if (obj_auxi->result == -DER_NONEXIST)
@@ -4907,49 +4921,48 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 			d_sg_list_t *sg_orig      = &ctx->sgls_orig[i];
 			uint32_t     dup_sg_idx   = 0;
 			uint32_t     dup_buf_size = 0;
-			uint32_t     sg_nr_out    = 0;
+			uint32_t     dup_data_len = 0;
 			char        *dup_buf;
 
 			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i])
 				continue;
 
 			D_ASSERT(ctx->merged_bitmaps[i] != NULL);
-			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out;) {
+			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out; j++) {
 				iov     = &sg_orig->sg_iovs[j];
 				iov_dup = &sg_dup->sg_iovs[dup_sg_idx];
 
-				if (skip_sgl_iov(false, iov)) {
-					j++;
+				if (skip_sgl_iov(false, iov))
 					continue;
-				}
 
 				/* Direct copy if entry wasn't modified */
 				if (!isset_range((uint8_t *)ctx->merged_bitmaps[i], j, j)) {
 					*iov = *iov_dup;
-					D_ASSERT(dup_buf_size == 0);
-					j++;
-					sg_nr_out++;
+					D_ASSERT(dup_data_len == 0);
 					dup_sg_idx++;
 					continue;
 				}
-				if (dup_buf_size == 0) {
+				if (dup_data_len == 0) {
+					dup_data_len = iov_dup->iov_len;
 					dup_buf_size = iov_dup->iov_buf_len;
 					dup_buf      = (char *)iov_dup->iov_buf;
 				}
 
+				/* Update iov_len for short read */
+				if (dup_data_len < iov->iov_len)
+					iov->iov_len = dup_data_len;
 				/* Copy data from duplicate buffer to original buffer */
-				D_ASSERT(dup_buf_size >= iov->iov_buf_len);
-				memcpy((char *)iov->iov_buf, dup_buf, iov->iov_buf_len);
-				dup_buf_size -= iov->iov_buf_len;
-				dup_buf += iov->iov_buf_len;
-				sg_nr_out++;
-				j++;
+				D_ASSERT(dup_buf_size >= iov->iov_len);
+				memcpy((char *)iov->iov_buf, dup_buf, iov->iov_len);
+				dup_data_len -= iov->iov_len;
+				dup_buf += iov->iov_len;
+				dup_buf_size -= iov->iov_len;
 
 				/* When current duplicate buffer is exhausted, get next entry */
-				if (dup_buf_size == 0)
+				if (dup_data_len == 0)
 					dup_sg_idx++;
 			}
-			sg_orig->sg_nr_out = sg_nr_out;
+			sg_orig->sg_nr_out = j;
 		}
 	}
 
@@ -4974,7 +4987,8 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 	}
 	obj_bulk_fini(obj_auxi);
 	obj_auxi_free_failed_tgt_list(obj_auxi);
-	obj_dup_sgls_free(obj_auxi);
+	if (!retry)
+		obj_dup_sgls_free(obj_auxi);
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 	obj_auxi->req_reasbed = false;
 
@@ -5041,6 +5055,9 @@ obj_ec_comp_cb(struct obj_auxi_args *obj_auxi)
 		int	rc;
 
 		daos_obj_fetch_t *args = dc_task_get_args(task);
+
+		/* possibly due to previous EC recovery task failed and do the recovery again */
+		obj_ec_recov_reset(&obj_auxi->reasb_req);
 
 		task->dt_result = 0;
 		obj_bulk_fini(obj_auxi);
@@ -5335,7 +5352,10 @@ args_fini:
 			 */
 			obj_rw_csum_destroy(obj, obj_auxi);
 
-			if (daos_handle_is_valid(obj_auxi->th) &&
+			/* for EC recovery fetch task, need not cache the tx as it only fetch from
+			 * committed full-stripe.
+			 */
+			if (daos_handle_is_valid(obj_auxi->th) && !obj_auxi->ec_in_recov &&
 			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
 			    (task->dt_result == 0 || task->dt_result == -DER_NONEXIST))
 				/* Cache transactional read if exist or not. */
@@ -5743,6 +5763,12 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 		if (likely(ec_deg_tgt == tgt_idx))
 			continue;
 
+		if (args->extra_flags & DIOF_EC_NO_DEGRADE) {
+			D_WARN(DF_OID "have to degraded fetch for %u => %u, but sponsor forbid.\n",
+			       DP_OID(obj->cob_md.omd_id), tgt_idx, ec_deg_tgt);
+			D_GOTO(out, rc = -DER_IO);
+		}
+
 		if (obj_auxi->ec_in_recov) {
 			D_DEBUG(DB_IO, DF_OID " shard %d failed recovery.\n",
 				DP_OID(obj->cob_md.omd_id), grp_start + tgt_idx);
@@ -5996,6 +6022,8 @@ dc_obj_fetch_task(tse_task_t *task)
 
 	if (args->extra_flags & DIOF_EC_RECOV_FROM_PARITY)
 		obj_auxi->flags |= ORF_EC_RECOV_FROM_PARITY;
+	if (args->extra_flags & DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY)
+		obj_auxi->flags |= ORF_FETCH_EPOCH_EC_AGG_BOUNDARY;
 
 	if (args->extra_flags & DIOF_FOR_FORCE_DEGRADE ||
 	    DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))

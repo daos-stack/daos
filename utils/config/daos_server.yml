@@ -290,6 +290,12 @@
 #  #
 #  # The server should have sufficiently many physical cores to support the
 #  # number of targets, plus the additional service threads.
+#  #
+#  # Besides the number of CPU cores, this target number is limited by the number of
+#  # SSDs listed in the bdev_list as well. One NVMe SSD in the bdev_list can be assigned
+#  # to at most 64 targets in pmem mode, or 21 targets in md-on-ssd mode (when the SSD
+#  # has three roles), so the maximum target number will be 'number_of_SSD * 64' in
+#  # pmem mode or 'number_of_SSD * 21' in md-on-ssd mode.
 #
 #  targets: 16
 #
