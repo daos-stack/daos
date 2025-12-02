@@ -1503,6 +1503,7 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 	init_test_pool_info(&exp_info);
 	exp_info.pi_rebuild_st.rs_version = 1;
 	exp_info.pi_rebuild_st.rs_errno = -DER_MISC;
+	exp_info.pi_rebuild_st.rs_state   = DRS_IN_PROGRESS;
 
 	ds_mgmt_pool_query_info_out = exp_info;
 	ds_mgmt_pool_query_mem_bytes = 11;
@@ -1517,7 +1518,6 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	/* Expect zero value rebuild status on failure */
 	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, &resp);
 
 	D_FREE(call.body.data);
