@@ -2829,8 +2829,9 @@ ds_cont_eph_report(struct ds_pool *pool)
 		D_DEBUG(DB_MD, "Update ec_agg_eph " DF_X64 ", stable_eph " DF_X64 ", " DF_UUID "\n",
 			min_ec_agg_eph, min_stable_eph, DP_UUID(ec_eph->cte_cont_uuid));
 
-		ret = cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid,
-					       min_ec_agg_eph, min_stable_eph);
+		ret =
+		    cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid, min_ec_agg_eph,
+					     min_stable_eph, pool->sp_ec_ephs_req);
 		if (ret == 0) {
 			ec_eph->cte_last_ec_agg_epoch = min_ec_agg_eph;
 			ec_eph->cte_last_stable_epoch = min_stable_eph;
