@@ -633,6 +633,17 @@ retry:
 	return rc;
 }
 
+static inline int
+migrate_pool_tls_get_status(struct migrate_pool_tls *tls)
+{
+	if (tls && tls->mpt_status)
+		return tls->mpt_status;
+	if (tls == NULL || tls->mpt_fini)
+		return -DER_SHUTDOWN;
+
+	return 0;
+}
+
 static int
 mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
@@ -646,7 +657,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(mrone->mo_pool_uuid));
-		D_GOTO(out, rc = -DER_SHUTDOWN);
+		D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
 	}
 
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
@@ -1782,7 +1793,7 @@ migrate_tgt_enter(struct migrate_pool_tls *tls, int ult_type, bool *yielded)
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
 		if (tls->mpt_fini)
-			D_GOTO(out, rc = -DER_SHUTDOWN);
+			D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
 
 		ult_cnt = migrate_tgt_ult_cnt(tls, ult_type);
 	}
@@ -2427,8 +2438,7 @@ free:
 		migrate_one_destroy(mrone);
 	}
 put:
-	if (tls)
-		migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2581,8 +2591,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 put:
 	if (obj)
 		obj_decref(obj);
-	if (tls != NULL)
-		migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2671,8 +2680,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 	}
 
 put:
-	if (tls)
-		migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -3021,8 +3029,8 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
-	D_ASSERT(pool->sp_rebuilding >= arg.stop_count);
-	pool->sp_rebuilding -= arg.stop_count;
+	D_ASSERT(atomic_load(&pool->sp_rebuilding) >= arg.stop_count);
+	atomic_fetch_sub(&pool->sp_rebuilding, arg.stop_count);
 	ABT_mutex_free(&arg.stop_lock);
 
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
@@ -3366,7 +3374,8 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 	uuid_copy(fetch_arg.cont_uuid, cont_uuid);
 	uuid_copy(fetch_arg.pool_uuid, tls->mpt_pool_uuid);
-	rc = dss_ult_execute(cont_fetch_start_ult, &fetch_arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(cont_fetch_start_ult, &fetch_arg, NULL, NULL, DSS_XS_SYS, 0,
+			     MIGRATE_STACK_SIZE);
 	if (rc) {
 		D_ERROR(DF_UUID" ds_pool_lookup failed: "DF_RC"\n",
 			DP_UUID(tls->mpt_pool_uuid), DP_RC(rc));
@@ -3551,14 +3560,14 @@ migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid,
 }
 
 struct ds_pool_migrate_arg {
-	uuid_t          pool_uuid;
-	struct ds_pool *pool;
-	uint32_t        rebuild_ver;
-	uint32_t        generation;
-	daos_prop_t    *prop;
-	int             tgt_id;
-	int             rebuilding_count;
-	bool            no_iv;
+	uuid_t          pma_pool_uuid;
+	struct ds_pool *pma_pool;
+	uint32_t        pma_rebuild_ver;
+	uint32_t        pma_generation;
+	daos_prop_t    *pma_prop;
+	int             pma_tgt_id;
+	int             pma_rebuilding_count;
+	bool            pma_no_iv;
 };
 
 static int
@@ -3566,12 +3575,9 @@ ds_migrate_end_ult(void *arg)
 {
 	struct ds_pool_migrate_arg *pool_arg = (struct ds_pool_migrate_arg *)arg;
 
-	if (pool_arg->pool) {
-		pool_arg->pool->sp_rebuilding += pool_arg->rebuilding_count;
-		ds_pool_put(pool_arg->pool);
-	}
-	if (pool_arg->prop)
-		daos_prop_free(pool_arg->prop);
+	ds_pool_put(pool_arg->pma_pool);
+	if (pool_arg->pma_prop)
+		daos_prop_free(pool_arg->pma_prop);
 	return 0;
 }
 
@@ -3582,38 +3588,37 @@ ds_migrate_prepare_ult(void *arg)
 	uint32_t                    rebuild_ver;
 	struct ds_pool_migrate_arg *pool_arg = (struct ds_pool_migrate_arg *)arg;
 
-	rc = ds_pool_lookup(pool_arg->pool_uuid, &pool_arg->pool);
+	rc = ds_pool_lookup(pool_arg->pma_pool_uuid, &pool_arg->pma_pool);
 	if (rc != 0) {
 		if (rc == -DER_SHUTDOWN) {
 			D_DEBUG(DB_REBUILD, DF_UUID " pool service is stopping.\n",
-				DP_UUID(pool_arg->pool_uuid));
+				DP_UUID(pool_arg->pma_pool_uuid));
 			rc = 0;
 		} else {
 			D_DEBUG(DB_REBUILD, DF_UUID " pool service is not started yet. " DF_RC "\n",
-				DP_UUID(pool_arg->pool_uuid), DP_RC(rc));
+				DP_UUID(pool_arg->pma_pool_uuid), DP_RC(rc));
 			rc = -DER_AGAIN;
 		}
 		return rc;
 	}
 
-	ds_rebuild_running_query(pool_arg->pool_uuid, -1, &rebuild_ver, NULL, NULL);
-	if (rebuild_ver == 0 || rebuild_ver != pool_arg->rebuild_ver) {
+	ds_rebuild_running_query(pool_arg->pma_pool_uuid, -1, &rebuild_ver, NULL, NULL);
+	if (rebuild_ver == 0 || rebuild_ver != pool_arg->pma_rebuild_ver) {
 		rc = -DER_SHUTDOWN;
 		D_GOTO(out, rc);
 	}
 
-	if (pool_arg->no_iv)
+	if (pool_arg->pma_no_iv)
 		D_GOTO(out, rc = 0);
 
-	D_ALLOC_PTR(pool_arg->prop);
-	if (pool_arg->prop == NULL)
+	D_ALLOC_PTR(pool_arg->pma_prop);
+	if (pool_arg->pma_prop == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_pool_iv_prop_fetch(pool_arg->pool, pool_arg->prop);
+	rc = ds_pool_iv_prop_fetch(pool_arg->pma_pool, pool_arg->pma_prop);
 	if (rc)
 		D_GOTO(out, rc);
 
-	pool_arg->pool->sp_rebuilding++;
 out:
 	return rc;
 }
@@ -3634,29 +3639,31 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 
 	tls = migrate_pool_tls_lookup(pool_uuid, version, generation);
 	if (tls)
-		arg.no_iv = true;
+		arg.pma_no_iv = true;
 
-	uuid_copy(arg.pool_uuid, pool_uuid);
-	arg.rebuild_ver = version;
-	arg.tgt_id      = tgt_id;
-	arg.generation  = generation;
-	rc = dss_ult_execute(ds_migrate_prepare_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
-	if (rc || arg.pool == NULL)
+	uuid_copy(arg.pma_pool_uuid, pool_uuid);
+	arg.pma_rebuild_ver = version;
+	arg.pma_tgt_id      = tgt_id;
+	arg.pma_generation  = generation;
+	rc = dss_ult_execute(ds_migrate_prepare_ult, &arg, NULL, NULL, DSS_XS_SYS, 0,
+			     MIGRATE_STACK_SIZE);
+	if (rc || arg.pma_pool == NULL)
 		D_GOTO(out, rc);
 
 	if (tls)
 		goto skip_create;
 
-	entry = daos_prop_entry_get(arg.prop, DAOS_PROP_PO_SVC_LIST);
+	entry = daos_prop_entry_get(arg.pma_prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 
 	/* prepare might yield */
 	tls = migrate_pool_tls_lookup(pool_uuid, version, generation);
 	if (tls) {
-		arg.rebuilding_count = -1;
 		goto skip_create;
 	}
+
+	atomic_fetch_add(&arg.pma_pool->sp_rebuilding, 1);
 
 	rc = migrate_pool_tls_create(pool_uuid, version, generation, po_hdl, co_hdl, max_eph,
 				     new_layout_ver, opc, &tls, svc_list);
@@ -3664,7 +3671,7 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 		D_GOTO(out, rc);
 skip_create:
 	if (tls->mpt_fini)
-		D_GOTO(out, rc = -DER_SHUTDOWN);
+		D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
 
 	rc = migrate_try_create_object_tree(tls);
 	if (rc)
@@ -3703,9 +3710,8 @@ skip_create:
 	}
 
 out:
-	if (tls)
-		migrate_pool_tls_put(tls);
-	if (arg.pool)
+	migrate_pool_tls_put(tls);
+	if (arg.pma_pool)
 		D_ASSERT(dss_ult_execute(ds_migrate_end_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0) ==
 			 0);
 	return rc;
