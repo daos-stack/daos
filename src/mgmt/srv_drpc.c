@@ -1757,7 +1757,7 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 		rebuild->objects = info->rs_obj_nr;
 		rebuild->records = info->rs_rec_nr;
 
-		if (info->rs_version == 0)
+		if ((info->rs_version == 0) || (info->rs_state == DRS_NOT_STARTED))
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
 		else if (info->rs_state == DRS_COMPLETED)
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
