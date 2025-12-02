@@ -54,7 +54,7 @@ def _base_setup(env):
 
     # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options
     # that this brings in.
-    env.Append(CCFLAGS=['-g3', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
+    env.Append(CCFLAGS=['-g', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
@@ -92,7 +92,8 @@ def _base_setup(env):
 
     if build_type == 'debug':
         if compiler == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
+            env['CCFLAGS'].remove('-g')
+            env.AppendUnique(CCFLAGS=['-g3', '-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
