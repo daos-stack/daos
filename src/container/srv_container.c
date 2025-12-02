@@ -2061,11 +2061,16 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 					 DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), min_eph);
 		}
 
-		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph);
+		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph,
+						svc->cs_ec_leader_ephs_req);
 		if (rc) {
 			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
 				  DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
+
+			/* If ULT is exiting, break out */
+			if (rc == -DER_SHUTDOWN)
+				break;
 
 			/* If there are network error or pool map inconsistency,
 			 * let's skip the following eph sync, which will fail
