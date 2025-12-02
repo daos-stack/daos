@@ -297,6 +297,7 @@ func (mod *srvModule) handleGetSysProps(reqb []byte) ([]byte, error) {
 		msReq.Keys = append(msReq.Keys, t)
 	}
 	msReq.SetHostList(mod.msReplicas)
+	msReq.SetSystem(req.Sys)
 
 	msResp, err := control.SystemGetProp(ctx, mod.client, msReq)
 	if err != nil {
