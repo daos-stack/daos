@@ -752,6 +752,7 @@ cr_pool_create(void **state, struct test_pool *pool, bool connect, uint32_t faul
 	char		*ptr;
 	int		 rc;
 
+	pool->pool_size = CR_POOL_SIZE;
 	print_message("CR: creating pool ...\n");
 	rc = test_setup_pool_create(state, NULL, pool, NULL);
 	if (rc != 0) {
