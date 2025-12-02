@@ -565,6 +565,10 @@ rebuild_status_completed_update_partial(const uuid_t pool_uuid, int32_t rs_state
 
 	rs_inlist = rebuild_status_completed_lookup(pool_uuid);
 	if (rs_inlist != NULL) {
+		/* possible enhancement: only overwrite rs_inlist->rs_errno if rs_errno != 0
+		 * e.g., if marking a failed rebuild as done after Fail_reclaim, keep original
+		 * rs_errno.
+		 */
 		rs_inlist->rs_errno = rs_errno;
 		rs_inlist->rs_state = rs_state;
 		return 0;
@@ -1901,8 +1905,7 @@ complete:
 			  DP_RC(rgt->rgt_status.rs_errno));
 	} else if ((task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) &&
 		   (task->dst_retry_rebuild_op != RB_OP_NONE)) {
-		/* Fail_reclaim done (and a stop command wasn't received during) - retry original
-		 * rebuild */
+		/* Fail_reclaim done (and a stop command wasn't received during) - retry rebuild. */
 		rc1 = ds_rebuild_schedule(pool, task->dst_retry_map_ver, rgt->rgt_reclaim_epoch,
 					  task->dst_new_layout_version, &task->dst_tgts,
 					  task->dst_retry_rebuild_op,
@@ -2732,8 +2735,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_INFO(DF_RB " finishing rebuild rpt refcount %u, pool refcount %u\n", DP_RB_RPT(rpt),
 	       rpt->rt_refcount, daos_lru_ref_count(&rpt->rt_pool->sp_entry));
 
-	D_ASSERT(rpt->rt_pool->sp_rebuilding > 0);
-	rpt->rt_pool->sp_rebuilding--;
+	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuilding) > 0);
+	atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
 	rpt->rt_pool->sp_rebuild_scan = 0;
 
 	ABT_mutex_lock(rpt->rt_lock);
