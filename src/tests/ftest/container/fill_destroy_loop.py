@@ -90,20 +90,17 @@ class BoundaryPoolContainerSpace(TestWithServers):
         self.log.info("--%i.(3)Pool free space before writing data to container %s (%i bytes)",
                       test_loop, bytes_to_human(free_space_init), free_space_init)
 
-
         # Write random data to container until pool out of space
-        # base_data_size = container.data_size.value
         base_data_size = int(self.params.get("block_size", "/run/ior/*"))
         num_of_processes = int(self.params.get("processes", "/run/ior/*"))
         data_written = 0
         while True:
             try:
-                # container.write_objects()
                 write_data(self, container)
             except CommandFailure as excep:
                 if self.IOR_NOSPACE in str(excep):
                     self.log.info(
-                        "--%i.(4)DER_NOSPACE %s detected",test_loop, self.IOR_NOSPACE)
+                        "--%i.(4)DER_NOSPACE %s detected", test_loop, self.IOR_NOSPACE)
                     break
                 self.fail("Test-loop {0} exception while writing object: {1}".format(
                     test_loop, repr(excep)))
