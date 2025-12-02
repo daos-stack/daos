@@ -6,9 +6,9 @@
 import os
 
 from apricot import TestWithServers
-from ior_utils import write_data
 from exception_utils import CommandFailure
-from general_utils import DaosTestError, bytes_to_human, human_to_bytes
+from general_utils import bytes_to_human, human_to_bytes
+from ior_utils import write_data
 from run_utils import run_remote
 
 
@@ -62,7 +62,8 @@ class BoundaryPoolContainerSpace(TestWithServers):
         err_regex += r"gc_reclaim_pool failed DER_NOSPACE.+$'"
         log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
 
-        cmd = "find {} -path {}/control_metadata -prune -type f -regextype egrep ".format(log_dir, log_dir)
+        cmd = "find {0} -path {0}/control_metadata -prune -type f ".format(log_dir)
+        cmd += r"-regextype egrep "
         cmd += r"-regex '.*/daos_server\.log\.[[:digit:]]+' "
         cmd += r"-exec grep -q -E -e " + err_regex + r" {} ';' -print"
         result = run_remote(self.log, self.hostlist_servers, cmd)
@@ -98,7 +99,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         while True:
             try:
                 # container.write_objects()
-                result = write_data(self, container)
+                write_data(self, container)
             except CommandFailure as excep:
                 if self.IOR_NOSPACE in str(excep):
                     self.log.info(

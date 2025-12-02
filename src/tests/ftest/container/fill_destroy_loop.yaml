@@ -1,3 +1,6 @@
+launch:
+  !filter-only : /run/pool/default    # yamllint disable-line rule:colons
+
 hosts:
   test_servers: 1
   test_clients: 1
@@ -26,23 +29,13 @@ pool: !mux
     size: 1% 
     mem_ratio: 25
 
-container:
-  control_method: daos
-  oclass: SX
-  type: POSIX
-  object_qty: 10
-  record_qty: 1
-  data_size: 2097152 # 2MiB
-  akey_size: 5
-  dkey_size: 5
-
 ior: &ior_base
   processes: 8
   repetitions: 1
   api: DFS
   dfs_oclass: SX
-  transfer_size: 2097152 # 2MiB
-  block_size: 268435456 # 256MiB
+  transfer_size: 4194304 # 4MiB
+  block_size: 536870912 # 512MiB
 
 ior_write:
   flags: "-w -W -k -G 1"
