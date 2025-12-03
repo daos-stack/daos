@@ -13,7 +13,7 @@
 
 #include <daos_errno.h>
 #include <daos/debug.h>
-#include <daos/rpc.h>
+#include <daos/mgmt.h>
 #include <daos_srv/daos_engine.h>
 #include <gurt/common.h>
 
@@ -33,7 +33,7 @@ static void
 check_user(struct checker *ck)
 {
 	uid_t          euid = geteuid();
-	struct passwd *pw;
+	struct passwd *pw   = NULL;
 	int            ret;
 
 	/** The root user is not always named "root" but its uid is always 0. */
@@ -43,11 +43,17 @@ check_user(struct checker *ck)
 		return;
 	}
 
-	pw = getpwuid(euid);
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_GETPWUID)) { /** fault injection */
+		errno = daos_fail_value_get();
+	} else {
+		pw = getpwuid(euid);
+	}
 	if (pw == NULL || pw->pw_name == NULL) {
 		ret = d_errno2der(errno);
 		CK_PRINTFL_RC(ck, ret, "Cannot get the name of a user for uid=%" PRIuMAX,
 			      (uintmax_t)euid);
+		CK_PRINT(ck, UNEXPECTED_USER_WARNING_MSG);
+		return;
 	}
 
 	if (strncmp(pw->pw_name, DAOS_DEFAULT_SYS_NAME, DAOS_SYS_NAME_MAX) == 0) {

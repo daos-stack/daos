@@ -293,8 +293,6 @@ int daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_send_wait(crt_rpc_t *rpc);
 
-#define DAOS_DEFAULT_SYS_NAME "daos_server"
-
 /* Currently, this is used on rcs in metadata RPC reply buffers. */
 static inline bool
 daos_rpc_retryable_rc(int rc)

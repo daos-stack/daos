@@ -18,6 +18,8 @@
 #include <daos/pool.h>
 #include "svc.pb-c.h"
 
+#define DAOS_DEFAULT_SYS_NAME "daos_server"
+
 extern bool d_dynamic_ctx_g;
 
 int dc_mgmt_init(void);
