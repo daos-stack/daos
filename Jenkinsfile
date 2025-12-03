@@ -720,7 +720,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 9.5') {
+                stage('Unit Test') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -743,7 +743,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8.8') {
+                stage('Unit Test bdev') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -757,7 +757,7 @@ pipeline {
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages(),
-                                     image_version: 'el8.8'))
+                                     image_version: 'el9.5'))
                     }
                     post {
                         always {

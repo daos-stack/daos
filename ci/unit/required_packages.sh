@@ -4,13 +4,12 @@ set -eu
 
 # No longer used but provided by pipeline-lib
 # quick_build="${2:-false}"
-
-distro="$1"
+# distro="$1"
 
 OPENMPI_VER=""
 PY_MINOR_VER=""
 
-export DISTRO="${distro:-el8}"
+export DISTRO="${1:-el8}"
 pkgs="boost-python3$PY_MINOR_VER-devel                               \
       capstone                                                       \
       $(utils/rpms/package_version.sh argobots lib)                  \
