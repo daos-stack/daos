@@ -35,6 +35,7 @@ def _base_setup(env):
     Include all our preferred compile options for the chosen
     compiler and build type.
     """
+    # pylint: disable=too-many-branches
     if GetOption('help') or GetOption('clean'):
         return
 
