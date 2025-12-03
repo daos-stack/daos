@@ -34,12 +34,12 @@ RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
 
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el*.sh /tmp/
-RUN RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";        \
+RUN RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)";        \
     cp /tmp/install-el${RELEASE_MAJOR}.sh /tmp/install.sh && \
     rm -f /tmp/install-el*.sh
 # script to setup local repo if available
 COPY ./utils/scripts/helpers/repo-helper-el*.sh /tmp/
-RUN RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                \
+RUN RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)";                \
     cp /tmp/repo-helper-el${RELEASE_MAJOR}.sh /tmp/repo-helper.sh && \
     rm -f /tmp/repo-helper-el*.sh
 
@@ -136,7 +136,7 @@ COPY --chown=daos_server:daos_server utils/sl utils/sl
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
         if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "       \
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi;            \
-        RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                       \
+        RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)";                       \
         export DISTRO="el${RELEASE_MAJOR}" &&                                   \
 	    utils/rpms/build_packages.sh deps &&                                    \
 	    mkdir -p /home/daos/rpms &&                                             \
@@ -192,7 +192,7 @@ COPY --chown=daos_server:daos_server utils utils
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
 	    if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
-	RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                      \ 
+	RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)";                      \ 
     export DISTRO="el${RELEASE_MAJOR}" &&                                       \
     utils/rpms/build_packages.sh daos &&                                   \
 	mkdir -p /home/daos/rpms &&                                            \
@@ -208,9 +208,7 @@ WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
-# Disable Java build for now since it fails
-# Disable Java build only for EL9 as it works in EL8
-RUN RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                     \
+RUN RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)";                     \
     if [ "$DAOS_JAVA_BUILD" == "yes" && "$RELEASE_MAJOR" == "8" ]; then   \
         if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; " \
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi;      \
