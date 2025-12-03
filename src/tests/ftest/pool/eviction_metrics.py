@@ -33,6 +33,8 @@ class EvictionMetrics(TestWithTelemetry):
         self.log_step('Creating a pool (dmg pool create)')
         pool = self.get_pool(connect=False)
 
+        self.telemetry.list_metrics()
+
         self.log_step(
             'Collect pool eviction metrics after creating a pool (dmg telemetry metrics query)')
         expected_ranges = self.telemetry.collect_data(evict_metrics)
