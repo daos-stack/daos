@@ -65,6 +65,69 @@ map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *r
 	return 0;
 }
 
+static bool
+all_tgts_match(struct pool_domain *rank_dom, unsigned int status)
+{
+	int i;
+
+	for (i = 0; i < rank_dom->do_target_nr; i++) {
+		if ((status & rank_dom->do_targets[i].ta_comp.co_status) == 0)
+			return false;
+	}
+
+	return true;
+}
+
+/* Build failed rank list, treats the rank as DOWN if all its targets are DOWN . */
+int
+map_ranks_failed(const struct pool_map *map, d_rank_list_t *ranks)
+{
+	struct pool_domain *domains = NULL;
+	unsigned int        status  = PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN;
+	int                 nranks;
+	int                 n = 0;
+	int                 i;
+	d_rank_t           *rs;
+
+	nranks = pool_map_find_ranks((struct pool_map *)map, PO_COMP_ID_ALL, &domains);
+	if (nranks == 0) {
+		D_ERROR("no nodes in pool map\n");
+		return -DER_IO;
+	}
+
+	for (i = 0; i < nranks; i++) {
+		if ((status & domains[i].do_comp.co_status) || all_tgts_match(&domains[i], status))
+			n++;
+	}
+
+	if (n == 0) {
+		ranks->rl_nr    = 0;
+		ranks->rl_ranks = NULL;
+		return 0;
+	}
+
+	D_ALLOC_ARRAY(rs, n);
+	if (rs == NULL)
+		return -DER_NOMEM;
+
+	ranks->rl_nr    = n;
+	ranks->rl_ranks = rs;
+
+	n = 0;
+	for (i = 0; i < nranks; i++) {
+		if ((status & domains[i].do_comp.co_status) ||
+		    all_tgts_match(&domains[i], status)) {
+			D_ASSERT(n < ranks->rl_nr);
+			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
+			n++;
+			continue;
+		}
+	}
+	D_ASSERTF(n == ranks->rl_nr, "%d != %u\n", n, ranks->rl_nr);
+
+	return 0;
+}
+
 void
 map_ranks_fini(d_rank_list_t *ranks)
 {
