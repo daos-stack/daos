@@ -188,8 +188,8 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 
 	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
 		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), pool->sp_rebuilding,
-			pool->sp_rebuild_scan);
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			atomic_load(&pool->sp_rebuilding), pool->sp_rebuild_scan);
 		return false;
 	}
 
@@ -260,6 +260,7 @@ get_hae(struct ds_cont_child *cont, bool vos_agg)
 	/* EC aggregation */
 	if (!vos_agg)
 		return cont->sc_ec_agg_eph;
+
 	/*
 	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
 	 * in vos_aggregate()
@@ -2795,9 +2796,17 @@ ds_cont_eph_report(struct ds_pool *pool)
 			}
 		}
 
-		if (min_ec_agg_eph == 0 || min_ec_agg_eph == DAOS_EPOCH_MAX ||
-		    min_stable_eph == 0 || min_stable_eph == DAOS_EPOCH_MAX ||
-		    (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
+		if (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
+		    min_stable_eph <= ec_eph->cte_last_stable_epoch &&
+		    pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+			continue;
+
+		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
+		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
+		 */
+		if (min_ec_agg_eph == DAOS_EPOCH_MAX || min_stable_eph == DAOS_EPOCH_MAX ||
+		    (ec_eph->cte_last_ec_agg_epoch != 0 &&
+		     min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
 		     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
 			if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&
 			    (min_ec_agg_eph < ec_eph->cte_last_ec_agg_epoch ||
@@ -2820,8 +2829,9 @@ ds_cont_eph_report(struct ds_pool *pool)
 		D_DEBUG(DB_MD, "Update ec_agg_eph " DF_X64 ", stable_eph " DF_X64 ", " DF_UUID "\n",
 			min_ec_agg_eph, min_stable_eph, DP_UUID(ec_eph->cte_cont_uuid));
 
-		ret = cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid,
-					       min_ec_agg_eph, min_stable_eph);
+		ret =
+		    cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid, min_ec_agg_eph,
+					     min_stable_eph, pool->sp_ec_ephs_req);
 		if (ret == 0) {
 			ec_eph->cte_last_ec_agg_epoch = min_ec_agg_eph;
 			ec_eph->cte_last_stable_epoch = min_stable_eph;

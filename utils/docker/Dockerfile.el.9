@@ -23,6 +23,14 @@ ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
 
+# Accept DAOS_NO_PROXY at build time
+ARG DAOS_NO_PROXY
+# Propagate into the build environment
+ENV no_proxy=${DAOS_NO_PROXY}
+ENV NO_PROXY=${DAOS_NO_PROXY}
+# Persist into /etc/environment for use by shells and services
+RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
+    echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el*.sh /tmp/
@@ -113,12 +121,12 @@ USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
-        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
-              TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
-        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                  \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; " \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;      \
+        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos        \
+              TARGET_TYPE=$DAOS_TARGET_TYPE &&                            \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz);       \
     }
 
 COPY --chown=daos_server:daos_server utils/rpms utils/rpms
@@ -126,13 +134,13 @@ COPY --chown=daos_server:daos_server utils/sl utils/sl
 
 # Build third party RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-    if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
-        direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
-    RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                     \
-    export DISTRO="el${RELEASE_MAJOR}" &&                                                  \
-	utils/rpms/build_packages.sh deps &&                                    \
-	mkdir -p /home/daos/rpms &&                                             \
-	mv *.rpm /home/daos/rpms;                                               \
+        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "       \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;            \
+        RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                       \
+        export DISTRO="el${RELEASE_MAJOR}" &&                                   \
+	    utils/rpms/build_packages.sh deps &&                                    \
+	    mkdir -p /home/daos/rpms &&                                             \
+	    mv *.rpm /home/daos/rpms;                                               \
     }
 USER root:root
 

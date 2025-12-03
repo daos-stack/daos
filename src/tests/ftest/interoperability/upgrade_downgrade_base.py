@@ -261,7 +261,8 @@ class UpgradeDowngradeBase(IorTestBase):
 
         if servers:
             self.log.info("Installing version %s on servers, %s", version, servers)
-            if not install_packages(self.log, servers, server_packages, 'root').passed:
+            result = install_packages(self.log, servers, server_packages, 'root', allowerasing=True)
+            if not result.passed:
                 self.fail(f"Failed to install version {version} on servers")
             self.current_server_version = Version(version)
             result = run_remote(self.log, NodeSet(servers[0]), 'dmg version')
@@ -274,7 +275,8 @@ class UpgradeDowngradeBase(IorTestBase):
         # Install on clients
         if clients:
             self.log.info("Installing version %s on clients, %s", version, clients)
-            if not install_packages(self.log, clients, client_packages, 'root').passed:
+            result = install_packages(self.log, clients, client_packages, 'root', allowerasing=True)
+            if not result.passed:
                 self.fail(f"Failed to install version {version} on clients")
             self.current_client_version = Version(version)
             result = run_remote(self.log, clients, 'daos version')

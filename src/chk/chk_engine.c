@@ -2577,7 +2577,7 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	coll_ops.co_func = chk_engine_query_one;
 	coll_args.ca_func_args = shard;
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
