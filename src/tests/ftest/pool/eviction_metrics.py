@@ -33,17 +33,12 @@ class EvictionMetrics(TestWithTelemetry):
         self.log_step('Creating a pool (dmg pool create)')
         pool = self.get_pool(connect=False)
 
-        self.telemetry.list_metrics()
-
         self.log_step(
             'Collect pool eviction metrics after creating a pool (dmg telemetry metrics query)')
         expected_ranges = self.telemetry.collect_data(evict_metrics)
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
-                if self.server_managers[0].manager.job.using_control_metadata:
-                    expected_ranges[metric][label] = [1, 1]
-                else:
-                    expected_ranges[metric][label] = [0, 0]
+                expected_ranges[metric][label] = [0, 0]
 
         self.log_step(
             'Verify pool eviction metrics after pool creation (dmg telemetry metrics query)')
