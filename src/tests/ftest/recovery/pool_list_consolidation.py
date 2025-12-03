@@ -297,8 +297,8 @@ class PoolListConsolidationTest(TestWithServers):
         self.log_step("Create a pool with --nsvc=3.")
         pool = self.get_pool(connect=False, svcn=3)
 
-        # vos_path = self.server_managers[0].get_vos_path(pool)
-        # self.log.debug(f"## vos_path = {vos_path}")
+        vos_path = self.server_managers[0].get_vos_path(pool)
+        self.log.debug(f"## vos_path = {vos_path}")
 
         self.log.debug("Determine the host with two service ranks.")
         # Each rank corresponds to a mount point of a host. However, the mapping could
