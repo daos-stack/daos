@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-if-dependabot:
-    if: github.actor == 'dependabot'
+    if: startsWith(github.actor, 'dependabot')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -25,17 +25,31 @@ jobs:
             -X POST \
             -H "Content-Type: application/json" \
             --data "$(jq -n --arg title "$new_title" \
-                           --arg body "$PR_BODY" \
-                           --arg project_key "$JIRA_PROJECT_KEY" \
-                           '{
+                            --arg body "$PR_BODY" \
+                            --arg project_key "$JIRA_PROJECT_KEY" \
+                            '{
                               fields: {
                                 project: { key: $project_key },
                                 summary: $title,
-                                description: $body,
+                                description: {
+                                  type: "doc",
+                                  version: 1,
+                                  content: [
+                                    {
+                                      type: "paragraph",
+                                      content: [
+                                        {
+                                          type: "text",
+                                          text: $body
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
                                 issuetype: { name: "Story" }
                               }
-                            }')" ${{ secrets.JIRA_BASE_URL }}
-           )
+                            }')" ${{ secrets.JIRA_ISSUES_REST_API_V3_URL }}
+          )
 
           jira_ticket_key=$(echo $jira_response | jq -r .key)
           echo "PR_NEW_TITLE=$jira_ticket_key cq: $new_title" >> $GITHUB_ENV

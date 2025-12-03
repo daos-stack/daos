@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +8,8 @@
 package main
 
 import (
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -205,8 +208,150 @@ exclude_fabric_ifaces: ["ib3"]
 		t.Run(name, func(t *testing.T) {
 			result, err := LoadConfig(tc.path)
 
+			cmpOpts := cmp.Options{
+				cmpopts.IgnoreUnexported(security.CertificateConfig{}),
+				cmpopts.IgnoreUnexported(TelemetryConfig{}),
+			}
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(security.CertificateConfig{})); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, cmpOpts...); diff != "" {
+				t.Fatalf("(want-, got+):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestAgent_ReadConfig(t *testing.T) {
+	cfgWith := func(cfg *Config, xfrm func(*Config) *Config) *Config {
+		if xfrm != nil {
+			cfg = xfrm(cfg)
+		}
+		return cfg
+	}
+
+	for name, tc := range map[string]struct {
+		input  string
+		expCfg *Config
+		expErr error
+	}{
+		"empty": {
+			expCfg: DefaultConfig(),
+		},
+		"telemetry enabled with no port": {
+			input: `
+telemetry_enabled: true
+`,
+			expErr: errors.New("telemetry_enabled requires telemetry_port"),
+		},
+		"telemetry retain set without enable": {
+			input: `
+telemetry_retain: 10m
+`,
+			expErr: errors.New("telemetry_retain requires telemetry_enabled: true"),
+		},
+		"telemetry enable pattern without enable": {
+			input: `
+telemetry_enabled_procs: foo
+`,
+			expErr: errors.New("cannot specify telemetry_enabled_procs without telemetry_enabled"),
+		},
+		"invalid enable pattern": {
+			input: `
+telemetry_enabled_procs: "*"
+`,
+			expErr: errors.New("invalid regular expression"),
+		},
+		"telemetry enabled and disabled patterns specified": {
+			input: `
+telemetry_port: 1234
+telemetry_enabled: true
+telemetry_enabled_procs: foo
+telemetry_disabled_procs: bar
+`,
+			expErr: errors.New("cannot specify both telemetry_enabled_procs and telemetry_disabled_procs"),
+		},
+		"telemetry disabled pattern without enable": {
+			input: `
+telemetry_disabled_procs: foo
+`,
+			expErr: errors.New("cannot specify telemetry_disabled_procs without telemetry_enabled"),
+		},
+		"invalid disabled pattern": {
+			input: `
+telemetry_disabled_procs: "*"
+`,
+			expErr: errors.New("invalid regular expression"),
+		},
+		"empty disabled pattern": {
+			input: `
+telemetry_disabled_procs: ""
+`,
+			expErr: errors.New("empty regular expression"),
+		},
+		"invalid retain value": {
+			input: `
+telemetry_retain: foo
+`,
+			expErr: errors.New("time.Duration"),
+		},
+		"minimal telemetry config": {
+			input: `
+telemetry_port: 1234
+telemetry_enabled: true
+`,
+			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+				cfg.Telemetry.Port = 1234
+				cfg.Telemetry.Enabled = true
+				return cfg
+			}),
+		},
+		"telemetry config with retain duration": {
+			input: `
+telemetry_port: 1234
+telemetry_enabled: true
+telemetry_retain: 10s
+`,
+			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+				cfg.Telemetry.Port = 1234
+				cfg.Telemetry.Enabled = true
+				cfg.Telemetry.Retain = 10 * time.Second
+				return cfg
+			}),
+		},
+		"telemetry config with enabled pattern": {
+			input: `
+telemetry_port: 1234
+telemetry_enabled: true
+telemetry_enabled_procs: ^foo$
+`,
+			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+				cfg.Telemetry.Port = 1234
+				cfg.Telemetry.Enabled = true
+				cfg.Telemetry.RegPattern = (*ConfigRegexp)(regexp.MustCompile("^foo$"))
+				return cfg
+			}),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotCfg, gotErr := ReadConfig(strings.NewReader(tc.input))
+
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := cmp.Options{
+				cmpopts.IgnoreUnexported(security.CertificateConfig{}),
+				cmp.Comparer(func(x, y *ConfigRegexp) bool {
+					if x == nil && y == nil {
+						return true
+					}
+					if x == nil || y == nil {
+						return false
+					}
+					return x.String() == y.String()
+				}),
+			}
+			if diff := cmp.Diff(tc.expCfg, gotCfg, cmpOpts...); diff != "" {
 				t.Fatalf("(want-, got+):\n%s", diff)
 			}
 		})

@@ -562,10 +562,6 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 
 	tx->last_errnum = 0;
 	ASSERT(env == NULL);
-	if (env != NULL)
-		memcpy(txd->env, env, sizeof(jmp_buf));
-	else
-		memset(txd->env, 0, sizeof(jmp_buf));
 
 	txd->failure_behavior = failure_behavior;
 
@@ -689,9 +685,6 @@ obj_tx_abort(int errnum, int user)
 
 	/* ONABORT */
 	obj_tx_callback(tx);
-
-	if (!util_is_zeroed(txd->env, sizeof(jmp_buf)))
-		longjmp(txd->env, errnum);
 }
 
 /*

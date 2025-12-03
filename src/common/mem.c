@@ -186,9 +186,19 @@ set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 		davslab.units_per_block = 1000;
 		davslab.header_type = DAV_HEADER_NONE;
 		davslab.class_id = slab->class_id;
-		rc = dav_class_register_v2((dav_obj_t *)ph_p->up_priv, &davslab);
+		rc = dav_class_register_v2((dav_obj_t *)ph_p->up_priv, &davslab, 0);
+		if (rc)
+			break;
 		/* update with the new slab id */
 		slab->class_id = davslab.class_id;
+
+		davslab.units_per_block = 1;
+		davslab.class_id        = slab->class_id;
+		rc = dav_class_register_v2((dav_obj_t *)ph_p->up_priv, &davslab, 1);
+		if (rc)
+			D_ERROR(
+			    "Reregistering slab of unit size %ld with class_id %d for emb failed",
+			    slab->unit_size, slab->class_id);
 		break;
 	case DAOS_MD_ADMEM:
 		/* NOOP for ADMEM now */
@@ -404,6 +414,11 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 	struct ad_blob_handle	 bh;
 	int			 enabled = 1;
 	int			 rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_UMEM)) { /** fault injection */
+		errno = daos_fail_value_get();
+		return NULL;
+	}
 
 	D_ALLOC(umm_pool, sizeof(*umm_pool) + sizeof(umm_pool->up_slabs[0]) * UMM_SLABS_CNT);
 	if (umm_pool == NULL)

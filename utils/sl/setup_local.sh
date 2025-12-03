@@ -78,7 +78,7 @@ function in_list()
 
 function create_list()
 {
-  compgen -A variable | grep "SL_.*_PREFIX"
+  compgen -A variable | grep "SL_.*_PREFIX" || true
 }
 
 list="$(create_list)"

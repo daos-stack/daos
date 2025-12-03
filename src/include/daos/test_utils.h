@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +14,20 @@
 
 #include <daos/drpc.h>
 
+/**
+ * Initialize DAOS logging framework for unit tests.
+ *
+ * \return  0 if success, -DER error code otherwise
+ */
+int
+ut_log_init(void);
+
+/**
+ * Finalize DAOS logging framework for unit tests.
+ */
+void
+ut_log_fini(void);
+
 /*
  * drpc unit test utilities
  */
@@ -25,7 +40,8 @@
  *
  * \return	Newly allocated struct drpc
  */
-struct drpc *new_drpc_with_fd(int fd);
+struct drpc                 *
+new_drpc_with_fd(int fd);
 
 /**
  * Frees a drpc context and cleans up. Not tied to anything in the real file

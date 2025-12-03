@@ -73,7 +73,8 @@ def _base_setup(env):
                 env["CCFLAGS"].remove(flag)
         cc_flags = [f"-Wframe-larger-than={ASAN_FRAME_SIZE_MAX[cc]}",
                     '-fno-omit-frame-pointer',
-                    '-fno-common']
+                    '-fno-common',
+                    '-Wno-stringop-truncation']
 
         asan_flags = []
         for sanitizer in env['SANITIZERS'].split(','):
@@ -105,7 +106,10 @@ def _base_setup(env):
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
         env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
-    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
+    if env['CMOCKA_FILTER_SUPPORTED']:
+        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '1'})
+    else:
+        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 

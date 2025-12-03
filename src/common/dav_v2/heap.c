@@ -58,6 +58,7 @@ TAILQ_HEAD(mbrt_q, mbrt);
 struct mbrt {
 	TAILQ_ENTRY(mbrt) mb_link;
 	struct mbrt_q        *qptr;
+	struct alloc_class_collection *alloc_classes;
 	uint32_t              mb_id;
 	uint32_t              garbage_reclaimed;
 	uint64_t              space_usage;
@@ -100,12 +101,13 @@ struct mbrt_qbs {
 struct soemb_rt {
 	struct mbrt    *svec[SOEMB_ACTIVE_CNT];
 	int             cur_idx;
-	int             fur_idx;
+	int             far_idx;
 	struct mbrt_qbs qbs;
 };
 
 struct heap_rt {
-	struct alloc_class_collection *alloc_classes;
+	struct alloc_class_collection *alloc_classes_default;
+	struct alloc_class_collection *alloc_classes_emb;
 	pthread_mutex_t                run_locks[MAX_RUN_LOCKS];
 	unsigned                       nlocks;
 	unsigned                       nzones;
@@ -424,7 +426,7 @@ soemb_init(struct soemb_rt *smbrt)
 	memset(smbrt->svec, 0, sizeof(struct mbrt *) * SOEMB_ACTIVE_CNT);
 	mbrt_qbs_init(&smbrt->qbs);
 	smbrt->cur_idx = 0;
-	smbrt->fur_idx = 0;
+	smbrt->far_idx = 0;
 }
 
 static void
@@ -527,8 +529,13 @@ heap_mbrt_setup_mb(struct palloc_heap *heap, uint32_t zid)
 
 	mb->mb_id = zid;
 
+	if (mb->mb_id)
+		mb->alloc_classes = rt->alloc_classes_emb;
+	else
+		mb->alloc_classes = rt->alloc_classes_default;
+
 	for (i = 0; i < MAX_ALLOCATION_CLASSES; ++i) {
-		c = alloc_class_by_id(rt->alloc_classes, i);
+		c = alloc_class_by_id(mb->alloc_classes, i);
 
 		if (c == NULL)
 			continue;
@@ -540,7 +547,7 @@ heap_mbrt_setup_mb(struct palloc_heap *heap, uint32_t zid)
 
 	mb->default_bucket =
 	    bucket_locked_new(container_new_ravl(heap),
-			      alloc_class_by_id(rt->alloc_classes, DEFAULT_ALLOC_CLASS_ID), mb);
+			      alloc_class_by_id(mb->alloc_classes, DEFAULT_ALLOC_CLASS_ID), mb);
 
 	if (mb->default_bucket == NULL)
 		goto error_bucket_create;
@@ -549,7 +556,7 @@ heap_mbrt_setup_mb(struct palloc_heap *heap, uint32_t zid)
 
 error_bucket_create:
 	for (i = 0; i < MAX_ALLOCATION_CLASSES; ++i) {
-		c = alloc_class_by_id(rt->alloc_classes, i);
+		c = alloc_class_by_id(mb->alloc_classes, i);
 		if (c != NULL) {
 			if (mb->buckets[c->id] != NULL)
 				bucket_locked_delete(mb->buckets[c->id]);
@@ -590,15 +597,14 @@ heap_mbrt_update_alloc_class_buckets(struct palloc_heap *heap, struct mbrt *mb,
 {
 	uint8_t c_id = c->id;
 
-	if ((heap->rt->default_mb == mb) || (mb->buckets[c_id] != NULL))
+	if (mb->buckets[c_id] != NULL)
 		return 0;
 
 	/* Allocation class created post creation/loading of the memory bucket runtime */
-	if (heap->rt->default_mb->buckets[c_id]) {
-		mb->buckets[c_id] = bucket_locked_new(container_new_seglists(heap), c, mb);
-		if (!mb->buckets[c_id])
-			return ENOMEM;
-	}
+	mb->buckets[c_id] = bucket_locked_new(container_new_seglists(heap), c, mb);
+	if (!mb->buckets[c_id])
+		return ENOMEM;
+
 	return 0;
 }
 
@@ -695,6 +701,26 @@ heap_mbrt_log_alloc_failure(struct palloc_heap *heap, uint32_t zone_id)
 		mbrt_qbs_insertmb_force(&heap->rt->emb_qbs, mb, MB_U90_HINT);
 		heap_zinfo_set_usage(heap, zone_id, MB_U90_HINT);
 	}
+}
+
+/*
+ * heap_touch_umem_cache -- touch the cache page for a memory address
+ *			  if the memory bucket is evictable
+ */
+void
+heap_touch_umem_cache(struct palloc_heap *heap, void *addr, size_t size)
+{
+	uint64_t     offset  = HEAP_PTR_TO_OFF(heap, addr);
+	uint32_t     zone_id = OFFSET_TO_ZID(offset);
+	struct mbrt *mb      = heap_mbrt_get_mb(heap, zone_id);
+	dav_obj_t   *dav_hdl = (dav_obj_t *)heap->p_ops.base;
+
+	D_ASSERT((mb != NULL) && (dav_hdl != NULL) && (dav_hdl->do_utx != NULL));
+
+	if (!mb->is_evictable)
+		return;
+
+	umem_cache_touch(dav_hdl->do_store, dav_hdl->do_utx->utx_id, offset, size);
 }
 
 void
@@ -797,10 +823,72 @@ heap_mbrt_mb_reclaim_garbage(struct palloc_heap *heap, uint32_t zid)
 	return 0;
 }
 
+static int
+heap_detach_and_try_discard_run(struct palloc_heap *heap, struct bucket *b);
+
+static int
+heap_mbrt_recycle_runs(struct palloc_heap *heap, struct mbrt *mb, int exclude_cid)
+{
+	int                           i;
+	int                           cnt = 0;
+	struct bucket                *b;
+	struct recycler_element       e;
+	struct run_bitmap             bmap;
+	struct memory_block          *m;
+	struct memory_block_reserved *msrv;
+
+	if (mb->mb_id == 0)
+		return 0;
+
+	for (i = 0; i < MAX_ALLOCATION_CLASSES; i++) {
+		if ((mb->buckets[i] == NULL) || (i == exclude_cid))
+			continue;
+		b = bucket_acquire(mb->buckets[i]);
+		if ((msrv = bucket_active_block(b)) == NULL)
+			goto next;
+		m = &msrv->m;
+		if (m == NULL)
+			goto next;
+		e = recycler_element_new(heap, m);
+		m->m_ops->get_bitmap(m, &bmap);
+		if (e.free_space == bmap.nbits)
+			cnt += !heap_detach_and_try_discard_run(heap, b);
+next:
+		mbrt_bucket_release(b);
+	}
+	return cnt;
+}
+
 void
 heap_soemb_active_iter_init(struct palloc_heap *heap)
 {
 	heap->rt->smbrt.cur_idx = 0;
+}
+
+static int
+heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id);
+
+static struct mbrt *
+heap_soemb_passive_get(struct palloc_heap *heap)
+{
+	struct soemb_rt *smbrt = &heap->rt->smbrt;
+	struct mbrt     *mb    = NULL;
+	int              ret;
+	uint32_t         mb_id;
+
+	mb = mbrt_qbs_getmb(&smbrt->qbs, 0);
+	if (mb)
+		return mb;
+
+	ret = heap_create_soe_mb(heap, &mb_id);
+	if (ret == 0)
+		return heap_mbrt_get_mb(heap, mb_id);
+
+	mb = mbrt_qbs_getmb(&smbrt->qbs, 1);
+	if (mb)
+		return mb;
+
+	return 0;
 }
 
 uint32_t
@@ -812,35 +900,36 @@ heap_soemb_active_get(struct palloc_heap *heap)
 	if (heap->rt->nzones_e == 0)
 		return 0;
 
-	if (smbrt->cur_idx > smbrt->fur_idx)
-		smbrt->fur_idx = smbrt->cur_idx;
+	if (smbrt->cur_idx > smbrt->far_idx)
+		smbrt->far_idx = smbrt->cur_idx;
 
 	if (smbrt->cur_idx < SOEMB_ACTIVE_CNT) {
 		mb = smbrt->svec[smbrt->cur_idx];
-		smbrt->cur_idx++;
+		if (mb == NULL) {
+			mb = heap_soemb_passive_get(heap);
+			if (mb == NULL)
+				return 0;
+			smbrt->svec[smbrt->cur_idx] = mb;
+		}
+		if (mb) {
+			smbrt->cur_idx++;
+			return mb->mb_id;
+		}
 	}
-
-	if (mb)
-		return mb->mb_id;
-
 	return 0;
 }
 
-static int
-heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id);
-
 void
-heap_soemb_reserve(struct palloc_heap *heap)
+heap_soemb_active_update(struct palloc_heap *heap)
 {
-	int              i, ret;
-	uint32_t         mb_id;
-	struct mbrt     *mb;
+	int              i;
+	struct mbrt     *mb    = NULL;
 	struct soemb_rt *smbrt = &heap->rt->smbrt;
 
 	if (heap->rt->nzones_e == 0)
 		return;
 
-	if (smbrt->fur_idx > 1) {
+	if (smbrt->far_idx > 1) {
 		mb = smbrt->svec[0];
 		if (mb)
 			mbrt_qbs_insertmb(&smbrt->qbs, mb);
@@ -850,28 +939,7 @@ heap_soemb_reserve(struct palloc_heap *heap)
 		}
 
 		smbrt->svec[SOEMB_ACTIVE_CNT - 1] = NULL;
-		smbrt->fur_idx                    = 0;
-	}
-
-	for (i = 0; i < SOEMB_ACTIVE_CNT; i++) {
-		if (smbrt->svec[i] != NULL)
-			continue;
-		mb = mbrt_qbs_getmb(&smbrt->qbs, 0);
-		if (mb) {
-			smbrt->svec[i] = mb;
-			break;
-		}
-		ret = heap_create_soe_mb(heap, &mb_id);
-		if (ret == 0) {
-			smbrt->svec[i] = heap_mbrt_get_mb(heap, mb_id);
-			break;
-		}
-		mb = mbrt_qbs_getmb(&smbrt->qbs, 1);
-		if (mb) {
-			smbrt->svec[i] = mb;
-			break;
-		}
-		break;
+		smbrt->far_idx                    = 0;
 	}
 	smbrt->cur_idx = 0;
 }
@@ -920,22 +988,34 @@ heap_get_recycler(struct palloc_heap *heap, struct mbrt *mb, size_t id, size_t n
 }
 
 /*
- * heap_alloc_classes -- returns the allocation classes collection
+ * heap_alloc_classes - returns the allocation classes collection for the heap based on requested
+ * type.
  */
 struct alloc_class_collection *
-heap_alloc_classes(struct palloc_heap *heap)
+heap_alloc_classes(struct palloc_heap *heap, bool evictable_mb)
 {
-	return heap->rt ? heap->rt->alloc_classes : NULL;
+	if (heap->rt == NULL)
+		return NULL;
+	return evictable_mb ? heap->rt->alloc_classes_emb : heap->rt->alloc_classes_default;
 }
 
 /*
- * heap_get_best_class -- returns the alloc class that best fits the
- *	requested size
+ * mbrt_alloc_classes -- returns the allocation classes collection for the given mbrt
+ */
+struct alloc_class_collection *
+mbrt_alloc_classes(struct mbrt *mb)
+{
+	return mb ? mb->alloc_classes : NULL;
+}
+
+/*
+ * mbrt_get_best_class -- returns the alloc class that best fits the
+ *	requested size for the given mbrt
  */
 struct alloc_class *
-heap_get_best_class(struct palloc_heap *heap, size_t size)
+mbrt_get_best_class(struct mbrt *mb, size_t size)
 {
-	return alloc_class_by_alloc_size(heap->rt->alloc_classes, size);
+	return alloc_class_by_alloc_size(mb->alloc_classes, size);
 }
 
 /*
@@ -1185,9 +1265,8 @@ heap_reclaim_run(struct palloc_heap *heap, struct memory_block *m, int startup)
 	struct chunk_header *hdr = heap_get_chunk_hdr(heap, m);
 	struct mbrt         *mb   = heap_mbrt_get_mb(heap, m->zone_id);
 
-	struct alloc_class *c = alloc_class_by_run(
-		heap->rt->alloc_classes,
-		run->hdr.block_size, hdr->flags, m->size_idx);
+	struct alloc_class  *c =
+	    alloc_class_by_run(mb->alloc_classes, run->hdr.block_size, hdr->flags, m->size_idx);
 
 	struct recycler_element e = recycler_element_new(heap, m);
 
@@ -1253,7 +1332,10 @@ heap_reclaim_zone_garbage(struct palloc_heap *heap, struct bucket *bucket,
 		case CHUNK_TYPE_USED:
 			break;
 		default:
-			ASSERT(0);
+			D_ASSERTF(0,
+				  "Encountered invalid chunk (%" PRIu32 ") of type %" PRIu16
+				  " val = 0x%" PRIx64,
+				  i, hdr->type, *(uint64_t *)hdr);
 		}
 
 		i = m.chunk_id + m.size_idx; /* hdr might have changed */
@@ -1473,6 +1555,7 @@ heap_populate_bucket(struct palloc_heap *heap, struct bucket *bucket)
 
 	heap_zone_init(heap, zone_id, 0, 0);
 	heap_mark_zone_used_persist(heap, zone_id);
+	heap_incr_empty_nemb_cnt(heap);
 
 reclaim_garbage:
 	heap_reclaim_zone_garbage(heap, bucket, zone_id);
@@ -1663,6 +1746,7 @@ heap_ensure_run_bucket_filled(struct palloc_heap *heap, struct bucket *b,
 	struct mbrt        *mb     = bucket_get_mbrt(b);
 	struct memory_block m;
 	struct bucket      *defb;
+	int                 count = mb->mb_id ? 0 : 1;
 
 	D_ASSERT(mb != NULL);
 	ASSERTeq(aclass->type, CLASS_RUN);
@@ -1676,6 +1760,7 @@ heap_ensure_run_bucket_filled(struct palloc_heap *heap, struct bucket *b,
 	if (heap_reuse_from_recycler(heap, b, units, 0) == 0)
 		goto out;
 
+retry:
 	m = MEMORY_BLOCK_NONE;
 
 	m.size_idx = aclass->rdsc.size_idx;
@@ -1696,6 +1781,9 @@ heap_ensure_run_bucket_filled(struct palloc_heap *heap, struct bucket *b,
 
 	if (heap_reuse_from_recycler(heap, b, units, 1) == 0)
 		goto out;
+
+	if (!count++ && heap_mbrt_recycle_runs(heap, mb, aclass->id))
+		goto retry;
 
 	mbrt_set_laf(mb, aclass->id);
 	ret = ENOMEM;
@@ -1720,9 +1808,8 @@ heap_memblock_on_free(struct palloc_heap *heap, const struct memory_block *m)
 
 	ASSERTeq(hdr->type, CHUNK_TYPE_RUN);
 
-	struct alloc_class *c = alloc_class_by_run(
-		heap->rt->alloc_classes,
-		run->hdr.block_size, hdr->flags, hdr->size_idx);
+	struct alloc_class *c =
+	    alloc_class_by_run(mb->alloc_classes, run->hdr.block_size, hdr->flags, hdr->size_idx);
 
 	if (c == NULL)
 		return;
@@ -1866,7 +1953,8 @@ heap_cleanup(struct palloc_heap *heap)
 	struct heap_rt *rt = heap->rt;
 	unsigned        i;
 
-	alloc_class_collection_delete(rt->alloc_classes);
+	alloc_class_collection_delete(rt->alloc_classes_default);
+	alloc_class_collection_delete(rt->alloc_classes_emb);
 
 	for (i = 0; i < rt->nlocks; ++i)
 		util_mutex_destroy(&rt->run_locks[i]);
@@ -2026,10 +2114,15 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 		goto error_heap_malloc;
 	}
 
-	h->alloc_classes = alloc_class_collection_new();
-	if (h->alloc_classes == NULL) {
+	h->alloc_classes_default = alloc_class_collection_new(false);
+	if (h->alloc_classes_default == NULL) {
 		err = ENOMEM;
 		goto error_alloc_classes_new;
+	}
+	h->alloc_classes_emb = alloc_class_collection_new(true);
+	if (h->alloc_classes_emb == NULL) {
+		err = ENOMEM;
+		goto error_mbrt_init;
 	}
 
 	hzl = heap_get_zone_limits(heap_size, cache_size, nemb_pct);
@@ -2068,7 +2161,10 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 	return 0;
 
 error_mbrt_init:
-	alloc_class_collection_delete(h->alloc_classes);
+	if (h->alloc_classes_default)
+		alloc_class_collection_delete(h->alloc_classes_default);
+	if (h->alloc_classes_emb)
+		alloc_class_collection_delete(h->alloc_classes_emb);
 error_alloc_classes_new:
 	D_FREE(h);
 	heap->rt = NULL;
@@ -2153,7 +2249,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rc = heap_get_next_unused_zone(heap, &zone_id);
 	if (rc) {
 		D_ERROR("Failed to obtain free zone for evictable mb");
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2161,7 +2257,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	mb = heap_mbrt_setup_mb(heap, zone_id);
 	if (mb == NULL) {
 		ERR("Failed to setup mbrt for zone %u\n", zone_id);
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2250,7 +2346,7 @@ heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rc = heap_get_next_unused_zone(heap, &zone_id);
 	if (rc) {
 		D_ERROR("Failed to obtain free zone for evictable mb");
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2258,7 +2354,7 @@ heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	mb = heap_mbrt_setup_mb(heap, zone_id);
 	if (mb == NULL) {
 		ERR("Failed to setup mbrt for zone %u\n", zone_id);
-		rc    = 1;
+		rc    = -1;
 		errno = ENOMEM;
 		goto out;
 	}
@@ -2716,7 +2812,7 @@ heap_force_recycle(struct palloc_heap *heap)
 	struct bucket *defb;
 	struct mbrt   *mb;
 	uint32_t       zone_id;
-	uint32_t       max_reclaim = heap->rt->empty_nemb_gcth * 2;
+	uint32_t       max_reclaim = HEAP_NEMB_EMPTY_THRESHOLD * 2;
 
 	mb   = heap_mbrt_get_mb(heap, 0);
 

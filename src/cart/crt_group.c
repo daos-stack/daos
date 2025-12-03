@@ -3332,13 +3332,13 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 
 	if (grp_priv->gp_membs_ver_min == 0) {
 		D_INFO("Minimum group version not known yet\n");
-		D_GOTO(unlock, rc = -DER_UNINIT);
+		D_GOTO(unlock, rc = -DER_GRPVER);
 	}
 
 	if (version < grp_priv->gp_membs_ver_min || version <= grp_priv->gp_membs_ver) {
 		D_INFO("Incoming group version too low: incoming=%u min=%u current=%u\n", version,
 		       grp_priv->gp_membs_ver_min, grp_priv->gp_membs_ver);
-		D_GOTO(unlock, rc = -DER_ALREADY);
+		D_GOTO(unlock, rc = -DER_GRPVER);
 	}
 
 	grp_membs = grp_priv_get_membs(grp_priv);

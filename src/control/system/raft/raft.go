@@ -297,11 +297,49 @@ func (db *Database) ConfigureTransport(srv *grpc.Server, dialOpts ...grpc.DialOp
 	return nil
 }
 
+type getCfgFn func(logging.Logger, *DatabaseConfig) (raft.Configuration, error)
+type recoverFn func(logging.Logger, *DatabaseConfig) error
+
+// replicasRemoved checks whether replicas have been removed from the system configuration since the
+// last time the raft service ran. Raft persists the list in its configuration.
+func (db *Database) replicasRemoved(getCfg getCfgFn) (bool, error) {
+	raftCfg, err := getCfg(db.log, db.cfg)
+	if err != nil {
+		return false, errors.Wrap(err, "getting raft config")
+	}
+
+	current := common.NewStringSet(db.cfg.stringReplicas()...)
+	for _, raftSrv := range raftCfg.Servers {
+		if !current.Has(string(raftSrv.Address)) {
+			db.log.Debugf("detected removed MS replica: %s", raftSrv.Address)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// recoverIfReplicasRemoved detects whether nodes have been removed from the last known MS replica
+// list. If so, it may not be possible to hold an election with the voter list in the raft config.
+// We must recover the DB with a fresh raft configuration to allow an election to be held.
+func (db *Database) recoverIfReplicasRemoved(getCfg getCfgFn, recover recoverFn) error {
+	if removed, err := db.replicasRemoved(getCfg); err != nil {
+		return errors.Wrap(err, "checking for removed replicas")
+	} else if removed {
+		db.log.Infof("detected at least one MS replica removed, attempting to recover raft DB")
+		return recover(db.log, db.cfg)
+	}
+	return nil
+}
+
 // initRaft sets up the backing raft service for use. If the service has
 // already been bootstrapped, then it will start immediately. Otherwise,
 // it will need to be bootstrapped before it can be used.
 func (db *Database) initRaft() error {
 	if err := createRaftDir(db.cfg.RaftDir); err != nil {
+		return err
+	}
+
+	if err := db.recoverIfReplicasRemoved(GetRaftConfiguration, RecoverLocalReplica); err != nil {
 		return err
 	}
 

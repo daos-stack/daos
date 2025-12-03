@@ -27,7 +27,12 @@ const msgNoPools = "No pools in system"
 // PrintPoolQueryResponse generates a human-readable representation of the supplied
 // PoolQueryResp struct and writes it to the supplied io.Writer.
 func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...PrintConfigOption) error {
-	return pretty.PrintPoolInfo(&pqr.PoolInfo, out)
+	if err := pretty.PrintPoolInfo(&pqr.PoolInfo, out); err != nil {
+		return err
+	}
+	pretty.PrintPoolSelfHealDisable(pqr.PoolInfo.SelfHealPolicy, pqr.SysSelfHealPolicy, out)
+
+	return nil
 }
 
 // PrintPoolQueryTargetResponse generates a human-readable representation of the supplied

@@ -559,7 +559,7 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 			sizeof(struct tx_range_def));
 		tx->first_snapshot = 1;
 		tx->pop = pop;
-		heap_soemb_reserve(pop->do_heap);
+		heap_soemb_active_update(pop->do_heap);
 	} else {
 		FATAL("Invalid stage %d to begin new transaction", tx->stage);
 	}
@@ -575,10 +575,6 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 
 	tx->last_errnum = 0;
 	ASSERT(env == NULL);
-	if (env != NULL)
-		memcpy(txd->env, env, sizeof(jmp_buf));
-	else
-		memset(txd->env, 0, sizeof(jmp_buf));
 
 	txd->failure_behavior = failure_behavior;
 
@@ -702,9 +698,6 @@ obj_tx_abort(int errnum, int user)
 
 	/* ONABORT */
 	obj_tx_callback(tx);
-
-	if (!util_is_zeroed(txd->env, sizeof(jmp_buf)))
-		longjmp(txd->env, errnum);
 }
 
 /*

@@ -1,0 +1,239 @@
+/**
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+
+#ifndef __DLCK_ENGINE__
+#define __DLCK_ENGINE__
+
+#include <abt.h>
+
+#include "dlck_args.h"
+
+#if defined(__x86_64) || defined(_M_X64) || defined(__aarch64__) || defined(__riscv)
+#define CACHELINE_SIZE 64ULL
+#elif defined(__PPC64__)
+#define CACHELINE_SIZE 128ULL
+#else
+#error unable to recognize architecture at compile time
+#endif
+
+struct dlck_ult {
+	ABT_thread thread;
+};
+
+struct dlck_xstream {
+	ABT_xstream     xstream;
+	ABT_pool        pool;
+
+	int             tgt_id;
+	struct dlck_ult nvme_poll;
+	ABT_eventual    nvme_poll_done;
+
+	int             ult_rc;
+};
+
+struct dlck_engine {
+	unsigned             targets;
+	struct dlck_xstream *xss;
+	bool                 join_fail;
+};
+
+typedef void (*dlck_ult_func)(void *arg);
+
+/**
+ * Start an engine.
+ *
+ * \param[in]	args		Engine's arguments.
+ * \param[out]	engine_ptr	Started engine.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
+ */
+int
+dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr);
+
+/**
+ * Stop an engine.
+ *
+ * \param[in]	engine	Engine to stop.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_BUSY	Joining ULTs failed. Unrecoverable.
+ * \retval -DER_*	Errors.
+ */
+int
+dlck_engine_stop(struct dlck_engine *engine);
+
+/**
+ * Initialize an execution stream.
+ *
+ * \param[in,out]	xs	Execution stream to initialize.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_INVAL	Thread name generation failed.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
+ */
+int
+dlck_engine_xstream_init(struct dlck_xstream *xs);
+
+/**
+ * Finalize an execution stream.
+ *
+ * \param[in,out]	xs	Execution stream to finalize.
+ *
+ * \retval DER_SUCCESS	Success. Supposedly it can't fail.
+ */
+int
+dlck_engine_xstream_fini(struct dlck_xstream *xs);
+
+/** dlck_abt.c */
+
+/**
+ * Just create an ABT execution stream.
+ *
+ * \param[out]	xs	Where the created execution stream will be stored.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_xstream_create(struct dlck_xstream *xs);
+
+/**
+ * Free an ABT execution stream.
+ *
+ * \param[out]	xs	Execution stream to free.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_xstream_free(struct dlck_xstream *xs);
+
+/**
+ * Create an ABT thread (ULT).
+ *
+ * \param[in]	pool	Pool to put the created ULT in.
+ * \param[in]	func	Function to start on the created ULT.
+ * \param[in]	arg	Argument pointer for the function.
+ * \param[out]	ult	Created ULT.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult);
+
+typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom, void **arg);
+typedef int (*arg_free_fn_t)(void *custom, void **arg);
+
+/**
+ * \brief Run the \p exec_one function as a set of ULTs on all the daos_io_* execution streams
+ * of the \p engine.
+ *
+ * The function does not return as along as all ULTs conclude.
+ *
+ * The \p arg_alloc_func and \p arg_free_fn are called to allocate and free arguments respectively.
+ * Each of ULTs has a separate arguments allocated for its own use.
+ *
+ * \param[in]	engine		Engine to run the created ULTs.
+ * \param[in]	exec_one	Function to run in the ULTs.
+ * \param[in]	arg_alloc_fn	Function to allocate arguments for an ULT.
+ * \param[in]	custom		Custom parameters for \p arg_alloc_fn and \p arg_free_fn function.
+ * \param[in]	arg_free_fn	Function to free arguments.
+ * \param[in]	checker		Checker.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
+		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn,
+		     struct checker *ck);
+
+#define DLCK_XSTREAM_PROGRESS_END UINT_MAX
+
+/**
+ * @struct xstream_arg
+ *
+ * Arguments passed to the main ULT on each of the execution streams.
+ */
+struct xstream_arg {
+	/** in */
+	struct dlck_control *ctrl;   /** Control state. */
+	struct dlck_engine  *engine; /** Engine itself. */
+	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
+	/** out */
+	volatile unsigned    progress __attribute__((__aligned__(CACHELINE_SIZE)));
+	int                  rc; /** return code */
+	unsigned             warnings_num;
+};
+
+static inline void
+dlck_xstream_set_rc(struct xstream_arg *xa, int rc)
+{
+	if (rc == DER_SUCCESS) {
+		return;
+	}
+
+	/** do not overwrite the first error found */
+	if (xa->rc == DER_SUCCESS) {
+		xa->rc = rc;
+	}
+}
+
+static inline void
+dlck_uadd_no_overflow(unsigned a, unsigned b, unsigned *result)
+{
+	/** safeguard against integer overflow */
+	if (__builtin_uadd_overflow(a, b, result)) {
+		*result = UINT_MAX;
+	}
+}
+
+/**
+ * Allocate arguments for a ULT.
+ *
+ * \param[in]	engine		Engine the ULT is about to be run in.
+ * \param[in]	idx		ULT ID.
+ * \param[in]	ctrl_ptr	Control state to be passed to the ULT.
+ * \param[out]	output_arg	Allocated argument for the ULT.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ */
+int
+dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr,
+			      void **output_arg);
+
+/**
+ * Free arguments of a ULT.
+ *
+ * \param[out]		ctrl_ptr	Control state to collect stats in.
+ * \param[in,out]	arg		ULT arguments to process and free.
+ *
+ * \return The return code for the ULT.
+ */
+int
+dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg);
+
+/**
+ * Read the progress of the given execution stream \p xa.
+ *
+ * \param[in]	xa		Execution stream.
+ * \param[out]	progress	Progress read from \p xa.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_INVAL	Invalid mutex.
+ */
+static inline void
+dlck_xstream_progress_get(struct xstream_arg *xa, unsigned *progress)
+{
+	*progress = xa->progress;
+}
+
+#endif /** __DLCK_ENGINE__ */

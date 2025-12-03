@@ -47,6 +47,20 @@
 ## default 0 (do not retain telemetry after client exit)
 #telemetry_retain: 1m
 
+## Enable client telemetry for a subset of DAOS clients matching the
+# supplied regular expression pattern. May not be used with
+# telemetry_disabled_procs.
+#
+## default: not set
+#telemetry_enabled_procs: ^dfuse$
+
+## Disable client telemetry for a subset of DAOS clients matching the
+# supplied regular expression pattern. May not be used with
+# telemetry_enabled_procs.
+#
+## default: not set
+#telemetry_disabled_procs: ^spambot-.*
+
 ## Configuration for user credential management.
 #credential_config:
 #  # If the agent should be able to resolve unknown client uids and gids
@@ -97,9 +111,9 @@
 # default: /var/run/daos_agent
 #runtime_dir: /var/run/daos_agent
 
-# Full path and name of the DAOS agent logfile.
-# default: /tmp/daos_agent.log
-#log_file: /tmp/daos_agent.log
+## Full path and name of the DAOS agent logfile.
+## default: print to stderr
+#log_file: /var/log/daos/daos_agent.log
 
 ## Force specific debug mask for daos_agent (control plane).
 ## Mask specifies minimum level of message significance to pass to logger.

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,6 +74,7 @@ obj_inherit_timeout(crt_rpc_t *parent, crt_rpc_t *child)
 
 	rc = crt_req_src_timeout_get(parent, &timeout);
 	D_ASSERT(rc == 0);
+
 	rc = crt_req_set_timeout(child, timeout);
 	D_ASSERT(rc == 0);
 }
@@ -123,10 +125,10 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	crt_req_addref(parent_req);
 	remote_arg->parent_req = parent_req;
 
-	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
-			    DAOS_OBJ_RPC_TGT_UPDATE, &req);
+	rc = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, DAOS_OBJ_RPC_TGT_UPDATE,
+			       &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc "DF_RC"\n", DP_RC(rc));
+		D_ERROR("ds_obj_req_create failed, rc " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -235,9 +237,9 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	else
 		opc = DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
 
-	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
+	rc = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc "DF_RC"\n", DP_RC(rc));
+		D_ERROR("ds_obj_req_create failed, rc " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -351,11 +353,9 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	tgt_ep.ep_rank = shard_tgt->st_rank;
 	tgt_ep.ep_tag = shard_tgt->st_tgt_idx;
 
-	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
-			    DAOS_OBJ_RPC_CPD, &req);
+	rc = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, DAOS_OBJ_RPC_CPD, &req);
 	if (rc != 0) {
-		D_ERROR("CPD crt_req_create failed, idx %u: "DF_RC"\n",
-			idx, DP_RC(rc));
+		D_ERROR("CPD ds_obj_req_create failed, idx %u: " DF_RC "\n", idx, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -518,9 +518,10 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	remote_arg->comp_cb = comp_cb;
 	remote_arg->idx = idx;
 
-	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, DAOS_OBJ_RPC_COLL_PUNCH, &req);
+	rc = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, DAOS_OBJ_RPC_COLL_PUNCH,
+			       &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed for coll punch: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("ds_obj_req_create failed for coll punch: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -641,7 +642,8 @@ ds_obj_coll_query_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	crt_req_addref(parent_req);
 	remote_arg->parent_req = parent_req;
 
-	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, DAOS_OBJ_RPC_COLL_QUERY, &req);
+	rc = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, DAOS_OBJ_RPC_COLL_QUERY,
+			       &req);
 	if (rc != 0) {
 		D_ERROR("Failed to create RPC to forward collective query: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);

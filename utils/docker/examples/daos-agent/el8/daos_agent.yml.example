@@ -10,7 +10,7 @@ access_points: ['localhost']
 port: 10001
 runtime_dir: /var/run/daos_agent
 control_log_mask: debug
-log_file: /tmp/daos_agent.log
+log_file: /var/log/daos/daos_agent.log
 
 transport_config:
   allow_insecure: false

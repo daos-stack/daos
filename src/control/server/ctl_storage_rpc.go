@@ -108,13 +108,17 @@ func findBdevTier(pciAddr string, tcs storage.TierConfigs) *storage.TierConfig {
 }
 
 // Convert bdev scan results to protobuf response.
-func bdevScanToProtoResp(scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb.ScanNvmeResp, error) {
+func bdevScanToProtoResp(log logging.DebugLogger, scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb.ScanNvmeResp, error) {
 	req := storage.BdevScanRequest{DeviceList: bdevCfgs.Bdevs()}
+
+	log.Debugf("bdevScanToProtoResp: bdev provider scan, req: %+v", req)
 
 	resp, err := scan(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "bdev provider scan")
 	}
+
+	log.Debugf("bdevScanToProtoResp: bdev provider scan, resp: %+v", resp)
 
 	pbCtrlrs := make(proto.NvmeControllers, 0, len(resp.Controllers))
 
@@ -159,9 +163,11 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 	resp := &ctlpb.ScanNvmeResp{}
 
 	for _, engine := range instances {
+		cs.log.Tracef("scanning engine %d with namespaces %+v", instances, nsps)
+
 		eReq := new(ctlpb.ScanNvmeReq)
 		*eReq = *req
-		if req.Meta {
+		if req.Meta && engine.IsReady() {
 			ms, rs, err := metaRdbComputeSz(cs, engine, nsps, req.MemRatio)
 			if err != nil {
 				return nil, errors.Wrap(err, "computing meta and rdb size")
@@ -228,7 +234,13 @@ func bdevScanAssigned(ctx context.Context, cs *ControlService, req *ctlpb.ScanNv
 			return nil, errors.New("meta smd usage info unavailable as engines stopped")
 		}
 
-		return bdevScanToProtoResp(cs.storage.ScanBdevs, bdevCfgs)
+		resp, err := bdevScanToProtoResp(cs.log, cs.storage.ScanBdevs, bdevCfgs)
+		if err != nil {
+			return nil, errors.Wrap(err, "bdevScanAssigned: bdevScanToProtoResp")
+		}
+
+		cs.log.Debugf("bdevScanAssigned: bdevScanToProtoResp returned: %+v", resp)
+		return resp, nil
 	}
 
 	// Delegate scan to engine instances as soon as one engine with assigned bdevs has started.
@@ -262,11 +274,12 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		cs.log.Debugf("scan bdevs from control service as no bdevs in cfg")
 
 		// No bdevs configured for engines to claim so scan through control service.
-		resp, err = bdevScanToProtoResp(cs.storage.ScanBdevs, bdevCfgs)
+		resp, err = bdevScanToProtoResp(cs.log, cs.storage.ScanBdevs, bdevCfgs)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "bdevScan: bdevScanToProtoResp")
 		}
 
+		cs.log.Debugf("bdevScan: bdevScanToProtoResp returned: %+v", resp)
 		return bdevScanTrimResults(req, resp), nil
 	}
 
@@ -284,6 +297,9 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if err != nil {
 		return nil, err
 	}
+
+	cs.log.Debugf("bdevScanAssigned returned %d, want %d", nrScannedBdevs, nrCfgBdevs)
+
 	if nrScannedBdevs == nrCfgBdevs {
 		return bdevScanTrimResults(req, resp), nil
 	}
@@ -347,10 +363,19 @@ func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*
 		return nil, errors.New("nil scm request")
 	}
 
-	ssr, err := cs.ScmScan(storage.ScmScanRequest{})
-	if err != nil || !req.GetUsage() {
-		return newScanScmResp(ssr, err)
+	reqInner := storage.ScmScanRequest{
+		PMemInConfig: cs.srvCfg.HasPMem(),
 	}
+
+	msg := fmt.Sprintf("pmem scan, req %+v", reqInner)
+
+	ssr, err := cs.ScmScan(reqInner)
+	if err != nil || !req.GetUsage() {
+		resp, err := newScanScmResp(ssr, err)
+		cs.log.Tracef("%s, resp %+v", msg, resp)
+		return resp, err
+	}
+	cs.log.Tracef("%s, resp %+v", msg, ssr)
 
 	ssr, err = cs.getScmUsage(ssr)
 	if err != nil {
@@ -407,18 +432,21 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 // response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
 // size divided by the number of targets of the engine. Sizes returned are per-target values.
 func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace, memRatio float32) (uint64, uint64, error) {
-	msg := fmt.Sprintf("computing meta/rdb sizes with %d scm namespaces", len(nsps))
-
 	var metaBytes, rdbBytes uint64
+	var msg string
 	for _, nsp := range nsps {
-		msg += fmt.Sprintf(", scm-ns: %+v", nsp)
+		msg = fmt.Sprintf("attempt compute of meta/rdb sizes for engine %d, scm-ns: %+v",
+			ei.Index(), nsp)
 
 		mp := nsp.GetMount()
 		if mp == nil {
 			cs.log.Tracef("%s: skip (no mount)", msg)
 			continue
 		}
-		msg += fmt.Sprintf(", mount: %+v", mp)
+		if mp.Rank == uint32(ranklist.NilRank) {
+			cs.log.Tracef("%s: skip (mount has nil rank, was engine not running?)", msg)
+			continue
+		}
 
 		r, err := ei.GetRank()
 		if err != nil {
@@ -757,16 +785,17 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 	} else {
 		respNvme, err := scanBdevs(ctx, cs, req.Nvme, respScm.Namespaces)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "scan bdevs")
 		}
+		cs.log.Debugf("scanBdevs returned respNvme: %+v", respNvme)
 		resp.Nvme = respNvme
 	}
 
-	mi, err := cs.getSysMemInfo()
+	smi, err := cs.getSysMemInfo()
 	if err != nil {
 		return nil, err
 	}
-	if err := convert.Types(mi, &resp.SysMemInfo); err != nil {
+	if err := convert.Types(smi, &resp.SysMemInfo); err != nil {
 		return nil, err
 	}
 
@@ -805,11 +834,11 @@ func checkTmpfsMem(log logging.Logger, scmCfgs map[int]*storage.TierConfig, getS
 		memRamdisks += uint64(sc.Scm.RamdiskSize) * humanize.GiByte
 	}
 
-	mi, err := getSysMemInfo()
+	smi, err := getSysMemInfo()
 	if err != nil {
 		return errors.Wrap(err, "retrieving system meminfo")
 	}
-	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
+	memAvail := uint64(smi.MemAvailableKiB) * humanize.KiByte
 
 	if err := checkMemForRamdisk(log, memRamdisks, memAvail); err != nil {
 		return errors.Wrap(err, "check ram available for all tmpfs")
@@ -1107,11 +1136,19 @@ func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.Nvme
 	}
 
 	prepReq := storage.BdevPrepareRequest{
-		// zero as hugepages already allocated on start-up
-		HugepageCount: 0,
-		TargetUser:    cu.Username,
-		PCIAllowList:  req.PciAddr,
-		Reset_:        false,
+		TargetUser:   cu.Username,
+		PCIAllowList: req.PciAddr,
+		Reset_:       false,
+	}
+
+	smi, err := cs.getSysMemInfo()
+	if err != nil {
+		return nil, errors.Wrapf(err, "retrieve system memory info")
+	}
+
+	// Set hugepage allocations in prepare request.
+	if err := SetHugeNodes(cs.log, cs.srvCfg, smi, &prepReq); err != nil {
+		return nil, errors.Wrap(err, "setting hugenodes in bdev prep request")
 	}
 
 	resp := new(ctlpb.NvmeRebindResp)

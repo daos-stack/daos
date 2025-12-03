@@ -243,7 +243,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[18] =
     offsetof(Chk__CheckReport, act_choices),
     &chk__check_inconsist_action__descriptor,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -591,5 +591,33 @@ const ProtobufCEnumDescriptor chk__check_scan_phase__descriptor =
   chk__check_scan_phase__enum_values_by_name,
   1,
   chk__check_scan_phase__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
+};
+static const ProtobufCEnumValue chk__check_result__enum_values_by_number[2] =
+{
+  { "SUCCESS", "CHK__CHECK_RESULT__SUCCESS", 0 },
+  { "DRY_RUN", "CHK__CHECK_RESULT__DRY_RUN", 1 },
+};
+static const ProtobufCIntRange chk__check_result__value_ranges[] = {
+{0, 0},{0, 2}
+};
+static const ProtobufCEnumValueIndex chk__check_result__enum_values_by_name[2] =
+{
+  { "DRY_RUN", 1 },
+  { "SUCCESS", 0 },
+};
+const ProtobufCEnumDescriptor chk__check_result__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "chk.CheckResult",
+  "CheckResult",
+  "Chk__CheckResult",
+  "chk",
+  2,
+  chk__check_result__enum_values_by_number,
+  2,
+  chk__check_result__enum_values_by_name,
+  1,
+  chk__check_result__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

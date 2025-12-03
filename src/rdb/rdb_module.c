@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -78,3 +79,5 @@ struct dss_module rdb_module = {.sm_name        = "rdb",
 				.sm_handlers    = {rdb_handlers},
 				.sm_key         = NULL,
 				.sm_mod_ops     = &rdb_mod_ops};
+
+DEFINE_RPC_PROTOCOL(rdb, DAOS_RDB_MODULE);

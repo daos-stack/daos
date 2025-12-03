@@ -212,7 +212,9 @@ if [ "$ib_count" -ge 2 ]; then
     if [ "$dimm_count" -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
        # May not be fatal, the PMEM DIMM should be replaced when downtime can be
        # scheduled for this system.
-       dimm_message="FAIL: Wrong number $dimm_count healthy PMEM DIMMs seen."
+       dimm_message="FAIL: Wrong number $dimm_count healthy PMEM DIMMs seen"
+       dimm_message+=" on $HOSTNAME."
+
        mail_message+="$nl$dimm_message$nl$(ipmctl show -dimm)$nl"
     else
        echo "OK: Found $dimm_count PMEM DIMMs."
@@ -227,12 +229,13 @@ if [ "$ib_count" -ge 2 ]; then
     ((testruns++)) || true
     testcases+="  <testcase name=\"PMEM DIMM Count Node $mynodenum\">${nl}"
     if [ "$dimm_rcount" -ne 2 ]; then
-       nvme_message="FAIL: Found $dimm_rcount of DIMM PMEM regions, need 2."
-       nvme_message+="$nl$(ipmctl show -region)"
-       mail_message+="$nl$nvme_message$nl"
+       pmem_message="FAIL: Found $dimm_rcount of DIMM PMEM regions, need 2"
+       pmem_message+=" on $HOSTNAME."
+       pmem_message+="$nl$(ipmctl show -region)"
+       mail_message+="$nl$pmem_message$nl"
         ((testfails++)) || true
         testcases+="    <error message=\"Bad Count\" type=\"error\">
-      <![CDATA[ $nvme_message ]]>
+      <![CDATA[ $pmem_message ]]>
     </error>$nl"
        result=3
     else
@@ -274,7 +277,8 @@ if [ "$ib_count" -ge 2 ]; then
     ((testruns++)) || true
     testcases+="  <testcase name=\"NVMe lsblk Count Node $mynodenum\">${nl}"
     if [ "$lsblk_nvme" -ne "$nvme_count" ]; then
-       lsblk_nvme_msg="Fail: Only $lsblk_nvme of $nvme_count NVMe devices seen."
+       lsblk_nvme_msg="Fail: Only $lsblk_nvme of $nvme_count NVMe devices seen"
+       lsblk_nvme_msg+=" on $HOSTNAME."
        mail_message+="$nl$lsblk_nvme_msg$nl$(lsblk)$nl"
         ((testfails++)) || true
         testcases+="    <error message=\"Bad Count\" type=\"error\">
@@ -289,7 +293,8 @@ if [ "$ib_count" -ge 2 ]; then
     ((testruns++)) || true
     testcases+="  <testcase name=\"PMEM lsblk Count Node $mynodenum\">${nl}"
     if [ "$lsblk_pmem" -ne "$dimm_rcount" ]; then
-       lsblk_pmem_msg="Only $lsblk_pmem of $dimm_rcount PMEM devices seen."
+       lsblk_pmem_msg="Only $lsblk_pmem of $dimm_rcount PMEM devices seen"
+       lsblk_pmem_msg+=" on $HOSTNAME."
        mail_message+="$nl$lsblk_pmem_msg$nl$(lsblk)$nl"
         ((testfails++)) || true
         testcases+="    <error message=\"Bad Count\" type=\"error\">

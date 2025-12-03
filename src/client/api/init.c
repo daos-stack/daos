@@ -381,8 +381,6 @@ daos_reinit(void)
 	if (rc)
 		return rc;
 
-	daos_dti_reset();
-
 	/**
 	 * Mark all pool and container handles owned by the parent process as if they were created
 	 * in the child processes with g2l to avoid confusing the DAOS engines.

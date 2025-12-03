@@ -39,6 +39,11 @@ struct sched_stats {
 	void			*ss_last_unit;		/* Last executed unit */
 };
 
+struct sched_hist_seq {
+	uint64_t sm_last_seq; /* Last sched sequence */
+	uint64_t sm_last_ts;  /* Timestamp of the last sched sequence */
+};
+
 struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
 	uint64_t		 si_cur_seq;	/* Current schedule sequence */
@@ -52,6 +57,7 @@ struct sched_info {
 	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
 	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
 	struct d_binheap	 si_heap;	/* All retried RPC */
+	struct sched_hist_seq   *si_hist_seqs;  /* Historical sequence for SYS & VOS xstreams */
 	/* Total inuse request count */
 	uint32_t		 si_total_req_cnt;
 	/* Request count for each type of inuse request */
@@ -166,6 +172,11 @@ extern unsigned int          dss_tgt_per_numa_nr;
 /** The maximum number of credits for each IO chore queue. That is per helper XS. */
 extern uint32_t              dss_chore_credits;
 
+/** Number of dRPC xstreams */
+#define DRPC_XS_NR            (1)
+
+#define DSS_SYS_XS_NR_DEFAULT (DAOS_TGT0_OFFSET + DRPC_XS_NR)
+
 #define DSS_CHORE_CREDITS_MIN 1024
 #define DSS_CHORE_CREDITS_DEF 4096
 
@@ -190,9 +201,14 @@ int dss_srv_init(void);
 int dss_srv_fini(bool force);
 void dss_srv_set_shutting_down(void);
 void dss_dump_ABT_state(FILE *fp);
-void dss_xstreams_open_barrier(void);
+void
+		    dss_xstreams_open_barrier(bool stopping);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
+bool
+dss_sched_monitor_enter(void);
+void
+     dss_sched_monitor_exit(void);
 void dss_mem_total_alloc_track(void *arg, daos_size_t bytes);
 void dss_mem_total_free_track(void *arg, daos_size_t bytes);
 
@@ -245,6 +261,8 @@ extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
 extern unsigned int sched_unit_runtime_max;
 extern bool sched_watchdog_all;
+extern unsigned int sched_inactive_max;
+extern bool         sched_monitor_kill;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
@@ -319,16 +337,20 @@ void ds_iv_fini(void);
 #define DSS_XS_NR_TOTAL						\
 	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)
 /** Total number of cart contexts created */
-#define DSS_CTX_NR_TOTAL					\
-	(DAOS_TGT0_OFFSET + dss_tgt_nr +			\
-	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr :	\
-	  dss_tgt_offload_xs_nr))
+#define DSS_CTX_NR_TOTAL                                                                           \
+	(DAOS_TGT0_OFFSET + dss_tgt_nr +                                                           \
+	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr : dss_tgt_offload_xs_nr))
+/** main XS id of (vos) tgt_id when no helper pool is present */
+#define DSS_MAIN_XS_ID_WITH_HELPER_POOL(tgt_id, sys_xs_nr) ((tgt_id) + (sys_xs_nr))
 /** main XS id of (vos) tgt_id */
-#define DSS_MAIN_XS_ID(tgt_id)					\
-	(dss_helper_pool ? ((tgt_id) + dss_sys_xs_nr) :		\
-			   ((tgt_id) * ((dss_tgt_offload_xs_nr /\
-			      dss_tgt_nr) + 1) + dss_sys_xs_nr))
+#define DSS_MAIN_XS_ID(tgt_id)                                                                     \
+	(dss_helper_pool                                                                           \
+	     ? (DSS_MAIN_XS_ID_WITH_HELPER_POOL(tgt_id, dss_sys_xs_nr))                            \
+	     : ((tgt_id) * ((dss_tgt_offload_xs_nr / dss_tgt_nr) + 1) + dss_sys_xs_nr))
 
+#define DSS_SYS_XS_NAME_FMT     "daos_sys_%d"
+#define DSS_IO_XS_NAME_FMT      "daos_io_%d"
+#define DSS_OFFLOAD_XS_NAME_FMT "daos_off_%d"
 
 /**
  * get the VOS target ID of xstream.
@@ -373,5 +395,10 @@ int dss_chore_queue_init(struct dss_xstream *dx);
 int dss_chore_queue_start(struct dss_xstream *dx);
 void dss_chore_queue_stop(struct dss_xstream *dx);
 void dss_chore_queue_fini(struct dss_xstream *dx);
+
+/** util.c */
+
+int
+dss_register_dbtree_classes(void);
 
 #endif /* __DAOS_SRV_INTERNAL__ */

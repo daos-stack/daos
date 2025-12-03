@@ -638,8 +638,8 @@ type BdevTierScanResult struct {
 	Result *BdevScanResponse
 }
 
-// ScanBdevs calls into bdev storage provider to scan SSDs, always bypassing cache.
-// Function should not be called when engines have been started and SSDs have been claimed by SPDK.
+// ScanBdevs calls into bdev storage provider to scan SSDs. Function should not be called when
+// engines have been started and SSDs have been claimed by SPDK.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	p.RLock()
 	defer p.RUnlock()

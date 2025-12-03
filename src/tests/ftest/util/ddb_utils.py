@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
 
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 from run_utils import run_remote
@@ -81,34 +80,15 @@ class DdbCommand(DdbCommandBase):
     with the indices, so it's better for tests to use the UUID.
     """
 
-    def __init__(self, server_host, path, mount_point, pool_uuid, vos_file):
+    def __init__(self, server_host, path, vos_path):
         """Constructor that sets the common variables for sub-commands.
 
         Args:
             server_host (NodeSet): Server host to run the command.
             path (str): Path to the ddb command. Pass in self.bin for our wolf/CI env.
-            mount_point (str): DAOS mount point where pool directory is created. e.g.,
-                /mnt/daos, /mnt/daos0.
-            pool_uuid (str): Pool UUID.
-            vos_file (str): VOS file name that's located in /mnt/daos/<pool_uuid>. It's
-                usually in the form of vos-0, vos-1, and so on.
+            vos_path (str): VOS file path, e.g. /mnt/daos/<pool_uuid>/vos-0
         """
         super().__init__(server_host, path)
-
-        # Construct the VOS file path where ddb will inject the command.
-        self.update_vos_path(mount_point, pool_uuid, vos_file)
-
-    def update_vos_path(self, mount_point, pool_uuid, vos_file):
-        """Update the vos_path ddb command argument.
-
-        Args:
-            mount_point (str): DAOS mount point where pool directory is created. e.g.,
-                /mnt/daos, /mnt/daos0.
-            pool_uuid (str): Pool UUID.
-            vos_file (str): VOS file name that's located in /mnt/daos/<pool_uuid>. It's
-                usually in the form of vos-0, vos-1, and so on.
-        """
-        vos_path = os.path.join(mount_point, pool_uuid.lower(), vos_file)
         self.vos_path.update(vos_path, "vos_path")
 
     def list_component(self, component_path=None):

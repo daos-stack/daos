@@ -31,7 +31,6 @@
 #define POOL_SIZE  ((256 * 1024 * 1024ULL))
 #define NEMB_RATIO (0.8)
 #define MB_SIZE    (16 * 1024 * 1024)
-#define MIN_SOEMB_CNT 3
 
 struct test_arg {
 	struct utest_context	*ta_utx;
@@ -248,24 +247,7 @@ setup_pmem(void **state)
 static int
 setup_pmem_v2(void **state)
 {
-	struct test_arg      *arg;
-	struct umem_instance *umm;
-	int                   rc, i;
-
-	rc = setup_pmem_internal(state, &ustore_v2);
-
-	arg = *state;
-	umm = utest_utx2umm(arg->ta_utx);
-	/*
-	 * Do soemb reservations before the test begins.
-	 */
-	if (!rc) {
-		for (i = 0; i < MIN_SOEMB_CNT; i++) {
-			umem_tx_begin(umm, NULL);
-			umem_tx_commit(umm);
-		}
-	}
-	return rc;
+	return setup_pmem_internal(state, &ustore_v2);
 }
 
 static int
@@ -2403,12 +2385,50 @@ test_umempobj_create_smallsize(void **state)
 	umempobj_close(uma.uma_pool);
 	unlink(name);
 	D_FREE(name);
+
+	/* Support creating pool of 16M of blob size and 16M vos file size */
+	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
+	assert_true(name != NULL);
+	ustore_tmp.stor_size = 16 * 1024 * 1024;
+	uma.uma_pool         = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS,
+					       16 * 1024 * 1024, 0666, &ustore_tmp);
+	assert_ptr_not_equal(uma.uma_pool, NULL);
+	ustore_tmp.stor_size = POOL_SIZE;
+	umempobj_close(uma.uma_pool);
+	unlink(name);
+	D_FREE(name);
+
+	/* Creating pool of POOL_SIZE of blob and 16M vos file size, should fail */
+	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
+	assert_true(name != NULL);
+	ustore_tmp.stor_size = 16 * 1024 * 1024;
+	uma.uma_pool         = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS,
+					       16 * 1024 * 1024, 0666, &ustore_tmp);
+	assert_ptr_not_equal(uma.uma_pool, NULL);
+	ustore_tmp.stor_size = POOL_SIZE;
+	umempobj_close(uma.uma_pool);
+	unlink(name);
+	D_FREE(name);
+
+	/* Creating pool of POOL_SIZE of blob and 32M vos file size, should succeed */
+	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
+	assert_true(name != NULL);
+	uma.uma_pool = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS,
+				       32 * 1024 * 1024, 0666, &ustore_tmp);
+	assert_ptr_not_equal(uma.uma_pool, NULL);
+	umem_class_init(&uma, &umm);
+	id = umem_allot_mb_evictable(&umm, 0);
+	print_message("with metablob > scm (32M), evictable id returned is %d\n", id);
+	ustore_tmp.stor_size = POOL_SIZE;
+	umempobj_close(uma.uma_pool);
+	unlink(name);
+	D_FREE(name);
 }
 
 static void
 test_umempobj_nemb_usage(void **state)
 {
-	int                  num = 0, i;
+	int                  num = 0;
 	char                *name;
 	struct umem_store    ustore_tmp = {.stor_size  = 256 * 1024 * 1024,
 					   .stor_ops   = &_store_ops_v2,
@@ -2429,12 +2449,6 @@ test_umempobj_nemb_usage(void **state)
 
 	umem_class_init(&uma, &umm);
 
-	/* Do the SOEMB reservation before the actual test. */
-	for (i = 0; i < MIN_SOEMB_CNT; i++) {
-		umem_tx_begin(&umm, NULL);
-		umem_tx_commit(&umm);
-	}
-
 	/* Do allocation and verify that only 80% of 15 zones - MIN_SOEMB_CNT are allotted
 	 * to non evictable MBs
 	 */
@@ -2448,7 +2462,7 @@ test_umempobj_nemb_usage(void **state)
 		prev_umoff = umoff;
 	}
 	/* 80% nemb when heap size greater than cache size */
-	assert_int_equal(num, 12 - MIN_SOEMB_CNT);
+	assert_int_equal(num, 12);
 	print_message("Number of allocations is %d\n", num);
 
 	for (--num;; num--) {
@@ -2473,12 +2487,6 @@ test_umempobj_nemb_usage(void **state)
 	assert_ptr_not_equal(uma.uma_pool, NULL);
 
 	umem_class_init(&uma, &umm);
-
-	/* Do the SOEMB reservation before the actual test. */
-	for (i = 0; i < MIN_SOEMB_CNT; i++) {
-		umem_tx_begin(&umm, NULL);
-		umem_tx_commit(&umm);
-	}
 
 	/* Do allocation and verify that all 16 zones are allotted to non evictable MBs */
 	for (num = 0;; num++) {
@@ -2510,7 +2518,7 @@ test_umempobj_nemb_usage(void **state)
 static void
 test_umempobj_heap_mb_stats(void **state)
 {
-	int                  num = 0, count, rc, i;
+	int                  num = 0, count, rc;
 	char                *name;
 	uint64_t             scm_size   = 128 * 1024 * 1024;
 	uint64_t             meta_size  = 256 * 1024 * 1024;
@@ -2534,7 +2542,7 @@ test_umempobj_heap_mb_stats(void **state)
 				       &ustore_tmp);
 	assert_ptr_not_equal(uma.uma_pool, NULL);
 	maxsz_exp   = (uint64_t)(scm_size / MB_SIZE * NEMB_RATIO) * MB_SIZE;
-	maxsz_alloc = ((uint64_t)(((scm_size / MB_SIZE) * NEMB_RATIO)) - MIN_SOEMB_CNT) * MB_SIZE;
+	maxsz_alloc = ((uint64_t)(((scm_size / MB_SIZE) * NEMB_RATIO))) * MB_SIZE;
 
 	umem_class_init(&uma, &umm);
 
@@ -2543,12 +2551,6 @@ test_umempobj_heap_mb_stats(void **state)
 		      maxsz_exp, allocated0);
 	assert_int_equal(rc, 0);
 	assert_int_equal(maxsz, maxsz_exp);
-
-	/* Do the SOEMB reservation before the actual test. */
-	for (i = 0; i < MIN_SOEMB_CNT; i++) {
-		umem_tx_begin(&umm, NULL);
-		umem_tx_commit(&umm);
-	}
 
 	/* allocate and consume all of the space */
 	for (num = 0;; num++) {

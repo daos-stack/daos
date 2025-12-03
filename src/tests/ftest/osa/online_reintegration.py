@@ -43,7 +43,8 @@ class OSAOnlineReintegration(OSAUtils):
         self.daos_racer.get_params(self)
         self.daos_racer.run()
 
-    def run_online_reintegration_test(self, num_pool, racer=False, server_boot=False, oclass=None):
+    def run_online_reintegration_test(self, num_pool, racer=False, server_boot=False, oclass=None,
+                                      num_ranks=1):
         """Run the Online reintegration without data.
 
         Args:
@@ -52,16 +53,16 @@ class OSAOnlineReintegration(OSAUtils):
                 Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank. Defaults to False.
             oclass (str) : daos object class string (eg: "RP_2G8"). Defaults to None.
+            num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
         test_seq = self.ior_test_sequence[0]
         # Create a pool
         pool = {}
-        exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
-        # Exclude one rank : other than rank 0.
-        rank = self.random.randint(1, exclude_servers)
+        ranklist = list(self.server_managers[0].ranks.keys())
+        rank = ",".join(map(str, self.random.sample(ranklist, k=num_ranks)))
 
         # Start the daos_racer thread
         if racer is True:
@@ -220,3 +221,16 @@ class OSAOnlineReintegration(OSAUtils):
         self.log.info("Online Reintegration : Object Class")
         for oclass in self.test_oclass:
             self.run_online_reintegration_test(1, oclass=oclass)
+
+    def test_osa_online_reintegration_with_multiple_ranks(self):
+        """Test ID: DAOS-4753.
+
+        Test Description: Validate online reintegration with multiple ranks.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,online_reintegration
+        :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_with_multiple_ranks
+        """
+        self.log.info("Online Reintegration : Multiple ranks")
+        self.run_online_reintegration_test(1, oclass="RP_3G1", num_ranks=2)

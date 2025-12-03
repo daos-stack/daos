@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -68,10 +69,11 @@ class SparseFile(IorTestBase):
 
         # create and open a connection on remote node to open file on that
         # remote node
+        key_path = os.path.expanduser(os.path.join('~', '.ssh', 'id_rsa'))
+        self.log.info("=does %s exist: %s", key_path, os.path.exists(key_path))
         ssh = paramiko.SSHClient()
-        ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(self.hostlist_clients[0], username=getuser())
+        ssh.connect(hostname=self.hostlist_clients[0], username=getuser(), key_filename=key_path)
         sftp = ssh.open_sftp()
 
         # open remote file

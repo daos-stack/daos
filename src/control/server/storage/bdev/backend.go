@@ -232,7 +232,7 @@ func spdkLockfileAddrCheckAllowAll(_ string) (bool, error) {
 // Skip addresses in block list if present then supply address check function that can detect VMD
 // backing device addresses during clean operation. If CleanSpdkLockfilesAny set, all lockfiles
 // should be removed.
-func (sb *spdkBackend) removeSpdkLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) error {
+func (sb *spdkBackend) cleanLockfiles(req storage.BdevPrepareRequest, resp *storage.BdevPrepareResponse) error {
 	var lfAddrCheckFn spdk.LockfileAddrCheckFn
 
 	if req.CleanSpdkLockfilesAny {
@@ -303,7 +303,7 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 			}
 		}
 		if req.CleanSpdkLockfiles {
-			if err := sb.removeSpdkLockfiles(req, resp); err != nil {
+			if err := sb.cleanLockfiles(req, resp); err != nil {
 				return resp, errors.Wrapf(err, "clean spdk lockfiles")
 			}
 		}
@@ -419,14 +419,37 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	return out, nil
 }
 
+func (sb *spdkBackend) cleanLockfilesQuiet(devAddrs *hardware.PCIAddressSet) {
+	msg := fmt.Sprintf("spdk backend clean-locks (bindings discover call): for %v",
+		devAddrs.Strings())
+	addrCheckFn := createSpdkLockfileAddrCheckFunc(devAddrs)
+
+	removed, err := sb.binding.Clean(sb.log, addrCheckFn)
+	if err != nil {
+		sb.log.Errorf("%s: %s", msg, err.Error())
+		return
+	}
+	sb.log.Debugf("%s: removed %v", msg, removed)
+}
+
 // Scan discovers NVMe controllers accessible by SPDK.
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+	needDevs := req.DeviceList.PCIAddressSetPtr()
+
+	// Remove SPDK lockfiles for requested addresses before and after scan, requested addresses
+	// should not be in use by other processes and SPDK will refuse access if they are.
+	if needDevs.IsEmpty() {
+		sb.log.Debug("clean spdk lockfiles skipped, zero devices selected")
+	} else {
+		sb.cleanLockfilesQuiet(needDevs)
+		defer sb.cleanLockfilesQuiet(needDevs)
+	}
+
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
 	// Only filter devices if all have a PCI address, avoid validating the presence of emulated
 	// NVMe devices as they may not exist yet e.g. for SPDK AIO-file the devices are created on
 	// format.
-	needDevs := req.DeviceList.PCIAddressSetPtr()
 	spdkOpts := &spdk.EnvOptions{
 		PCIAllowList: needDevs,
 		EnableVMD:    req.VMDEnabled,

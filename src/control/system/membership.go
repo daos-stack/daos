@@ -512,7 +512,7 @@ func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (me
 	return
 }
 
-func msgBadStateTransition(m *Member, ts MemberState) string {
+func MsgBadStateTransition(m *Member, ts MemberState) string {
 	return fmt.Sprintf("illegal member state update for rank %d: %s->%s", m.Rank, m.State, ts)
 }
 
@@ -554,7 +554,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		}
 
 		if member.State.isTransitionIllegal(result.State) {
-			m.log.Debugf("skipping %s", msgBadStateTransition(member, result.State))
+			m.log.Debugf("skipping %s", MsgBadStateTransition(member, result.State))
 			continue
 		}
 		member.State = result.State
@@ -662,37 +662,49 @@ func (m *Membership) IsRankAdminExcluded(rank Rank) bool {
 	return cm.State == MemberStateAdminExcluded
 }
 
-// MarkRankDead is a helper method to mark a rank as dead in response to a
-// swim_rank_dead event.
-func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) error {
+// MarkRankDead is a helper method to mark a rank as dead in response to a swim_rank_dead event.
+// Pass zero value for incarnation to skip comparison with existing member incarnation value.
+// Return bool indicates whether a membership change was made and might indicate a group update is
+// necessary.
+func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) (bool, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	member, err := m.db.FindMemberByRank(rank)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	ns := MemberStateExcluded
+	msg := MsgBadStateTransition(member, ns)
+	if member.State == ns {
+		m.log.Trace(msg)
+		return false, nil
+	}
 	if member.State.isTransitionIllegal(ns) {
-		msg := msgBadStateTransition(member, ns)
-		// excluded->excluded transitions expected for multiple swim
-		// notifications, if so return error to skip group update
-		if member.State != ns {
-			m.log.Error(msg)
-		}
-
-		return errors.New(msg)
+		// This doesn't constitute an error, just that a transition from the current state
+		// to excluded isn't allowed. Possibly the engine is in start-up and is no longer
+		// in a joined state.
+		m.log.Debug(msg)
+		return false, nil
 	}
 
-	if member.State == MemberStateJoined && member.Incarnation > incarnation {
-		m.log.Debugf("ignoring rank dead event for previous incarnation of %d (%x < %x)", rank, incarnation, member.Incarnation)
-		return errors.Errorf("event is for previous incarnation of %d", rank)
+	// Perform check on rank incarnation number if valid value passed and a currently
+	// active/joined rank is going to be excluded.
+	if member.State == MemberStateJoined && incarnation > 0 &&
+		member.Incarnation > uint64(incarnation) {
+		m.log.Debugf("ignoring rank dead event for previous incarnation of %d (%x < %x)",
+			rank, incarnation, member.Incarnation)
+		return false, errors.Errorf("event is for previous incarnation of %d", rank)
 	}
 
 	m.log.Infof("marking rank %d as %s in response to rank dead event", rank, ns)
 	member.State = ns
-	return m.db.UpdateMember(member)
+	if err := m.db.UpdateMember(member); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
@@ -711,6 +723,11 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 		return
 	}
 
+	if evt.Incarnation != 0 && evt.Incarnation < member.Incarnation {
+		m.log.Debugf("ignoring event for incarnation = %d, current member incarnation = %d: %s", evt.Incarnation, member.Incarnation, evt.String())
+		return
+	}
+
 	// TODO DAOS-7261: sanity check that the correct member is being
 	//                 updated by performing lookup on provided hostname
 	//                 and matching returned addresses with the address
@@ -720,7 +737,7 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 
 	newState := MemberStateErrored
 	if member.State.isTransitionIllegal(newState) {
-		m.log.Debugf("skipping %s", msgBadStateTransition(member, newState))
+		m.log.Debugf("skipping %s", MsgBadStateTransition(member, newState))
 		return
 	}
 

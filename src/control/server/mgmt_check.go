@@ -501,7 +501,7 @@ func (svc *mgmtSvc) setCheckerPolicyMap(polList []*mgmtpb.CheckInconsistPolicy) 
 	return system.SetMgmtProperty(svc.sysdb, checkerPoliciesKey, string(polStr))
 }
 
-// SystemCheckSetPolicy sets checker policies in the policy map.
+// SystemCheckSetPolicy sets checker policies to the checker instance (if running) and in the policy map.
 func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckSetPolicyReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -509,6 +509,20 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 
 	if err := svc.verifyCheckerReady(); err != nil {
 		return nil, err
+	}
+
+	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerSetPolicy, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.DaosResp)
+	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
+	}
+
+	if resp.Status != 0 {
+		return nil, errors.Wrap(daos.ErrorFromRC(int(resp.Status)), "checker set-policy failed")
 	}
 
 	policies, err := svc.mergePoliciesWithCurrent(req.Policies)

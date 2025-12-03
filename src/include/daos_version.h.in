@@ -12,6 +12,31 @@
 #ifndef __DAOS_VERSION_H__
 #define __DAOS_VERSION_H__
 
+#include <stdint.h>
+
+/**
+ * struct daos_version - DAOS version control structure
+ * @raw: Combined 32-bit version value
+ * @major: API-breaking changes
+ * @minor: Backward-compatible features
+ * @patch: Bug fixes
+ * @protocol: RPC compatibility identifier
+ *
+ * Bit layout (MSB to LSB):
+ * [31:24] major
+ * [23:16] minor
+ * [15:8]  patch
+ * [7:0]   protocol
+ */
+typedef union {
+	uint32_t raw;
+	struct {
+		uint8_t protocol;
+		uint8_t patch;
+		uint8_t minor;
+		uint8_t major;
+	};
+} daos_version_t;
 
 #if defined(__cplusplus)
 extern "C" {
@@ -30,5 +55,22 @@ extern "C" {
 #if defined(__cplusplus)
 }
 #endif
+
+#define DAOS_VERSION_PROTOCAL	1
+/* Version manipulation functions */
+static inline void
+daos_version_pack(daos_version_t *ver)
+{
+	ver->major = DAOS_VERSION_MAJOR;
+	ver->minor = DAOS_VERSION_MINOR;
+	ver->patch = DAOS_VERSION_FIX;
+	ver->protocol = DAOS_VERSION_PROTOCAL;
+}
+
+static inline uint8_t
+daos_version_get_protocol(const daos_version_t *ver)
+{
+	return ver->protocol;
+}
 
 #endif /* __DAOS_VERSION_H__ */

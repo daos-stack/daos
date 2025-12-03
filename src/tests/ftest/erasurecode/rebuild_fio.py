@@ -25,7 +25,7 @@ class EcodFioRebuild(FioBase):
         Args:
             rebuild_mode (str): On-line or off-line rebuild mode
         """
-        aggregation_timeout = self.params.get("aggr_timeout", "/run/pool/aggregation/*")
+        aggregation_timeout = self.params.get("aggregation_timeout", "/run/pool/*")
         read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
 
         num_ranks = len(self.server_managers[0].ranks)

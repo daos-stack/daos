@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /* Copyright 2015-2024, Intel Corporation */
+/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
 
 /*
  * palloc.c -- implementation of pmalloc POSIX-like API
@@ -197,14 +198,21 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 	int                  err       = 0;
 	struct memory_block *new_block = &out->m;
 	struct mbrt         *mb;
+	ssize_t              size_idx;
 
 	out->type = DAV_ACTION_TYPE_HEAP;
 
 	ASSERT(class_id < UINT8_MAX);
-	struct alloc_class *c = class_id == 0 ?
-		heap_get_best_class(heap, size) :
-		alloc_class_by_id(heap_alloc_classes(heap),
-			(uint8_t)class_id);
+
+	mb = heap_mbrt_get_mb(heap, mb_id);
+	if (mb == NULL) {
+		ERR("Invalid mb_id %u", mb_id);
+		errno = EINVAL;
+		return -1;
+	}
+	struct alloc_class *c = class_id == 0
+				    ? mbrt_get_best_class(mb, size)
+				    : alloc_class_by_id(mbrt_alloc_classes(mb), (uint8_t)class_id);
 
 	if (c == NULL) {
 		ERR("no allocation class for size %lu bytes", size);
@@ -215,12 +223,6 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 	heap_soemb_active_iter_init(heap);
 
 retry:
-	mb = heap_mbrt_get_mb(heap, mb_id);
-	if (mb == NULL) {
-		errno = EINVAL;
-		return -1;
-	}
-
 	/*
 	 * The caller provided size in bytes, but buckets operate in
 	 * 'size indexes' which are multiples of the block size in the
@@ -229,7 +231,7 @@ retry:
 	 * For example, to allocate 500 bytes from a bucket that
 	 * provides 256 byte blocks two memory 'units' are required.
 	 */
-	ssize_t size_idx = alloc_class_calc_size_idx(c, size);
+	size_idx = alloc_class_calc_size_idx(c, size);
 
 	if (size_idx < 0) {
 		ERR("allocation class not suitable for size %lu bytes",
@@ -291,6 +293,22 @@ out:
 	if ((mb_id != 0) && (err == ENOMEM)) {
 		heap_mbrt_log_alloc_failure(heap, mb_id);
 		mb_id = heap_soemb_active_get(heap);
+		mb    = heap_mbrt_get_mb(heap, mb_id);
+		if (mb == NULL) {
+			ERR("Invalid mb_id %u", mb_id);
+			errno = EINVAL;
+			return -1;
+		}
+		if (mb_id == 0) {
+			c = class_id == 0
+				? mbrt_get_best_class(mb, size)
+				: alloc_class_by_id(mbrt_alloc_classes(mb), (uint8_t)class_id);
+			if (c == NULL) {
+				ERR("no allocation class for size %lu bytes", size);
+				errno = EINVAL;
+				return -1;
+			}
+		}
 		goto retry;
 	}
 

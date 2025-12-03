@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,7 +51,7 @@ struct ddb_array {
 
 /* Open and close a pool for a ddb_ctx */
 int
-    dv_pool_open(const char *path, daos_handle_t *poh, uint32_t flags);
+    dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags);
 int dv_pool_close(daos_handle_t poh);
 int
 dv_pool_destroy(const char *path);
@@ -196,7 +197,8 @@ dv_dtx_active_entry_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *
 
 /* Sync the smd table with information saved in blobs */
 typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_id,
-				    uint64_t blob_id, daos_size_t blob_size, uuid_t dev_id);
+				    uint64_t blob_id, daos_size_t blob_size, uuid_t dev_id,
+				    enum smd_dev_type st);
 int dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
 		void *cb_args);
 
@@ -214,5 +216,7 @@ int
 dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt);
 int
 dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid);
+int
+dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mount_size);
 
 #endif /* DAOS_DDB_VOS_H */

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,7 +85,11 @@ int chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 
 int chk_leader_prop(chk_prop_cb_t prop_cb, void *buf);
 
-int chk_leader_act(uint64_t seq, uint32_t act, bool for_all);
+int
+    chk_leader_act(uint64_t seq, uint32_t act);
+
+int
+    chk_leader_set_policy(uint32_t policy_nr, struct chk_policy *policies);
 
 int chk_engine_pool_stop(uuid_t pool_uuid, bool destroy);
 

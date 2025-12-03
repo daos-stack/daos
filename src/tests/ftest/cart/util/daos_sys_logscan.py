@@ -354,6 +354,9 @@ class SysPools():
         if term < 1:
             self._warn(f"pool {puuid} I don't know what term it is ({term})!", fname, line)
             return True
+        if self._debug:
+            print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
+                  f"rank {rank}\t{host}\tPID {pid}\t{fname}")
 
         if ver not in self._pools[puuid][term]["maps"]:
             self._warn(f"pool {puuid} term {term} ver {ver} not in maps - add placeholder",
@@ -366,8 +369,8 @@ class SysPools():
             self._create_rbgen(op, start_time=datetime)
 
         if self._debug:
-            print(f"{datetime} FOUND rebuild start in term {term}, rb={puuid}/{ver}/{gen}/{op} "
-                  f"rank {rank}\t{host}\tPID {pid}\t{fname}")
+            print(f"{datetime} SET _pools[{puuid}][{term}][maps][{ver}][rb_gens][{gen}]: {op}")
+
         return True
 
     def _get_ps_rb_status_components(self, match):
@@ -406,6 +409,9 @@ class SysPools():
             existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
             if op != existing_op:
                 self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
+        else:
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = self._create_rbgen(op)
+
         if status == "scanning":
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
         elif status == "pulling":
@@ -468,6 +474,9 @@ class SysPools():
             existing_op = self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["op"]
             if op != existing_op:
                 self._warn(f"rb={puuid}/{ver}/{gen}/{existing_op} != line op {op}", fname, line)
+        else:
+            self._pools[puuid][term]["maps"][ver]["rb_gens"][gen] = self._create_rbgen(op)
+
         if status == "scanning":
             self._pools[puuid][term]["maps"][ver]["rb_gens"][gen]["scanning"] = True
         elif status == "pulling":

@@ -600,3 +600,5 @@ struct dss_module dtx_module = {
     .sm_key         = &dtx_module_key,
     .sm_metrics     = &dtx_metrics,
 };
+
+DEFINE_RPC_PROTOCOL(dtx, DAOS_DTX_MODULE);

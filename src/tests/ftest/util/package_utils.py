@@ -1,8 +1,11 @@
 """
 (C) Copyright 2023-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
+import re
 
 # pylint: disable=import-error,no-name-in-module
 from util.run_utils import command_as_user, run_remote
@@ -29,7 +32,7 @@ def find_packages(log, hosts, pattern, user=None):
     return installed
 
 
-def install_packages(log, hosts, packages, user=None, timeout=600):
+def install_packages(log, hosts, packages, user=None, timeout=600, allowerasing=False):
     """Install the packages on the hosts.
 
     Args:
@@ -38,12 +41,17 @@ def install_packages(log, hosts, packages, user=None, timeout=600):
         packages (list): a list of packages to install
         user (str, optional): user to use when installing the packages. Defaults to None.
         timeout (int, optional): timeout for the dnf install command. Defaults to 600.
+        allowerasing (bool, optional): whether to use dnf --allowerasing. Defaults to False.
 
     Returns:
         CommandResult: the 'dnf install' command results
     """
     log.info('Installing packages on %s: %s', hosts, ', '.join(packages))
-    command = command_as_user(' '.join(['dnf', 'install', '-y'] + packages), user)
+    command = ['dnf', 'install', '-y']
+    if allowerasing:
+        command.append('--allowerasing')
+    command.extend(packages)
+    command = command_as_user(' '.join(command), user)
     return run_remote(log, hosts, command, timeout=timeout)
 
 
@@ -63,3 +71,65 @@ def remove_packages(log, hosts, packages, user=None, timeout=600):
     log.info('Removing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'remove', '-y'] + packages), user)
     return run_remote(log, hosts, command, timeout=timeout)
+
+
+class Version():
+    """Class representing a package or API version."""
+
+    def __init__(self, version):
+        """Initialize Version.
+
+        Args:
+            version (str/list): the major.minor.patch version
+
+        Raises:
+            ValueError: if the version is formatted incorrectly
+        """
+        if isinstance(version, Version):
+            self.__version = repr(version)
+        elif isinstance(version, (list, tuple)):
+            self.__version = '.'.join(map(str, version))
+        else:
+            self.__version = str(version)
+
+        try:
+            version_match = re.match(r'^v?([0-9]+)\.([0-9]+)\.([0-9]+)', self.__version)
+            self.major = version_match.group(1)
+            self.minor = version_match.group(2)
+            self.patch = version_match.group(3)
+        except (AttributeError, IndexError) as error:
+            raise ValueError(f'Invalid version string {self.__version}') from error
+
+    def __str__(self):
+        """Version as 'major.minor.patch'"""
+        return f'{self.major}.{self.minor}.{self.patch}'
+
+    def __repr__(self):
+        """Full version used in init."""
+        return self.__version
+
+    def __iter__(self):
+        """Version as [major, minor, patch]"""
+        yield self.major
+        yield self.minor
+        yield self.patch
+
+    def __eq__(self, other):
+        """self == other"""
+        return list(self) == list(Version(other))
+
+    def __gt__(self, other):
+        """self > other"""
+        return list(self) > list(Version(other))
+
+    def __ge__(self, other):
+        """self >= other"""
+        return list(self) >= list(Version(other))
+
+    def __lt__(self, other):
+        """self < other"""
+        return list(self) < list(Version(other))
+
+    def __le__(self, other):
+        """self <= other"""
+        return list(self) <= list(Version(other))

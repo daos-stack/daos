@@ -30,7 +30,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
 
-    def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0):
+    def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0,
+                               num_ranks=1):
         """Run the offline drain without data.
 
         Args:
@@ -38,6 +39,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             data (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             oclass (str): DAOS object class (eg: RP_2G1,etc)
+            num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
         # Create a pool
         pool = {}
@@ -45,6 +47,12 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
 
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
+
+        # Get a random rank(s) based on num_ranks input.
+        ranklist = list(self.server_managers[0].ranks.keys())
+        # For tests which uses num_ranks equal to 1, use the YAML file information.
+        if num_ranks > 1:
+            self.ranks = [",".join(map(str, self.random.sample(ranklist, k=num_ranks)))]
 
         # Exclude target : random two targets  (target idx : 0-7)
         exc = self.random.randint(0, 6)
@@ -257,3 +265,16 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
         pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
         self.run_offline_drain_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)
+
+    def test_osa_offline_drain_with_multiple_ranks(self):
+        """Test ID: DAOS-4753.
+
+        Test Description: Drain multiple ranks at the same time.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_drain,offline_drain,offline_drain_full
+        :avocado: tags=OSAOfflineDrain,test_osa_offline_drain_with_multiple_ranks
+        """
+        self.log.info("Offline Drain : Test with multiple ranks")
+        self.run_offline_drain_test(1, data=True, num_ranks=2)

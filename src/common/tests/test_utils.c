@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,10 +10,41 @@
  */
 
 #include <daos/test_utils.h>
+#include <gurt/dlog.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
+
+int
+ut_log_init(void)
+{
+	int rc;
+
+	rc = d_log_init();
+	if (rc != 0) {
+		D_PRINT_ERR("failed d_log_init: " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = D_LOG_REGISTER_FAC(DAOS_FOREACH_LOG_FAC);
+	if (rc != 0)
+		D_PRINT_ERR("Failed to register daos log facilities: " DF_RC "\n", DP_RC(rc));
+
+	rc = D_LOG_REGISTER_DB(DAOS_FOREACH_DB);
+	if (rc != 0)
+		D_PRINT_ERR("Failed to register daos debug bits: " DF_RC "\n", DP_RC(rc));
+
+	d_log_sync_mask();
+
+	return 0;
+}
+
+void
+ut_log_fini(void)
+{
+	d_log_fini();
+}
 
 struct drpc*
 new_drpc_with_fd(int fd)

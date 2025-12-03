@@ -1,10 +1,7 @@
 hosts:
   test_servers: 5
   test_clients: 3
-timeout: 900
-setup:
-  start_agents_once: false
-  start_servers_once: false
+timeout: 1600
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -27,18 +24,13 @@ server_config:
       storage: auto
 pool:
   size: 93%
-  cell_size: !mux
-    cell_size_4K:
-      properties: ec_cell_sz:4KiB
-    cell_size_64K:
-      properties: ec_cell_sz:64KiB
-    cell_size_128K:
-      properties: ec_cell_sz:128KiB
-    cell_size_1M:
-      properties: ec_cell_sz:1MiB
+  cell_sizes:
+    - 4KiB
+    - 64KiB
+    - 128KiB
+    - 1MiB
 container:
   type: POSIX
-  control_method: daos
 ior:
   api: "DFS"
   client_processes:
@@ -47,18 +39,13 @@ ior:
   iorflags:
     flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile
-  repetitions: 1
-  transfersize_blocksize: !mux
-    1M_128M:
-      transfer_size: 8k
-      block_size: 64M
-    2M_128M:
-      transfer_size: 1M
-      block_size: 128M
-  objectclass:
-    dfs_oclass:
-      - "EC_2P1GX"
-      - "EC_2P2GX"
-      - "EC_4P1GX"
-      - "EC_4P2GX"
-      - "EC_4P3GX"
+  transfersize_blocksize:
+    # [transfer size, block size]
+    - [8k, 64M]
+    - [1M, 128M]
+  dfs_oclass:
+    - "EC_2P1GX"
+    - "EC_2P2GX"
+    - "EC_4P1GX"
+    - "EC_4P2GX"
+    - "EC_4P3GX"

@@ -1,9 +1,11 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #include <semaphore.h>
+#include <daos/dpar.h>
 
 #include "crt_utils.h"
 #include "test_proto_common.h"
@@ -18,20 +20,12 @@ test_run(d_rank_t my_rank)
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		test.tg_local_group_name, test.tg_remote_group_name);
 
-	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
-				  &test.tg_tid, &grp, &grp_size, NULL);
+	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx, &test.tg_tid, &grp,
+				  &grp_size, NULL, NULL);
 	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
-
-	/* START: FIXME: always save */
-	if (my_rank == 0) {
-		rc = crt_group_config_save(NULL, true);
-		D_ASSERTF(rc == 0,
-			  "crt_group_config_save() failed. rc: %d\n", rc);
-	}
-	/* END: FIXME: always save */
 
 	switch (test.tg_num_proto) {
 	case 4:
@@ -48,6 +42,14 @@ test_run(d_rank_t my_rank)
 		D_ASSERT(rc == 0);
 	default:
 		break;
+	}
+
+	if (grp_size > 1)
+		par_barrier(PAR_COMM_WORLD);
+
+	if (my_rank == 0) {
+		rc = crt_group_config_save(NULL, true);
+		D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n", rc);
 	}
 
 	rc = pthread_join(test.tg_tid, NULL);

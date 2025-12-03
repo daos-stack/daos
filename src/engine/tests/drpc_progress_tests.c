@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -377,6 +378,18 @@ test_drpc_progress_listener_accept_failed(void **state)
 	cleanup_drpc_progress_context(&ctx);
 }
 
+static Drpc__Response *
+unpack_sendmsg_drpc_resp(void)
+{
+	struct drpc_header *hdr;
+
+	assert_true(sendmsg_msg_iov_len > DRPC_HEADER_LEN);
+	hdr = (struct drpc_header *)sendmsg_msg_content;
+
+	return drpc__response__unpack(NULL, hdr->chunk_data_size,
+				      DRPC_CHUNK_DATA_PTR(sendmsg_msg_content));
+}
+
 static void
 test_drpc_progress_single_session_bad_call(void **state)
 {
@@ -393,10 +406,10 @@ test_drpc_progress_single_session_bad_call(void **state)
 				  new_drpc_with_fd(session_fd));
 	memcpy(&original_ctx, &ctx, sizeof(struct drpc_progress_context));
 
-	/* Get some arbitrary junk via recvmsg */
-	recvmsg_return = bad_msg_size;
+	/* Get bad call via recvmsg */
+	mock_valid_drpc_header_in_recvmsg(bad_msg_size);
 	for (i = 0; i < bad_msg_size; i++) {
-		recvmsg_msg_content[i] = i;
+		recvmsg_msg_content[DRPC_HEADER_LEN + i] = i;
 	}
 
 	/* sessions end up listed before listener in poll list */
@@ -412,8 +425,7 @@ test_drpc_progress_single_session_bad_call(void **state)
 	assert_int_equal(sendmsg_call_count, 1);
 	assert_int_equal(sendmsg_sockfd, session_fd);
 
-	resp = drpc__response__unpack(NULL, sendmsg_msg_iov_len,
-				      sendmsg_msg_content);
+	resp = unpack_sendmsg_drpc_resp();
 	assert_non_null(resp);
 	assert_int_equal(resp->status, DRPC__STATUS__FAILED_UNMARSHAL_CALL);
 

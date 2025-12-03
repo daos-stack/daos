@@ -281,6 +281,13 @@ struct vos_gc_info {
 	uint32_t	gi_last_pinned;
 };
 
+/* Inline checkpointing context */
+struct vos_chkpt_context {
+	uint64_t vcc_committed_id;
+	uint64_t vcc_total_blks;
+	uint64_t vcc_used_blks;
+};
+
 /**
  * VOS pool (DRAM)
  */
@@ -301,6 +308,8 @@ struct vos_pool {
 	bool			vp_rdb;
 	/** caller specifies pool is small (for sys space reservation) */
 	bool			vp_small;
+	/** caller does checkpointing periodically */
+	bool                     vp_ext_chkpt;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */
@@ -345,6 +354,8 @@ struct vos_pool {
 	unsigned int		 vp_space_rb;
 	/* GC runtime for pool */
 	struct vos_gc_info	 vp_gc_info;
+	/* Inline checkpointing context */
+	struct vos_chkpt_context vp_chkpt_ctxt;
 };
 
 /**
@@ -506,11 +517,8 @@ struct vos_dtx_act_ent {
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
-	struct vos_dtx_cmt_ent_df	 dce_base;
-
-	uint32_t			 dce_reindex:1,
-					 dce_exist:1,
-					 dce_invalid:1;
+	struct vos_dtx_cmt_ent_df dce_base;
+	uint32_t                  dce_invalid : 1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
@@ -689,7 +697,7 @@ vos_pool_hash_del(struct vos_pool *pool)
 }
 
 /**
- * Register btree class for container table, it is called within vos_init()
+ * Register btree class for container table.
  *
  * \return		0 on success and negative on
  *			failure
@@ -698,8 +706,7 @@ int
 vos_cont_tab_register();
 
 /**
- * VOS object index class register for btree
- * Called with vos_init()
+ * VOS object index class register for btree.
  *
  * \return		0 on success and negative on
  *			failure
@@ -720,7 +727,7 @@ int
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 
 /**
- * Register dbtree class for DTX table, it is called within vos_init().
+ * Register dbtree class for DTX table.
  *
  * \return		0 on success and negative on failure
  */
@@ -1366,6 +1373,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
+int
+vos_tree_mark_corruption(struct vos_container *cont, struct vos_object *obj, daos_handle_t toh,
+			 enum vos_tree_class tclass, daos_epoch_t epoch, uint32_t pm_ver,
+			 bool is_dkey, daos_key_t *key, daos_handle_t *sub_toh);
 
 /* vos_io.c */
 int
@@ -1444,7 +1455,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(struct vos_pool *pool, daos_size_t *rsrvd);
 int
-gc_open_pool(struct vos_pool *pool);
+gc_open_pool(struct vos_pool *pool, struct checker *ck);
 void
 gc_close_pool(struct vos_pool *pool);
 int

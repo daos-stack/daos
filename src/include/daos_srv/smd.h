@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,6 +51,8 @@ struct smd_dev_info {
 	uuid_t			 sdi_id;
 	enum smd_dev_state	 sdi_state;
 	uint32_t		 sdi_tgt_cnt;
+	char                    *sdi_model;
+	char                    *sdi_serial;
 	int			*sdi_tgts;
 };
 
@@ -87,10 +90,13 @@ void smd_fini(void);
  * \param [IN]	dev_id		NVMe device ID
  * \param [IN]	tgt_id		Target ID
  * \param [IN]	smd_type	SMD type
+ * \param [IN]	ctrlr		Ctrlr data (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type smd_type);
+int
+    smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type smd_type,
+		    struct nvme_ctrlr_t *ctrlr);
 
 /**
  * Unassign a NVMe device from a target (VOS xstream)
@@ -148,6 +154,10 @@ static inline void smd_dev_free_info(struct smd_dev_info *dev_info)
 {
 	if (dev_info->sdi_tgts != NULL)
 		D_FREE(dev_info->sdi_tgts);
+	if (dev_info->sdi_model != NULL)
+		D_FREE(dev_info->sdi_model);
+	if (dev_info->sdi_serial != NULL)
+		D_FREE(dev_info->sdi_serial);
 	D_FREE(dev_info);
 }
 
@@ -158,10 +168,12 @@ static inline void smd_dev_free_info(struct smd_dev_info *dev_info)
  * \param [IN] old_id		Old device ID
  * \param [IN] new_id		New device ID
  * \param [IN] dev_roles	Old device roles
+ * \param [IN] ctrlr		Ctrlr data (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles);
+int
+smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles, struct nvme_ctrlr_t *ctrlr);
 
 /**
  * Assign a blob to a VOS pool target

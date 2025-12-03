@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +8,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <daos/drpc.h>
-#include "drpc_test.pb-c.h"
+#include <daos/drpc_test.pb-c.h>
 
 void
 print_usage(void)

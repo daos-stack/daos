@@ -248,9 +248,10 @@ func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
-	sysResponse `json:"-"`
-	Members     system.Members `json:"members"`
-	Providers   []string       `json:"providers"`
+	sysResponse       `json:"-"`
+	Members           system.Members `json:"members"`
+	Providers         []string       `json:"providers"`
+	SysSelfHealPolicy string         `json:"sys_self_heal_policy"`
 }
 
 // Wrap sysResponse handling of absent hosts and ranks in a helper to be called from response
@@ -1068,7 +1069,6 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 type SystemSetAttrReq struct {
 	unaryRequest
 	msRequest
-
 	Attributes map[string]string
 }
 
@@ -1103,7 +1103,6 @@ type (
 	SystemGetAttrReq struct {
 		unaryRequest
 		msRequest
-
 		Keys []string
 	}
 
@@ -1141,7 +1140,6 @@ func SystemGetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetAt
 type SystemSetPropReq struct {
 	unaryRequest
 	msRequest
-
 	Properties map[daos.SystemPropertyKey]daos.SystemPropertyValue
 }
 
@@ -1179,7 +1177,6 @@ type (
 	SystemGetPropReq struct {
 		unaryRequest
 		msRequest
-
 		Keys []daos.SystemPropertyKey
 	}
 
@@ -1245,4 +1242,126 @@ func SystemGetProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetPr
 	}
 
 	return resp, nil
+}
+
+// SystemRebuildManageReq sends an interactive pool rebuild request to each pool in a DAOS system.
+type SystemRebuildManageReq struct {
+	unaryRequest
+	msRequest
+	OpCode PoolRebuildOpCode // Which pool rebuild operation to trigger
+	Force  bool              // Applies to stop interactive rebuild only
+}
+
+// PoolRebuildManageResult describe the result of an interactive rebuild operation on a given pool.
+type PoolRebuildManageResult struct {
+	ID      string            `json:"id"`
+	OpCode  PoolRebuildOpCode `json:"op_code"`
+	Errored bool              `json:"errored"`
+	Msg     string            `json:"msg"`
+}
+
+// SystemRebuildManageResp contains the request response.
+type SystemRebuildManageResp struct {
+	Results []*PoolRebuildManageResult `json:"results"`
+}
+
+// Errors returns a single error combining all error messages associated with pool-rank results.
+func (resp *SystemRebuildManageResp) Errors() error {
+	if resp == nil {
+		return errors.Errorf("nil %T", resp)
+	}
+
+	var err error
+	for _, res := range resp.Results {
+		if res.Errored {
+			err = concatErrs(err,
+				errors.Errorf("pool-rebuild %s failed on pool %s: %s",
+					res.OpCode, res.ID, res.Msg))
+		}
+	}
+
+	return err
+}
+
+// SystemRebuildManage will apply interactive rebuild operation to all pools.
+func SystemRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *SystemRebuildManageReq) (*SystemRebuildManageResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+	if !req.OpCode.IsValid() {
+		return nil, errors.Errorf("invalid pool-rebuild opcode %d", req.OpCode)
+	}
+	if req.Force && req.OpCode != PoolRebuildOpCodeStop {
+		return nil, errors.New("force flag only supported with rebuild stop opcode")
+	}
+
+	pbReq := &mgmtpb.SystemRebuildManageReq{
+		Sys:    req.getSystem(rpcClient),
+		OpCode: uint32(req.OpCode),
+		Force:  req.Force,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemRebuildManage(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS system rebuild request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemRebuildManageResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemSelfHealEvalReq sends a request to evaluate self_heal system property in a DAOS system.
+type SystemSelfHealEvalReq struct {
+	unaryRequest
+	msRequest
+}
+
+// SystemSelfHealEvalResp contains the response.
+type SystemSelfHealEvalResp struct {
+}
+
+// Errors returns collective error for response.
+func (resp *SystemSelfHealEvalResp) Errors() error {
+	return nil
+}
+
+// SystemSelfHealEval will trigger actions based on the value of the system self_heal property.
+func SystemSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *SystemSelfHealEvalReq) (*SystemSelfHealEvalResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemSelfHealEvalReq{
+		Sys: req.getSystem(rpcClient),
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemSelfHealEval(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS system self-heal eval request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := "system self-heal eval failed"
+	msErr := ur.getMSError()
+	if msErr != nil {
+		return nil, errors.Wrap(msErr, msg)
+	}
+	resp := new(mgmtpb.DaosResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, errors.Wrap(err, msg)
+	}
+
+	rpcClient.Debugf("resp: %+v", resp)
+	if s := daos.Status(resp.Status); s != daos.Success {
+		return nil, errors.Wrap(s, msg)
+	}
+
+	return new(SystemSelfHealEvalResp), nil
 }

@@ -21,16 +21,24 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31416
       log_file: daos_server0.log
-      log_mask: ERR
+      log_mask: INFO
       storage: auto
+      env_vars:
+        - NA_OFI_UNEXPECTED_TAG_MSG=0
+
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31517
       log_file: daos_server1.log
-      log_mask: ERR
+      log_mask: INFO
       storage: auto
+      env_vars:
+        - NA_OFI_UNEXPECTED_TAG_MSG=0
+client:
+  env_vars:
+    - NA_OFI_UNEXPECTED_TAG_MSG=0
 pool:
   size: 93%
 container:

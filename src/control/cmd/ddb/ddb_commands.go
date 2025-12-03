@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Vdura Inc.
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -8,6 +9,8 @@
 package main
 
 import (
+	"math"
+
 	"github.com/desertbit/grumble"
 )
 
@@ -42,12 +45,13 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.Bool("w", "write_mode", false, "Open the vos file in write mode.")
+			f.String("p", "db_path", "", "Path to the sys db to open.")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Path to the vos file to open.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbOpen(ctx, c.Args.String("path"), c.Flags.Bool("write_mode"))
+			return ddbOpen(ctx, c.Args.String("path"), c.Flags.String("db_path"), c.Flags.Bool("write_mode"))
 		},
 		Completer: openCompleter,
 	})
@@ -308,13 +312,14 @@ the path must include the extent, otherwise, it must not.`,
 		Flags: func(f *grumble.Flags) {
 			f.String("e", "enable", "", "Enable vos pool features")
 			f.String("d", "disable", "", "Disable vos pool features")
+			f.String("p", "db_path", "", "Path to the sys db")
 			f.Bool("s", "show", false, "Show current features")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
 		},
 		Completer: featureCompleter,
 	})
@@ -378,6 +383,62 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDevReplace(ctx, c.Args.String("db_path"), c.Args.String("old_dev"), c.Args.String("new_dev"))
+		},
+		Completer: nil,
+	})
+	// Command dtx_stat
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_stat",
+		Aliases:   nil,
+		Help:      "Stat on DTX entries",
+		LongHelp:  "Print statistic on the DTX entries",
+		HelpGroup: "vos",
+		Flags: func(a *grumble.Flags) {
+			a.Bool("d", "details", false, "Show detailed time related stats.")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, VOS tree path of a container to query.", grumble.Default(""))
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxStat(ctx, c.Args.String("path"), c.Flags.Bool("details"))
+		},
+		Completer: nil,
+	})
+	// Command prov_mem
+	app.AddCommand(&grumble.Command{
+		Name:      "prov_mem",
+		Aliases:   nil,
+		Help:      "Prepare the memory environment for md-on-ssd mode",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.Uint("s", "tmpfs_size", 0, "Specify tmpfs size(GiB) for mount. By default, The total size of all VOS files will be used")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the sys db.")
+			a.String("tmpfs_mount", "Path to the tmpfs mountpoint.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbProvMem(ctx, c.Args.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_size"))
+		},
+		Completer: nil,
+	})
+	// Command dtx_aggr
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_aggr",
+		Aliases:   nil,
+		Help:      "Aggregate DTX entries",
+		LongHelp:  "Aggregate DTX entries until a given aggregation commit time or date",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, VOS tree path of a container to aggregate.", grumble.Default(""))
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("t", "cmt_time", math.MaxUint64, "Max aggregfation committed time in seconds")
+			f.String("d", "cmt_date", "", "Max aggregation committed date (format '1970-01-01 00:00:00')")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxAggr(ctx, c.Args.String("path"), c.Flags.Uint64("cmt_time"), c.Flags.String("cmt_date"))
 		},
 		Completer: nil,
 	})

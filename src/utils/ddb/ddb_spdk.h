@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +11,17 @@
 #include <daos_srv/bio.h>
 
 struct ddbs_sync_info {
-	struct bio_blob_hdr	*dsi_hdr;
+	union {
+		/* SMD_DEV_TYPE_DATA */
+		struct bio_blob_hdr *dsi_hdr;
+		/* SMD_DEV_TYPE_META */
+		struct meta_header  *dsi_meta_hdr;
+		/* SMD_DEV_TYPE_WAL */
+		struct wal_header   *dsi_wal_hdr;
+	};
+	enum smd_dev_type        st;
 	uuid_t			 dsi_dev_id;
+	uint64_t                 dsi_blob_id;
 	uint64_t		 dsi_cluster_size;
 	uint64_t		 dsi_cluster_nr;
 };

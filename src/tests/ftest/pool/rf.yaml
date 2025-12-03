@@ -15,15 +15,11 @@ server_config:
           scm_mount: /mnt/daos0
 
 pool:
-  name: daos_server
   scm_size: 1G
-  rf: !mux
-    rf1:
-      properties: rd_fac:4
+  properties: rd_fac:4
 
 container:
   type: POSIX
-  control_method: daos
   cont_rf:
     - 0
     - 1

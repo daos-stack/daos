@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -243,12 +244,6 @@ dss_module_init_all(uint64_t *mod_facs)
 	struct loaded_mod	*tmp;
 	uint64_t		 fac;
 	int			 rc = 0;
-
-	/*
-	 * first register global tls accessible to all modules,
-	 * it'll be first initialized and last finalized.
-	 */
-	dss_register_key(&daos_srv_modkey);
 
 	/* lookup the module from the loaded module list */
 	D_MUTEX_LOCK(&loaded_mod_list_lock);

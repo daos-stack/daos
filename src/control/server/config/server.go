@@ -1084,3 +1084,20 @@ func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
 
 	return
 }
+
+// HasPMem returns true if any engine storage config contains a DCPM-class SCM-tier.
+func (cfg *Server) HasPMem() bool {
+	if cfg == nil {
+		return false
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		for _, scmCfg := range engineCfg.Storage.Tiers.ScmConfigs() {
+			if scmCfg.Class == storage.ClassDcpm {
+				return true
+			}
+		}
+	}
+
+	return false
+}

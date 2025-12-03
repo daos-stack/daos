@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,10 +36,10 @@ func (ei *EngineInstance) format(ctx context.Context) error {
 
 	ei.log.Debugf("instance %d: checking if storage is formatted", idx)
 	if err := ei.awaitStorageReady(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "awaitStorageReady")
 	}
 	if err := ei.createSuperblock(); err != nil {
-		return err
+		return errors.Wrap(err, "createSuperblock")
 	}
 
 	if !ei.hasSuperblock() {
@@ -49,10 +50,26 @@ func (ei *EngineInstance) format(ctx context.Context) error {
 	// any callbacks that were waiting for this state.
 	for _, readyFn := range ei.onStorageReady {
 		if err := readyFn(ctx); err != nil {
-			return err
+			return errors.Wrap(err, "onStorageReady readyFn")
 		}
 	}
 
+	return nil
+}
+
+func (ei *EngineInstance) initIncarnationFromSuperblock() error {
+	if ei.incarnation > 0 {
+		return nil
+	}
+
+	sb := ei.getSuperblock()
+	if sb == nil {
+		return errors.New("no superblock found")
+	}
+
+	ei.incarnation = sb.Incarnation
+
+	ei.log.Debugf("engine %d initialized with incarnation %d", ei.Index(), ei.incarnation)
 	return nil
 }
 
@@ -64,7 +81,12 @@ func (ei *EngineInstance) start(ctx context.Context) (chan *engine.RunnerExitInf
 		ei.log.Errorf("instance %d: unable to log SCM storage stats: %s", ei.Index(), err)
 	}
 
-	return ei.runner.Start(ctx)
+	if err := ei.initIncarnationFromSuperblock(); err != nil {
+		return nil, errors.Wrap(err, "initIncarnationFromSuperblock")
+	}
+
+	ch, err := ei.runner.Start(ctx)
+	return ch, errors.Wrap(err, "runner Start")
 }
 
 // waitReady awaits ready signal from I/O Engine before starting
@@ -105,12 +127,12 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 // createPublishInstanceExitFunc returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
 func createPublishInstanceExitFunc(publish func(*events.RASEvent), hostname string) onInstanceExitFn {
-	return func(_ context.Context, engineIdx uint32, rank ranklist.Rank, exitErr error, exPid int) error {
+	return func(_ context.Context, engineIdx uint32, rank ranklist.Rank, incarnation uint64, exitErr error, exPid int) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
 
-		evt := events.NewEngineDiedEvent(hostname, engineIdx, rank.Uint32(),
+		evt := events.NewEngineDiedEvent(hostname, engineIdx, rank.Uint32(), incarnation,
 			common.ExitStatus(exitErr.Error()), exPid)
 
 		// set forwardable if there is a rank for the MS to operate on
@@ -143,7 +165,7 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 	// After we know that the instance has exited, fire off
 	// any callbacks that were waiting for this state.
 	for _, exitFn := range ei.onInstanceExit {
-		err := exitFn(ctx, engineIdx, rank, exitErr, exitPid)
+		err := exitFn(ctx, engineIdx, rank, ei.incarnation, exitErr, exitPid)
 		if err != nil {
 			ei.log.Errorf("onExit: %s", err)
 		}
@@ -214,7 +236,7 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 
 				runnerExitCh, err = ei.startRunner(ctx)
 				if err != nil {
-					ei.log.Errorf("runner exited without starting process: %s", err)
+					ei.log.Errorf("runner exited without starting process: %+v", err)
 					ei.handleExit(ctx, 0, err)
 					continue
 				}

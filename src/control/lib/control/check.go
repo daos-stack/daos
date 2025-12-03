@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -433,6 +434,15 @@ func (r *SystemCheckReport) IsRemovedPool() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_DISCARD &&
 		(r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE ||
 			r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS)
+}
+
+// IsDryRun indicates whether this report was for a dry run. In a dry run, the resolution was not
+// actually applied.
+func (r *SystemCheckReport) IsDryRun() bool {
+	if r == nil {
+		return false
+	}
+	return r.Result == int32(chkpb.CheckResult_DRY_RUN)
 }
 
 // Resolution returns a string describing the action taken to resolve this report.

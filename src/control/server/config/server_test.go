@@ -249,9 +249,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVMD(true).     // vmd enabled by default
 		WithDisableHotplug(true). // hotplug enabled by default
 		WithControlLogMask(common.ControlLogLevelError).
-		WithControlLogFile("/tmp/daos_server.log").
-		WithHelperLogFile("/tmp/daos_server_helper.log").
-		WithFirmwareHelperLogFile("/tmp/daos_firmware_helper.log").
+		WithControlLogFile("/var/log/daos/daos_server.log").
+		WithHelperLogFile("/var/log/daos/daos_server_helper.log").
+		WithFirmwareHelperLogFile("/var/log/daos/daos_firmware_helper.log").
 		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
@@ -293,7 +293,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithPinnedNumaNode(0).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
-			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogFile("/var/log/daos/daos_engine.0.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(false).
 			WithStorageAutoFaultyCriteria(true, 100, 200),
@@ -320,7 +320,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithCrtTimeout(30).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
-			WithLogFile("/tmp/daos_engine.1.log").
+			WithLogFile("/var/log/daos/daos_engine.1.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(false).
 			WithStorageAutoFaultyCriteria(false, 0, 0),
@@ -425,7 +425,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 		WithControlMetadata(storage.ControlMetadata{
 			Path: "/var/daos/config",
 		}).
-		WithControlLogFile("/tmp/daos_server.log").
+		WithControlLogFile("/var/log/daos/daos_server.log").
 		WithTelemetryPort(9191).
 		WithFabricProvider("ofi+tcp").
 		WithMgmtSvcReplicas("example1", "example2", "example3")
@@ -459,7 +459,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+tcp").
 			WithPinnedNumaNode(0).
 			WithEnvVars("FI_SOCKETS_CONN_TIMEOUT=2000", "FI_SOCKETS_MAX_CONN_RETRY=1").
-			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogFile("/var/log/daos/daos_engine.0.log").
 			WithLogMask("INFO"),
 	}
 
@@ -2306,6 +2306,40 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					t.Errorf("unexpected fabric numa node set (-want +got):\n%s", diff)
 				}
 			}
+		})
+	}
+}
+
+func TestConfig_HasPMem(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg        *Server
+		expHasPMem bool
+	}{
+		"has pmem": {
+			cfg: DefaultServer().WithEngines(
+				engine.MockConfig().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass(storage.ClassDcpm.String()).
+							WithScmMountPoint("bb").
+							WithScmDeviceList("a"),
+					),
+			),
+			expHasPMem: true,
+		},
+		"no pmem": {
+			cfg: DefaultServer().WithEngines(
+				engine.MockConfig().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass(storage.ClassRam.String()).
+							WithScmMountPoint("bb"),
+					),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expHasPMem, tc.cfg.HasPMem(), "unexpected")
 		})
 	}
 }
