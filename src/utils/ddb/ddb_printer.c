@@ -136,7 +136,7 @@ void
 ddb_print_sv(struct ddb_ctx *ctx, struct ddb_sv *sv, uint32_t indent)
 {
 	print_indent(ctx, indent);
-	ddb_printf(ctx, DF_IDX " Single Value (Length: " DF_U64 " bytes, Epoch: %" PRIu64 ")\n",
+	ddb_printf(ctx, DF_IDX " Single Value (Length: " DF_U64 " bytes, Epoch: " DF_U64 ")\n",
 		   sv->ddbs_idx, sv->ddbs_record_size, sv->ddbs_epoch);
 }
 

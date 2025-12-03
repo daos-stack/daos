@@ -147,25 +147,26 @@ print_key_test(void **state)
 static void
 print_sv_test(void **state)
 {
-	struct ddb_sv sv = {.ddbs_record_size = 19089555};
+	struct ddb_sv sv = {.ddbs_record_size = 19089555, .ddbs_epoch = 49126485506073};
 
 	ddb_print_sv(&g_ctx, &sv, 0);
-	assert_printed_exact("[0] Single Value (Length: 19089555 bytes, Epoch: 0)\n");
+	assert_printed_exact("[0] Single Value (Length: 19089555 bytes, Epoch: 49126485506073)\n");
 }
 
 static void
 print_array_test(void **state)
 {
 	struct ddb_array array = {
-		.ddba_recx.rx_idx = 64,
-		.ddba_recx.rx_nr = 128,
-		.ddba_record_size = 3,
-		.ddba_idx = 8,
+	    .ddba_recx.rx_idx = 64,
+	    .ddba_recx.rx_nr  = 128,
+	    .ddba_record_size = 3,
+	    .ddba_idx         = 8,
+	    .ddba_epoch       = 49126485506073,
 	};
 
 	ddb_print_array(&g_ctx, &array, 0);
 	assert_printed_exact("[8] Array Value (Length: 128 records, "
-			     "Record Indexes: {64-191}, Record Size: 3, Epoch: 0)\n");
+			     "Record Indexes: {64-191}, Record Size: 3, Epoch: 49126485506073)\n");
 }
 
 #define assert_hr_bytes(expected_str, bytes) \
