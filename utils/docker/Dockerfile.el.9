@@ -128,7 +128,8 @@ COPY --chown=daos_server:daos_server utils/sl utils/sl
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
     if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
         direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
-    export DISTRO="${EL_VERSION}" &&                                                  \
+    RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                     \
+    export DISTRO="el${RELEASE_MAJOR}" &&                                                  \
 	utils/rpms/build_packages.sh deps &&                                    \
 	mkdir -p /home/daos/rpms &&                                             \
 	mv *.rpm /home/daos/rpms;                                               \
@@ -183,10 +184,11 @@ COPY --chown=daos_server:daos_server utils utils
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
 	    if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
-	export DISTRO="${EL_VERSION}" &&                                             \
-	utils/rpms/build_packages.sh daos &&                               \
-	mkdir -p /home/daos/rpms &&                                        \
-	cp *.rpm /home/daos/rpms;                                          \
+	RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                      \ 
+    export DISTRO="el${RELEASE_MAJOR}" &&                                       \
+    utils/rpms/build_packages.sh daos &&                                   \
+	mkdir -p /home/daos/rpms &&                                            \
+	cp *.rpm /home/daos/rpms;                                              \
     }
 
 # Set environment variables
