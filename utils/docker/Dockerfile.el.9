@@ -14,6 +14,8 @@ FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
+# Needed for later use of RELEASE
+ARG RELEASE
 
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
@@ -34,12 +36,13 @@ RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
 
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el*.sh /tmp/
-RUN RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)";        \
+RUN RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";        \
+    echo "Release major is: ${RELEASE_MAJOR}";               \
     cp /tmp/install-el${RELEASE_MAJOR}.sh /tmp/install.sh && \
     rm -f /tmp/install-el*.sh
 # script to setup local repo if available
 COPY ./utils/scripts/helpers/repo-helper-el*.sh /tmp/
-RUN RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)";                \
+RUN RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)";                  \
     cp /tmp/repo-helper-el${RELEASE_MAJOR}.sh /tmp/repo-helper.sh && \
     rm -f /tmp/repo-helper-el*.sh
 
