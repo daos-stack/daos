@@ -23,13 +23,17 @@ ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
 
-ENV EL_VERSION=el${RELEASE}
-RUN echo "Selected EL version is $EL_VERSION"
 
 # script to install OS updates basic tools and daos dependencies
-COPY ./utils/scripts/install-${EL_VERSION}.sh /tmp/install.sh
+COPY ./utils/scripts/install-el*.sh /tmp/
+RUN RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";        \
+    cp /tmp/install-el${RELEASE_MAJOR}.sh /tmp/install.sh && \
+    rm -f /tmp/install-el*.sh
 # script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-${EL_VERSION}.sh /tmp/repo-helper.sh
+COPY ./utils/scripts/helpers/repo-helper-el*.sh /tmp/
+RUN RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                \
+    cp /tmp/repo-helper-el${RELEASE_MAJOR}.sh /tmp/repo-helper.sh && \
+    rm -f /tmp/repo-helper-el*.sh
 
 RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
     /tmp/repo-helper.sh &&                          \
@@ -194,7 +198,8 @@ WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
-RUN if [ "$DAOS_JAVA_BUILD" == "yes" && "$EL_VERSION" == "el8" ]; then    \
+RUN RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)";                     \
+    if [ "$DAOS_JAVA_BUILD" == "yes" && "$RELEASE_MAJOR" == "8" ]; then   \
         if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; " \
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi;      \
         mkdir /home/daos/.m2 &&                                           \
