@@ -299,7 +299,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             join_ranks (bool): Stop ranks individual ranks. Defaults to True.
 
         Returns:
-            list: a list of random ranks either as individual strings, 
+            list: a list of random ranks either as individual strings,
             or one comma-separated string.
 
         """
