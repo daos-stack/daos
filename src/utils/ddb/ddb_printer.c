@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -135,22 +136,20 @@ void
 ddb_print_sv(struct ddb_ctx *ctx, struct ddb_sv *sv, uint32_t indent)
 {
 	print_indent(ctx, indent);
-	ddb_printf(ctx, DF_IDX" Single Value (Length: "DF_U64" bytes)\n",
-		   sv->ddbs_idx,
-		   sv->ddbs_record_size);
+	ddb_printf(ctx, DF_IDX " Single Value (Length: " DF_U64 " bytes, Epoch: %" PRIu64 ")\n",
+		   sv->ddbs_idx, sv->ddbs_record_size, sv->ddbs_epoch);
 }
 
 void
 ddb_print_array(struct ddb_ctx *ctx, struct ddb_array *array, uint32_t indent)
 {
 	print_indent(ctx, indent);
-	ddb_printf(ctx, DF_IDX" Array Value (Length: "DF_U64" records, Record Indexes: "
-			"{"DF_U64"-"DF_U64"}, Record Size: "DF_U64")\n",
-		   array->ddba_idx,
-		   array->ddba_recx.rx_nr,
-		   array->ddba_recx.rx_idx,
-		   array->ddba_recx.rx_idx + array->ddba_recx.rx_nr - 1,
-		   array->ddba_record_size);
+	ddb_printf(ctx,
+		   DF_IDX " Array Value (Length: " DF_U64 " records, Record Indexes: "
+			  "{" DF_U64 "-" DF_U64 "}, Record Size: " DF_U64 ", Epoch: " DF_U64 ")\n",
+		   array->ddba_idx, array->ddba_recx.rx_nr, array->ddba_recx.rx_idx,
+		   array->ddba_recx.rx_idx + array->ddba_recx.rx_nr - 1, array->ddba_record_size,
+		   array->ddba_epoch);
 }
 
 void

@@ -36,17 +36,18 @@ struct ddb_key {
 };
 
 struct ddb_sv {
-	uint64_t			ddbs_record_size;
-	uint32_t			ddbs_idx;
-	struct dv_indexed_tree_path	*ddbs_path;
+	uint64_t                    ddbs_record_size;
+	daos_epoch_t                ddbs_epoch;
+	uint32_t                    ddbs_idx;
+	struct dv_indexed_tree_pat *ddbs_path;
 };
 
 struct ddb_array {
-	uint64_t			ddba_record_size;
-	daos_recx_t			ddba_recx;
-	uint32_t			ddba_idx;
-	struct dv_indexed_tree_path	*ddba_path;
-
+	uint64_t                     ddba_record_size;
+	daos_recx_t                  ddba_recx;
+	daos_epoch_t                 ddba_epoch;
+	uint32_t                     ddba_idx;
+	struct dv_indexed_tree_path *ddba_path;
 };
 
 /* Open and close a pool for a ddb_ctx */
@@ -138,6 +139,13 @@ int dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args);
 typedef int (*dv_dump_value_cb)(void *cb_arg, d_iov_t *value);
 int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb,
 		  void *cb_arg);
+
+typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *rel,
+			       struct dcs_ci_list *cil);
+
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	     dv_dump_csum_cb dump_cb, void *cb_arg);
 
 struct ddb_ilog_entry {
 	uint32_t	die_idx;

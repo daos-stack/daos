@@ -55,6 +55,10 @@ def scons():
     ddblib = denv.d_library('ddb', src, LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv/', ddblib)
 
+    # FIXME DAOS-17321 -- Conditional build for ddb legacies
+    ddbexe = denv.d_program('ddb_leg', src + ['ddb_entry.c'], LIBS=libs)
+    denv.Install('$PREFIX/bin', ddbexe)
+
     # tests
     SConscript('tests/SConscript', exports=['denv'])
 

@@ -166,7 +166,7 @@ main(int argc, char **argv)
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			cmocka_set_skip_filter(optarg);
 #else
-			D_PRINT("filter not enabled");
+			D_PRINT("filter not enabled\n");
 #endif
 
 			break;
@@ -181,7 +181,7 @@ main(int argc, char **argv)
 				printf("Test filter: %s\n", filter);
 			}
 #else
-			D_PRINT("filter not enabled");
+			D_PRINT("filter not enabled\n");
 #endif
 			break;
 		case FORCE_CSUM:
