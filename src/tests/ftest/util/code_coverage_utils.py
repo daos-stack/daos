@@ -163,21 +163,7 @@ class CodeCoverage():
             "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900, result)
 
         # Rename bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.host.cov.*
-        for item in os.listdir(job_results_dir):
-            item_full = os.path.join(job_results_dir, item)
-            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
-                host_ext = os.path.splitext(item)
-                if len(host_ext) > 1:
-                    os.makedirs(bullseye_dir, exist_ok=True)
-                    for name in os.listdir(item_full):
-                        old_file = os.path.join(item_full, name)
-                        if os.path.isfile(old_file):
-                            new_name = name.split(".")
-                            new_name.insert(1, host_ext[-1][1:])
-                            new_file_name = ".".join(new_name)
-                            new_file = os.path.join(bullseye_dir, new_file_name)
-                            logger.debug("Renaming %s to %s", old_file, new_file)
-                            os.rename(old_file, new_file)
+        self.__rename_rcopy_files(logger, bullseye_dir)
         return status == 0
 
     def __check_gcov(self, logger, hosts):
@@ -190,14 +176,13 @@ class CodeCoverage():
         Returns:
             bool: True if gcov code coverage is enabled; False otherwise
         """
-        logger.info("Gcov code coverage collection configured on %s", hosts)
-        return True
         source = os.environ.get("GCOV_PREFIX", "/tmp")
         result = run_remote(logger, hosts, find_command(source, "*.gcno"))
         if not result.passed:
-            logger.info(
-                "Gcov code coverage collection not configured on %s", result.failed_hosts)
-            return False
+            # logger.info(
+            #     "Gcov code coverage collection not configured on %s", result.failed_hosts)
+            # return False
+            logger.debug("No gcov *.gcno files found on %s", result.failed_hosts)
         logger.info("Gcov code coverage collection configured on %s", hosts)
         return True
 
@@ -213,16 +198,18 @@ class CodeCoverage():
             bool: False if there is a problem setting up gcov code coverage; True otherwise
         """
         prefix = os.environ.get("GCOV_PREFIX", "/tmp/gcov")
-        result = run_remote(logger, hosts, f"rm -fr {prefix}")
-        if not result.passed:
-            message = f"Error removing existing gcov directory on {result.failed_hosts}"
-            result.fail_test(logger, "Run", message, None)
-            return False
         result = run_remote(logger, hosts, f"mkdir -p {prefix}")
         if not result.passed:
             message = f"Error creating gcov directory on {result.failed_hosts}"
             result.fail_test(logger, "Run", message, None)
             return False
+        run_remote(logger, hosts, f"ls -aR {prefix}")
+        other = ["-print", "-delete"]
+        logger.debug("Removing any pre-existing *.gcda files in %s", prefix)
+        result = run_remote(logger, hosts, find_command(prefix, "*.gcda", None, other))
+        if not result.passed:
+            logger.debug("Failed to remove pre-existing *.gcda files on %s", result.failed_hosts)
+        run_remote(logger, hosts, f"ls -aR {prefix}")
         return True
 
     def __finalize_gcov(self, logger, hosts, job_results_dir, result):
@@ -241,7 +228,7 @@ class CodeCoverage():
         source = os.environ.get("GCOV_PREFIX", "/tmp/gcov")
 
         # Log any generated *.gcda files
-        other = ["-print", "-delete"]
+        other = ["-print"]
         logger.debug("Listing any *.gcda files in %s", source)
         run_remote(logger, hosts, find_command(source, "*.gcda", None, other))
 
@@ -264,5 +251,34 @@ class CodeCoverage():
             logger, "gcov coverage reports", hosts, os.path.dirname(_report),
             os.path.basename(_report), destination, 1, None, 900, result)
 
-        # Rename bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.host.cov.*
+        # Rename code_coverage_report.host/*.json files to code_coverage_report/*.host.json
+        self.__rename_rcopy_files(logger, destination)
         return status == 0
+
+    def __rename_rcopy_files(self, logger, directory):
+        """Rename host-specific directories of files to a single directory with host-specific files.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            directory (str): directory in which to place host-specific files
+        """
+        parent_dir = os.path.dirname(directory)
+        rename_dir = os.path.basename(directory)
+
+        # Rename <parent_dir>/<rename_dir>.<host>/<file>.<ext>
+        #     to <parent_dir>/<rename_dir>/<file>.<host>.<ext>
+        for item in os.listdir(parent_dir):
+            item_full = os.path.join(parent_dir, item)
+            if os.path.isdir(item_full) and rename_dir in item:
+                host_ext = os.path.splitext(item)
+                if len(host_ext) > 1:
+                    os.makedirs(directory, exist_ok=True)
+                    for name in os.listdir(item_full):
+                        old_file = os.path.join(item_full, name)
+                        if os.path.isfile(old_file):
+                            new_name = name.split(".")
+                            new_name.insert(1, host_ext[-1][1:])
+                            new_file_name = ".".join(new_name)
+                            new_file = os.path.join(directory, new_file_name)
+                            logger.debug("Renaming %s to %s", old_file, new_file)
+                            os.rename(old_file, new_file)
