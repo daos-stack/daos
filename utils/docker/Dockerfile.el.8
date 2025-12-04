@@ -32,10 +32,9 @@ ENV NO_PROXY=${DAOS_NO_PROXY}
 RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
-ENV RELEASE=$RELEASE
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el*.sh /tmp/
-RUN echo "Release is ${RELEASE}" && RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)" && \
+RUN echo "Release is $RELEASE" && RELEASE_MAJOR="$(echo $RELEASE | cut -d. -f1)" && \
     echo "Release major is $RELEASE_MAJOR" && \
     ls -l /tmp/ && \
     cp /tmp/install-el${RELEASE_MAJOR}.sh /tmp/install.sh &&\
