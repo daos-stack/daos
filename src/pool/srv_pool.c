@@ -4738,10 +4738,7 @@ out:
 void
 ds_pool_disconnect_handler(crt_rpc_t *rpc)
 {
-	uint8_t rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
-
-	D_ASSERT(rpc_ver == DAOS_POOL_VERSION || rpc_ver == DAOS_POOL_VERSION - 1);
-	pool_disconnect_handler(rpc, rpc_ver);
+	pool_disconnect_handler(rpc, opc_get_rpc_ver(rpc->cr_opc));
 }
 
 static int
