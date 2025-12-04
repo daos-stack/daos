@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -596,9 +597,9 @@ out:
 }
 
 int
-crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
-		     pthread_t *progress_thread, crt_group_t **grp,
-		     uint32_t *grp_size, crt_init_options_t *init_opt)
+crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx, pthread_t *progress_thread,
+		     crt_group_t **grp, uint32_t *grp_size, crt_init_options_t *init_opt,
+		     struct crt_proto_format *p_fmt)
 {
 	char            *grp_cfg_file = NULL;
 	char            *my_uri       = NULL;
@@ -642,6 +643,12 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	rc = crt_context_create(crt_ctx);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	if (p_fmt != NULL) {
+		rc = crt_proto_register(p_fmt);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
 
 	rc = pthread_create(progress_thread, NULL, crtu_progress_fn, crt_ctx);
 	if (rc != 0)

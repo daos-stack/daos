@@ -124,7 +124,7 @@ test_run(d_rank_t my_rank)
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
 	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx[0], &test.tg_tid[0],
-				  &grp, &grp_size, NULL);
+				  &grp, &grp_size, NULL, &my_proto_fmt);
 	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	if (grp_size > 1) {
@@ -137,11 +137,8 @@ test_run(d_rank_t my_rank)
 		/* Note: saving group config file tells clients they can send rpcs */
 		DBG_PRINT("Saving group (%s) config file\n", test.tg_local_group_name);
 		rc = crt_group_config_save(grp, true);
-		D_ASSERTF(rc == 0,
-			  "crt_group_config_save() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n", rc);
 	}
-	rc = crt_proto_register(&my_proto_fmt);
-	D_ASSERT(rc == 0);
 
 	DBG_PRINT("Server started\n");
 

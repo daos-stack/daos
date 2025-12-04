@@ -63,8 +63,8 @@ test_run(d_rank_t my_rank)
 	int			 i;
 	int			 rc = 0;
 
-	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
-				  &test_g.t_tid[0], &grp, &grp_size, NULL);
+	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0], &test_g.t_tid[0],
+				  &grp, &grp_size, NULL, NULL);
 	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	/* Register event callback after CaRT has initialized */
