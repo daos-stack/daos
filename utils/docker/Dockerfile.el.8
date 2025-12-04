@@ -23,14 +23,6 @@ ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
 
-ENV RELEASE=$RELEASE
-RUN if [ -z "$RELEASE" ]; then \
-      echo "ERROR: RELEASE is empty!"; \
-      exit 1; \
-    else \
-      echo "RELEASE is set to '$RELEASE'"; \
-    fi
-
 # Accept DAOS_NO_PROXY at build time
 ARG DAOS_NO_PROXY
 # Propagate into the build environment
@@ -40,6 +32,7 @@ ENV NO_PROXY=${DAOS_NO_PROXY}
 RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
+ENV RELEASE=$RELEASE
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el*.sh /tmp/
 RUN echo "Release is ${RELEASE}" && RELEASE_MAJOR="$(echo ${RELEASE} | cut -d. -f1)" && \
