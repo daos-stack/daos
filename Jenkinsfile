@@ -522,7 +522,7 @@ pipeline {
                 expression { !skip_build_stage() }
             }
             parallel {
-                stage('Build on EL 8.8') {
+                stage('Build on EL 8.10') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el8') }
@@ -538,7 +538,7 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.8 '
+                                                ' --build-arg POINT_RELEASE=.10 '
                         }
                     }
                     steps {
