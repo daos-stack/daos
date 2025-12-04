@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,6 +38,7 @@
 #define COMMAND_NAME_DTX_ACT_ABORT "dtx_act_abort"
 #define COMMAND_NAME_FEATURE         "feature"
 #define COMMAND_NAME_RM_POOL         "rm_pool"
+#define COMMAND_NAME_DTX_ACT_DISCARD_INVALID "dtx_act_discard_invalid"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -542,55 +544,13 @@ vea_update_option_parse(struct ddb_ctx *ctx, struct vea_update_options *cmd_args
 	return 0;
 }
 
-/* Parse command line options for the 'dtx_act_commit' command */
+/**
+ * Parse command line options for the 'dtx_act_commit', 'dtx_act_abort', and 'dtx_act_abort'
+ * commands.
+ */
 static int
-dtx_act_commit_option_parse(struct ddb_ctx *ctx, struct dtx_act_commit_options *cmd_args,
-			    uint32_t argc, char **argv)
-{
-	char		 *options_short = "";
-	int		  index = 0;
-	struct option	  options_long[] = {
-		{ NULL }
-	};
-
-	memset(cmd_args, 0, sizeof(*cmd_args));
-
-	/* Restart getopt */
-	optind = 1;
-	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
-		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
-		return -DER_INVAL;
-	}
-
-	index = optind;
-	if (argc - index > 0) {
-		cmd_args->path = argv[index];
-		index++;
-	} else {
-		ddb_print(ctx, "Expected argument 'path'\n");
-		return -DER_INVAL;
-	}
-	if (argc - index > 0) {
-		cmd_args->dtx_id = argv[index];
-		index++;
-	} else {
-		ddb_print(ctx, "Expected argument 'dtx_id'\n");
-		return -DER_INVAL;
-	}
-
-	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
-		return -DER_INVAL;
-	}
-
-	return 0;
-}
-
-/* Parse command line options for the 'dtx_act_abort' command */
-static int
-dtx_act_abort_option_parse(struct ddb_ctx *ctx, struct dtx_act_abort_options *cmd_args,
-			   uint32_t argc, char **argv)
+dtx_act_option_parse(struct ddb_ctx *ctx, struct dtx_act_options *cmd_args, uint32_t argc,
+		     char **argv)
 {
 	char		 *options_short = "";
 	int		  index = 0;
@@ -854,13 +814,15 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 	}
 	if (same(cmd, COMMAND_NAME_DTX_ACT_COMMIT)) {
 		info->dci_cmd = DDB_CMD_DTX_ACT_COMMIT;
-		return dtx_act_commit_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act_commit,
-		       argc, argv);
+		return dtx_act_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act, argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_DTX_ACT_ABORT)) {
 		info->dci_cmd = DDB_CMD_DTX_ACT_ABORT;
-		return dtx_act_abort_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act_abort,
-		       argc, argv);
+		return dtx_act_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act, argc, argv);
+	}
+	if (same(cmd, COMMAND_NAME_DTX_ACT_DISCARD_INVALID)) {
+		info->dci_cmd = DDB_CMD_DTX_ACT_DISCARD_INVALID;
+		return dtx_act_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act, argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_RM_POOL)) {
 		info->dci_cmd = DDB_CMD_RM_POOL;
@@ -1043,11 +1005,15 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str)
 		break;
 
 	case DDB_CMD_DTX_ACT_COMMIT:
-		rc = ddb_run_dtx_act_commit(ctx, &info.dci_cmd_option.dci_dtx_act_commit);
+		rc = ddb_run_dtx_act_commit(ctx, &info.dci_cmd_option.dci_dtx_act);
 		break;
 
 	case DDB_CMD_DTX_ACT_ABORT:
-		rc = ddb_run_dtx_act_abort(ctx, &info.dci_cmd_option.dci_dtx_act_abort);
+		rc = ddb_run_dtx_act_abort(ctx, &info.dci_cmd_option.dci_dtx_act);
+		break;
+
+	case DDB_CMD_DTX_ACT_DISCARD_INVALID:
+		rc = ddb_run_dtx_act_discard_invalid(ctx, &info.dci_cmd_option.dci_dtx_act);
 		break;
 
 	case DDB_CMD_FEATURE:
