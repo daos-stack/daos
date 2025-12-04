@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       8%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -635,6 +635,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Dec 4 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-11
+- Bump version
+
+* Wed Nov 26 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.6.4-9
+- Add ddb_ut and dtx_ut to the server-tests package
+
 * Fri Nov 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-8
 - Pin isa-l_crypto at 2.24 since 2.25 is incompatible
 
