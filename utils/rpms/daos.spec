@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       8%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -633,6 +633,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Dec 04 2025 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-10
+- Tag 2.6.4-aurora.p1
+
 * Fri Nov 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-8
 - Pin isa-l_crypto at 2.24 since 2.25 is incompatible
 
