@@ -23,7 +23,7 @@ ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
 
-ENV RELEASE=${RELEASE}
+ENV RELEASE=$RELEASE
 RUN if [ -z "$RELEASE" ]; then \
       echo "ERROR: RELEASE is empty!"; \
       exit 1; \
