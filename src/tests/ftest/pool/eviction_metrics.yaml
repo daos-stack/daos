@@ -23,12 +23,16 @@ pool: !mux
     size: 10%
     mem_ratio: 50
 
+container:
+  oclass: S1
+  dir_oclass: SX
+
 mdtest:
   ppn: 32
   dfs_oclass: S1
   dfs_dir_oclass: SX
   manager: "MPICH"
-  # [api, write, read, branching_factor, num_of_dir_files, depth, flags, IL]
+  processes: 16
   test_dir: "/"
   api: DFS
   branching_factor: 1

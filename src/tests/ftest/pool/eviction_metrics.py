@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from mdtest_utils import get_mdtest, get_mdtest_container
+from mdtest_utils import write_mdtest_data
 from telemetry_test_base import TestWithTelemetry
 
 
@@ -32,6 +32,7 @@ class EvictionMetrics(TestWithTelemetry):
 
         self.log_step('Creating a pool (dmg pool create)')
         pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
 
         self.log_step(
             'Collect pool eviction metrics after creating a pool (dmg telemetry metrics query)')
@@ -46,11 +47,7 @@ class EvictionMetrics(TestWithTelemetry):
             self.fail('Pool eviction metrics verification failed after pool creation')
 
         self.log_step('Writing data to the pool (mdtest -a DFS)')
-        mdtest = get_mdtest(self, self.hostlist_clients)
-        container = get_mdtest_container(self, mdtest, pool)
-        result = mdtest.run(pool, container, processes=16)
-        if not result.passed:
-            self.fail('Mdtest command failed')
+        write_mdtest_data(self, container)
 
         self.log_step(
             'Collect pool eviction metrics after writing data (dmg telemetry metrics query)')

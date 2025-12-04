@@ -41,25 +41,6 @@ def get_mdtest(test, hosts, manager=None, path=None, slots=None, namespace=MDTES
     return mdtest
 
 
-def get_mdtest_container(test, mdtest, pool):
-    """Create a container to use with mdtest.
-
-    Args:
-        test (Test): avocado Test object
-        mdtest (MdtestCommand): mdtest command object
-        pool (TestPool): pool to create container in
-
-    Returns:
-        TestContainer: the new container
-    """
-    params = {}
-    if mdtest.dfs_oclass.value:
-        params['oclass'] = mdtest.dfs_oclass.value
-    if mdtest.dfs_dir_oclass.value:
-        params['dir_oclass'] = mdtest.dfs_dir_oclass.value
-    return test.get_container(pool, **params)
-
-
 def run_mdtest(test, log, hosts, path, slots, pool, container, processes, ppn=None, manager=None,
                display_space=True, namespace=MDTEST_NAMESPACE, mdtest_params=None):
     # pylint: disable=too-many-arguments
@@ -93,6 +74,32 @@ def run_mdtest(test, log, hosts, path, slots, pool, container, processes, ppn=No
     mdtest = get_mdtest(test, hosts, manager, path, slots, namespace, mdtest_params)
     mdtest.update_log_file(log)
     return mdtest.run(pool, container, processes, ppn, display_space, False)
+
+
+def write_mdtest_data(test, container, namespace=MDTEST_NAMESPACE, **mdtest_run_params):
+    """Write data to the container/dfuse using mdtest.
+
+    Simple method for test classes to use to write data with mdtest. While not required, this is
+    setup by default to pull in mdtest parameters from the test yaml.
+
+    Args:
+        test (Test): avocado Test object
+        container (TestContainer): the container to populate
+        namespace (str, optional): path to mdtest yaml parameters. Defaults to MDTEST_NAMESPACE.
+        mdtest_run_params (dict): optional params for the Mdtest.run() command.
+
+    Returns:
+        Mdtest: the Mdtest object used to populate the container
+    """
+    mdtest = get_mdtest(test, test.hostlist_clients, None, test.workdir, None, namespace)
+
+    if 'processes' not in mdtest_run_params:
+        mdtest_run_params['processes'] = test.params.get('processes', namespace, None)
+    elif 'ppn' not in mdtest_run_params:
+        mdtest_run_params['ppn'] = test.params.get('ppn', namespace, None)
+
+    mdtest.run(container.pool, container, **mdtest_run_params)
+    return mdtest
 
 
 class MdtestCommand(ExecutableCommand):
@@ -324,8 +331,6 @@ class Mdtest:
             self.env["LD_PRELOAD"] = intercept
             if "D_LOG_MASK" not in self.env:
                 self.env["D_LOG_MASK"] = "INFO"
-            # if "D_IL_REPORT" not in self.env and il_report is not None:
-            #     self.env["D_IL_REPORT"] = str(il_report)
 
         # Pass only processes or ppn to be compatible with previous behavior
         if ppn is not None:
