@@ -638,7 +638,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Thu Dec 4 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-11
 - Bump version
 
-* Wed 26 Nov 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.6.4-9
+* Wed Nov 26 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.6.4-9
 - Add ddb_ut and dtx_ut to the server-tests package
 
 * Fri Nov 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-8
