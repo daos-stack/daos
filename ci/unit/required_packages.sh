@@ -4,12 +4,12 @@ set -eu
 
 # No longer used but provided by pipeline-lib
 # quick_build="${2:-false}"
-# distro="$1"
+distro="$1"
 
 OPENMPI_VER=""
 PY_MINOR_VER=""
 
-export DISTRO="${1:-el8}"
+export DISTRO="${distro:-el8}"
 echo "DISTRO is $1"
 pkgs="boost-python3$PY_MINOR_VER-devel                               \
       capstone                                                       \
