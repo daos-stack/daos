@@ -10,7 +10,7 @@ OPENMPI_VER=""
 PY_MINOR_VER=""
 
 export DISTRO="${1:-el8}"
-echo "DISTRO is $DISTRO"
+
 pkgs="boost-python3$PY_MINOR_VER-devel                               \
       capstone                                                       \
       $(utils/rpms/package_version.sh argobots lib)                  \
