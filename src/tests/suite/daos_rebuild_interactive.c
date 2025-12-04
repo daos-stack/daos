@@ -652,7 +652,6 @@ int_rebuild_dkeys_stop_failing(void **state)
 	daos_pool_info_t pinfo     = {0};
 	d_rank_t         kill_rank = 0;
 	int              kill_rank_nr;
-	uint32_t         orig_map_ver;
 	uint32_t         excl_rebuild_ver;
 	uint32_t         reclaim_rebuild_ver;
 	daos_obj_id_t    oid;
@@ -667,14 +666,9 @@ int_rebuild_dkeys_stop_failing(void **state)
 
 	T_BEGIN();
 
-	pinfo.pi_bits = DPI_REBUILD_STATUS;
-	rc            = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
-	assert_rc_equal(rc, 0);
-	orig_map_ver        = pinfo.pi_map_ver;
-	reclaim_rebuild_ver = orig_map_ver;
-
-	print_message("arg->obj_class=%d, DAOS_OC_R3S_SPEC_RANK=%d\n", arg->obj_class,
-		      DAOS_OC_R3S_SPEC_RANK);
+	/* Use EC object - daos_obj_verify() -DER_MISMATCH with replicated object when targets down
+	 */
+	arg->obj_class = OC_EC_2P2G1;
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -706,28 +700,30 @@ int_rebuild_dkeys_stop_failing(void **state)
 				      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
 	}
 
-	/* Wait for: Fail_reclaim 1 to start, retry rebuild, Fail_reclaim 2 to start.
-	 * Then, use dmg pool rebuild stop to terminate a runaway retry cycle.
-	 */
+	/* Trigger exclude and rebuild, fail twice, force-stop it during the second Fail_reclaim */
 	arg->no_rebuild = 1;
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	arg->no_rebuild = 0;
-	rc              = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
+	test_rebuild_wait_to_start(&arg, 1);
+	pinfo.pi_bits = DPI_REBUILD_STATUS;
+	rc            = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	assert_rc_equal(rc, 0);
 	excl_rebuild_ver = pinfo.pi_rebuild_st.rs_version;
-	print_message("Wait for exclude rebuild ver %u to fail (then start Fail_reclaim ver %u)\n",
-		      excl_rebuild_ver, reclaim_rebuild_ver);
+
+	print_message("Wait for exclude rebuild ver %u to fail (and start Fail_reclaim)\n",
+		      excl_rebuild_ver);
 	test_rebuild_wait_to_start_before_ver(&arg, 1, excl_rebuild_ver);
-	/* TODO: can we assert rs_version == reclaim_rebuild_ver here using
-	 * arg->pool.pool_info.pi_rebuild_st (or invoke pool query again here)?
-	 */
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
+	assert_rc_equal(rc, 0);
+	reclaim_rebuild_ver = pinfo.pi_rebuild_st.rs_version;
+
 	print_message("Wait for Fail_reclaim to finish (and start retry of exclude rebuild)\n");
 	test_rebuild_wait_to_start_after_ver(&arg, 1, reclaim_rebuild_ver);
-	print_message("Wait for second exclude rebuild to fail (and start another Fail_reclaim)\n");
+	print_message("Wait for second exclude rebuild to fail (and start Fail_reclaim)\n");
 	test_rebuild_wait_to_start_before_ver(&arg, 1, excl_rebuild_ver);
 	sleep(2);
-	print_message(
-	    "Stopping runaway exclude rebuild retries with dmg pool rebuild stop --force\n");
+
+	print_message("Force-stop runaway failing exclude rebuild retries\n");
 	rc = rebuild_force_stop_with_dmg(arg);
 	assert_rc_equal(rc, 0);
 	test_rebuild_wait(&arg, 1);
@@ -737,42 +733,19 @@ int_rebuild_dkeys_stop_failing(void **state)
 
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
-#define DO_START() 1
-#if DO_START()
-	rc = rebuild_resume_wait_to_start(arg);
-	assert_rc_equal(rc, 0);
-	print_message("Exclude rebuild restarted\n");
-	test_rebuild_wait(&arg, 1);
-	print_message("Exclude rebuild completed\n");
-#endif
-
-#define DO_OBJ_VERIFY_EXCLUDE() 1
-#if DO_OBJ_VERIFY_EXCLUDE()
+	/* Verify data consistency while rebuild has been stopped */
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	print_message("Object verify after exclude rebuild stop returned rc=%d\n", rc);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
-#endif
 
+	/* Do not restart the rebuild ; instead, go directly to reintegrate the rank */
 	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 	T_END();
 }
-
-#if 0
-static void
-int_dfs_reintegrate_stop_failing(void **state)
-{
-	test_arg_t *arg = *state;
-
-	FAULT_INJECTION_REQUIRED();
-
-	T_BEGIN();
-	arg->interactive_rebuild = 1;
-	T_END();
-}
-#endif
 
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_interactive_tests[] = {
@@ -792,10 +765,6 @@ static const struct CMUnitTest rebuild_interactive_tests[] = {
      int_dfs_extend_enumerate_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
     {"IREBUILD8: interactive exclude: stop repeatedly-failing rebuild",
      int_rebuild_dkeys_stop_failing, rebuild_small_sub_setup, test_teardown},
-#if 0
-    {"IREBUILD9: interactive reintegrate: stop repeatedly-failing rebuild",
-     int_dfs_reintegrate_stop_failing, rebuild_sub_3nodes_rf0_setup, test_teardown},
-#endif
 };
 
 int
