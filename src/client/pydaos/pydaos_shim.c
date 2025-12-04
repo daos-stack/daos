@@ -429,8 +429,10 @@ __shim_handle__cont_destroyobj(PyObject *self, PyObject *args)
 	otype = entry.otype;
 
 	/** we do not support arrays anyway, so we would not be here */
-	if (otype == PYDAOS_ARRAY)
+	if (otype == PYDAOS_ARRAY) {
+		rc = -DER_INVAL;
 		goto out;
+	}
 
 	/* Remove name from root kv, use conditional to fail if not exist */
 	rc = daos_kv_remove(hdl->oh, DAOS_TX_NONE, DAOS_COND_PUNCH, name, NULL);
@@ -801,8 +803,10 @@ do {				\
 	DEFINE_OC_EXPL(EC_2P2G);	/** OC_EC_2P2G1, OC_EC_2P2G2, ... */
 	DEFINE_OC_EXPL(EC_4P1G);	/** OC_EC_4P1G1, OC_EC_4P1G2, ... */
 	DEFINE_OC_EXPL(EC_4P2G);	/** OC_EC_4P2G1, OC_EC_4P2G2, ... */
+	DEFINE_OC_EXPL(EC_4P3G);        /** OC_EC_4P3G1, OC_EC_4P3G2, ... */
 	DEFINE_OC_EXPL(EC_8P1G);	/** OC_EC_8P1G1, OC_EC_8P1G2, ... */
 	DEFINE_OC_EXPL(EC_8P2G);	/** OC_EC_8P2G1, OC_EC_8P2G2, ... */
+	DEFINE_OC_EXPL(EC_8P3G);        /** OC_EC_8P3G1, OC_EC_8P3G2, ... */
 	DEFINE_OC_EXPL(EC_16P1G);	/** OC_EC_16P1G1, OC_EC_16P1G2, ... */
 	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
 	DEFINE_OC_EXPL(EC_16P3G);       /** OC_EC_16P3G1, OC_EC_16P3G2, ... */
