@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -133,12 +134,6 @@ int main(int argc, char **argv)
 	if (rank_list->rl_nr != grp_size) {
 		D_ERROR("rank_list differs in size. expected %d got %d\n",
 			grp_size, rank_list->rl_nr);
-		assert(0);
-	}
-
-	rc = crt_group_psr_set(grp, rank_list->rl_ranks[0]);
-	if (rc != 0) {
-		D_ERROR("crt_group_psr_set() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
