@@ -33,9 +33,9 @@ RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
 # script to install OS updates basic tools and daos dependencies
-COPY ./utils/scripts/install-${EL_VERSION}.sh /tmp/install.sh
+COPY ./utils/scripts/install-el9.sh /tmp/install.sh
 # script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-${EL_VERSION}.sh /tmp/repo-helper.sh
+COPY ./utils/scripts/helpers/repo-helper-el9.sh /tmp/repo-helper.sh
 
 RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
     /tmp/repo-helper.sh &&                          \
@@ -130,7 +130,7 @@ COPY --chown=daos_server:daos_server utils/sl utils/sl
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
     if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
         direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
-    export DISTRO="${EL_VERSION}" &&                                                  \
+    export DISTRO="el9" &&                                                  \
 	utils/rpms/build_packages.sh deps &&                                    \
 	mkdir -p /home/daos/rpms &&                                             \
 	mv *.rpm /home/daos/rpms;                                               \
@@ -144,7 +144,7 @@ RUN [ -z "$CB1" ] || {                                                     \
         direct="${direct%%/*}"; export no_proxy="${direct}"; fi;           \
     dnf upgrade                                                            \
         --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    dnf clean all;                                                         \
+    dnf clean all;                                                         \    
     }
 USER daos_server:daos_server
 
@@ -170,10 +170,10 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
+            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;      \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
               FIRMWARE_MGMT=1 BUILD_TYPE=$DAOS_BUILD_TYPE                  \
-	          TARGET_TYPE=$DAOS_TARGET_TYPE &&                             \
+	      TARGET_TYPE=$DAOS_TARGET_TYPE &&                             \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
         cp -r utils/config/examples /opt/daos;                             \
@@ -185,7 +185,7 @@ COPY --chown=daos_server:daos_server utils utils
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
 	    if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "  \
             direct="${direct%%/*}"; export no_proxy="${direct}"; fi;       \
-	export DISTRO="${EL_VERSION}" &&                                             \
+	export DISTRO="el9" &&                                             \
 	utils/rpms/build_packages.sh daos &&                               \
 	mkdir -p /home/daos/rpms &&                                        \
 	cp *.rpm /home/daos/rpms;                                          \
@@ -201,18 +201,13 @@ WORKDIR /home/daos/daos/src/client/java
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 # Disable Java build for now since it fails
-# Disable Java build only for EL9 as it works in EL8
-RUN if [ "$DAOS_JAVA_BUILD" == "yes" && "$EL_VERSION" == "el8" ]; then    \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; " \
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi;      \
-        mkdir /home/daos/.m2 &&                                           \
-        cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in    \
-           /home/daos/.m2/settings.xml &&                                 \
-        export JAVA_HOME=$(daos-java/find_java_home.sh) &&                \
-        mvn clean install -T 1C                                           \
-            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;           \
-    fi
+#RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
+#        mkdir /home/daos/.m2 &&                                                               \
+#        cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+#        mvn clean install -T 1C                                                               \
+#            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn                                                   \
+#            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
+#    }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
