@@ -888,7 +888,7 @@ out_unlock:
 static int
 pool_connect_cp(tse_task_t *task, void *data)
 {
-	struct pool_connect_arg   *arg = (struct pool_connect_arg *)data;
+	struct pool_connect_arg    *arg     = *((struct pool_connect_arg **)data);
 	struct pool_task_priv     *tpriv   = dc_task_get_priv(task);
 	daos_pool_info_t	  *info = arg->pca_info;
 	struct pool_buf		  *map_buf = arg->pca_map_buf;
@@ -980,6 +980,7 @@ out:
 		dc_pool_put(tpriv->pool);
 		pool_task_destroy_priv(task);
 	}
+	D_FREE(arg);
 	return rc;
 }
 
@@ -1034,9 +1035,10 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 	crt_endpoint_t          ep;
 	crt_rpc_t              *rpc;
 	struct pool_buf        *map_buf;
-	struct pool_connect_arg con_args;
+	struct pool_connect_arg *con_args;
 	d_iov_t                *credp;
 	crt_bulk_t              bulk;
+	bool                     free_args = true;
 	int                     rc;
 
 	/** Choose an endpoint and create an RPC. */
@@ -1082,14 +1084,18 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 				 bulk, DAOS_POOL_GLOBAL_VERSION);
 
 	/** Prepare "con_args" for pool_connect_cp(). */
-	con_args.pca_info = info;
-	con_args.pca_map_buf = map_buf;
-	con_args.rpc = rpc;
-	con_args.hdlp = poh;
+	D_ALLOC_PTR(con_args);
+	if (con_args == NULL)
+		D_GOTO(out_bulk, rc = -DER_NOMEM);
+	con_args->pca_info    = info;
+	con_args->pca_map_buf = map_buf;
+	con_args->rpc         = rpc;
+	con_args->hdlp        = poh;
 
 	rc = tse_task_register_comp_cb(task, pool_connect_cp, &con_args, sizeof(con_args));
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
+	free_args = false;
 
 	return daos_rpc_send(rpc, task);
 
@@ -1103,6 +1109,8 @@ out_req:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc); /* free req */
 out:
+	if (free_args)
+		D_FREE(con_args);
 	return rc;
 }
 
