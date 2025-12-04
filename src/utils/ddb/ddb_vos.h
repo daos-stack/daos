@@ -36,17 +36,18 @@ struct ddb_key {
 };
 
 struct ddb_sv {
-	uint64_t			ddbs_record_size;
-	uint32_t			ddbs_idx;
-	struct dv_indexed_tree_path	*ddbs_path;
+	uint64_t                     ddbs_record_size;
+	daos_epoch_t                 ddbs_epoch;
+	uint32_t                     ddbs_idx;
+	struct dv_indexed_tree_path *ddbs_path;
 };
 
 struct ddb_array {
-	uint64_t			ddba_record_size;
-	daos_recx_t			ddba_recx;
-	uint32_t			ddba_idx;
-	struct dv_indexed_tree_path	*ddba_path;
-
+	uint64_t                     ddba_record_size;
+	daos_recx_t                  ddba_recx;
+	daos_epoch_t                 ddba_epoch;
+	uint32_t                     ddba_idx;
+	struct dv_indexed_tree_path *ddba_path;
 };
 
 /* Open and close a pool for a ddb_ctx */

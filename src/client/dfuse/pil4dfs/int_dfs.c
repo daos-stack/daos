@@ -845,7 +845,7 @@ retrieve_handles_from_fuse(int idx)
 		fclose(tmp_file);
 		unlink(fname);
 		if (read_size != hs_reply.fsr_pool_size) {
-			errno_saved = EAGAIN;
+			errno_saved = EIO;
 			D_DEBUG(DB_ANY, "fread expected %zu bytes, read %d bytes : %d (%s)\n",
 				hs_reply.fsr_pool_size, read_size, errno_saved,
 				strerror(errno_saved));
@@ -1468,16 +1468,16 @@ init_fd_list(void)
 
 	rc = D_MUTEX_INIT(&lock_fd, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_MUTEX_INIT(&lock_dirfd, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_MUTEX_INIT(&lock_mmap, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_RWLOCK_INIT(&lock_fd_dup2ed, NULL);
 	if (rc)
-		return 1;
+		return rc;
 
 	/* fatal error above: failure to create mutexes. */
 

@@ -92,18 +92,16 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 			       struct dss_coll_args *args, bool create_ult,
 			       unsigned int flags)
 {
-	struct collective_arg		carg;
-	struct dss_coll_stream_args	*stream_args;
-	struct dss_stream_arg_type	*stream;
-	struct aggregator_arg_type	aggregator;
-	struct dss_xstream		*dx;
-	ABT_future			future;
-	int				xs_nr;
-	int				rc;
-	int				tid;
-	int				tgt_id = dss_get_module_info()->dmi_tgt_id;
-	uint32_t			bm_len;
-	bool				self = false;
+	struct dss_coll_stream_args *stream_args;
+	struct dss_stream_arg_type  *stream;
+	struct dss_xstream          *dx;
+	struct collective_arg        carg;
+	struct aggregator_arg_type   aggregator;
+	ABT_future                   future;
+	uint32_t                     bm_len;
+	int                          xs_nr;
+	int                          rc;
+	int                          tid;
 
 	if (ops == NULL || args == NULL || ops->co_func == NULL) {
 		D_DEBUG(DB_MD, "mandatory args missing dss_collective_reduce");
@@ -171,11 +169,6 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 				D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 				continue;
 			}
-
-			if (tgt_id == tid && flags & DSS_USE_CURRENT_ULT) {
-				self = true;
-				continue;
-			}
 		}
 
 		dx = dss_get_xstream(DSS_MAIN_XS_ID(tid));
@@ -214,12 +207,6 @@ next:
 			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
-	}
-
-	if (self) {
-		stream = &stream_args->csa_streams[tgt_id];
-		stream->st_coll_args = &carg;
-		collective_func(stream);
 	}
 
 	ABT_future_wait(future);
