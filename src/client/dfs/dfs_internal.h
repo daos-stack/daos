@@ -236,7 +236,7 @@ struct dfs {
 	/** DFS top-level metrics */
 	struct dfs_metrics  *metrics;
 	/* the hash value of pool uuid & cont uuid */
-	uint64_t	     pool_cont_hash;
+	uint64_t             pool_cont_hash;
 	/** optional dentry and stat cache */
 	dfs_dcache_t        *dcache;
 	/** optional data cache */

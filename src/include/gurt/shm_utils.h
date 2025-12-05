@@ -382,12 +382,12 @@ typedef struct shm_lru_node  shm_lru_node_t;
 enum SHM_LRU_CACHE_TYPE { CACHE_DENTRY = 0, CACHE_DATA };
 
 /* key for data caching: dfs hash (uint64_t) + object id of file (sizeof(uint64_t) * 2) + offset */
-#define KEY_SIZE_FILE_ID_OFF (sizeof(uint64_t) + sizeof(uint64_t) * 2 + sizeof(off_t))
+#define KEY_SIZE_FILE_ID_OFF        (sizeof(uint64_t) + sizeof(uint64_t) * 2 + sizeof(off_t))
 
 /* key for file size caching: dfs hash (uint64_t) + object id of file (sizeof(uint64_t) * 2) */
-#define KEY_SIZE_FILESIZE    (sizeof(uint64_t)*3)
+#define KEY_SIZE_FILESIZE           (sizeof(uint64_t)*3)
 
-#define DEFAULT_CACHE_DATA_CAPACITY     (2048)
+#define DEFAULT_CACHE_DATA_CAPACITY (2048)
 
 /**
  * create LRU cache
