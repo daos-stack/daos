@@ -130,9 +130,6 @@ struct dfs_dcache {
 		struct {
 			/** shm lru cache */
 			shm_lru_cache_t *d_shm_lru_dentry;
-
-			/* the hash value of pool uuid & cont uuid */
-			uint64_t         dd_pool_cont_hash;
 		} shm;
 	};
 };
@@ -427,7 +424,7 @@ dcache_add_root_shm(dfs_dcache_t *dcache)
 	if (rc)
 		goto out;
 
-	ptr_key[0] = dcache->shm.dd_pool_cont_hash;
+	ptr_key[0] = dcache->dd_dfs->pool_cont_hash;
 	ptr_key[1] = dcache->dd_dfs->root.oid.lo;
 	ptr_key[2] = dcache->dd_dfs->root.oid.hi;
 	rc = shm_lru_put(dcache->shm.d_shm_lru_dentry, (void *)key, SHM_DCACHE_KEY_PREF_SIZE, val,
@@ -697,7 +694,7 @@ dcache_find_insert_rel_act_shm(dfs_dcache_t *dcache, dfs_obj_t *parent, const ch
 	dfs_t          *dfs = dcache->dd_dfs;
 
 	ptr_key    = (uint64_t *)key;
-	ptr_key[0] = dcache->shm.dd_pool_cont_hash;
+	ptr_key[0] = dfs->pool_cont_hash;
 	if (parent) {
 		ptr_key[1] = parent->oid.lo;
 		ptr_key[2] = parent->oid.hi;
@@ -720,6 +717,7 @@ dcache_find_insert_rel_act_shm(dfs_dcache_t *dcache, dfs_obj_t *parent, const ch
 		D_ALLOC_PTR(rec);
 		if (rec == NULL)
 			D_GOTO(err, rc = ENOMEM);
+		rec->dc_file_size = ULONG_MAX;
 
 		rc = dfs_obj_deserialize(dfs, flags, value, rec);
 		if (rc)
@@ -754,6 +752,8 @@ dcache_find_insert_rel_act_shm(dfs_dcache_t *dcache, dfs_obj_t *parent, const ch
 				rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
 				if (rc != 0)
 					D_GOTO(err, rc);
+				if ((rec->mode & S_IFMT) == S_IFREG)
+					cache_file_size(dfs, rec, stbuf->st_size);
 			}
 		}
 		if (mode)
@@ -871,7 +871,7 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 	name       = path;
 	name_len   = 0;
 	parent     = NULL;
-	ptr_key[0] = dcache->shm.dd_pool_cont_hash;
+	ptr_key[0] = dfs->pool_cont_hash;
 	ptr_key[1] = dfs->root.oid.lo;
 	ptr_key[2] = dfs->root.oid.hi;
 
@@ -969,6 +969,8 @@ dcache_find_insert_act_shm(dfs_dcache_t *dcache, char *path, size_t path_len, in
 			rc       = dfs_obj_serialize(rec, (uint8_t *)value, &val_size);
 			if (rc != 0)
 				D_GOTO(err, rc);
+			if ((rec->mode & S_IFMT) == S_IFREG)
+				cache_file_size(dfs, rec, stbuf->st_size);
 		}
 	}
 	if (mode && !skip_stat)
@@ -1270,7 +1272,7 @@ dcache_create_shm(dfs_t *dfs)
 	/* acquire the pointer of the existing shm LRU cache for dentry */
 	dcache_tmp->shm.d_shm_lru_dentry = shm_lru_get_cache(CACHE_DENTRY);
 	D_ASSERT(dcache_tmp->shm.d_shm_lru_dentry != NULL);
-	dcache_tmp->shm.dd_pool_cont_hash =
+	dfs->pool_cont_hash =
 	    d_hash_murmur64((const unsigned char *)pool_cont_uuid, sizeof(uuid_t) * 2, 0);
 
 	rc = dcache_add_root(dcache_tmp);
@@ -1389,6 +1391,65 @@ drec_del(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent)
 		return -DER_SUCCESS;
 
 	return dcache->dh.drec_del_fn(dcache, path, parent);
+}
+
+#define MAX_DENTRY_REC_LEN (3072)
+/* add file size into dentry cache record */
+int
+cache_file_size(dfs_t *dfs, dfs_obj_t *obj, uint64_t file_size)
+{
+	cache_dentry_key_header_t key;
+	int                  rc;
+	size_t               buf_size;
+	size_t               len;
+	/* using a stack buffer to avoid exprensive dynamic memory allocation */
+	uint8_t              buf[MAX_DENTRY_REC_LEN];
+
+	if (dfs->dcache == NULL)
+		return 0;
+
+	obj->dc_file_size = file_size;
+
+	dfs_obj_serialize(obj, NULL, &buf_size);
+	/* checking to make sure buffer is large enough */
+	D_ASSERT(buf_size < MAX_DENTRY_REC_LEN);
+	dfs_obj_serialize(obj, buf, &buf_size);
+
+	key.pool_cont_hash = dfs->pool_cont_hash;
+	dfs_obj2id(obj, &key.parent_oid);
+	len = strnlen(obj->name, DFS_MAX_NAME);
+	memcpy(key.name, obj->name, len);
+	rc = shm_lru_put(dfs->dcache->shm.d_shm_lru_dentry, &key, SHM_DCACHE_KEY_PREF_SIZE + len,
+			 buf, buf_size);
+	if (rc)
+		DS_ERROR(rc, "shm_lru_put() failed");
+	return rc;
+}
+
+int
+query_cached_file_size(dfs_t *dfs, dfs_obj_t *obj)
+{
+	cache_dentry_key_header_t key;
+	shm_lru_node_t           *node_dentry = NULL;
+	char                     *cache_data;
+	int                       rc;
+	size_t                    len;
+
+	if (dfs->dcache == NULL)
+		return 0;
+
+	key.pool_cont_hash = dfs->pool_cont_hash;
+	dfs_obj2id(obj, &key.parent_oid);
+	len = strnlen(obj->name, DFS_MAX_NAME);
+	memcpy(key.name, obj->name, len);
+
+	rc = shm_lru_get(dfs->dcache->shm.d_shm_lru_dentry, &key, SHM_DCACHE_KEY_PREF_SIZE + len,
+			 &node_dentry, (void **)&cache_data);
+	if (rc == 0) {
+		obj->dc_file_size = *((daos_size_t *)((char *)cache_data + sizeof(int)));
+		shm_lru_node_dec_ref(node_dentry);
+	}
+	return rc;
 }
 
 // dcache_readdir(dfs_dcache_t *dcache, dfs_obj_t *obj, dfs_dir_anchor_t *anchor, struct dirent dir)
