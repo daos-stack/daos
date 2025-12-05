@@ -1,24 +1,27 @@
 /**
  * (C) Copyright 2022-2025 Intel Corporation.
  * (C) Copyright 2025 Vdura Inc.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
 #include <sys/mount.h>
 #include <string.h>
 #include <sys/vfs.h>
+
 #include <daos_srv/vos.h>
-#include <gurt/debug.h>
-#include <vos_internal.h>
 #include <daos_srv/smd.h>
+#include <vos_internal.h>
 #include <bio_wal.h>
+
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb_mgmt.h"
 #include "ddb_vos.h"
 #include "ddb_spdk.h"
+
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)

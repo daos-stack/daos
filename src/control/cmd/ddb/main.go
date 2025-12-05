@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -179,10 +179,36 @@ Example Paths:
 		return nil
 	}
 
-	if opts.Debug {
-		log.WithLogLevel(logging.LogLevelDebug)
-		log.Debug("debug output enabled")
+	if os.Getenv("DD_MASK") == "" {
+		os.Setenv("DD_MASK", "mgmt,epc,csum,md,df,io,trace")
 	}
+	if opts.Debug {
+		log.WithLogLevel(logging.LogLevelTrace)
+		if os.Getenv("D_LOG_MASK") == "" {
+			os.Setenv("D_LOG_MASK", "INFO,DDB=DEBUG")
+		}
+		// Show debug output and above on stderr to not pollute stdout
+		// NOTE: DD_STDERR can only be used with INFO and above.
+		if os.Getenv("DD_STDERR") == "" {
+			os.Setenv("DD_STDERR", "EMIT")
+		}
+		if os.Getenv("D_LOG_FILE") == "" {
+			os.Setenv("D_LOG_FILE", "/dev/stderr")
+		}
+	} else {
+		log.WithLogLevel(logging.LogLevelError)
+		if os.Getenv("D_LOG_MASK") == "" {
+			os.Setenv("D_LOG_MASK", "ERR,DDB=WARN")
+		}
+		// Only show warnings and above on stderr to not pollute stdout
+		if os.Getenv("DD_STDERR") == "" {
+			os.Setenv("DD_STDERR", "WARN")
+		}
+		if os.Getenv("D_LOG_FILE") == "" {
+			os.Setenv("D_LOG_FILE", "/dev/null")
+		}
+	}
+	log.Debug("debug output enabled")
 
 	ctx, cleanup, err := InitDdb(log)
 	if err != nil {
