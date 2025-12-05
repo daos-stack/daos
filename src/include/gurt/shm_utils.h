@@ -385,7 +385,7 @@ enum SHM_LRU_CACHE_TYPE { CACHE_DENTRY = 0, CACHE_DATA };
 #define KEY_SIZE_FILE_ID_OFF        (sizeof(uint64_t) + sizeof(uint64_t) * 2 + sizeof(off_t))
 
 /* key for file size caching: dfs hash (uint64_t) + object id of file (sizeof(uint64_t) * 2) */
-#define KEY_SIZE_FILESIZE           (sizeof(uint64_t)*3)
+#define KEY_SIZE_FILESIZE           (sizeof(uint64_t) * 3)
 
 #define DEFAULT_CACHE_DATA_CAPACITY (2048)
 
