@@ -443,8 +443,10 @@ __shim_handle__cont_destroyobj(PyObject *self, PyObject *args)
 	if (rc != -DER_SUCCESS)
 		goto out;
 	rc = daos_kv_destroy(oh, DAOS_TX_NONE, NULL);
-	if (rc != -DER_SUCCESS)
+	if (rc != -DER_SUCCESS) {
+		daos_kv_close(oh, NULL);
 		goto out;
+	}
 	rc = daos_kv_close(oh, NULL);
 
 out:
