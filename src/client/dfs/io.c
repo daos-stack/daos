@@ -153,7 +153,6 @@ request_in_batch(dfs_t *dfs, dfs_obj_t *obj, int num_req, dat_req req_list[], ca
 	int              num_sgl = 0;
 	daos_size_t      byte_to_copy;
 	daos_size_t      byte_to_cache;
-	daos_size_t      byte_copied   = 0;
 	daos_size_t      byte_to_fetch = 0;
 	daos_array_iod_t iod;
 	d_sg_list_t      sgl = {0};
@@ -266,7 +265,6 @@ request_in_batch(dfs_t *dfs, dfs_obj_t *obj, int num_req, dat_req req_list[], ca
 				}
 			}
 		}
-		byte_copied += byte_to_copy;
 		*short_read_size += (req->size - byte_to_copy);
 	}
 
