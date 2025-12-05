@@ -172,7 +172,13 @@ Example Paths:
 	}
 
 	if opts.Debug {
-		log.WithLogLevel(logging.LogLevelDebug)
+		log.WithLogLevel(logging.LogLevelTrace)
+		if os.Getenv("D_LOG_MASK") == "" {
+			os.Setenv("D_LOG_MASK", "INFO,DDB=DEBUG")
+		}
+		if os.Getenv("DD_MASK") == "" {
+			os.Setenv("DD_MASK", "mgmt,epc,csum,md,df,io")
+		}
 		log.Debug("debug output enabled")
 	}
 

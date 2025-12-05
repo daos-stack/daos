@@ -4,9 +4,9 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
-#include <bio_internal.h>
-#include <bio_wal.h>
+#include <uuid/uuid.h>
 #include <spdk/stdinc.h>
 #include <spdk/bdev.h>
 #include <spdk/env.h>
@@ -14,7 +14,9 @@
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
 #include <spdk/string.h>
-#include <uuid/uuid.h>
+
+#include <bio_internal.h>
+#include <bio_wal.h>
 
 #include "ddb_common.h"
 #include "ddb_spdk.h"

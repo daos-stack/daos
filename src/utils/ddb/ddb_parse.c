@@ -4,11 +4,13 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
 #include <wordexp.h>
 #include <getopt.h>
-#include <gurt/common.h>
-#include "daos_errno.h"
+
+#include <daos_errno.h>
+
 #include "ddb_common.h"
 #include "ddb_parse.h"
 
