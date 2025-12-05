@@ -78,6 +78,7 @@ struct rdb {
 	/* General fields */
 	d_list_t		d_entry;	/* in rdb_hash */
 	uuid_t			d_uuid;		/* of database */
+	rdb_replica_id_t        d_replica_id;   /* of this replica */
 	ABT_mutex		d_mutex;	/* d_replies, d_replies_cv */
 	int			d_ref;		/* of callers and RPCs */
 	ABT_cond		d_ref_cv;	/* for d_ref decrements */
@@ -85,6 +86,7 @@ struct rdb {
 	void		       *d_arg;		/* for d_cbs callbacks */
 	struct daos_lru_cache  *d_kvss;		/* rdb_kvs cache */
 	daos_handle_t		d_pool;		/* VOS pool */
+	uint32_t                d_version;      /* of DB layout */
 	struct rdb_chkpt_record d_chkpt_record; /* pool checkpoint information */
 	ABT_thread              d_chkptd;       /* thread handle for pool checkpoint daemon */
 	ABT_mutex               d_chkpt_mutex;  /* mutex for checkpoint synchronization */
@@ -94,6 +96,7 @@ struct rdb {
 	uint64_t		d_nospc_ts;	/* last time commit observed low/no space (usec) */
 	bool			d_new;		/* for skipping lease recovery */
 	bool			d_use_leases;	/* when verifying leadership */
+	ABT_rwlock              d_gen_lock;     /* for rdb_lc_replica_gen_next */
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
@@ -131,21 +134,8 @@ struct rdb {
 #define RDB_NOAPPEND_FREE_SPACE (1ULL << 22)
 #define RDB_CRITICAL_FREE_SPACE (1ULL << 14)
 
-/* Current rank */
-#define DF_RANK "%u"
-static inline d_rank_t
-DP_RANK(void)
-{
-	d_rank_t	rank;
-	int		rc;
-
-	rc = crt_group_rank(NULL, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	return rank;
-}
-
-#define DF_DB		DF_UUID"["DF_RANK"]"
-#define DP_DB(db)	DP_UUID((db)->d_uuid), DP_RANK()
+#define DF_DB                   DF_UUID "[" RDB_F_RID "]"
+#define DP_DB(db)               DP_UUID((db)->d_uuid), RDB_P_RID((db)->d_replica_id)
 
 /* Number of "base" references that the rdb_stop() path expects to remain */
 #define RDB_BASE_REFS 1
@@ -157,6 +147,24 @@ void rdb_put(struct rdb *db);
 struct rdb *rdb_lookup(const uuid_t uuid);
 
 /* rdb_raft.c *****************************************************************/
+
+D_CASSERT(sizeof(raft_node_id_t) == sizeof(uint64_t));
+
+static inline rdb_replica_id_t
+rdb_replica_id_decode(raft_node_id_t raft_id)
+{
+	rdb_replica_id_t id;
+
+	id.rri_rank = (uint64_t)raft_id >> 32;
+	id.rri_gen  = raft_id & 0xffffffff;
+	return id;
+}
+
+static inline raft_node_id_t
+rdb_replica_id_encode(rdb_replica_id_t id)
+{
+	return (uint64_t)id.rri_rank << 32 | id.rri_gen;
+}
 
 /*
  * Per-raft_node_t INSTALLSNAPSHOT state
@@ -179,9 +187,11 @@ struct rdb_raft_node {
 	struct rdb_raft_is	dn_is;
 };
 
+/* clang-format off */
 void rdb_raft_module_init(void);
 void rdb_raft_module_fini(void);
-int rdb_raft_init(daos_handle_t pool, daos_handle_t mc, const d_rank_list_t *replicas);
+int rdb_raft_init(uuid_t db_uuid, daos_handle_t pool, daos_handle_t mc, rdb_replica_id_t *replicas,
+		  int replicas_len, uint32_t layout_version);
 int rdb_raft_open(struct rdb *db, uint64_t caller_term);
 int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
@@ -191,19 +201,21 @@ void rdb_raft_resign(struct rdb *db, uint64_t term);
 int rdb_raft_campaign(struct rdb *db);
 int rdb_raft_ping(struct rdb *db, uint64_t caller_term);
 int rdb_raft_verify_leadership(struct rdb *db);
-int rdb_raft_load_replicas(daos_handle_t lc, uint64_t index, d_rank_list_t **replicas);
-int rdb_raft_add_replica(struct rdb *db, d_rank_t rank);
-int rdb_raft_remove_replica(struct rdb *db, d_rank_t rank);
+int rdb_raft_load_replicas(uuid_t db_uuid, daos_handle_t lc, uint64_t index,
+			   uint32_t layout_version, struct rdb_replica_record **replicas_out,
+			   int *replicas_len_out);
+int rdb_raft_append_apply_cfg(struct rdb *db, raft_logtype_e type, rdb_replica_id_t id);
 int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
 			  void *result);
 int rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term);
-int rdb_raft_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+int rdb_raft_get_replicas(struct rdb *db, rdb_replica_id_t **replicas_out, int *replicas_len_out);
 void rdb_requestvote_handler(crt_rpc_t *rpc);
 void rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_installsnapshot_handler(crt_rpc_t *rpc);
 void rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc);
 void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
 int rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx);
+/* clang-format on */
 
 /* rdb_rpc.c ******************************************************************/
 
@@ -231,15 +243,22 @@ enum rdb_operation { RDB_PROTO_SRV_RPC_LIST };
 
 extern struct crt_proto_format rdb_proto_fmt;
 
+/* clang-format off */
 #define DAOS_ISEQ_RDB_OP	/* input fields */		 \
-	((uuid_t)		(ri_uuid)		CRT_VAR)
+	((uuid_t)		(ri_uuid)		CRT_VAR) \
+	((rdb_replica_id_t)	(ri_from)		CRT_VAR) \
+	((rdb_replica_id_t)	(ri_to)			CRT_VAR)
 
 #define DAOS_OSEQ_RDB_OP	/* output fields */		 \
 	((int32_t)		(ro_rc)			CRT_VAR) \
-	((uint32_t)		(ro_padding)		CRT_VAR)
+	((uint32_t)		(ro_padding)		CRT_VAR) \
+	((rdb_replica_id_t)	(ro_from)		CRT_VAR) \
+	((rdb_replica_id_t)	(ro_to)			CRT_VAR)
+/* clang-format on */
 
 CRT_RPC_DECLARE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
 
+/* clang-format off */
 #define DAOS_ISEQ_RDB_REQUESTVOTE /* input fields */		 \
 	((struct rdb_op_in)	(rvi_op)		CRT_VAR) \
 	((msg_requestvote_t)	(rvi_msg)		CRT_RAW)
@@ -247,10 +266,12 @@ CRT_RPC_DECLARE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
 #define DAOS_OSEQ_RDB_REQUESTVOTE /* output fields */		 \
 	((struct rdb_op_out)	(rvo_op)		CRT_VAR) \
 	((msg_requestvote_response_t) (rvo_msg)		CRT_VAR)
+/* clang-format on */
 
 CRT_RPC_DECLARE(rdb_requestvote, DAOS_ISEQ_RDB_REQUESTVOTE,
 		DAOS_OSEQ_RDB_REQUESTVOTE)
 
+/* clang-format off */
 #define DAOS_ISEQ_RDB_APPENDENTRIES /* input fields */		 \
 	((struct rdb_op_in)	(aei_op)		CRT_VAR) \
 	((msg_appendentries_t)	(aei_msg)		CRT_VAR)
@@ -258,6 +279,7 @@ CRT_RPC_DECLARE(rdb_requestvote, DAOS_ISEQ_RDB_REQUESTVOTE,
 #define DAOS_OSEQ_RDB_APPENDENTRIES /* output fields */		 \
 	((struct rdb_op_out)	(aeo_op)		CRT_VAR) \
 	((msg_appendentries_response_t) (aeo_msg)	CRT_RAW)
+/* clang-format on */
 
 CRT_RPC_DECLARE(rdb_appendentries, DAOS_ISEQ_RDB_APPENDENTRIES,
 		DAOS_OSEQ_RDB_APPENDENTRIES)
@@ -267,6 +289,7 @@ struct rdb_local {
 	d_iov_t	rl_data_iov;	/* isi_data buffer */
 };
 
+/* clang-format off */
 #define DAOS_ISEQ_RDB_INSTALLSNAPSHOT /* input fields */	 \
 	((struct rdb_op_in)	(isi_op)		CRT_VAR) \
 	((msg_installsnapshot_t) (isi_msg)		CRT_VAR) \
@@ -290,23 +313,26 @@ struct rdb_local {
 	((uint64_t)		(iso_seq)		CRT_VAR) \
 	/* last anchor */					 \
 	((struct rdb_anchor)	(iso_anchor)		CRT_RAW)
+/* clang-format on */
 
 CRT_RPC_DECLARE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
 		DAOS_OSEQ_RDB_INSTALLSNAPSHOT)
 
-int rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
+/* clang-format off */
+int rdb_create_raft_rpc(struct rdb *db, crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
 int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db);
 int rdb_abort_raft_rpcs(struct rdb *db);
 void rdb_recvd(void *arg);
+/* clang-format on */
 
 /* rdb_kvs.c ******************************************************************/
 
 /* KVS cache entry */
 struct rdb_kvs {
-	struct daos_llink	de_entry;	/* in LRU */
-	rdb_path_t		de_path;
-	rdb_oid_t		de_object;
-	uint8_t			de_buf[];	/* for de_path */
+	struct daos_llink de_entry; /* in LRU (private) */
+	rdb_path_t        de_path;
+	rdb_oid_t         de_object;
+	uint8_t           de_buf[]; /* for de_path */
 };
 
 int rdb_kvs_cache_create(struct daos_lru_cache **cache);
@@ -318,6 +344,14 @@ void rdb_kvs_put(struct rdb *db, struct rdb_kvs *kvs);
 void rdb_kvs_evict(struct rdb *db, struct rdb_kvs *kvs);
 
 /* rdb_path.c *****************************************************************/
+
+extern rdb_path_t rdb_path_attrs;
+
+static inline bool
+rdb_path_is_attrs(const rdb_path_t *path)
+{
+	return path->iov_len == 0;
+}
 
 int rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path);
 typedef int (*rdb_path_iterate_cb_t)(d_iov_t *key, void *arg);
@@ -487,6 +521,26 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
 		" backward=%d\n", lc.cookie, index, oid, backward);
 	return rdb_vos_iterate(lc, index, oid, backward, cb, arg);
+}
+
+static inline void
+rdb_set_mc_vote_lookup_buf(uint32_t layout_version, rdb_replica_id_t *vote, d_iov_t *value)
+{
+	if (layout_version < RDB_LAYOUT_VERSION_REPLICA_ID) {
+		d_iov_set(value, &vote->rri_rank, sizeof(vote->rri_rank));
+		vote->rri_gen = 0;
+	} else {
+		d_iov_set(value, vote, sizeof(*vote));
+	}
+}
+
+static inline void
+rdb_set_mc_vote_update_buf(uint32_t layout_version, rdb_replica_id_t *vote, d_iov_t *value)
+{
+	if (layout_version < RDB_LAYOUT_VERSION_REPLICA_ID)
+		d_iov_set(value, &vote->rri_rank, sizeof(vote->rri_rank));
+	else
+		d_iov_set(value, vote, sizeof(*vote));
 }
 
 int rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
