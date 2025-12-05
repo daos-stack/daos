@@ -78,6 +78,16 @@ dnf --nodocs install ${dnf_install_args} \
     which \
     yasm
 
+
+# Make sure we have lua-lmod > 8.7.34 for leap 15.6
+source /etc/os-release
+if [[ "$VERSION_ID" == "15.6" ]]; then
+    dnf remove lua-lmod
+    # shellcheck disable=SC2086
+    dnf --nodocs --nogpgcheck install ${dnf_install_args} \
+        lua-lmod --repo='*-oss*' --repo '*lua*' --repo '*network-cluster*'
+fi
+
 # shellcheck disable=SC2086
 dnf install ${dnf_install_args} ruby-devel
 gem install json -v 2.7.6
