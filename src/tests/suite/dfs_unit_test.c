@@ -3580,6 +3580,8 @@ dfs_test_datacache(void **state)
 	rc = dfs_init();
 	assert_int_equal(rc, 0);
 
+	d_setenv("DFS_DCACHE_TYPE", "SHM", 1);
+
 	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_disconnect(dfs);
