@@ -22,7 +22,7 @@ updates:
       gha-versions:
         patterns:
           - "*"
-    assignees:
+    reviewers:
       - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
@@ -36,7 +36,7 @@ updates:
       gha-versions:
         patterns:
           - "*"
-    assignees:
+    reviewers:
       - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
