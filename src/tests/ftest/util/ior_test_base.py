@@ -1,5 +1,6 @@
 """
 (C) Copyright 2018-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,8 +8,8 @@ import os
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
+from duns_utils import format_path
 from exception_utils import CommandFailure
-from general_utils import get_random_string
 from host_utils import get_local_host
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
@@ -100,9 +101,7 @@ class IorTestBase(TestWithServers):
             create_cont (bool, optional): Create new container. Default is True
             stop_dfuse (bool, optional): Stop dfuse after ior command is
                 finished. Default is True.
-            plugin_path (str, optional): HDF5 vol connector library path.
-                This will enable dfuse (xattr) working directory which is
-                needed to run vol connector for DAOS. Default is None.
+            plugin_path (str, optional): HDF5 vol connector library path. Default is None.
             timeout (int, optional): command timeout. Defaults to None.
             fail_on_warning (bool/callable, optional): Controls test behavior when a 'WARNING' is
                 found. If True, call self.fail. If False, call self.log.warn. If callable, call it.
@@ -121,22 +120,22 @@ class IorTestBase(TestWithServers):
         if create_pool:
             self.update_ior_cmd_with_pool(create_cont)
 
-        # start dfuse if api is POSIX or HDF5 with vol connector
-        if (self.ior_cmd.api.value == "POSIX" or plugin_path) and not self.dfuse:
+        # start dfuse if api is POSIX
+        if self.ior_cmd.api.value == "POSIX" and not self.dfuse:
             # Initialize dfuse instance
             self.dfuse = get_dfuse(self, self.hostlist_clients)
             # Default mount_dir to value in dfuse instance
             mount_dir = mount_dir or self.dfuse.mount_dir.value
-            # Add a substring in case of HDF5-VOL
-            if plugin_path:
-                sub_dir = get_random_string(5)
-                mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
             start_dfuse(self, self.dfuse, self.pool, self.container, mount_dir=mount_dir)
 
-        # setup test file for POSIX or HDF5 with vol connector
-        if self.ior_cmd.api.value == "POSIX" or plugin_path:
+        if self.ior_cmd.api.value == "POSIX":
+            # file in dfuse
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
+        elif self.ior_cmd.api.value == "HDF5" and plugin_path:
+            # UNS path for file
+            test_file = format_path(
+                self.ior_cmd.dfs_pool.value, self.ior_cmd.dfs_cont.value, "testfile")
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
 
@@ -207,9 +206,7 @@ class IorTestBase(TestWithServers):
             intercept (str, optional): path to interception library.
             display_space (bool, optional): Whether to display the pool
                 space. Defaults to True.
-            plugin_path (str, optional): HDF5 vol connector library path.
-                This will enable dfuse (xattr) working directory which is
-                needed to run vol connector for DAOS. Default is None.
+            plugin_path (str, optional): HDF5 vol connector library path. Default is None.
             fail_on_warning (bool/callable, optional): Controls test behavior when a 'WARNING' is
                 found. If True, call self.fail. If False, call self.log.warn. If callable, call it.
                 Defaults is False.
@@ -227,7 +224,6 @@ class IorTestBase(TestWithServers):
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
-            manager.working_dir.value = self.dfuse.mount_dir.value
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         # Pass only processes or ppn to be compatible with previous behavior
