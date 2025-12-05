@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2023-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -47,20 +48,20 @@ func Test_CalcRamdiskSize(t *testing.T) {
 			expErr:   errors.New("insufficient ram"), // 30 - (14+26+1) = -1
 		},
 		"default values; high mem": {
-			memTotal: humanize.GiByte * 70,
+			memTotal: humanize.GiByte * 108,
 			memHuge:  humanize.GiByte * 30,
 			memSys:   DefaultSysMemRsvd,
 			tgtCount: 16,
 			engCount: 2,
-			expSize:  humanize.GiByte * 5, // (70 - (30+26+4)) / 2
+			expSize:  humanize.GiByte * 5, // (108 - (30+64+4)) / 2
 		},
 		"default values; low nr targets": {
-			memTotal: humanize.GiByte * 70,
+			memTotal: humanize.GiByte * 108,
 			memHuge:  humanize.GiByte * 30,
 			memSys:   DefaultSysMemRsvd,
 			tgtCount: 1,
 			engCount: 2,
-			expSize:  humanize.GiByte * 6, // (70 - (30+26+2)) / 2
+			expSize:  humanize.GiByte * 6, // (108 - (30+64+2)) / 2
 		},
 		"custom values; low sys reservation": {
 			memTotal: humanize.GiByte * 60,
