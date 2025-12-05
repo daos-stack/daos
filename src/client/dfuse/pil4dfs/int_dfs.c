@@ -95,23 +95,23 @@ static int                    fd_dummy = -1;
 #define DCACHE_GC_PERIOD      120
 
 /* reference count of fake fd duplicated by real fd with dup2() */
-static int                max_fd  = MAX_OPENED_FILE;
-static int                max_dir = MAX_OPENED_DIR;
+static int                    max_fd  = MAX_OPENED_FILE;
+static int                    max_dir = MAX_OPENED_DIR;
 
 /* fd_dir_base - The base number of the file descriptor for a directory.
  * The fd allocate from this lib is always larger than FD_FILE_BASE.
  */
-static int                fd_dir_base;
+static int                    fd_dir_base;
 
-static int               *dup_ref_count;
-struct file_obj         **d_file_list;
-static struct dir_obj   **dir_list;
-static struct mmap_obj    mmap_list[MAX_MMAP_BLOCK];
+static int                   *dup_ref_count;
+struct file_obj             **d_file_list;
+static struct dir_obj       **dir_list;
+static struct mmap_obj        mmap_list[MAX_MMAP_BLOCK];
 
 /* last_fd==-1 means the list is empty. No active fd in list. */
-static int                next_free_fd, last_fd       = -1, num_fd;
-static int                next_free_dirfd, last_dirfd = -1, num_dirfd;
-static int                next_free_map, last_map     = -1, num_map;
+static int                    next_free_fd, last_fd       = -1, num_fd;
+static int                    next_free_dirfd, last_dirfd = -1, num_dirfd;
+static int                    next_free_map, last_map     = -1, num_map;
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -4149,7 +4149,7 @@ out_readdir:
 		mydir->offset++;
 	len_str = asprintf(&full_path, "%s/%s",
 			   dir_list[mydir->fd - fd_dir_base]->path +
-			   dir_list[mydir->fd - fd_dir_base]->dfs_mt->len_fs_root,
+			       dir_list[mydir->fd - fd_dir_base]->dfs_mt->len_fs_root,
 			   mydir->ents[mydir->num_ents].d_name);
 	if (len_str >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
@@ -6262,8 +6262,8 @@ new_fcntl(int fd, int cmd, ...)
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
 			if (fd_directed >= fd_dir_base) {
-				rc = find_next_available_dirfd(
-					dir_list[fd_directed - fd_dir_base], &next_dirfd);
+				rc = find_next_available_dirfd(dir_list[fd_directed - fd_dir_base],
+							       &next_dirfd);
 				if (rc) {
 					errno = rc;
 					return (-1);
@@ -7180,7 +7180,7 @@ init_myhook(void)
 	int      rc;
 	uint64_t eq_count_loc = 0;
 	float    libc_version;
-	uint32_t max_fd_loc = 0;
+	uint32_t max_fd_loc  = 0;
 	uint32_t max_dir_loc = 0;
 
 	/* get env for max number of fd and dir, then allocate memory for arrays */
@@ -7189,7 +7189,8 @@ init_myhook(void)
 		max_fd = (int)max_fd_loc;
 		if (max_fd > MAX_OPENED_FILE_LMT) {
 			max_fd = MAX_OPENED_FILE_LMT;
-			printf("D_IL_MAX_FD is set as %u, but is capped as %d\n", max_fd_loc, max_fd);
+			printf("D_IL_MAX_FD is set as %u, but is capped as %d\n", max_fd_loc,
+			       max_fd);
 		}
 	}
 	rc = d_getenv_uint("D_IL_MAX_DIR", &max_dir_loc);
@@ -7197,7 +7198,8 @@ init_myhook(void)
 		max_dir = (int)max_dir_loc;
 		if (max_dir > MAX_OPENED_DIR_LMT) {
 			max_dir = MAX_OPENED_DIR_LMT;
-			printf("D_IL_MAX_DIR is set as %u, but is capped as %d\n", max_dir_loc, max_dir);
+			printf("D_IL_MAX_DIR is set as %u, but is capped as %d\n", max_dir_loc,
+			       max_dir);
 		}
 	}
 	dup_ref_count = malloc(sizeof(int) * max_fd);
