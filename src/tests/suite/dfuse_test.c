@@ -214,7 +214,7 @@ is_fd_large(int fd)
 	return (fd > 100000);
 }
 
-#define MAX_FD  (8192)
+#define MAX_FD (8192)
 
 extern int __open(const char *pathname, int flags, ...);
 void
