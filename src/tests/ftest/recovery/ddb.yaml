@@ -19,7 +19,7 @@ server_config:
 # In CI, all tests in ddb.py are ran in a single launch.py execution. In that case, the
 # test_dir (/var/tmp/daos_testing/<test_method>) in the server node will not be created
 # for each test if "start_servers_once: False" isn't set. test_load() needs this
-# directory, so we need to set it.
+# directory, so we need to set it. A
 setup:
   start_servers_once: False
 
