@@ -3622,9 +3622,10 @@ out:
 	if (rc > 0) {
 		cont->vc_cmt_dtx_reindex_pos = UMOFF_NULL;
 		cont->vc_cmt_dtx_indexed = 1;
-		D_INFO("Reindexed committed DTX table (%u entries) for " DF_UUID "/" DF_UUID "\n",
-		       cont->vc_dtx_committed_count, DP_UUID(cont->vc_pool->vp_id),
-		       DP_UUID(cont->vc_id));
+		D_DEBUG(DB_TRACE,
+			"Reindexed committed DTX table (%u entries) for " DF_UUID "/" DF_UUID "\n",
+			cont->vc_dtx_committed_count, DP_UUID(cont->vc_pool->vp_id),
+			DP_UUID(cont->vc_id));
 	} else if (rc < 0) {
 		D_ERROR("Failed to reindex committed DTX for " DF_UUID "/" DF_UUID ": " DF_RC "\n",
 			DP_UUID(cont->vc_pool->vp_id), DP_UUID(cont->vc_id), DP_RC(rc));

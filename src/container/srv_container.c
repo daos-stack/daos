@@ -1910,7 +1910,7 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = ds_pool_thread_collective(
 	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
-	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, rc,
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc,
 		  DF_CONT ": refresh ec_agg_eph " DF_X64 ", "
 			  "stable_eph " DF_X64,
 		  DP_CONT(pool_uuid, cont_uuid), ec_agg_eph, stable_eph);
