@@ -787,12 +787,44 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR(DF_UOID" (%s) RPC %d to %d/%d, flags %lx/%x, task %p failed, %s: "DF_RC"\n",
+		D_ERROR(DF_UOID " (%s) RPC %d to %d/%d, flags %lx/%x, task %p failed, iod_nr:%u "
+				"%s(%lu): " DF_RC "\n",
 			DP_UOID(orw->orw_oid), is_ec_obj ? "EC" : "non-EC", opc,
 			rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag,
 			(unsigned long)orw->orw_api_flags, orw->orw_flags, task,
-			orw->orw_bulks.ca_arrays != NULL ||
-			orw->orw_bulks.ca_count != 0 ? "DMA" : "non-DMA", DP_RC(ret));
+			orw->orw_iod_array.oia_iod_nr,
+			orw->orw_bulks.ca_arrays != NULL || orw->orw_bulks.ca_count != 0
+			    ? "DMA"
+			    : "non-DMA",
+			orw->orw_bulks.ca_count, DP_RC(ret));
+
+		/* Dump IODs */
+		if (orw->orw_iod_array.oia_iod_nr) {
+			unsigned int buf_len = 1024, left, used;
+			char        *buf, *tmp;
+			daos_iod_t  *iod;
+
+			D_ALLOC(buf, buf_len);
+			if (buf == NULL)
+				D_GOTO(out, ret);
+
+			tmp  = buf;
+			left = buf_len;
+			for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
+				iod = &orw->orw_iod_array.oia_iods[i];
+				used =
+				    snprintf(tmp, left, "[%u, %lu] ", iod->iod_nr, iod->iod_size);
+				if (used >= left) {
+					buf[buf_len - 1] = '\0';
+					break;
+				} else {
+					left -= used;
+					tmp += used;
+				}
+			}
+			D_ERROR("IODs: %s\n", buf);
+			D_FREE(buf);
+		}
 
 		D_GOTO(out, ret);
 	}
