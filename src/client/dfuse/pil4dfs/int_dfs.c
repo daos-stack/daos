@@ -94,6 +94,25 @@ static int                    fd_dummy = -1;
 /* Default dir cache garbage collector time-out in seconds */
 #define DCACHE_GC_PERIOD      120
 
+/* reference count of fake fd duplicated by real fd with dup2() */
+static int                max_fd  = MAX_OPENED_FILE;
+static int                max_dir = MAX_OPENED_DIR;
+
+/* fd_dir_base - The base number of the file descriptor for a directory.
+ * The fd allocate from this lib is always larger than FD_FILE_BASE.
+ */
+static int                fd_dir_base;
+
+static int               *dup_ref_count;
+struct file_obj         **d_file_list;
+static struct dir_obj   **dir_list;
+static struct mmap_obj    mmap_list[MAX_MMAP_BLOCK];
+
+/* last_fd==-1 means the list is empty. No active fd in list. */
+static int                next_free_fd, last_fd       = -1, num_fd;
+static int                next_free_dirfd, last_dirfd = -1, num_dirfd;
+static int                next_free_map, last_map     = -1, num_map;
+
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
 /* the list of low fd reserved */
@@ -306,8 +325,8 @@ fd_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	struct ht_fd *fd = fd_obj(rlink);
 
 	/* close fake fd */
-	if (fd->fake_fd >= FD_DIR_BASE)
-		free_dirfd(fd->fake_fd - FD_DIR_BASE);
+	if (fd->fake_fd >= fd_dir_base)
+		free_dirfd(fd->fake_fd - fd_dir_base);
 	else
 		free_fd(fd->fake_fd - FD_FILE_BASE, false);
 
@@ -505,17 +524,6 @@ static int
 remove_dot_dot(char path[], int *len);
 static int
 remove_dot_and_cleanup(char szPath[], int len);
-
-/* reference count of fake fd duplicated by real fd with dup2() */
-static int                dup_ref_count[MAX_OPENED_FILE];
-struct file_obj          *d_file_list[MAX_OPENED_FILE];
-static struct dir_obj    *dir_list[MAX_OPENED_DIR];
-static struct mmap_obj    mmap_list[MAX_MMAP_BLOCK];
-
-/* last_fd==-1 means the list is empty. No active fd in list. */
-static int                next_free_fd, last_fd       = -1, num_fd;
-static int                next_free_dirfd, last_dirfd = -1, num_dirfd;
-static int                next_free_map, last_map     = -1, num_map;
 
 static int
 find_next_available_fd(struct file_obj *obj, int *new_fd);
@@ -1487,8 +1495,8 @@ init_fd_list(void)
 
 	/* fatal error above: failure to create mutexes. */
 
-	memset(d_file_list, 0, sizeof(struct file_obj *) * MAX_OPENED_FILE);
-	memset(dir_list, 0, sizeof(struct dir_obj *) * MAX_OPENED_DIR);
+	memset(d_file_list, 0, sizeof(struct file_obj *) * max_fd);
+	memset(dir_list, 0, sizeof(struct dir_obj *) * max_dir);
 	memset(mmap_list, 0, sizeof(struct mmap_obj) * MAX_MMAP_BLOCK);
 
 	next_free_fd    = 0;
@@ -1540,7 +1548,7 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 		last_fd = next_free_fd;
 	next_free_fd = -1;
 
-	for (i = idx + 1; i < MAX_OPENED_FILE; i++) {
+	for (i = idx + 1; i < max_fd; i++) {
 		if (d_file_list[i] == NULL) {
 			/* available, then update next_free_fd */
 			next_free_fd = i;
@@ -1609,7 +1617,7 @@ find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 
 	next_free_dirfd = -1;
 
-	for (i = idx + 1; i < MAX_OPENED_DIR; i++) {
+	for (i = idx + 1; i < max_dir; i++) {
 		if (dir_list[i] == NULL) {
 			/* available, then update next_free_dirfd */
 			next_free_dirfd = i;
@@ -1681,7 +1689,7 @@ free_fd(int idx, bool closing_dup_fd)
 	}
 	d_file_list[idx] = NULL;
 
-	if (idx < next_free_fd)
+	if (idx < next_free_fd || next_free_fd == -1)
 		next_free_fd = idx;
 
 	if (idx == last_fd) {
@@ -1729,7 +1737,7 @@ free_dirfd(int idx)
 		saved_obj = dir_list[idx];
 	dir_list[idx] = NULL;
 
-	if (idx < next_free_dirfd)
+	if (idx < next_free_dirfd || next_free_dirfd == -1)
 		next_free_dirfd = idx;
 
 	if (idx == last_dirfd) {
@@ -1985,9 +1993,9 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 	*full_path_out = NULL;
 	dirfd_directed = d_get_fd_redirected(dirfd);
 
-	if (dirfd_directed >= FD_DIR_BASE) {
+	if (dirfd_directed >= fd_dir_base) {
 		len_str = asprintf(full_path_out, "%s/%s",
-				   dir_list[dirfd_directed - FD_DIR_BASE]->path, rel_path);
+				   dir_list[dirfd_directed - fd_dir_base]->path, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
 		else if (len_str < 0)
@@ -2151,7 +2159,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			if (rc)
 				goto out_compatible_release;
 			dir_list[idx_dirfd]->dfs_mt   = dfs_mt;
-			dir_list[idx_dirfd]->fd       = idx_dirfd + FD_DIR_BASE;
+			dir_list[idx_dirfd]->fd       = idx_dirfd + fd_dir_base;
 			dir_list[idx_dirfd]->offset   = 0;
 			dir_list[idx_dirfd]->dir      = dfs_obj;
 			dir_list[idx_dirfd]->num_ents = 0;
@@ -2178,7 +2186,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				free_dirfd(idx_dirfd);
 				goto out_compatible;
 			}
-			fd_fake = idx_dirfd + FD_DIR_BASE;
+			fd_fake = idx_dirfd + fd_dir_base;
 			drec_decref(dfs_mt->dcache, parent);
 		} else {
 			/* not supposed to be here. If the object is neither a dir or a regular
@@ -2189,7 +2197,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		/* add fd_kernel to hash table */
 		D_ALLOC_PTR(fd_ht_obj);
 		if (fd_ht_obj == NULL) {
-			if (fd_fake >= FD_DIR_BASE)
+			if (fd_fake >= fd_dir_base)
 				free_dirfd(idx_dirfd);
 			else
 				free_fd(idx_fd, false);
@@ -2257,7 +2265,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			D_GOTO(out_error, rc);
 
 		dir_list[idx_dirfd]->dfs_mt      = dfs_mt;
-		dir_list[idx_dirfd]->fd          = idx_dirfd + FD_DIR_BASE;
+		dir_list[idx_dirfd]->fd          = idx_dirfd + fd_dir_base;
 		dir_list[idx_dirfd]->offset      = 0;
 		dir_list[idx_dirfd]->dir         = dfs_obj;
 		dir_list[idx_dirfd]->num_ents    = 0;
@@ -2289,7 +2297,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		drec_decref(dfs_mt->dcache, parent);
 		FREE(parent_dir);
 
-		return (idx_dirfd + FD_DIR_BASE);
+		return (idx_dirfd + fd_dir_base);
 	}
 
 	rc = find_next_available_fd(NULL, &idx_fd);
@@ -2451,9 +2459,9 @@ new_close_common(int (*next_close)(int fd), int fd)
 	}
 
 	fd_directed = d_get_fd_redirected(fd);
-	if (fd_directed >= FD_DIR_BASE) {
+	if (fd_directed >= fd_dir_base) {
 		/* directory */
-		free_dirfd(fd_directed - FD_DIR_BASE);
+		free_dirfd(fd_directed - fd_dir_base);
 		return 0;
 	} else if (fd_directed >= FD_FILE_BASE) {
 		/* This fd is a kernel fd. There was a duplicate fd created. */
@@ -3002,14 +3010,14 @@ new_fxstat(int vers, int fd, struct stat *buf)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fxstat(vers, fd, buf);
 
-	if (fd_directed < FD_DIR_BASE) {
+	if (fd_directed < fd_dir_base) {
 		rc          = dfs_ostat(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
 					d_file_list[fd_directed - FD_FILE_BASE]->file, buf);
 		buf->st_ino = d_file_list[fd_directed - FD_FILE_BASE]->st_ino;
 	} else {
-		rc          = dfs_ostat(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
-					dir_list[fd_directed - FD_DIR_BASE]->dir, buf);
-		buf->st_ino = dir_list[fd_directed - FD_DIR_BASE]->st_ino;
+		rc          = dfs_ostat(dir_list[fd_directed - fd_dir_base]->dfs_mt->dfs,
+					dir_list[fd_directed - fd_dir_base]->dir, buf);
+		buf->st_ino = dir_list[fd_directed - fd_dir_base]->st_ino;
 	}
 
 	if (rc) {
@@ -3039,14 +3047,14 @@ fstat(int fd, struct stat *buf)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fstat(fd, buf);
 
-	if (fd_directed < FD_DIR_BASE) {
+	if (fd_directed < fd_dir_base) {
 		rc          = dfs_ostat(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
 					d_file_list[fd_directed - FD_FILE_BASE]->file, buf);
 		buf->st_ino = d_file_list[fd_directed - FD_FILE_BASE]->st_ino;
 	} else {
-		rc          = dfs_ostat(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
-					dir_list[fd_directed - FD_DIR_BASE]->dir, buf);
-		buf->st_ino = dir_list[fd_directed - FD_DIR_BASE]->st_ino;
+		rc          = dfs_ostat(dir_list[fd_directed - fd_dir_base]->dfs_mt->dfs,
+					dir_list[fd_directed - fd_dir_base]->dir, buf);
+		buf->st_ino = dir_list[fd_directed - fd_dir_base]->st_ino;
 	}
 
 	if (rc) {
@@ -3202,7 +3210,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 			return new_xstat(1, path, stat_buf);
 	}
 
-	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE) {
+	if (dirfd >= FD_FILE_BASE && dirfd < fd_dir_base) {
 		if (path[0] == 0 && flags & AT_EMPTY_PATH)
 			/* same as fstat for a file. May need further work to handle flags */
 			return new_fxstat(ver, dirfd, stat_buf);
@@ -3260,7 +3268,7 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 			return new_xstat(1, path, stat_buf);
 	}
 
-	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE) {
+	if (dirfd >= FD_FILE_BASE && dirfd < fd_dir_base) {
 		if (path[0] == 0 && flags & AT_EMPTY_PATH)
 			/* same as fstat for a file. May need further work to handle flags */
 			return fstat(dirfd, stat_buf);
@@ -3398,7 +3406,7 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 	if (fd_directed < FD_FILE_BASE)
 		return next_lseek(fd, offset, whence);
 	/* seekdir() will handle by the following. */
-	if (fd < FD_FILE_BASE && fd_directed >= FD_DIR_BASE && d_compatible_mode)
+	if (fd < FD_FILE_BASE && fd_directed >= fd_dir_base && d_compatible_mode)
 		return next_lseek(fd, offset, whence);
 
 	atomic_fetch_add_relaxed(&num_seek, 1);
@@ -3521,10 +3529,10 @@ fstatfs(int fd, struct statfs *sfs)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fstatfs(fd, sfs);
 
-	if (fd_directed < FD_DIR_BASE)
+	if (fd_directed < fd_dir_base)
 		dfs_mt = d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt;
 	else
-		dfs_mt = dir_list[fd_directed - FD_DIR_BASE]->dfs_mt;
+		dfs_mt = dir_list[fd_directed - fd_dir_base]->dfs_mt;
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc != 0) {
 		errno = rc;
@@ -3677,7 +3685,7 @@ opendir(const char *path)
 		D_GOTO(out_err, rc);
 
 	dir_list[idx_dirfd]->dfs_mt   = dfs_mt;
-	dir_list[idx_dirfd]->fd       = idx_dirfd + FD_DIR_BASE;
+	dir_list[idx_dirfd]->fd       = idx_dirfd + fd_dir_base;
 	dir_list[idx_dirfd]->offset   = 0;
 	dir_list[idx_dirfd]->dir      = dir_obj;
 	dir_list[idx_dirfd]->num_ents = 0;
@@ -3716,7 +3724,7 @@ opendir(const char *path)
 		}
 		fd_ht_obj->real_fd = dirfd(dirp_kernel);
 		D_ASSERT(fd_ht_obj->real_fd >= 0);
-		fd_ht_obj->fake_fd = idx_dirfd + FD_DIR_BASE;
+		fd_ht_obj->fake_fd = idx_dirfd + fd_dir_base;
 		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
 				       false);
 		D_ASSERT(rc == 0);
@@ -3757,14 +3765,14 @@ fdopendir(int fd)
 	if (!d_hook_enabled)
 		return next_fdopendir(fd);
 	fd_directed = d_get_fd_redirected(fd);
-	if (fd_directed < FD_DIR_BASE)
+	if (fd_directed < fd_dir_base)
 		return next_fdopendir(fd_directed);
-	if (fd < FD_FILE_BASE && fd_directed >= FD_DIR_BASE && d_compatible_mode)
+	if (fd < FD_FILE_BASE && fd_directed >= fd_dir_base && d_compatible_mode)
 		return next_fdopendir(fd);
 
 	atomic_fetch_add_relaxed(&num_opendir, 1);
 
-	return (DIR *)(dir_list[fd_directed - FD_DIR_BASE]);
+	return (DIR *)(dir_list[fd_directed - fd_dir_base]);
 }
 
 int
@@ -3919,8 +3927,8 @@ closedir(DIR *dirp)
 		}
 	}
 
-	if (fd >= FD_DIR_BASE) {
-		free_dirfd(fd - FD_DIR_BASE);
+	if (fd >= fd_dir_base) {
+		free_dirfd(fd - fd_dir_base);
 		return 0;
 	} else {
 		return next_closedir(dirp);
@@ -3940,10 +3948,10 @@ telldir(DIR *dirp)
 		return next_telldir(dirp);
 
 	fd = dirfd(dirp);
-	if (fd < FD_DIR_BASE)
+	if (fd < fd_dir_base)
 		return next_telldir(dirp);
 
-	return dir_list[fd - FD_DIR_BASE]->offset;
+	return dir_list[fd - fd_dir_base]->offset;
 }
 
 void
@@ -3959,10 +3967,10 @@ rewinddir(DIR *dirp)
 		return next_rewinddir(dirp);
 
 	fd = dirfd(dirp);
-	if (fd < FD_DIR_BASE)
+	if (fd < fd_dir_base)
 		return next_rewinddir(dirp);
 
-	idx                     = fd - FD_DIR_BASE;
+	idx                     = fd - fd_dir_base;
 	dir_list[idx]->offset   = 0;
 	dir_list[idx]->num_ents = 0;
 	memset(&dir_list[idx]->anchor, 0, sizeof(daos_anchor_t));
@@ -3988,10 +3996,10 @@ seekdir(DIR *dirp, long loc)
 		return next_seekdir(dirp, loc);
 
 	fd = dirfd(dirp);
-	if (fd < FD_DIR_BASE)
+	if (fd < fd_dir_base)
 		return next_seekdir(dirp, loc);
 
-	idx = fd - FD_DIR_BASE;
+	idx = fd - fd_dir_base;
 
 	/* need to compare loc with current offset & the number of cached entries */
 	if (loc <= OFFSET_BASE) {
@@ -4064,7 +4072,7 @@ scandirat(int dirfd, const char *restrict path, struct dirent ***restrict nameli
 	if (!d_hook_enabled)
 		return next_scandirat(dirfd, path, namelist, filter, compar);
 
-	if (dirfd < FD_DIR_BASE)
+	if (dirfd < fd_dir_base)
 		return next_scandirat(dirfd, path, namelist, filter, compar);
 
 	if (path[0] == '/')
@@ -4103,7 +4111,7 @@ new_readdir(DIR *dirp)
 	if (fd_directed < FD_FILE_BASE)
 		return next_readdir(dirp);
 
-	if (fd_directed < FD_DIR_BASE) {
+	if (fd_directed < fd_dir_base) {
 		/* Not suppose to be here */
 		D_DEBUG(DB_ANY, "readdir() failed: %d (%s)\n", EINVAL, strerror(EINVAL));
 		errno = EINVAL;
@@ -4111,7 +4119,7 @@ new_readdir(DIR *dirp)
 	}
 	if (d_compatible_mode)
 		/* dirp is from Linux kernel */
-		mydir = dir_list[fd_directed - FD_DIR_BASE];
+		mydir = dir_list[fd_directed - fd_dir_base];
 	atomic_fetch_add_relaxed(&num_readdir, 1);
 
 	if (mydir->num_ents)
@@ -4119,7 +4127,7 @@ new_readdir(DIR *dirp)
 
 	mydir->num_ents = READ_DIR_BATCH_SIZE;
 	while (!daos_anchor_is_eof(&mydir->anchor)) {
-		rc = dfs_readdir(dir_list[mydir->fd - FD_DIR_BASE]->dfs_mt->dfs, mydir->dir,
+		rc = dfs_readdir(dir_list[mydir->fd - fd_dir_base]->dfs_mt->dfs, mydir->dir,
 				 &mydir->anchor, &mydir->num_ents, mydir->ents);
 		if (rc != 0)
 			goto out_null_readdir;
@@ -4140,8 +4148,8 @@ out_readdir:
 	else
 		mydir->offset++;
 	len_str = asprintf(&full_path, "%s/%s",
-			   dir_list[mydir->fd - FD_DIR_BASE]->path +
-			   dir_list[mydir->fd - FD_DIR_BASE]->dfs_mt->len_fs_root,
+			   dir_list[mydir->fd - fd_dir_base]->path +
+			   dir_list[mydir->fd - fd_dir_base]->dfs_mt->len_fs_root,
 			   mydir->ents[mydir->num_ents].d_name);
 	if (len_str >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
@@ -5310,7 +5318,7 @@ fchdir(int dirfd)
 		return next_fchdir(dirfd);
 
 	fd_directed = d_get_fd_redirected(dirfd);
-	if (fd_directed < FD_DIR_BASE)
+	if (fd_directed < fd_dir_base)
 		return next_fchdir(dirfd);
 
 	/* assume dfuse is running. call chdir() to update cwd. */
@@ -5318,11 +5326,11 @@ fchdir(int dirfd)
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
 		D_ASSERT(next_chdir != NULL);
 	}
-	rc = next_chdir(dir_list[fd_directed - FD_DIR_BASE]->path);
+	rc = next_chdir(dir_list[fd_directed - fd_dir_base]->path);
 	if (rc)
 		return rc;
 
-	pt_end = stpncpy(cur_dir, dir_list[fd_directed - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
+	pt_end = stpncpy(cur_dir, dir_list[fd_directed - fd_dir_base]->path, DFS_MAX_PATH - 1);
 	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
 			strerror(ENAMETOOLONG));
@@ -5476,7 +5484,7 @@ fsync(int fd)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fsync(fd);
 
-	if (fd < FD_DIR_BASE && d_compatible_mode)
+	if (fd < fd_dir_base && d_compatible_mode)
 		return next_fsync(fd);
 
 	/* errno = ENOTSUP;
@@ -5501,7 +5509,7 @@ fdatasync(int fd)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fdatasync(fd);
 
-	if (fd < FD_DIR_BASE && d_compatible_mode)
+	if (fd < fd_dir_base && d_compatible_mode)
 		return next_fdatasync(fd);
 
 	return 0;
@@ -5522,7 +5530,7 @@ ftruncate(int fd, off_t length)
 	if (fd_directed < FD_FILE_BASE)
 		return next_ftruncate(fd, length);
 
-	if (fd_directed >= FD_DIR_BASE) {
+	if (fd_directed >= fd_dir_base) {
 		errno = EINVAL;
 		return (-1);
 	}
@@ -5683,7 +5691,7 @@ fchmod(int fd, mode_t mode)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fchmod(fd, mode);
 
-	if (fd_directed >= FD_DIR_BASE) {
+	if (fd_directed >= fd_dir_base) {
 		errno = EINVAL;
 		return (-1);
 	}
@@ -5753,16 +5761,16 @@ fchown(int fd, uid_t uid, gid_t gid)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fchown(fd, uid, gid);
 
-	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+	if (fd_directed >= (fd_dir_base + max_dir)) {
 		errno = EINVAL;
 		return (-1);
 	}
 
-	if (fd_directed >= FD_DIR_BASE)
+	if (fd_directed >= fd_dir_base)
 		/* Let dfuse handle this case. This function is not commonly used in applications.
 		 * There is no need for further optimization here at this time.
 		 */
-		return chown(dir_list[fd_directed - FD_DIR_BASE]->path, uid, gid);
+		return chown(dir_list[fd_directed - fd_dir_base]->path, uid, gid);
 
 	/* regular file */
 	rc = dfs_chown(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
@@ -5793,18 +5801,18 @@ fgetxattr(int fd, char *name, void *value, size_t size)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fgetxattr(fd, name, value, size);
 
-	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+	if (fd_directed >= (fd_dir_base + max_dir)) {
 		errno = EINVAL;
 		return (-1);
 	}
 
-	if (fd_directed < FD_DIR_BASE)
+	if (fd_directed < fd_dir_base)
 		rc = dfs_getxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
 				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value,
 				  &buf_size);
 	else
-		rc = dfs_getxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
-				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, &buf_size);
+		rc = dfs_getxattr(dir_list[fd_directed - fd_dir_base]->dfs_mt->dfs,
+				  dir_list[fd_directed - fd_dir_base]->dir, name, value, &buf_size);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -5829,18 +5837,18 @@ fsetxattr(int fd, char *name, void *value, size_t size, int flags)
 	if (fd_directed < FD_FILE_BASE)
 		return next_fsetxattr(fd, name, value, size, flags);
 
-	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+	if (fd_directed >= (fd_dir_base + max_dir)) {
 		errno = EINVAL;
 		return (-1);
 	}
 
-	if (fd_directed < FD_DIR_BASE)
+	if (fd_directed < fd_dir_base)
 		rc = dfs_setxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
 				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value, size,
 				  flags);
 	else
-		rc = dfs_setxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
-				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, size,
+		rc = dfs_setxattr(dir_list[fd_directed - fd_dir_base]->dfs_mt->dfs,
+				  dir_list[fd_directed - fd_dir_base]->dir, name, value, size,
 				  flags);
 	if (rc) {
 		errno = rc;
@@ -6236,8 +6244,8 @@ new_fcntl(int fd, int cmd, ...)
 		fd_directed = d_get_fd_redirected(fd);
 
 		if (cmd == F_GETFL) {
-			if (fd_directed >= FD_DIR_BASE)
-				return dir_list[fd_directed - FD_DIR_BASE]->open_flag;
+			if (fd_directed >= fd_dir_base)
+				return dir_list[fd_directed - fd_dir_base]->open_flag;
 			else if (fd_directed >= FD_FILE_BASE)
 				return d_file_list[fd_directed - FD_FILE_BASE]->open_flag;
 			else
@@ -6253,14 +6261,14 @@ new_fcntl(int fd, int cmd, ...)
 			OrgFunc = 0;
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
-			if (fd_directed >= FD_DIR_BASE) {
+			if (fd_directed >= fd_dir_base) {
 				rc = find_next_available_dirfd(
-					dir_list[fd_directed - FD_DIR_BASE], &next_dirfd);
+					dir_list[fd_directed - fd_dir_base], &next_dirfd);
 				if (rc) {
 					errno = rc;
 					return (-1);
 				}
-				return (next_dirfd + FD_DIR_BASE);
+				return (next_dirfd + fd_dir_base);
 			} else if (fd_directed >= FD_FILE_BASE) {
 				rc = find_next_available_fd(
 					d_file_list[fd_directed - FD_FILE_BASE], &next_fd);
@@ -6327,7 +6335,7 @@ ioctl(int fd, unsigned long request, ...)
 		return next_ioctl(fd, request, param);
 
 	fd_directed = d_get_fd_redirected(fd);
-	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)))
+	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (fd_dir_base + max_dir)))
 		return next_ioctl(fd, request, param);
 
 	if (request == FIOCLEX)
@@ -6383,7 +6391,7 @@ dup2(int oldfd, int newfd)
 		fd_directed = d_get_fd_redirected(oldfd);
 		if (fd_directed < FD_FILE_BASE) {
 			return fd_kernel;
-		} else if (fd_directed < FD_DIR_BASE) {
+		} else if (fd_directed < fd_dir_base) {
 			rc = find_next_available_fd(d_file_list[fd_directed - FD_FILE_BASE],
 						    &next_fd);
 			if (rc)
@@ -6391,21 +6399,21 @@ dup2(int oldfd, int newfd)
 				return fd_kernel;
 			fd_fake = next_fd + FD_FILE_BASE;
 		} else {
-			rc = find_next_available_dirfd(dir_list[fd_directed - FD_DIR_BASE],
+			rc = find_next_available_dirfd(dir_list[fd_directed - fd_dir_base],
 						       &next_dirfd);
 			if (rc)
 				/* still return the fd dup from kernel in
 				 * compatible mode
 				 */
 				return fd_kernel;
-			fd_fake = next_dirfd + FD_DIR_BASE;
+			fd_fake = next_dirfd + fd_dir_base;
 		}
 		if (fd_fake < 0)
 			return fd_kernel;
 		/* add fd_kernel to hash table */
 		D_ALLOC_PTR(fd_ht_obj);
 		if (fd_ht_obj == NULL) {
-			if (fd_fake >= FD_DIR_BASE)
+			if (fd_fake >= fd_dir_base)
 				free_dirfd(next_dirfd);
 			else
 				free_fd(next_fd, false);
@@ -7172,6 +7180,48 @@ init_myhook(void)
 	int      rc;
 	uint64_t eq_count_loc = 0;
 	float    libc_version;
+	uint32_t max_fd_loc = 0;
+	uint32_t max_dir_loc = 0;
+
+	/* get env for max number of fd and dir, then allocate memory for arrays */
+	rc = d_getenv_uint("D_IL_MAX_FD", &max_fd_loc);
+	if (rc != -DER_NONEXIST) {
+		max_fd = (int)max_fd_loc;
+		if (max_fd > MAX_OPENED_FILE_LMT) {
+			max_fd = MAX_OPENED_FILE_LMT;
+			printf("D_IL_MAX_FD is set as %u, but is capped as %d\n", max_fd_loc, max_fd);
+		}
+	}
+	rc = d_getenv_uint("D_IL_MAX_DIR", &max_dir_loc);
+	if (rc != -DER_NONEXIST) {
+		max_dir = (int)max_dir_loc;
+		if (max_dir > MAX_OPENED_DIR_LMT) {
+			max_dir = MAX_OPENED_DIR_LMT;
+			printf("D_IL_MAX_DIR is set as %u, but is capped as %d\n", max_dir_loc, max_dir);
+		}
+	}
+	dup_ref_count = malloc(sizeof(int) * max_fd);
+	if (dup_ref_count == NULL) {
+		printf("failed to allocate memory %ld bytes for dup_ref_count\n",
+		       sizeof(int) * max_fd);
+		return;
+	}
+	d_file_list = malloc(sizeof(struct file_obj *) * max_fd);
+	if (d_file_list == NULL) {
+		printf("failed to allocate memory %ld bytes for d_file_list\n",
+		       sizeof(struct file_obj *) * max_fd);
+		free(dup_ref_count);
+		return;
+	}
+	dir_list = malloc(sizeof(struct dir_obj *) * max_dir);
+	if (dir_list == NULL) {
+		printf("failed to allocate memory %ld bytes for dir_list\n",
+		       sizeof(struct dir_obj *) * max_dir);
+		free(dup_ref_count);
+		free(d_file_list);
+		return;
+	}
+	fd_dir_base = FD_FILE_BASE + max_fd;
 
 	/* D_IL_NO_BYPASS is ONLY for testing. It always keeps function interception enabled in
 	 * current process and children processes. This is needed to thoroughly test interception
