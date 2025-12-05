@@ -730,15 +730,17 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        config.image_version = "el9"
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(),
-                                     image_version: 'el9.5',
-                                    )
-                        )
+                        script {
+                            config.image_version = "el9"
+                            job_step_update(
+                                unitTest(timeout_time: 60,
+                                        unstash_opt: true,
+                                        inst_repos: daosRepos(),
+                                        inst_rpms: unitPackages(),
+                                        image_version: 'el9.5',
+                                        )
+                            )
+                        }
                     }
                     post {
                         always {
