@@ -374,7 +374,11 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 			entry.gid = getegid();
 		}
 	} else if (dfs->dcache) {
-		return dcache_find_insert_rel(dfs, parent, name, len, flags, _obj, NULL, stbuf);
+		rc = dcache_find_insert_rel(dfs, parent, name, len, flags, _obj, NULL, stbuf);
+		if (rc == 0 && (*_obj)->dc_file_size == ULONG_MAX)
+			/* query file size cache */
+			query_cached_file_size(dfs, *_obj);
+		return rc;
 	}
 
 	D_ALLOC_PTR(obj);
@@ -386,6 +390,7 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	obj->mode  = mode;
 	obj->flags = flags;
 	oid_cp(&obj->parent_oid, parent->oid);
+	obj->dc_file_size = ULONG_MAX;
 
 	switch (mode & S_IFMT) {
 	case S_IFREG:
@@ -395,6 +400,9 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		if (stbuf)
+			/* cache file size */
+			cache_file_size(dfs, obj, file_size);
 		break;
 	case S_IFDIR:
 		rc = open_dir(dfs, parent, flags, cid, &entry, len, obj);
@@ -843,6 +851,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	/** if dfs cache is enabled, see if the stat is done already */
 	if (dfs->dcache && obj->dc_stated) {
 		memcpy(stbuf, &obj->dc_stbuf, sizeof(struct stat));
+		obj->dc_file_size = stbuf->st_size;
 		return 0;
 	}
 
@@ -857,6 +866,8 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 
 	if (dfs->dcache) {
 		memcpy(&obj->dc_stbuf, stbuf, sizeof(struct stat));
+		/* "obj->dc_file_size = stbuf->st_size" will be set inside cache_file_size() */
+		cache_file_size(dfs, obj, stbuf->st_size);
 		obj->dc_stated = true;
 	}
 out:
@@ -1790,6 +1801,9 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 		/* save data size before data buffer */
 		size_t size = sizeof(int);
 
+		/* file size */
+		size += sizeof(daos_size_t);
+
 		size += sizeof(obj->oid);
 		size += sizeof(obj->mode);
 		size += sizeof(obj->flags);
@@ -1803,6 +1817,7 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 			size += sizeof(daos_oclass_id_t);
 			size += sizeof(daos_size_t);
 		} else {
+			/* chunk size */
 			size += sizeof(daos_size_t);
 		}
 
@@ -1816,6 +1831,8 @@ dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size)
 	/* save data size before data buffer */
 	*((int *)p) = (int)(*buf_size);
 	p += sizeof(int);
+	memcpy(p, &obj->dc_file_size, sizeof(daos_size_t));
+	p += sizeof(daos_size_t);
 	memcpy(p, &obj->oid, sizeof(obj->oid));
 	p += sizeof(obj->oid);
 	memcpy(p, &obj->mode, sizeof(obj->mode));
@@ -1869,6 +1886,8 @@ dfs_obj_deserialize(dfs_t *dfs, int flags, const char *buf, struct dfs_obj *obj)
 	int            rc;
 
 	obj->dfs = dfs;
+	memcpy(&obj->dc_file_size, p, sizeof(daos_size_t));
+	p += sizeof(daos_size_t);
 	memcpy(&obj->oid, p, sizeof(obj->oid));
 	p += sizeof(obj->oid);
 	memcpy(&obj->mode, p, sizeof(obj->mode));
