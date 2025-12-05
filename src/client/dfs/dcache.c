@@ -1399,11 +1399,11 @@ int
 cache_file_size(dfs_t *dfs, dfs_obj_t *obj, uint64_t file_size)
 {
 	cache_dentry_key_header_t key;
-	int                  rc;
-	size_t               buf_size;
-	size_t               len;
+	int                       rc;
+	size_t                    buf_size;
+	size_t                    len;
 	/* using a stack buffer to avoid exprensive dynamic memory allocation */
-	uint8_t              buf[MAX_DENTRY_REC_LEN];
+	uint8_t                   buf[MAX_DENTRY_REC_LEN];
 
 	if (dfs->dcache == NULL)
 		return 0;

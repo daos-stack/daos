@@ -3537,7 +3537,7 @@ dfs_test_pipeline_find(void **state)
 	test_pipeline_find(state, OC_RP_3GX);
 }
 
-#define NUM_INT  (1024*1024)
+#define NUM_INT  (1024 * 1024)
 #define NUM_READ (1000)
 #define MAX_RG   16
 #define MAX_IOV  1024
@@ -3593,8 +3593,8 @@ dfs_test_datacache(void **state)
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, OC_S1, 0, NULL,
-				  &file);
+	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, OC_S1, 0,
+		      NULL, &file);
 	assert_int_equal(rc, 0);
 
 	buf_wr = malloc(NUM_INT * sizeof(int));
@@ -3622,7 +3622,8 @@ dfs_test_datacache(void **state)
 	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY, OC_S1, 0, NULL, &file);
+	rc =
+	    dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY, OC_S1, 0, NULL, &file);
 	assert_int_equal(rc, 0);
 
 	buf_rd = malloc(NUM_INT * sizeof(int));
@@ -3647,7 +3648,7 @@ dfs_test_datacache(void **state)
 	memset(buf_rd, 0, NUM_INT * sizeof(int));
 	buf_rd[1] = 1;
 	buf_rd[2] = 2;
-	rc        = dfs_read(dfs, file, &sgl,  3 * sizeof(int), &read_size, NULL);
+	rc        = dfs_read(dfs, file, &sgl, 3 * sizeof(int), &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_true(read_size == ((NUM_INT - 3) * sizeof(int)));
 
@@ -3686,7 +3687,7 @@ dfs_test_datacache(void **state)
 
 	block_num = 8;
 	/* verify multiple ranges with dfs_readx() */
-	for (range_num = 1; range_num <= MAX_RG; range_num*=2) {
+	for (range_num = 1; range_num <= MAX_RG; range_num *= 2) {
 		/* make sure iov_list[] is large enough */
 		assert_true((range_num * block_num) <= MAX_IOV);
 		range_size  = (NUM_INT * sizeof(int)) / range_num;
@@ -3704,8 +3705,8 @@ dfs_test_datacache(void **state)
 			iod_rgs[i].rg_len = range_size;
 
 			for (j = 0; j < block_num; j++) {
-				d_iov_set(&iov_list[block_cnt], (char *)buf_rd + block_cnt * block_size,
-						  block_size);
+				d_iov_set(&iov_list[block_cnt],
+					  (char *)buf_rd + block_cnt * block_size, block_size);
 				block_cnt++;
 			}
 		}
@@ -3743,7 +3744,8 @@ dfs_test_datacache(void **state)
 	d_setenv("DFS_ENABLE_DATACACHE", "0", 1);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
 	assert_int_equal(rc, 0);
-	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY, OC_S1, 0, NULL, &file);
+	rc =
+	    dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY, OC_S1, 0, NULL, &file);
 	assert_int_equal(rc, 0);
 
 	gettimeofday(&tm1, NULL);
@@ -3821,7 +3823,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
      test_case_teardown},
     {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
-    {"DFS_UNIT_TEST29: dfs read with datacache", dfs_test_datacache, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST29: dfs read with datacache", dfs_test_datacache, async_disable,
+     test_case_teardown},
 };
 
 static int
