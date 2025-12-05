@@ -119,7 +119,7 @@ err_task:
 	return 0;
 }
 
-#define MAX_NUM_REQ            (64)
+#define MAX_NUM_REQ            (32)
 
 /* the chunck of request aligned with data cache entry size */
 typedef struct {
