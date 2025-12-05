@@ -218,20 +218,20 @@ is_fd_large(int fd)
 static void
 randomize(int *list, int size, int num_exch)
 {
-        int i;
-        int idx_1;
-        int idx_2;
-        int tmp;
+	int i;
+	int idx_1;
+	int idx_2;
+	int tmp;
 
-        for (i = 0; i < num_exch; i++) {
-                idx_1 = rand() % size;
-                idx_2 = idx_1;
-                while (idx_2 == idx_1)
-                        idx_2 = rand() % size;
-                tmp = list[idx_1];
-                list[idx_1] = list[idx_2];
-                list[idx_2] = tmp;
-        }
+	for (i = 0; i < num_exch; i++) {
+		idx_1 = rand() % size;
+		idx_2 = idx_1;
+		while (idx_2 == idx_1)
+			idx_2 = rand() % size;
+		tmp = list[idx_1];
+		list[idx_1] = list[idx_2];
+		list[idx_2] = tmp;
+	}
 }
 
 #define MAX_FD (8192)
