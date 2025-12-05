@@ -88,4 +88,32 @@ struct dfs_mt {
 	char            *fs_root;
 };
 
+/* structure of a fd pool based on linked list to manage fd/dirfd allocation/deallocation */
+typedef struct {
+	/* the number of allocated nodes */
+	int  size;
+	/* the max number of nodes */
+	int  capacity;
+	/* the index of the head of the link list of available nodes */
+	int  head;
+	/* array of next node for link list */
+	int *next;
+} fd_pool_t;
+
+/* create a fd pool */
+int
+fd_pool_create(int size, fd_pool_t *fd_pool);
+
+/* get a fd */
+int
+fd_pool_alloc(fd_pool_t *fd_pool, int *idx);
+
+/* free a fd */
+int
+fd_pool_free(fd_pool_t *fd_pool, int idx);
+
+/* free fd pool */
+int
+fd_pool_destroy(fd_pool_t *fd_pool);
+
 #endif
