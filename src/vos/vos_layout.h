@@ -272,19 +272,27 @@ enum vos_io_stream {
 	VOS_IOS_CNT
 };
 
+enum vos_cont_ext_bits {
+	VCEB_CSUM = (1 << 0),
+};
+
 /* VOS container durable format extension */
 struct vos_cont_ext_df {
 	/* GC bucket extension */
-	struct vos_gc_bkt_df		ced_gc_bkt;
+	struct vos_gc_bkt_df ced_gc_bkt;
+	uint32_t             ced_valid_bits;
+	uint32_t             ced_padding0;
 	/*
 	 * Any modification involved in current target (container shard) under the global
 	 * stable epoch have already been persistently stored globally.
 	 */
-	uint64_t			ced_global_stable_epoch;
+	uint64_t             ced_global_stable_epoch;
+	uint32_t             ced_csum_type;
+	uint32_t             ced_chunksize;
 	/* Reserved for potential new features */
-	uint64_t			ced_paddings[37];
+	uint64_t             ced_padding1[35];
 	/* Reserved for future extension */
-	uint64_t			ced_reserve;
+	uint64_t             ced_reserve;
 };
 
 /* VOS Container Value */

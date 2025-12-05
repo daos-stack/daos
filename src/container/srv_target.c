@@ -148,7 +148,6 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	/* Check again since IV fetch yield */
 	if (cont->sc_props_fetched)
 		goto done;
-	cont->sc_props_fetched = 1;
 
 	csum_val = cont_props->dcp_csum_type;
 	if (!daos_cont_csum_prop_is_enabled(csum_val)) {
@@ -162,9 +161,25 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 					    daos_contprop2hashtype(csum_val),
 					    cont_props->dcp_chunksize,
 					    cont_props->dcp_srv_verify);
+		if (rc != 0)
+			goto done;
+
 		if (dedup_only)
 			dedup_configure_csummer(cont->sc_csummer, cont_props);
 	}
+
+	rc = vos_cont_save_props(cont->sc_hdl, cont_props);
+	if (rc != 0) {
+		/*
+		 * The failure of saving checksum property copy only potentially affect ddb, but
+		 * it is not fatal for current caller. Let's go ahead with some warning message.
+		 */
+		D_WARN("Cannot locally save container property for " DF_UUID ": " DF_RC "\n",
+		       DP_UUID(cont->sc_uuid), DP_RC(rc));
+		rc = 0;
+	}
+	cont->sc_props_fetched = 1;
+
 done:
 	return rc;
 }
