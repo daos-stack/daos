@@ -123,14 +123,22 @@ err_task:
 
 /* the chunk of request aligned with data cache entry size */
 typedef struct {
-	daos_off_t      off_base;	/* cache entry size aligned */
-	daos_off_t      off;	/* offset relative to off_base (the offset within a cache entry) */
-	uint32_t        size;	/* the size to copy to user buffer */
-	uint32_t        size_req;	/* the size to request from server */
-	int             pre_req;	/* existing request in request list */
-	char           *buf_usr;	/* the user buffer to receive data */
-	char           *buf_cache;	/* the buffer to receive data from server */
-	shm_lru_node_t *node_found;	/* the pointer to the LRU node */
+	/* cache entry size aligned */
+	daos_off_t      off_base;
+	/* offset relative to off_base (the offset within a cache entry) */
+	daos_off_t      off;
+	/* the size to copy to user buffer */
+	uint32_t        size;
+	/* the size to request from server */
+	uint32_t        size_req;
+	/* existing request in request list */
+	int             pre_req;
+	/* the user buffer to receive data */
+	char           *buf_usr;
+	/* the buffer to receive data from server */
+	char           *buf_cache;
+	/* the pointer to the LRU node */
+	shm_lru_node_t *node_found;
 } dat_req;
 
 #define DEFAULT_CACHE_DATA_SIZE (512 * 1024)
@@ -145,6 +153,7 @@ request_in_batch(dfs_t *dfs, dfs_obj_t *obj, int num_req, dat_req req_list[], ca
 	int              num_sgl = 0;
 	daos_size_t      byte_to_copy;
 	daos_size_t      byte_to_cache;
+	daos_size_t      byte_copied   = 0;
 	daos_size_t      byte_to_fetch = 0;
 	daos_array_iod_t iod;
 	d_sg_list_t      sgl = {0};
@@ -287,7 +296,8 @@ daos_array_read_cached(dfs_t *dfs, dfs_obj_t *obj, daos_array_iod_t *iod, d_sg_l
 	int              idx_sg  = 0;
 	daos_off_t       off;
 	daos_off_t       off_aligned;
-	daos_off_t       off_in_rec;	/* off % DEFAULT_CACHE_DATA_SIZE */
+	/* off % DEFAULT_CACHE_DATA_SIZE */
+	daos_off_t       off_in_rec;
 	daos_size_t      off_in_sg;
 	daos_size_t      left_in_sg;
 	daos_size_t      byte_rg_sum;
@@ -415,7 +425,7 @@ daos_array_read_cached(dfs_t *dfs, dfs_obj_t *obj, daos_array_iod_t *iod, d_sg_l
 
 		/* num_req > 0 and req_list is full or have processed all sgl */
 		if ((num_req == MAX_NUM_REQ ||
-		     ((idx_sg == (sgl->sg_nr -1)) && (left_in_sg == 0))) &&
+		     ((idx_sg == (sgl->sg_nr - 1)) && (left_in_sg == 0))) &&
 		    (num_req > 0)) {
 			tmp_file_size = file_size;
 			rc = request_in_batch(dfs, obj, num_req, req_list, &key, &tmp_file_size,
