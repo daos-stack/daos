@@ -228,7 +228,7 @@ randomize(int *list, int size, int num_exch)
 		idx_2 = idx_1;
 		while (idx_2 == idx_1)
 			idx_2 = rand() % size;
-		tmp = list[idx_1];
+		tmp         = list[idx_1];
 		list[idx_1] = list[idx_2];
 		list[idx_2] = tmp;
 	}
