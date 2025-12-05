@@ -113,7 +113,7 @@ static struct mmap_obj         mmap_list[MAX_MMAP_BLOCK];
 
 static int                     num_fd;
 static int                     num_dirfd;
-static int                     next_free_map, last_map     = -1, num_map;
+static int                     next_free_map, last_map = -1, num_map;
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -1512,8 +1512,8 @@ init_fd_list(void)
 static int
 find_next_available_fd(struct file_obj *obj, int *new_fd)
 {
-	bool	allocated = false;
-	int	rc, idx;
+	bool             allocated = false;
+	int              rc, idx;
 	struct file_obj *new_obj = NULL;
 
 	if (obj == NULL) {
@@ -1569,8 +1569,8 @@ dec_dup_ref_count(int fd)
 static int
 find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 {
-	bool	allocated = false;
-	int	rc, idx;
+	bool            allocated = false;
+	int             rc, idx;
 	struct dir_obj *new_obj;
 
 	if (obj == NULL) {
