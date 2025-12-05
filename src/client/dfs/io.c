@@ -394,18 +394,7 @@ daos_array_read_cached(dfs_t *dfs, dfs_obj_t *obj, daos_array_iod_t *iod, d_sg_l
 					byte_left         = file_size - off;
 				}
 				/* data are found in cache, copy to user buffer */
-				byte_copied = rec_data_size - off_in_rec;
-				if (byte_copied < left_in_sg) {
-					/* reached the end of file */
-					byte_short_read += (left_in_sg - byte_copied);
-					byte_short_read_rg += (left_in_sg - byte_copied);
-					/* adjust left_in_sg to make it zero after executing
-					 * "left_in_sg -= byte_copied"
-					 */
-					left_in_sg -= (left_in_sg - byte_copied);
-				} else {
-					byte_copied = left_in_sg;
-				}
+				byte_copied = min(rec_data_size - off_in_rec, left_in_sg);
 				if (byte_copied > 0)
 					memcpy(sgl->sg_iovs[idx_sg].iov_buf + off_in_sg,
 					       cache_data + off_in_rec, byte_copied);
