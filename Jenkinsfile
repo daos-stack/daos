@@ -734,7 +734,7 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(image_version: 'el9'),
+                                     inst_rpms: unitPackages(),
                                      image_version: 'el9.5',
                                     )
                         )
