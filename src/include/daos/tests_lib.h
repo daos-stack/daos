@@ -176,19 +176,20 @@ enum test_cr_class {
 };
 
 enum test_cr_action {
-	TCA_DEFAULT		= 0,
-	TCA_INTERACT		= 1,
-	TCA_IGNORE		= 2,
-	TCA_DISCARD		= 3,
-	TCA_READD		= 4,
-	TCA_TRUST_MS		= 5,
-	TCA_TRUST_PS		= 6,
-	TCA_TRUST_TARGET	= 7,
-	TCA_TRUST_MAJORITY	= 8,
-	TCA_TRUST_LATEST	= 9,
-	TCA_TRUST_OLDEST	= 10,
-	TCA_TRUST_EC_PARITY	= 11,
-	TCA_TRUST_EC_DATA	= 12,
+	TCA_STALE           = -1,
+	TCA_DEFAULT         = 0,
+	TCA_INTERACT        = 1,
+	TCA_IGNORE          = 2,
+	TCA_DISCARD         = 3,
+	TCA_READD           = 4,
+	TCA_TRUST_MS        = 5,
+	TCA_TRUST_PS        = 6,
+	TCA_TRUST_TARGET    = 7,
+	TCA_TRUST_MAJORITY  = 8,
+	TCA_TRUST_LATEST    = 9,
+	TCA_TRUST_OLDEST    = 10,
+	TCA_TRUST_EC_PARITY = 11,
+	TCA_TRUST_EC_DATA   = 12,
 };
 
 struct daos_check_pool_info {

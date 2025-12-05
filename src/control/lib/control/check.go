@@ -429,6 +429,13 @@ func (r *SystemCheckReport) IsInteractive() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_INTERACT
 }
 
+// IsStale indicates whether this report was awaiting user interaction when it became stale. Stale
+// reports are still valid but can't be repaired without re-running the checker on the affected
+// pool.
+func (r *SystemCheckReport) IsStale() bool {
+	return r.Action == chkpb.CheckInconsistAction_CIA_STALE
+}
+
 // IsRemovedPool indicates whether the error detected in this report indicates a missing pool.
 func (r *SystemCheckReport) IsRemovedPool() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_DISCARD &&
