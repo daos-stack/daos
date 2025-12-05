@@ -14,9 +14,9 @@
 
 #define MAX_MMAP_BLOCK      (64)
 #define MAX_OPENED_FILE     (2048)
-#define MAX_OPENED_FILE_M1  ((MAX_OPENED_FILE)-1)
 #define MAX_OPENED_DIR      (512)
-#define MAX_OPENED_DIR_M1   ((MAX_OPENED_DIR)-1)
+#define MAX_OPENED_FILE_LMT (1024 * 1024)
+#define MAX_OPENED_DIR_LMT  (256 * 1024)
 
 #define MAX_EQ          64
 
@@ -26,11 +26,6 @@
  * The fd allocate from this lib is always larger than FD_FILE_BASE.
  */
 #define FD_FILE_BASE    (0x20000000)
-
-/* FD_FILE_BASE - The base number of the file descriptor for a directory.
- * The fd allocate from this lib is always larger than FD_FILE_BASE.
- */
-#define FD_DIR_BASE     (FD_FILE_BASE + MAX_OPENED_FILE)
 
 /* structure allocated for a FD for a file */
 struct file_obj {
