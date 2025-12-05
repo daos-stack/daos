@@ -103,14 +103,16 @@ static int                     max_dir = MAX_OPENED_DIR;
  */
 static int                     fd_dir_base;
 
+static fd_pool_t               fd_pool;
+static fd_pool_t               dirfd_pool;
+
 static int                    *dup_ref_count;
 struct file_obj              **d_file_list;
 static struct dir_obj        **dir_list;
 static struct mmap_obj         mmap_list[MAX_MMAP_BLOCK];
 
-/* last_fd==-1 means the list is empty. No active fd in list. */
-static int                     next_free_fd, last_fd       = -1, num_fd;
-static int                     next_free_dirfd, last_dirfd = -1, num_dirfd;
+static int                     num_fd;
+static int                     num_dirfd;
 static int                     next_free_map, last_map     = -1, num_map;
 
 /* the number of low fd reserved */
@@ -1499,10 +1501,6 @@ init_fd_list(void)
 	memset(dir_list, 0, sizeof(struct dir_obj *) * max_dir);
 	memset(mmap_list, 0, sizeof(struct mmap_obj) * MAX_MMAP_BLOCK);
 
-	next_free_fd    = 0;
-	last_fd         = -1;
-	next_free_dirfd = 0;
-	last_dirfd      = -1;
 	next_free_map   = 0;
 	last_map        = -1;
 	num_fd = num_dirfd = num_map = 0;
@@ -1515,7 +1513,7 @@ static int
 find_next_available_fd(struct file_obj *obj, int *new_fd)
 {
 	bool	allocated = false;
-	int	i, idx = -1;
+	int	rc, idx;
 	struct file_obj *new_obj = NULL;
 
 	if (obj == NULL) {
@@ -1531,30 +1529,17 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 	}
 
 	D_MUTEX_LOCK(&lock_fd);
-	if (next_free_fd < 0) {
+	rc = fd_pool_alloc(&fd_pool, &idx);
+	if (rc) {
 		D_MUTEX_UNLOCK(&lock_fd);
 		if (allocated)
 			D_FREE(new_obj);
-		DS_ERROR(EMFILE, "failed to allocate fd");
-		return EMFILE;
+		DS_ERROR(rc, "failed to allocate fd");
+		return rc;
 	}
-	idx = next_free_fd;
-	if (idx >= 0) {
-		new_obj->ref_count++;
-		d_file_list[idx] = new_obj;
-	}
+	new_obj->ref_count++;
+	d_file_list[idx]   = new_obj;
 	dup_ref_count[idx] = 0;
-	if (next_free_fd > last_fd)
-		last_fd = next_free_fd;
-	next_free_fd = -1;
-
-	for (i = idx + 1; i < max_fd; i++) {
-		if (d_file_list[i] == NULL) {
-			/* available, then update next_free_fd */
-			next_free_fd = i;
-			break;
-		}
-	}
 
 	num_fd++;
 	D_MUTEX_UNLOCK(&lock_fd);
@@ -1585,7 +1570,7 @@ static int
 find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 {
 	bool	allocated = false;
-	int	i, idx	= -1;
+	int	rc, idx;
 	struct dir_obj *new_obj;
 
 	if (obj == NULL) {
@@ -1600,30 +1585,16 @@ find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 	}
 
 	D_MUTEX_LOCK(&lock_dirfd);
-	if (next_free_dirfd < 0) {
+	rc = fd_pool_alloc(&dirfd_pool, &idx);
+	if (rc) {
 		D_MUTEX_UNLOCK(&lock_dirfd);
 		if (allocated)
 			D_FREE(new_obj);
-		DS_ERROR(EMFILE, "Failed to allocate dirfd");
-		return EMFILE;
+		DS_ERROR(rc, "Failed to allocate dirfd");
+		return rc;
 	}
-	idx = next_free_dirfd;
-	if (idx >= 0) {
-		new_obj->ref_count++;
-		dir_list[idx] = new_obj;
-	}
-	if (next_free_dirfd > last_dirfd)
-		last_dirfd = next_free_dirfd;
-
-	next_free_dirfd = -1;
-
-	for (i = idx + 1; i < max_dir; i++) {
-		if (dir_list[i] == NULL) {
-			/* available, then update next_free_dirfd */
-			next_free_dirfd = i;
-			break;
-		}
-	}
+	new_obj->ref_count++;
+	dir_list[idx] = new_obj;
 
 	num_dirfd++;
 	D_MUTEX_UNLOCK(&lock_dirfd);
@@ -1666,7 +1637,7 @@ find_next_available_map(int *idx)
 static void
 free_fd(int idx, bool closing_dup_fd)
 {
-	int              i, rc;
+	int              rc;
 	struct file_obj *saved_obj = NULL;
 
 	D_MUTEX_LOCK(&lock_fd);
@@ -1688,19 +1659,7 @@ free_fd(int idx, bool closing_dup_fd)
 		return;
 	}
 	d_file_list[idx] = NULL;
-
-	if (idx < next_free_fd || next_free_fd == -1)
-		next_free_fd = idx;
-
-	if (idx == last_fd) {
-		for (i = idx - 1; i >= 0; i--) {
-			if (d_file_list[i]) {
-				last_fd = i;
-				break;
-			}
-		}
-	}
-
+	fd_pool_free(&fd_pool, idx);
 	num_fd--;
 	D_MUTEX_UNLOCK(&lock_fd);
 
@@ -1727,7 +1686,7 @@ free_fd(int idx, bool closing_dup_fd)
 static void
 free_dirfd(int idx)
 {
-	int             i, rc;
+	int             rc;
 	struct dir_obj *saved_obj = NULL;
 
 	D_MUTEX_LOCK(&lock_dirfd);
@@ -1736,19 +1695,7 @@ free_dirfd(int idx)
 	if (dir_list[idx]->ref_count == 0)
 		saved_obj = dir_list[idx];
 	dir_list[idx] = NULL;
-
-	if (idx < next_free_dirfd || next_free_dirfd == -1)
-		next_free_dirfd = idx;
-
-	if (idx == last_dirfd) {
-		for (i = idx - 1; i >= 0; i--) {
-			if (dir_list[i]) {
-				last_dirfd = i;
-				break;
-			}
-		}
-	}
-
+	fd_pool_free(&dirfd_pool, idx);
 	num_dirfd--;
 	D_MUTEX_UNLOCK(&lock_dirfd);
 
@@ -7225,6 +7172,23 @@ init_myhook(void)
 	}
 	fd_dir_base = FD_FILE_BASE + max_fd;
 
+	rc = fd_pool_create(max_fd, &fd_pool);
+	if (rc) {
+		free(dup_ref_count);
+		free(d_file_list);
+		free(dir_list);
+		return;
+	}
+
+	rc = fd_pool_create(max_dir, &dirfd_pool);
+	if (rc) {
+		fd_pool_destroy(&fd_pool);
+		free(dup_ref_count);
+		free(d_file_list);
+		free(dir_list);
+		return;
+	}
+
 	/* D_IL_NO_BYPASS is ONLY for testing. It always keeps function interception enabled in
 	 * current process and children processes. This is needed to thoroughly test interception
 	 * related code in CI. The code related to interception disabled is tested by a few tests in
@@ -7471,7 +7435,7 @@ close_all_fd(void)
 {
 	int i;
 
-	for (i = 0; i <= last_fd; i++) {
+	for (i = 0; i <= max_fd; i++) {
 		if (d_file_list[i])
 			free_fd(i, false);
 	}
@@ -7482,7 +7446,7 @@ close_all_dirfd(void)
 {
 	int i;
 
-	for (i = 0; i <= last_dirfd; i++) {
+	for (i = 0; i <= max_dir; i++) {
 		if (dir_list[i])
 			free_dirfd(i);
 	}
@@ -7569,6 +7533,12 @@ finalize_myhook(void)
 
 	if (daos_debug_inited)
 		daos_debug_fini();
+
+	free(dup_ref_count);
+	free(d_file_list);
+	free(dir_list);
+	fd_pool_destroy(&fd_pool);
+	fd_pool_destroy(&dirfd_pool);
 }
 
 static int
