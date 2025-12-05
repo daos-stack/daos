@@ -47,7 +47,7 @@ fd_pool_alloc(fd_pool_t *fd_pool, int *idx)
 		/* free list is empty. */
 		return EMFILE;
 	/* return the head of free list */
-	*idx          = fd_pool->head;
+	*idx = fd_pool->head;
 	/* update the head of free list to point to the next node */
 	fd_pool->head = fd_pool->next[*idx];
 	fd_pool->size++;
@@ -58,13 +58,13 @@ fd_pool_alloc(fd_pool_t *fd_pool, int *idx)
 int
 fd_pool_free(fd_pool_t *fd_pool, int idx)
 {
-	if (fd_pool == NULL || (idx < 0) || (idx >= fd_pool->capacity) )
+	if (fd_pool == NULL || (idx < 0) || (idx >= fd_pool->capacity))
 		return EINVAL;
 
 	/* set the freed node as the head node */
 	fd_pool->next[idx] = fd_pool->head;
 	/* update head pointer to the newly freed node */
-	fd_pool->head      = idx;
+	fd_pool->head = idx;
 	fd_pool->size--;
 
 	return 0;
