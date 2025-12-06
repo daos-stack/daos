@@ -3542,85 +3542,32 @@ dfs_test_pipeline_find(void **state)
 #define MAX_RG   16
 #define MAX_IOV  1024
 
-static void
-dfs_test_datacache(void **state)
+typedef struct {
+	dfs_t     *dfs;
+} thread_param_t;
+
+static void *
+thread_file_read(void *arg)
 {
-	test_arg_t    *arg = *state;
-	dfs_t         *dfs;
-	daos_handle_t  coh;
-	dfs_obj_t     *file;
-	char          *cname = "cont_datacache";
-	char          *name  = "file_datacache";
-	int            rc;
-	daos_size_t    read_size;
-	int           *buf_wr;
-	int           *buf_rd;
-	int            i;
-	int            j;
-	d_sg_list_t    sgl;
-	d_iov_t        iov;
-	d_iov_t        iov_list[MAX_IOV];
-	int            block_num;
-	int            block_size;
-	int            block_cnt;
-	int            range_num;
-	int            range_size;
-	daos_range_t   iod_rgs[MAX_RG];
-	dfs_iod_t      iod;
-	struct timeval tm1;
-	struct timeval tm2;
-	double         dt;
-	double         perf_cached;
-	double         perf_no_cache;
-
-	rc = shm_init();
-	assert_true(rc == 0);
-	assert_true(shm_inited() == true);
-
-	rc = dfs_init();
-	assert_int_equal(rc, 0);
-
-	d_setenv("DFS_DCACHE_TYPE", "SHM", 1);
-
-	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
-	assert_int_equal(rc, 0);
-	rc = dfs_disconnect(dfs);
-	assert_int_equal(rc, 0);
-
-	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_rc_equal(rc, 0);
-
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, OC_S1, 0,
-		      NULL, &file);
-	assert_int_equal(rc, 0);
-
-	buf_wr = malloc(NUM_INT * sizeof(int));
-	assert_true(buf_wr != NULL);
-	for (i = 0; i < NUM_INT; i++) {
-		buf_wr[i] = i;
-	}
-
-	d_iov_set(&iov, buf_wr, NUM_INT * sizeof(int));
-	sgl.sg_nr     = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs   = &iov;
-
-	rc = dfs_write(dfs, file, &sgl, 0, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_release(file);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_umount(dfs);
-	assert_int_equal(rc, 0);
-
-	/* re-mount as read only to test data caching */
-	d_setenv("DFS_ENABLE_DATACACHE", "1", 1);
-	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
-	assert_int_equal(rc, 0);
+	int             i;
+	int             j;
+	int             rc;
+	thread_param_t *param = (thread_param_t *)arg;
+	char           *name  = "file_datacache";
+	daos_size_t     read_size;
+	int            *buf_rd;
+	d_sg_list_t     sgl;
+	dfs_iod_t       iod;
+	daos_range_t    iod_rgs[MAX_RG];
+	d_iov_t         iov;
+	d_iov_t         iov_list[MAX_IOV];
+	int             block_num;
+	int             block_size;
+	int             block_cnt;
+	int             range_num;
+	int             range_size;
+	dfs_t          *dfs = param->dfs;
+	dfs_obj_t      *file;
 
 	rc =
 	    dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY, OC_S1, 0, NULL, &file);
@@ -3631,6 +3578,10 @@ dfs_test_datacache(void **state)
 
 	d_iov_set(&iov, buf_rd, NUM_INT * sizeof(int));
 	memset(buf_rd, 0, NUM_INT * sizeof(int));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+
 	rc = dfs_read(dfs, file, &sgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_true(read_size == (NUM_INT * sizeof(int)));
@@ -3722,8 +3673,106 @@ dfs_test_datacache(void **state)
 		}
 	}
 
+	free(buf_rd);
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+
+	pthread_exit(NULL);
+}
+
+static void
+dfs_test_datacache(void **state)
+{
+	test_arg_t       *arg = *state;
+	dfs_t            *dfs;
+	daos_handle_t     coh;
+	dfs_obj_t        *file;
+	char             *cname = "cont_datacache";
+	char             *name  = "file_datacache";
+	int               rc;
+	daos_size_t       read_size;
+	int              *buf_wr;
+	int              *buf_rd;
+	int               i;
+	d_sg_list_t       sgl;
+	d_iov_t           iov;
+	struct timeval    tm1;
+	struct timeval    tm2;
+	double            dt;
+	double            perf_cached;
+	double            perf_no_cache;
+	thread_param_t    param[DFS_TEST_MAX_THREAD_NR];
+
+	rc = shm_init();
+	assert_true(rc == 0);
+	assert_true(shm_inited() == true);
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
+	d_setenv("DFS_DCACHE_TYPE", "SHM", 1);
+
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, OC_S1, 0,
+		      NULL, &file);
+	assert_int_equal(rc, 0);
+
+	buf_wr = malloc(NUM_INT * sizeof(int));
+	assert_true(buf_wr != NULL);
+	for (i = 0; i < NUM_INT; i++) {
+		buf_wr[i] = i;
+	}
+
+	d_iov_set(&iov, buf_wr, NUM_INT * sizeof(int));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+
+	rc = dfs_write(dfs, file, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+
+	/* re-mount as read only to test data caching */
+	d_setenv("DFS_ENABLE_DATACACHE", "1", 1);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < 4; i++) {
+		param[i].dfs = dfs;
+		rc = pthread_create(&dfs_test_tid[i], NULL, thread_file_read, &param[i]);
+		assert_int_equal(rc, 0);
+	}
+	for (i = 0; i < 4; i++) {
+		rc = pthread_join(dfs_test_tid[i], NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	buf_rd = malloc(NUM_INT * sizeof(int));
+	assert_true(buf_rd != NULL);
+
 	d_iov_set(&iov, buf_rd, NUM_INT * sizeof(int));
 	memset(buf_rd, 0, NUM_INT * sizeof(int));
+
+	rc =
+	    dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY, OC_S1, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+
 	gettimeofday(&tm1, NULL);
 	for (i = 0; i < NUM_READ; i++) {
 		rc = dfs_read(dfs, file, &sgl, 0, &read_size, NULL);
