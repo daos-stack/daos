@@ -1034,7 +1034,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 	crt_endpoint_t          ep;
 	crt_rpc_t              *rpc;
 	struct pool_buf        *map_buf;
-	struct pool_connect_arg con_args;
+	struct pool_connect_arg con_args = {0};
 	d_iov_t                *credp;
 	crt_bulk_t              bulk;
 	int                     rc;
