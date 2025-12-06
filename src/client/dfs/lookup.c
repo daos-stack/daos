@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,6 +56,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, char *rem, int flags, dfs_obj_t **_
 	obj->mode         = root->mode;
 	obj->dfs          = dfs;
 	strncpy(obj->name, root->name, DFS_MAX_NAME + 1);
+	obj->dc_file_size = ULONG_MAX;
 
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
@@ -172,6 +174,7 @@ lookup_rel_path_loop:
 					daos_array_close(obj->oh, NULL);
 					D_GOTO(err_obj, rc);
 				}
+				cache_file_size(dfs, obj, stbuf->st_size);
 			}
 			break;
 		}
@@ -396,8 +399,9 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int 
 	strncpy(obj->name, name, len + 1);
 	oid_cp(&obj->parent_oid, parent->oid);
 	oid_cp(&obj->oid, entry.oid);
-	obj->mode = entry.mode;
-	obj->dfs  = dfs;
+	obj->mode         = entry.mode;
+	obj->dfs          = dfs;
+	obj->dc_file_size = ULONG_MAX;
 
 	/** if entry is a file, open the array object and return */
 	switch (entry.mode & S_IFMT) {
@@ -435,6 +439,8 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int 
 				daos_array_close(obj->oh, NULL);
 				D_GOTO(err_obj, rc);
 			}
+			/* cache file size */
+			cache_file_size(dfs, obj, stbuf->st_size);
 		}
 		break;
 	case S_IFLNK:

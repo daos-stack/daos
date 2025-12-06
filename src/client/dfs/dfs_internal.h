@@ -16,6 +16,8 @@
 #include <daos.h>
 #include <daos_fs.h>
 
+#include <gurt/shm_utils.h>
+
 #include "metrics.h"
 
 /** D-key name of SB metadata */
@@ -149,7 +151,10 @@ struct dfs_obj {
 	struct stat      dc_stbuf;
 	/** indicates if we need to retrieve the file size for the stbuf cache */
 	bool             dc_stated;
-
+	/** cached file size. Initialized with ULONG_MAX. Updated on short read detection or stat()
+	 *  called.
+	 */
+	daos_size_t      dc_file_size;
 	/** Dram cache */
 	/** Entry in the hash table of the DFS cache */
 	d_list_t         dc_entry;
@@ -230,8 +235,12 @@ struct dfs {
 	struct stat          root_stbuf;
 	/** DFS top-level metrics */
 	struct dfs_metrics  *metrics;
+	/* the hash value of pool uuid & cont uuid */
+	uint64_t             pool_cont_hash;
 	/** optional dentry and stat cache */
 	dfs_dcache_t        *dcache;
+	/** optional data cache */
+	shm_lru_cache_t     *datacache;
 	/** Root object info */
 	dfs_obj_t            root;
 };
@@ -264,6 +273,24 @@ struct dfs_entry {
 	/** Sym Link value */
 	char            *value;
 };
+
+typedef struct {
+	/* 64-bit hash of pool & cont uuid */
+	uint64_t      pool_cont_hash;
+	/** DAOS object ID */
+	daos_obj_id_t oid;
+	daos_off_t    off;
+} cache_data_key_t;
+
+typedef struct {
+	/* 64-bit hash of pool & cont uuid */
+	uint64_t      pool_cont_hash;
+	/** DAOS object ID */
+	daos_obj_id_t parent_oid;
+	/* followed by file name[] */
+	char          name[DFS_MAX_NAME + 1];
+	char          pad[3];
+} cache_dentry_key_header_t;
 
 /** enum for hash entry type */
 enum {
@@ -515,5 +542,12 @@ int
 dfs_obj_serialize(const struct dfs_obj *obj, uint8_t *buf, size_t *buf_size);
 int
 dfs_obj_deserialize(dfs_t *dfs, int flags, const char *buf, struct dfs_obj *obj);
+
+/* add a record in file size cache */
+int
+cache_file_size(dfs_t *dfs, dfs_obj_t *obj, uint64_t file_size);
+
+int
+query_cached_file_size(dfs_t *dfs, dfs_obj_t *obj);
 
 #endif /* __DFS_INTERNAL_H__ */
