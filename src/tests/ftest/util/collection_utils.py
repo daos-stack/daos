@@ -11,6 +11,7 @@ import os
 import re
 import sys
 from collections import OrderedDict
+from datetime import datetime
 from difflib import unified_diff
 
 from ClusterShell.NodeSet import NodeSet
@@ -705,6 +706,10 @@ def rename_avocado_test_dir(logger, test, job_results_dir, test_result, jenkins_
             # are unique by including the repeat count in the path
             new_test_logs_dir = os.path.join(
                 job_results_dir, test.directory, test.python_file, test.name.repeat_str)
+        if os.path.isdir(new_test_logs_dir):
+            # Ensure the Jenkins-style avocado log directory is unique with a current timestamp
+            new_test_logs_dir = "-".join(
+                [new_test_logs_dir, datetime.now().strftime(r"%Y%m%d_%H%M%S")])
         try:
             os.makedirs(new_test_logs_dir)
         except OSError:

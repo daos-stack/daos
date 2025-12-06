@@ -29,6 +29,7 @@ source venv/bin/activate
 
 pip install --upgrade pip
 pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
+pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-code-coverage.txt
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
@@ -88,12 +89,19 @@ export WITH_VALGRIND
 export STAGE_NAME
 export TEST_RPMS
 export DAOS_BASE
+export DAOS_TEST_LOG_DIR=${DAOS_TEST_LOG_DIR:-"/var/tmp/daos_testing"}
 export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/CIShare/daos_test/apps"}
 export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test/apps"}
 if [ -n "$DAOS_HTTPS_PROXY" ]; then
     # shellcheck disable=SC2154
     export HTTPS_PROXY="${DAOS_HTTPS_PROXY:-""}"
 fi
+
+# Code coverage environment variables
+export COVFILE="/tmp/test.cov"
+# export COVFILE="${DAOS_TEST_LOG_DIR}/daos_test/bullseye/test.cov"
+export GCOV_PREFIX="${DAOS_TEST_LOG_DIR}/daos_test/gcov"
+export GCOV_PREFIX_STRIP=7
 
 launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then

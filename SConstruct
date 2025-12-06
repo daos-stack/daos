@@ -524,7 +524,9 @@ def scons():
     # also install to $PREFIX/lib to work with existing avocado test code
     if prereqs.test_requested():
         env.Install('$PREFIX/lib/daos/TESTING/ftest/util', ['site_scons/env_modules.py'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh', "requirements-ftest.txt"])
+        env.Install(
+            '$PREFIX/lib/daos/TESTING/ftest/',
+            ['ftest.sh', "requirements-ftest.txt", "requirements-code-coverage.txt"])
 
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
