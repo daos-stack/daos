@@ -7440,7 +7440,7 @@ close_all_fd(void)
 {
 	int i;
 
-	for (i = 0; i <= max_fd; i++) {
+	for (i = 0; i < max_fd; i++) {
 		if (d_file_list[i])
 			free_fd(i, false);
 	}
@@ -7451,7 +7451,7 @@ close_all_dirfd(void)
 {
 	int i;
 
-	for (i = 0; i <= max_dir; i++) {
+	for (i = 0; i < max_dir; i++) {
 		if (dir_list[i])
 			free_dirfd(i);
 	}
