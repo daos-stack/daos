@@ -1288,7 +1288,7 @@ class ValgrindHelper():
         else:
             cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
-        return cmd
+        return ['env', 'GODEBUG=initstack=128k'] + cmd
 
     def convert_xml(self):
         """Modify the xml file"""
