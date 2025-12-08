@@ -300,6 +300,22 @@ class Mdtest:
         parts = [self.test_id, container.pool.identifier, container.identifier, label]
         return '.'.join(['_'.join(parts), 'log'])
 
+    def update_daos_params(self, pool, container):
+        """Set the mdtest parameters for the pool and container.
+
+        Optionally also set the DAOS pool and container environment variables for mdtest.
+
+        Args:
+            pool (TestPool): the pool to use with the mdtest command
+            container (TestContainer): the container to use with the mdtest command
+        """
+        self.command.update_params(dfs_pool=pool.identifier, dfs_cont=container.identifier)
+
+        if "mpirun" in str(self.manager) or "srun" in str(self.manager):
+            self.command.env["DAOS_POOL"] = self.command.dfs_pool.value
+            self.command.env["DAOS_CONT"] = self.command.dfs_cont.value
+            self.command.env["IOR_HINT__MPI__romio_daos_obj_class"] = self.command.dfs_oclass.value
+
     def run(self, pool, container, processes, ppn=None, intercept=None, display_space=True,
             unique_log=True):
         # pylint: disable=too-many-arguments
@@ -325,7 +341,7 @@ class Mdtest:
         result = None
         error_message = None
 
-        self.command.update_params(dfs_pool=pool.identifier, dfs_cont=container.identifier)
+        self.update_daos_params(pool, container)
 
         if intercept:
             self.env["LD_PRELOAD"] = intercept
