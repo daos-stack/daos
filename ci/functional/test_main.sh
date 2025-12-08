@@ -97,6 +97,8 @@ rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 
+find . -name '*.gcno'
+
 if "$hardware_ok"; then
     if $TEST_RPMS; then
         # shellcheck disable=SC2029

@@ -437,6 +437,11 @@ DEPENDS+=("MACSio-mpich")
 DEPENDS+=("simul-mpich")
 DEPENDS+=("romio-tests")
 DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
+gcno_files=$(find . -name '*.gcno')
+if [ -n "$gcno_files" ]; then
+  list_files files $gcno_files
+  append_install_list "${files[@]}"
+fi
 build_package "daos-tests"
 
 build_package "daos-client-tests-mpich"
