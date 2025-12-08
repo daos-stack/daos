@@ -176,14 +176,25 @@ class CodeCoverage():
         Returns:
             bool: True if gcov code coverage is enabled; False otherwise
         """
-        source = os.environ.get("GCOV_PREFIX", "/tmp")
+        source = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "..", "..", "code_coverage")
         result = run_remote(logger, hosts, find_command(source, "*.gcno"))
         if not result.passed:
-            # logger.info(
-            #     "Gcov code coverage collection not configured on %s", result.failed_hosts)
-            # return False
-            logger.debug("No gcov *.gcno files found on %s", result.failed_hosts)
+            logger.info(
+                "Gcov code coverage collection not configured on %s", result.failed_hosts)
+            return False
+
         logger.info("Gcov code coverage collection configured on %s", hosts)
+        gcov_dir = os.environ.get("GCOV_PREFIX", "/tmp")
+        result = run_remote(logger, hosts, f"mkdir -p {gcov_dir}")
+        if not result.passed:
+            logger.info("Error creating gcov directory %s on %s", gcov_dir, result.failed_hosts)
+            return False
+        result = run_remote(logger, hosts, f"cp -r {source}/* {gcov_dir}/")
+        if not result.passed:
+            logger.info("Error copying gcov notes files to %s on %s", gcov_dir, result.failed_hosts)
+            return False
+
         return True
 
     def __setup_gcov(self, logger, hosts, result):
