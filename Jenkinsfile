@@ -389,7 +389,7 @@ pipeline {
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_node-hdr-210_212-219X',
+               defaultValue: 'ci_node-hdr-200_202-205X',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
@@ -1159,6 +1159,7 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
+                            image_version: 'el9.5',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
