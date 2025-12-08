@@ -440,11 +440,15 @@ DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
 readarray -t gcno_files < <(find . -name '*.gcno')
 if [ ${#gcno_files[@]} -gt 0 ]; then
   PACKAGE_TYPE="dir"
+  TARGET_PATH="${libdir}/daos/gcov"
+  ARCH="${isa}"
   list_files files "${gcno_files[@]}"
   append_install_list "${files[@]}"
 fi
 build_package "daos-tests"
 
+PACKAGE_TYPE="empty"
+ARCH="noarch"
 build_package "daos-client-tests-mpich"
 
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
