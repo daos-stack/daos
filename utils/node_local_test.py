@@ -1746,6 +1746,7 @@ def run_daos_cmd(conf,
             lf.write(f'cmd: {" ".join(cmd)}\n')
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
+    cmd_env["GODEBUG"] = "initstack=128k"
 
     rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                         env=cmd_env, check=False, cwd=cwd)
