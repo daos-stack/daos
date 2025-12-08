@@ -42,6 +42,9 @@ container:
   control_method: daos
   oclass: RP_2GX
 
+ior:
+  ior_timeout: 120
+
 ior_write:
   processes: 8
   repetitions: 1
