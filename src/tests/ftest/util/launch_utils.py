@@ -1287,6 +1287,7 @@ class TestGroup():
             int: status code indicating any issues running tests
         """
         return_code = 0
+        return_execute_code = 0
         runner = TestRunner(self._avocado, result, len(self.tests), repeat, self.tag_filters)
 
         # Display the location of the avocado logs
@@ -1336,7 +1337,9 @@ class TestGroup():
                     continue
 
                 # Run the test with avocado
-                return_code |= runner.execute(logger, test, loop, sequence + 1, sparse, fail_fast)
+                return_execute_code = runner.execute(logger, test, loop, sequence + 1, sparse,
+                                                     fail_fast)
+                return_code |= return_execute_code
 
                 # Archive the test results
                 return_code |= runner.process(
@@ -1349,8 +1352,9 @@ class TestGroup():
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)
 
-            if repeat > 1 and return_code != 0:
-                logger.info("Failure at test repetition %s/%s. No more repetitions.", loop, repeat)
+            if repeat > 1 and return_execute_code != 0:
+                logger.info("Failure at test repetition %s/%s: %d. ", loop, repeat,
+                            return_execute_code)
                 break
 
         # Cleanup any specified files at the end of testing
