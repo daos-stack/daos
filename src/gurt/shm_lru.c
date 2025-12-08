@@ -398,7 +398,6 @@ shm_lru_put_shallow_cp(shm_lru_cache_t *cache, void *key, uint32_t key_size, voi
 	shm_lru_cache_var_t *sub_cache;
 	int                 *off_bucket;
 	int                  offset;
-	char                *buf_to_free = NULL;
 	shm_lru_node_t      *node;
 	shm_lru_node_t      *node_head;
 	shm_lru_node_t      *node_new;
@@ -422,18 +421,12 @@ shm_lru_put_shallow_cp(shm_lru_cache_t *cache, void *key, uint32_t key_size, voi
 	while (offset) {
 		node = (shm_lru_node_t *)((long int)cache + offset);
 		if (key_cmp(cache, node, key, key_size) == 0) {
-			/* key exists in cache */
-
-			/* save the data buffer pointer which will be freed later */
-			buf_to_free     = (char *)cache + node->off_data;
-			node->off_data  = (long int)data - (long int)cache;
-			node->data_size = data_size;
-			shm_free(buf_to_free);
+			/* key exists in cache, fail to insert and return EEXIST. It's ok for
+			 * caching read-only files.
+			 */
 			lru_move_to_head(cache, sub_cache, node);
-			/* increase reference count by 1 */
-			atomic_fetch_add(&node->ref_count, 1);
 			shm_mutex_unlock(&sub_cache->lock);
-			return 0;
+			return EEXIST;
 		}
 		offset = (long int)node->off_hnext;
 	}
