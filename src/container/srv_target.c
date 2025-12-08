@@ -255,6 +255,7 @@ get_hae(struct ds_cont_child *cont, bool vos_agg)
 	/* EC aggregation */
 	if (!vos_agg)
 		return cont->sc_ec_agg_eph;
+
 	/*
 	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
 	 * in vos_aggregate()
@@ -1403,7 +1404,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	if (!DAOS_FAIL_CHECK(DAOS_CHK_CONT_ORPHAN))
 		rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
 
-	out->tdo_rc = (rc == 0 ? 0 : 1);
+	out->tdo_rc = rc;
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
@@ -1415,7 +1416,8 @@ ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	struct cont_tgt_destroy_out    *out_source = crt_reply_get(source);
 	struct cont_tgt_destroy_out    *out_result = crt_reply_get(result);
 
-	out_result->tdo_rc += out_source->tdo_rc;
+	if (out_result->tdo_rc == 0)
+		out_result->tdo_rc = out_source->tdo_rc;
 	return 0;
 }
 
@@ -2201,7 +2203,8 @@ ds_cont_tgt_snapshot_notify_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	out_source = crt_reply_get(source);
 	out_result = crt_reply_get(result);
-	out_result->tso_rc += out_source->tso_rc;
+	if (out_result->tso_rc >= 0 && out_source->tso_rc < 0)
+		out_result->tso_rc = out_source->tso_rc;
 	return 0;
 }
 
@@ -2581,8 +2584,15 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 					min_eph = min(min_eph, ec_eph->ce_ephs[i]);
 			}
 
-			if (min_eph == 0 || min_eph == DAOS_EPOCH_MAX ||
-			    min_eph <= ec_eph->ce_last_eph) {
+			if (min_eph <= ec_eph->ce_last_eph &&
+			    pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+				continue;
+
+			/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
+			 * when min_eph and ce_last_eph are both zero.
+			 */
+			if (min_eph == DAOS_EPOCH_MAX ||
+			    (ec_eph->ce_last_eph != 0 && min_eph <= ec_eph->ce_last_eph)) {
 				if (min_eph > 0 && min_eph < ec_eph->ce_last_eph)
 					D_ERROR("ignore for now "DF_X64" < "DF_X64
 						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
@@ -2597,7 +2607,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			D_DEBUG(DB_MD, "Update eph "DF_X64" "DF_UUID"\n",
 				min_eph, DP_UUID(ec_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns, ec_eph->ce_cont_uuid,
-						       min_eph);
+						       min_eph, pool->sp_ec_ephs_req);
 			if (rc == 0)
 				ec_eph->ce_last_eph = min_eph;
 			else

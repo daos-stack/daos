@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +13,7 @@
 struct blob_cp_arg {
 	spdk_blob_id		 bca_id;
 	struct spdk_blob	*bca_blob;
+	struct bio_io_lug        bca_io_lug;
 	/*
 	 * Completion could run on different xstream when NVMe
 	 * device is shared by multiple xstreams.
@@ -35,6 +37,7 @@ blob_cp_arg_init(struct blob_cp_arg *ba)
 {
 	int	rc;
 
+	bio_io_lug_init(&ba->bca_io_lug);
 	rc = ABT_eventual_create(0, &ba->bca_eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
@@ -45,6 +48,7 @@ blob_cp_arg_init(struct blob_cp_arg *ba)
 static inline void
 blob_cp_arg_fini(struct blob_cp_arg *ba)
 {
+	bio_io_lug_fini(&ba->bca_io_lug);
 	ABT_eventual_free(&ba->bca_eventual);
 }
 
@@ -163,8 +167,7 @@ blob_unmap_cb(void *arg, int rc)
 
 	bxb = bma->bma_ioc->bic_xs_blobstore;
 	D_ASSERT(bxb != NULL);
-	D_ASSERT(bxb->bxb_blob_rw > 0);
-	bxb->bxb_blob_rw--;
+	bio_io_lug_dequeue(bxb, &ba->bca_io_lug);
 
 	blob_common_cb(ba, rc);
 }
@@ -1205,7 +1208,7 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 		drain_inflight_ios(xs_ctxt, bxb);
 
 		ba->bca_inflights++;
-		bxb->bxb_blob_rw++;
+		bio_io_lug_enqueue(xs_ctxt, bxb, &ba->bca_io_lug);
 
 		pg_off = (uint64_t)unmap_iov->iov_buf;
 		pg_cnt = unmap_iov->iov_len;

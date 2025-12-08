@@ -1113,6 +1113,12 @@ out_eventual:
 	return rc;
 }
 
+static inline bool
+cont_iv_retryable_error(int rc)
+{
+	return daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY;
+}
+
 int
 cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 				   daos_epoch_t eph, unsigned int shortcut,
@@ -1133,28 +1139,54 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 		return rc;
 	}
 
-	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
-			    shortcut, sync_mode, true /* retry */);
-	if (rc)
+	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry), shortcut, sync_mode,
+			    false /* retry */);
+	if (rc && !cont_iv_retryable_error(rc))
 		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
 			DP_UUID(cont_uuid), op, DP_RC(rc));
 	return rc;
 }
 
-int
-cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
+static int
+cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t eph, unsigned int shortcut,
+			unsigned int sync_mode, uint32_t op, struct sched_request *req)
 {
-	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
-						  CRT_IV_SHORTCUT_TO_ROOT,
-						  CRT_IV_SYNC_NONE,
-						  IV_CONT_AGG_EPOCH_REPORT);
+	int sleep_ms = 1000; /* 1 second retry interval */
+	int rc       = 0;
+
+	while (1) {
+		rc =
+		    cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph, shortcut, sync_mode, op);
+		if (rc == 0)
+			break;
+
+		/* Only retry on specific errors */
+		if (!cont_iv_retryable_error(rc))
+			break;
+
+		if (req && dss_ult_exiting(req)) {
+			rc = -DER_SHUTDOWN;
+			break;
+		}
+
+		dss_sleep(sleep_ms);
+	}
+
+	return rc;
 }
 
 int
-cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
+cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph, struct sched_request *req)
 {
-	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph, 0, CRT_IV_SYNC_EAGER,
-						  IV_CONT_AGG_EPOCH_BOUNDRY);
+	return cont_iv_track_eph_retry(ns, cont_uuid, eph, CRT_IV_SHORTCUT_TO_ROOT,
+				       CRT_IV_SYNC_NONE, IV_CONT_AGG_EPOCH_REPORT, req);
+}
+
+int
+cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph, struct sched_request *req)
+{
+	return cont_iv_track_eph_retry(ns, cont_uuid, eph, 0, CRT_IV_SYNC_EAGER,
+				       IV_CONT_AGG_EPOCH_BOUNDRY, req);
 }
 
 int

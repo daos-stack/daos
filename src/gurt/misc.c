@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -744,24 +745,39 @@ out:
  * Create a ranged string representation of a rank list.
  *
  * \param[in]  rank_list	the rank list to represent
+ * \param[out] ranks_str	Returned ranged string (caller must free)
  *
- * \return			a ranged string (caller must free)
+ * \return			0 on success, a negative value on error
  */
-char *
-d_rank_list_to_str(d_rank_list_t *rank_list)
+int
+d_rank_list_to_str(d_rank_list_t *ranks, char **ranks_str)
 {
-	char			*str;
-	bool			 truncated = false;
-	d_rank_range_list_t	*range_list;
+	d_rank_range_list_t *range_list = NULL;
+	char                *range_list_str;
+	int                  rc;
 
-	range_list = d_rank_range_list_create_from_ranks(rank_list);
+	D_ASSERT(ranks_str != NULL);
+
+	if (ranks == NULL) {
+		range_list_str = NULL;
+		D_GOTO(out, rc = -DER_SUCCESS);
+	}
+
+	range_list = d_rank_range_list_create_from_ranks(ranks);
 	if (range_list == NULL)
-		return NULL;
-	str = d_rank_range_list_str(range_list, &truncated);
+		D_GOTO(error, rc = -DER_NOMEM);
 
+	rc = d_rank_range_list_str(range_list, &range_list_str);
+	if (rc != 0)
+		D_GOTO(error, rc);
+
+out:
+	*ranks_str = range_list_str;
+
+error:
 	d_rank_range_list_free(range_list);
 
-	return str;
+	return rc;
 }
 
 d_rank_list_t *
@@ -844,7 +860,6 @@ d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
 	return range_list;
 }
 
-/* TODO (DAOS-10253) Add unit tests for this function */
 d_rank_range_list_t *
 d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 {
@@ -890,56 +905,91 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	return range_list;
 }
 
-/* TODO (DAOS-10253) Add unit tests for this function */
-char *
-d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
+static inline int
+ranks2str(char *buf, size_t buf_size, uint32_t rank_lo, uint32_t rank_hi, size_t *buf_len)
 {
-	const size_t	MAXBYTES = 512;
-	char	       *line;
-	char	       *linepos;
-	int		ret = 0;
-	size_t		remaining = MAXBYTES - 2u;
-	int		i;
-	int		err = 0;
+	int len;
 
-	*truncated = false;
-	D_ALLOC(line, MAXBYTES);
+	if (rank_lo == rank_hi)
+		len = snprintf(buf, buf_size, "%u", rank_lo);
+	else
+		len = snprintf(buf, buf_size, "%u-%u", rank_lo, rank_hi);
+
+	if (len < 0)
+		return -DER_INVAL;
+	if (len >= buf_size)
+		return -DER_TRUNC;
+
+	*buf_len = (size_t)len;
+	return -DER_SUCCESS;
+}
+
+int
+d_rank_range_list_str(d_rank_range_list_t *list, char **ranks_str)
+{
+	const size_t MINBYTES = 256u;
+	char        *line;
+	size_t       line_size;
+	char        *buf;
+	size_t       buf_size;
+	int          i;
+	int          rc;
+
+	D_ASSERT(list != NULL);
+
+	D_ALLOC_ARRAY(line, MINBYTES);
 	if (line == NULL)
-		return NULL;
+		D_GOTO(error, rc = -DER_NOMEM);
+	line_size = MINBYTES;
+	buf       = line;
+	buf_size  = line_size;
 
-	*line = '[';
-	linepos = line + 1;
+	buf[0] = '[';
+	buf++;
+	buf_size--;
 	for (i = 0; i < list->rrl_nr; i++) {
-		uint32_t	lo = list->rrl_ranges[i].lo;
-		uint32_t	hi = list->rrl_ranges[i].hi;
-		bool		lastrange = (i == (list->rrl_nr - 1));
+		size_t   len          = 0;
+		uint32_t rank_lo      = list->rrl_ranges[i].lo;
+		uint32_t rank_hi      = list->rrl_ranges[i].hi;
+		bool     is_last_iter = (i == (list->rrl_nr - 1));
 
-		if (lo == hi)
-			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
-		else
-			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+		rc = ranks2str(buf, buf_size, rank_lo, rank_hi, &len);
+		if (rc == -DER_INVAL)
+			D_GOTO(error, rc);
+		if (rc == -DER_TRUNC ||
+		    (rc == -DER_SUCCESS && buf_size < len + sizeof("]") + (is_last_iter ? 0 : 1))) {
+			int buf_idx = buf - line;
 
-		if (ret < 0) {
-			err = errno;
-			D_ERROR("rank set could not be serialized: %s (%d)\n", strerror(err), err);
-			break;
+			D_REALLOC_ARRAY(buf, line, line_size, line_size + MINBYTES);
+			if (buf == NULL)
+				D_GOTO(error, rc = -DER_NOMEM);
+			line = buf;
+			line_size += MINBYTES;
+			buf = line + buf_idx;
+			buf_size += MINBYTES;
+
+			rc = ranks2str(buf, buf_size, rank_lo, rank_hi, &len);
+		}
+		D_ASSERT(rc == -DER_SUCCESS &&
+			 buf_size >= len + sizeof("]") + (is_last_iter ? 0 : 1));
+
+		if (!is_last_iter) {
+			buf[len] = ',';
+			len++;
 		}
 
-		if (ret >= remaining) {
-			err = EOVERFLOW;
-			D_WARN("rank set has been partially serialized\n");
-			break;
-		}
-
-		remaining -= ret;
-		linepos += ret;
+		buf += len;
+		buf_size -= len;
 	}
-	memcpy(linepos, "]", 2u);
+	memcpy(buf, "]", sizeof("]"));
 
-	if (err != 0)
-		*truncated = true;
+	*ranks_str = line;
+	D_GOTO(out, rc = -DER_SUCCESS);
 
-	return line;
+error:
+	D_FREE(line);
+out:
+	return rc;
 }
 
 void

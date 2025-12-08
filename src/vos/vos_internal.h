@@ -1878,4 +1878,32 @@ vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid
 bool
 vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid);
 
+enum {
+	DTX_UMOFF_ILOG = (1 << 0),
+	DTX_UMOFF_SVT  = (1 << 1),
+	DTX_UMOFF_EVT  = (1 << 2),
+};
+
+static inline void
+dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
+{
+	uint8_t flag = 0;
+
+	switch (type) {
+	case DTX_RT_ILOG:
+		flag = DTX_UMOFF_ILOG;
+		break;
+	case DTX_RT_SVT:
+		flag = DTX_UMOFF_SVT;
+		break;
+	case DTX_RT_EVT:
+		flag = DTX_UMOFF_EVT;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+
+	umem_off_set_flags(rec, flag);
+}
+
 #endif /* __VOS_INTERNAL_H__ */

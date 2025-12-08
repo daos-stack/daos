@@ -489,7 +489,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	D_FREE(path);
 
 	if (rc != 0) {
-		if (!engine_in_check() || rc != -DER_NONEXIST) {
+		if (rc != -DER_NONEXIST) {
 			DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
 				  DF_UUID": Open VOS pool failed.", DP_UUID(child->spc_uuid));
 			goto out;
@@ -2665,6 +2665,8 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	pool->sp_need_discard = 1;
 	pool->sp_discard_status = 0;
 	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (rc == 0)
+		ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
 
 	ds_pool_put(pool);
 out:

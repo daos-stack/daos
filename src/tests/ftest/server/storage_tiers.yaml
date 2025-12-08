@@ -9,7 +9,7 @@ setup:
 
 check_server_storage: false
 
-timeout: 1800
+timeout: 30
 
 engine_0: &engine_0_base
   pinned_numa_node: 0

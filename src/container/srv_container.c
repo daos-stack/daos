@@ -1295,10 +1295,18 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to destroy %d targets\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
-		rc = -DER_IO;
+	if (rc == -DER_BUSY) {
+		D_INFO(DF_CONT ": some target busy\n", DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		/*
+		 * Must return an error that ds_pool_svc_ops_save considers
+		 * retryable. Otherwise, when it is retried, this container
+		 * destroy operation would always get its result from svc_ops
+		 * without being executed.
+		 */
+		rc = -DER_TIMEDOUT;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to destroy targets",
+			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	}
 
 out_rpc:
@@ -1807,8 +1815,11 @@ cont_refresh_vos_agg_eph_one(void *data)
 	int			rc;
 
 	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
-	if (rc)
+	if (rc) {
+		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc,
+			  DF_CONT " lookup cont failed", DP_CONT(arg->pool_uuid, arg->cont_uuid));
 		return rc;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
 		DP_CONT(arg->pool_uuid, arg->cont_uuid),
@@ -1877,8 +1888,9 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to look container",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -1941,8 +1953,9 @@ cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph, 
 	ABT_rwlock_wrlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to look container",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -1992,7 +2005,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	int                 i;
 	int                 rc;
 
-	rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN, &fail_ranks);
+	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
 	if (rc) {
 		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
 		return;
@@ -2009,9 +2022,15 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		if (ec_agg->ea_rdb_eph == 0) {
 			rc = cont_agg_eph_load(svc, ec_agg->ea_cont_uuid, &ec_agg->ea_rdb_eph);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(rc, DF_CONT " container skipped",
+						DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
+					continue;
+				}
 				DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.",
 					 DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
+			}
 		}
 
 		min_eph = DAOS_EPOCH_MAX;
@@ -2032,7 +2051,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_eph < ec_agg->ea_rdb_eph)
 			min_eph = ec_agg->ea_rdb_eph;
 
-		if (min_eph == ec_agg->ea_current_eph)
+		if (min_eph == ec_agg->ea_current_eph && ec_agg->ea_current_eph != 0)
 			continue;
 
 		/**
@@ -2055,17 +2074,28 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_eph > ec_agg->ea_rdb_eph) {
 			rc = cont_agg_eph_store(svc, ec_agg->ea_cont_uuid, min_eph,
 						&ec_agg->ea_rdb_eph);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(rc, DF_CONT " container skipped",
+						DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
+					continue;
+				}
 				DL_ERROR(rc,
 					 DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64 " failed.",
 					 DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), min_eph);
+			}
 		}
 
-		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph);
+		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph,
+						svc->cs_ec_leader_ephs_req);
 		if (rc) {
 			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
 				  DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
+
+			/* If ULT is exiting, break out */
+			if (rc == -DER_SHUTDOWN)
+				break;
 
 			/* If there are network error or pool map inconsistency,
 			 * let's skip the following eph sync, which will fail

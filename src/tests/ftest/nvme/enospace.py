@@ -85,7 +85,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         for elt in self.media_names:
             self.pool_usage_min.append(float(
-                self.params.get(elt.casefold(), "/run/pool/usage_min/*", 0)))
+                self.params.get(f"usage_min_{elt.casefold()}", "/run/pool/*")))
 
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)

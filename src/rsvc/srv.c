@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -906,8 +907,15 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
-		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name, svc->s_stop);
-		if (mode == DS_RSVC_DICTATE && !svc->s_stop) {
+		D_DEBUG(DB_MD, "%s: found: stop=%d mode=%s replicas=%p\n", svc->s_name, svc->s_stop,
+			start_mode_str(mode), replicas);
+		if (mode == DS_RSVC_CREATE && replicas != NULL) {
+			D_ERROR("%s: creating and bootstrapping existing replica not allowed\n",
+				svc->s_name);
+			rc = -DER_EXIST;
+			ds_rsvc_put(svc);
+			goto out;
+		} else if (mode == DS_RSVC_DICTATE && !svc->s_stop) {
 			/*
 			 * If we need to dictate, and the service is not
 			 * stopping, then stop it, which should not fail in

@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       7%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -81,10 +81,10 @@ BuildRequires: spdk-devel >= 22.01.2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
-BuildRequires: libisa-l_crypto-devel >= 2.24.0-1
+BuildRequires: libisa-l_crypto-devel >= 2.24.0-1, libisa-l_crypto-devel < 2.25.0
 %else
 BuildRequires: libisal-devel >= 2.31.1-7
-BuildRequires: libisal_crypto-devel >= 2.24.0-3
+BuildRequires: libisal_crypto-devel >= 2.24.0-3, libisal_crypto-devel < 2.25.0
 %endif
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -397,7 +397,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
+sed -i -e '1s/env //' %{buildroot}%{daoshome}/TESTING/ftest/{cart/cart_logtest,cart/daos_sys_logscan,config_file_gen,launch,slurm_setup,tags,verify_perms}.py
 %if %{with server}
 sed -i -e '1s/env //' %{buildroot}%{_bindir}/daos_storage_estimator.py
 %endif
@@ -588,6 +588,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files server-tests
 %doc README.md
 %{_bindir}/dtx_tests
+%{_bindir}/dtx_ut
 %{_bindir}/evt_ctl
 %{_bindir}/rdbt
 %{_bindir}/smd_ut
@@ -596,6 +597,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
 %{_bindir}/ddb_tests
+%{_bindir}/ddb_ut
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 %endif
@@ -633,6 +635,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Dec 4 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-11
+- Bump version
+
+* Wed Nov 26 2025 Jan Michalski <jan-marian.michalski@hpe.com> 2.6.4-9
+- Add ddb_ut and dtx_ut to the server-tests package
+
+* Fri Nov 21 2025 Jeff Olivier <jeffolivier@google.com> 2.6.4-8
+- Pin isa-l_crypto at 2.24 since 2.25 is incompatible
+
 * Fri Oct 31 2025 Mohamad Chaarawi <mohamad.chaarawi@hpe.com> 2.6.4-7
 - Revert bump of libfabric to 1.20
 

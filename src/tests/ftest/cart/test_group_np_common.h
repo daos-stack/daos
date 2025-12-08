@@ -42,6 +42,7 @@ struct test_t {
 	int			 t_shut_only;
 	int			 t_init_only;
 	int			 t_skip_init;
+	int                                    t_skip_wait;
 	int			 t_skip_shutdown;
 	int			 t_skip_check_in;
 	bool			 t_save_cfg;
@@ -351,6 +352,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	int				rank;
 	int				rc_dead;
 	int				rc_alive;
+	bool                             result_ok = false;
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
@@ -360,51 +362,43 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 
 	/* compile and run regex's */
 	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
-	rc_dead = regexec(&regex_dead,
-			      swim_seq_by_rank[rank],
-			      0, NULL, 0);
+	rc_dead = regexec(&regex_dead, swim_seq_by_rank[rank], 0, NULL, 0);
+
 	regcomp(&regex_alive, alive_regex, REG_EXTENDED);
-	rc_alive = regexec(&regex_alive,
-			       swim_seq_by_rank[rank],
-			       0, NULL, 0);
+	rc_alive = regexec(&regex_alive, swim_seq_by_rank[rank], 0, NULL, 0);
 
 	regfree(&regex_alive);
 	regfree(&regex_dead);
 
-	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
-		  rpc_req->cr_opc);
-	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
-		  rank, e_req->exp_status);
-
-	if (e_req->exp_status == CRT_EVT_ALIVE)
-		D_ASSERTF(rc_alive == 0,
-			  "Swim status alive sequence (%s) "
-			  "does not match '%s' for rank %d.\n",
-			  swim_seq_by_rank[rank], alive_regex, rank);
-	else if (e_req->exp_status == CRT_EVT_DEAD)
-		D_ASSERTF(rc_dead == 0,
-			  "Swim status dead sequence (%s) "
-			  "does not match '%s' for rank %d..\n",
-			  swim_seq_by_rank[rank], dead_regex, rank);
-
-	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
-		  "status [%d] is as expected.\n",
-		  rank, swim_seq_by_rank[rank],
-		  e_req->exp_status);
+	if (e_req->exp_status == CRT_EVT_ALIVE) {
+		if (rc_alive != 0) {
+			D_ERROR("Swim status alive sequence (%s) "
+				"does not match '%s' for rank %d.\n",
+				swim_seq_by_rank[rank], alive_regex, rank);
+			result_ok = false;
+		} else {
+			result_ok = true;
+		}
+	} else if (e_req->exp_status == CRT_EVT_DEAD) {
+		if (rc_dead != 0) {
+			D_ERROR("Swim status dead sequence (%s) "
+				"does not match '%s' for rank %d..\n",
+				swim_seq_by_rank[rank], dead_regex, rank);
+			result_ok = false;
+		} else {
+			result_ok = true;
+		}
+	}
 
 	e_reply = crt_reply_get(rpc_req);
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed");
+	e_reply->bool_val = result_ok;
 
-	/* If we got past the previous assert, then we've succeeded */
-	e_reply->bool_val = true;
-	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
-		  e_reply);
+	DBG_PRINT("rank:%d exp_status: %d matches_expected: %d\n", rank, e_req->exp_status,
+		  result_ok);
 
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
-
-	DBG_PRINT("tier1 test_srver sent swim_status reply,"
-		  "e_reply->bool_val: %d.\n",
-		  e_reply->bool_val);
 }
 
 static void
@@ -421,8 +415,7 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("test_server recv'd ping delay, opc: %#x.\n", rpc_req->cr_opc);
 
 	p_reply = crt_reply_get(rpc_req);
-	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
-		  p_reply);
+	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed\n");
 	p_reply->ret = 0;
 	p_reply->room_no = test_g.t_roomno++;
 

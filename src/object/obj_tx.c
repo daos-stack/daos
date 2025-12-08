@@ -101,8 +101,7 @@ struct dc_tx {
 	/** The read requests count */
 	uint32_t		 tx_read_cnt;
 
-	uint16_t		 tx_retry_cnt;
-	uint16_t		 tx_inprogress_cnt;
+	uint32_t                 tx_retry_cnt;
 	/* Last timestamp (in second) when report retry warning message. */
 	uint32_t                 tx_retry_warn_ts;
 	/** Pool map version when trigger first IO. */
@@ -1083,15 +1082,14 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	if (rc != -DER_TX_RESTART) {
 		uint32_t now = daos_gettime_coarse();
 
-		delay = dc_obj_retry_delay(task, DAOS_OBJ_RPC_CPD, rc, &tx->tx_retry_cnt,
-					   &tx->tx_inprogress_cnt, 0);
+		delay = dc_obj_retry_delay(task, DAOS_OBJ_RPC_CPD, rc, &tx->tx_retry_cnt, 0, false);
 		if (rc == -DER_INPROGRESS &&
-		    ((tx->tx_retry_warn_ts == 0 && tx->tx_inprogress_cnt >= 10) ||
+		    ((tx->tx_retry_warn_ts == 0 && tx->tx_retry_cnt >= 10) ||
 		     (tx->tx_retry_warn_ts > 0 && tx->tx_retry_warn_ts + 10 < now))) {
 			tx->tx_retry_warn_ts = now;
 			tx->tx_maybe_starve  = 1;
 			D_WARN("The dist TX task %p has been retried for %u times, maybe starve\n",
-			       task, tx->tx_inprogress_cnt);
+			       task, tx->tx_retry_cnt);
 		}
 
 		rc1 = tse_task_reinit_with_delay(task, delay);
@@ -2589,7 +2587,6 @@ dc_tx_restart_begin(struct dc_tx *tx, uint32_t *backoff)
 		 */
 		tx->tx_status = TX_RESTARTING;
 		tx->tx_retry_cnt = 0;
-		tx->tx_inprogress_cnt = 0;
 
 		*backoff = d_backoff_seq_next(&tx->tx_backoff_seq);
 	}
