@@ -3606,7 +3606,8 @@ thread_file_read(void *arg)
 	/* verify data integrity */
 	for (i = 0; i < NUM_INT; i++) {
 		if (buf_rd[i] != i) {
-			printf("Wrong data read in\n");
+			printf("Wrong data read at %ld, %d instead of %d\n", i * sizeof(int),
+			       buf_rd[i], i);
 			assert_true(0);
 		}
 	}
@@ -3630,7 +3631,8 @@ thread_file_read(void *arg)
 		/* verify data integrity */
 		for (i = 0; i < NUM_INT; i++) {
 			if (buf_rd[i] != i) {
-				printf("Wrong data read in\n");
+				printf("Wrong data read at %ld, %d instead of %d\n",
+				       i * sizeof(int), buf_rd[i], i);
 				assert_true(0);
 			}
 		}
@@ -3753,12 +3755,12 @@ dfs_test_datacache(void **state)
 	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
 	assert_int_equal(rc, 0);
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < DFS_TEST_MAX_THREAD_NR; i++) {
 		param[i].dfs = dfs;
 		rc           = pthread_create(&dfs_test_tid[i], NULL, thread_file_read, &param[i]);
 		assert_int_equal(rc, 0);
 	}
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < DFS_TEST_MAX_THREAD_NR; i++) {
 		rc = pthread_join(dfs_test_tid[i], NULL);
 		assert_int_equal(rc, 0);
 	}

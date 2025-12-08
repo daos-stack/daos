@@ -162,6 +162,7 @@ request_in_batch(dfs_t *dfs, dfs_obj_t *obj, int num_req, dat_req req_list[], ca
 	dat_req         *req_pre;
 	daos_size_t      byte_left;
 	daos_off_t       offset;
+	bool             buf_to_free[MAX_NUM_REQ] = {false};
 
 	*short_read_size = 0;
 
@@ -184,6 +185,7 @@ request_in_batch(dfs_t *dfs, dfs_obj_t *obj, int num_req, dat_req req_list[], ca
 		if (req_list[i].buf_cache == NULL)
 			D_GOTO(err, rc = ENOMEM);
 		req_list[i].node_found = NULL;
+		buf_to_free[i]         = true;
 	}
 
 	/* need to 1) get data from server 2) copy data into user buffer 3) add data into cache */
@@ -259,7 +261,14 @@ request_in_batch(dfs_t *dfs, dfs_obj_t *obj, int num_req, dat_req req_list[], ca
 				rc = shm_lru_put_shallow_cp(
 				    dfs->datacache, key, KEY_SIZE_FILE_ID_OFF,
 				    req_list[i].buf_cache, byte_to_cache, &req->node_found);
-				if (rc) {
+				if (rc == 0) {
+					/* inserted record into cache successfully, do not free the
+					 * buffer!!!
+					 */
+					buf_to_free[i] = false;
+				} else if (rc == EEXIST) {
+					/* do nothing since buf_to_free[i] is set true already */
+				} else {
 					printf("Warning: fail to cache data rc = %d\n", rc);
 					D_GOTO(err, rc);
 				}
@@ -270,6 +279,11 @@ request_in_batch(dfs_t *dfs, dfs_obj_t *obj, int num_req, dat_req req_list[], ca
 
 	for (i = 0; i < num_req; i++) {
 		if (req_list[i].pre_req == i) {
+			if (buf_to_free[i])
+				/* the cache has this record already, so record insertion failed.
+				 * data were copied to user buffer. Now time to free the buffer.
+				 */
+				shm_free(req_list[i].buf_cache);
 			if (req_list[i].node_found)
 				shm_lru_node_dec_ref(req_list[i].node_found);
 		}
@@ -279,7 +293,7 @@ request_in_batch(dfs_t *dfs, dfs_obj_t *obj, int num_req, dat_req req_list[], ca
 
 err:
 	for (i = 0; i < num_req; i++) {
-		if (req_list[i].pre_req == i)
+		if (buf_to_free[i])
 			shm_free(req_list[i].buf_cache);
 	}
 	return rc;
