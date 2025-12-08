@@ -395,7 +395,10 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, &pool_info, NULL, NULL);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL,
+				daos_getmtime_coarse() + 2 * 60 * 1000, &pool_info, NULL, NULL);
+	if (DAOS_FAIL_CHECK(DAOS_MGMT_FAIL_CREATE_QUERY))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -453,7 +456,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to create pool on %zu ranks.\n", req->n_ranks);
+	D_INFO("Received request to create pool %s on %zu ranks.\n", req->uuid, req->n_ranks);
 
 	if (req->n_tierbytes != DAOS_MEDIA_MAX)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -507,6 +510,15 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
 	d_rank_list_free(svc);
+	if (rc != 0) {
+		int rc_tmp;
+
+		DL_ERROR(rc, DF_UUID ": failed to fill pool create response", DP_UUID(pool_uuid));
+		rc_tmp = ds_mgmt_destroy_pool(pool_uuid, targets);
+		if (rc_tmp != 0)
+			DL_ERROR(rc_tmp, DF_UUID ": failed to clean up pool", DP_UUID(pool_uuid));
+		goto out;
+	}
 
 out:
 	resp.status = rc;
@@ -1778,8 +1790,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	pool_info.pi_bits = req->query_mask;
-	rc                = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &dead_ranks, &pool_info,
-					       &resp.pool_layout_ver, &resp.upgrade_layout_ver);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &dead_ranks, mgmt_ps_call_deadline(),
+				&pool_info, &resp.pool_layout_ver, &resp.upgrade_layout_ver);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
 		goto out_svc_ranks;

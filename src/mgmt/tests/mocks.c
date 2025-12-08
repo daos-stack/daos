@@ -285,7 +285,7 @@ d_rank_list_t           *ds_mgmt_pool_query_dead_ranks_out;
 
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info,
+		   d_rank_list_t **dead_ranks, uint64_t deadline, daos_pool_info_t *pool_info,
 		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
 {
 	/* If function is to return with an error, pool_info and ranks will not be filled. */
@@ -528,7 +528,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks)
 {
 	return 0;
 }
