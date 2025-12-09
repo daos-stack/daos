@@ -1,4 +1,5 @@
 # (C) Copyright 2019-2024 Intel Corporation.
+# (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -73,6 +74,10 @@ class DCont():
 
     array(name, kwargs):
         Create new DArray object.
+
+    destroy()
+        Destroy the DDict or DArray object. This does not invalidate open objects and using those
+        objects after destroying it will result in undefined behavior.
     """
 
     def __init__(self, pool=None, cont=None, path=None, open_mode='RW'):
@@ -163,6 +168,14 @@ class DCont():
         # Should eventually populate array with data in input list
 
         return da
+
+    def destroy(self, name):
+        """ Destroy an existing Dict or Array object """
+
+        # Remove the entry for the container root object and destroy the kv
+        ret = pydaos_shim.cont_destroyobj(DAOS_MAGIC, self._hdl, name)
+        if ret != pydaos_shim.DER_SUCCESS:
+            raise PyDError("failed to destroy DAOS dict", ret)
 
     def __str__(self):
         return '{}/{}'.format(self.pool, self.cont)
