@@ -106,6 +106,7 @@ if [ "$WITH_CODE_COVERAGE" = "yes" ]; then
     find . -name "*.gcno" | xargs ls -la
     find . -name "*.gcda" | xargs ls -la
     find . -name "*.c" | xargs ls -la
+    find . -name "*.h" | xargs ls -la
     mkdir -p "${test_log_dir}/code_coverage"
     gcovr --json "${test_log_dir}/code_coverage/code_coverage.json" --gcov-ignore-parse-errors \
         --gcov-ignore-errors=no_working_dir_found
