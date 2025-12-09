@@ -1609,28 +1609,22 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out_prop;
 
-	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
-	if (rc != 0)
-		goto out_prop;
+	if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
+		need_destroy_oid_oit_kvs = true;
+	} else {
+		d_iov_t value;
 
-	cont_track_eph_leader_delete(cont->c_svc, cont->c_uuid);
-
-        if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
-                need_destroy_oid_oit_kvs = true;
-        } else {
-                d_iov_t value;
-
-                d_iov_set(&value, NULL, 0);
-                rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
-                if (rc && rc != -DER_NONEXIST) {
-                        DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
-                                 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
-                        goto out_prop;
-                }
-                /* There was a bug that oit oids might be created already see DAOS-14799 */
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
+				 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+			goto out_prop;
+		}
+		/* There was a bug that oit oids might be created already see DAOS-14799 */
 		if (rc == 0)
 			need_destroy_oid_oit_kvs = true;
-        }
+	}
 
 	/* Destroy oit oids index KVS. */
 	if (need_destroy_oid_oit_kvs) {
@@ -5502,8 +5496,6 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *
 		if (dup_op)
 			break;
 		rc = cont_destroy(tx, pool_hdl, cont, rpc, cont_proto_ver);
-		if (likely(rc == 0))
-			d_tm_inc_counter(metrics->destroy_total, 1);
 		break;
 	default:
 		/* Look up the container handle. */
@@ -5681,6 +5673,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	bool                          fi_fail_nl_noreply;
 	int                           rc;
 
+	metrics            = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
 	fi_pass_nl_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY_NEWLDR);
 	fi_fail_nl_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY_NEWLDR);
 
@@ -5705,10 +5698,8 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		if (dup_op)
 			goto out_commit;
 		rc = cont_create(&tx, pool_hdl, svc, rpc, cont_proto_ver);
-		if (likely(rc == 0)) {
-			metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
+		if (likely(rc == 0))
 			d_tm_inc_counter(metrics->create_total, 1);
-		}
 		break;
 	case CONT_OPEN_BYLABEL:
 		cont_op_in_get_label(rpc, opc, cont_proto_ver, &clbl);
@@ -5773,6 +5764,15 @@ out_contref:
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
+
+	if (rc == 0 && !dup_op && (opc == CONT_DESTROY || opc == CONT_DESTROY_BYLABEL)) {
+		rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
+		if (rc == 0) {
+			cont_track_eph_leader_delete(cont->c_svc, cont->c_uuid);
+			d_tm_inc_counter(metrics->destroy_total, 1);
+		}
+	}
+
 out:
 	if ((rc == 0) && !dup_op) {
 		/* Propagate new snapshot list by IV */
