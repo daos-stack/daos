@@ -21,7 +21,7 @@ pool: !mux
     size: 10%
   md_on_ssd_p2:
     size: 10%
-    mem_ratio: 50
+    mem_ratio: 25
 
 container:
   type: POSIX
@@ -38,7 +38,4 @@ mdtest:
   api: DFS
   branching_factor: 1
   depth: 20
-  flags: ''
-  num_of_files_dirs: 100
-  read_bytes: 4096
-  write_bytes: 4096
+  num_of_files_dirs: 10000

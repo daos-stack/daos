@@ -3,7 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from mdtest_utils import write_mdtest_data
+import json
+
+from mdtest_utils import MDTEST_NAMESPACE, run_mdtest
 from telemetry_test_base import TestWithTelemetry
 
 
@@ -32,6 +34,13 @@ class EvictionMetrics(TestWithTelemetry):
 
         self.log_step('Creating a pool (dmg pool create)')
         pool = self.get_pool(connect=False)
+        try:
+            _result = json.loads(pool.dmg.result.stdout)
+            mem_file_bytes = int(_result["response"]["mem_file_bytes"])
+        except Exception as error:      # pylint: disable=broad-except
+            self.fail(f"Error extracting mem_file_bytes for dmg pool create output: {error}")
+
+        self.log_step('Creating a container (dmg container create)')
         container = self.get_container(pool)
 
         self.log_step(
@@ -41,13 +50,20 @@ class EvictionMetrics(TestWithTelemetry):
             for label in expected_ranges[metric]:
                 expected_ranges[metric][label] = [0, 0]
 
-        self.log_step(
-            'Verify pool eviction metrics after pool creation (dmg telemetry metrics query)')
+        self.log_step('Verify pool eviction metrics after pool creation')
         if not self.telemetry.verify_data(expected_ranges):
             self.fail('Pool eviction metrics verification failed after pool creation')
 
         self.log_step('Writing data to the pool (mdtest -a DFS)')
-        write_mdtest_data(self, container)
+        mdtest_params = {
+            "read_bytes": mem_file_bytes * 2,
+            "write_bytes": mem_file_bytes * 2
+        }
+        processes = self.params.get('processes', MDTEST_NAMESPACE, None)
+        ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
+        run_mdtest(
+            self, self.log, self.hostlist_clients, self.workdir, None, pool, container, processes,
+            ppn, **mdtest_params)
 
         self.log_step(
             'Collect pool eviction metrics after writing data (dmg telemetry metrics query)')
@@ -59,8 +75,7 @@ class EvictionMetrics(TestWithTelemetry):
                 else:
                     expected_ranges[metric][label] = [0, 0]
 
-        self.log_step(
-            'Verify pool eviction metrics after writing data (dmg telemetry metrics query)')
+        self.log_step('Verify pool eviction metrics after writing data')
         if not self.telemetry.verify_data(expected_ranges):
             self.fail('Pool eviction metrics verification failed after writing data')
 
