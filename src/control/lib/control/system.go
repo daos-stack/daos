@@ -649,11 +649,10 @@ func SystemDrain(ctx context.Context, rpcClient UnaryInvoker, req *SystemDrainRe
 	}
 
 	pbReq := &mgmtpb.SystemDrainReq{
-		Hosts:        req.Hosts.String(),
-		Ranks:        req.Ranks.String(),
-		Sys:          req.Sys, // getSystem() used in control API drain/reint later in call-stack.
-		Reint:        req.Reint,
-		RequestHosts: req.getHostList(),
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.Sys, // getSystem() used in control API drain/reint later in call-stack.
+		Reint: req.Reint,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemDrain(ctx, pbReq)
@@ -1297,10 +1296,9 @@ func SystemRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *Syste
 	}
 
 	pbReq := &mgmtpb.SystemRebuildManageReq{
-		Sys:          req.getSystem(rpcClient),
-		OpCode:       uint32(req.OpCode),
-		Force:        req.Force,
-		RequestHosts: req.getHostList(),
+		Sys:    req.getSystem(rpcClient),
+		OpCode: uint32(req.OpCode),
+		Force:  req.Force,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemRebuildManage(ctx, pbReq)
@@ -1338,8 +1336,7 @@ func SystemSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *System
 	}
 
 	pbReq := &mgmtpb.SystemSelfHealEvalReq{
-		Sys:          req.getSystem(rpcClient),
-		RequestHosts: req.getHostList(),
+		Sys: req.getSystem(rpcClient),
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemSelfHealEval(ctx, pbReq)

@@ -261,15 +261,10 @@ struct  _Mgmt__SystemDrainReq
    * Flag to indicate if request is for drain or reint.
    */
   protobuf_c_boolean reint;
-  /*
-   * Hosts to fan-out request to.
-   */
-  size_t n_request_hosts;
-  char **request_hosts;
 };
 #define MGMT__SYSTEM_DRAIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_drain_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
 /*
@@ -332,15 +327,10 @@ struct  _Mgmt__SystemRebuildManageReq
    * Flag to indicate a forced operation
    */
   protobuf_c_boolean force;
-  /*
-   * Hosts to fan-out request to.
-   */
-  size_t n_request_hosts;
-  char **request_hosts;
 };
 #define MGMT__SYSTEM_REBUILD_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_rebuild_manage_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0, 0 }
 
 
 /*
@@ -392,15 +382,10 @@ struct  _Mgmt__SystemSelfHealEvalReq
    * DAOS system name
    */
   char *sys;
-  /*
-   * Hosts to fan-out request to.
-   */
-  size_t n_request_hosts;
-  char **request_hosts;
 };
 #define MGMT__SYSTEM_SELF_HEAL_EVAL_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_self_heal_eval_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string }
 
 
 /*

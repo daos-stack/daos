@@ -1313,8 +1313,13 @@ func (svc *mgmtSvc) getPoolRanksDisabled(ctx context.Context, ranks *ranklist.Ra
 type poolRanksOpSig func(context.Context, control.UnaryInvoker, *control.PoolRanksReq) (*control.PoolRanksResp, error)
 
 // Generate operation results by iterating through pool's ranks and calling supplied fn on each.
-func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, requestHosts []string, ctlApiCall poolRanksOpSig) ([]*control.PoolRanksResp, error) {
+func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, ctlApiCall poolRanksOpSig) ([]*control.PoolRanksResp, error) {
 	resps := []*control.PoolRanksResp{}
+
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return nil, err
+	}
 
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
@@ -1327,10 +1332,9 @@ func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs [
 			Ranks: rs.Ranks(),
 		}
 		req.Sys = sys
-		// Set request hostlist from system request so control-API pool call reaches
-		// MS-replicas and includes any custom server port assignments (as we don't have
-		// access to the server config from here).
-		req.SetHostList(requestHosts)
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
 
 		svc.log.Tracef("%T: %+v", req, req)
 
@@ -1396,8 +1400,7 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainRe
 	}
 
 	// Generate results from dRPC calls to operate on pool ranks.
-	resps, err := svc.getPoolRanksResps(ctx, pbReq.Sys, poolIDs, poolRanks, pbReq.RequestHosts,
-		apiCall)
+	resps, err := svc.getPoolRanksResps(ctx, pbReq.Sys, poolIDs, poolRanks, apiCall)
 	if err != nil {
 		return nil, err
 	}
@@ -1437,6 +1440,11 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 		return &mgmtpb.SystemRebuildManageResp{}, nil // Successful no-op.
 	}
 
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return nil, err
+	}
+
 	var results []*control.PoolRebuildManageResult
 	for _, id := range poolIDs {
 		opCode := control.PoolRebuildOpCode(pbReq.OpCode)
@@ -1446,10 +1454,9 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 			OpCode: opCode,
 			Force:  pbReq.Force,
 		}
-		// Set request hostlist from system request so control-API pool call reaches
-		// MS-replicas and includes any custom server port assignments (as we don't have
-		// access to the server config from here).
-		req.SetHostList(pbReq.RequestHosts)
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
 
 		svc.log.Tracef("%T: %+v", req, req)
 
@@ -1527,7 +1534,7 @@ func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
 // selfHealNotifyPSes calls into each pool service with the current value of self_heal system
 // property so that the appropriate actions can be performed across the pool (e.g. rebuild or
 // exclude).
-func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string, requestHosts []string) error {
+func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) error {
 	poolIDs, err := svc.getPoolIDs()
 	if err != nil {
 		return err
@@ -1538,16 +1545,20 @@ func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string, requ
 		return nil // Successful no-op.
 	}
 
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return err
+	}
+
 	var successes, failures []string
 	for _, id := range poolIDs {
 		req := &control.PoolSelfHealEvalReq{
 			ID:         id,
 			SysPropVal: propVal,
 		}
-		// Set request hostlist from system request so control-API pool call reaches
-		// MS-replicas and includes any custom server port assignments (as we don't have
-		// access to the server config from here).
-		req.SetHostList(requestHosts)
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
 
 		svc.log.Tracef("%T: %+v", req, req)
 
@@ -1606,7 +1617,7 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagPoolExclude) {
 		return new(mgmtpb.DaosResp), nil
 	}
-	if err := svc.selfHealNotifyPSes(ctx, selfHeal, pbReq.RequestHosts); err != nil {
+	if err := svc.selfHealNotifyPSes(ctx, selfHeal); err != nil {
 		return nil, errors.Wrapf(err, "notify pool services of self_heal=%q", selfHeal)
 	}
 

@@ -42,14 +42,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 		return req
 	}
 
-	withHostList := func(req control.UnaryRequest, hosts ...string) control.UnaryRequest {
-		if rs, ok := req.(interface{ SetHostList([]string) }); ok {
-			rs.SetHostList(hosts)
-		}
-
-		return req
-	}
-
 	withSystem := func(req control.UnaryRequest, sys string) control.UnaryRequest {
 		if rs, ok := req.(interface{ SetSystem(string) }); ok {
 			rs.SetSystem(sys)
@@ -331,13 +323,9 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system drain with multiple hosts",
 			"system drain --rank-hosts foo-[0,1,4]",
 			strings.Join([]string{
-				printRequest(t,
-					withHostList(
-						withSystem(
-							withHosts(&control.SystemDrainReq{},
-								"foo-[0-1,4]"),
-							"daos_server"),
-						"localhost:10001")),
+				printRequest(t, withSystem(
+					withHosts(&control.SystemDrainReq{}, "foo-[0-1,4]"),
+					"daos_server")),
 			}, " "),
 			nil,
 		},
@@ -345,12 +333,9 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system drain with multiple ranks",
 			"system drain --ranks 0,1,4",
 			strings.Join([]string{
-				printRequest(t,
-					withHostList(
-						withSystem(
-							withRanks(&control.SystemDrainReq{}, 0, 1, 4),
-							"daos_server"),
-						"localhost:10001")),
+				printRequest(t, withSystem(
+					withRanks(&control.SystemDrainReq{}, 0, 1, 4),
+					"daos_server")),
 			}, " "),
 			nil,
 		},
@@ -364,13 +349,9 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system reintegrate with multiple hosts",
 			"system reintegrate --rank-hosts foo-[0,1,4]",
 			strings.Join([]string{
-				printRequest(t,
-					withHostList(
-						withSystem(
-							withHosts(&control.SystemDrainReq{Reint: true},
-								"foo-[0-1,4]"),
-							"daos_server"),
-						"localhost:10001")),
+				printRequest(t, withSystem(
+					withHosts(&control.SystemDrainReq{Reint: true}, "foo-[0-1,4]"),
+					"daos_server")),
 			}, " "),
 			nil,
 		},
@@ -378,13 +359,9 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system reintegrate with multiple ranks",
 			"system reintegrate --ranks 0,1,4",
 			strings.Join([]string{
-				printRequest(t,
-					withHostList(
-						withSystem(
-							withRanks(&control.SystemDrainReq{Reint: true},
-								0, 1, 4),
-							"daos_server"),
-						"localhost:10001")),
+				printRequest(t, withSystem(
+					withRanks(&control.SystemDrainReq{Reint: true}, 0, 1, 4),
+					"daos_server")),
 			}, " "),
 			nil,
 		},
@@ -414,10 +391,9 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system rebuild start",
 			"system rebuild start",
 			strings.Join([]string{
-				printRequest(t, withHostList(
-					&control.SystemRebuildManageReq{
-						OpCode: control.PoolRebuildOpCodeStart,
-					}, "localhost:10001")),
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
 			}, " "),
 			nil,
 		},
@@ -431,10 +407,9 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system rebuild stop",
 			"system rebuild stop",
 			strings.Join([]string{
-				printRequest(t, withHostList(
-					&control.SystemRebuildManageReq{
-						OpCode: control.PoolRebuildOpCodeStop,
-					}, "localhost:10001")),
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
 			}, " "),
 			nil,
 		},
@@ -442,11 +417,10 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system rebuild stop with force",
 			"system rebuild stop --force",
 			strings.Join([]string{
-				printRequest(t, withHostList(
-					&control.SystemRebuildManageReq{
-						OpCode: control.PoolRebuildOpCodeStop,
-						Force:  true,
-					}, "localhost:10001")),
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+					Force:  true,
+				}),
 			}, " "),
 			nil,
 		},
@@ -454,8 +428,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system self-heal evaluate",
 			"system self-heal eval",
 			strings.Join([]string{
-				printRequest(t, withHostList(
-					&control.SystemSelfHealEvalReq{}, "localhost:10001")),
+				printRequest(t, &control.SystemSelfHealEvalReq{}),
 			}, " "),
 			nil,
 		},
@@ -630,15 +603,14 @@ func TestDmg_systemStartCmd(t *testing.T) {
 
 func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 	for name, tc := range map[string]struct {
-		ctlCfg   *control.Config
-		opCode   control.PoolRebuildOpCode
-		force    bool
-		verbose  bool
-		resp     *mgmtpb.SystemRebuildManageResp
-		msErr    error
-		expErr   error
-		expInfo  string
-		expDebug string
+		ctlCfg  *control.Config
+		opCode  control.PoolRebuildOpCode
+		force   bool
+		verbose bool
+		resp    *mgmtpb.SystemRebuildManageResp
+		msErr   error
+		expErr  error
+		expInfo string
 	}{
 		"no config": {
 			opCode: control.PoolRebuildOpCodeStop,
@@ -711,24 +683,6 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			},
 			expInfo: "System-rebuild start request succeeded on 3 pools [foo bar baz]",
 		},
-		"hostlist with custom port parsed and set": {
-			ctlCfg: &control.Config{
-				HostList:    []string{"host-[1-3]"},
-				ControlPort: 10002,
-			},
-			opCode:   control.PoolRebuildOpCodeStop,
-			resp:     &mgmtpb.SystemRebuildManageResp{},
-			expInfo:  "System-rebuild stop request succeeded on 0 pools",
-			expDebug: "request_hosts:\"host-3:10002\"",
-		},
-		"hostlist parse error": {
-			ctlCfg: &control.Config{
-				HostList:    []string{"host-[1-3"},
-				ControlPort: 10001,
-			},
-			opCode: control.PoolRebuildOpCodeStart,
-			expErr: errors.New("invalid rang"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -758,10 +712,6 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			if tc.expInfo == "" && strings.Contains(buf.String(), "INFO") {
 				t.Fatalf("unexpected info log output printed, got %s\n",
 					buf.String())
-			}
-			if !strings.Contains(buf.String(), tc.expDebug) {
-				t.Fatalf("expected debug log output to contain %s, got %s\n",
-					tc.expDebug, buf.String())
 			}
 		})
 	}
@@ -812,15 +762,6 @@ func TestDmg_systemSelfHealEvalCmd_execute(t *testing.T) {
 
 			gotErr := cmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
-
-			if !strings.Contains(buf.String(), tc.expInfo) {
-				t.Fatalf("expected info log output to contain %s, got %s\n",
-					tc.expInfo, buf.String())
-			}
-			if tc.expInfo == "" && strings.Contains(buf.String(), "INFO") {
-				t.Fatalf("unexpected info log output printed, got %s\n",
-					buf.String())
-			}
 		})
 	}
 }

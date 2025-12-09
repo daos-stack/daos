@@ -88,7 +88,6 @@ message SystemDrainReq
 	string ranks = 2; // rankset to drain on all pools
 	string hosts = 3; // hostset to drain on all pools
 	bool   reint = 4; // Flag to indicate if request is for drain or reint.
-	repeated string request_hosts = 5; // Hosts to fan-out request to.
 }
 
 // PoolRanksResp describes a response from pool-ranks operation.
@@ -111,7 +110,6 @@ message SystemRebuildManageReq
 	string sys     = 1; // DAOS system name
 	uint32 op_code = 2; // pool-rebuild operation to run on all pools
 	bool   force   = 3; // Flag to indicate a forced operation
-	repeated string request_hosts = 4; // Hosts to fan-out request to.
 }
 
 // PoolRebuildManageResult returns the result of a pool-rebuild-manage operation.
@@ -133,7 +131,6 @@ message SystemRebuildManageResp
 message SystemSelfHealEvalReq
 {
 	string sys = 1; // DAOS system name
-	repeated string request_hosts = 2; // Hosts to fan-out request to.
 }
 
 // SystemQueryReq supplies system query parameters.

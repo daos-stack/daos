@@ -9,7 +9,6 @@ package control
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -476,7 +475,7 @@ func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
 			expErr: errors.New("invalid member states bitmask -1"),
 		},
 		"vanilla": {
-			req:     new(SystemQueryReq),
+			req:     &SystemQueryReq{},
 			expMask: system.AllMemberFilter,
 		},
 	} {
@@ -1094,7 +1093,6 @@ func TestControl_SystemDrain(t *testing.T) {
 		expErr     error
 		expResp    *SystemDrainResp
 		expRespErr error
-		expDebug   string
 	}{
 		"nil req": {
 			req:    nil,
@@ -1177,36 +1175,6 @@ func TestControl_SystemDrain(t *testing.T) {
 			},
 			expRespErr: errors.New("rank 1 failed on pool 00000001-0001-0001-0001-000000000001, rank 1 failed on pool 00000002-0002-0002-0002-000000000002"),
 		},
-		"custom hostlist": {
-			req: func() *SystemDrainReq {
-				req := new(SystemDrainReq)
-				req.SetHostList([]string{"host-1:10002", "host-2:10002"})
-				return req
-			}(),
-			uResp: MockMSResponse("host-1:10002", nil, &mgmtpb.SystemDrainResp{
-				Responses: []*mgmtpb.PoolRanksResp{
-					{
-						Id: test.MockUUID(1),
-						Results: []*sharedpb.RankResult{
-							{Rank: 0},
-						},
-					},
-				},
-			}),
-			expResp: &SystemDrainResp{
-				Responses: []*PoolRanksResp{
-					{
-						ID: test.MockUUID(1),
-						Results: []*PoolRankResult{
-							{Rank: 0},
-						},
-					},
-				},
-			},
-			// Verify hostlist get transferred to protobuf req which gets printed by the
-			// rpcClient debug logger.
-			expDebug: "request_hosts:\"host-2:10002\"",
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1231,11 +1199,6 @@ func TestControl_SystemDrain(t *testing.T) {
 			}
 
 			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
-
-			if !strings.Contains(buf.String(), tc.expDebug) {
-				t.Fatalf("expected debug log output to contain %s, got %s\n",
-					tc.expDebug, buf.String())
-			}
 		})
 	}
 }
@@ -1272,7 +1235,7 @@ func TestControl_SystemCleanup(t *testing.T) {
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemCleanupResp{
 				Results: []*mgmtpb.SystemCleanupResp_CleanupResult{},
 			}),
-			expResp: new(SystemCleanupResp),
+			expResp: &SystemCleanupResp{},
 		},
 		"cleanup multiple handles": {
 			req: &SystemCleanupReq{Machine: "foo"},
@@ -1702,7 +1665,7 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 				},
 			})
 
-			gotResp, gotErr := SystemJoin(test.Context(t), client, new(SystemJoinReq))
+			gotResp, gotErr := SystemJoin(test.Context(t), client, &SystemJoinReq{})
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %v", gotErr)
 			}
@@ -1795,7 +1758,7 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 
 			ctx := test.Context(t)
 			client := NewMockInvoker(log, tc.mic)
-			gotResp, gotErr := SystemJoin(ctx, client, new(SystemJoinReq))
+			gotResp, gotErr := SystemJoin(ctx, client, &SystemJoinReq{})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1933,7 +1896,6 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 		expErr     error
 		expResp    *SystemRebuildManageResp
 		expRespErr error
-		expDebug   string
 	}{
 		"nil req": {
 			req:    nil,
@@ -1956,7 +1918,7 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 		"no pools; rebuild-stop no-op": {
 			req:     &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStop},
 			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{}),
-			expResp: new(SystemRebuildManageResp),
+			expResp: &SystemRebuildManageResp{},
 		},
 		"dual pools; rebuild-start": {
 			req: &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart},
@@ -2023,18 +1985,6 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 				"stop failed on pool %s: %s", test.MockUUID(1), "fail1", test.MockUUID(2),
 				"fail2"),
 		},
-		"rebuild-start with custom hostlist": {
-			req: func() *SystemRebuildManageReq {
-				req := &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart}
-				req.SetHostList([]string{"host-1:10002", "host-2:10002"})
-				return req
-			}(),
-			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{}),
-			expResp: new(SystemRebuildManageResp),
-			// Verify hostlist get transferred to protobuf req which gets printed by the
-			// rpcClient debug logger.
-			expDebug: "request_hosts:\"host-2:10002\"",
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2059,11 +2009,6 @@ func TestControl_SystemRebuildManage(t *testing.T) {
 			}
 
 			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
-
-			if !strings.Contains(buf.String(), tc.expDebug) {
-				t.Fatalf("expected debug log output to contain %s, got %s\n",
-					tc.expDebug, buf.String())
-			}
 		})
 	}
 }
@@ -2076,7 +2021,6 @@ func TestControl_SystemSelfHealEval(t *testing.T) {
 		expErr     error
 		expResp    *SystemSelfHealEvalResp
 		expRespErr error
-		expDebug   string
 	}{
 		"nil req": {
 			req:    nil,
@@ -2104,18 +2048,6 @@ func TestControl_SystemSelfHealEval(t *testing.T) {
 			}),
 			expErr: errors.New("DER_UNKNOWN"),
 		},
-		"custom hostlist": {
-			req: func() *SystemSelfHealEvalReq {
-				req := new(SystemSelfHealEvalReq)
-				req.SetHostList([]string{"host-1:10002", "host-2:10002"})
-				return req
-			}(),
-			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.DaosResp{}),
-			expResp: new(SystemSelfHealEvalResp),
-			// Verify hostlist get transferred to protobuf req which gets printed by the
-			// rpcClient debug logger.
-			expDebug: "request_hosts:\"host-2:10002\"",
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2140,11 +2072,6 @@ func TestControl_SystemSelfHealEval(t *testing.T) {
 			}
 
 			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
-
-			if !strings.Contains(buf.String(), tc.expDebug) {
-				t.Fatalf("expected debug log output to contain %s, got %s\n",
-					tc.expDebug, buf.String())
-			}
 		})
 	}
 }
