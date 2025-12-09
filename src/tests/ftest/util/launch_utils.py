@@ -1351,6 +1351,10 @@ class TestGroup():
 
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)
+                if repeat > 1 and return_execute_code != 0:
+                    logger.info("Failure at test repetition %s/%s/%d: %d. ", loop, repeat,
+                                sequence + 1, return_execute_code)
+                    break
 
             if repeat > 1 and return_execute_code != 0:
                 logger.info("Failure at test repetition %s/%s: %d. ", loop, repeat,
