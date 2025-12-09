@@ -176,7 +176,7 @@ enum test_cr_class {
 };
 
 enum test_cr_action {
-	TCA_STALE           = -1,
+	TCA_STALE           = 0xffff,
 	TCA_DEFAULT         = 0,
 	TCA_INTERACT        = 1,
 	TCA_IGNORE          = 2,

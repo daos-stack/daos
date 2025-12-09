@@ -2442,8 +2442,8 @@ cr_reset_specified(void **state)
 	rc = cr_ins_verify(&dcis[1], TCIS_RUNNING);
 	assert_rc_equal(rc, 0);
 
-	/* There are 3 reports for pool2: two are old (since not reset), another one is new. */
-	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_PENDING, 3, classes, actions, NULL);
+	/* Pool2's stale report is re-generated */
+	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_PENDING, 2, classes, actions, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_check_stop(0, NULL);
