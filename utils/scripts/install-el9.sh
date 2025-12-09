@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (C) Copyright 2025 Google LLC
 
 # Install OS updates and packages as required for building DAOS on EL 9 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -80,6 +81,7 @@ dnf --nodocs install ${dnf_install_args} \
     sudo \
     valgrind-devel \
     which \
+    ncurses-devel \
     yasm
 
 ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
