@@ -93,7 +93,8 @@ def _base_setup(env):
 
     if build_type == 'debug':
         if compiler == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
+            env['CCFLAGS'].remove('-g')
+            env.AppendUnique(CCFLAGS=['-g3', '-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
