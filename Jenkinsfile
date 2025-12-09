@@ -389,7 +389,8 @@ pipeline {
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_node-hdr-200_202-205X',
+               // defaultValue: 'ci_node-hdr-200_202-205X',
+               defaultValue: 'ci_node-hdr-210_212-215X',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
@@ -403,9 +404,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
-        string(name: 'FUNCTIONAL_HARDWARE_IMAGE_VERSION',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION',
                defaultValue: 'el8.8',
-               description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
+               description: 'Label to use for 5 node Functional Hardware Medium (MD on SSD) stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -1144,6 +1145,7 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1156,7 +1158,7 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
-                            image_version: params.FUNCTIONAL_HARDWARE_IMAGE_VERSION,
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
