@@ -24,6 +24,7 @@ pool: !mux
     mem_ratio: 50
 
 container:
+  type: POSIX
   oclass: S1
   dir_oclass: SX
 
