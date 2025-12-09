@@ -403,6 +403,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_HARDWARE_IMAGE_VERSION',
+               defaultValue: 'el8.8',
+               description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -1153,7 +1156,7 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
-                            image_version: 'el9.5',
+                            image_version: params.FUNCTIONAL_HARDWARE_IMAGE_VERSION,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
