@@ -37,6 +37,8 @@ class CodeCoverage():
                 "finalize_method": self.__finalize_gcov,
             }
         }
+        self.__code_coverage_dir = os.path.realpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "code_coverage"))
 
     def check(self, logger, hosts):
         """Determine if code coverage collection is enabled.
@@ -176,25 +178,12 @@ class CodeCoverage():
         Returns:
             bool: True if gcov code coverage is enabled; False otherwise
         """
-        source = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "..", "..", "code_coverage")
-        result = run_remote(logger, hosts, find_command(source, "*.gcno"))
+        result = run_remote(logger, hosts, find_command(self.__code_coverage_dir, "*.gcno"))
         if not result.passed:
             logger.info(
                 "Gcov code coverage collection not configured on %s", result.failed_hosts)
             return False
-
         logger.info("Gcov code coverage collection configured on %s", hosts)
-        gcov_dir = os.environ.get("GCOV_PREFIX", "/tmp")
-        result = run_remote(logger, hosts, f"mkdir -p {gcov_dir}")
-        if not result.passed:
-            logger.info("Error creating gcov directory %s on %s", gcov_dir, result.failed_hosts)
-            return False
-        result = run_remote(logger, hosts, f"cp -r {source}/* {gcov_dir}/")
-        if not result.passed:
-            logger.info("Error copying gcov notes files to %s on %s", gcov_dir, result.failed_hosts)
-            return False
-
         return True
 
     def __setup_gcov(self, logger, hosts, result):
@@ -213,6 +202,10 @@ class CodeCoverage():
         if not result.passed:
             message = f"Error creating gcov directory on {result.failed_hosts}"
             result.fail_test(logger, "Run", message, None)
+            return False
+        result = run_remote(logger, hosts, f"cp -r {self.__code_coverage_dir}/* {prefix}/")
+        if not result.passed:
+            logger.info("Error copying gcov notes files to %s on %s", prefix, result.failed_hosts)
             return False
         run_remote(logger, hosts, f"ls -aR {prefix}")
         other = ["-print", "-delete"]
@@ -277,19 +270,17 @@ class CodeCoverage():
         rename_dir = os.path.basename(directory)
 
         # Rename <parent_dir>/<rename_dir>.<host>/<file>.<ext>
-        #     to <parent_dir>/<rename_dir>/<file>.<host>.<ext>
+        #     to <parent_dir>/<rename_dir>/<host>/<file>.<ext>
         for item in os.listdir(parent_dir):
             item_full = os.path.join(parent_dir, item)
             if os.path.isdir(item_full) and rename_dir in item:
                 host_ext = os.path.splitext(item)
                 if len(host_ext) > 1:
-                    os.makedirs(directory, exist_ok=True)
+                    new_dir = os.path.join(directory, host_ext[-1][1:])
+                    os.makedirs(new_dir, exist_ok=True)
                     for name in os.listdir(item_full):
                         old_file = os.path.join(item_full, name)
                         if os.path.isfile(old_file):
-                            new_name = name.split(".")
-                            new_name.insert(1, host_ext[-1][1:])
-                            new_file_name = ".".join(new_name)
-                            new_file = os.path.join(directory, new_file_name)
+                            new_file = os.path.join(new_dir, name)
                             logger.debug("Renaming %s to %s", old_file, new_file)
                             os.rename(old_file, new_file)

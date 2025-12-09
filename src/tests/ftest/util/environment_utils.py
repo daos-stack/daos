@@ -100,6 +100,7 @@ def log_environment(logger):
 
 class TestEnvironment():
     """Collection of test environment variables."""
+    # pylint: disable=too-many-public-methods
 
     __ENV_VAR_MAP = {
         'app_dir': 'DAOS_TEST_APP_DIR',
@@ -708,7 +709,7 @@ class TestEnvironment():
            Already exists      Defined             Overwrite file with exports
            Already exists      None defined        Remove file
 
-        Which environment variables are exported can be exteranally controlled by the
+        Which environment variables are exported can be externally controlled by the
         EXPORT_DAOS_TEST_ENV_VARS environment variable.  If this is not defined the
         DEFAULT_DAOS_TEST_ENV_VARS list is used.  Either can contain regular expressions.
 
