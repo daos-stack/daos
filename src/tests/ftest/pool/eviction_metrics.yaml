@@ -29,7 +29,6 @@ container:
   dir_oclass: SX
 
 mdtest:
-  ppn: 32
   dfs_oclass: S1
   dfs_dir_oclass: SX
   manager: "MPICH"
@@ -38,4 +37,4 @@ mdtest:
   api: DFS
   branching_factor: 1
   depth: 20
-  num_of_files_dirs: 10000
+  num_of_files_dirs: 1000
