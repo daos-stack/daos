@@ -1,12 +1,5 @@
 # Install dependencies of a development node
 
-- name: Add Powertools repository
-  become: true
-  community.general.dnf_config_manager:
-    name: powertools
-    state: enabled
-  ignore_errors: true
-
 - name: Install rpms development dependencies
   become: true
   dnf:

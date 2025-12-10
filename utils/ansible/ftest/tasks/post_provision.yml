@@ -1,8 +1,4 @@
 # Ansible scripts for configuring a DAOS node with ftest
-# yamllint disable rule:line-length
-
-
-### Custom configuration for functional test checking permission
 
 - name: Install pip for python3.11
   become: true

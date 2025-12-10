@@ -38,8 +38,8 @@ cat > /etc/systemd/coredump.conf.d/daos-coredumps.conf << EOF
 [Coredump]
 Storage=external
 Compress=yes
-ProcessSizeMax=8G
-ExternalSizeMax=8G
+ProcessSizeMax=64G
+ExternalSizeMax=64G
 KeepFree=2G
 EOF
 systemctl daemon-reexec

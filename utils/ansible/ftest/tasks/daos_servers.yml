@@ -6,34 +6,57 @@
   with_first_found:
     - "{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version}}/servers_dependencies.yml"
 
-- name: Check Huge Pages
+- name: Copy bash script setup-server_entries.sh
   become: true
-  daos_hugepages:
-    size: "{{ daos_hugepages_nb | default(daos_hugepages_nb_default) }}"
+  copy:
+    src: file/setup-server_entries.sh
+    dest: /root/setup-server_entries.sh
+    owner: root
+    group: root
+    mode: '0600'
 
-- name: Add DAOS server groups
+- name: Create DAOS server entries
   become: true
-  group:
-    name: "{{ item }}"
-    state: present
-    system: true
-  loop:
-    - daos_metrics
-    - daos_server
-    - daos_daemons
+  command: /bin/bash /root/setup-server_entries.sh
 
-- name: Add DAOS server user
+- name: Copy bash script setup-nofile.sh
   become: true
-  user:
-    name: daos_server
-    state: present
-    system: true
-    shell: /sbin/nologin
-    create_home: false
-    group: daos_server
-    groups:
-      - daos_metrics
-      - daos_daemons
+  copy:
+    src: file/setup-nofile.sh
+    dest: /root/setup-nofile.sh
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Configure Number of Open Files
+  become: true
+  command: /bin/bash /root/setup-nofile.sh
+
+- name: Copy bash script setup-huge_pages.sh
+  become: true
+  copy:
+    src: file/setup-huge_pages.sh
+    dest: /root/setup-huge_pages.sh
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Configure Huge Pages
+  become: true
+  command: "/bin/bash /root/setup-huge_pages.sh {{ daos_hugepages_nb | default(daos_hugepages_nb_default) }}"
+
+- name: Copy bash script setup-memlock.sh
+  become: true
+  copy:
+    src: file/setup-memlock.sh
+    dest: /root/setup-memlock.sh
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Configure Memory Lock limits
+  become: true
+  command: /bin/bash /root/setup-memlock.sh
 
 - name: Update systemd service for daos-server
   become: true

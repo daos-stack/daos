@@ -75,14 +75,13 @@ The inventory should also contain a set of mandatory and optional variables.
 - **daos\_ofi\_provider**: optional variable (default value: ofi+tcp;ofi_rxm) defining the network
   provider to be used by the DAOS engines.  It also defines which network rpms driver to install
   (e.g. ib mellanox driver).
-- **daos\_ofi\_interface**: optional variable only used by the node of the daos\_dev group defining
-  the network interface to use.  When this variable is not defined, the network interface is
-  arbitrarily selected by DAOS.
 - **daos\_hugepages\_nb**: optional variable (default value: 4096) only used by the nodes of the
   *daos\_servers* group.  This variable defines the number of hugepages to be allocated by the linux
-  kernel.
+  kernel.  If equal to 0, hugepages allocated will be automatically computed according to the number
+  of CPU cores available on the node.
 - **daos\_ofi\_interface**: optional variable (default value: None) defining the network interface
-  to use with the launch.py python script.
+  to use with the launch.py python script.  When this variable is not defined, the network interface is
+  arbitrarily selected by DAOS.
 - **daos_http_proxy**: optional variable defining the http proxy to use for downloading external
   dependencies
 
