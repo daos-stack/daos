@@ -443,9 +443,10 @@ if [ ${#gcno_files[@]} -gt 0 ]; then
   TARGET_PATH="${daoshome}/TESTING/code_coverage"
   
   # list_files files "${gcno_files[@]}"
+  readarray -t tmparray <<< "$(ls -1 -d $gcno_files)"
   target_dir="${tmp}${TARGET_PATH}"
   files=()
-  for file in "${gcno_files[@]}"; do
+  for file in "${tmparray[@]}"; do
     new_file="${target_dir}/${file}"
     echo "FILE: ${file}, NEW_FILE: ${new_file}"
     listvar+=("${new_file}")
