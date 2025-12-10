@@ -190,7 +190,7 @@ check_cmds $SSH_EXE $WGET_EXE $CLUSH_EXE $NODESET_EXE $MODULE_EXE $MAKE_EXE $CMA
 set -e
 
 if "$FORCE_INSTALL" ; then
-	for dir in "$DAOS_INSTALL_DIR" "$DAOS_VENV_DIR" "$DAOS_BUILD_DIR"
+	for dir in "$DAOS_INSTALL_DIR" "$DAOS_BUILD_DIR"
 	do
 		info "Removing old DAOS directory $dir"
 		if ! run /bin/rm -fr "$dir" ; then
