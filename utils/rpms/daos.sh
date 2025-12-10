@@ -442,7 +442,16 @@ if [ ${#gcno_files[@]} -gt 0 ]; then
   PACKAGE_TYPE="dir"
   TARGET_PATH="${daoshome}/TESTING/code_coverage"
   
-  list_files files "${gcno_files[@]}"
+  # list_files files "${gcno_files[@]}"
+  target_dir="${tmp}${TARGET_PATH}"
+  files=()
+  for file in "${gcno_files[@]}"; do
+    new_file="${target_dir}/${file}"
+    echo "FILE: ${file}, NEW_FILE: ${new_file}"
+    listvar+=("${new_file}")
+    mkdir -p "$(dirname "${new_file}")"
+  done
+
   append_install_list "${files[@]}"
 fi
 build_package "daos-tests"
