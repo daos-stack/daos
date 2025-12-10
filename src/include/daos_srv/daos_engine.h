@@ -453,11 +453,9 @@ int dss_parameters_set(unsigned int key_id, uint64_t value);
 
 enum dss_ult_flags {
 	/* Periodically created ULTs */
-	DSS_ULT_FL_PERIODIC	= (1 << 0),
+	DSS_ULT_FL_PERIODIC = (1 << 0),
 	/* Use DSS_DEEP_STACK_SZ as the stack size */
-	DSS_ULT_DEEP_STACK	= (1 << 1),
-	/* Use current ULT (instead of creating new one) for the task. */
-	DSS_USE_CURRENT_ULT	= (1 << 2),
+	DSS_ULT_DEEP_STACK = (1 << 1),
 };
 
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
