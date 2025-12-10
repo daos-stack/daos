@@ -38,10 +38,12 @@ done
 
 CLUSH_OPTS="-bL -S"
 
-MPI_FILE_UTILS_DEPS=("https://github.com/hpc/libcircle/releases/download/v0.3/libcircle-0.3.0.tar.gz"
+MPI_FILE_UTILS_DEPS=(
+	"https://github.com/hpc/libcircle/releases/download/v0.3/libcircle-0.3.0.tar.gz"
 	"https://github.com/llnl/lwgrp/releases/download/v1.0.4/lwgrp-1.0.4.tar.gz"
 	"https://github.com/llnl/dtcmp/releases/download/v1.1.4/dtcmp-1.1.4.tar.gz"
-	"https://github.com/libarchive/libarchive/releases/download/v3.5.1/libarchive-3.5.1.tar.gz")
+	"https://github.com/libarchive/libarchive/releases/download/v3.5.1/libarchive-3.5.1.tar.gz"
+)
 
 ANSI_COLOR_BLACK=30
 ANSI_COLOR_RED=31
@@ -229,7 +231,7 @@ fi
 
 if "$DAOS_BUILD_DEPS" ; then
 	info "Building DAOS dependencies from source tree $DAOS_SOURCE_DIR"
-	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS --build-deps=only ; then
+	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS --build-deps=only ; then
 		fatal "DAOS dependencies could not be properly build"
 	fi
 fi
@@ -237,11 +239,11 @@ fi
 info "Building DAOS from source tree $DAOS_SOURCE_DIR"
 # NOTE Dependencies will not be build as 'no' is default value of the --build-deps option
 if [[ ${BEAR_EXE:+x} ]] ; then
-	if ! run env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY MPI_PKG=any "$BEAR_EXE" --append --output "$DAOS_SOURCE_DIR/compile_commands.json" -- "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
+	if ! run env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY MPI_PKG=any "$BEAR_EXE" --append --output "$DAOS_SOURCE_DIR/compile_commands.json" -- "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
 		fatal "DAOS could not be properly build"
 	fi
 else
-	if ! run env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
+	if ! run env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
 		fatal "DAOS could not be properly build"
 	fi
 fi
@@ -268,6 +270,7 @@ do
         dest="/usr/${item#$DAOS_INSTALL_DIR/}"
         run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo install -v -D -o root -g root -m 755 "$item" "$dest"
 done
+run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST sudo ln -fvs "$DAOS_INSTALL_DIR/prereq/debug/spdk/share/daos/spdk" /usr/share/daos/.
 
 info "Finalizing daos-server-helper install"
 run chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_server_helper"
@@ -283,13 +286,22 @@ run $CLUSH_EXE $CLUSH_OPTS -w $CLIENTS_LIST sudo chown root:root /usr/bin/dfuse
 run $CLUSH_EXE $CLUSH_OPTS -w $CLIENTS_LIST sudo chmod 755 /usr/bin/dfuse
 {% endif %}
 
-info "Updating dynamic linker configuration"
+info "Updating ld.so configuration for DAOS install dir $DAOS_INSTALL_DIR"
+run rm -f "$DAOS_INSTALL_DIR/share/modulefiles/mpich-x86_64"
+run mkdir -p "$DAOS_INSTALL_DIR/share/ld.so.conf.d"
+cat > "$DAOS_INSTALL_DIR/share/ld.so.conf.d/daos-x86_64.conf" <<<"$DAOS_INSTALL_DIR/lib64"
+{
+	cat <<- EOF
+	set -e -o pipefail
+
+	rm -fv /etc/ld.so.conf.d/daos-x86_64.conf
+	ln -fsv "$DAOS_INSTALL_DIR/share/ld.so.conf.d/daos-x86_64.conf" /etc/ld.so.conf.d/daos-x86_64.conf
+	ldconfig
+	EOF
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST -w $CLIENTS_LIST sudo rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST -w $CLIENTS_LIST sudo ldconfig "$DAOS_INSTALL_DIR/lib64" "$DAOS_INSTALL_DIR/lib64/daos_srv"
+} | run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $CLIENTS_LIST -w $SERVERS_LIST sudo bash -s
 {% else %}
-run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST sudo rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST sudo ldconfig "$DAOS_INSTALL_DIR/lib64" "$DAOS_INSTALL_DIR/lib64/daos_srv"
+} | run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST sudo bash -s
 {% endif %}
 
 if [[ ${MPICH_PATH:+x} ]] ; then
@@ -301,35 +313,35 @@ if [[ ${MPICH_PATH:+x} ]] ; then
 
 	if "$FORCE_INSTALL" ; then
 		info "Removing old MPICH install"
-		if ! run rm -fr "$MPICH_PATH/build" "$MPICH_PATH/configure" ; then
+		if ! run rm -fr "$DAOS_BUILD_DIR/mpich" "$MPICH_PATH/configure" ; then
 			fatal "Old install of MPICH could not be removed"
 		fi
 	fi
 
 	if [[ ! -f "$MPICH_PATH/configure" ]] ; then
+		info "Preconfiguring MPICH source tree"
 		pushd "$MPICH_PATH" > /dev/null
 		run env MPI_LIB="" ./autogen.sh
 		popd > /dev/null
 	fi
 
-	run mkdir -p "$MPICH_PATH/build"
-	pushd "$MPICH_PATH/build"  > /dev/null
+	run mkdir -p "$DAOS_BUILD_DIR/mpich"
+	pushd "$DAOS_BUILD_DIR/mpich"  > /dev/null
 
-	if [[ ! -f "$MPICH_PATH/build/Makefile" ]] ; then
-		MPICH_CONFIGURE_OPTS=( --prefix="$DAOS_INSTALL_DIR"
+	if [[ ! -f "$DAOS_BUILD_DIR/mpich/Makefile" ]] ; then
+		info "Configuring MPICH build"
+		MPICH_CONFIGURE_OPTS=(
+			--prefix="$DAOS_INSTALL_DIR"
 			--enable-g=all
-			--enable-debuginfo
-			--enable-sharedlibs=gcc
-			--enable-shared
-			--enable-static=no
-			--enable-lib-depend
-			--disable-rpath
-			--disable-silent-rules
-			--enable-fc
-			--with-device=ch3:nemesis
-			--with-hwloc=embedded
+			--enable-c
+			--enable-cxx
 			--enable-fortran=all
+			--enable-fc
 			--enable-romio
+			--enable-debuginfo
+			--enable-shared
+			--enable-static
+			--with-device=ch3:nemesis
 			--with-file-system=ufs+daos
 			--with-daos="$DAOS_INSTALL_DIR"
 			--disable-checkerrors
@@ -337,14 +349,15 @@ if [[ ${MPICH_PATH:+x} ]] ; then
 			--disable-large-tests
 			--disable-ft-tests
 			--disable-comm-overlap-tests
-			--enable-threads=single )
-
-		run env MPI_LIB="" ../configure "${MPICH_CONFIGURE_OPTS[@]}"
+		)
+		run env MPI_LIB="" "$MPICH_PATH/configure" "${MPICH_CONFIGURE_OPTS[@]}"
 	fi
 
+	info "Building and installing MPICH"
 	run env MPI_LIB="" $MAKE_EXE -j $JOBS_NB install
 	popd > /dev/null
 
+	info "Post-installing MPICH modulefile"
 	run rm -f "$DAOS_INSTALL_DIR/share/modulefiles/mpich-x86_64"
 	run mkdir -p "$DAOS_INSTALL_DIR/share/modulefiles"
 	cat > "$DAOS_INSTALL_DIR/share/modulefiles/mpich-x86_64" <<- EOF
@@ -398,36 +411,29 @@ if [[ ${HDF5_PATH:+x} ]] ; then
 
 	if "$FORCE_INSTALL" ; then
 		info "Removing old HDF5 install"
-		if ! run rm -fr "$HDF5_PATH/build" "$HDF5_PATH/configure" ; then
+		if ! run rm -fr "$DAOS_BUILD_DIR/hdf5" ; then
 			fatal "Old install of HDF5 could not be removed"
 		fi
 	fi
 
+	run mkdir -p "$DAOS_BUILD_DIR/hdf5"
+	pushd "$DAOS_BUILD_DIR/hdf5" > /dev/null
 	run $MODULE_EXE load mpi/mpich-x86_64
-
-	if [[ ! -f "$HDF5_PATH/configure" ]] ; then
-		pushd "$HDF5_PATH" > /dev/null
-		run ./autogen.sh
-		popd > /dev/null
+	if [[ ! -f "$DAOS_BUILD_DIR/hdf5/Makefile" ]] ; then
+		info "Configuring HDF5 build"
+		HDF5_CMAKE_OPTS=(
+			-DCMAKE_INSTALL_PREFIX="$DAOS_INSTALL_DIR"
+			-DCMAKE_BUILD_TYPE=Debug
+			-DHDF5_BUILD_HL_LIB=ON
+			-DBUILD_SHARED_LIBS=ON
+			-DHDF5_BUILD_FORTRAN=ON
+			-DHDF5_ENABLE_PARALLEL=ON
+			-DHDF5_ENABLE_MAP_API=ON
+		)
+		$CMAKE_EXE "${HDF5_CMAKE_OPTS[@]}" "$HDF5_PATH"
 	fi
 
-	run mkdir -p "$HDF5_PATH/build"
-	pushd "$HDF5_PATH/build" > /dev/null
-
-	if [[ ! -f "$HDF5_PATH/build/Makefile" ]] ; then
-		HDF5_CONFIGURE_OPTS=( --prefix="$DAOS_INSTALL_DIR"
-			--disable-dependency-tracking
-			--disable-silent-rules
-			--enable-build-mode=debug
-			--enable-fortran
-			--enable-hl
-			--enable-shared
-			--enable-parallel
-			--enable-map-api )
-
-		run ../configure "${HDF5_CONFIGURE_OPTS[@]}"
-	fi
-
+	info "Building and installing HDF5"
 	run $MAKE_EXE -j $JOBS_NB install
 	popd > /dev/null
 fi
@@ -441,20 +447,19 @@ if [[ ${VOL_DAOS_PATH:+x} ]] ; then
 
 	if "$FORCE_INSTALL" ; then
 		info "Removing old DAOS HDF5 Volume install"
-		if ! run rm -fr "$VOL_DAOS_PATH/build" ; then
+		if ! run rm -fr "$DAOS_BUILD_DIR/vol-daos" ; then
 			fatal "Old install of HDF5 could not be removed"
 		fi
 	fi
 
+	run mkdir -p "$DAOS_BUILD_DIR/vol-daos"
+	pushd "$DAOS_BUILD_DIR/vol-daos" > /dev/null
 	run $MODULE_EXE load mpi/mpich-x86_64
-
-	run mkdir -p "$VOL_DAOS_PATH/build"
-	pushd "$VOL_DAOS_PATH/build" > /dev/null
-
-	if [[ ! -f "$VOL_DAOS_PATH/build/Makefile" ]] ; then
-		VOL_DAOS_CMAKE_OPTS=( -DDCMAKE_BUILD_TYPE=Debug
+	if [[ ! -f "$DAOS_BUILD_DIR/vol-daos/Makefile" ]] ; then
+		info "Configuring DAOS HDF5 Volume build"
+		VOL_DAOS_CMAKE_OPTS=(
+			-DDCMAKE_BUILD_TYPE=Debug
 			-DCMAKE_INSTALL_PREFIX="$DAOS_INSTALL_DIR"
-			-DCMAKE_SKIP_RPATH:BOOL=ON
 			-DDAOS_INCLUDE_DIR="$DAOS_INSTALL_DIR/include/"
 			-DDAOS_LIBRARY="$DAOS_INSTALL_DIR/lib64/libdaos.so"
 			-DDAOS_UNS_LIBRARY="$DAOS_INSTALL_DIR/lib64/libduns.so"
@@ -464,13 +469,15 @@ if [[ ${VOL_DAOS_PATH:+x} ]] ; then
 			-DHDF5_VOL_TEST_ENABLE_PARALLEL=ON
 			-DHDF5_VOL_TEST_ENABLE_ASYNC=ON
 			-DHDF5_VOL_DAOS_USE_SYSTEM_HDF5=OFF
-			-DMPI_C_COMPILER="$MPI_BIN/mpicc" )
-
-			run $CMAKE_EXE "${VOL_DAOS_CMAKE_OPTS[@]}" ..
+			-DMPI_C_COMPILER="$MPI_BIN/mpicc"
+		)
+		run $CMAKE_EXE "${VOL_DAOS_CMAKE_OPTS[@]}" "$VOL_DAOS_PATH"
 	fi
 
+	info "Building and installing DAOS HDF5 Volume"
 	run $MAKE_EXE -j $JOBS_NB install
 
+	info "Installing DAOS HDF5 Volume test binaries"
 	for file_path in bin/*test* ; do
 		install --verbose --mode=0755 $file_path "$DAOS_INSTALL_DIR/bin"
 	done
@@ -487,15 +494,14 @@ if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
 
 	if "$FORCE_INSTALL" ; then
 		info "Removing old MPI File Utils install"
-		if ! run rm -fr "$MPI_FILE_UTILS_PATH/deps" "$MPI_FILE_UTILS_PATH/build" "$MPI_FILE_UTILS_PATH/configure" ; then
+		if ! run rm -fr "$MPI_FILE_UTILS_PATH/deps" "$DAOS_BUILD_DIR/mpi_file_utils" "$MPI_FILE_UTILS_PATH/configure" ; then
 			fatal "Old install of MPI File Utils could not be removed"
 		fi
 	fi
 
+
+	run mkdir -p "$MPI_FILE_UTILS_PATH/deps" "$DAOS_BUILD_DIR/mpi_file_utils"
 	run $MODULE_EXE load mpi/mpich-x86_64
-
-	run mkdir -p "$MPI_FILE_UTILS_PATH/deps" "$MPI_FILE_UTILS_PATH/build"
-
 	for dep_uri in "${MPI_FILE_UTILS_DEPS[@]}" ; do
 		pushd "$MPI_FILE_UTILS_PATH/deps" > /dev/null
 
@@ -504,6 +510,7 @@ if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
 		info "Building and installing MPI File Utils dependency $dep_name"
 
 		if [[ ! -d $dep_name ]] ; then
+			info "Downloading dependency $dep_name from $dep_uri"
 			run $WGET_EXE "$dep_uri"
 			run tar xzf "$file_name"
 		fi
@@ -511,6 +518,7 @@ if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
 		cd $dep_name
 
 		if [[ ! -f Makefile ]] ; then
+			info "Configuring dependency $dep_name"
 			opts="--prefix=$DAOS_INSTALL_DIR"
 			if [[ $dep_name =~ dtcmp ]] ; then
 				opts="$opts --with-lwgrp=$DAOS_INSTALL_DIR"
@@ -518,15 +526,17 @@ if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
 			run env LDFLAGS="-L$DAOS_INSTALL_DIR/lib64 -L$DAOS_INSTALL_DIR/lib" ./configure $opts
 		fi
 
+		info "Building and installing dependency $dep_name"
 		run env LDFLAGS="-L$DAOS_INSTALL_DIR/lib64 -L$DAOS_INSTALL_DIR/lib" $MAKE_EXE -j $JOBS_NB install
 
 		popd > /dev/null
 	done
 
-	pushd "$MPI_FILE_UTILS_PATH/build" > /dev/null
-
-	if [[ ! -f "$MPI_FILE_UTILS_PATH/build/Makefile" ]] ; then
-		MPI_FILE_UTILS_CMAKE_OPTS=( -DCMAKE_BUILD_TYPE=Debug
+	pushd "$DAOS_BUILD_DIR/mpi_file_utils" > /dev/null
+	if [[ ! -f "$DAOS_BUILD_DIR/mpi_file_utils/Makefile" ]] ; then
+		info "Configuring MPI File Utils build"
+		MPI_FILE_UTILS_CMAKE_OPTS=(
+			-DCMAKE_BUILD_TYPE=Debug
 			-DENABLE_DAOS=ON
 			-DENABLE_HDF5=ON
 			-DENABLE_LIBARCHIVE=ON
@@ -534,16 +544,19 @@ if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
 			-DWITH_DAOS_PREFIX="$DAOS_INSTALL_DIR"
 			-DWITH_DTCMP_PREFIX="$DAOS_INSTALL_DIR"
 			-DWITH_LibCircle_PREFIX="$DAOS_INSTALL_DIR"
-			-DWITH_LibArchive_PREFIX="$DAOS_INSTALL_DIR" )
+			-DWITH_LibArchive_PREFIX="$DAOS_INSTALL_DIR"
+		)
 		if [[ -h "$DAOS_INSTALL_DIR/lib/libhdf5.so" ]] ; then
+			info "Configuring MPI File Utils build with HDF5 from $DAOS_INSTALL_DIR"
 			MPI_FILE_UTILS_CMAKE_OPTS+=( -DWITH_HDF5_PREFIX="$DAOS_INSTALL_DIR" )
 		else
+			info "Configuring MPI File Utils build with HDF5 from /usr"
 			MPI_FILE_UTILS_CMAKE_OPTS+=( -DWITH_HDF5_PREFIX=/usr )
 		fi
-
-		run $CMAKE_EXE "${MPI_FILE_UTILS_CMAKE_OPTS[@]}" ..
+		run $CMAKE_EXE "${MPI_FILE_UTILS_CMAKE_OPTS[@]}" "$MPI_FILE_UTILS_PATH"
 	fi
 
+	info "Building and installing MPI File Utils"
 	run $MAKE_EXE -j $JOBS_NB install
 
 	popd > /dev/null
@@ -558,33 +571,35 @@ if [[ ${IOR_PATH:+x} ]] ; then
 
 	if "$FORCE_INSTALL" ; then
 		info "Removing old IOR install"
-		if ! run rm -fr "$IOR_PATH/build" "$IOR_PATH/configure" ; then
+		if ! run rm -fr "$DAOS_BUILD_DIR/ior" "$IOR_PATH/configure" ; then
 			fatal "Old install of IOR could not be removed"
 		fi
 	fi
 
 	run $MODULE_EXE load mpi/mpich-x86_64
-
 	if [[ ! -f "$IOR_PATH/configure" ]] ; then
+		info "Preconfiguring IOR source tree"
 		pushd "$IOR_PATH" > /dev/null
 		run env MPI_LIB="" ./bootstrap
 		popd > /dev/null
 	fi
 
-	run mkdir -p "$IOR_PATH/build"
-	pushd "$IOR_PATH/build" > /dev/null
-
-	if [[ ! -f "$IOR_PATH/build/Makefile" ]] ; then
-		IOR_CONFIGURE_OPTS=( --prefix="$DAOS_INSTALL_DIR"
-			--disable-dependency-tracking
+	run mkdir -p "$DAOS_BUILD_DIR/ior"
+	pushd "$DAOS_BUILD_DIR/ior" > /dev/null
+	if [[ ! -f "$DAOS_BUILD_DIR/ior/Makefile" ]] ; then
+		info "Configuring IOR build"
+		IOR_CONFIGURE_OPTS=(
+			--prefix="$DAOS_INSTALL_DIR"
+			--enable-dependency-tracking
 			--with-daos="$DAOS_INSTALL_DIR"
-			--with-hdf5
-			--with-mpiio)
-
-		run ../configure "${IOR_CONFIGURE_OPTS[@]}"
+			--with-hdf5="$DAOS_INSTALL_DIR"
+			--with-mpiio
+		)
+		run "$IOR_PATH/configure" "${IOR_CONFIGURE_OPTS[@]}"
 	fi
 
-	run env CFLAGS="-g -O0" make -j $(nproc) install
+	info "Building and installing IOR"
+	run env CFLAGS="-g3 -O0" make -j $(nproc) install
 
 	popd > /dev/null
 fi
@@ -598,25 +613,26 @@ if [[ ${FIO_PATH:+x} ]] ; then
 
 	if "$FORCE_INSTALL" ; then
 		info "Removing old FIO install"
-		if ! run rm -fr "$FIO_PATH/build" ; then
+		if ! run rm -fr "$DAOS_BUILD_DIR/fio" ; then
 			fatal "Old install of FIO could not be removed"
 		fi
 	fi
 
-	run mkdir -p "$FIO_PATH/build"
-	pushd "$FIO_PATH/build" > /dev/null
-
-	if [[ ! -f "$FIO_PATH/build/Makefile" ]] ; then
-		run env CFLAGS="-I$DAOS_INSTALL_DIR/include" LDFLAGS="-L$DAOS_INSTALL_DIR/lib64" ../configure --prefix="$DAOS_INSTALL_DIR"
+	run mkdir -p "$DAOS_BUILD_DIR/fio"
+	pushd "$DAOS_BUILD_DIR/fio" > /dev/null
+	if [[ ! -f "$DAOS_BUILD_DIR/fio/Makefile" ]] ; then
+		info "Configuring FIO build"
+		run env CFLAGS="-I$DAOS_INSTALL_DIR/include" LDFLAGS="-L$DAOS_INSTALL_DIR/lib64" "$FIO_PATH/configure" --prefix="$DAOS_INSTALL_DIR"
 	fi
 
-	run env CFLAGS="-g -O0" make -j $(nproc) install
+	info "Building and installing FIO"
+	run env CFLAGS="-g3 -O0" make -j $(nproc) install
 
 	popd > /dev/null
 
 	pushd "$FIO_PATH/doc" > /dev/null
 
-	FIO_VENV_DIR="$FIO_PATH/build/virtualenvs"
+	FIO_VENV_DIR="$DAOS_BUILD_DIR/fio/virtualenvs"
 	if [[ ! -f "$FIO_VENV_DIR/bin/activate" ]] ; then
 		info "Creating FIO python virtualenv $FIO_VENV_DIR"
 		run $PYTHON_EXE -m venv "$FIO_VENV_DIR"
@@ -627,19 +643,11 @@ if [[ ${FIO_PATH:+x} ]] ; then
 	run $PIP_EXE install --upgrade pip
 	run $PIP_EXE install sphinx
 
+	info "Building and installing FIO man pages"
 	run make man
-	run install -v output/man/fio.1 $DAOS_INSTALL_DIR/man/man1/fio.1
+	run install -v output/man/fio.1 $DAOS_INSTALL_DIR/share/man/man1/fio.1
 
 	deactivate
 
-	popd
+	popd > /dev/null
 fi
-
-info "Updating dynamic linker configuration"
-{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST -w $CLIENTS_LIST sudo rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST -w $CLIENTS_LIST sudo ldconfig "$DAOS_INSTALL_DIR/lib64" "$DAOS_INSTALL_DIR/lib64/daos_srv"
-{% else %}
-run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST sudo rm -f /etc/ld.so.cache
-run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST sudo ldconfig "$DAOS_INSTALL_DIR/lib64" "$DAOS_INSTALL_DIR/lib64/daos_srv"
-{% endif %}

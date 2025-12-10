@@ -1,9 +1,7 @@
 # Set of variables for Rocky 8
 # yamllint disable rule:line-length
 
-daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
-
-daos_common_deps:
+daos_base_deps:
   rpms:
     - bash
     - bzip2-devel
@@ -46,7 +44,6 @@ daos_dev_deps:
     - python3-wheel
     - rpmdevtools
     - rpm-build
-    - spdk-devel
 
 daos_client_deps:
   rpms:
@@ -71,7 +68,6 @@ daos_server_deps:
     - lz4-libs
     - ndctl
     - pciutils
-    - spdk-tools
 
 mlnx_deps:
   rpms:
