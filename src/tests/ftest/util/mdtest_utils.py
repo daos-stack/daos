@@ -41,14 +41,13 @@ def get_mdtest(test, hosts, manager=None, path=None, slots=None, namespace=MDTES
     return mdtest
 
 
-def run_mdtest(test, log, hosts, path, slots, pool, container, processes, ppn=None, manager=None,
-               display_space=True, namespace=MDTEST_NAMESPACE, mdtest_params=None):
+def run_mdtest(test, hosts, path, slots, pool, container, processes, ppn=None, manager=None,
+               log_file=None, display_space=True, namespace=MDTEST_NAMESPACE, mdtest_params=None):
     # pylint: disable=too-many-arguments
     """Run Mdtest on multiple hosts.
 
     Args:
         test (Test): avocado Test object
-        log (str): log file.
         hosts (NodeSet): hosts on which to run the mdtest command
         path (str): hostfile path.
         slots (int): hostfile number of slots per host.
@@ -59,6 +58,8 @@ def run_mdtest(test, log, hosts, path, slots, pool, container, processes, ppn=No
             the processes input. Defaults to None.
         manager (JobManager, optional): command to manage the multi-host execution of mdtest.
             Defaults to None, which will get a default job manager.
+        log_file (str, optional): log file name. Defaults to None, which will result in a log file
+            name containing the test, pool, and container IDs.
         display_space (bool, optional): Whether to display the pool space. Defaults to True.
         namespace (str, optional): path to yaml parameters. Defaults to MDTEST_NAMESPACE.
         mdtest_params (dict, optional): dictionary of MdtestCommand attributes to override from
@@ -72,7 +73,9 @@ def run_mdtest(test, log, hosts, path, slots, pool, container, processes, ppn=No
 
     """
     mdtest = get_mdtest(test, hosts, manager, path, slots, namespace, mdtest_params)
-    mdtest.update_log_file(log)
+    if log_file is None:
+        log_file = f"mdtest_{test.test_id}_{pool.identifier}_{container.identifier}.log"
+    mdtest.update_log_file(log_file)
     return mdtest.run(pool, container, processes, ppn, display_space, False)
 
 
@@ -92,6 +95,8 @@ def write_mdtest_data(test, container, namespace=MDTEST_NAMESPACE, **mdtest_run_
         Mdtest: the Mdtest object used to populate the container
     """
     mdtest = get_mdtest(test, test.hostlist_clients, None, test.workdir, None, namespace)
+    mdtest.update_log_file(
+        f"mdtest_{test.test_id}_{container.pool.identifier}_{container.identifier}.log")
 
     if 'processes' not in mdtest_run_params:
         mdtest_run_params['processes'] = test.params.get('processes', namespace, None)
