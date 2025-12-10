@@ -42,7 +42,8 @@ def get_mdtest(test, hosts, manager=None, path=None, slots=None, namespace=MDTES
 
 
 def run_mdtest(test, hosts, path, slots, pool, container, processes, ppn=None, manager=None,
-               log_file=None, display_space=True, namespace=MDTEST_NAMESPACE, mdtest_params=None):
+               log_file=None, intercept=None, display_space=True, namespace=MDTEST_NAMESPACE,
+               mdtest_params=None):
     # pylint: disable=too-many-arguments
     """Run Mdtest on multiple hosts.
 
@@ -60,6 +61,7 @@ def run_mdtest(test, hosts, path, slots, pool, container, processes, ppn=None, m
             Defaults to None, which will get a default job manager.
         log_file (str, optional): log file name. Defaults to None, which will result in a log file
             name containing the test, pool, and container IDs.
+        intercept (str, optional): path to interception library. Defaults to None.
         display_space (bool, optional): Whether to display the pool space. Defaults to True.
         namespace (str, optional): path to yaml parameters. Defaults to MDTEST_NAMESPACE.
         mdtest_params (dict, optional): dictionary of MdtestCommand attributes to override from
@@ -74,9 +76,9 @@ def run_mdtest(test, hosts, path, slots, pool, container, processes, ppn=None, m
     """
     mdtest = get_mdtest(test, hosts, manager, path, slots, namespace, mdtest_params)
     if log_file is None:
-        log_file = f"mdtest_{test.test_id}_{pool.identifier}_{container.identifier}.log"
+        log_file = mdtest.get_unique_log(container)
     mdtest.update_log_file(log_file)
-    return mdtest.run(pool, container, processes, ppn, display_space, False)
+    return mdtest.run(pool, container, processes, ppn, intercept, display_space, False)
 
 
 def write_mdtest_data(test, container, namespace=MDTEST_NAMESPACE, **mdtest_run_params):

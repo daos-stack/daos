@@ -60,8 +60,8 @@ class EvictionMetrics(TestWithTelemetry):
         ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
         mdtest_params = {"read_bytes": mem_file_bytes * 2, "write_bytes": mem_file_bytes * 2}
         run_mdtest(
-            self, self.hostlist_clients, self.workdir, None, pool, container, processes, ppn, None,
-            None, True, MDTEST_NAMESPACE, mdtest_params)
+            self, self.hostlist_clients, self.workdir, None, pool, container, processes, ppn,
+            mdtest_params=mdtest_params)
 
         self.log_step(
             'Collect pool eviction metrics after writing data (dmg telemetry metrics query)')
