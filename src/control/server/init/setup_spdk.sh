@@ -96,7 +96,7 @@ else
 		chown -R "${_TARGET_USER}:${_TARGET_USER}" /dev/hugepages
 	fi
 	if [ -d "/tmp/dpdk/" ]; then
-		echo "RUN: chmod -R g+rw /tmp/dpdk"
+		echo "RUN: chmod -R g+rwx /tmp/dpdk"
 		chmod -R g+rw /tmp/dpdk
 	fi
 
