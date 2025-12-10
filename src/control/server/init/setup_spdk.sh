@@ -92,8 +92,12 @@ else
 	set +x
 
 	if [ -d "/dev/hugepages/" ]; then
-		echo "RUN: chown -R ${_TARGET_USER} /dev/hugepages"
-		chown -R "${_TARGET_USER}" "/dev/hugepages"
+		echo "RUN: chown -R ${_TARGET_USER}:${_TARGET_USER} /dev/hugepages"
+		chown -R "${_TARGET_USER}:${_TARGET_USER}" /dev/hugepages
+	fi
+	if [ -d "/tmp/dpdk/" ]; then
+		echo "RUN: chmod -R g+rw /tmp/dpdk"
+		chmod -R g+rw /tmp/dpdk
 	fi
 
 	echo "Setting VFIO file permissions for unprivileged access"
