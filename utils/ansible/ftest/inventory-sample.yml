@@ -36,11 +36,6 @@
 #       hosts:
 #         wolf-666:
 #     daos_servers:
-#       vars:
-#         #
-#         # Optional variable defining the number of hugepages to be allocated by the linux kernel.
-#         #  default: 4096
-#         daos_hugepages_nb: 8182
 #       hosts:
 #         wolf-666:
 #         wolf-999:

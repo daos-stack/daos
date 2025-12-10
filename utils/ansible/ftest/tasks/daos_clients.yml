@@ -1,32 +1,23 @@
 # Ansible scripts for deploying a DAOS client node
 # yamllint disable rule:line-length
 
-- name: Install DAOS client dependency packages
-  include_tasks: "{{ item }}"
+- name: Gather distribution specific variables
+  include_vars: "{{ item }}"
   with_first_found:
-    - "{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version}}/clients_dependencies.yml"
+    - "{{ playbook_dir }}/vars/{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version }}.yml"
 
-- name: Add DAOS agent groups
+- name: Copy bash script setup-client_entries.sh
   become: true
-  group:
-    name: "{{ item }}"
-    state: present
-    system: true
-  loop:
-    - daos_agent
-    - daos_daemons
+  copy:
+    src: file/setup-client_entries.sh
+    dest: /root/setup-client_entries.sh
+    owner: root
+    group: root
+    mode: '0600'
 
-- name: Add DAOS agent user
+- name: Create DAOS Client entries
   become: true
-  user:
-    name: daos_agent
-    state: present
-    system: true
-    shell: /sbin/nologin
-    create_home: false
-    group: daos_agent
-    groups:
-      - daos_daemons
+  command: /bin/bash /root/setup-client_entries.sh
 
 - name: Update systemd service for DAOS agent
   become: true
@@ -50,6 +41,11 @@
     - /etc/daos
     - /etc/daos/certs
 
+- name: Install DAOS client dependency packages
+  include_tasks: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version}}/clients_dependencies.yml"
+
 - name: Update dynamic linker configuration
   become: true
   template:
@@ -68,3 +64,13 @@
     regexp: '^PATH='
     line: "PATH={{ daos_runtime_dir }}/install/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/usr/bin/syscfg:/root/bin"
     backup: true
+
+- name: Create MPI module directory
+  become: true
+  file:
+    path: /etc/modulefiles/mpi
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+    recurse: true

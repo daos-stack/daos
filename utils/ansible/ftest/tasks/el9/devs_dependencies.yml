@@ -1,12 +1,5 @@
 # Install dependencies of a developmentansible-galaxy collection list node
 
-- name: Add CodeReady Linux Builder repository
-  become: true
-  community.general.dnf_config_manager:
-    name: crb
-    state: enabled
-  ignore_errors: true
-
 - name: Install rpms development dependencies
   become: true
   dnf:

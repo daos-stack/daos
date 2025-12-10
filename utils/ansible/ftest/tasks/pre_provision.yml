@@ -1,13 +1,6 @@
 # Ansible scripts for configuring a DAOS node with ftest
 # yamllint disable rule:line-length
 
-- name: Checking required variables
-  fail:
-    msg: "Variable '{{ item }}' is not defined"
-  when: item not in vars
-  loop:
-    - daos_launch_username
-
 - name: Gather distribution specific variables
   include_vars: "{{ item }}"
   with_first_found:
@@ -71,64 +64,20 @@
     mode: 0440
     validate: /usr/sbin/visudo -cf %s
 
-- name: Create MPI module directory
-  become: true
-  file:
-    path: /etc/modulefiles/mpi
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-    recurse: true
-
-- name: Copy bash script enable-coredumps.sh
+- name: Copy bash script setup-coredumps.sh
   become: true
   copy:
-    src: file/enable-coredumps.sh
-    dest: /root/enable-coredumps.sh
+    src: file/setup-coredumps.sh
+    dest: /root/setup-coredumps.sh
     owner: root
     group: root
     mode: '0600'
 
 - name: Enable CORE dump
   become: true
-  command: /bin/bash /root/enable-coredumps.sh
+  command: /bin/bash /root/setup-coredumps.sh
 
-- name: Copy bash script configure-nofile.sh
-  become: true
-  copy:
-    src: file/configure-nofile.sh
-    dest: /root/configure-nofile.sh
-    owner: root
-    group: root
-    mode: '0600'
-
-- name: Configure Number of Open Files
-  become: true
-  command: /bin/bash /root/configure-nofile.sh
-
-- name: Copy bash script configure-passwd.sh
-  become: true
-  copy:
-    src: file/configure-passwd.sh
-    dest: /root/configure-passwd.sh
-    owner: root
-    group: root
-    mode: '0600'
-
-- name: Configure /etc/passwd
-  become: true
-  command: "/bin/bash /root/configure-passwd.sh {{ daos_launch_username }}"
-
-- name: Add EPEL release
-  become: true
-  dnf:
-    name: epel-release
-    state: present
-
-- name: Install rpms DAOS base dependencies
-  become: true
-  dnf:
-    state: latest
-    update_cache: true
-    name: "{{ daos_common_deps.rpms }}"
+- name: Install Base Dependencies
+  include_tasks: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version}}/base_dependencies.yml"
