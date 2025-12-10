@@ -79,20 +79,20 @@ type srvModule struct {
 	checkerDB  checker.FindingStore
 	engines    []Engine
 	events     *events.PubSub
-	client     *control.Client
+	rpcClient  control.UnaryInvoker
 	msReplicas []string
 }
 
 // newSrvModule creates a new srv module references to the system database,
 // resident EngineInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, pdb poolDatabase, cdb checker.FindingStore, engines []Engine, events *events.PubSub, client *control.Client, msReplicas []string) *srvModule {
+func newSrvModule(log logging.Logger, pdb poolDatabase, cdb checker.FindingStore, engines []Engine, events *events.PubSub, client control.UnaryInvoker, msReplicas []string) *srvModule {
 	return &srvModule{
 		log:        log,
 		poolDB:     pdb,
 		checkerDB:  cdb,
 		engines:    engines,
 		events:     events,
-		client:     client,
+		rpcClient:  client,
 		msReplicas: msReplicas,
 	}
 }
@@ -297,8 +297,9 @@ func (mod *srvModule) handleGetSysProps(reqb []byte) ([]byte, error) {
 		msReq.Keys = append(msReq.Keys, t)
 	}
 	msReq.SetHostList(mod.msReplicas)
+	msReq.SetSystem(req.Sys)
 
-	msResp, err := control.SystemGetProp(ctx, mod.client, msReq)
+	msResp, err := control.SystemGetProp(ctx, mod.rpcClient, msReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get system properties from MS")
 	}

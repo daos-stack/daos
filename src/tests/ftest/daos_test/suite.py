@@ -302,22 +302,6 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
-    def test_daos_rebuild_simple_interactive(self):
-        """Jira ID: DAOS-17354
-
-        Test Description:
-            Run daos_test -v --rebuild_interactive
-
-        Use cases:
-            Core tests for daos_test
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,provider
-        :avocado: tags=daos_test,daos_core_test,rebuild
-        :avocado: tags=DaosCoreTest,test_daos_rebuild_simple_interactive
-        """
-        self.run_subtest()
-
     def test_daos_drain_simple(self):
         """Jira ID: DAOS-1568
 
@@ -329,7 +313,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider
-        :avocado: tags=daos_test,daos_core_test
+        :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_drain_simple
         """
         self.run_subtest()
@@ -345,8 +329,24 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider
-        :avocado: tags=daos_test,daos_core_test
+        :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_extend_simple
+        """
+        self.run_subtest()
+
+    def test_daos_rebuild_interactive(self):
+        """Jira ID: DAOS-17358
+
+        Test Description:
+            Run daos_test -j
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,provider
+        :avocado: tags=daos_test,daos_core_test,rebuild
+        :avocado: tags=DaosCoreTest,test_daos_rebuild_interactive
         """
         self.run_subtest()
 

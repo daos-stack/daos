@@ -896,11 +896,12 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	while (cont_child->sc_ec_agg_active &&
 	       rpt->rt_rebuild_op != RB_OP_RECLAIM &&
 	       rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
-		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
-			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
+		D_ASSERTF(atomic_load(&rpt->rt_pool->sp_rebuilding) >= 0,
+			  DF_UUID " rebuilding %d\n", DP_UUID(rpt->rt_pool_uuid),
+			  atomic_load(&rpt->rt_pool->sp_rebuilding));
 		/* Wait for EC aggregation to abort before discard the object */
 		D_INFO(DF_RB " " DF_UUID " wait for ec agg abort, rebuilding %d.\n", DP_RB_RPT(rpt),
-		       DP_UUID(entry->ie_couuid), rpt->rt_pool->sp_rebuilding);
+		       DP_UUID(entry->ie_couuid), atomic_load(&rpt->rt_pool->sp_rebuilding));
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " rebuild abort %u/%u.\n",
@@ -1263,7 +1264,7 @@ tls_lookup:
 		D_GOTO(out, rc);
 	}
 
-	rpt->rt_pool->sp_rebuilding++; /* reset in rebuild_tgt_fini */
+	atomic_fetch_add(&rpt->rt_pool->sp_rebuilding, 1); /* reset in rebuild_tgt_fini */
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
