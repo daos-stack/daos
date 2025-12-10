@@ -1715,7 +1715,7 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	for (i = 0; i < rank_nr; i++) {
 		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
 		ec_agg->ea_server_ephs[i].eph = 0;
-		ec_agg->ea_server_ephs[i].ee_update_ts = d_hlc2sec(d_hlc_get());
+		ec_agg->ea_server_ephs[i].ee_update_ts = daos_gettime_coarse();
 	}
 	d_list_add(&ec_agg->ea_list, &cont_svc->cs_ec_agg_list);
 	*ec_aggp = ec_agg;
@@ -1775,7 +1775,7 @@ retry:
 		if (ec_agg->ea_server_ephs[i].rank == rank) {
 			if (ec_agg->ea_server_ephs[i].eph < eph) {
 				ec_agg->ea_server_ephs[i].eph = eph;
-				ec_agg->ea_server_ephs[i].ee_update_ts = d_hlc2sec(d_hlc_get());
+				ec_agg->ea_server_ephs[i].ee_update_ts = daos_gettime_coarse();
 			}
 			break;
 		}
@@ -2038,7 +2038,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		}
 
 		min_eph = DAOS_EPOCH_MAX;
-		cur_ts  = d_hlc2sec(d_hlc_get());
+		cur_ts  = daos_gettime_coarse();
 		for (i = 0; i < ec_agg->ea_servers_num; i++) {
 			rank = ec_agg->ea_server_ephs[i].rank;
 
@@ -2049,7 +2049,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			}
 
 			if (pool->sp_reclaim != DAOS_RECLAIM_DISABLED &&
-			    cur_ts - ec_agg->ea_server_ephs[i].ee_update_ts > 600)
+			    cur_ts > ec_agg->ea_server_ephs[i].ee_update_ts + 600)
 				D_WARN(DF_CONT ": Sluggish EC boundary report from rank %d, " DF_U64
 					       " Seconds.",
 				       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), rank,
