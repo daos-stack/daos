@@ -1106,7 +1106,7 @@ class DmgCommand(DmgCommandBase):
             ("system", "clear-exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
     def system_drain(self, ranks=None, rank_hosts=None):
-        """Clear exclude ranks from system.
+        """Call dmg system drain.
 
         Args:
             ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
@@ -1227,7 +1227,7 @@ class DmgCommand(DmgCommandBase):
             ("system", "query"), ranks=ranks, verbose=verbose)
 
     def system_reintegrate(self, ranks, rank_hosts):
-        """Reintegrate ranks or hosts into all relevant pools in DAOS system.
+        """Call dmg system reintegrate.
 
         Args:
             ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
@@ -1245,7 +1245,7 @@ class DmgCommand(DmgCommandBase):
             ("system", "reintegrate"), ranks=ranks, rank_hosts=rank_hosts)
 
     def system_rebuild_start(self, verbose=False):
-        """System rebuild start requests submitted to pools.
+        """Call dmg system rebuild start.
 
         Args:
             verbose (str, optional): Print pool identifiers
@@ -1261,7 +1261,7 @@ class DmgCommand(DmgCommandBase):
             ("system", "rebuild", "start"), verbose=verbose)
 
     def system_rebuild_stop(self, verbose=False, force=False):
-        """System rebuild stop requests submitted to pools.
+        """Call dmg system rebuild stop.
 
         Args:
             verbose (str, optional): Print pool identifiers

@@ -1419,24 +1419,22 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to start or end.
 
         Args:
-            expected (str/list): which rebuild data check to wait for: 'running' or 'completed'
+            expected (str): which rebuild data check to wait for: 'running', 'completed', 'stopped'
             interval (int): number of seconds to wait in between rebuild completion checks
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
 
         """
-        if not isinstance(expected, (list, tuple)):
-            expected = [expected]
         self.log.info(
             "Waiting for rebuild to be %s%s ...",
-            ", ".join(expected),
+            expected,
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
         # If waiting for rebuild to start and it is detected as completed, stop waiting
         expected_set = set()
-        expected_set.update(expected)
+        expected_set.add(expected)
         expected_set.add("completed")
 
         start = time()
@@ -1448,7 +1446,7 @@ class TestPool(TestDaosApiBase):
                     raise DaosTestError(
                         "TIMEOUT detected after {} seconds while for waiting for rebuild to be {}. "
                         "This timeout can be adjusted via the 'pool/rebuild_timeout' test yaml "
-                        "parameter.".format(self.rebuild_timeout.value, ",".join(expected)))
+                        "parameter.".format(self.rebuild_timeout.value, expected))
             sleep(interval)
             self._update_rebuild_data()
 
@@ -1514,7 +1512,7 @@ class TestPool(TestDaosApiBase):
             DaosTestError: if waiting for rebuild times out.
 
         """
-        self._wait_for_rebuild(["failed", "stopped"], interval)
+        self._wait_for_rebuild("stopped", interval)
 
     def measure_rebuild_time(self, operation, interval=1):
         """Measure rebuild time.
