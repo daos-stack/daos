@@ -990,6 +990,8 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 			 * Destroy the older replica and continue. Note that the destroy only
 			 * happens when the last svc reference is released.
 			 */
+			D_INFO("%s: destroying older replica " RDB_F_RID " for " RDB_F_RID "\n",
+			       svc->s_name, RDB_P_RID(rid), RDB_P_RID(create_params->rcp_id));
 			rc = ds_rsvc_stop(class, id, caller_term, true /* destroy */);
 			if (rc != 0) {
 				DL_ERROR(rc, "%s: failed to destroy existing replica", svc->s_name);

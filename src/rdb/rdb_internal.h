@@ -524,9 +524,9 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 }
 
 static inline void
-rdb_set_mc_vote_lookup_buf(uint32_t layout_version, rdb_replica_id_t *vote, d_iov_t *value)
+rdb_set_mc_vote_lookup_buf(struct rdb *db, rdb_replica_id_t *vote, d_iov_t *value)
 {
-	if (layout_version < RDB_LAYOUT_VERSION_REPLICA_ID) {
+	if (db->d_version < RDB_LAYOUT_VERSION_REPLICA_ID) {
 		d_iov_set(value, &vote->rri_rank, sizeof(vote->rri_rank));
 		vote->rri_gen = 0;
 	} else {
@@ -535,9 +535,9 @@ rdb_set_mc_vote_lookup_buf(uint32_t layout_version, rdb_replica_id_t *vote, d_io
 }
 
 static inline void
-rdb_set_mc_vote_update_buf(uint32_t layout_version, rdb_replica_id_t *vote, d_iov_t *value)
+rdb_set_mc_vote_update_buf(struct rdb *db, rdb_replica_id_t *vote, d_iov_t *value)
 {
-	if (layout_version < RDB_LAYOUT_VERSION_REPLICA_ID)
+	if (db->d_version < RDB_LAYOUT_VERSION_REPLICA_ID)
 		d_iov_set(value, &vote->rri_rank, sizeof(vote->rri_rank));
 	else
 		d_iov_set(value, vote, sizeof(*vote));

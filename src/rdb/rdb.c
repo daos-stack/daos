@@ -145,6 +145,7 @@ rdb_destroy(const char *path, const uuid_t uuid)
 {
 	int rc;
 
+	D_INFO(DF_UUID ": destroying db %s\n", DP_UUID(uuid), path);
 	rc = vos_pool_destroy_ex(path, (unsigned char *)uuid, VOS_POF_RDB);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy %s: "DF_RC"\n",
@@ -574,7 +575,7 @@ rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
 		goto err;
 	}
 
-	rdb_set_mc_vote_lookup_buf(db->d_version, &vote, &value);
+	rdb_set_mc_vote_lookup_buf(db, &vote, &value);
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
 	if (rc == -DER_NONEXIST) {
 		vote.rri_rank = -1;

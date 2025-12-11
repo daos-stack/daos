@@ -98,8 +98,8 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 	D_ASSERT(node != NULL);
 	D_ASSERT(rdb_node != NULL);
 	rdb_node_id = rdb_replica_id_decode(raft_node_get_id(node));
-	D_DEBUG(DB_TRACE, DF_DB ": sending rv%s to node " RDB_F_RID " rank %u: term=%ld\n",
-		DP_DB(db), s, RDB_P_RID(rdb_node_id), rdb_node->dn_rank, msg->term);
+	D_DEBUG(DB_TRACE, DF_DB ": sending rv%s to node " RDB_F_RID ": term=%ld\n", DP_DB(db), s,
+		RDB_P_RID(rdb_node_id), msg->term);
 
 	rc = rdb_create_raft_rpc(db, RDB_REQUESTVOTE, node, &rpc);
 	if (rc != 0) {
@@ -196,8 +196,8 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	D_ASSERT(node != NULL);
 	D_ASSERT(rdb_node != NULL);
 	rdb_node_id = rdb_replica_id_decode(raft_node_get_id(node));
-	D_DEBUG(DB_TRACE, DF_DB ": sending ae to node " RDB_F_RID " rank %u: term=%ld\n", DP_DB(db),
-		RDB_P_RID(rdb_node_id), rdb_node->dn_rank, msg->term);
+	D_DEBUG(DB_TRACE, DF_DB ": sending ae to node " RDB_F_RID ": term=%ld\n", DP_DB(db),
+		RDB_P_RID(rdb_node_id), msg->term);
 
 	if (DAOS_FAIL_CHECK(DAOS_RDB_SKIP_APPENDENTRIES_FAIL))
 		D_GOTO(err, rc = 0);
@@ -593,8 +593,8 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 
 	rc = rdb_create_raft_rpc(db, RDB_INSTALLSNAPSHOT, node, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to create IS RPC to rank %u: %d\n",
-			DP_DB(db), rdb_node->dn_rank, rc);
+		DL_ERROR(rc, DF_DB ": failed to create IS RPC to node " RDB_F_RID, DP_DB(db),
+			 RDB_P_RID(rdb_node_id));
 		goto err;
 	}
 
@@ -646,8 +646,8 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 	rc = crt_bulk_create(info->dmi_ctx, &sgl, CRT_BULK_RO,
 			     &in->isi_kds);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to create key descriptor bulk for rank "
-			"%u: %d\n", DP_DB(db), rdb_node->dn_rank, rc);
+		DL_ERROR(rc, DF_DB ": failed to create key descriptor bulk for node " RDB_F_RID,
+			 DP_DB(db), RDB_P_RID(rdb_node_id));
 		goto err_data;
 	}
 	data.iov_buf_len = data.iov_len;
@@ -656,23 +656,23 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 	sgl.sg_iovs = &data;
 	rc = crt_bulk_create(info->dmi_ctx, &sgl, CRT_BULK_RO, &in->isi_data);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to create key bulk for rank %u: %d\n",
-			DP_DB(db), rdb_node->dn_rank, rc);
+		DL_ERROR(rc, DF_DB ": failed to create key bulk for node " RDB_F_RID, DP_DB(db),
+			 RDB_P_RID(rdb_node_id));
 		goto err_kds_bulk;
 	}
 
 	rc = rdb_send_raft_rpc(rpc, db);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to send IS RPC to rank %u: %d\n",
-			DP_DB(db), rdb_node->dn_rank, rc);
+		DL_ERROR(rc, DF_DB ": failed to send IS RPC to node " RDB_F_RID, DP_DB(db),
+			 RDB_P_RID(rdb_node_id));
 		goto err_data_bulk;
 	}
 
 	D_DEBUG(DB_TRACE,
-		DF_DB ": sent is to node " RDB_F_RID " rank %u: term=%ld last_idx=%ld seq=" DF_U64
+		DF_DB ": sent is to node " RDB_F_RID ": term=%ld last_idx=%ld seq=" DF_U64
 		      " kds.len=" DF_U64 " data.len=" DF_U64 "\n",
-		DP_DB(db), RDB_P_RID(rdb_node_id), rdb_node->dn_rank, in->isi_msg.term,
-		in->isi_msg.last_idx, in->isi_seq, kds.iov_len, data.iov_len);
+		DP_DB(db), RDB_P_RID(rdb_node_id), in->isi_msg.term, in->isi_msg.last_idx,
+		in->isi_seq, kds.iov_len, data.iov_len);
 	return 0;
 
 err_data_bulk:
@@ -1090,19 +1090,24 @@ rdb_raft_cb_recv_installsnapshot_resp(raft_server_t *raft, void *arg,
 {
 	struct rdb		       *db = arg;
 	struct rdb_raft_node	       *rdb_node = raft_node_get_udata(node);
+	rdb_replica_id_t                rdb_node_id;
 	struct rdb_raft_is	       *is = &rdb_node->dn_is;
 	struct rdb_installsnapshot_out *out;
 
+	D_ASSERT(db->d_raft == raft);
+	D_ASSERT(node != NULL);
+	D_ASSERT(rdb_node != NULL);
+	rdb_node_id = rdb_replica_id_decode(raft_node_get_id(node));
 	out = container_of(resp, struct rdb_installsnapshot_out, iso_msg);
 
 	/* If no longer transferring this snapshot, ignore this response. */
 	if (rdb_node->dn_term != raft_get_current_term(raft) ||
 	    is->dis_index != resp->last_idx) {
 		D_DEBUG(DB_TRACE,
-			DF_DB": rank %u: stale term "DF_U64" != %ld or index "
-			DF_U64" != %ld\n", DP_DB(db), rdb_node->dn_rank,
-			rdb_node->dn_term, raft_get_current_term(raft),
-			is->dis_index, resp->last_idx);
+			DF_DB ": node " RDB_F_RID ": stale term " DF_U64 " != %ld or index " DF_U64
+			      " != %ld\n",
+			DP_DB(db), RDB_P_RID(rdb_node_id), rdb_node->dn_term,
+			raft_get_current_term(raft), is->dis_index, resp->last_idx);
 		return 0;
 	}
 
@@ -1114,8 +1119,8 @@ rdb_raft_cb_recv_installsnapshot_resp(raft_server_t *raft, void *arg,
 		 * snapshot.
 		 */
 		if (resp->complete) {
-			D_DEBUG(DB_TRACE, DF_DB": rank %u: completed snapshot %ld\n", DP_DB(db),
-				rdb_node->dn_rank, resp->last_idx);
+			D_DEBUG(DB_TRACE, DF_DB ": node " RDB_F_RID ": completed snapshot %ld\n",
+				DP_DB(db), RDB_P_RID(rdb_node_id), resp->last_idx);
 			return 0;
 		}
 
@@ -1123,26 +1128,25 @@ rdb_raft_cb_recv_installsnapshot_resp(raft_server_t *raft, void *arg,
 		 * ... and the snapshot is not complete, return a generic error so
 		 * that raft will not retry too eagerly.
 		 */
-		D_DEBUG(DB_TRACE,
-			DF_DB": rank %u: unsuccessful chunk %ld/"DF_U64"("
-			DF_U64")\n", DP_DB(db), rdb_node->dn_rank,
-			resp->last_idx, out->iso_seq, is->dis_seq);
+		D_DEBUG(
+		    DB_TRACE,
+		    DF_DB ": node " RDB_F_RID ": unsuccessful chunk %ld/" DF_U64 "(" DF_U64 ")\n",
+		    DP_DB(db), RDB_P_RID(rdb_node_id), resp->last_idx, out->iso_seq, is->dis_seq);
 		return -DER_MISC;
 	}
 
 	/* Ignore this stale response. */
 	if (out->iso_seq <= is->dis_seq) {
 		D_DEBUG(DB_TRACE,
-			DF_DB": rank %u: stale chunk %ld/"DF_U64"("DF_U64")\n",
-			DP_DB(db), rdb_node->dn_rank, resp->last_idx,
-			out->iso_seq, is->dis_seq);
+			DF_DB ": node " RDB_F_RID ": stale chunk %ld/" DF_U64 "(" DF_U64 ")\n",
+			DP_DB(db), RDB_P_RID(rdb_node_id), resp->last_idx, out->iso_seq,
+			is->dis_seq);
 		return 0;
 	}
 
 	D_DEBUG(DB_TRACE,
-		DF_DB": rank %u: completed chunk %ld/"DF_U64"("DF_U64")\n",
-		DP_DB(db), rdb_node->dn_rank, resp->last_idx, out->iso_seq,
-		is->dis_seq);
+		DF_DB ": node " RDB_F_RID ": completed chunk %ld/" DF_U64 "(" DF_U64 ")\n",
+		DP_DB(db), RDB_P_RID(rdb_node_id), resp->last_idx, out->iso_seq, is->dis_seq);
 
 	/* Update the last sequence number and anchor. */
 	is->dis_seq = out->iso_seq;
@@ -1162,7 +1166,7 @@ rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, raft_node_id_t vote)
 	if (!db->d_raft_loaded)
 		return 0;
 
-	rdb_set_mc_vote_update_buf(db->d_version, &rdb_vote, &value);
+	rdb_set_mc_vote_update_buf(db, &rdb_vote, &value);
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_vote, &value, NULL /* vtx */);
 	if (rc != 0)
 		DL_ERROR(rc, DF_DB ": failed to persist vote " RDB_F_RID, DP_DB(db),
@@ -1188,7 +1192,7 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, raft_term_t term,
 	keys[0] = rdb_mc_term;
 	d_iov_set(&values[0], &term, sizeof(term));
 	keys[1] = rdb_mc_vote;
-	rdb_set_mc_vote_update_buf(db->d_version, &rdb_vote, &values[1]);
+	rdb_set_mc_vote_update_buf(db, &rdb_vote, &values[1]);
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys, values, NULL /* vtx */);
 	if (rc != 0)
 		DL_ERROR(rc, DF_DB ": failed to update term %ld and vote " RDB_F_RID, DP_DB(db),
@@ -3120,7 +3124,7 @@ rdb_raft_load(struct rdb *db)
 		goto out;
 	}
 
-	rdb_set_mc_vote_lookup_buf(db->d_version, &vote, &value);
+	rdb_set_mc_vote_lookup_buf(db, &vote, &value);
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
 	if (rc == 0) {
 		rc = raft_vote_for_nodeid(db->d_raft, rdb_replica_id_encode(vote));
@@ -3441,9 +3445,20 @@ mutex:
 }
 
 static int
-rdb_lookup_for_request(struct rdb_op_in *in, struct rdb **db_out)
+rdb_lookup_for_request(crt_rpc_t *rpc, struct rdb **db_out)
 {
-	struct rdb *db;
+	struct rdb_op_in *in = crt_req_get(rpc);
+	d_rank_t          src_rank;
+	struct rdb       *db;
+	int               rc;
+
+	rc = crt_req_src_rank_get(rpc, &src_rank);
+	D_ASSERTF(rc == 0, "crt_req_src_rank_get: " DF_RC "\n", DP_RC(rc));
+	if (src_rank != in->ri_from.rri_rank) {
+		D_ERROR(DF_UUID ": inconsistent request: src_rank=%u from=" RDB_F_RID "\n",
+			DP_UUID(in->ri_uuid), src_rank, RDB_P_RID(in->ri_from));
+		return -DER_PROTO;
+	}
 
 	db = rdb_lookup(in->ri_uuid);
 	if (db == NULL)
@@ -3478,7 +3493,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 
 	s = in->rvi_msg.prevote ? " (prevote)" : "";
 
-	rc = rdb_lookup_for_request(&in->rvi_op, &db);
+	rc = rdb_lookup_for_request(rpc, &db);
 	if (rc != 0)
 		goto out;
 
@@ -3518,7 +3533,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	raft_node_id_t                  node_id = rdb_replica_id_encode(in->aei_op.ri_from);
 	int				rc;
 
-	rc = rdb_lookup_for_request(&in->aei_op, &db);
+	rc = rdb_lookup_for_request(rpc, &db);
 	if (rc != 0)
 		goto out;
 
@@ -3558,7 +3573,7 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	raft_node_id_t                  node_id = rdb_replica_id_encode(in->isi_op.ri_from);
 	int				rc;
 
-	rc = rdb_lookup_for_request(&in->isi_op, &db);
+	rc = rdb_lookup_for_request(rpc, &db);
 	if (rc != 0)
 		goto out;
 
@@ -3616,9 +3631,18 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	struct rdb_appendentries_out   *out_ae;
 	struct rdb_installsnapshot_out *out_is;
 	struct rdb_op_out              *out_op = out;
+	d_rank_t                        dst_rank;
 	raft_node_t		       *node;
 	raft_time_t		       *lease = NULL;
 	int				rc;
+
+	rc = crt_req_dst_rank_get(rpc, &dst_rank);
+	D_ASSERTF(rc == 0, "crt_req_dst_rank_get: " DF_RC "\n", DP_RC(rc));
+	if (dst_rank != out_op->ro_from.rri_rank) {
+		D_ERROR(DF_DB ": inconsistent reply: dst_rank=%u from=" RDB_F_RID "\n", DP_DB(db),
+			dst_rank, RDB_P_RID(out_op->ro_from));
+		return;
+	}
 
 	if (rdb_replica_id_compare(db->d_replica_id, out_op->ro_to) != 0) {
 		D_DEBUG(DB_MD,
