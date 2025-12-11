@@ -1055,6 +1055,17 @@ int
 vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch);
 
 /**
+ * Save property for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param props	[IN]	Pointer to container property to be saved.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_save_props(daos_handle_t coh, struct cont_props *props);
+
+/**
  * Query the gap between the max allowed aggregation epoch and current HLC.
  *
  * \return		The gap value in seconds.
