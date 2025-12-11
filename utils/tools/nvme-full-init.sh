@@ -56,7 +56,7 @@ function nvme_bind_all_in_order {
 
   if [ -z "$nvme_pcie_addrs" ]; then
     echo "No NVMe PCI devices found."
-    return 1
+    return 0
   fi
 
   #echo "Found PCI NVMe addresses:"
@@ -150,20 +150,22 @@ function nvme_reserve_2_disk_per_numa {
 }
 
 nvme_count=$(nvme_count_devices)
-((nvme_count--)) || true
-nvme_unmount_all $nvme_count
-nvme_bind_all_in_order $nvme_count
-nvme_recreate_namespace $nvme_count
-nvme_reserve_2_disk_per_numa $nvme_count
+if [ "$nvme_count" -gt 1 ]; then
+  ((nvme_count--)) || true
+  nvme_unmount_all $nvme_count
+  nvme_bind_all_in_order $nvme_count
+  nvme_recreate_namespace $nvme_count
+  nvme_reserve_2_disk_per_numa $nvme_count
 
-#echo "Done. All NVMe devices have been re-bound in sorted PCI address order."
-#for i in $(seq 0 $NVME_MAX_GLOBAL); do
-#  echo -n "nvme$i: "
-#	cat /sys/class/nvme/nvme$i/address 2>/dev/null || echo "not found"
-#done
+  #echo "Done. All NVMe devices have been re-bound in sorted PCI address order."
+  #for i in $(seq 0 $NVME_MAX_GLOBAL); do
+  #  echo -n "nvme$i: "
+  #	cat /sys/class/nvme/nvme$i/address 2>/dev/null || echo "not found"
+  #done
 
-pushd /usr/share/daos/spdk/scripts/
-export PCI_ALLOWED="$SPDK_PCI_ALLOWED"
-sudo ./setup.sh
+  pushd /usr/share/daos/spdk/scripts/
+  export PCI_ALLOWED="$SPDK_PCI_ALLOWED"
+  sudo ./setup.sh
 
-daos_server nvme scan
+  daos_server nvme scan
+fi
