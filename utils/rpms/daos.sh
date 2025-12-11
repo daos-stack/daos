@@ -458,6 +458,7 @@ if [ ${#gcno_files[@]} -gt 0 ]; then
 
     echo "install_list += ${base}"
     install_list+=("${base}=${TARGET_PATH}/${file:2}")
+  done
 fi
 build_package "daos-tests"
 
