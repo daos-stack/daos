@@ -1085,18 +1085,18 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "cleanup"), machinename=machinename, verbose=verbose)
 
-    def system_clear_exclude(self, ranks, rank_hosts):
-        """Clear exclude ranks from system.
+    def system_clear_exclude(self, ranks=None, rank_hosts=None):
+        """Call dmg system clear-exclude.
 
-        Either ranks or rank_hosts is necessary. Pass in None to one of them.
+        Either ranks or rank_hosts is required.
 
         Args:
-            ranks (str): Comma separated rank-ranges to exclude e.g. "0,2-5".
-            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+            ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
+            rank_hosts (str, optional): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
         Raises:
-            CommandFailure: if the dmg system clear-exclude command fails.
+            CommandFailure: if the command fails.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -1108,13 +1108,15 @@ class DmgCommand(DmgCommandBase):
     def system_drain(self, ranks=None, rank_hosts=None):
         """Call dmg system drain.
 
+        Either ranks or rank_hosts is required.
+
         Args:
             ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
             rank_hosts (str, optional): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
         Raises:
-            CommandFailure: if the dmg system drain command fails.
+            CommandFailure: if the command fails.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -1127,7 +1129,7 @@ class DmgCommand(DmgCommandBase):
         """Erase system metadata prior to reformat.
 
         Raises:
-            CommandFailure: if the dmg system erase command fails.
+            CommandFailure: if the command fails.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -1135,18 +1137,18 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("system", "erase"))
 
-    def system_exclude(self, ranks, rank_hosts):
-        """Exclude ranks from system.
+    def system_exclude(self, ranks=None, rank_hosts=None):
+        """Call dmg system exclude.
 
-        Either ranks or rank_hosts is necessary. Pass in None to one of them.
+        Either ranks or rank_hosts is required.
 
         Args:
-            ranks (str): Comma separated rank-ranges to exclude e.g. "0,2-5".
-            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+            ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
+            rank_hosts (str, optional): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
         Raises:
-            CommandFailure: if the dmg system exclude command fails.
+            CommandFailure: if the command fails.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -1156,26 +1158,15 @@ class DmgCommand(DmgCommandBase):
             ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
     def system_leader_query(self):
-        """Query system to obtain the MS leader and replica information.
+        """Call dmg system leader-query.
 
         Raises:
-            CommandFailure: if the dmg system query command fails.
+            CommandFailure: if the command fails.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
 
         """
-        # Example JSON output:
-        # {
-        #   "response": {
-        #     "current_leader": "127.0.0.1:10001",
-        #     "replicas": [
-        #       "127.0.0.1:10001"
-        #     ]
-        #   },
-        #   "error": null,
-        #   "status": 0
-        # }
         return self._get_json_result(("system", "leader-query"))
 
     def system_query(self, ranks=None, verbose=True):
