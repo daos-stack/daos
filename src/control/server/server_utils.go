@@ -373,11 +373,15 @@ func prepBdevStorage(srv *server, smi *common.SysMemInfo, iommuChecker hardware.
 		return nil
 	}
 
-	// Fail to start if transparent hugepages are enabled. DAOS SPDK use needs feature disabled.
-	if thpEnabled, err := thpChecker.IsTHPEnabled(); err != nil {
-		return errors.Wrap(err, "transparent hugepage check")
-	} else if thpEnabled {
-		return FaultTransparentHugepageEnabled
+	// Fail to start if transparent hugepages are enabled. DAOS requires exclusive control over
+	// hugepages and therefore needs feature disabled. AllowTHP override flag provided for
+	// edge cases.
+	if !srv.cfg.AllowTHP {
+		if thpEnabled, err := thpChecker.IsTHPEnabled(); err != nil {
+			return errors.Wrap(err, "transparent hugepage check")
+		} else if thpEnabled {
+			return FaultTransparentHugepageEnabled
+		}
 	}
 
 	iommuEnabled, err := iommuChecker.IsIOMMUEnabled()

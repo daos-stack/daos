@@ -446,6 +446,26 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			},
 			expPrepErr: FaultTransparentHugepageEnabled,
 		},
+		"thp enabled; override flag set": {
+			thpEnabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithAllowTHP(true).
+					WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				defCleanDualEngine,
+				{
+					HugeNodes:  "nodes_hp[0]=8192,nodes_hp[1]=8192",
+					TargetUser: username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+						storage.BdevPciAddrSep, test.MockPCIAddr(1)),
+					EnableVMD: true,
+				},
+			},
+			expHugepageSize: 2,
+			// Allocation change logged.
+			expNotice: true,
+		},
 		"no bdevs configured; hugepages disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableHugepages(true).
@@ -1221,13 +1241,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			test.AssertEqual(t, tc.expHugepageSize, ei.runner.GetConfig().HugepageSz,
 				"unexpected huge page size")
 
-			txtMod := ""
-			if !tc.expNotice {
-				txtMod = "no "
+			gotNotice := strings.Contains(buf.String(), "NOTICE")
+			if tc.expNotice && !gotNotice {
+				t.Fatal("expected NOTICE level message but got none")
+			} else if !tc.expNotice && gotNotice {
+				t.Fatal("expected no NOTICE level message but got one")
 			}
-			msg := fmt.Sprintf("expected %sNOTICE level message", txtMod)
-			test.AssertEqual(t, tc.expNotice, strings.Contains(buf.String(), "NOTICE"),
-				msg)
 		})
 	}
 }
