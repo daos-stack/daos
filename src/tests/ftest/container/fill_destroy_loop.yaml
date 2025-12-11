@@ -13,6 +13,7 @@ server_config:
   engines:
     0:
       targets: 4
+      log_mask: DEBUG,MEM=ERR
       storage: auto
 
 test_config:

@@ -26,25 +26,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
     IOR_NOSPACE = "No space left on device"
     DER_NOSPACE = "-1007"
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a BoundaryPoolContainerSpace object."""
-        super().__init__(*args, **kwargs)
-
-        self.test_loop = 0
-        self.reclaim_props = []
-        self.delta_bytes = 0
-
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-
-        self.test_loop = self.params.get("test_loop", "/run/test_config/*", 0)
-        self.reclaim_props = self.params.get("reclaim_props", "/run/test_config/*", [])
-
-        delta = self.params.get("delta", "/run/test_config/*", "0")
-        self.delta_bytes = human_to_bytes(delta)
-        self.log.info("==> Set pool delta to %s (%i bytes)", delta, self.delta_bytes)
-
     def check_server_logs(self):
         """Check if GC engine errors have occurred during the test
 
@@ -87,6 +68,10 @@ class BoundaryPoolContainerSpace(TestWithServers):
         Args:
             test_loop (int): test loop for log info.
         """
+        delta = self.params.get("delta", "/run/test_config/*", "0")
+        delta_bytes = human_to_bytes(delta)
+        self.log.info("==> Set pool delta to %s (%i bytes)", delta, delta_bytes)
+
         # Create a container and get pool free space before write
         container = self.get_container(self.pool)
         free_space_init = self.pool.get_pool_free_space()
@@ -133,7 +118,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy,
                 bytes_to_human(free_space_after_destroy), free_space_after_destroy))
         self.assertAlmostEqual(
-            free_space_init, free_space_after_destroy, delta=self.delta_bytes,
+            free_space_init, free_space_after_destroy, delta=delta_bytes,
             msg="Deleting container did not restore all free pool space: "
             "loop={}, init={} ({} bytes), end={} ({} bytes)".format(
                 test_loop, bytes_to_human(free_space_init), free_space_init,
@@ -170,28 +155,32 @@ class BoundaryPoolContainerSpace(TestWithServers):
         :avocado: tags=container,pool,boundary_test
         :avocado: tags=BoundaryPoolContainerSpace,test_fill_destroy_cont_loop
         """
+        reclaim_props = []
+        test_loop = self.params.get("test_loop", "/run/test_config/*", 0)
+        reclaim_props = self.params.get("reclaim_props", "/run/test_config/*", [])
+
         # create pool
         self.add_pool()
 
-        for test_loop in range(1, self.test_loop + 1):
-            self.log.info("==>Starting test loop: %i ...", test_loop)
+        for loop_cnt in range(1, test_loop + 1):
+            self.log.info("==>Starting test loop: %i ...", loop_cnt)
 
             if self.reclaim_props:
-                reclaim_prop = self.reclaim_props.pop(0)
+                reclaim_prop = reclaim_props.pop(0)
                 self.log.info(
                     '--%i.(0)Set Pool reclaim properties to "%s"',
-                    test_loop, reclaim_prop)
+                    loop_cnt, reclaim_prop)
                 self.pool.set_property("reclaim", reclaim_prop)
 
             self.pool.set_query_data()
             self.log.info(
                 "--%i.(1)Query pool %s before write: %s",
-                test_loop, str(self.pool), self.pool.query_data)
+                loop_cnt, str(self.pool), self.pool.query_data)
             free_space = self.pool.get_pool_free_space()
             self.log.info(
                 "--%s.(2)Pool free space before container create: %s (%i bytes)",
                 test_loop, bytes_to_human(free_space), free_space)
 
-            self.write_pool_until_nospace(test_loop)
+            self.write_pool_until_nospace(loop_cnt)
 
         self.check_server_logs()
