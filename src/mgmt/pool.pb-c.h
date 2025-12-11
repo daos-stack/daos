@@ -57,9 +57,18 @@ typedef struct _Mgmt__PoolSelfHealEvalReq Mgmt__PoolSelfHealEvalReq;
 /* --- enums --- */
 
 typedef enum _Mgmt__PoolRebuildStatus__State {
-  MGMT__POOL_REBUILD_STATUS__STATE__IDLE = 0,
-  MGMT__POOL_REBUILD_STATUS__STATE__DONE = 1,
-  MGMT__POOL_REBUILD_STATUS__STATE__BUSY = 2
+  /*
+   * DRS_IN_PROGRESS
+   */
+  MGMT__POOL_REBUILD_STATUS__STATE__BUSY = 0,
+  /*
+   * DRS_NOT_STARTED
+   */
+  MGMT__POOL_REBUILD_STATUS__STATE__IDLE = 1,
+  /*
+   * DRS_COMPLETED
+   */
+  MGMT__POOL_REBUILD_STATUS__STATE__DONE = 2
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_REBUILD_STATUS__STATE)
 } Mgmt__PoolRebuildStatus__State;
 typedef enum _Mgmt__PoolQueryTargetInfo__TargetType {
@@ -777,7 +786,8 @@ struct  _Mgmt__StorageUsageStats
 
 
 /*
- * PoolRebuildStatus represents a pool's rebuild status.
+ * PoolRebuildStatus represents a pool's rebuild status, translates to enum daos_rebuild_state_t
+ * IN_PROGRESS/NOT_STARTED/COMPLETED states.
  */
 struct  _Mgmt__PoolRebuildStatus
 {
@@ -792,7 +802,7 @@ struct  _Mgmt__PoolRebuildStatus
 };
 #define MGMT__POOL_REBUILD_STATUS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_rebuild_status__descriptor) \
-    , 0, MGMT__POOL_REBUILD_STATUS__STATE__IDLE, 0, 0 }
+    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0 }
 
 
 /*
