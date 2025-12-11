@@ -441,31 +441,23 @@ readarray -t gcno_files < <(find . -name '*.gcno')
 if [ ${#gcno_files[@]} -gt 0 ]; then
   PACKAGE_TYPE="dir"
   TARGET_PATH="${daoshome}/TESTING/code_coverage"
-  
-  # list_files files "${gcno_files[@]}"
-  target_dir="${tmp}${TARGET_PATH}"
-  files=()
-  directories=()
-  for file in "${gcno_files[@]}"; do
-    new_file="${target_dir}/${file:2}"
-    new_dir="$(dirname "${new_file}")"
-    echo "FILE: ${file}, NEW_DIR: ${new_dir}, NEW_FILE: ${new_file}"
-    files+=("${new_file}")
-    if [ ! -e "${new_dir}" ]; then
-      directories=("${new_dir}")
-      mkdir -p "${new_dir}"
-    fi
-    cp "${file}" "$(dirname "${new_file}")"
-  done
-  while [ ${#directories[@]} -gt 0 ]; do
-    newfiles=()
-    newdirs=()
-    expand_directories newfiles newdirs "${directories[@]}";
-    directories=("${newdirs[@]}")
-    files+=("${newfiles[@]}")
-  done
 
-  append_install_list "${files[@]}"
+  # list_files files "${gcno_files[@]}"
+  # append_install_list "${files[@]}"
+
+  target_dir="${tmp}${TARGET_PATH}"
+  for file in "${gcno_files[@]}"; do
+    base="$(basename "${file}")"
+
+    tmp_file="${target_dir}/${file:2}"
+    tmp_dir="$(dirname ${tmp_file})"
+    if [ ! -e "${tmp_dir}" ]; then
+      mkdir -p "${tmp_dir}"
+    fi
+    cp "${file}" "${tmp_dir}"
+
+    echo "install_list += ${base}"
+    install_list+=("${base}=${TARGET_PATH}/${file:2}")
 fi
 build_package "daos-tests"
 
