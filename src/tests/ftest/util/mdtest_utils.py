@@ -41,7 +41,7 @@ def get_mdtest(test, hosts, manager=None, path=None, slots=None, namespace=MDTES
     return mdtest
 
 
-def run_mdtest(test, hosts, path, slots, pool, container, processes, ppn=None, manager=None,
+def run_mdtest(test, hosts, path, slots, container, processes, ppn=None, manager=None,
                log_file=None, intercept=None, display_space=True, namespace=MDTEST_NAMESPACE,
                mdtest_params=None):
     # pylint: disable=too-many-arguments
@@ -52,7 +52,6 @@ def run_mdtest(test, hosts, path, slots, pool, container, processes, ppn=None, m
         hosts (NodeSet): hosts on which to run the mdtest command
         path (str): hostfile path.
         slots (int): hostfile number of slots per host.
-        pool (TestPool): DAOS test pool object
         container (TestContainer): DAOS test container object.
         processes (int): number of processes to run
         ppn (int, optional): number of processes per node to run.  If specified it will override
@@ -78,7 +77,7 @@ def run_mdtest(test, hosts, path, slots, pool, container, processes, ppn=None, m
     if log_file is None:
         log_file = mdtest.get_unique_log(container)
     mdtest.update_log_file(log_file)
-    return mdtest.run(pool, container, processes, ppn, intercept, display_space, False)
+    return mdtest.run(container, processes, ppn, intercept, display_space)
 
 
 def write_mdtest_data(test, container, namespace=MDTEST_NAMESPACE, **mdtest_run_params):
@@ -97,15 +96,14 @@ def write_mdtest_data(test, container, namespace=MDTEST_NAMESPACE, **mdtest_run_
         Mdtest: the Mdtest object used to populate the container
     """
     mdtest = get_mdtest(test, test.hostlist_clients, None, test.workdir, None, namespace)
-    mdtest.update_log_file(
-        f"mdtest_{test.test_id}_{container.pool.identifier}_{container.identifier}.log")
+    mdtest.update_log_file(mdtest.get_unique_log(container))
 
     if 'processes' not in mdtest_run_params:
         mdtest_run_params['processes'] = test.params.get('processes', namespace, None)
     elif 'ppn' not in mdtest_run_params:
         mdtest_run_params['ppn'] = test.params.get('ppn', namespace, None)
 
-    mdtest.run(container.pool, container, **mdtest_run_params)
+    mdtest.run(container, **mdtest_run_params)
     return mdtest
 
 
@@ -323,21 +321,16 @@ class Mdtest:
             self.env["DAOS_CONT"] = self.command.dfs_cont.value
             self.env["IOR_HINT__MPI__romio_daos_obj_class"] = self.command.dfs_oclass.value
 
-    def run(self, pool, container, processes, ppn=None, intercept=None, display_space=True,
-            unique_log=True):
-        # pylint: disable=too-many-arguments
+    def run(self, container, processes, ppn=None, intercept=None, display_space=True):
         """Run mdtest.
 
         Args:
-            pool (TestPool): DAOS test pool object
             container (TestContainer): DAOS test container object.
             processes (int): number of processes to run
             ppn (int, optional): number of processes per node to run.  If specified it will override
                 the processes input. Defaults to None.
             intercept (str, optional): path to interception library. Defaults to None.
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
-            unique_log (bool, optional): whether or not to update the log file with a new unique log
-                file name. Defaults to True.
 
         Raises:
             CommandFailure: if there is an error running the mdtest command
@@ -348,7 +341,7 @@ class Mdtest:
         result = None
         error_message = None
 
-        self.update_daos_params(pool, container)
+        self.update_daos_params(container.pool, container)
 
         if intercept:
             self.env["LD_PRELOAD"] = intercept
@@ -363,12 +356,9 @@ class Mdtest:
 
         self.manager.assign_environment(self.env)
 
-        if unique_log:
-            self.update_log_file(self.get_unique_log(container))
-
         try:
             if display_space:
-                pool.display_space()
+                container.pool.display_space()
             result = self.manager.run()
 
         except CommandFailure as error:
@@ -376,7 +366,7 @@ class Mdtest:
 
         finally:
             if not self.manager.run_as_subprocess and display_space:
-                pool.display_space()
+                container.pool.display_space()
 
         if error_message:
             raise CommandFailure(error_message)

@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import json
+import math
 
 from mdtest_utils import MDTEST_NAMESPACE, run_mdtest
 from telemetry_test_base import TestWithTelemetry
@@ -57,10 +58,11 @@ class EvictionMetrics(TestWithTelemetry):
 
         self.log_step('Writing data to the pool (mdtest -a DFS)')
         processes = self.params.get('processes', MDTEST_NAMESPACE, None)
+        read_bytes = self.params.get('read_bytes', MDTEST_NAMESPACE, None)
         ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
-        mdtest_params = {"read_bytes": mem_file_bytes * 2, "write_bytes": mem_file_bytes * 2}
+        mdtest_params = {"num_of_files_dirs": math.ceil(mem_file_bytes / read_bytes) + 1}
         run_mdtest(
-            self, self.hostlist_clients, self.workdir, None, pool, container, processes, ppn,
+            self, self.hostlist_clients, self.workdir, None, container, processes, ppn,
             mdtest_params=mdtest_params)
 
         self.log_step(

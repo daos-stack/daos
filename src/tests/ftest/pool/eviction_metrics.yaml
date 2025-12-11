@@ -37,4 +37,5 @@ mdtest:
   api: DFS
   branching_factor: 1
   depth: 20
-  num_of_files_dirs: 1000
+  write_bytes: 4096
+  read_bytes: 4096
