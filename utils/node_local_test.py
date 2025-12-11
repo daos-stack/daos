@@ -5430,6 +5430,7 @@ def test_pydaos_kv(server, conf):
         print("That's not good")
 
     del kv
+    container.destroy('my_test_kv')
     del container
 
     print('Running PyDAOS container checker')

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -77,6 +78,8 @@
  */
 #define INVAL_DIRECTORY_GRACE (60 * 60 * 24 * 365 * 20) /* 20 years to avoid getcwd failures */
 #define INVAL_FILE_GRACE      2
+
+static double expiration_time_dir = INVAL_DIRECTORY_GRACE;
 
 /* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
  * this timeout.
@@ -262,7 +265,13 @@ ival_bucket_add(d_list_t *list, double timeout)
 int
 ival_init(struct dfuse_info *dfuse_info)
 {
-	int rc;
+	int      rc;
+	uint64_t expiration_time_dir_env;
+
+	/* this env is only used for testing */
+	rc = d_getenv_uint64_t("D_EXPIRATION_TIME_DIR", &expiration_time_dir_env);
+	if (rc != -DER_NONEXIST)
+		expiration_time_dir = 1.0 * expiration_time_dir_env;
 
 	DFUSE_TRA_UP(&ival_data, dfuse_info, "invalidator");
 
@@ -343,7 +352,7 @@ ival_update_inode(struct dfuse_inode_entry *inode, double timeout)
 	bool                     wake = false;
 
 	if (S_ISDIR(inode->ie_stat.st_mode))
-		timeout += INVAL_DIRECTORY_GRACE;
+		timeout += expiration_time_dir;
 	else
 		timeout += INVAL_FILE_GRACE;
 
@@ -454,13 +463,13 @@ ival_add_cont_buckets(struct dfuse_cont *dfc)
 
 	D_MUTEX_LOCK(&ival_lock);
 
-	rc = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
+	rc = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + expiration_time_dir);
 	if (rc != 0)
 		goto out;
 	if (dfc->dfc_dentry_timeout != 0) {
 		rc = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
 		if (rc != 0)
-			ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
+			ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + expiration_time_dir);
 	}
 
 out:
@@ -475,7 +484,7 @@ ival_dec_cont_buckets(struct dfuse_cont *dfc)
 	D_MUTEX_LOCK(&ival_lock);
 	if (dfc->dfc_dentry_timeout != 0)
 		ival_bucket_dec_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
-	ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
+	ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + expiration_time_dir);
 	D_MUTEX_UNLOCK(&ival_lock);
 }
 

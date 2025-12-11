@@ -586,6 +586,15 @@ do_mtime(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
+	usleep(10000);
+	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+	rc              = utimensat(root, "mtime_file", NULL, 0);
+	assert_return_code(rc, errno);
+	rc = fstatat(root, "mtime_file", &stbuf, 0);
+	assert_return_code(rc, errno);
+	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+
 	rc = unlinkat(root, "mtime_file", 0);
 	assert_return_code(rc, errno);
 
@@ -629,7 +638,23 @@ do_directory(void **state)
 	DIR            *dirp;
 	struct dirent **namelist;
 	long            pos;
-	int             entry_count = 100;
+	int             entry_count  = 100;
+	bool            with_pil4dfs = false;
+	bool            use_dfuse    = true;
+	char           *env_ldpreload;
+	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
+	char            native_mount_dir[] = "/tmp/dfuse-test";
+	char            cwd[1024];
+	char            cwd_saved[1024];
+	char           *resolved_path;
+	char           *path_ret;
+
+	if (strstr(test_dir, native_mount_dir))
+		use_dfuse = false;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload != NULL && strstr(env_ldpreload, "libpil4dfs.so") != NULL)
+		with_pil4dfs = true;
 
 	printf("Creating dir and files\n");
 	root = open(test_dir, O_PATH | O_DIRECTORY);
@@ -724,6 +749,61 @@ do_directory(void **state)
 
 	rc = close(root);
 	assert_return_code(rc, errno);
+
+	if (!with_pil4dfs || !use_dfuse)
+		return;
+
+	/* start testing getcwd() and realpath() */
+	resolved_path = malloc(PATH_MAX);
+	assert_true(resolved_path != NULL);
+
+	path_ret = getcwd(cwd_saved, sizeof(cwd_saved));
+	assert_true(path_ret != NULL);
+
+	rc = chdir(test_dir);
+	assert_return_code(rc, errno);
+
+	rc = mkdir("dir_test", 0755);
+	assert_return_code(rc, errno);
+
+	rc = symlink("dir_test", "link_test");
+	assert_return_code(rc, errno);
+
+	rc = chdir("link_test");
+	assert_return_code(rc, errno);
+
+	path_ret = getcwd(cwd, sizeof(cwd));
+	assert_true(path_ret != NULL);
+	assert_true(strstr(cwd, "dir_test") != NULL);
+
+	path_ret = realpath(".", resolved_path);
+	assert_true(path_ret != NULL);
+	assert_true(strstr(resolved_path, "dir_test") != NULL);
+
+	sleep(2);
+
+	path_ret = getcwd(cwd, sizeof(cwd));
+	assert_true(path_ret != NULL);
+	assert_true(strstr(cwd, "dir_test") != NULL);
+
+	path_ret = realpath(".", resolved_path);
+	assert_true(path_ret != NULL);
+	assert_true(strstr(resolved_path, "dir_test") != NULL);
+
+	rc = chdir("..");
+	assert_return_code(rc, errno);
+
+	rc = unlink("link_test");
+	assert_return_code(rc, errno);
+
+	rc = rmdir("dir_test");
+	assert_return_code(rc, errno);
+
+	rc = chdir(cwd_saved);
+	assert_return_code(rc, errno);
+
+	free(resolved_path);
+	/* end   testing getcwd() and realpath() */
 }
 
 void

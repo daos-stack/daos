@@ -464,40 +464,17 @@ struct obj_auxi_args {
 	 * ec_wait_recov -- obj fetch wait another EC recovery task,
 	 * ec_in_recov -- a EC recovery task
 	 */
-	uint32_t			 io_retry:1,
-					 args_initialized:1,
-					 to_leader:1,
-					 spec_shard:1,
-					 spec_group:1,
-					 req_reasbed:1,
-					 is_ec_obj:1,
-					 csum_retry:1,
-					 csum_report:1,
-					 tx_uncertain:1,
-					 nvme_io_err:1,
-					 no_retry:1,
-					 ec_wait_recov:1,
-					 ec_in_recov:1,
-					 new_shard_tasks:1,
-					 reset_param:1,
-					 force_degraded:1,
-					 shards_scheded:1,
-					 sub_anchors:1,
-					 ec_degrade_fetch:1,
-					 tx_convert:1,
-					 cond_modify:1,
-					 /* conf_fetch split to multiple sub-tasks */
-					 cond_fetch_split:1,
-					 reintegrating:1,
-					 tx_renew:1,
-					 rebuilding:1,
-					 for_migrate:1,
-					 req_dup_sgl:1;
+	uint32_t new_shard_tasks : 1, reset_param : 1, force_degraded : 1, shards_scheded : 1,
+	    io_retry : 1, args_initialized : 1, to_leader : 1, spec_shard : 1, spec_group : 1,
+	    req_reasbed : 1, is_ec_obj : 1, csum_retry : 1, csum_report : 1, tx_uncertain : 1,
+	    nvme_io_err : 1, no_retry : 1, ec_wait_recov : 1, ec_in_recov : 1, rebuilding : 1,
+	    sub_anchors : 1, ec_degrade_fetch : 1, long_retry_delay : 1, cond_fetch_split : 1,
+	    cond_modify : 1, reintegrating : 1, tx_renew : 1, tx_convert : 1, req_dup_sgl : 1,
+	    for_migrate : 1;
 	/* request flags. currently only: ORF_RESEND */
-	uint32_t			 specified_shard;
-	uint32_t			 flags;
-	uint16_t			 retry_cnt;
-	uint16_t			 inprogress_cnt;
+	uint32_t                         specified_shard;
+	uint32_t                         flags;
+	uint32_t                         retry_cnt;
 	/* Last timestamp (in second) when report retry warning message. */
 	uint32_t                         retry_warn_ts;
 	struct obj_req_tgts		 req_tgts;
@@ -925,8 +902,8 @@ void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint16_t *retry_cnt,
-		   uint16_t *inprogress_cnt, uint32_t timeout_secs);
+dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
+		   uint32_t timeout_secs, bool long_delay);
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {

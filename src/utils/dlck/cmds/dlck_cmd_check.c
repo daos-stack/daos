@@ -33,6 +33,13 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 	daos_handle_t poh;
 	int           rc;
 
+	rc = dlck_pool_file_preallocate(xa->ctrl->engine.storage_path, file->po_uuid,
+					xa->xs->tgt_id);
+	CK_PRINTL_RC(ck, xa->rc, "VOS file allocation");
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
 	/** generate a VOS file path */
 	rc = ds_mgmt_file(xa->ctrl->engine.storage_path, file->po_uuid, VOS_FILE, &xa->xs->tgt_id,
 			  &path);
