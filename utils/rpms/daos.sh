@@ -445,11 +445,16 @@ if [ ${#gcno_files[@]} -gt 0 ]; then
   # list_files files "${gcno_files[@]}"
   target_dir="${tmp}${TARGET_PATH}"
   files=()
+  directories=()
   for file in "${gcno_files[@]}"; do
     new_file="${target_dir}/${file:2}"
-    echo "FILE: ${file}, NEW_FILE: ${new_file}"
+    new_dir="$(dirname "${new_file}")"
+    echo "FILE: ${file}, NEW_DIR: ${new_dir}, NEW_FILE: ${new_file}"
     files+=("${new_file}")
-    mkdir -p "$(dirname "${new_file}")"
+    if [ ! -e "${new_dir}" ]; then
+      directories=("${new_dir}")
+      mkdir -p "${new_dir}"
+    fi
     cp "${file}" "$(dirname "${new_file}")"
   done
 
