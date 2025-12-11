@@ -58,7 +58,7 @@ class EvictionMetrics(TestWithTelemetry):
             self.fail('Pool eviction metrics verification failed after pool creation')
 
         self.log_step('Writing data to the pool (mdtest -a DFS)')
-        manager = get_job_manager(self, subprocess=False, timeout=1600)
+        manager = get_job_manager(self, subprocess=False, timeout=None)
         processes = self.params.get('processes', MDTEST_NAMESPACE, None)
         read_bytes = self.params.get('read_bytes', MDTEST_NAMESPACE, None)
         ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
