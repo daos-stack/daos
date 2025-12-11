@@ -203,7 +203,7 @@ class CodeCoverage():
             message = f"Error creating gcov directory on {result.failed_hosts}"
             result.fail_test(logger, "Run", message, None)
             return False
-        result = run_remote(logger, hosts, f"cp -r {self.__code_coverage_dir}/* {prefix}/")
+        result = run_remote(logger, hosts, f"rsync -avtr  {self.__code_coverage_dir} {prefix}/")
         if not result.passed:
             logger.info("Error copying gcov notes files to %s on %s", prefix, result.failed_hosts)
             return False
