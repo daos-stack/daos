@@ -456,7 +456,7 @@ if [ ${#gcno_files[@]} -gt 0 ]; then
     fi
     cp "${file}" "${tmp_dir}"
 
-    echo "install_list += ${base}"
+    echo "install_list: file=${file}, tmp_file=${tmp_file} => ${base}=${TARGET_PATH}/${file:2}"
     install_list+=("${base}=${TARGET_PATH}/${file:2}")
   done
 fi
