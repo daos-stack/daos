@@ -448,7 +448,7 @@ if [ ${#gcno_files[@]} -gt 0 ]; then
   for file in "${gcno_files[@]}"; do
     new_file="${target_dir}/${file#?}"
     echo "FILE: ${file}, NEW_FILE: ${new_file}"
-    listvar+=("${new_file}")
+    files+=("${new_file}")
     mkdir -p "$(dirname "${new_file}")"
   done
 
