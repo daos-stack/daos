@@ -1217,7 +1217,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "query"), ranks=ranks, verbose=verbose)
 
-    def system_reintegrate(self, ranks, rank_hosts):
+    def system_reintegrate(self, ranks=None, rank_hosts=None):
         """Call dmg system reintegrate.
 
         Args:
