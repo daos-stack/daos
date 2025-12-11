@@ -669,7 +669,7 @@ int_rebuild_dkeys_stop_failing(void **state)
 	/* Use EC object - daos_obj_verify() -DER_MISMATCH with replicated object when targets down
 	 */
 	arg->obj_class = OC_EC_2P2G1;
-	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
+	oid            = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert records */
