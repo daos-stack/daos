@@ -457,6 +457,13 @@ if [ ${#gcno_files[@]} -gt 0 ]; then
     fi
     cp "${file}" "$(dirname "${new_file}")"
   done
+  while [ ${#directories[@]} -gt 0 ]; do
+    newfiles=()
+    newdirs=()
+    expand_directories newfiles newdirs "${directories[@]}";
+    directories=("${newdirs[@]}")
+    files+=("${newfiles[@]}")
+  done
 
   append_install_list "${files[@]}"
 fi
