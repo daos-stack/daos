@@ -31,11 +31,6 @@
 /* 256MB for CR pool size. */
 #define CR_POOL_SIZE	(1 << 28)
 
-struct test_cont {
-	uuid_t	uuid;
-	char	label[DAOS_PROP_LABEL_MAX_LEN];
-};
-
 /* Instance Status */
 
 static inline bool
@@ -173,10 +168,24 @@ cr_dump_pools(uint32_t pool_nr, uuid_t uuids[])
 /* dmg command */
 
 static inline int
-cr_debug_set_params_internal(test_arg_t *arg, uint64_t fail_loc, bool nowait)
+cr_debug_set_fail_val(test_arg_t *arg, uint64_t fail_val)
+{
+	int rc;
+
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, fail_val, 0, NULL);
+
+	print_message("CR: set fail_val as " DF_X64 ": " DF_RC "\n", fail_val, DP_RC(rc));
+
+	return rc;
+}
+
+static inline int
+cr_debug_set_fail_loc(test_arg_t *arg, uint64_t fail_loc, bool nowait)
 {
 	int	rc;
 	int	i = 0;
+
+	print_message("CR: setting fail_loc as " DF_X64 "\n", fail_loc);
 
 	/* The system maybe just started, wait for a while for primary group initialization. */
 	if (fail_loc != 0 && !nowait)
@@ -198,13 +207,13 @@ cr_debug_set_params_internal(test_arg_t *arg, uint64_t fail_loc, bool nowait)
 static inline int
 cr_debug_set_params(test_arg_t *arg, uint64_t fail_loc)
 {
-	return cr_debug_set_params_internal(arg, fail_loc, false);
+	return cr_debug_set_fail_loc(arg, fail_loc, false);
 }
 
 static inline int
 cr_debug_set_params_nowait(test_arg_t *arg, uint64_t fail_loc)
 {
-	return cr_debug_set_params_internal(arg, fail_loc, true);
+	return cr_debug_set_fail_loc(arg, fail_loc, true);
 }
 
 static inline int
@@ -979,6 +988,108 @@ cr_cont_get_label(void **state, struct test_pool *pool, struct test_cont *cont, 
 	 */
 
 	return rc;
+}
+
+static int
+cr_pool_is_healthy(struct daos_check_info *dci, uuid_t uuid)
+{
+	struct daos_check_pool_info *dcpi;
+
+	print_message("CR: verify whether the pool " DF_UUID " is healthy\n", DP_UUID(uuid));
+
+	if (dci->dci_pool_nr != 1) {
+		print_message("CR pool count %d is not 1\n", dci->dci_pool_nr);
+		return -DER_INVAL;
+	}
+
+	dcpi = &dci->dci_pools[0];
+	D_ASSERTF(uuid_compare(dcpi->dcpi_uuid, uuid) == 0,
+		  "Unmatched pool UUID: " DF_UUID " vs " DF_UUID "\n", DP_UUID(dcpi->dcpi_uuid),
+		  DP_UUID(uuid));
+
+	if (!cr_pool_status_checked(dcpi->dcpi_status)) {
+		print_message("CR pool " DF_UUID " status %s is not CHECKED\n", DP_UUID(uuid),
+			      dcpi->dcpi_status);
+		return -DER_INVAL;
+	}
+
+	if (!cr_pool_phase_is_done(dcpi->dcpi_phase)) {
+		print_message("CR pool " DF_UUID " phase %s is not DONE\n", DP_UUID(uuid),
+			      dcpi->dcpi_phase);
+		return -DER_INVAL;
+	}
+
+	if (dci->dci_report_nr != 0) {
+		print_message("CR pool " DF_UUID " expect zero report, but got %u\n", DP_UUID(uuid),
+			      dci->dci_report_nr);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+void
+test_verify_cont(test_arg_t *arg, struct test_pool *pool, struct test_cont *conts, int cont_nr)
+{
+	struct daos_check_info dci     = {0};
+	uint32_t               rank_nr = pool->pool_info.pi_nnodes;
+	int                    rc;
+	int                    i;
+
+	print_message("closing containers ...\n");
+
+	for (i = 0; i < cont_nr; i++) {
+		if (daos_handle_is_valid(conts[i].coh)) {
+			rc = daos_cont_close(conts[i].coh, NULL);
+			assert_rc_equal(rc, 0);
+			conts[i].coh = DAOS_HDL_INVAL;
+		}
+	}
+
+	print_message("disconnecting pool ...\n");
+
+	if (daos_handle_is_valid(pool->poh)) {
+		rc = daos_pool_disconnect(pool->poh, NULL);
+		assert_rc_equal(rc, 0);
+		pool->poh = DAOS_HDL_INVAL;
+	}
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_params(arg, DAOS_CHK_VERIFY_CONT_SHARDS | DAOS_FAIL_ALWAYS);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_fail_val(arg, rank_nr);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_RESET, 1, &pool->pool_uuid, "CONT_NONEXIST_ON_PS:CIA_IGNORE");
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool->pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_is_healthy(&dci, pool->pool_uuid);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_params_nowait(arg, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_fail_val(arg, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
 }
 
 /* Test Cases. */

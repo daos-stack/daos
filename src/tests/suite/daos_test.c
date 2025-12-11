@@ -18,13 +18,13 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mFpcetTViADKCoRvSXbOzZUdrNbBIPG"
+#define TESTS          "mFpcetTViADKCoRvSXbOzZUdrNbBIPGY"
 
 /**
  * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
  */
-#define EXPLICIT_TESTS "x"
+#define EXPLICIT_TESTS "xj"
 static const char *all_tests = TESTS;
 static const char *all_tests_defined = TESTS EXPLICIT_TESTS;
 
@@ -32,7 +32,6 @@ enum {
 	CHECKSUM_ARG_VAL_TYPE         = 0x2713,
 	CHECKSUM_ARG_VAL_CHUNKSIZE    = 0x2714,
 	CHECKSUM_ARG_VAL_SERVERVERIFY = 0x2715,
-	REBUILD_INTERACTIVE           = 0x2716,
 };
 
 static void
@@ -74,6 +73,7 @@ print_usage(int rank)
 	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -P|--daos_pipeline\n");
 	print_message("daos_test -G|--upgrade\n");
+	print_message("daos_test -Y|--inc_reint\n");
 	print_message("daos_test -a|--all\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
@@ -88,7 +88,6 @@ print_usage(int rank)
 	print_message("daos_test --csum_type CSUM_TYPE\n");
 	print_message("daos_test --csum_cs CHUNKSIZE\n");
 	print_message("daos_test --csum_sv\n");
-	print_message("daos_test --rebuild_interactive\n");
 	print_message("\n=============================\n");
 }
 
@@ -311,6 +310,19 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_upgrade_test(rank, size, sub_tests, sub_tests_size);
 			break;
+		case 'Y':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS incremental reintegration tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_inc_reint_test(rank, size, sub_tests, sub_tests_size);
+			break;
+		case 'j':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS interactive rebuild tests..");
+			daos_test_print(rank, "=================");
+			nr_failed +=
+			    run_daos_int_rebuild_test(rank, size, sub_tests, sub_tests_size);
+			break;
 		default:
 			D_ASSERT(0);
 		}
@@ -381,6 +393,8 @@ main(int argc, char **argv)
 	    {"drain_simple", no_argument, NULL, 'b'},
 	    {"nvme_recovery", no_argument, NULL, 'N'},
 	    {"pipeline", no_argument, NULL, 'P'},
+	    {"upgrade", no_argument, NULL, 'G'},
+	    {"inc_reint", no_argument, NULL, 'Y'},
 	    {"group", required_argument, NULL, 'g'},
 	    {"csum_type", required_argument, NULL, CHECKSUM_ARG_VAL_TYPE},
 	    {"csum_cs", required_argument, NULL, CHECKSUM_ARG_VAL_CHUNKSIZE},
@@ -393,7 +407,6 @@ main(int argc, char **argv)
 	    {"work_dir", required_argument, NULL, 'W'},
 	    {"workload_file", required_argument, NULL, 'w'},
 	    {"obj_class", required_argument, NULL, 'l'},
-	    {"rebuild_interactive", no_argument, NULL, REBUILD_INTERACTIVE},
 	    {"help", no_argument, NULL, 'h'},
 	    {NULL, 0, NULL, 0}};
 
@@ -405,10 +418,9 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt =
-		getopt_long(argc, argv,
-			    "amFpcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GP",
-			     long_options, &index)) != -1) {
+	while (
+	    (opt = getopt_long(argc, argv, "amFpcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GPYj",
+			       long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -468,9 +480,6 @@ main(int argc, char **argv)
 			break;
 		case CHECKSUM_ARG_VAL_SERVERVERIFY:
 			dt_csum_server_verify = true;
-			break;
-		case REBUILD_INTERACTIVE:
-			dt_rb_interactive = true;
 			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");

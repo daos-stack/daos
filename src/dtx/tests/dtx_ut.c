@@ -22,7 +22,9 @@ run_structs_tests(void);
 int
 run_discard_invalid_tests(void);
 int
-run_dtx_count_tests(void);
+run_dtx_cmt_stat_tests(void);
+int
+run_dtx_aggregate_tests(void);
 
 static void
 print_usage()
@@ -42,7 +44,8 @@ run_all_tests(int keys)
 
 	failed += run_structs_tests();
 	failed += run_discard_invalid_tests();
-	failed += run_dtx_count_tests();
+	failed += run_dtx_cmt_stat_tests();
+	failed += run_dtx_aggregate_tests();
 
 	return failed;
 }

@@ -114,18 +114,27 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	}
 
 	if (rsvc_class(class)->sc_map_dist != NULL) {
+		rc = ABT_mutex_create(&svc->s_map_dist_mutex);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("%s: failed to create map_dist_mutex: %d\n", svc->s_name, rc);
+			rc = dss_abterr2der(rc);
+			goto err_leader_ref_cv;
+		}
 		rc = ABT_cond_create(&svc->s_map_dist_cv);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("%s: failed to create map_dist_cv: %d\n",
 				svc->s_name, rc);
 			rc = dss_abterr2der(rc);
-			goto err_leader_ref_cv;
+			goto err_map_dist_mutex;
 		}
 	}
 
 	*svcp = svc;
 	return 0;
 
+err_map_dist_mutex:
+	if (rsvc_class(class)->sc_map_dist != NULL)
+		ABT_mutex_free(&svc->s_map_dist_mutex);
 err_leader_ref_cv:
 	ABT_cond_free(&svc->s_leader_ref_cv);
 err_state_cv:
@@ -148,8 +157,10 @@ fini_free(struct ds_rsvc *svc)
 	D_ASSERT(d_list_empty(&svc->s_entry));
 	D_ASSERTF(svc->s_ref == 0, "%d\n", svc->s_ref);
 	D_ASSERTF(svc->s_leader_ref == 0, "%d\n", svc->s_leader_ref);
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
 		ABT_cond_free(&svc->s_map_dist_cv);
+		ABT_mutex_free(&svc->s_map_dist_mutex);
+	}
 	ABT_cond_free(&svc->s_leader_ref_cv);
 	ABT_cond_free(&svc->s_state_cv);
 	ABT_mutex_free(&svc->s_mutex);
@@ -443,45 +454,57 @@ fini_map_distd(struct ds_rsvc *svc)
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 }
 
-static int
-rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
+/**
+ * Release svc->s_mutex, which the caller must hold when calling. Change the
+ * state of \a svc to STEPPING_UP. The caller must call ds_rsvc_end_stepping_up
+ * after this function returns.
+ */
+void
+ds_rsvc_begin_stepping_up(struct ds_rsvc *svc)
 {
-	struct ds_rsvc *svc = arg;
-	bool		map_distd_initialized = false;
-	int		rc;
-
-	ABT_mutex_lock(svc->s_mutex);
-	if (svc->s_stop) {
-		D_DEBUG(DB_MD, "%s: skip term "DF_U64" due to stopping\n",
-			svc->s_name, term);
-		rc = 0;
-		goto out_mutex;
-	}
-	D_ASSERTF(svc->s_state == DS_RSVC_DOWN, "%d\n", svc->s_state);
-	svc->s_term = term;
 	change_state(svc, DS_RSVC_STEPPING_UP);
-	D_DEBUG(DB_MD, "%s: stepping up to "DF_U64"\n", svc->s_name,
-		svc->s_term);
+	ABT_mutex_unlock(svc->s_mutex);
+}
+
+/**
+ * Acquire svc->s_mutex, which the caller must release when appropriate. Change
+ * the state of \a svc to \a state upon errors. If \a rc_in is nonzero, it will
+ * be returned to the caller.
+ */
+int
+ds_rsvc_end_stepping_up(struct ds_rsvc *svc, int rc_in, enum ds_rsvc_state state)
+{
+	bool map_distd_initialized = false;
+	int  rc;
+
+	D_DEBUG(DB_MD, "%s: ending stepping up: rc=" DF_RC " state=%s\n", svc->s_name, DP_RC(rc_in),
+		ds_rsvc_state_str(state));
+	D_ASSERT(state == DS_RSVC_UP_EMPTY || state == DS_RSVC_DOWN);
+
+	if (rc_in != 0) {
+		rc = rc_in;
+		goto out;
+	}
 
 	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
 		rc = init_map_distd(svc);
-		if (rc != 0)
-			goto out_mutex;
+		if (rc != 0) {
+			DL_ERROR(rc, "%s: failed to initialize map_distd", svc->s_name);
+			goto out;
+		}
 		map_distd_initialized = true;
 	}
 
-	ABT_mutex_unlock(svc->s_mutex);
-	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
-	ABT_mutex_lock(svc->s_mutex);
-	if (rc == DER_UNINIT) {
-		change_state(svc, DS_RSVC_UP_EMPTY);
-		rc = 0;
-		goto out_mutex;
-	} else if (rc != 0) {
-		D_DEBUG(DB_MD, "%s: failed to step up to "DF_U64": "DF_RC"\n",
-			svc->s_name, term, DP_RC(rc));
-		if (map_distd_initialized)
-			drain_map_distd(svc);
+	if (state == DS_RSVC_UP_EMPTY && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_STEP_UP))
+		rc = -DER_GRPVER;
+	else
+		rc = rsvc_class(svc->s_class)->sc_step_up(svc);
+	if (rc != 0) {
+		if (rc == DER_UNINIT)
+			D_DEBUG(DB_MD, "%s: new db\n", svc->s_name);
+		else
+			D_DEBUG(DB_MD, "%s: failed to step up to " DF_U64 ": " DF_RC "\n",
+				svc->s_name, svc->s_term, DP_RC(rc));
 		/*
 		 * For certain harder-to-recover errors, trigger a replica stop
 		 * to avoid reporting them too many times. (A better strategy
@@ -491,15 +514,54 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		 */
 		if (rc == -DER_DF_INCOMPT)
 			rc = -DER_SHUTDOWN;
-		change_state(svc, DS_RSVC_DOWN);
-		goto out_mutex;
+		if (map_distd_initialized) {
+			drain_map_distd(svc);
+			fini_map_distd(svc);
+		}
 	}
 
-	change_state(svc, DS_RSVC_UP);
+out:
+	ABT_mutex_lock(svc->s_mutex);
+	if (rc == 0) {
+		change_state(svc, DS_RSVC_UP);
+	} else if (rc == DER_UNINIT) {
+		change_state(svc, DS_RSVC_UP_EMPTY);
+		rc = 0;
+	} else {
+		change_state(svc, state);
+		/*
+		 * If the error is from this function, and we are returning to
+		 * UP_EMPTY, then resign the leadership so that a new leader
+		 * will retry stepping up.
+		 */
+		if (rc_in == 0 && state == DS_RSVC_UP_EMPTY)
+			rdb_resign(svc->s_db, svc->s_term);
+	}
+	return rc;
+}
+
+static int
+rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
+{
+	struct ds_rsvc *svc = arg;
+	int             rc;
+
+	ABT_mutex_lock(svc->s_mutex);
+	if (svc->s_stop) {
+		D_DEBUG(DB_MD, "%s: skip term " DF_U64 " due to stopping\n", svc->s_name, term);
+		rc = 0;
+		goto out_mutex;
+	}
+	D_ASSERTF(svc->s_state == DS_RSVC_DOWN, "%d\n", svc->s_state);
+	svc->s_term = term;
+	D_DEBUG(DB_MD, "%s: stepping up to " DF_U64 "\n", svc->s_name, svc->s_term);
+
+	ds_rsvc_begin_stepping_up(svc);
+
+	rc = ds_rsvc_end_stepping_up(svc, 0 /* rc_in */, DS_RSVC_DOWN);
+
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
-	if (rc != 0 && map_distd_initialized)
-		fini_map_distd(svc);
 	return rc;
 }
 
@@ -520,23 +582,13 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 	D_ASSERTF(svc->s_state == DS_RSVC_UP_EMPTY, "%d\n", svc->s_state);
 
+	ds_rsvc_begin_stepping_up(svc);
+
 	D_DEBUG(DB_MD, "%s: calling sc_bootstrap\n", svc->s_name);
 	rc = rsvc_class(svc->s_class)->sc_bootstrap(svc, arg);
-	if (rc != 0)
-		goto out_mutex;
 
-	/* Try stepping up again. */
-	D_DEBUG(DB_MD, "%s: calling sc_step_up\n", svc->s_name);
-	ABT_mutex_unlock(svc->s_mutex);
-	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
-	ABT_mutex_lock(svc->s_mutex);
-	if (rc != 0) {
-		D_ASSERT(rc != DER_UNINIT);
-		goto out_mutex;
-	}
+	rc = ds_rsvc_end_stepping_up(svc, rc, DS_RSVC_UP_EMPTY);
 
-	change_state(svc, DS_RSVC_UP);
-out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
 	D_DEBUG(DB_MD, "%s: bootstrapped: "DF_RC"\n", svc->s_name, DP_RC(rc));
 	return rc;
@@ -545,37 +597,48 @@ out_mutex:
 static void
 rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 {
-	struct ds_rsvc    *svc = arg;
-	enum ds_rsvc_state entry_state;
+	struct ds_rsvc *svc = arg;
 
 	D_DEBUG(DB_MD, "%s: stepping down from "DF_U64"\n", svc->s_name, term);
 	ABT_mutex_lock(svc->s_mutex);
-	D_ASSERTF(svc->s_term == term, DF_U64" == "DF_U64"\n", svc->s_term, term);
-	entry_state = svc->s_state;
-	D_ASSERT(entry_state == DS_RSVC_UP_EMPTY || entry_state == DS_RSVC_UP);
 
-	/* Stop accepting new leader references (ds_rsvc_lookup_leader). */
-	change_state(svc, DS_RSVC_STEPPING_DOWN);
+	/*
+	 * There must have been a successful rsvc_step_up_cb call, which changes
+	 * the state to either UP_EMPTY or UP. From UP_EMPTY, however, there may
+	 * have been a bootstrap_self or ds_pool_create_handler calls either of
+	 * which changes the state first to STEPPING_UP and then to either
+	 * UP_EMPTY or UP.
+	 */
+	while (svc->s_state != DS_RSVC_UP_EMPTY && svc->s_state != DS_RSVC_UP) {
+		D_ASSERTF(svc->s_state == DS_RSVC_STEPPING_UP, "unexpected state %s\n",
+			  ds_rsvc_state_str(svc->s_state));
+		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
+	}
+	D_ASSERTF(svc->s_term == term, DF_U64 " == " DF_U64 "\n", svc->s_term, term);
 
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
-		drain_map_distd(svc);
+	if (svc->s_state == DS_RSVC_UP) {
+		/* Stop accepting new leader references (ds_rsvc_lookup_leader). */
+		change_state(svc, DS_RSVC_STEPPING_DOWN);
 
-	if (entry_state == DS_RSVC_UP)
+		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+			drain_map_distd(svc);
+
 		rsvc_class(svc->s_class)->sc_drain(svc);
 
-	/* Wait for all leader references to be released. */
-	for (;;) {
-		if (svc->s_leader_ref == 0)
-			break;
-		D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n", svc->s_name, svc->s_leader_ref);
-		ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
-	}
+		/* Wait for all leader references to be released. */
+		for (;;) {
+			if (svc->s_leader_ref == 0)
+				break;
+			D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n", svc->s_name,
+				svc->s_leader_ref);
+			ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
+		}
 
-	if (entry_state == DS_RSVC_UP)
 		rsvc_class(svc->s_class)->sc_step_down(svc);
 
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
-		fini_map_distd(svc);
+		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+			fini_map_distd(svc);
+	}
 
 	change_state(svc, DS_RSVC_DOWN);
 	ABT_mutex_unlock(svc->s_mutex);
@@ -620,7 +683,7 @@ map_distd(void *arg)
 	struct ds_rsvc *svc = arg;
 
 	D_DEBUG(DB_MD, "%s: start\n", svc->s_name);
-	ABT_mutex_lock(svc->s_mutex);
+	ABT_mutex_lock(svc->s_map_dist_mutex);
 	for (;;) {
 		uint32_t version;
 		int      rc;
@@ -634,9 +697,9 @@ map_distd(void *arg)
 				svc->s_map_dist_inp = true;
 				break;
 			}
-			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+			sched_cond_wait(svc->s_map_dist_cv, svc->s_map_dist_mutex);
 		}
-		ABT_mutex_unlock(svc->s_mutex);
+		ABT_mutex_unlock(svc->s_map_dist_mutex);
 
 		rc = rsvc_class(svc->s_class)->sc_map_dist(svc, &version);
 		if (rc != 0) {
@@ -647,7 +710,7 @@ map_distd(void *arg)
 			dss_sleep(3000 /* ms */);
 		}
 
-		ABT_mutex_lock(svc->s_mutex);
+		ABT_mutex_lock(svc->s_map_dist_mutex);
 		/* Stop serving the request. */
 		svc->s_map_dist_inp = false;
 		if (rc == 0) {
@@ -664,7 +727,7 @@ map_distd(void *arg)
 		}
 	}
 break_out:
-	ABT_mutex_unlock(svc->s_mutex);
+	ABT_mutex_unlock(svc->s_map_dist_mutex);
 	put_leader(svc);
 	D_DEBUG(DB_MD, "%s: stop\n", svc->s_name);
 	ds_rsvc_put(svc);
@@ -711,15 +774,15 @@ void
 ds_rsvc_wait_map_dist(struct ds_rsvc *svc)
 {
 	D_DEBUG(DB_MD, "%s: begin", svc->s_name);
-	ABT_mutex_lock(svc->s_mutex);
+	ABT_mutex_lock(svc->s_map_dist_mutex);
 	for (;;) {
 		if (svc->s_map_distd_stop)
 			break;
 		if (!svc->s_map_dist && !svc->s_map_dist_inp)
 			break;
-		sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+		sched_cond_wait(svc->s_map_dist_cv, svc->s_map_dist_mutex);
 	}
-	ABT_mutex_unlock(svc->s_mutex);
+	ABT_mutex_unlock(svc->s_map_dist_mutex);
 	D_DEBUG(DB_MD, "%s: end", svc->s_name);
 }
 
@@ -871,12 +934,10 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
 
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
 
-	ABT_mutex_lock(svc->s_mutex);
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
 		drain_map_distd(svc);
-	ABT_mutex_unlock(svc->s_mutex);
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
 		fini_map_distd(svc);
+	}
 
 	ds_rsvc_put(svc);
 	return 0;
@@ -916,8 +977,15 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
-		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name, svc->s_stop);
-		if (mode == DS_RSVC_DICTATE && !svc->s_stop) {
+		D_DEBUG(DB_MD, "%s: found: stop=%d mode=%s replicas=%p\n", svc->s_name, svc->s_stop,
+			start_mode_str(mode), replicas);
+		if (mode == DS_RSVC_CREATE && replicas != NULL) {
+			D_ERROR("%s: creating and bootstrapping existing replica not allowed\n",
+				svc->s_name);
+			rc = -DER_EXIST;
+			ds_rsvc_put(svc);
+			goto out;
+		} else if (mode == DS_RSVC_DICTATE && !svc->s_stop) {
 			/*
 			 * If we need to dictate, and the service is not
 			 * stopping, then stop it, which should not fail in

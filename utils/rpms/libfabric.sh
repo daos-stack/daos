@@ -16,6 +16,7 @@ ARCH=${isa}
 DESCRIPTION="Provides a user-space API to access high-performance fabric
 services, such as RDMA. This package contains the runtime library."
 URL="https://github.com/ofiwg/libfabric"
+RPM_CHANGELOG="libfabric.changelog"
 
 files=()
 TARGET_PATH="${bindir}"

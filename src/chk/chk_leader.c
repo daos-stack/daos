@@ -3631,10 +3631,10 @@ new_seq:
 		*seq = chk_report_seq_gen(ins);
 	}
 
-	D_INFO(DF_LEADER" handle %s report from rank %u with seq "
-	       DF_X64" class %u, action %u, result %d\n", DP_LEADER(ins),
-	       decision != NULL ? "local" : "remote", cru->cru_rank, *seq, cru->cru_cla,
-	       cru->cru_act, cru->cru_result);
+	D_INFO(DF_LEADER " handle %s report from rank %u with seq " DF_X64 " class %u, action %u, "
+			 "%s, result %d\n",
+	       DP_LEADER(ins), decision != NULL ? "local" : "remote", cru->cru_rank, *seq,
+	       cru->cru_cla, cru->cru_act, cru->cru_msg, cru->cru_result);
 
 	if (cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
 		if (cru->cru_pool == NULL)

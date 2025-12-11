@@ -17,6 +17,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/desertbit/go-shlex"
 	"github.com/desertbit/grumble"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -71,7 +72,7 @@ type ddbCmdStr string
 
 func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
 	// hack to get at command names
-	ctx, cleanup, err := InitDdb()
+	ctx, cleanup, err := InitDdb(nil)
 	if err != nil {
 		return
 	}
@@ -96,24 +97,31 @@ func (cmdStr *ddbCmdStr) UnmarshalFlag(fv string) error {
 func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 	file, err := os.Open(fileName)
 	if err != nil {
-		return errors.Wrapf(err, "Error opening file: %s", fileName)
+		return errors.Wrapf(err, "Error opening file %q", fileName)
 
 	}
 	defer func() {
 		err = file.Close()
 		if err != nil {
-			log.Errorf("Error closing %s: %s\n", fileName, err)
+			log.Errorf("Error closing %q: %s\n", fileName, err)
 		}
 	}()
 
-	log.Debugf("Running commands in: %s\n", fileName)
+	log.Debugf("Running commands in %q\n", fileName)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		fileCmd := scanner.Text()
-		log.Debugf("Running Command: %s\n", fileCmd)
-		err := runCmdStr(app, fileCmd)
+		lineStr := scanner.Text()
+		lineCmd, err := shlex.Split(lineStr, true)
 		if err != nil {
-			return errors.Wrapf(err, "Failed running command %q", fileCmd)
+			return errors.Wrapf(err, "Failed running command %q", lineStr)
+		}
+		if len(lineCmd) == 0 || strings.HasPrefix(lineCmd[0], "#") {
+			continue
+		}
+		log.Debugf("Running Command %q\n", lineStr)
+		err = runCmdStr(app, lineCmd[0], lineCmd[1:]...)
+		if err != nil {
+			return errors.Wrapf(err, "Failed running command %q", lineStr)
 		}
 	}
 
@@ -176,7 +184,7 @@ Example Paths:
 		log.Debug("debug output enabled")
 	}
 
-	ctx, cleanup, err := InitDdb()
+	ctx, cleanup, err := InitDdb(log)
 	if err != nil {
 		return errors.Wrap(err, "Error initializing the DDB Context")
 	}
@@ -213,7 +221,7 @@ Example Paths:
 		} else {
 			err := runFileCmds(log, app, opts.CmdFile)
 			if err != nil {
-				log.Error("Error running command file\n")
+				log.Errorf("Error running command file: %s\n", err)
 			}
 		}
 

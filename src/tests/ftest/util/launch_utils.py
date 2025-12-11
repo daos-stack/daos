@@ -869,13 +869,12 @@ class TestRunner():
         logger.debug("Generating certificates")
         test_env = TestEnvironment()
         certs_dir = os.path.join(test_env.log_dir, "daosCA")
-        certgen_dir = os.path.abspath(
-            os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
-        command = os.path.join(certgen_dir, "gen_certificates.sh")
         if not run_local(logger, f"/usr/bin/rm -rf {certs_dir}").passed:
             message = "Error removing old certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
             return False
+        command = os.path.abspath(
+            os.path.join(test_env.daos_prefix, "lib64", "daos", "certgen", "gen_certificates.sh"))
         if not run_local(logger, f"{command} {test_env.log_dir}").passed:
             message = "Error generating certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())

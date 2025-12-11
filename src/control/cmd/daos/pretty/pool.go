@@ -14,8 +14,10 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -60,6 +62,45 @@ func printPoolTiersMdOnSsd(memFileBytes uint64, suss []*daos.StorageUsageStats, 
 		}
 
 		printPoolTierStats(tierStats, w, fullStats)
+	}
+}
+
+// PrintPoolSelfHealDisable compares system and pool self_heal flags and display disabled
+// features.
+func PrintPoolSelfHealDisable(poolSelfHeal, sysSelfHeal string, out io.Writer) {
+	disabled := make(map[string][]string)
+
+	sysOffFlags := daos.SystemPropertySelfHealUnsetFlags(sysSelfHeal)
+	for _, sysOffFlag := range sysOffFlags {
+		switch sysOffFlag {
+		case "pool_exclude":
+			disabled["exclude"] = append(disabled["exclude"], "system")
+		case "pool_rebuild":
+			disabled["rebuild"] = append(disabled["rebuild"], "system")
+		}
+	}
+
+	poolOffFlags := daos.PoolPropertySelfHealUnsetFlags(poolSelfHeal)
+	for _, poolOffFlag := range poolOffFlags {
+		switch poolOffFlag {
+		case "exclude":
+			disabled["exclude"] = append(disabled["exclude"], "pool")
+		case "rebuild":
+			disabled["rebuild"] = append(disabled["rebuild"], "pool")
+		}
+	}
+
+	if len(disabled) == 0 {
+		return
+	}
+
+	for _, key := range []string{"exclude", "rebuild"} {
+		policies := common.DedupeStringSlice(disabled[key])
+		if len(policies) == 0 {
+			continue
+		}
+		fmt.Fprintf(out, "%s disabled on pool due to %v %s\n", key, policies,
+			english.PluralWord(len(policies), "policy", "policies"))
 	}
 }
 
@@ -110,6 +151,7 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 			printPoolTiersPMem(pi.TierStats, w, true)
 		}
 	}
+
 	return w.Err
 }
 

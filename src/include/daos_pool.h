@@ -169,6 +169,8 @@ enum daos_pool_info_bit {
 	DPI_ENGINES_DEAD = 1ULL << 4,
 	/** true to query pool's maximum supported rebuild layout version */
 	DPI_REBUILD_MAX_LAYOUT_VER = 1ULL << 5,
+	/** true to query pool's self_heal policy. currently fetch implemented in control plane */
+	DPI_SELF_HEAL_POLICY = 1ULL << 6,
 	/** query all above optional info */
 	DPI_ALL = -1,
 };

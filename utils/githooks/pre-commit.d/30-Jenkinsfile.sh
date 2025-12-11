@@ -21,7 +21,6 @@ if [ -z "$(_git_diff_cached_files "Jenkinsfile")" ] ; then
     exit 0
 fi
 
-
 echo "Checking syntax"
 : "${JENKINS_HOST:=jenkins.daos.hpc.amslabs.hpecorp.net}"
 
