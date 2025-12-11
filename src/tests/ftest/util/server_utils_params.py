@@ -456,6 +456,8 @@ class EngineYamlParameters(YamlParameters):
             # FIXME disable space cache since some tests need to verify instant pool space
             # changing, this global setting to individual test setting once in follow-on PR.
             "DAOS_POOL_SPACE_CACHE_INTVL=0",
+            f"GCOV_PREFIX={os.environ.get('GCOV_PREFIX', '/tmp/gcov')}",
+            f"GCOV_PREFIX_STRIP={os.environ.get('GCOV_PREFIX_STRIP', '7')}",
             "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],

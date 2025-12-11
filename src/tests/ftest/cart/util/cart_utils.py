@@ -228,7 +228,7 @@ class CartTest(TestWithoutServers):
 
         env += yaml_envs
 
-        for _env_name in ["PATH", "COVFILE", "GCOV_PREFIX", "GCOV_PREFIX_STRP"]:
+        for _env_name in ["PATH", "COVFILE", "GCOV_PREFIX", "GCOV_PREFIX_STRIP"]:
             if os.environ.get(_env_name) is not None:
                 env += f" -x {_env_name}"
 

@@ -443,14 +443,19 @@ if [ ${#gcno_files[@]} -gt 0 ]; then
   TARGET_PATH="${daoshome}/TESTING/code_coverage"
   
   # list_files files "${gcno_files[@]}"
+  FILTER_LIST=("/.sconf_temp/" "/tests/")
   target_dir="${tmp}${TARGET_PATH}"
   files=()
   for file in "${gcno_files[@]}"; do
-    new_file="${target_dir}/${file#?}"
+    if filter_file "${file}"; then
+      continue
+    fi
+    new_file="${target_dir}/${file:2}"
     echo "FILE: ${file}, NEW_FILE: ${new_file}"
     files+=("${new_file}")
     mkdir -p "$(dirname "${new_file}")"
   done
+  FILTER_LIST=()
 
   append_install_list "${files[@]}"
 fi
