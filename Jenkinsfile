@@ -390,7 +390,7 @@ pipeline {
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                // defaultValue: 'ci_node-hdr-200_202-205X',
-               defaultValue: 'ci_node-hdr-210_212-215X',
+               defaultValue: 'ci_node-hdr-210_212-219X',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
