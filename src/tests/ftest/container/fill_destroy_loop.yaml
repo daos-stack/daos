@@ -23,6 +23,10 @@ test_config:
     - "disabled"
     - "time"
 
+container:
+  type: POSIX
+  oclass: SX
+
 pool: !mux
   default:
     size: 1%
