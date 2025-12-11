@@ -165,7 +165,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         for loop_cnt in range(1, test_loop + 1):
             self.log.info("==>Starting test loop: %i ...", loop_cnt)
 
-            if self.reclaim_props:
+            if reclaim_props:
                 reclaim_prop = reclaim_props.pop(0)
                 self.log.info(
                     '--%i.(0)Set Pool reclaim properties to "%s"',
