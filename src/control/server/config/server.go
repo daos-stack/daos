@@ -68,6 +68,7 @@ type Server struct {
 	SystemRamReserved  int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages   bool                      `yaml:"disable_hugepages"`
 	AllowNumaImbalance bool                      `yaml:"allow_numa_imbalance"`
+	AllowTHP           bool                      `yaml:"allow_thp"`
 	ControlLogMask     common.ControlLogLevel    `yaml:"control_log_mask"`
 	ControlLogFile     string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON     bool                      `yaml:"control_log_json,omitempty"`
@@ -207,6 +208,13 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	if cfg.DisableHotplug != nil && *cfg.DisableHotplug {
 		engineCfg.Storage.EnableHotplug = false
 	}
+	if !cfg.AllowTHP {
+		for _, scmCfg := range engineCfg.Storage.Tiers.ScmConfigs() {
+			if scmCfg.Class == storage.ClassRam {
+				scmCfg.Scm.DisableHugepages = true
+			}
+		}
+	}
 }
 
 // WithEngines sets the list of engine configurations.
@@ -296,6 +304,12 @@ func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 // WithAllowNumaImbalance allows engine count mismatch between NUMA-nodes.
 func (cfg *Server) WithAllowNumaImbalance(allowed bool) *Server {
 	cfg.AllowNumaImbalance = allowed
+	return cfg
+}
+
+// WithAllowTHP allows DAOS server to run with transparent hugepage support enabled.
+func (cfg *Server) WithAllowTHP(allowed bool) *Server {
+	cfg.AllowTHP = allowed
 	return cfg
 }
 

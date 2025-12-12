@@ -264,7 +264,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithFabricAuthKey("foo:bar").
 		WithHyperthreads(true). // hyper-threads disabled by default
 		WithSystemRamReserved(5).
-		WithAllowNumaImbalance(true)
+		WithAllowNumaImbalance(true).
+		WithAllowTHP(true)
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{
@@ -439,7 +440,8 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos").
-					WithStorageClass("ram"),
+					WithStorageClass("ram").
+					WithScmDisableHugepages(),
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0").
@@ -1726,6 +1728,29 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expCheck: func(c *Server) error {
 				if !c.Engines[0].Storage.EnableHotplug {
 					return errors.New("expecting hotplug to be enabled")
+				}
+				return nil
+			},
+		},
+		"allow_thp enabled and scm hugepages enabled": {
+			inTxt:  "    scm_hugepages_disabled: true",
+			outTxt: "    scm_hugepages_disabled: false",
+			expCheck: func(c *Server) error {
+				if c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.DisableHugepages {
+					return errors.New("expecting scm hugepages to be enabled")
+				}
+				return nil
+			},
+		},
+		"allow_thp disabled sets scm huge disabled": {
+			inTxt:  "    scm_hugepages_disabled: true",
+			outTxt: "    scm_hugepages_disabled: false",
+			extraConfig: func(c *Server) *Server {
+				return c.WithAllowTHP(false)
+			},
+			expCheck: func(c *Server) error {
+				if !c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.DisableHugepages {
+					return errors.New("expecting scm hugepages to be disabled")
 				}
 				return nil
 			},

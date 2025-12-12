@@ -228,6 +228,14 @@
 #allow_numa_imbalance: true
 #
 #
+## Transparent hugepage support is incompatible with the way DAOS uses hugepages and it's highly
+## recommended to leave this option unset. There are edge-cases where administrators may want to
+## have THP enabled and to do that you will need to set this flag to trum.
+#
+## default: false
+#allow_thp: true
+#
+#
 ## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
 ## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
 ## reserved when calculating RAM-disk sizes for all engines.
