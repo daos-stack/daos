@@ -26,12 +26,12 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
-: "${BULLSEYE:=}"
-if [ -n "$BULLSEYE" ]; then
+: "${BULLSEYE_KEY:=}"
+if [ -n "$BULLSEYE_KEY" ]; then
     pushd "${SL_SRC_DIR}/bullseye"
     set +x
     echo + sudo ./install --quiet --key "**********" --prefix /opt/BullseyeCoverage
-    sudo ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage
+    sudo ./install --quiet --key "${BULLSEYE_KEY}" --prefix /opt/BullseyeCoverage
     set -x
     popd
     rm -rf bullseye

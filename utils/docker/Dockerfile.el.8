@@ -69,6 +69,21 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
 
 USER daos_server:daos_server
 
+# Install bullseye for code coverage reporting
+ARG BULLSEYE_KEY
+RUN if [ "x$BULLSEYE_KEY" != "x" ]; then \
+      dnf install xz && dnf clean all && \
+      curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/1/artifact/bullseyecoverage-linux.tar \
+        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar.xz && \
+      mkdir -p bullseye && \
+      tar -C bullseye --strip-components=1 -xf bullseye.tar.xz && \
+      pushd bullseye && \
+      ./install --quiet --key "${BULLSEYE_KEY}" --prefix /opt/BullseyeCoverage && \
+      popd && \
+      rm -rf bullseye.tar.xz bullseye; \
+    fi
+
+
 # Setup a python venv so that python packages can be installed locally.
 RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
