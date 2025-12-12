@@ -66,10 +66,10 @@ function nvme_bind_all_in_order {
   for dir in /sys/class/nvme/*/; do
     echo "$dir: $(ls -la ${dir} | grep device | awk -F'-> ' '{print $2}' | sed 's|.*/||')"
   done
-  
+
   # Unbind all NVMe devices
   echo "Unbinding NVMe devices from nvme driver (or vfio-pci driver) ..."
-  #set +e # it's ok if a device isn't bound to one of the drivers
+  set +e # it's ok if a device isn't bound to one of the drivers
   for addr in $nvme_pcie_addrs; do
     echo "Unbinding $addr"
     if [ -f "/sys/bus/pci/drivers/nvme/${addr}" ]; then
@@ -79,7 +79,7 @@ function nvme_bind_all_in_order {
         echo "$addr" | sudo tee /sys/bus/pci/drivers/vfio-pci/unbind > /dev/null 2>&1
     fi
   done
-  #set -e
+  set -e
 
   echo
   echo "Binding NVMe devices to nvme driver in sorted order..."
