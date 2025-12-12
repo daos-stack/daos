@@ -2344,14 +2344,16 @@ cr_engine_resume(void **state)
 static void
 cr_reset_specified(void **state)
 {
-	test_arg_t		*arg = *state;
-	struct test_pool	 pools[2] = { 0 };
-	struct test_cont	 conts[2] = { 0 };
-	struct daos_check_info	 dcis[2] = { 0 };
-	uint32_t		 classes[3];
-	uint32_t		 actions[3];
-	int			 rc;
-	int			 i;
+	test_arg_t            *arg        = *state;
+	struct test_pool       pools[2]   = {0};
+	struct test_cont       conts[2]   = {0};
+	struct daos_check_info dcis[2]    = {0};
+	const int              NR_REPORTS = 3;
+	uint32_t               classes[NR_REPORTS];
+	uint32_t               actions[NR_REPORTS];
+	uint32_t               stale_actions[NR_REPORTS];
+	int                    rc;
+	int                    i;
 
 	FAULT_INJECTION_REQUIRED();
 
@@ -2367,6 +2369,12 @@ cr_reset_specified(void **state)
 	actions[0] = TCA_IGNORE;
 	actions[1] = TCA_INTERACT;
 	actions[2] = TCA_INTERACT;
+
+	for (i = 0; i < NR_REPORTS; i++) {
+		stale_actions[i] = actions[i];
+		if (stale_actions[i] == TCA_INTERACT)
+			stale_actions[i] = TCA_STALE;
+	}
 
 	for (i = 0; i < 2; i++) {
 		rc = cr_pool_create(state, &pools[i], true, classes[0]);
@@ -2418,7 +2426,8 @@ cr_reset_specified(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Pool2's (old) report should be still there. */
-	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_STOPPED, 2, classes, actions, NULL);
+	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_STOPPED, 2, classes, stale_actions,
+			    NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_check_stop(0, NULL);
@@ -2433,8 +2442,8 @@ cr_reset_specified(void **state)
 	rc = cr_ins_verify(&dcis[1], TCIS_RUNNING);
 	assert_rc_equal(rc, 0);
 
-	/* There are 3 reports for pool2: two are old (since not reset), another one is new. */
-	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_PENDING, 3, classes, actions, NULL);
+	/* Pool2's stale report is re-generated */
+	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_PENDING, 2, classes, actions, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_check_stop(0, NULL);
