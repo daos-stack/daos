@@ -1597,6 +1597,8 @@ test_container_prop_to_csum_type(void **state)
 			 daos_contprop2hashtype(DAOS_PROP_CO_CSUM_SHA256));
 	assert_int_equal(HASH_TYPE_SHA512,
 			 daos_contprop2hashtype(DAOS_PROP_CO_CSUM_SHA512));
+	assert_int_equal(HASH_TYPE_ADLER32,
+			 daos_contprop2hashtype(DAOS_PROP_CO_CSUM_ADLER32));
 }
 
 static void
@@ -1609,7 +1611,7 @@ test_is_valid_csum(void **state)
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC64));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA256));
-	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA512));
+	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_ADLER32));
 
 	/* Not supported yet */
 	assert_false(daos_cont_csum_prop_is_valid(99));
@@ -1625,6 +1627,7 @@ test_is_csum_enabled(void **state)
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA256));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA512));
+	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_ADLER32));
 
 	/* Not supported yet */
 	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_OFF));
