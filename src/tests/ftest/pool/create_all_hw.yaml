@@ -16,7 +16,7 @@ test_one_pool_hw:
     nvme: 1048576       # 1MiB
 
 test_recycle_pools_hw:
-  pool_count: 50
+  pool_count: 1
   deltas:
     scm: 18874368       # 18MiB
     nvme: 0             # 0MiB

@@ -121,8 +121,12 @@ function nvme_bind_all_in_order {
   set +e # it's ok if a device isn't bound to one of the drivers
   for addr in $nvme_pcie_addrs; do
     echo "Unbinding $addr"
-    echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/unbind > /dev/null 2>&1
-    echo "$addr" | sudo tee /sys/bus/pci/drivers/vfio-pci/unbind > /dev/null 2>&1
+    if [ -f "/sys/bus/pci/drivers/nvme/${addr}" ]; then
+        echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/unbind > /dev/null 2>&1
+    fi
+    if [ -f "/sys/bus/pci/drivers/vfio-pci/${addr}" ]; then
+        echo "$addr" | sudo tee /sys/bus/pci/drivers/vfio-pci/unbind > /dev/null 2>&1
+    fi
   done
   set -e
 
