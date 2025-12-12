@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import time
 
 from apricot import TestWithServers
 from exception_utils import CommandFailure
@@ -127,7 +128,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 test_loop, bytes_to_human(free_space_after_destroy), free_space_after_destroy,
                 bytes_to_human(free_space_init - delta_bytes),
                 free_space_init - delta_bytes)
-            self.sleep(6)
+            time.sleep(6)
             free_space_after_destroy = self.pool.get_pool_free_space()
             cnt += 1
         self.assertAlmostEqual(
