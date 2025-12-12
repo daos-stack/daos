@@ -178,7 +178,8 @@ class CodeCoverage():
         Returns:
             bool: True if gcov code coverage is enabled; False otherwise
         """
-        result = run_remote(logger, hosts, find_command(self.__code_coverage_dir, "*.gcno"))
+        result = run_remote(
+            logger, hosts, find_command(self.__code_coverage_dir, "*.gcno", None, ["|", "sort"]))
         if not result.passed:
             logger.info(
                 "Gcov code coverage collection not configured on %s", result.failed_hosts)
@@ -207,13 +208,12 @@ class CodeCoverage():
         if not result.passed:
             logger.info("Error copying gcov notes files to %s on %s", prefix, result.failed_hosts)
             return False
-        run_remote(logger, hosts, f"ls -aR {prefix}")
         other = ["-print", "-delete"]
         logger.debug("Removing any pre-existing *.gcda files in %s", prefix)
         result = run_remote(logger, hosts, find_command(prefix, "*.gcda", None, other))
         if not result.passed:
             logger.debug("Failed to remove pre-existing *.gcda files on %s", result.failed_hosts)
-        run_remote(logger, hosts, f"ls -aR {prefix}")
+        run_remote(logger, hosts, find_command(prefix, "*.gc*", None, ["|", "sort"]))
         return True
 
     def __finalize_gcov(self, logger, hosts, job_results_dir, result):
@@ -232,9 +232,9 @@ class CodeCoverage():
         source = os.environ.get("GCOV_PREFIX", "/tmp/gcov")
 
         # Log any generated *.gcda files
-        other = ["-print"]
-        logger.debug("Listing any *.gcda files in %s", source)
-        run_remote(logger, hosts, find_command(source, "*.gcda", None, other))
+        other = ["|", "sort"]
+        logger.debug("Listing any *.gcno/*.gcda files in %s", source)
+        run_remote(logger, hosts, find_command(source, "*.gc*", None, other))
 
         # Create a code coverage report on each host
         _report = os.path.join(job_results_dir, "code_coverage", "code_coverage.json")
