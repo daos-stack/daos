@@ -847,6 +847,24 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
 
+    def rebuild_start(self, *args, **kwargs):
+        """Use dmg to start rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_start(self.identifier, *args, **kwargs)
+
+    def rebuild_stop(self, *args, **kwargs):
+        """Use dmg to stop rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
+
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
         """Set Property.
@@ -1344,7 +1362,7 @@ class TestPool(TestDaosApiBase):
             verbose (bool, optional): whether to display the pool query info. Defaults to True.
         """
         # Reset the rebuild data if rebuild completion was previously detected
-        if self._rebuild_data["check"] == "completed":
+        if self._rebuild_data["check"] in ("completed", "stopped"):
             self._reset_rebuild_data()
 
         # Use the current rebuild data to define the previous rebuild data
@@ -1387,6 +1405,9 @@ class TestPool(TestDaosApiBase):
             # If the current state is busy or idle w/o a version increase after previously being
             # busy then rebuild is running
             self._rebuild_data["check"] = "running"
+        elif self._rebuild_data["state"] == "idle" and self._rebuild_data["status"] == -2027:
+            # Rebuild was explicitly stopped
+            self._rebuild_data["check"] = "stopped"
         elif self._rebuild_data["check"] is None:
             # Otherwise rebuild has yet to start
             self._rebuild_data["check"] = "not yet started"
@@ -1398,7 +1419,7 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to start or end.
 
         Args:
-            expected (str): which rebuild data check to wait for: 'running' or 'completed'
+            expected (str): which rebuild data check to wait for: 'running', 'completed', 'stopped'
             interval (int): number of seconds to wait in between rebuild completion checks
 
         Raises:
@@ -1480,6 +1501,18 @@ class TestPool(TestDaosApiBase):
 
         """
         self._wait_for_rebuild("completed", interval)
+
+    def wait_for_rebuild_to_stop(self, interval=1):
+        """Wait for the rebuild to stop without completing.
+
+        Args:
+            interval (int): number of seconds to wait in between checks
+
+        Raises:
+            DaosTestError: if waiting for rebuild times out.
+
+        """
+        self._wait_for_rebuild("stopped", interval)
 
     def measure_rebuild_time(self, operation, interval=1):
         """Measure rebuild time.
