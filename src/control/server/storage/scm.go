@@ -52,7 +52,7 @@ const (
 
 // Memory reservation constant defaults to be used when calculating RAM-disk size for DAOS I/O engine.
 const (
-	DefaultSysMemRsvd    = humanize.GiByte * 26  // per-system
+	DefaultSysMemRsvd    = humanize.GiByte * 64  // per-system
 	DefaultTgtMemRsvd    = humanize.MiByte * 128 // per-engine-target
 	DefaultEngineMemRsvd = humanize.GiByte * 1   // per-engine
 )

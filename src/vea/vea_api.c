@@ -380,7 +380,7 @@ error:
 	return rc;
 }
 
-#define FLUSH_INTVL 2 /* seconds */
+#define FLUSH_INTVL 5 /* seconds */
 
 static inline bool
 need_aging_flush(struct vea_space_info *vsi, bool force)

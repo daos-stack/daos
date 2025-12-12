@@ -778,8 +778,9 @@ handle_sv(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_sv_handler);
 	value.ddbs_record_size = entry->ie_rsize;
-	value.ddbs_idx = ctx->value_seen++;
-	value.ddbs_path = &ctx->itp;
+	value.ddbs_epoch       = entry->ie_epoch;
+	value.ddbs_idx         = ctx->value_seen++;
+	value.ddbs_path        = &ctx->itp;
 
 	return ctx->handlers->ddb_sv_handler(&value, ctx->handler_args);
 }
@@ -791,10 +792,11 @@ handle_array(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_array_handler);
 	itp_set_recx(&ctx->itp, &entry->ie_orig_recx, ctx->value_seen);
-	value.ddba_path = &ctx->itp;
+	value.ddba_path        = &ctx->itp;
 	value.ddba_record_size = entry->ie_rsize;
-	value.ddba_recx = entry->ie_orig_recx;
-	value.ddba_idx = ctx->value_seen++;
+	value.ddba_recx        = entry->ie_orig_recx;
+	value.ddba_epoch       = entry->ie_epoch;
+	value.ddba_idx         = ctx->value_seen++;
 
 	return ctx->handlers->ddb_array_handler(&value, ctx->handler_args);
 }

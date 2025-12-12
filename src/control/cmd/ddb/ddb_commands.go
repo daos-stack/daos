@@ -434,7 +434,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "Optional, VOS tree path of a container to aggregate.", grumble.Default(""))
 		},
 		Flags: func(f *grumble.Flags) {
-			f.Uint64("t", "cmt_time", math.MaxUint64, "Max aggregfation committed time in seconds")
+			f.Uint64("t", "cmt_time", math.MaxUint64, "Max aggregation committed time in seconds")
 			f.String("d", "cmt_date", "", "Max aggregation committed date (format '1970-01-01 00:00:00')")
 		},
 		Run: func(c *grumble.Context) error {
