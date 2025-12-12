@@ -1136,7 +1136,7 @@ main(int argc, char **argv)
 	sigset_t        set;
 	int		sig;
 	int		rc;
-	bool	exit_failure = false;
+	bool		exit_failure = false;
 
 	/** parse command line arguments */
 	parse(argc, argv);
