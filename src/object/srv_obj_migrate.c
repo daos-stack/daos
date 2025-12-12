@@ -35,10 +35,55 @@
 /* Set the total in-flight size to be 25% of MAX DMA size for
  * the moment, will adjust it later if needed.
  */
-#define MIGRATE_MAX_SIZE	(1 << 28)
-/* Max migrate ULT number on the server */
-#define MIGRATE_DEFAULT_MAX_ULT	4096
+#define MIGR_TGT_INF_DATA       (1 << 28)
+
 #define ENV_MIGRATE_ULT_CNT	"D_MIGRATE_ULT_CNT"
+
+/* Number of migration ULTs per target */
+#define MIGR_TGT_ULTS_MIN       100
+#define MIGR_TGT_ULTS_DEF       500
+#define MIGR_TGT_ULTS_MAX       2000
+
+/* 1/3 object ults, 2/3 key ULTs */
+#define MIGR_OBJ_ULT_PERCENT    33
+
+#define MIGR_TGT_OBJ_ULTS(ults) ((ults * MIGR_OBJ_ULT_PERCENT) / 100)
+#define MIGR_TGT_KEY_ULTS(ults) (ults - MIGR_TGT_OBJ_ULTS(ults))
+
+enum {
+	MIGR_OBJ = 0,
+	MIGR_KEY,
+	MIGR_DATA,
+	MIGR_MAX,
+};
+
+/* resource consumed by migration */
+struct migr_resource {
+	const char *res_name;
+	/* upper limit of the resource */
+	long        res_limit;
+	/* resource amount in "unit" */
+	long        res_units;
+	/* number of waiters on this resource */
+	int         res_waiters;
+	/* ABT_cond for waiters */
+	ABT_cond    res_cond;
+};
+
+/* migration resources manager */
+struct migr_res_manager {
+	ABT_mutex            rmg_mutex;
+	struct migr_resource rmg_resources[MIGR_MAX];
+};
+
+struct migr_engine_res {
+	/* total ULTs per target, it a tunable which can be set by admin */
+	unsigned int             er_ults;
+	struct migr_res_manager *er_rmgs;
+};
+
+static struct migr_engine_res migr_eng_res;
+
 struct migrate_one {
 	daos_key_t		 mo_dkey;
 	uint64_t		 mo_dkey_hash;
@@ -391,10 +436,6 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 		D_FREE(tls->mpt_svc_list.rl_ranks);
 	if (tls->mpt_done_eventual)
 		ABT_eventual_free(&tls->mpt_done_eventual);
-	if (tls->mpt_inflight_cond)
-		ABT_cond_free(&tls->mpt_inflight_cond);
-	if (tls->mpt_inflight_mutex)
-		ABT_mutex_free(&tls->mpt_inflight_mutex);
 	if (daos_handle_is_valid(tls->mpt_root_hdl))
 		obj_tree_destroy(tls->mpt_root_hdl);
 	if (daos_handle_is_valid(tls->mpt_migrated_root_hdl))
@@ -450,14 +491,12 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 			uint32_t new_layout_ver, uint32_t opc, struct migrate_pool_tls **p_tls,
 			d_rank_list_t *svc_list, uint8_t tgt_status, uint32_t tgt_in_ver)
 {
-	uint32_t                            max_migrate_ult = MIGRATE_DEFAULT_MAX_ULT;
 	struct obj_tls                     *obj_tls         = obj_tls_get();
 	uint32_t                            tgt_id          = dss_get_module_info()->dmi_tgt_id;
 	struct migrate_pool_tls            *pool_tls        = NULL;
 	struct ds_pool_child		   *pool_child = NULL;
 	int				    rc = 0;
 
-	d_getenv_uint(ENV_MIGRATE_ULT_CNT, &max_migrate_ult);
 	D_ASSERT(generation != (unsigned int)(-1));
 
 	pool_child = ds_pool_child_lookup(pool_uuid);
@@ -485,14 +524,6 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
-	rc = ABT_cond_create(&pool_tls->mpt_inflight_cond);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	rc = ABT_mutex_create(&pool_tls->mpt_inflight_mutex);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
 	uuid_copy(pool_tls->mpt_pool_uuid, pool_uuid);
 	uuid_copy(pool_tls->mpt_poh_uuid, pool_hdl_uuid);
 	uuid_copy(pool_tls->mpt_coh_uuid, co_hdl_uuid);
@@ -508,8 +539,6 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 	pool_tls->mpt_pool           = ds_pool_child_lookup(pool_uuid);
 	if (pool_tls->mpt_pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
-	pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE / dss_tgt_nr;
-	pool_tls->mpt_inflight_max_ult  = max_migrate_ult / dss_tgt_nr;
 	pool_tls->mpt_tgt_obj_ult_cnt   = 0;
 	pool_tls->mpt_tgt_dkey_ult_cnt  = 0;
 
@@ -1775,77 +1804,98 @@ migrate_one_destroy(struct migrate_one *mrone)
 	D_FREE(mrone);
 }
 
-enum {
-	OBJ_ULT = 1,
-	DKEY_ULT = 2,
-};
-
-static inline uint32_t
-migrate_tgt_ult_cnt(struct migrate_pool_tls *tls, int ult_type)
-{
-	if (ult_type == OBJ_ULT)
-		return tls->mpt_tgt_obj_ult_cnt;
-	else
-		return tls->mpt_tgt_dkey_ult_cnt;
-}
-
 static int
-migrate_tgt_enter(struct migrate_pool_tls *tls, int ult_type, bool *yielded)
+migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *yielded)
 {
-	uint32_t ult_cnt = 0;
-	int	 rc = 0;
+	struct dss_module_info  *dmi = dss_get_module_info();
+	struct migr_res_manager *rmg;
+	struct migr_resource    *res;
+	bool                     waited = false;
+	int                      rc     = 0;
 
-	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
+	D_ASSERT(dmi->dmi_xs_id != 0);
 
-	ult_cnt = migrate_tgt_ult_cnt(tls, ult_type);
-	while (tls->mpt_inflight_max_ult / 2 <= ult_cnt) {
-		D_DEBUG(DB_REBUILD, "tgt %u max %u\n", ult_cnt, tls->mpt_inflight_max_ult);
-
-		if (yielded)
-			*yielded = true;
-		ABT_mutex_lock(tls->mpt_inflight_mutex);
-		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
-		ABT_mutex_unlock(tls->mpt_inflight_mutex);
-		if (tls->mpt_fini)
-			D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
-
-		ult_cnt = migrate_tgt_ult_cnt(tls, ult_type);
+	rmg = &migr_eng_res.er_rmgs[dmi->dmi_tgt_id];
+	if (tls->mpt_rmg == NULL) {
+		tls->mpt_rmg = rmg;
+	} else {
+		D_ASSERTF(tls->mpt_rmg == rmg, "target=%d, rmg_off=%d\n", dmi->dmi_tgt_id,
+			  (int)(tls->mpt_rmg - &migr_eng_res.er_rmgs[0]));
 	}
 
-	if (ult_type == OBJ_ULT)
+	res = &rmg->rmg_resources[res_type];
+	while (1) {
+		if (tls->mpt_fini) {
+			rc = migrate_pool_tls_get_status(tls);
+			D_GOTO(out, rc);
+		}
+
+		if (res->res_units + units <= res->res_limit) {
+			res->res_units += units;
+			break;
+		}
+
+		ABT_mutex_lock(rmg->rmg_mutex);
+		res->res_waiters++;
+		if (res->res_waiters >= 100 && res->res_waiters % 100 == 0) {
+			D_DEBUG(DB_REBUILD, "%d waiters are waiting on res=%s (target=%d)\n",
+				res->res_waiters, res->res_name, dmi->dmi_tgt_id);
+		}
+
+		ABT_cond_wait(res->res_cond, rmg->rmg_mutex);
+		res->res_waiters--;
+		ABT_mutex_unlock(rmg->rmg_mutex);
+		waited = true;
+	}
+	if (yielded)
+		*yielded = waited;
+
+	/* per-pool counters for rebuild status tracking */
+	if (res_type == MIGR_OBJ)
 		tls->mpt_tgt_obj_ult_cnt++;
-	else
+	else if (res_type == MIGR_KEY)
 		tls->mpt_tgt_dkey_ult_cnt++;
+	else
+		tls->mpt_inflight_size += units;
+
+	D_DEBUG(DB_REBUILD, DF_RB " migrate %s: hold units=%lu, used=%lu, limit=%lu, waited=%d\n",
+		DP_RB_MPT(tls), res->res_name, units, res->res_units, res->res_limit, waited);
 out:
 	return rc;
 }
 
 static void
-migrate_tgt_try_wakeup(struct migrate_pool_tls *tls, int ult_type)
+migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 {
-	uint32_t ult_cnt = 0;
+	struct migr_res_manager *rmg;
+	struct migr_resource    *res;
 
-	ult_cnt = migrate_tgt_ult_cnt(tls, ult_type);
-	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	if (tls->mpt_inflight_max_ult / 2 > ult_cnt) {
-		ABT_mutex_lock(tls->mpt_inflight_mutex);
-		ABT_cond_signal(tls->mpt_inflight_cond);
-		ABT_mutex_unlock(tls->mpt_inflight_mutex);
-	}
-}
+	rmg = tls->mpt_rmg;
+	D_ASSERT(rmg != NULL);
 
-static void
-migrate_tgt_exit(struct migrate_pool_tls *tls, int ult_type)
-{
-	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	if (ult_type == OBJ_ULT) {
+	res = &rmg->rmg_resources[res_type];
+
+	D_DEBUG(DB_REBUILD, DF_RB "migrate %s: release units=%lu, used=%lu, limit=%lu\n",
+		DP_RB_MPT(tls), res->res_name, units, res->res_units, res->res_limit);
+
+	if (res_type == MIGR_OBJ) {
 		D_ASSERT(tls->mpt_tgt_obj_ult_cnt > 0);
 		tls->mpt_tgt_obj_ult_cnt--;
-	} else {
+	} else if (res_type == MIGR_KEY) {
 		D_ASSERT(tls->mpt_tgt_dkey_ult_cnt > 0);
 		tls->mpt_tgt_dkey_ult_cnt--;
+	} else {
+		D_ASSERT(tls->mpt_inflight_size >= units);
+		tls->mpt_inflight_size -= units;
 	}
-	migrate_tgt_try_wakeup(tls, ult_type);
+
+	D_ASSERT(res->res_units >= units);
+	res->res_units -= units;
+	if (res->res_waiters > 0) {
+		ABT_mutex_lock(rmg->rmg_mutex);
+		ABT_cond_signal(res->res_cond);
+		ABT_mutex_unlock(rmg->rmg_mutex);
+	}
 }
 
 static void
@@ -1874,26 +1924,14 @@ migrate_one_ult(void *arg)
 		data_size, mrone->mo_iod_num, mrone->mo_iods_num_from_parity);
 
 	D_ASSERT(data_size != (daos_size_t)-1);
-	D_DEBUG(DB_REBUILD, DF_RB ": mrone %p inflight_size " DF_U64 " max " DF_U64 "\n",
-		DP_RB_MPT(tls), mrone, tls->mpt_inflight_size, tls->mpt_inflight_max_size);
 
-	while (tls->mpt_inflight_size + data_size >= tls->mpt_inflight_max_size &&
-	       tls->mpt_inflight_max_size != 0 && tls->mpt_inflight_size != 0 &&
-	       !tls->mpt_fini) {
-		D_DEBUG(DB_REBUILD, DF_RB ": mrone %p wait " DF_U64 "/" DF_U64 "/" DF_U64 "\n",
-			DP_RB_MPT(tls), mrone, tls->mpt_inflight_size, tls->mpt_inflight_max_size,
-			data_size);
-		ABT_mutex_lock(tls->mpt_inflight_mutex);
-		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
-		ABT_mutex_unlock(tls->mpt_inflight_mutex);
-	}
-
-	if (tls->mpt_fini)
+	rc = migrate_res_hold(tls, MIGR_DATA, data_size, NULL);
+	if (rc)
 		D_GOTO(out, rc);
 
-	tls->mpt_inflight_size += data_size;
 	rc = migrate_dkey(tls, mrone, data_size);
-	tls->mpt_inflight_size -= data_size;
+
+	migrate_res_release(tls, MIGR_DATA, data_size);
 
 	D_DEBUG(DB_REBUILD,
 		DF_RB ": " DF_UOID " layout %u migrate dkey " DF_KEY " inflight_size " DF_U64
@@ -1919,7 +1957,7 @@ migrate_one_ult(void *arg)
 out:
 	migrate_one_destroy(mrone);
 	if (tls != NULL) {
-		migrate_tgt_exit(tls, DKEY_ULT);
+		migrate_res_release(tls, MIGR_KEY, 1);
 		migrate_pool_tls_put(tls);
 	}
 }
@@ -2687,14 +2725,14 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 			continue;
 		}
 
-		rc = migrate_tgt_enter(tls, DKEY_ULT, NULL);
+		rc = migrate_res_hold(tls, MIGR_KEY, 1, NULL);
 		if (rc)
 			break;
 		d_list_del_init(&mrone->mo_list);
 		rc = dss_ult_create(migrate_one_ult, mrone, DSS_XS_VOS,
 				    arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
 		if (rc) {
-			migrate_tgt_exit(tls, DKEY_ULT);
+			migrate_res_release(tls, MIGR_KEY, 1);
 			migrate_one_destroy(mrone);
 			break;
 		}
@@ -3011,9 +3049,18 @@ migrate_fini_one_ult(void *data)
 	arg->stop_count++;
 	ABT_mutex_unlock(arg->stop_lock);
 
-	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
-	ABT_mutex_unlock(tls->mpt_inflight_mutex);
+	if (tls->mpt_rmg) {
+		struct migr_res_manager *rmg = tls->mpt_rmg;
+		int                      i;
+
+		/* NB: no big deal but ULTs of all pools will be waken up */
+		ABT_mutex_lock(rmg->rmg_mutex);
+		for (i = 0; i < MIGR_MAX; i++)
+			ABT_cond_broadcast(rmg->rmg_resources[i].res_cond);
+		ABT_mutex_unlock(rmg->rmg_mutex);
+
+		tls->mpt_rmg = NULL;
+	}
 
 	migrate_pool_tls_put(tls); /* lookup */
 	rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
@@ -3209,13 +3256,13 @@ out:
 		tls->mpt_status = rc;
 
 	D_DEBUG(DB_REBUILD,
-		DF_RB ":  stop migrate obj " DF_UOID "for shard %u ult %u/%u " DF_U64 " : " DF_RC
+		DF_RB ": stop migrate obj " DF_UOID "for shard %u ult %u/%u " DF_U64 " : " DF_RC
 		      "\n",
 		DP_RB_MPT(tls), DP_UOID(arg->oid), arg->shard, tls->mpt_tgt_obj_ult_cnt,
 		tls->mpt_tgt_dkey_ult_cnt, tls->mpt_obj_count, DP_RC(rc));
 free_notls:
 	if (tls != NULL)
-		migrate_tgt_exit(tls, OBJ_ULT);
+		migrate_res_release(tls, MIGR_OBJ, 1);
 
 	D_FREE(arg->snaps);
 	D_FREE(arg);
@@ -3313,7 +3360,7 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 		DF_RB ": obj migrate " DF_UUID "/" DF_UOID " %" PRIx64 " eph " DF_U64 " start\n",
 		DP_RB_MPT(arg->pool_tls), DP_UUID(arg->cont_uuid), DP_UOID(*oid), ih.cookie, epoch);
 
-	rc = migrate_tgt_enter(arg->pool_tls, OBJ_ULT, &yielded);
+	rc = migrate_res_hold(arg->pool_tls, MIGR_OBJ, 1, &yielded);
 	if (rc) {
 		DL_ERROR(rc, DF_RB ": " DF_UUID " enter migrate failed.", DP_RB_MPT(arg->pool_tls),
 			 DP_UUID(arg->cont_uuid));
@@ -3324,11 +3371,11 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB ": obj " DF_UOID " migration failed", DP_RB_MPT(arg->pool_tls),
 			 DP_UOID(*oid));
-		migrate_tgt_exit(arg->pool_tls, OBJ_ULT);
+		migrate_res_release(arg->pool_tls, MIGR_OBJ, 1);
 		return rc;
 	}
 
-	/* migrate_tgt_enter possibly yielded the ULT, let's re-probe before delete  */
+	/* migrate_res_hold possibly yielded the ULT, let's re-probe before delete  */
 	if (yielded) {
 		d_iov_set(&tmp_iov, oid, sizeof(*oid));
 		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, &tmp_iov, NULL);
@@ -4348,4 +4395,90 @@ out:
 		crt_req_decref(rpc);
 
 	return rc;
+}
+
+static int
+migr_res_init(struct migr_resource *res, const char *name, long limit)
+{
+	int rc;
+
+	memset(res, 0, sizeof(*res));
+	res->res_name  = name;
+	res->res_limit = limit;
+	rc             = ABT_cond_create(&res->res_cond);
+
+	return (rc != ABT_SUCCESS) ? dss_abterr2der(rc) : 0;
+}
+
+static void
+migr_res_fini(struct migr_resource *res)
+{
+	if (res->res_cond)
+		ABT_cond_free(&res->res_cond);
+}
+
+int
+obj_migrate_init(void)
+{
+	unsigned int ults = MIGR_TGT_ULTS_DEF;
+	int          i;
+	int          rc = 0;
+
+	d_getenv_uint(ENV_MIGRATE_ULT_CNT, &ults);
+	if (ults < MIGR_TGT_ULTS_MIN)
+		ults = MIGR_TGT_ULTS_MIN;
+	if (ults > MIGR_TGT_ULTS_MAX)
+		ults = MIGR_TGT_ULTS_MAX;
+
+	memset(&migr_eng_res, 0, sizeof(migr_eng_res));
+	migr_eng_res.er_ults = ults;
+
+	D_ASSERT(dss_tgt_nr > 0);
+	D_ALLOC(migr_eng_res.er_rmgs, sizeof(struct migr_res_manager) * dss_tgt_nr);
+	if (!migr_eng_res.er_rmgs)
+		return -DER_NOMEM;
+
+	for (i = 0; i < dss_tgt_nr; i++) {
+		struct migr_res_manager *rmg = &migr_eng_res.er_rmgs[i];
+
+		rc = ABT_mutex_create(&rmg->rmg_mutex);
+		if (rc != ABT_SUCCESS)
+			D_GOTO(out, rc = dss_abterr2der(rc));
+
+		rc = migr_res_init(&rmg->rmg_resources[MIGR_OBJ], "OBJ", MIGR_TGT_OBJ_ULTS(ults));
+		if (rc)
+			D_GOTO(out, rc);
+
+		rc = migr_res_init(&rmg->rmg_resources[MIGR_KEY], "KEY", MIGR_TGT_KEY_ULTS(ults));
+		if (rc)
+			D_GOTO(out, rc);
+
+		rc = migr_res_init(&rmg->rmg_resources[MIGR_DATA], "DATA", MIGR_TGT_INF_DATA);
+		if (rc)
+			D_GOTO(out, rc);
+	}
+	return 0;
+out:
+	obj_migrate_fini();
+	return rc;
+}
+
+void
+obj_migrate_fini(void)
+{
+	int i;
+	int j;
+
+	if (migr_eng_res.er_rmgs) {
+		for (i = 0; i < dss_tgt_nr; i++) {
+			struct migr_res_manager *rmg = &migr_eng_res.er_rmgs[i];
+
+			for (j = 0; j < MIGR_MAX; j++)
+				migr_res_fini(&rmg->rmg_resources[j]);
+			if (rmg->rmg_mutex)
+				ABT_mutex_free(&rmg->rmg_mutex);
+		}
+		D_FREE(migr_eng_res.er_rmgs);
+	}
+	memset(&migr_eng_res, 0, sizeof(migr_eng_res));
 }
