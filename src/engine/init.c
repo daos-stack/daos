@@ -1134,9 +1134,9 @@ int
 main(int argc, char **argv)
 {
 	sigset_t        set;
-	int		sig;
-	int		rc;
-	bool		exit_failure = false;
+	bool	        exit_failure = false;
+	int	        sig;
+	int	        rc;
 
 	/** parse command line arguments */
 	parse(argc, argv);
@@ -1187,9 +1187,9 @@ main(int argc, char **argv)
 			struct tm     *tm = NULL;
 
 			rc = gettimeofday(&tv, NULL);
-			if (rc == 0) {
+			if (rc == 0)
 				tm = localtime(&tv.tv_sec);
-			} else
+			else
 				D_ERROR("failure to gettimeofday(): %s (%d)\n",
 					strerror(errno), errno);
 
