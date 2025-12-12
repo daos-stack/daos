@@ -13,7 +13,6 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos.h>
 #include <ddb_common.h>
-#include <ddb_main.h>
 #include <fcntl.h>
 #include <gurt/debug.h>
 #include <libgen.h>
