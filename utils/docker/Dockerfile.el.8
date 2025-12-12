@@ -67,6 +67,20 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
+ARG JENKINS_URL
+ARG BULLSEYE
+RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
+      dnf install xz && dnf clean all &&                                           \
+      curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
+        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar.xz && \
+      mkdir -p bullseye &&                                                         \
+      tar -C bullseye --strip-components=1 -xf bullseye.tar.xz &&                  \
+      pushd bullseye &&                                                            \
+        ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage &&    \
+      popd &&                                                                      \
+      rm -rf bullseye.tar.xz bullseye;                                             \
+    fi
+
 USER daos_server:daos_server
 
 # Setup a python venv so that python packages can be installed locally.
