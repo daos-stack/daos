@@ -437,8 +437,34 @@ DEPENDS+=("MACSio-mpich")
 DEPENDS+=("simul-mpich")
 DEPENDS+=("romio-tests")
 DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
+readarray -t gcno_files < <(find . -name '*.gcno')
+if [ ${#gcno_files[@]} -gt 0 ]; then
+  PACKAGE_TYPE="dir"
+  TARGET_PATH="${daoshome}/TESTING/code_coverage"
+
+  # list_files files "${gcno_files[@]}"
+  # append_install_list "${files[@]}"
+
+  target_dir="${tmp}${TARGET_PATH}"
+  for file in "${gcno_files[@]}"; do
+    base="$(basename "${file}")"
+
+    tmp_file="${target_dir}/${file:2}"
+    tmp_dir="$(dirname ${tmp_file})"
+    if [ ! -e "${tmp_dir}" ]; then
+      mkdir -p "${tmp_dir}"
+    fi
+    cp "${file}" "${tmp_dir}"
+
+    rel_file="$(realpath -s -m "${file}" --relative-to="${PWD}")"
+    echo "install_list: ${rel_file}=${TARGET_PATH}/${file:2} for ${file} in ${tmp_dir}"
+
+    install_list+=("${rel_file}=${TARGET_PATH}/${file:2}")
+  done
+fi
 build_package "daos-tests"
 
+PACKAGE_TYPE="empty"
 build_package "daos-client-tests-mpich"
 
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")

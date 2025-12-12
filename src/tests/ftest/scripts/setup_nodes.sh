@@ -2,6 +2,7 @@
 # shellcheck disable=SC1113
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -91,10 +92,32 @@ if ! $TEST_RPMS; then
     # first, strip the execute bit from the in-tree binary,
     # then copy daos_server_helper binary into \$PATH and fix perms
     chmod -x "$DAOS_BASE"/install/bin/daos_server_helper && \
-    sudo cp "$DAOS_BASE"/install/bin/daos_server_helper /usr/bin/daos_server_helper && \
-	    sudo chown root /usr/bin/daos_server_helper && \
-	    sudo chmod 4755 /usr/bin/daos_server_helper
+        sudo cp "$DAOS_BASE"/install/bin/daos_server_helper /usr/bin/daos_server_helper && \
+        sudo chown root /usr/bin/daos_server_helper && \
+        sudo chmod 4755 /usr/bin/daos_server_helper
 fi
+
+# Setup a python virtual environment for functional testing
+if  [ -d "${DAOS_FTEST_VENV}" ] ; then
+    rm -rf "${DAOS_FTEST_VENV}"
+fi
+python3 -m venv "${DAOS_FTEST_VENV}"
+# shellcheck disable=SC1091
+source "${DAOS_FTEST_VENV}"/bin/activate
+pip install --upgrade pip
+pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
+pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-code-coverage.txt
+
+# Copy the pydaos source locally and install it, in an ideal world this would install
+# from the read-only tree directly but for now that isn't working.
+# https://github.com/pypa/setuptools/issues/3237
+cp -a "$PREFIX"/lib/daos/python pydaos
+pip install ./pydaos
+rm -rf pydaos
+# python3.6 does not like deactivate with -u set, later versions are OK with it however.
+set +u
+deactivate
+set -u
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"

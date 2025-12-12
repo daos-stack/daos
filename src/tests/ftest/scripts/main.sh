@@ -18,17 +18,7 @@ fi
 # shellcheck disable=SC2153
 mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
 
-if  [ -d venv ]
-then
-    rm -rf venv
-fi
-
-python3 -m venv venv
-# shellcheck disable=SC1091
-source venv/bin/activate
-
-pip install --upgrade pip
-pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
+source "${DAOS_FTEST_VENV}"/bin/activate
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
@@ -44,13 +34,6 @@ else
     logs_prefix="$DAOS_BASE/install/lib/daos/TESTING"
     cd "$DAOS_BASE"
 fi
-
-# Copy the pydaos source locally and install it, in an ideal world this would install
-# from the read-only tree directly but for now that isn't working.
-# https://github.com/pypa/setuptools/issues/3237
-cp -a "$PREFIX"/lib/daos/python pydaos
-pip install ./pydaos
-rm -rf pydaos
 
 # Disable D_PROVIDER to allow launch.py to set it
 unset D_PROVIDER
@@ -88,12 +71,19 @@ export WITH_VALGRIND
 export STAGE_NAME
 export TEST_RPMS
 export DAOS_BASE
+export DAOS_TEST_LOG_DIR=${DAOS_TEST_LOG_DIR:-"/var/tmp/daos_testing"}
 export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/CIShare/daos_test/apps"}
 export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test/apps"}
 if [ -n "$DAOS_HTTPS_PROXY" ]; then
     # shellcheck disable=SC2154
     export HTTPS_PROXY="${DAOS_HTTPS_PROXY:-""}"
 fi
+
+# Code coverage environment variables
+export COVFILE="/tmp/test.cov"
+# export COVFILE="${DAOS_TEST_LOG_DIR}/daos_test/bullseye/test.cov"
+export GCOV_PREFIX="${DAOS_TEST_LOG_DIR}/daos_test/gcov"
+export GCOV_PREFIX_STRIP=7
 
 launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then

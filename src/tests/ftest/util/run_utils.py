@@ -416,10 +416,7 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.PIPE if stderr else subprocess.STDOUT
 
-    if timeout and verbose:
-        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
-    elif verbose:
-        log.debug("Running on %s: %s", local_host, command)
+    __log_command(log, local_host, command, verbose, timeout)
 
     try:
         # pylint: disable=subprocess-run-check
@@ -447,7 +444,7 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
 
 
 def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False,
-               fanout=None):
+               fanout=None, export_test_env=True):
     """Run the command on the remote hosts.
 
     Args:
@@ -461,9 +458,90 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
         stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
         fanout (int, optional): fanout to use. Default uses the max of the
             clush default (64) or available cores
+        export_test_env (bool, optional): whether to export the test environment variables.
+            Defaults to True.
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
+    """
+    task = __get_task(task_debug, stderr, fanout)
+
+    # Support running remote commands with the test environment
+    if export_test_env:
+        _test_env_file = os.environ.get("DAOS_TEST_ENV_FILE", None)
+        if _test_env_file is not None and os.path.exists(_test_env_file):
+            command = f"source {_test_env_file} && {command}"
+
+    __log_command(log, hosts, command, verbose, timeout)
+    task.run(command=command, nodes=hosts, timeout=timeout)
+    return __get_result(log, command, task, verbose)
+
+
+def copy(log, hosts, source, directory, verbose=True, timeout=120, task_debug=False, stderr=False,
+         fanout=None):
+    """Copy a source file to a directory on remote hosts.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        source (str): source path for the copy operation
+        directory (str): destination directory for the copy operation
+        verbose (bool, optional): log the command output. Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to 120 seconds.
+        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+        stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
+        fanout (int, optional): fanout to use. Default uses the max of the
+            clush default (64) or available cores
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    command = f"Clush copy {source} to {directory}"
+    task = __get_task(task_debug, stderr, fanout)
+    __log_command(log, hosts, command, verbose, timeout)
+    task.copy(source=source, dest=directory, nodes=hosts, timeout=timeout)
+    return __get_result(log, command, task, verbose)
+
+
+def rcopy(log, hosts, source, directory, verbose=True, timeout=120, task_debug=False, stderr=False,
+          fanout=None):
+    """Copy files from hosts to local directory.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        source (str): source path for the copy operation
+        directory (str): local directory to copy files to
+        verbose (bool, optional): log the command output. Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to 120 seconds.
+        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+        stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
+        fanout (int, optional): fanout to use. Default uses the max of the
+            clush default (64) or available cores
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    command = f"Clush rcopy {source} to {directory}"
+    task = __get_task(task_debug, stderr, fanout)
+    __log_command(log, hosts, command, verbose, timeout)
+    task.rcopy(source=source, dest=directory, nodes=hosts, timeout=timeout)
+    return __get_result(log, command, task, verbose)
+
+
+def __get_task(task_debug=False, stderr=False, fanout=None):
+    """Get a ClusterShell Task object.
+
+    Args:
+        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+        stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
+        fanout (int, optional): fanout to use. Default uses the max of the
+            clush default (64) or available cores
+
+    Returns:
+        Task: a ClusterShell Task object
     """
     task = task_self()
     task.set_info('debug', task_debug)
@@ -474,12 +552,37 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     task.set_info('fanout', fanout)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    if verbose:
-        if timeout is None:
-            log.debug("Running on %s without a timeout: %s", hosts, command)
-        else:
-            log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
-    task.run(command=command, nodes=hosts, timeout=timeout)
+    return task
+
+
+def __log_command(log, hosts, command, verbose, timeout):
+    """Log the command if requested.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        command (str): command to be run
+        verbose (bool): whether to log the command
+        timeout (int): number of seconds to wait for the command to complete
+    """
+    if verbose and timeout:
+        log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    elif verbose:
+        log.debug("Running on %s without a timeout: %s", hosts, command)
+
+
+def __get_result(log, command, task, verbose):
+    """Get the command result for the provided command and task.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        command (str): command executed by the task
+        task (Task): the ClusterShell Task object used to run the command
+        verbose (bool): whether to log the command output
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
     results = CommandResult(command, task)
     if verbose:
         results.log_output(log)
@@ -508,7 +611,7 @@ def command_as_user(command, user, env=None):
             return command
         return " ".join([env.to_export_str(), command]).strip()
 
-    cmd_list = ["sudo"]
+    cmd_list = ["sudo", "-E"]
     if env:
         cmd_list.extend(env.to_list())
     cmd_list.append("-n")
@@ -519,20 +622,23 @@ def command_as_user(command, user, env=None):
     return " ".join(cmd_list)
 
 
-def find_command(source, pattern, depth, other=None):
+def find_command(source, pattern, depth=None, other=None):
     """Get the find command.
 
     Args:
         source (str): where the files are currently located
         pattern (str): pattern used to limit which files are processed
-        depth (int): max depth for find command
+        depth (int, optional): max depth for find command. Defaults to None, no depth limit.
         other (object, optional): other commands, as a list or str, to include at the end of the
             base find command. Defaults to None.
 
     Returns:
         str: the find command
     """
-    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    command = ["find", source]
+    if depth is not None:
+        command.extend(["-maxdepth", str(depth)])
+    command.extend(["-type", "f", "-name", f"'{pattern}'"])
     if isinstance(other, list):
         command.extend(other)
     elif isinstance(other, str):

@@ -5,6 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import re
+import shlex
 import shutil
 import site
 
@@ -13,7 +15,9 @@ from ClusterShell.NodeSet import NodeSet
 from util.host_utils import get_local_host
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
                                 get_common_provider, get_fastest_interface)
-from util.run_utils import run_remote
+from util.run_utils import copy, run_remote
+
+DEFAULT_DAOS_TEST_ENV_VARS = [r"D_.*", r"DAOS_.*", "COVFILE", r"GCOV_PREFIX.*"]
 
 
 class TestEnvironmentException(Exception):
@@ -96,6 +100,7 @@ def log_environment(logger):
 
 class TestEnvironment():
     """Collection of test environment variables."""
+    # pylint: disable=too-many-public-methods
 
     __ENV_VAR_MAP = {
         'app_dir': 'DAOS_TEST_APP_DIR',
@@ -108,6 +113,8 @@ class TestEnvironment():
         'insecure_mode': 'DAOS_TEST_INSECURE_MODE',
         'bullseye_src': 'DAOS_TEST_BULLSEYE_SRC',
         'bullseye_file': 'COVFILE',
+        'gcov_prefix': 'GCOV_PREFIX',
+        'gcov_prefix_strip': 'GCOV_PREFIX_STRIP',
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
         'systemd_path': 'DAOS_TEST_SYSTEMD_PATH',
@@ -115,6 +122,7 @@ class TestEnvironment():
         'control_config': 'DAOS_TEST_CONTROL_CONFIG',
         'agent_config': 'DAOS_TEST_AGENT_CONFIG',
         'server_config': 'DAOS_TEST_SERVER_CONFIG',
+        'env_file': 'DAOS_TEST_ENV_FILE',
     }
 
     def __init__(self):
@@ -182,6 +190,10 @@ class TestEnvironment():
                 os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
         if self.bullseye_file is None:
             self.bullseye_file = os.path.join(os.sep, "tmp", "test.cov")
+        if self.gcov_prefix is None:
+            self.gcov_prefix = os.path.join(self.log_dir, "gcov")
+        if self.gcov_prefix_strip is None:
+            self.gcov_prefix_strip = "7"
         if self.daos_prefix is None:
             self.daos_prefix = self._default_daos_prefix(logger)
         if self.agent_user is None:
@@ -192,6 +204,11 @@ class TestEnvironment():
             self.agent_config = os.path.join(self.log_dir, "configs", "daos_agent.yml")
         if self.server_config is None:
             self.server_config = os.path.join(self.log_dir, "configs", "daos_server.yml")
+        if self.env_file is None:
+            self.env_file = os.path.join(self.log_dir, "configs", "daos_test_env.txt")
+
+        # Update the environment file with the current environment variables
+        self.update_environment_file(logger)
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -464,6 +481,42 @@ class TestEnvironment():
         self.__set_value('bullseye_file', value)
 
     @property
+    def gcov_prefix(self):
+        """Get the gcov prefix directory.
+
+        Returns:
+            str: the gcov prefix directory
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['gcov_prefix'])
+
+    @gcov_prefix.setter
+    def gcov_prefix(self, value):
+        """Set the gcov prefix directory.
+
+        Args:
+            value (str): the gcov prefix directory
+        """
+        self.__set_value('gcov_prefix', value)
+
+    @property
+    def gcov_prefix_strip(self):
+        """Get the gcov prefix strip number.
+
+        Returns:
+            str: the gcov prefix strip number
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['gcov_prefix_strip'])
+
+    @gcov_prefix_strip.setter
+    def gcov_prefix_strip(self, value):
+        """Set the gcov prefix strip number.
+
+        Args:
+            value (str, int): the gcov prefix strip number
+        """
+        self.__set_value('gcov_prefix_strip', value)
+
+    @property
     def daos_prefix(self):
         """Get the daos_prefix.
 
@@ -615,6 +668,24 @@ class TestEnvironment():
         """
         self.__set_value('server_config', value)
 
+    @property
+    def env_file(self):
+        """Get the test environment file.
+
+        Returns:
+            str: the test environment file
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['env_file'])
+
+    @env_file.setter
+    def env_file(self, value):
+        """Set the test environment file.
+
+        Args:
+            value (str): the test environment file
+        """
+        self.__set_value('env_file', value)
+
     def config_file_directories(self):
         """Get the unique list of directories for the client, control, and server config files.
 
@@ -626,6 +697,57 @@ class TestEnvironment():
         directories.add(os.path.dirname(self.control_config))
         directories.add(os.path.dirname(self.server_config))
         return list(directories)
+
+    def update_environment_file(self, logger):
+        """Create, update, or remove the test environment file based upon the export variables.
+
+        Situations:
+           Environment File    Export Variables    Action
+           ----------------    ----------------    -----------------------------
+           Does not exist      None defined        None
+           Does not exist      Defined             Create file and write exports
+           Already exists      Defined             Overwrite file with exports
+           Already exists      None defined        Remove file
+
+        Which environment variables are exported can be externally controlled by the
+        EXPORT_DAOS_TEST_ENV_VARS environment variable.  If this is not defined the
+        DEFAULT_DAOS_TEST_ENV_VARS list is used.  Either can contain regular expressions.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+        """
+        if logger is None:
+            return
+
+        _export_keys = os.environ.get("EXPORT_DAOS_TEST_ENV_VARS", DEFAULT_DAOS_TEST_ENV_VARS)
+        _key_pattern = re.compile(f"({'|'.join(_export_keys)})")
+        _export_env = []
+        for _key, _value in os.environ.items():
+            if _key_pattern.match(_key):
+                _export_env.append(f"export {_key}={_value}")
+
+        logger.debug("Updating environment file %s with %s", self.env_file, _export_env)
+
+        # Nothing to do if the environment file does not exist and there are no exports
+        if not _export_env and not os.path.exists(self.env_file):
+            return
+
+        # Remove the environment file if there are no exports and the file exists
+        if not _export_env and os.path.exists(self.env_file):
+            logger.debug("Removing environment file %s", self.env_file)
+            os.remove(self.env_file)
+            return
+
+        # Create the directory for the environment file if it does not exist
+        if not os.path.exists(self.env_file):
+            os.makedirs(os.path.dirname(self.env_file), exist_ok=True)
+
+        # Write the current environment variables to the test environment file
+        with open(self.env_file, 'w', encoding='utf-8') as _env_file:
+            for _key, _value in os.environ.items():
+                if _key_pattern.match(_key):
+                    _env_file.write(f"export {_key}={shlex.quote(_value)}\n")
+            logger.debug("Wrote environment file %s", self.env_file)
 
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
@@ -684,6 +806,19 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         # Default agent socket dir to be accessible by agent user
         if os.environ.get("DAOS_AGENT_DRPC_DIR") is None and test_env.agent_user != 'root':
             os.environ["DAOS_AGENT_DRPC_DIR"] = os.path.join(test_env.log_dir, "daos_agent")
+
+        # Copy the test environment file to all the servers and clients
+        if test_env.env_file:
+            command = f"mkdir -p {os.path.dirname(test_env.env_file)}"
+            result = run_remote(logger, servers | clients, command, export_test_env=False)
+            if not result.passed:
+                raise TestEnvironmentException(
+                    f"Failed to create test environment file directory on {result.failed_hosts}")
+            result = copy(
+                logger, servers | clients, test_env.env_file, os.path.dirname(test_env.env_file))
+            if not result.passed:
+                raise TestEnvironmentException(
+                    f"Failed to copy test environment file to {result.failed_hosts}")
 
     # Python paths required for functional testing
     set_python_environment(logger)
