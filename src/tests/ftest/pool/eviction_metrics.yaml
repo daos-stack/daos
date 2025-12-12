@@ -2,8 +2,8 @@ launch:
   !filter-only : /run/pool/default    # yamllint disable-line rule:colons
 
 hosts:
-  test_servers: 2
-  test_clients: 2
+  test_servers: 1
+  test_clients: 3
 
 timeout: 16000
 
@@ -32,10 +32,10 @@ mdtest:
   dfs_oclass: S1
   dfs_dir_oclass: SX
   manager: "MPICH"
-  processes: 16
+  ppn: 32
   test_dir: "/"
   api: DFS
   branching_factor: 1
   depth: 20
-  write_bytes: 4096
-  read_bytes: 4096
+  write_bytes: 8192
+  read_bytes: 8192
