@@ -226,14 +226,14 @@ Boolean code_coverage_enabled() {
 }
 
 String code_coverage_build_args() {
-    if not code_coverage_enabled() {
+    if (!code_coverage_enabled()) {
         return ''
     }
     return " --build-arg BULLSEYE_KEY=${env.BULLSEYE_KEY}"
 }
 
 String code_coverage_scons_args() {
-    if not code_coverage_enabled() {
+    if (!code_coverage_enabled()) {
         return ''
     }
     return ' --define "compiler_args COMPILER=covc"'
