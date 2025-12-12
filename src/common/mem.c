@@ -2332,8 +2332,8 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	if (cache == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_IO, "Allocated page cache, md-pages(%u), mem-pages(%u), max-ne-pages(%u) %p\n",
-		md_pgs, mem_pgs, max_ne_pgs, cache);
+	D_INFO("Page cache: md-pgs(%u), mem-pages(%u), max-ne-pgs(%u), mode(%d)\n", md_pgs, mem_pgs,
+	       max_ne_pgs, cmode);
 
 	cache->ca_store		= store;
 	cache->ca_base		= base;
@@ -3290,13 +3290,17 @@ cache_get_free_page(struct umem_cache *cache, struct umem_page_info **ret_pinfo,
 
 		/* All pinned pages are from current caller */
 		if (rc == -DER_BUSY && pinned_nr == cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]) {
-			D_ERROR("Not enough evictable pages.\n");
+			D_ERROR("Not enough evictable pages. pinned [%u/%u]\n", pinned_nr,
+				cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]);
 			return -DER_INVAL;
 		}
 
-		D_CDEBUG(retry_cnt == 10, DLOG_ERR, DB_TRACE,
-			 "Retry get free page, %d times\n", retry_cnt);
 		retry_cnt++;
+		D_CDEBUG(retry_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
+			 "%u retries of get free page with %u pinned. [ne:%u,pinned:%u,free:%u]\n",
+			 retry_cnt, pinned_nr, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 	}
 
 	pinfo = cache_pop_free_page(cache);
@@ -3678,9 +3682,12 @@ umem_cache_reserve(struct umem_store *store)
 		}
 		rc = 0;
 
-		D_CDEBUG(retry_cnt == 10, DLOG_ERR, DB_TRACE,
-			 "Retry reserve free page, %d times\n", retry_cnt);
 		retry_cnt++;
+		D_CDEBUG(retry_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
+			 "%u retries of reserve page. [ne:%u,pinned:%u,free:%u]\n", retry_cnt,
+			 cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 	}
 
 	D_ASSERT(cache->ca_reserve_waiters > 0);
