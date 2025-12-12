@@ -6468,7 +6468,7 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi, struct shard_anch
 		}
 
 		if (obj_args->recxs != NULL) {
-			if (sub_anchor->ssa_recxs != NULL && sub_anchors->sa_nr == nr)
+			if (sub_anchor->ssa_recxs != NULL && sub_anchors->sa_nr != nr)
 				D_FREE(sub_anchor->ssa_recxs);
 
 			if (sub_anchor->ssa_recxs == NULL) {
