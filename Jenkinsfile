@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@soumagne/mercury_libfabric') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -1042,7 +1042,8 @@ pipeline {
                     steps {
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()))
+                                    daos_pkg_version: daosPackagesVersion(next_version()),
+                                    inst_rpms: 'mercury-libfabric')
                         )
                     }
                     post {
@@ -1094,7 +1095,8 @@ pipeline {
                     } */
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()))
+                                    daos_pkg_version: daosPackagesVersion(next_version()),
+                                    inst_rpms: 'mercury-libfabric')
                         )
                     }
                     post {
