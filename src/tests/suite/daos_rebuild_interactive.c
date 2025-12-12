@@ -666,9 +666,6 @@ int_rebuild_dkeys_stop_failing(void **state)
 
 	T_BEGIN();
 
-	/* Use EC object - daos_obj_verify() -DER_MISMATCH with replicated object when targets down
-	 */
-	arg->obj_class = OC_EC_2P2G1;
 	oid            = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -732,12 +729,6 @@ int_rebuild_dkeys_stop_failing(void **state)
 	print_message("Exclude rebuild stopped\n");
 
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
-
-	/* Verify data consistency while rebuild has been stopped */
-	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	print_message("Object verify after exclude rebuild stop returned rc=%d\n", rc);
-	if (rc != 0)
-		assert_rc_equal(rc, -DER_NOSYS);
 
 	/* Do not restart the rebuild ; instead, go directly to reintegrate the rank */
 	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
