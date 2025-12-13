@@ -41,7 +41,7 @@ sudo dnf install --allowerasing -y "${isal_pkg}" || echo "${isal_pkg} not availa
 sudo dnf install --allowerasing -y "${isal_crypto_pkg}" || echo "${isal_crypto_pkg} not available"
 
 if [ "${CODE_COVERAGE}" == "true" ] ; then
-  bullseye_pkg="$(utils/rpms/package_version.sh bullseye dev)"
+  bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"
   sudo dnf install --allowerasing -y "${bullseye_pkg}" || echo "${bullseye_pkg} not available"
 fi
 
