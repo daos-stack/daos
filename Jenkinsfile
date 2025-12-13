@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-18348') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -219,6 +220,7 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
 }
 
 Boolean code_coverage_enabled() {
+    // Determine if code coverage is enabled for the build
     if (startedByTimer()) {
         env.COVFN_DISABLED = 'false'
     }
@@ -226,6 +228,7 @@ Boolean code_coverage_enabled() {
 }
 
 String code_coverage_build_args() {
+    // Get additional build args for code coverage, if enabled
     if (!code_coverage_enabled()) {
         return ''
     }
@@ -233,10 +236,23 @@ String code_coverage_build_args() {
 }
 
 String code_coverage_scons_args() {
+    // Get additional scons args for code coverage, if enabled
     if (!code_coverage_enabled()) {
         return ''
     }
-    return ' --define \"compiler_args COMPILER=covc\"'
+    return ' compiler_args "COMPILER=covc"'
+}
+
+Map unit_test_post_args(String name) {
+    // Get the arguments for unitTestPost
+    Map args = [artifacts: "${name}_logs/"]
+    if (code_coverage_enabled()) {
+        args['artifacts'] += "covc_${name}_logs/"
+        args['artifacts'] += 'covc_vm_test/**'
+        args['ignore_failure'] = true
+        args['code_coverage'] = true
+    }
+    return args
 }
 
 pipeline {
@@ -765,12 +781,14 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
+                                     ignore_failure: code_coverage_enabled(),
+                                     code_coverage: code_coverage_enabled(),
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_logs/']
+                            unitTestPost unit_test_post_args('unit_test_logs/')
                             job_status_update()
                         }
                     }
