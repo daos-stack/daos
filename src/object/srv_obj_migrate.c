@@ -3058,8 +3058,6 @@ migrate_fini_one_ult(void *data)
 		for (i = 0; i < MIGR_MAX; i++)
 			ABT_cond_broadcast(rmg->rmg_resources[i].res_cond);
 		ABT_mutex_unlock(rmg->rmg_mutex);
-
-		tls->mpt_rmg = NULL;
 	}
 
 	migrate_pool_tls_put(tls); /* lookup */
