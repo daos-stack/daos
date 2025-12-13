@@ -232,7 +232,7 @@ String code_coverage_build_args() {
     if (!code_coverage_enabled()) {
         return ''
     }
-    return " --build-arg BULLSEYE_KEY=${env.BULLSEYE_KEY}"
+    return " --build-arg COMPILER=covc --build-arg BULLSEYE_KEY=${env.BULLSEYE_KEY}"
 }
 
 String code_coverage_scons_args() {
@@ -240,7 +240,7 @@ String code_coverage_scons_args() {
     if (!code_coverage_enabled()) {
         return ''
     }
-    return ' compiler_args "COMPILER=covc"'
+    return ' COMPILER=covc'
 }
 
 Map unit_test_post_args(String name) {
