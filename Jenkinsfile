@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-18348') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -218,10 +219,53 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     return false
 }
 
+Boolean code_coverage_enabled() {
+    // Determine if code coverage is enabled for the build
+    if (startedByTimer()) {
+        env.COVFN_DISABLED = 'false'
+    }
+    return env.COVFN_DISABLED == 'false'
+}
+
+String code_coverage_build_args() {
+    // Get additional build args for code coverage, if enabled
+    if (!code_coverage_enabled()) {
+        return ''
+    }
+    return " --build-arg COMPILER=covc --build-arg BULLSEYE_KEY=${env.BULLSEYE_KEY}"
+}
+
+String code_coverage_scons_args() {
+    // Get additional scons args for code coverage, if enabled
+    if (!code_coverage_enabled()) {
+        return ''
+    }
+    return ' COMPILER=covc'
+}
+
+Map unit_test_post_args(String name) {
+    // Get the arguments for unitTestPost
+    Map args = [artifacts: "${name}_logs/"]
+    if (code_coverage_enabled()) {
+        args['artifacts'] += "covc_${name}_logs/"
+        args['artifacts'] += 'covc_vm_test/**'
+        args['ignore_failure'] = true
+        args['code_coverage'] = true
+    }
+    return args
+}
+
 pipeline {
     agent { label 'lightweight' }
 
+    triggers {
+        // Generate a code coverage report each Sunday
+        /* groovylint-disable-next-line AddEmptyString */
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 6 * * 0' : '')
+    }
+
     environment {
+        BULLSEYE_KEY = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = '-ici_key'
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
@@ -305,6 +349,9 @@ pipeline {
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on Leap 15')
+        // booleanParam(name: 'CI_CODE_COVERAGE',
+        //              defaultValue: false,
+        //              description: 'Enable Bullseye code coverage report')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -537,22 +584,24 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                code_coverage_build_args()
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
+                                script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} ${code_coverage_enabled()}"
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
-                                        stash_files: 'ci/test_files_to_stash.txt',
-                                        build_deps: 'no',
-                                        stash_opt: true,
-                                        scons_args: sconsArgs() +
-                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_args: sconsArgs() +
+                                                       ' PREFIX=/opt/daos TARGET_TYPE=release' +
+                                                       code_coverage_scons_args()))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
                         }
@@ -732,12 +781,14 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
+                                     ignore_failure: code_coverage_enabled(),
+                                     code_coverage: code_coverage_enabled(),
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_logs/']
+                            unitTestPost unit_test_post_args('unit_test_logs/')
                             job_status_update()
                         }
                     }
