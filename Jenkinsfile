@@ -236,7 +236,7 @@ String code_coverage_scons_args() {
     if (!code_coverage_enabled()) {
         return ''
     }
-    return ' --define "compiler_args COMPILER=covc"'
+    return ' --define \"compiler_args COMPILER=covc\"'
 }
 
 pipeline {
@@ -575,7 +575,7 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
+                                script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} ${code_coverage_enabled()}"
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
