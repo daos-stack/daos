@@ -960,10 +960,7 @@ bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max
 	if (rc != 0) {
 		if (rc == JSON_NOT_FOUND) {
 			rc             = 0;
-			*enable        = false;
-			*max_io_errs   = UINT32_MAX;
-			*max_csum_errs = UINT32_MAX;
-			D_DEBUG(DB_MGMT, "bdev auto-faulty criteria disabled as not configured\n");
+			D_DEBUG(DB_MGMT, "bdev auto-faulty criteria not set in config\n");
 		}
 		return rc;
 	}
