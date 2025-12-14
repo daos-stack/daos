@@ -1,6 +1,8 @@
 hosts:
   test_servers: 4
-timeout: 5700
+
+timeout: 1H40M
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -38,12 +40,15 @@ server_config:
   transport_config:
     allow_insecure: true
   system_ram_reserved: 64
+
 agent_config:
   transport_config:
     allow_insecure: true
+
 dmg:
   transport_config:
     allow_insecure: true
+
 daos_tests:
   num_clients:
     test_daos_cat_recov_core: 1
