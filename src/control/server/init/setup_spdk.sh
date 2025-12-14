@@ -97,7 +97,7 @@ else
 	fi
 	if [ -d "/tmp/dpdk/" ]; then
 		echo "RUN: chmod -R g+rwx /tmp/dpdk"
-		chmod -R g+rw /tmp/dpdk
+		chmod -R g+rwx /tmp/dpdk
 	fi
 
 	echo "Setting VFIO file permissions for unprivileged access"
