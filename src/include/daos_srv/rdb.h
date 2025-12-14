@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -114,6 +115,50 @@
  */
 struct rdb_storage;
 
+/**
+ * Replica ID
+ *
+ * This 64-bit ID type is designed to be passed around by value, rather than
+ * address, even through it is a struct.
+ */
+typedef struct {
+	d_rank_t rri_rank; /**< rank */
+	uint32_t rri_gen;  /**< generation (see rdb_alloc_replica_gen) */
+} rdb_replica_id_t;
+
+#define RDB_F_RID     "%u.%u"
+#define RDB_P_RID(id) id.rri_rank, id.rri_gen
+
+static inline int
+rdb_replica_id_compare(rdb_replica_id_t x, rdb_replica_id_t y)
+{
+	if (x.rri_rank < y.rri_rank)
+		return -1;
+	if (x.rri_rank > y.rri_rank)
+		return 1;
+
+	if (x.rri_gen < y.rri_gen)
+		return -1;
+	if (x.rri_gen > y.rri_gen)
+		return 1;
+
+	return 0;
+}
+
+/* clang-format off */
+int crt_proc_rdb_replica_id_t(crt_proc_t proc, crt_proc_op_t proc_op, rdb_replica_id_t *p);
+/* clang-format on */
+
+/** Parameters for creating database storage */
+struct rdb_create_params {
+	size_t            rcp_size;           /**< VOS pool size in bytes */
+	uint32_t          rcp_vos_df_version; /**< VOS durable format version */
+	uint32_t          rcp_layout_version; /**< layout version (0 for default) */
+	rdb_replica_id_t  rcp_id;             /**< self ID */
+	rdb_replica_id_t *rcp_replicas;       /**< replica IDs if bootstrapping */
+	int               rcp_replicas_len;   /**< length of rcp_replicas[] */
+};
+
 struct rdb_cbs;
 
 /**
@@ -138,15 +183,17 @@ struct rdb_clue {
 };
 
 /** Database storage methods */
-int rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
-	       uint32_t vos_df_version, const d_rank_list_t *replicas, struct rdb_cbs *cbs,
-	       void *arg, struct rdb_storage **storagep);
+/* clang-format off */
+int rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term,
+	       struct rdb_create_params *params, struct rdb_cbs *cbs, void *arg,
+	       struct rdb_storage **storagep);
 int rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_cbs *cbs,
 	     void *arg, struct rdb_storage **storagep);
 void rdb_close(struct rdb_storage *storage);
 int rdb_destroy(const char *path, const uuid_t uuid);
 int rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue);
 int rdb_dictate(struct rdb_storage *storage);
+/* clang-format on */
 
 /** Database (opaque) */
 struct rdb;
@@ -179,7 +226,14 @@ struct rdb_cbs {
 	void (*dc_stop)(struct rdb *db, int err, void *arg);
 };
 
+/** Operation for \a rdb_modify_replicas */
+enum rdb_replica_op {
+	RDB_REPLICA_ADD,   /**< add voting replicas */
+	RDB_REPLICA_REMOVE /**< remove voting replicas */
+};
+
 /** Database methods */
+/* clang-format off */
 int rdb_start(struct rdb_storage *storage, struct rdb **dbp);
 void rdb_stop(struct rdb *db, struct rdb_storage **storagep);
 void rdb_stop_and_close(struct rdb *db);
@@ -187,12 +241,17 @@ void rdb_resign(struct rdb *db, uint64_t term);
 int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
+rdb_replica_id_t rdb_get_replica_id(struct rdb *db);
+int rdb_get_replicas(struct rdb *db, rdb_replica_id_t **replicas, int *replicas_len);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
 int rdb_get_size(struct rdb *db, size_t *sizep);
-int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
-int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
+uint32_t rdb_get_version(struct rdb *db);
+int rdb_alloc_replica_gen(struct rdb *db, uint64_t term, uint32_t *gen_out);
+int rdb_modify_replicas(struct rdb *db, enum rdb_replica_op op, rdb_replica_id_t *replicas,
+			int *replica_len);
 int rdb_ping(struct rdb *db, uint64_t caller_term);
 int rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version);
+/* clang-format on */
 
 /**
  * Path (opaque)
@@ -210,16 +269,19 @@ typedef d_iov_t rdb_path_t;
 extern d_iov_t rdb_path_root_key;
 
 /** Path methods */
+/* clang-format off */
 int rdb_path_init(rdb_path_t *path);
 void rdb_path_fini(rdb_path_t *path);
 int rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path);
 int rdb_path_push(rdb_path_t *path, const d_iov_t *key);
+/* clang-format on */
 
 /**
  * Define a d_iov_t object, named \a prefix + \a name, that represents a
  * constant string key. See rdb_layout.[ch] for an example of the usage of this
  * helper macro.
  */
+/* clang-format off */
 #define RDB_STRING_KEY(prefix, name)					\
 static char	prefix ## name ## _buf[] = #name;			\
 d_iov_t		prefix ## name = {					\
@@ -227,6 +289,7 @@ d_iov_t		prefix ## name = {					\
 	.iov_buf_len	= sizeof(prefix ## name ## _buf),		\
 	.iov_len	= sizeof(prefix ## name ## _buf)		\
 }
+/* clang-format on */
 
 /** KVS classes */
 enum rdb_kvs_class {
@@ -261,13 +324,16 @@ struct rdb_tx {
 #define RDB_NIL_TERM UINT64_MAX
 
 /** TX methods */
+/* clang-format off */
 int rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
 int rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx);
 void rdb_tx_discard(struct rdb_tx *tx);
 int rdb_tx_commit(struct rdb_tx *tx);
 void rdb_tx_end(struct rdb_tx *tx);
+/* clang-format on */
 
 /** TX update methods */
+/* clang-format off */
 int rdb_tx_create_root(struct rdb_tx *tx, const struct rdb_kvs_attr *attr);
 int rdb_tx_destroy_root(struct rdb_tx *tx);
 int rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
@@ -280,6 +346,7 @@ int rdb_tx_update_critical(struct rdb_tx *tx, const rdb_path_t *kvs,
 			   const d_iov_t *key, const d_iov_t *value);
 int rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs,
 		  const d_iov_t *key);
+/* clang-format on */
 
 /** Probe operation codes */
 enum rdb_probe_opc {
@@ -306,6 +373,7 @@ typedef int (*rdb_iterate_cb_t)(daos_handle_t ih, d_iov_t *key,
 				d_iov_t *val, void *arg);
 
 /** TX query methods */
+/* clang-format off */
 int rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs,
 		  const d_iov_t *key, d_iov_t *value);
 int rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs,
@@ -315,5 +383,6 @@ int rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key)
 int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 		   rdb_iterate_cb_t cb, void *arg);
 int rdb_tx_revalidate(struct rdb_tx *tx);
+/* clang-format on */
 
 #endif /* DAOS_SRV_RDB_H */

@@ -592,7 +592,7 @@ disable_vfio: false
 disable_vmd: false
 disable_hotplug: false
 nr_hugepages: 0
-system_ram_reserved: 26
+system_ram_reserved: 64
 disable_hugepages: false
 allow_numa_imbalance: false
 allow_thp: false
