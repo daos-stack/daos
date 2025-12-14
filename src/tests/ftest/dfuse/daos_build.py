@@ -311,7 +311,7 @@ class DaosBuild(TestWithServers):
         """This test builds DAOS on a dfuse filesystem.
 
         Use cases:
-            Create Pool
+            Create Pool.
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
