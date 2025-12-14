@@ -228,9 +228,12 @@
 #allow_numa_imbalance: true
 #
 #
-## Transparent hugepage support is incompatible with the way DAOS uses hugepages and it's highly
-## recommended to leave this option unset. There are edge-cases where administrators may want to
-## have THP enabled and to do that you will need to set this flag to trum.
+
+## Allow DAOS server to run with transparent hugepages (THP) enabled on the host machine.
+#
+## WARNING: Transparent hugepages can conflict with how the DAOS server uses hugepages, and enabling
+## them may cause intermittent errors. Unless transparent hugepages are required by another
+## application on the machine, it is strongly recommended to leave this setting disabled.
 #
 ## default: false
 #allow_thp: true
