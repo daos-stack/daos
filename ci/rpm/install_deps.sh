@@ -21,7 +21,7 @@ env
 pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
-CODE_COVERAGE="${3:-false}"
+code_coverage="${3:-false}"
 libfabric_pkg="$(utils/rpms/package_version.sh libfabric dev)"
 mercury_pkg="$(utils/rpms/package_version.sh mercury dev)"
 argobots_pkg="$(utils/rpms/package_version.sh argobots dev)"
@@ -40,7 +40,7 @@ sudo dnf install --allowerasing -y "${pmdk_pkg}" || echo "${pmdk_pkg} not availa
 sudo dnf install --allowerasing -y "${isal_pkg}" || echo "${isal_pkg} not available"
 sudo dnf install --allowerasing -y "${isal_crypto_pkg}" || echo "${isal_crypto_pkg} not available"
 
-if [ "${CODE_COVERAGE}" == "true" ] ; then
+if [ "${code_coverage}" == "true" ] ; then
   bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"
   sudo dnf install --allowerasing -y "${bullseye_pkg}" || echo "${bullseye_pkg} not available"
 fi

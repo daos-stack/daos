@@ -593,7 +593,7 @@ pipeline {
                             sh label: 'Install RPMs',
                                 script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} ${code_coverage_enabled()}"
                             sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
+                                script: "./ci/rpm/build_deps.sh ${code_coverage_enabled()} ${env.BULLSEYE_KEY}"
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
