@@ -827,8 +827,8 @@ cat /sys/kernel/mm/transparent_hugepage/enabled
 ```
 
 If `allow_thp: true` parameter is set in server config file global section, the behavior will change
-and the server will start (with THP enabled. SCM tmpfs will be mounted with `huge=always` unless
-`scm_hugepages_disabled: true` is set in the server config file storage section.
+and the server will start (with THP enabled. SCM tmpfs will be mounted with `huge=always` on `dmg
+storage format` unless `scm_hugepages_disabled: true` is set in the server config file storage section.
 
 ```bash
 tmpfs on /mnt/daos0 type tmpfs (rw,noatime,size=79691776k,gid=983,inode64,huge=always,mpol=prefer:0)
@@ -836,7 +836,8 @@ tmpfs on /mnt/daos1 type tmpfs (rw,noatime,size=79691776k,gid=983,inode64,huge=a
 ```
 
 If `allow_thp: false` or the parameter is unset the default behavior is that the server won’t start
-if THP is enabled in the operating system. SCM tmpfs will be mounted with `huge=never`.
+if THP is enabled in the operating system. SCM tmpfs will be mounted with `huge=never`on `dmg
+storage format`.
 
 ```bash
 tmpfs on /mnt/daos1 type tmpfs (rw,noatime,size=79691776k,gid=983,inode64,mpol=prefer:1)
