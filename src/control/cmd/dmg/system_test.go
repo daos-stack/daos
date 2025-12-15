@@ -635,7 +635,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			resp:    &mgmtpb.SystemRebuildManageResp{},
 			expInfo: "System-rebuild start request succeeded on 0 pools []",
 		},
-		"pool stop failed": {
+		"rebuild stop failed": {
 			ctlCfg: &control.Config{},
 			opCode: control.PoolRebuildOpCodeStop,
 			resp: &mgmtpb.SystemRebuildManageResp{
@@ -661,7 +661,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			expErr:  errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
 			expInfo: "System-rebuild stop request succeeded on 1 pool",
 		},
-		"pool start succeeded; verbose": {
+		"rebuild start succeeded; verbose": {
 			ctlCfg:  &control.Config{},
 			opCode:  control.PoolRebuildOpCodeStart,
 			verbose: true,
@@ -702,6 +702,9 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			gotErr := rbldCmd.execute(tc.opCode, tc.force)
 			test.CmpErr(t, tc.expErr, gotErr)
 
+			// Note this doesn't verify that the text is on an INFO or DEBUG line
+			// specifically, just that it appears in log output.
+
 			if !strings.Contains(buf.String(), tc.expInfo) {
 				t.Fatalf("expected info log output to contain %s, got %s\n",
 					tc.expInfo, buf.String())
@@ -710,6 +713,55 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 				t.Fatalf("unexpected info log output printed, got %s\n",
 					buf.String())
 			}
+		})
+	}
+}
+
+func TestDmg_systemSelfHealEvalCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg  *control.Config
+		resp    *mgmtpb.DaosResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"no config": {
+			expErr: errors.New("system self-heal eval failed: no configuration loaded"),
+		},
+		"ms failures": {
+			ctlCfg: &control.Config{},
+			msErr:  errors.New("failed"),
+			expErr: errors.New("failed"),
+		},
+		"success": {
+			ctlCfg:  &control.Config{},
+			resp:    &mgmtpb.DaosResp{},
+			expInfo: "System self-heal eval request succeeded",
+		},
+		"daos error": {
+			ctlCfg: &control.Config{},
+			resp: &mgmtpb.DaosResp{
+				Status: -1,
+			},
+			expErr: errors.New("DER_UNKNOWN"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			cmd := new(systemSelfHealEvalCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.setConfig(tc.ctlCfg)
+
+			gotErr := cmd.Execute(nil)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

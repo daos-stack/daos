@@ -199,13 +199,14 @@ message StorageUsageStats {
 	StorageMediaType media_type = 6;
 }
 
-// PoolRebuildStatus represents a pool's rebuild status.
+// PoolRebuildStatus represents a pool's rebuild status, translates to enum daos_rebuild_state_t
+// IN_PROGRESS/NOT_STARTED/COMPLETED states.
 message PoolRebuildStatus {
 	int32 status = 1; // DAOS error code
 	enum State {
-		IDLE = 0;
-		DONE = 1;
-		BUSY = 2;
+		BUSY = 0; // DRS_IN_PROGRESS
+		IDLE = 1; // DRS_NOT_STARTED
+		DONE = 2; // DRS_COMPLETED
 	}
 	State state = 2;
 	uint64 objects = 3;

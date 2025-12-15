@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -907,7 +908,12 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep, task);
 
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
-	D_ASSERT(dtp->dtp_dep_cnt < UINT16_MAX);
+	if (dtp->dtp_dep_cnt >= UINT16_MAX || dtp->dtp_refcnt >= UINT16_MAX) {
+		D_ERROR("Max dependent tasks reached: %" PRIu16 "\n", dtp->dtp_dep_cnt);
+		D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
+		D_FREE(tlink);
+		return -DER_NOMEM;
+	}
 	tse_task_addref_locked(dtp);
 	tlink->tl_task = task;
 	dtp->dtp_dep_cnt++;

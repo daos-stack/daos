@@ -135,29 +135,40 @@ enum ds_rsvc_start_mode {
 	DS_RSVC_DICTATE	/**< DANGEROUSLY reset and start the service (see rdb_dictate) */
 };
 
+/* clang-format off */
 int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t caller_term,
-		  enum ds_rsvc_start_mode mode, size_t size, uint32_t vos_df_version,
-		  d_rank_list_t *replicas, void *arg);
+		  enum ds_rsvc_start_mode mode, struct rdb_create_params *create_params, void *arg);
 int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, uint64_t caller_term, bool destroy);
 int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			struct rsvc_hint *hint);
+/* clang-format on */
+
+/** Parameters used for creating an rsvc */
+struct ds_rsvc_create_params {
+	bool              scp_bootstrap;      /**< create with an initial list of replicas */
+	size_t            scp_size;           /**< size of each replica in bytes */
+	uint32_t          scp_vos_df_version; /**< version of VOS durable format */
+	uint32_t          scp_layout_version; /**< version of RDB layout */
+	rdb_replica_id_t *scp_replicas;       /**< replicas IDs */
+	int               scp_replicas_len;   /**< length of scp_replicas[] */
+};
+
+/* clang-format off */
+
 int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		       const d_rank_list_t *ranks, uint64_t caller_term,
-		       enum ds_rsvc_start_mode mode, bool bootstrap, size_t size,
-		       uint32_t vos_df_version);
+		       enum ds_rsvc_start_mode mode, struct ds_rsvc_create_params *create_params);
 int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id, const d_rank_list_t *ranks,
 		      d_rank_list_t *excluded, uint64_t caller_term, bool destroy);
 enum ds_rsvc_state ds_rsvc_get_state(struct ds_rsvc *svc);
 void ds_rsvc_set_state(struct ds_rsvc *svc, enum ds_rsvc_state state);
-void
-ds_rsvc_begin_stepping_up(struct ds_rsvc *svc);
-int
-       ds_rsvc_end_stepping_up(struct ds_rsvc *svc, int rc_in, enum ds_rsvc_state state);
+void ds_rsvc_begin_stepping_up(struct ds_rsvc *svc);
+int ds_rsvc_end_stepping_up(struct ds_rsvc *svc, int rc_in, enum ds_rsvc_state state);
 int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 			   uint32_t vos_df_version);
 int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ranks,
 			 size_t size, uint32_t vos_df_version, struct rsvc_hint *hint);
-int ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks);
+int ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, bool destroy);
 int ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ranks,
 			    struct rsvc_hint *hint);
 int ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
@@ -185,5 +196,7 @@ size_t ds_rsvc_get_md_cap(void);
 void ds_rsvc_request_map_dist(struct ds_rsvc *svc);
 void ds_rsvc_query_map_dist(struct ds_rsvc *svc, uint32_t *version, bool *idle);
 void ds_rsvc_wait_map_dist(struct ds_rsvc *svc);
+
+/* clang-format on */
 
 #endif /* DAOS_SRV_RSVC_H */

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +18,7 @@
  *         D-key rdb_dkey
  *           A-key rdb_mc_uuid		// <db_uuid> (see rdb_create())
  *           A-key rdb_mc_version	// layout version
+ *           A-key rdb_mc_replica_id	// replica ID
  *           A-key rdb_mc_term		// term
  *           A-key rdb_mc_vote		// vote for term
  *           A-key rdb_mc_lc		// log container record
@@ -26,7 +28,9 @@
  *           A-key rdb_lc_entry_header	// log entry header
  *           A-key rdb_lc_entry_data	// log entry data
  *           A-key rdb_lc_nreplicas	// number of replicas
- *           A-key rdb_lc_replicas	// replica ranks
+ *           A-key rdb_lc_replicas	// replicas
+ *           A-key rdb_lc_replica_gen_next
+ *					// result for next replica generation allocation
  *           A-key rdb_lc_oid_next	// result for next object ID allocation
  *           A-key rdb_lc_root		// <root_oid>
  *       Object <root_oid>		// root KVS
@@ -72,10 +76,15 @@
 #define RDB_LAYOUT_H
 
 /* Default layout version */
-#define RDB_LAYOUT_VERSION 1
+#define RDB_LAYOUT_VERSION            2
 
 /* Lowest compatible layout version */
 #define RDB_LAYOUT_VERSION_LOW 1
+
+/* Layout version that introduces replica IDs with generations */
+#define RDB_LAYOUT_VERSION_REPLICA_ID 2
+
+D_CASSERT(sizeof(rdb_replica_id_t) == sizeof(uint64_t));
 
 /*
  * Object ID
@@ -122,8 +131,9 @@ struct rdb_anchor {
  */
 extern d_iov_t rdb_mc_uuid;		/* uuid_t */
 extern d_iov_t rdb_mc_version;		/* uint32_t */
+extern d_iov_t rdb_mc_replica_id;       /* rdb_replica_id_t or absent (< v2) */
 extern d_iov_t rdb_mc_term;		/* uint64_t */
-extern d_iov_t rdb_mc_vote;		/* int */
+extern d_iov_t rdb_mc_vote;             /* rdb_replica_id_t or int (< v2) */
 extern d_iov_t rdb_mc_lc;		/* rdb_lc_record */
 extern d_iov_t rdb_mc_slc;		/* rdb_lc_record */
 
@@ -154,15 +164,34 @@ struct rdb_lc_record {
 extern d_iov_t rdb_lc_entry_header;	/* rdb_entry */
 extern d_iov_t rdb_lc_entry_data;	/* uint8_t[] */
 extern d_iov_t rdb_lc_nreplicas;	/* uint8_t */
-extern d_iov_t rdb_lc_replicas;		/* uint32_t[] */
+extern d_iov_t rdb_lc_replicas;         /* rdb_replica_record[] or uint32_t[] (< v2) */
+extern d_iov_t rdb_lc_replica_gen_next; /* uint32_t or absent (< v2)*/
 extern d_iov_t rdb_lc_oid_next;		/* rdb_oid_t (classless) */
 extern d_iov_t rdb_lc_root;		/* rdb_oid_t */
 
-/* Log entry */
+/* Log entry header */
 struct rdb_entry {
 	uint64_t	dre_term;
 	uint32_t	dre_type;
 	uint32_t	dre_size;	/* of entry data */
+};
+
+/*
+ * Log normal entry data
+ *
+ * See rdb_tx_append.
+ */
+
+/*
+ * Log cfg entry data
+ *
+ * rdb_replica_id or d_rank_t (< v2).
+ */
+
+/* Replica record in rdb_lc_replicas */
+struct rdb_replica_record {
+	rdb_replica_id_t drr_id;
+	uint64_t         drr_reserved; /* for future non-voting support, etc. */
 };
 
 #endif /* RDB_LAYOUT_H */
