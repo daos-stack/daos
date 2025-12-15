@@ -677,7 +677,9 @@ pipeline {
                                                                 deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=.2 '
+
                         }
                     }
                     steps {
@@ -714,7 +716,9 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
+                                                ' --build-arg POINT_RELEASE=.6 '
+
                         }
                     }
                     steps {
@@ -750,7 +754,9 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg COMPILER=icc'
+                                                ' --build-arg COMPILER=icc' +
+                                                ' --build-arg POINT_RELEASE=.6 '
+
                         }
                     }
                     steps {
