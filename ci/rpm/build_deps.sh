@@ -8,5 +8,5 @@ scons install --build-deps=only USE_INSTALLED=all PREFIX=/opt/daos TARGET_TYPE=r
 
 if [ "${code_coverage}" == "true" ] ; then
     pushd "${mydir}/../.." || exit 1
-    utils/rpms/prep_other_deps.sh "${bullseye_key}"
+    utils/rpms/bullseye_build.sh "${bullseye_key}"
 fi
