@@ -222,6 +222,7 @@ pipeline {
     agent { label 'lightweight' }
 
     environment {
+        BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = '-ici_key'
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
@@ -574,6 +575,46 @@ pipeline {
                         }
                     }
                 }
+                stage('Build on EL 8.8 Bullseye') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'yes',
+                                       stash_opt: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh label: 'Save failed Bullseye logs',
+                               script: '''if [ -f config.log ]; then
+                                          mv config.log config.log-el8-covc
+                                       fi'''
+                            archiveArtifacts artifacts: 'config.log-el8-covc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
@@ -804,6 +845,34 @@ pipeline {
                         }
                     }
                 }
+                stage('Unit Test Bullseye on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPost ignore_failure: true,
+                                         artifacts: ['covc_test_logs/', 'covc_vm_test/**']
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit test Bullseye on EL 8.8')
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1237,6 +1306,50 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
+        stage('Test Report') {
+            parallel {
+                stage('Bullseye Report on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable') +
+                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        // The coverage_healthy is primarily set here
+                        // while the code coverage feature is being implemented.
+                        job_step_update(
+                            cloverReportPublish(
+                                coverage_stashes: ['el8-covc-unit-cov',
+                                                   'func-vm-cov',
+                                                   'func-hw-medium-cov',
+                                                   'func-hw-medium-md-on-ssd-cov',
+                                                   'func-hw-medium-verbs-provider-cov',
+                                                   'func-hw-medium-verbs-provider-md-on-ssd-cov',
+                                                   'func-hw-medium-ucx-provider-cov',
+                                                   'func-hw-large-cov',
+                                                   'func-hw-large-md-on-ssd-cov'],
+                                coverage_healthy: [methodCoverage: 0,
+                                                   conditionalCoverage: 0,
+                                                   statementCoverage: 0],
+                                ignore_failure: true))
+                    }
+                    post {
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
+                } // stage('Bullseye Report on EL 8.8')
+            } // parallel
+        } // stage ('Test Report')
     } // stages
     post {
         always {
