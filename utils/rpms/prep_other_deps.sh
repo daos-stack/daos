@@ -12,11 +12,10 @@ popd
 bullseye_url="https://www.bullseye.com/download"
 bullseye_src="${bullseye_url}/BullseyeCoverage-${bullseye_version}-Linux-x64.tar.xz"
 bullseye_out="bullseye.tar.xz"
-curl_proxy="--proxy http://proxy.houston.hpecorp.net:8080/"
 
 curl -h
-# curl "${curl_proxy}" "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
-curl "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
+curl --proxy http://proxy.houston.hpecorp.net:8080/ "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
+# curl "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
 mkdir -p bullseye
 tar -C bullseye --strip-components=1 -xf "${bullseye_out}"
 pushd bullseye
