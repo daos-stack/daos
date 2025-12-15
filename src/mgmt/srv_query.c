@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -248,7 +249,10 @@ bio_storage_dev_manage_led(void *arg)
 		return -DER_INVAL;
 	}
 
-	/* Set the LED of the VMD device to a FAULT state, tr_addr and state may be updated */
+	/**
+	 * Set/Get the LED state of the VMD device, tr_addr and state led_info fields may be
+	 * updated. GET will fail with DER_NOTSUPPORTED if VMD is not enabled.
+	 */
 	rc = bio_led_manage(bxc, led_info->tr_addr, led_info->dev_uuid,
 			    (unsigned int)led_info->action, (unsigned int *)led_info->state,
 			    led_info->duration);
@@ -486,7 +490,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 				break;
 			resp->devices[i]->ctrlr_namespace_id = dev_info->bdi_ctrlr->nss->id;
 		} else {
-			D_DEBUG(DB_MGMT, "ctrlr not initialized in bio_dev_info, unplugged?");
+			D_DEBUG(DB_MGMT, "ctrlr not initialized in bio_dev_info, is it unplugged?");
 		}
 
 		/* Populate NVMe device state */
@@ -754,12 +758,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
 	if (rc != 0) {
-		if (rc == -DER_NOTSUPPORTED)
-			/* Reset rc for non-VMD case */
-			rc = 0;
-		else
-			DL_ERROR(rc, "FAULT LED state not set on device:" DF_UUID,
-				 DP_UUID(dev_uuid));
+		DL_ERROR(rc, "FAULT LED state not set on device:" DF_UUID, DP_UUID(dev_uuid));
 	}
 
 out:
@@ -808,7 +807,7 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	led_info.state = &led_state;
 	led_info.duration = req->led_duration_mins * 60 * (NSEC_PER_SEC / NSEC_PER_USEC);
 
-	/* Manage the VMD LED state on init xstream */
+	/* Manage the LED state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
 	if (rc != 0) {
