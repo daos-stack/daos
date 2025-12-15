@@ -603,7 +603,7 @@ pipeline {
                                                        ' PREFIX=/opt/daos TARGET_TYPE=release' +
                                                        code_coverage_scons_args()))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
+                                script: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL} ${code_coverage_enabled()}"
                         }
                     }
                     post {

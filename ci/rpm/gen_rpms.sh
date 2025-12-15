@@ -21,9 +21,10 @@ env
 pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
+CODE_COVERAGE="${3:-false}"
 rm -f ./*.rpm
 rm -rf /home/daos/rpms/*
-utils/rpms/build_packages.sh deps
+utils/rpms/build_packages.sh deps "${CODE_COVERAGE}"
 if ls -1 ./*.rpm; then
   mkdir -p /home/daos/rpms/deps
   cp ./*.rpm /home/daos/rpms/deps

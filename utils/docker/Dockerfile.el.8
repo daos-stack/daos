@@ -79,6 +79,7 @@ RUN [ "x$BULLSEYE_KEY" != "x" ] || {                                            
         tar -C bullseye --strip-components=1 -xf bullseye.tar.xz &&                                  \
         pushd bullseye &&                                                                            \
         ./install --quiet --key "${BULLSEYE_KEY}" --prefix /opt/BullseyeCoverage &&                  \
+        ls -aR && ls -aR /opt/BullseyeCoverage &&                                                    \
         popd && rm -rf bullseye.tar.xz bullseye;                                                     \
     }
 
