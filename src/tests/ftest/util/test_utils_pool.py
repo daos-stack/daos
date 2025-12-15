@@ -1420,7 +1420,7 @@ class TestPool(TestDaosApiBase):
 
         Args:
             expected (str): which rebuild data check to wait for: 'running', 'completed', 'stopped'
-            interval (int): number of seconds to wait in between rebuild completion checks
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
@@ -1482,7 +1482,7 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to start.
 
         Args:
-            interval (int): number of seconds to wait in between rebuild completion checks
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
@@ -1494,7 +1494,7 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to end.
 
         Args:
-            interval (int): number of seconds to wait in between rebuild completion checks
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
@@ -1506,7 +1506,7 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to stop without completing.
 
         Args:
-            interval (int): number of seconds to wait in between checks
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
