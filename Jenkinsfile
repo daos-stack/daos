@@ -190,6 +190,9 @@ Boolean skip_pragma_set(String name, String def_val='false') {
 
 Boolean skip_build_stage(String distro='', String compiler='gcc') {
     // Skip the stage if the CI_<distro>_NOBUILD parameter is set
+    println("[${env.STAGE_NAME}] --- skip_build_stage diagnostics ---")
+    println("    Input: distro='$distro', compiler='$compiler'")
+
     if (distro) {
         if (startedByUser() && paramsValue("CI_${distro}_NOBUILD", false)) {
             println("[${env.STAGE_NAME}] Skipping build stage due to CI_${distro}_NOBUILD")
@@ -202,11 +205,18 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     if (distro && compiler) {
         pragma_names << "build-${distro}-${compiler}"
     }
-    Boolean any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
+    
+    println("    Pragma names to check: ${pragma_names}")
+
+    // Check if any of the skip pragmas are set
+    def pragma_checks = pragma_names.collectEntries { name -> [(name): skip_pragma_set(name)] }
+    println("    Pragma flags: ${pragma_checks}")
+
+    boolean any_pragma_skip = pragma_checks.values().any { it }
+
     if (any_pragma_skip) {
-        println("[${env.STAGE_NAME}] Skipping build stage for due to Skip-[${pragma_names}] pragma")
+        println("[${env.STAGE_NAME}] Skipping build stage due to Skip-[${pragma_names.join(', ')}] pragma(s), matched: ${pragma_checks.findAll { k,v -> v }.keySet()}")
         return true
-    }
 
     // Skip the stage if a specific DAOS RPM version is specified
     if (rpmTestVersion() != '') {
@@ -215,6 +225,8 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     }
 
     // Otherwise run the build stage
+    // Default: don't skip
+    println("[${env.STAGE_NAME}] Skipping NOT triggered. Build stage will run.")
     return false
 }
 
