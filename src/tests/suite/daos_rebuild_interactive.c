@@ -54,8 +54,7 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid, d_rank_t rank,
 		int rc;
 
 		rc = daos_obj_verify(arg->coh, inflight_oid, DAOS_EPOCH_MAX);
-		if (rc != 0)
-			assert_rc_equal(rc, -DER_NOSYS);
+		assert_rc_equal(rc, 0);
 	}
 }
 
@@ -111,23 +110,19 @@ int_rebuild_snap_update_recs(void **state)
 
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		if (rc != 0)
-			assert_rc_equal(rc, -DER_NOSYS);
+		assert_rc_equal(rc, 0);
 	}
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	if (rc != 0)
-		assert_rc_equal(rc, -DER_NOSYS);
+	assert_rc_equal(rc, 0);
 
 	arg->interactive_rebuild = 0;
 	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		if (rc != 0)
-			assert_rc_equal(rc, -DER_NOSYS);
+		assert_rc_equal(rc, 0);
 	}
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	if (rc != 0)
-		assert_rc_equal(rc, -DER_NOSYS);
+	assert_rc_equal(rc, 0);
 	T_END();
 }
 
@@ -172,24 +167,20 @@ int_rebuild_snap_punch_recs(void **state)
 
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		if (rc != 0)
-			assert_rc_equal(rc, -DER_NOSYS);
+		assert_rc_equal(rc, 0);
 	}
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	if (rc != 0)
-		assert_rc_equal(rc, -DER_NOSYS);
+	assert_rc_equal(rc, 0);
 
 	/* insert rebuild stop|start into the reintegrate rebuild execution */
 	arg->interactive_rebuild = 1;
 	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		if (rc != 0)
-			assert_rc_equal(rc, -DER_NOSYS);
+		assert_rc_equal(rc, 0);
 	}
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	if (rc != 0)
-		assert_rc_equal(rc, -DER_NOSYS);
+	assert_rc_equal(rc, 0);
 	T_END();
 }
 
@@ -278,8 +269,7 @@ int_rebuild_many_objects_with_failure(void **state)
 
 	for (i = 0; i < NUM_OBJS; i++) {
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
-		if (rc != 0)
-			assert_rc_equal(rc, -DER_NOSYS);
+		assert_rc_equal(rc, 0);
 	}
 	D_FREE(oids);
 	T_END();
