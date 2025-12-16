@@ -26,18 +26,10 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
-: "${BULLSEYE_KEY:=}"
-if [ -n "$BULLSEYE_KEY" ]; then
-    pushd "${SL_SRC_DIR}/bullseye"
-    set +x
-    echo + sudo ./install --quiet --key "**********" --prefix /opt/BullseyeCoverage
-    sudo ./install --quiet --key "${BULLSEYE_KEY}" --prefix /opt/BullseyeCoverage
-    set -x
-    popd
-    rm -rf bullseye
+: "${BULLSEYE_DIR:-/opt/BullseyeCoverage}"
+if [ -d "$BULLSEYE_DIR" ]; then
     export COVFILE="${SL_SRC_DIR}/test.cov"
-    export PATH="/opt/BullseyeCoverage/bin:$PATH"
-    log_prefix="covc_test"
+    export PATH="${$BULLSEYE_DIR}/bin:$PATH"
 fi
 
 cd "${SL_SRC_DIR}"
