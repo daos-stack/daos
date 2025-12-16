@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -405,6 +406,7 @@ rdbt_add_replica_rank(crt_group_t *grp, d_rank_t ldr_rank, d_rank_t new_rank,
 	if (out->rtmo_failed != NULL)
 		fprintf(stderr, "ERR: adding replica %u (reply rank %u)\n",
 				new_rank, out->rtmo_failed->rl_ranks[0]);
+	d_rank_list_free(replicas_to_add);
 	destroy_rpc(rpc);
 	return rc;
 }
@@ -433,6 +435,7 @@ rdbt_remove_replica_rank(crt_group_t *group, d_rank_t ldr_rank,
 	if (out->rtmo_failed != NULL)
 		fprintf(stderr, "ERR: removing replica %u (reply rank %u)\n",
 				rem_rank, out->rtmo_failed->rl_ranks[0]);
+	d_rank_list_free(replicas_to_remove);
 	destroy_rpc(rpc);
 	return rc;
 }
