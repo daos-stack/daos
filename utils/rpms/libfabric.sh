@@ -5,7 +5,7 @@ root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
 if [ -z "${SL_OFI_PREFIX:-}" ]; then
-  echo "Libfabric must be installed or never built"
+  echo "Libfabric must be installed or never built in ${SL_OFI_PREFIX:-}"
   exit 0
 fi
 

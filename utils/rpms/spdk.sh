@@ -5,7 +5,7 @@ root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
 if [ -z "${SL_SPDK_PREFIX:-}" ]; then
-  echo "spdk must be installed or never built"
+  echo "spdk must be installed or never built in ${SL_SPDK_PREFIX:-}"
   exit 0
 fi
 

@@ -3,7 +3,7 @@ root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
 if [ -z "${SL_BULLSEYE_PREFIX:-}" ]; then
-  echo "bullseye must be installed or was never built"
+  echo "bullseye must be installed or never built in ${SL_BULLSEYE_PREFIX:-}"
   exit 0
 fi
 

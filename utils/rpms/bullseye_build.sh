@@ -14,7 +14,6 @@ bullseye_src="${bullseye_url}/BullseyeCoverage-${bullseye_version}-Linux-x64.tar
 bullseye_out="bullseye.tar.xz"
 export SL_BULLSEYE_PREFIX="/opt/BullseyeCoverage"
 
-curl -h
 curl --proxy http://proxy.houston.hpecorp.net:8080/ "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
 # curl "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
 mkdir -p bullseye

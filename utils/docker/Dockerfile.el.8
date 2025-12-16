@@ -69,19 +69,19 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
 
 USER daos_server:daos_server
 
-# Install bullseye for code coverage reporting
-ARG BULLSEYE_KEY
-RUN [ "x$BULLSEYE_KEY" != "x" ] || {                                                                 \
-        dnf install xz && dnf clean all &&                                                           \
-        curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
-        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar.xz &&                   \
-        mkdir -p bullseye &&                                                                         \
-        tar -C bullseye --strip-components=1 -xf bullseye.tar.xz &&                                  \
-        pushd bullseye &&                                                                            \
-        ./install --quiet --key "${BULLSEYE_KEY}" --prefix /opt/BullseyeCoverage &&                  \
-        ls -aR && ls -aR /opt/BullseyeCoverage &&                                                    \
-        popd && rm -rf bullseye.tar.xz bullseye;                                                     \
-    }
+# # Install bullseye for code coverage reporting
+# ARG BULLSEYE_KEY
+# RUN [ "x$BULLSEYE_KEY" != "x" ] || {                                                                 \
+#         dnf install xz && dnf clean all &&                                                           \
+#         curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
+#         --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar.xz &&                   \
+#         mkdir -p bullseye &&                                                                         \
+#         tar -C bullseye --strip-components=1 -xf bullseye.tar.xz &&                                  \
+#         pushd bullseye &&                                                                            \
+#         ./install --quiet --key "${BULLSEYE_KEY}" --prefix /opt/BullseyeCoverage &&                  \
+#         ls -aR && ls -aR /opt/BullseyeCoverage &&                                                    \
+#         popd && rm -rf bullseye.tar.xz bullseye;                                                     \
+#     }
 
 # Setup a python venv so that python packages can be installed locally.
 RUN python3 -m venv /home/daos/venv
