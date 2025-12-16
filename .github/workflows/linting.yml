@@ -247,9 +247,14 @@ jobs:
     steps:
       - name: Check if any job failed
         run: |
-          if [[ -z "$(echo "${{ join(needs.*.result, '') }}" | sed -e 's/success//g')" ]]; then
-            echo "All jobs succeeded"
-          else
-            echo "One or more jobs did not succeed"
-            exit 1
-          fi
+          ALL_DEPS_RESULT='${{ toJSON(needs) }}'
+          echo "$ALL_DEPS_RESULT" | jq -rc 'keys[] as $k | "\($k):\(.[$k].result)"' \
+            | while read job_result; do
+              job_name=$(echo "$job_result" | cut -d: -f1)
+              job_result=$(echo "$job_result" | cut -d: -f2)
+              echo "$job_name = $job_result"
+              if [[ "$job_result" != "success" ]]; then
+                  echo "Job $job_name failed"
+                  exit 1
+              fi
+          done
