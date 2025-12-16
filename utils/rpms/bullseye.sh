@@ -16,6 +16,7 @@ RPM_CHANGELOG="bullseye.changelog"
 
 PACKAGE_TYPE="dir"
 files=()
+TARGET_PATH="/opt/BullseyeCoverage"
 list_files files "/opt/BullseyeCoverage/*"
 append_install_list "${files[@]}"
 build_package "bullseye"
