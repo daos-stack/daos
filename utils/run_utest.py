@@ -675,7 +675,7 @@ def main():
 
     os.makedirs(os.path.join(path_info["DAOS_BASE"], "test_results"), exist_ok=True)
 
-    print(f"OS ENV:\n{'\n'.join([f'{key}={val}' for key, val in os.environ.items()])}")
+    print(f"COVFILE: {os.environ.get('COVFILE')}")
 
     aio = None
 
