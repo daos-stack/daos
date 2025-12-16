@@ -1362,7 +1362,7 @@ class TestPool(TestDaosApiBase):
             verbose (bool, optional): whether to display the pool query info. Defaults to True.
         """
         # Reset the rebuild data if rebuild completion was previously detected
-        if self._rebuild_data["check"] in ("completed", "stopped"):
+        if self._rebuild_data["check"] == "completed":
             self._reset_rebuild_data()
 
         # Use the current rebuild data to define the previous rebuild data
