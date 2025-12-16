@@ -186,6 +186,7 @@ func (db *Database) SetCheckerFindingAction(seq uint64, action int32) error {
 			}
 			f.ActChoices = nil
 			found = true
+			break
 		}
 
 		if !found {
