@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -61,7 +62,7 @@ func MockHostAddr(varIdx ...int32) *net.TCPAddr {
 	return hostAddrs[idx]
 }
 
-// MockPCIAddr returns mock PCIAddr values for use in tests.
+// MockPCIAddr returns mock PCIAddr value for use in tests.
 func MockPCIAddr(varIdx ...int32) string {
 	idx := GetIndex(varIdx...)
 
@@ -94,6 +95,17 @@ func MockVMDPCIAddrs(dom int, idxs ...int) (addrs []string) {
 	return
 }
 
+// MockTCPAddr returns mock TCPAddr value for use in tests. Create a mock IPv4 address
+// (e.g., 127.0.0.1 on port 8080)
+func MockTCPAddr(port int, varIdx ...int32) *net.TCPAddr {
+	idx := GetIndex(varIdx...)
+
+	return &net.TCPAddr{
+		IP:   net.ParseIP(fmt.Sprintf("127.0.0.%d", idx)),
+		Port: port,
+	}
+}
+
 // MockWriter is a mock io.Writer that can be used to inject errors and check
 // values written.
 type MockWriter struct {
@@ -105,6 +117,7 @@ func (w *MockWriter) Write(p []byte) (int, error) {
 	if w.WriteErr != nil {
 		return 0, w.WriteErr
 	}
+
 	return w.builder.Write(p)
 }
 
