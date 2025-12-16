@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eEuo pipefail
 build_type="${1:-all}"
-code_coverage="{$2:-false}"
+code_coverage="${2:-false}"
 source utils/sl/setup_local.sh
 if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/argobots.sh
