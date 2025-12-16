@@ -26,7 +26,7 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
-: "${BULLSEYE_DIR:-/opt/BullseyeCoverage}"
+: "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
 if [ -d "$BULLSEYE_DIR" ]; then
     export COVFILE="${SL_SRC_DIR}/test.cov"
     export PATH="${$BULLSEYE_DIR}/bin:$PATH"
