@@ -247,8 +247,8 @@ jobs:
     steps:
       - name: Check if any job failed
         run: |
-          NEEDS_JSON='${{ toJSON(needs) }}'
-          echo "$NEEDS_JSON" | jq -rc 'keys[] as $k | "\($k):\(.[$k].result)"' \
+          ALL_DEPS_RESULT='${{ toJSON(needs) }}'
+          echo "$ALL_DEPS_RESULT" | jq -rc 'keys[] as $k | "\($k):\(.[$k].result)"' \
             | while read job_result; do
               job_name=$(echo "$job_result" | cut -d: -f1)
               job_result=$(echo "$job_result" | cut -d: -f2)
