@@ -170,6 +170,9 @@ function nvme_recreate_namespace {
   set -e
 }
 
+# FOR now limit to 2 devices per CPU NUMA node
+: "${DAOS_CI_NVME_NUMA_LIMIT:=2}"
+
 SPDK_PCI_ALLOWED=""
 function nvme_reserve_2_disk_per_numa {
   local NVME_MAX=${1:-$NVME_MAX_GLOBAL}
@@ -185,14 +188,14 @@ function nvme_reserve_2_disk_per_numa {
     echo "$nvme: NUMA node $numa_node, PCI addr $pci_addr, numa_node_0 $numa_node_0, numa_node_1 $numa_node_1"
     if [ "$numa_node" -eq 0 ]; then
       ((numa_node_0++)) || true
-      if [ "$numa_node_0" -lt 3 ]; then
+      if [ "$numa_node_0" -le $DAOS_CI_NVME_NUMA_LIMIT ]; then
         SPDK_PCI_ALLOWED="$SPDK_PCI_ALLOWED$pci_addr "
         echo "NUMA0: ${nvme} -> ${pci_addr}"
         continue
       fi
     else
       ((numa_node_1++)) || true
-      if [ "$numa_node_1" -lt 3 ]; then
+      if [ "$numa_node_1" -le $DAOS_CI_NVME_NUMA_LIMIT ]; then
         SPDK_PCI_ALLOWED="$SPDK_PCI_ALLOWED$pci_addr "
         echo "NUMA1: ${nvme} -> ${pci_addr}"
         continue
@@ -211,20 +214,20 @@ nvme_count=$(nvme_count_devices)
 if [ "$nvme_count" -gt 1 ]; then
   ((nvme_count--)) || true
 #  nvme_unmount_all $nvme_count
-#  nvme_bind_all_in_order
+  nvme_bind_all_in_order
   nvme_recreate_namespace $nvme_count
-#  nvme_reserve_2_disk_per_numa $nvme_count
+  nvme_reserve_2_disk_per_numa $nvme_count
 
-#  if [ -d /usr/share/daos/spdk/scripts/ ] && [ -f /usr/share/daos/spdk/scripts/setup.sh ]; then
-#    export PCI_ALLOWED="$SPDK_PCI_ALLOWED"
-#    pushd /usr/share/daos/spdk/scripts/
-#    set +e
-#    sudo ./setup.sh
-#    set -e
-#    popd
-#  else
-#    echo "Required spdk/scripts/setup.sh not found!"
-#  fi
+  if [ -d /usr/share/daos/spdk/scripts/ ] && [ -f /usr/share/daos/spdk/scripts/setup.sh ]; then
+    export PCI_ALLOWED="$SPDK_PCI_ALLOWED"
+    pushd /usr/share/daos/spdk/scripts/
+    set +e
+    sudo ./setup.sh
+    set -e
+    popd
+  else
+    echo "Required spdk/scripts/setup.sh not found!"
+  fi
 fi
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
@@ -235,9 +238,6 @@ if lspci | grep -i nvme; then
   export COVFILE=/tmp/test.cov
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
-
-# FOR now limit to 2 devices per CPU NUMA node
-: "${DAOS_CI_NVME_NUMA_LIMIT:=2}"
 
 function mount_nvme_drive {
     local drive="$1"
