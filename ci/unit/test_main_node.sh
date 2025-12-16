@@ -85,12 +85,10 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
-env | grep -i 'COV'
-find . -name test.cov
-find /tmp -name test.cov
+env | grep -i 'COV' || true
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
 
-find . -name test.cov
-find /tmp -name test.cov
+find . -name test.cov || true
+find /tmp -name test.cov || true
