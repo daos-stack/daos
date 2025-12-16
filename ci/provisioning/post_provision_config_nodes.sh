@@ -73,7 +73,7 @@ fi
 # all cluster nodes.
 # This prevents situations where the binding between NVMe devices and PCIe
 # addresses varies from restart to restart, resulting in error messages such as
-# "Failed to initialise SSD: [xxxx:xx:xx.x]' when DAOS engines are started.
+# "Failed to initialize SSD: [xxxx:xx:xx.x]' when DAOS engines are started.
 
 NVME_MAX_GLOBAL=15
 function nvme_count_devices {
