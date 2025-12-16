@@ -1,9 +1,11 @@
 hosts:
   test_servers: 2
   test_clients: 2
+
 # Few tests are in loop for ~10 times and single loop
 # is taking ~600 seconds to finish so larger timeout to run tests.
 timeout: 7500
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -11,25 +13,24 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       targets: 1
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       targets: 1
       storage: auto
   transport_config:
     allow_insecure: true
+
 agent_config:
   transport_config:
     allow_insecure: true
+
 dmg:
   transport_config:
     allow_insecure: true
+
 pool:
   scm_size: 5G
   nvme_size: 5G
@@ -43,6 +44,7 @@ container:
   control_method: daos
   register_cleanup: False  # Skip teardown destroy. Test manually destroys containers.
   type: POSIX
+
 ior:
   api: "DFS"
   client_processes:
