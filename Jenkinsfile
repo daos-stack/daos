@@ -389,8 +389,8 @@ pipeline {
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               // defaultValue: 'ci_node-hdr-200_202-205X',
-               defaultValue: 'ci_node-hdr-210_212-219X',
+               defaultValue: 'ci_node-hdr-200_202-205X',
+               // defaultValue: 'ci_node-hdr-210_212-219X',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
@@ -405,7 +405,7 @@ pipeline {
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION',
-               defaultValue: 'el8.8',
+               defaultValue: 'el9.5',
                description: 'Label to use for 5 node Functional Hardware Medium (MD on SSD) stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',

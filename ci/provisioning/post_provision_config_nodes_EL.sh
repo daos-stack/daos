@@ -18,6 +18,9 @@ set +e
 set -e
     # Seems to be needed to fix some issues.
     dnf -y reinstall sssd-common
+    # Seems to be required until https://daosio.atlassian.net/browse/DAOS-18358
+    # is fixed.
+    dnf -y remove clamav-lib
 }
 
 group_repo_post() {
