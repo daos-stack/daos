@@ -1274,6 +1274,10 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
+	/* Set crp_reply_pending bit unless this is a one-way OPCODE. */
+	if (opc_info->coi_no_reply == 0)
+		rpc_priv->crp_reply_pending = 1;
+
 	if (!is_coll_req)
 		rc = crt_rpc_common_hdlr(rpc_priv);
 	else
@@ -1601,9 +1605,13 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
+	if (unlikely(rpc_priv->crp_reply_pending == 0))
+		return 0;
+
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
+	rpc_priv->crp_reply_pending = 0;
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv, "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
@@ -1634,6 +1642,9 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(error_code != 0);
+
+	if (unlikely(rpc_priv->crp_reply_pending == 0))
+		return;
 
 	hg_out_struct = &rpc_priv->crp_pub.cr_output;
 	rpc_priv->crp_reply_hdr.cch_rc = error_code;
