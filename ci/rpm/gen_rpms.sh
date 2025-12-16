@@ -16,7 +16,7 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-env
+env | sort -n
 
 pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
