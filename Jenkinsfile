@@ -626,7 +626,7 @@ pipeline {
                 stage('Build on EL 9.6') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('el9') }
+                        expression { !skip_build_stage('el9') && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {
@@ -680,7 +680,7 @@ pipeline {
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('leap15') }
+                        expression { !skip_build_stage('leap15') && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {
@@ -731,7 +731,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('leap15', 'icc') }
+                        expression { !skip_build_stage('leap15', 'icc') && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {

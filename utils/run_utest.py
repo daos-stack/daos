@@ -611,6 +611,7 @@ def run_suites(args, suites, results, aio):
 
 def move_codecov(base):
     """Move any code coverage results"""
+    run_cmd(["find", "/", "-name", "test.cov"])
     try:
         target = "/tmp/test.cov"
         if os.path.isfile(target):
@@ -622,6 +623,8 @@ def move_codecov(base):
     except Exception:
         print("Exception trying to copy test.cov")
         traceback.print_exc()
+    finally:
+        run_cmd(["find", "/", "-name", "test.cov"])
 
 
 def get_args():
@@ -671,6 +674,8 @@ def main():
     path_info = get_path_info(args)
 
     os.makedirs(os.path.join(path_info["DAOS_BASE"], "test_results"), exist_ok=True)
+
+    print(f"OS ENV:\n{'\n'.join([f'{key}={val}' for key, val in os.environ.items()])}")
 
     aio = None
 
