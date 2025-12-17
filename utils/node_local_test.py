@@ -1331,7 +1331,8 @@ class DFuse():
         self._daos = daos
         self.caching = caching
         self.wbcache = wbcache
-        self.use_valgrind = True
+        # Disable valgrind for dfuse.  Fuse switch from fork/exec to posix_spawn causes hang.
+        self.use_valgrind = False
         self._sp = None
         self.log_flush = False
         self.log_mask = None
