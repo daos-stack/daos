@@ -103,6 +103,7 @@ function nvme_unmount_all {
       echo "Force umount of ${mnt}"
       sudo umount -f "${mnt}"
     fi
+    rm -rf $mnt
   done
   set -e
 }
@@ -116,16 +117,27 @@ function nvme_bind_all_in_order {
     echo "No NVMe PCI devices found."
     return 1
   fi
+
+  #echo "Found PCI NVMe addresses:"
+  #echo "$nvme_pcie_addrs"
+  #echo
+
+  for dir in /sys/class/nvme/*/; do
+    numa=$(cat ${dir}numa_node)
+    echo "$numa $dir: $(ls -la ${dir} | grep device | awk -F'-> ' '{print $2}' | sed 's|.*/||')"
+  done
+
   # Unbind all NVMe devices
   echo "Unbinding NVMe devices from nvme driver (or vfio-pci driver) ..."
   set +e # it's ok if a device isn't bound to one of the drivers
   for addr in $nvme_pcie_addrs; do
-    echo "Unbinding $addr"
-    if [ -f "/sys/bus/pci/drivers/nvme/${addr}" ]; then
-        echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/unbind > /dev/null 2>&1
+    if [ -e "/sys/bus/pci/drivers/nvme/${addr}" ]; then
+      echo "Unbinding $addr from nvme"
+      echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/unbind
     fi
-    if [ -f "/sys/bus/pci/drivers/vfio-pci/${addr}" ]; then
-        echo "$addr" | sudo tee /sys/bus/pci/drivers/vfio-pci/unbind > /dev/null 2>&1
+    if [ -e "/sys/bus/pci/drivers/vfio-pci/${addr}" ]; then
+      echo "Unbinding $addr from vfio-pci"
+      echo "$addr" | sudo tee /sys/bus/pci/drivers/vfio-pci/unbind
     fi
   done
   set -e
@@ -204,10 +216,10 @@ function nvme_reserve_2_disk_per_numa {
       fi
     fi
     sudo mkfs.ext4 -F "${dev}"
-    if [ ! -d "${mnt}" ]; then
-      sudo mkdir -p "${mnt}"
-    fi
-    sudo mount "${dev}" "${mnt}"
+#    if [ ! -d "${mnt}" ]; then
+#      sudo mkdir -p "${mnt}"
+#    fi
+#    sudo mount "${dev}" "${mnt}"
   done
   SPDK_PCI_ALLOWED=${SPDK_PCI_ALLOWED% }  # remove trailing space
 }
@@ -310,7 +322,7 @@ function nvme_limit {
 
 # Force only the desired number of NVMe devices to be seen by DAOS tests
 # by mounting the extra ones.
-nvme_limit
+# nvme_limit
 
 systemctl enable nfs-server.service
 systemctl start nfs-server.service
