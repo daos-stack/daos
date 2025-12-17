@@ -242,8 +242,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 			rc = -DER_INVAL;
 			goto out_preg;
 		}
-		memcpy(vfp_tmp->vf_db_path, db_path, db_path_len);
-		vfp_tmp->vf_db_path[db_path_len] = '\0';
+		memcpy(vfp_tmp->vf_db_path, db_path, db_path_len + 1);
 	} else {
 		rc = parse_db_path(vos_path, match, vfp_tmp->vf_db_path);
 		if (!SUCCESS(rc))
