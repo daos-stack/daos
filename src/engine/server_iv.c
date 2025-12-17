@@ -336,8 +336,8 @@ iv_entry_lookup_or_create(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		entry->iv_ref++;
 		if (got != NULL)
 			*got = entry;
-		D_DEBUG(DB_TRACE, "Get entry %p/%d key %d\n",
-			entry, entry->iv_ref, key->class_id);
+		D_DEBUG(DB_TRACE, "Get entry %p, ref %d valid %d key %d\n", entry, entry->iv_ref,
+			entry->iv_valid, key->class_id);
 		return 0;
 	}
 
@@ -880,12 +880,39 @@ ds_iv_ns_cleanup(struct ds_iv_ns *ns)
 /* To prepare for reintegrate, cleanup some IVs' cache.
  * May add more types later when needed.
  */
-void
+int
 ds_iv_ns_reint_prep(struct ds_iv_ns *ns)
 {
 	struct ds_iv_entry *entry;
 	struct ds_iv_entry *tmp;
+	uint32_t            msec  = 100;
+	uint32_t            total = 0;
+	int                 rc;
 
+	/* iv_refcount is 1 after ns create,
+	 *                2 after ds_iv_ns_start.
+	 *              > 2 if with any in-flight IV operation.
+	 * here wait the in-flight IV operation for at most 30 seconds, if cannot finish within
+	 * 30 seconds return EBUSY so user can redo the reintegration. Should be very rare case
+	 * for 30 seconds IV timeout.
+	 */
+	while (ns->iv_refcount > 2) {
+		msec = min(5000, msec * 2);
+		dss_sleep(msec);
+		total += msec;
+		if (total > 30000) {
+			rc = -DER_BUSY;
+			DL_ERROR(
+			    rc, DF_UUID " timed out for wait IV, iv_refcount %d, waited %d seconds",
+			    DP_UUID(ns->iv_pool_uuid), ns->iv_refcount, min(1, total / 1000));
+			return rc;
+		} else {
+			D_INFO(DF_UUID " wait IV operation, iv_refcount %d, waited %d seconds",
+			       DP_UUID(ns->iv_pool_uuid), ns->iv_refcount, min(1, total / 1000));
+		}
+	}
+
+	/* no yield for the cleanup */
 	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
 		if (entry->iv_key.class_id == IV_CONT_AGG_EPOCH_BOUNDRY ||
 		    entry->iv_key.class_id == IV_CONT_PROP ||
@@ -896,6 +923,8 @@ ds_iv_ns_reint_prep(struct ds_iv_ns *ns)
 			iv_entry_free(entry);
 		}
 	}
+
+	return 0;
 }
 
 void
