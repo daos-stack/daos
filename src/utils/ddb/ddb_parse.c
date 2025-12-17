@@ -176,6 +176,12 @@ parse_target_idx(const char *vos_path, const regmatch_t *vp_match, uint32_t *tar
 
 	errno = 0;
 	idx   = strtoull(&vos_path[ti_match->rm_so], &endptr, 10);
+	if (errno == ERANGE) {
+		D_ASSERT(idx == ULLONG_MAX);
+		D_ERROR("Target index '%s' out of range in VOS path '%s': %s\n",
+			&vos_path[ti_match->rm_so], vos_path, strerror(errno));
+		return -DER_OVERFLOW;
+	}
 	D_ASSERTF(errno == 0, "Invalid target index '%s' in VOS path '%s': %s\n",
 		  &vos_path[ti_match->rm_so], vos_path, strerror(errno));
 	D_ASSERT(endptr != &vos_path[ti_match->rm_so]);

@@ -117,6 +117,16 @@ parse_vos_file_parts_test_errors(void **state)
 	assert_rc_equal(rc, -DER_EXCEEDS_PATH_LEN);
 
 	/* Test invalid vos paths with invalid target idx */
+	rc = parse_vos_file_parts(MOCKED_POOL_UUID_STR "/vos-18446744073709551616", NULL, &parts);
+	/* Note: "vos-18446744073709551616" exceeds VOS_FILE_NAME_SIZE, so -DER_EXCEEDS_PATH_LEN
+	 * is returned before the target idx overflow (ULLONG_MAX + 1) is detected.
+	 * If VOS_FILE_NAME_SIZE is increased beyond the length of this filename, this assert
+	 * should be changed to:
+	 * assert_rc_equal(rc, -DER_OVERFLOW);
+	 */
+	assert_rc_equal(rc, -DER_EXCEEDS_PATH_LEN);
+
+	/* Test invalid vos paths with invalid target idx */
 	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-99999999999", NULL,
 				  &parts);
 	assert_rc_equal(rc, -DER_OVERFLOW);
