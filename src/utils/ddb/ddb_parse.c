@@ -234,9 +234,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 	D_ASSERT(rc == 0);
 
 	if (db_path != NULL && db_path[0] != '\0') {
-		size_t db_path_len;
-
-		db_path_len = strnlen(db_path, PATH_MAX);
+		size_t db_path_len = strnlen(db_path, PATH_MAX);
 		if (db_path_len >= DB_PATH_SIZE) {
 			D_ERROR("DB path '%s' too long: get=%zu, max=%i\n", db_path, db_path_len,
 				DB_PATH_SIZE - 1);
