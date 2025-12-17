@@ -323,6 +323,15 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 					     const char*, const int));
 
 /**
+ * \brief D_EMIT the provided memory range in hex.
+ *
+ * \param[in] ptr	Start of the memory range.
+ * \param[in] size	Size of the memory range.
+ */
+void
+d_log_memory(const uint8_t *ptr, size_t size);
+
+/**
  * D_PRINT can be used for output to stdout with or without clog being enabled
  */
 #define D_PRINT(fmt, ...)						\

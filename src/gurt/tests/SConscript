@@ -6,6 +6,23 @@
 
 import os
 
+
+def build_d_log_memory_ut(utenv):
+    """Build d_log_memory_ut"""
+    utenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_vlog'])
+    libs = ['cmocka', 'uuid', 'yaml', 'm']
+    srcs = [
+        'd_log_memory_ut.c',
+        '../debug.c',
+        '../dlog.c',
+        '../misc.c',
+        '../fault_inject.c',
+        '../hash.c',
+        '../errno.c',
+    ]
+    utenv.d_test_program('d_log_memory_ut', srcs, LIBS=libs)
+
+
 TEST_SRC = ['test_gurt.c', 'test_gurt_telem_producer.c']
 
 
@@ -34,6 +51,8 @@ def scons():
                                            source=testobj + gurt_targets + [mocks],
                                            LIBS=test_env["LIBS"] + ['yaml'])
         tests.append(testprog)
+
+    build_d_log_memory_ut(env.Clone())
 
     Default(tests)
 
