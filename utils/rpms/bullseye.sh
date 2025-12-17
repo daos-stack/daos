@@ -24,7 +24,8 @@ TARGET_PATH="${SL_BULLSEYE_PREFIX}"
 
 readarray -t bullseye_dirs < <(find /opt/BullseyeCoverage -maxdepth 1 -type d)
 for dir in "${bullseye_dirs[@]}"; do
-    list_files files "/opt/BullseyeCoverage/${dir}/*"
+    list_files files "${dir}/*"
     append_install_list "${files[@]}"
+done
 
 build_package "bullseye"
