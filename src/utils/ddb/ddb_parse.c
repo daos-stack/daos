@@ -44,17 +44,17 @@ int
 vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 {
 	enum {
-		DB_PATH_IDX       = 1,
-		POOL_UUID_IDX     = 3,
-		VOS_FILE_NAME_IDX = 6,
-		TARGET_IDX_IDX    = 7,
-		RDB_POOL_IDX      = 9,
-		MATCH_SIZE        = 10,
+		DB_PATH_IDX       = 2,
+		POOL_UUID_IDX     = 4,
+		VOS_FILE_NAME_IDX = 7,
+		TARGET_IDX_IDX    = 8,
+		RDB_POOL_IDX      = 10,
+		MATCH_SIZE        = 11,
 		POOL_UUID_LEN     = 36
 	};
-	const char *regex_buf =
-	    "^(/?([^/]+/)*)([0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})/"
-	    "((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$";
+	const char *regex_buf = "^((/*[^/]+(/+[^/]+)*)/+)?"
+				"([0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})/+"
+				"((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$";
 	char      *endptr;
 	uint64_t   target_idx;
 	regex_t    preg;
@@ -83,15 +83,15 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 	vos_file_parts->vf_db_path[0] = '\0';
 	if ((match[DB_PATH_IDX].rm_eo - match[DB_PATH_IDX].rm_so) != 0) {
 		D_ASSERT(match[DB_PATH_IDX].rm_so == 0);
-		if (match[DB_PATH_IDX].rm_eo > DB_PATH_SIZE) {
+		if (match[DB_PATH_IDX].rm_eo >= DB_PATH_SIZE) {
 			D_ERROR("DB path '%.*s' too long in VOS path '%s': get=%i, max=%i\n",
-				match[DB_PATH_IDX].rm_eo - 1, &path[match[DB_PATH_IDX].rm_so], path,
-				match[DB_PATH_IDX].rm_eo - 1, DB_PATH_SIZE - 1);
+				match[DB_PATH_IDX].rm_eo, &path[0], path, match[DB_PATH_IDX].rm_eo,
+				DB_PATH_SIZE - 1);
 			rc = -DER_INVAL;
 			goto out_preg;
 		}
-		memcpy(vos_file_parts->vf_db_path, path, match[DB_PATH_IDX].rm_eo - 1);
-		vos_file_parts->vf_db_path[match[DB_PATH_IDX].rm_eo - 1] = '\0';
+		memcpy(vos_file_parts->vf_db_path, path, match[DB_PATH_IDX].rm_eo);
+		vos_file_parts->vf_db_path[match[DB_PATH_IDX].rm_eo] = '\0';
 	}
 
 	D_ASSERT(match[POOL_UUID_IDX].rm_so != (regoff_t)-1);

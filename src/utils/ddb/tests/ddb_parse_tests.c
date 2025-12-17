@@ -81,9 +81,6 @@ vos_file_parse_test_errors(void **state)
 	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR, &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = vos_path_parse("//mnt/daos/" MOCKED_POOL_UUID_STR "/vos-1", &parts);
-	assert_rc_equal(rc, -DER_INVAL);
-
 	rc = vos_path_parse("/mnt/daos/g2345678-1234-1234-1234-123456789012/vos-1", &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 
@@ -100,7 +97,6 @@ vos_file_parse_test_errors(void **state)
 	rc = vos_path_parse(buf, &parts);
 	D_FREE(buf);
 	assert_rc_equal(rc, -DER_INVAL);
-	D_FREE(buf);
 
 	/* Test invalid vos paths with too long vos file name */
 	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-999999999999", &parts);
@@ -125,6 +121,14 @@ vos_file_parse_test_success(void **state)
 	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", &parts);
 	assert_rc_equal(rc, 0);
 	assert_string_equal("/mnt/daos", parts.vf_db_path);
+	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
+	assert_string_equal("vos-0", parts.vf_vos_file_name);
+	assert_int_equal(0, parts.vf_target_idx);
+
+	/* Test with absolute path and multiple '/' path separators */
+	rc = vos_path_parse("//////mnt////daos/////" MOCKED_POOL_UUID_STR "/////vos-0", &parts);
+	assert_rc_equal(rc, 0);
+	assert_string_equal("//////mnt////daos", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-0", parts.vf_vos_file_name);
 	assert_int_equal(0, parts.vf_target_idx);
