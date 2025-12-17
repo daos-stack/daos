@@ -193,7 +193,7 @@ parse_vos_file_parts_test_success(void **state)
 	assert_string_equal("vos-909", parts.vf_vos_file_name);
 	assert_int_equal(909, parts.vf_target_idx);
 
-	/* Test with different db path*/
+	/* Test with different db path */
 	rc =
 	    parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", "/my/db/path", &parts);
 	assert_rc_equal(rc, 0);
