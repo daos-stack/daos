@@ -630,6 +630,7 @@ pipeline {
                         }
                     }
                 }
+/*
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
@@ -716,7 +717,9 @@ pipeline {
                         }
                     }
                 }
+*/
             }
+
         }
         stage('Unit Tests') {
             when {
