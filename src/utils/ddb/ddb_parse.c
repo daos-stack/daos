@@ -167,9 +167,9 @@ parse_vos_file_name(const char *vos_path, const regmatch_t *vp_match, char *vos_
 static int
 parse_target_idx(const char *vos_path, const regmatch_t *vp_match, uint32_t *target_idx)
 {
-	const regmatch_t *ti_match = &vp_match[MATCH_TARGET_IDX_IDX];
-	char             *endptr;
-	uint64_t          idx;
+	const regmatch_t  *ti_match = &vp_match[MATCH_TARGET_IDX_IDX];
+	char              *endptr;
+	unsigned long long idx;
 
 	D_ASSERT(ti_match->rm_so != (regoff_t)-1);
 	D_ASSERT(ti_match->rm_so < ti_match->rm_eo);
@@ -182,8 +182,8 @@ parse_target_idx(const char *vos_path, const regmatch_t *vp_match, uint32_t *tar
 		return -DER_INVAL;
 	}
 	if (idx > UINT32_MAX) {
-		D_ERROR("Target index " DF_U64
-			"' out of range in VOS path '%s': min=0 , max=%" PRIu32 "\n",
+		D_ERROR("Target index '%llu' out of range in VOS path '%s': min=0 , max=%" PRIu32
+			"\n",
 			idx, vos_path, UINT32_MAX);
 		return -DER_INVAL;
 	}
