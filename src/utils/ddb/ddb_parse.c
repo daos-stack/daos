@@ -92,15 +92,15 @@ init_regex_vos_file_parts(regex_t *preg)
 static int
 parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 {
-	size_t db_path_len;
+	const regmatch_t *pr_match = &vp_match[MATCH_DB_PATH_ROOT_IDX];
+	const regmatch_t *pd_match = &vp_match[MATCH_DB_PATH_DIR_IDX];
+	size_t            db_path_len;
 
-	if (vp_match[MATCH_DB_PATH_ROOT_IDX].rm_so != (regoff_t)-1) {
-		D_ASSERT(vp_match[MATCH_DB_PATH_ROOT_IDX].rm_so == 0);
-		D_ASSERT(vp_match[MATCH_DB_PATH_ROOT_IDX].rm_so <
-			 vp_match[MATCH_DB_PATH_ROOT_IDX].rm_eo);
+	if (pr_match->rm_so != (regoff_t)-1) {
+		D_ASSERT(pr_match->rm_so == 0);
+		D_ASSERT(pr_match->rm_so < pr_match->rm_eo);
 
-		db_path_len =
-		    vp_match[MATCH_DB_PATH_ROOT_IDX].rm_eo - vp_match[MATCH_DB_PATH_ROOT_IDX].rm_so;
+		db_path_len = pr_match->rm_eo - pr_match->rm_so;
 		if (db_path_len >= DB_PATH_SIZE) {
 			D_ERROR("DB path '%.*s' too long in VOS path: got=%zu, max=%d\n",
 				(int)db_path_len, &vos_path[0], db_path_len, DB_PATH_SIZE - 1);
@@ -112,17 +112,17 @@ parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 		return 0;
 	}
 
-	if (vp_match[MATCH_DB_PATH_DIR_IDX].rm_so == (regoff_t)-1) {
+	if (pd_match->rm_so == (regoff_t)-1) {
 		/* No DB path provided, use current directory */
 		memcpy(db_path, ".", 2);
 
 		return 0;
 	}
 
-	D_ASSERT(vp_match[MATCH_DB_PATH_DIR_IDX].rm_so == 0);
-	D_ASSERT(vp_match[MATCH_DB_PATH_DIR_IDX].rm_so < vp_match[MATCH_DB_PATH_DIR_IDX].rm_eo);
+	D_ASSERT(pd_match->rm_so == 0);
+	D_ASSERT(pd_match->rm_so < pd_match->rm_eo);
 
-	db_path_len = vp_match[MATCH_DB_PATH_DIR_IDX].rm_eo - vp_match[MATCH_DB_PATH_DIR_IDX].rm_so;
+	db_path_len = pd_match->rm_eo - pd_match->rm_so;
 	if (db_path_len >= DB_PATH_SIZE) {
 		D_ERROR("DB path '%.*s' too long in VOS path: got=%zu, max=%d\n", (int)db_path_len,
 			&vos_path[0], db_path_len, DB_PATH_SIZE - 1);
@@ -137,14 +137,14 @@ parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 static int
 parse_pool_uuid(const char *vos_path, const regmatch_t *vp_match, uuid_t pool_uuid)
 {
-	char pool_uuid_str[UUID_STR_LEN];
-	int  rc;
+	const regmatch_t *pu_match = &vp_match[MATCH_POOL_UUID_IDX];
+	char              pool_uuid_str[UUID_STR_LEN];
+	int               rc;
 
-	D_ASSERT(vp_match[MATCH_POOL_UUID_IDX].rm_so != (regoff_t)-1);
-	D_ASSERT(vp_match[MATCH_POOL_UUID_IDX].rm_eo - vp_match[MATCH_POOL_UUID_IDX].rm_so ==
-		 UUID_STR_LEN - 1);
+	D_ASSERT(pu_match->rm_so != (regoff_t)-1);
+	D_ASSERT(pu_match->rm_eo - pu_match->rm_so == UUID_STR_LEN - 1);
 
-	memcpy(pool_uuid_str, &vos_path[vp_match[MATCH_POOL_UUID_IDX].rm_so], UUID_STR_LEN - 1);
+	memcpy(pool_uuid_str, &vos_path[pu_match->rm_so], UUID_STR_LEN - 1);
 	pool_uuid_str[UUID_STR_LEN - 1] = '\0';
 	rc                           = uuid_parse(pool_uuid_str, pool_uuid);
 	if (!SUCCESS(rc)) {
@@ -158,21 +158,20 @@ parse_pool_uuid(const char *vos_path, const regmatch_t *vp_match, uuid_t pool_uu
 static int
 parse_vos_file_name(const char *vos_path, const regmatch_t *vp_match, char *vos_file_name)
 {
-	size_t vos_file_name_len;
+	const regmatch_t *vf_match = &vp_match[MATCH_VOS_FILE_NAME_IDX];
+	size_t            vos_file_name_len;
 
-	D_ASSERT(vp_match[MATCH_VOS_FILE_NAME_IDX].rm_so != (regoff_t)-1);
-	D_ASSERT(vp_match[MATCH_VOS_FILE_NAME_IDX].rm_so < vp_match[MATCH_VOS_FILE_NAME_IDX].rm_eo);
+	D_ASSERT(vf_match->rm_so != (regoff_t)-1);
+	D_ASSERT(vf_match->rm_so < vf_match->rm_eo);
 
-	vos_file_name_len =
-	    vp_match[MATCH_VOS_FILE_NAME_IDX].rm_eo - vp_match[MATCH_VOS_FILE_NAME_IDX].rm_so;
+	vos_file_name_len = vf_match->rm_eo - vf_match->rm_so;
 	if (vos_file_name_len >= VOS_FILE_NAME_SIZE) {
 		D_ERROR("VOS file name '%.*s' too long in VOS path '%s': got=%zu, max=%d\n",
-			(int)vos_file_name_len, &vos_path[vp_match[MATCH_VOS_FILE_NAME_IDX].rm_so],
-			vos_path, vos_file_name_len, VOS_FILE_NAME_SIZE - 1);
+			(int)vos_file_name_len, &vos_path[vf_match->rm_so], vos_path,
+			vos_file_name_len, VOS_FILE_NAME_SIZE - 1);
 		return -DER_INVAL;
 	}
-	memcpy(vos_file_name, &vos_path[vp_match[MATCH_VOS_FILE_NAME_IDX].rm_so],
-	       vos_file_name_len);
+	memcpy(vos_file_name, &vos_path[vf_match->rm_so], vos_file_name_len);
 	vos_file_name[vos_file_name_len] = '\0';
 
 	return 0;
@@ -181,18 +180,18 @@ parse_vos_file_name(const char *vos_path, const regmatch_t *vp_match, char *vos_
 static int
 parse_target_idx(const char *vos_path, const regmatch_t *vp_match, uint32_t *target_idx)
 {
-	char    *endptr;
-	uint64_t idx;
+	const regmatch_t *ti_match = &vp_match[MATCH_TARGET_IDX_IDX];
+	char             *endptr;
+	uint64_t          idx;
 
-	D_ASSERT(vp_match[MATCH_TARGET_IDX_IDX].rm_so != (regoff_t)-1);
-	D_ASSERT(vp_match[MATCH_TARGET_IDX_IDX].rm_so < vp_match[MATCH_TARGET_IDX_IDX].rm_eo);
+	D_ASSERT(ti_match->rm_so != (regoff_t)-1);
+	D_ASSERT(ti_match->rm_so < ti_match->rm_eo);
 
 	errno = 0;
-	idx   = strtoull(&vos_path[vp_match[MATCH_TARGET_IDX_IDX].rm_so], &endptr, 10);
-	if (errno != 0 || endptr == &vos_path[vp_match[MATCH_TARGET_IDX_IDX].rm_so] ||
-	    *endptr != '\0') {
+	idx   = strtoull(&vos_path[ti_match->rm_so], &endptr, 10);
+	if (errno != 0 || endptr == &vos_path[ti_match->rm_so] || *endptr != '\0') {
 		D_CRIT("Invalid target index '%s' in VOS path '%s': %s\n",
-		       &vos_path[vp_match[MATCH_TARGET_IDX_IDX].rm_so], vos_path, strerror(errno));
+		       &vos_path[ti_match->rm_so], vos_path, strerror(errno));
 		return -DER_INVAL;
 	}
 	if (idx > UINT32_MAX) {
