@@ -185,7 +185,7 @@ vos_file_parse_test_success(void **state)
 	assert_string_equal(".", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("rdb-pool", parts.vf_vos_file_name);
-	assert_int_equal(0, parts.vf_target_idx);
+	assert_int_equal(BIO_SYS_TGT_ID, parts.vf_target_idx);
 
 	/* Test with null db path */
 	memset(&parts, 1, sizeof(parts));
