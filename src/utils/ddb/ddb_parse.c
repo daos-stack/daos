@@ -63,7 +63,6 @@ enum {
 	MATCH_TARGET_IDX_IDX    = 10,
 	MATCH_RDB_POOL_IDX      = 12,
 	MATCH_SIZE              = 13
-
 };
 
 static void
