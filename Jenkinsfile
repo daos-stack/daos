@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/explore') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -726,7 +726,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8.8') {
+                stage('Unit Test on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -748,7 +748,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8.8') {
+                stage('Unit Test bdev on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -770,7 +770,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8.8') {
+                stage('NLT on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { params.CI_NLT_TEST && !skipStage() }
@@ -810,7 +810,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test with memcheck on EL 8.8') {
+                stage('Unit Test with memcheck on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -834,8 +834,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8.8')
-                stage('Unit Test bdev with memcheck on EL 8.8') {
+                } // stage('Unit Test with memcheck on EL 9.6')
+                stage('Unit Test bdev with memcheck on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -870,7 +870,7 @@ pipeline {
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
-                stage('Functional on EL 8.8 with Valgrind') {
+                stage('Functional on EL 9.6 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -891,30 +891,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8.8 with Valgrind')
-                stage('Functional on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8.8')
-                stage('Functional on EL 9') {
+                } // stage('Functional on EL 9.6 with Valgrind')
+                stage('Functional on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -935,7 +913,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 9')
+                } // stage('Functional on EL 9.6')
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
@@ -981,7 +959,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8.8') {
+                stage('Fault injection testing on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1036,8 +1014,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing on EL 8.8')
-                stage('Test RPMs on EL 8.6') {
+                } // stage('Fault injection testing on EL 9.6')
+                stage('Test RPMs on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { params.CI_TEST_EL8_RPMs && !skipStage() }
@@ -1111,7 +1089,7 @@ pipeline {
                 } // stage('Test RPMs on Leap 15.5')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9.6') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
