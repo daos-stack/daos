@@ -33,7 +33,9 @@ struct vos_file_parts {
 };
 
 /* Parse a path to a VOS file to get needed parts for initializing vos */
-int vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts);
+int
+     parse_vos_file_parts(const char *vos_path, const char *db_path,
+			  struct vos_file_parts *vos_file_parts);
 
 /* Parse a string into an array of words with the count of words */
 int ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args);

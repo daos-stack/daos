@@ -32,20 +32,9 @@ dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t
 	struct vos_file_parts   path_parts = {0};
 	int			rc;
 
-	/*
-	 * Currently the vos file is required to be in the same path daos_engine created it in.
-	 * This is so that the sys_db file exists and the pool uuid and target id can be obtained
-	 * from the path. It should be considered in the future how to get these from another
-	 * source.
-	 */
-	rc = vos_path_parse(path, &path_parts);
+	rc = parse_vos_file_parts(path, db_path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
-
-	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
-	}
 
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
@@ -69,14 +58,9 @@ dv_pool_destroy(const char *path, const char *db_path)
 	struct vos_file_parts path_parts = {0};
 	int                   rc, flags = 0;
 
-	rc = vos_path_parse(path, &path_parts);
+	rc = parse_vos_file_parts(path, db_path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
-
-	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
-	}
 
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
