@@ -209,7 +209,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 				"((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$";
 	regex_t     preg;
 	regmatch_t  match[MATCH_SIZE];
-	int        rc;
+	int         rc;
 
 	D_ASSERT(vos_path != NULL && vos_file_parts != NULL);
 
@@ -272,7 +272,6 @@ out:
 		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
 	return rc;
 }
-
 
 int
 ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args)
