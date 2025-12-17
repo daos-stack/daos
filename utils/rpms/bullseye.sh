@@ -17,18 +17,15 @@ ARCH="${isa}"
 DESCRIPTION="The BullseyeCoverage compiler"
 URL="https://www.bullseye.com/index.html"
 RPM_CHANGELOG="bullseye.changelog"
-
 PACKAGE_TYPE="dir"
 files=()
-TARGET_PATH="${SL_BULLSEYE_PREFIX}"
-
-readarray -t bullseye_dirs < <(find /opt/BullseyeCoverage -mindepth 1 -maxdepth 1 -type d)
-for dir in "${bullseye_dirs[@]}"; do
-    readarray -t dir_files < <(find "${dir}" -mindepth 1 -maxdepth 1 -type f)
-    for dir_file in "${dir_files[@]}"; do
+readarray -t dir_list < <(find /opt/BullseyeCoverage -mindepth 1 -maxdepth 1 -type d)
+for dir in "${dir_list[@]}"; do
+    readarray -t dir_file_list < <(find "${dir}" -mindepth 1 -maxdepth 1 -type f)
+    TARGET_PATH="${dir}"
+    for dir_file in "${dir_file_list[@]}"; do
         list_files files "${dir_file}"
         append_install_list "${files[@]}"
     done
 done
-
 build_package "bullseye"
