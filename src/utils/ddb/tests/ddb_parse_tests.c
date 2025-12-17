@@ -13,6 +13,14 @@
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
+/*
+ * -----------------------------------------------
+ * Mock implementations
+ * -----------------------------------------------
+ */
+
+#define MOCKED_POOL_UUID_STR "12345678-1234-1234-1234-123456789012"
+
 static int
 fake_print(const char *fmt, ...)
 {
@@ -25,27 +33,89 @@ fake_print(const char *fmt, ...)
  * -----------------------------------------------
  */
 
-#define assert_invalid_f_path(path, parts) assert_invalid(vos_path_parse(path, &parts))
-#define assert_f_path(path, parts) assert_success(vos_path_parse(path, &parts))
+static void
+vos_file_parse_test_errors(void **state)
+{
+	uuid_t                pool_uuid;
+	struct vos_file_parts parts = {0};
+	char                 *buf;
+	int                   rc;
+
+	rc = uuid_parse(MOCKED_POOL_UUID_STR, pool_uuid);
+	assert_rc_equal(rc, 0);
+
+	/* Test invalid vos paths not respecting regex */
+	rc = vos_path_parse("", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("/mnt/daos", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR, &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("//mnt/daos/" MOCKED_POOL_UUID_STR "/vos-1", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("/mnt/daos/g2345678-1234-1234-1234-123456789012/vos-1", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* Test invalid vos paths with too long db path */
+	D_ALLOC(buf, DB_PATH_SIZE + 64);
+	assert_non_null(buf);
+	memset(buf, 'a', DB_PATH_SIZE + 64);
+	buf[0] = '/';
+	memcpy(&buf[DB_PATH_SIZE], "/" MOCKED_POOL_UUID_STR "/vos-0",
+	       sizeof("/" MOCKED_POOL_UUID_STR "/vos-0"));
+	rc = vos_path_parse(buf, &parts);
+	D_FREE(buf);
+	assert_rc_equal(rc, -DER_INVAL);
+	D_FREE(buf);
+
+	/* Test invalid vos paths with too long vos file name */
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-999999999999", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* Test invalid vos paths with invalid target idx */
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-99999999999", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+}
 
 static void
-vos_file_parts_tests(void **state)
+vos_file_parse_test_success(void **state)
 {
+	uuid_t                expected_uuid;
 	struct vos_file_parts parts = {0};
-	uuid_t expected_uuid;
+	int                   rc;
 
-	uuid_parse("12345678-1234-1234-1234-123456789012", expected_uuid);
+	rc = uuid_parse(MOCKED_POOL_UUID_STR, expected_uuid);
+	assert_rc_equal(rc, 0);
 
-	assert_invalid_f_path("", parts);
-	assert_invalid_f_path("/mnt/daos", parts);
-	assert_invalid_f_path("/mnt/daos/12345678-1234-1234-1234-123456789012", parts);
-
-	assert_f_path("/mnt/daos/12345678-1234-1234-1234-123456789012/vos-1", parts);
-
+	/* Test with absolute path */
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", &parts);
+	assert_rc_equal(rc, 0);
 	assert_string_equal("/mnt/daos", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
-	assert_string_equal("vos-1", parts.vf_vos_file);
-	assert_int_equal(1, parts.vf_target_idx);
+	assert_string_equal("vos-0", parts.vf_vos_file_name);
+	assert_int_equal(0, parts.vf_target_idx);
+
+	/* Test with relative path */
+	memset(&parts, 0, sizeof(parts));
+	rc = vos_path_parse("mnt/daos/" MOCKED_POOL_UUID_STR "/vos-42", &parts);
+	assert_rc_equal(rc, 0);
+	assert_string_equal("mnt/daos", parts.vf_db_path);
+	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
+	assert_string_equal("vos-42", parts.vf_vos_file_name);
+	assert_int_equal(42, parts.vf_target_idx);
+
+	/* Test with null db path */
+	memset(&parts, 1, sizeof(parts));
+	rc = vos_path_parse(MOCKED_POOL_UUID_STR "/vos-666", &parts);
+	assert_rc_equal(rc, 0);
+	assert_string_equal("", parts.vf_db_path);
+	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
+	assert_string_equal("vos-666", parts.vf_vos_file_name);
+	assert_int_equal(666, parts.vf_target_idx);
 }
 
 #define assert_vtp_eq(a, b) \
@@ -293,8 +363,9 @@ int
 ddb_parse_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
-	    TEST(vos_file_parts_tests), TEST(parse_dtx_id_tests),  TEST(keys_are_parsed_correctly),
-	    TEST(pool_flags_tests),     TEST(date2cmt_time_tests),
+	    TEST(vos_file_parse_test_errors), TEST(vos_file_parse_test_success),
+	    TEST(parse_dtx_id_tests),         TEST(keys_are_parsed_correctly),
+	    TEST(pool_flags_tests),           TEST(date2cmt_time_tests),
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);
