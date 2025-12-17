@@ -5,7 +5,7 @@
 /* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -285,7 +285,7 @@ pipeline {
                description: 'Additional repository used for locating packages for the build and ' +
                             'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
-               defaultValue: 'leap15.6', //'',
+               defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
@@ -300,7 +300,7 @@ pipeline {
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
         booleanParam(name: 'CI_el8_NOBUILD',
-                     defaultValue: true, // false,
+                     defaultValue: false,
                      description: 'Do not build sources and RPMs on EL 8')
         booleanParam(name: 'CI_el9_NOBUILD',
                      defaultValue: true, // false,

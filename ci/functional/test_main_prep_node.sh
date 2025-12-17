@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -115,8 +115,7 @@ fi
 set -x
 
 # Wait for at least the expected IB devices to show up.
-# in the case of dual port HBAs, not all IB devices will
-# show up.
+# in the case of dual port HBAs, only the ports that are connected may show up.
 # For some unknown reason, sometimes IB devices will not show up
 # except in the lspci output unless an ip link set up command for
 # at least one device that should be present shows up.
@@ -128,12 +127,9 @@ function do_wait_for_ib {
     # addresses.
     local ib_devs=("ib0" "ib1" "ib2" "ib3" "ib4")
           # Udev rule convention, first digit is the numa node
-          # second digit should be the port number on the HBA,
-          # but is currently 0, a bug not being fixed right now.
-          # Third digit is unique number as in rare cases there
-          # may be more than one HBA per numa node.
-          ib_devs+=("ib_000" "ib_001" "ib_002" "ib_003")
-          ib_devs+=("ib_100" "ib_101" "ib_102" "ib_103")
+          # second digit should be an index of the HBA on that numa node.
+          ib_devs+=("ib_00" "ib_01" "ib_02" "ib_03")
+          ib_devs+=("ib_10" "ib_11" "ib_12" "ib_13")
     local working_ib
     ib_timeout=300 # 5 minutes
     retry_wait=10 # seconds
