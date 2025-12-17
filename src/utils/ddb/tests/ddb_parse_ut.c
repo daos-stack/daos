@@ -121,7 +121,7 @@ vos_file_parse_test_crit_strtoull(void **state)
 
 	/* Testing strtoull failure */
 	will_return(__wrap_strtoull, ERANGE);
-	will_return(__wrap_strtoull, ULLONG_MAX);
+	will_return(__wrap_strtoull, 0);
 	rc = parse_vos_file_parts(MOCKED_POOL_UUID_STR "/vos-0", NULL, &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 }
