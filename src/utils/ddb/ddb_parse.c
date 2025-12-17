@@ -8,6 +8,8 @@
 
 #include <wordexp.h>
 #include <getopt.h>
+#include <regex.h>
+#include <errno.h>
 
 #include <daos_errno.h>
 
@@ -22,55 +24,91 @@ safe_strcat(char *dst, const char *src, size_t dst_size)
 	strncat(dst, src, remaining_space);
 }
 
+static void
+print_regx_error(int rc, regex_t *preg, const char *regex_buf)
+{
+	char  *buf;
+	size_t buf_size;
+
+	buf_size = regerror(rc, preg, NULL, 0);
+	D_ALLOC_ARRAY(buf, buf_size);
+	D_ASSERT(buf != NULL);
+	regerror(rc, preg, buf, buf_size);
+	D_CRIT("invalid regex %s: %s", regex_buf, buf);
+	D_FREE(buf);
+}
+
 int
 vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 {
-	uint32_t	 path_len = strlen(path) + 1;
-	char		*path_copy;
-	char		*tok;
-	int		 rc = -DER_INVAL;
+	const char  *regex_buf = "^/?([^/]+/)*([0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})/"
+				 "vos-([0-9]|([1-9][0-9]+))$";
+	const size_t uuid_idx  = 2;
+	const size_t target_idx = 4;
+	const size_t nmatch     = 5;
+	const size_t uuid_size  = 37;
+	char        *endptr;
+	unsigned long long val_tmp;
+	regex_t            preg;
+	regmatch_t         pmatch[nmatch + 1];
+	int                rc;
 
 	D_ASSERT(path != NULL && vos_file_parts != NULL);
 
-	D_ALLOC(path_copy, path_len);
-	if (path_copy == NULL)
-		return -DER_NOMEM;
-	strcpy(path_copy, path);
-
-	tok = strtok(path_copy, "/");
-	while (tok != NULL && rc != 0) {
-		rc = uuid_parse(tok, vos_file_parts->vf_pool_uuid);
-		if (!SUCCESS(rc)) {
-			safe_strcat(vos_file_parts->vf_db_path, "/", DB_PATH_LEN);
-			safe_strcat(vos_file_parts->vf_db_path, tok, DB_PATH_LEN);
-		}
-		tok = strtok(NULL, "/");
+	rc = regcomp(&preg, regex_buf, REG_EXTENDED);
+	if (rc != 0) {
+		print_regx_error(rc, &preg, regex_buf);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
-	if (rc != 0 || tok == NULL) {
-		D_ERROR("Incomplete path: %s\n", path);
-		D_GOTO(done, rc = -DER_INVAL);
+	rc = regexec(&preg, path, nmatch, pmatch, 0);
+	if (rc == REG_NOMATCH) {
+		D_WARN("Innvalid VOS path: %s\n", path);
+		rc = -DER_INVAL;
+		goto out_preg;
 	}
-
-	strncpy(vos_file_parts->vf_vos_file, tok, ARRAY_SIZE(vos_file_parts->vf_vos_file) - 1);
-
-	/*
-	 * file name should be vos-N ... split on "-"
-	 * If not, might be test, just assume target of 0
-	 */
-	strtok(tok, "-");
-	tok = strtok(NULL, "-");
-	if (tok != NULL) {
-		D_WARN("vos file name not in correct format: %s\n", vos_file_parts->vf_vos_file);
-		vos_file_parts->vf_target_idx = atoi(tok);
-	}
-
-done:
 	if (!SUCCESS(rc)) {
-		/* Reset to if not valid */
-		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
+		print_regx_error(rc, &preg, regex_buf);
+		rc = -DER_INVAL;
+		goto out_preg;
 	}
-	D_FREE(path_copy);
+
+	D_ASSERT(pmatch[uuid_idx].rm_so != (size_t)-1);
+	D_ASSERT(pmatch[target_idx].rm_so != (size_t)-1);
+	D_ASSERT(uuid_size == pmatch[uuid_idx].rm_eo - pmatch[uuid_idx].rm_so);
+
+	rc = uuid_parse(&path[pmatch[uuid_idx].rm_so], vos_file_parts->vf_pool_uuid);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Invalid UUID in VOS path '%s': %.*s\n", path, (int)uuid_size,
+			&path[pmatch[uuid_idx].rm_so]);
+		rc = -DER_INVAL;
+		goto out_preg;
+	}
+
+	errno   = 0;
+	val_tmp = strtoull(&path[pmatch[target_idx].rm_so], &endptr, 10);
+	if (errno != 0 || endptr == &path[pmatch[target_idx].rm_so] || *endptr != '\0') {
+		D_ERROR("Invalid taraget index in VOS path '%s': %s\n", path,
+			&path[pmatch[target_idx].rm_so]);
+		rc = -DER_INVAL;
+		goto out_preg;
+	}
+	if (val_tmp > UINT32_MAX) {
+		D_ERROR("Target index out of range in VOS path '%s': %llu\n", path, val_tmp);
+		rc = -DER_INVAL;
+		goto out_preg;
+	}
+	vos_file_parts->vf_target_idx = val_tmp;
+
+	rc = -DER_SUCCESS;
+
+out_preg:
+	regfree(&preg);
+out:
+	/* Reset to if not valid */
+	if (!SUCCESS(rc))
+		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
 	return rc;
 }
 
