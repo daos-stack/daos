@@ -23,12 +23,13 @@ struct program_args {
 	bool  pa_write_mode;
 	bool  pa_get_help;
 };
-#define DB_PATH_LEN 256
+
+enum { DB_PATH_SIZE = 256, VOS_FILE_NAME_SIZE = 16 };
 struct vos_file_parts {
-	char            vf_db_path[DB_PATH_LEN];
-	uuid_t		vf_pool_uuid;
-	char		vf_vos_file[16];
-	uint32_t	vf_target_idx;
+	char     vf_db_path[DB_PATH_SIZE];
+	uuid_t   vf_pool_uuid;
+	char     vf_vos_file_name[VOS_FILE_NAME_SIZE];
+	uint32_t vf_target_idx;
 };
 
 /* Parse a path to a VOS file to get needed parts for initializing vos */
