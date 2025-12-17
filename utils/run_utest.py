@@ -624,6 +624,7 @@ def move_codecov(base):
         print("Exception trying to copy test.cov")
         traceback.print_exc()
     finally:
+        print(f"move_codecov({base})")
         run_cmd(["find", "/", "-name", "test.cov"])
 
 
@@ -676,7 +677,7 @@ def main():
     os.makedirs(os.path.join(path_info["DAOS_BASE"], "test_results"), exist_ok=True)
 
     print(f"COVFILE:   {os.environ.get('COVFILE')}")
-    print(f"DAOS_BASE: {path_info["DAOS_BASE"]}")
+    print(f"DAOS_BASE: {path_info['DAOS_BASE']}")
 
     aio = None
 
