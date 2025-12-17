@@ -94,14 +94,14 @@ function nvme_unmount_all {
       mp=$(lsblk -nr -o MOUNTPOINT "$dev")
       if [ -n "$mp" ]; then
         echo "Unmounting $dev from $mp"
-        sudo umount -f "$dev" 2>/dev/null || sudo umount -f "$mp" 2>/dev/null
-      else
+        sudo umount -f "$dev"|| sudo umount -f "$mp"
+      elif [ -d "${mnt}" ]; then
         echo "Unmounting ${mnt}"
-        sudo umount -f "${mnt}" 2>/dev/null
+        sudo umount -f "${mnt}"
       fi
     elif [ -d "${mnt}" ]; then
       echo "Force umount of ${mnt}"
-      sudo umount -f "${mnt}" 2>/dev/null
+      sudo umount -f "${mnt}"
     fi
   done
   set -e
