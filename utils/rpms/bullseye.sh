@@ -19,8 +19,12 @@ URL="https://www.bullseye.com/index.html"
 RPM_CHANGELOG="bullseye.changelog"
 PACKAGE_TYPE="dir"
 files=()
-readarray -t dir_list < <(find /opt/BullseyeCoverage -mindepth 1 -maxdepth 1 -type d)
+FILTER_LIST=("sample")
+readarray -t dir_list < <(find "${SL_BULLSEYE_PREFIX}" -mindepth 1 -maxdepth 1 -type d)
 for dir in "${dir_list[@]}"; do
+    if filter_file "${file}"; then
+      continue
+    fi
     readarray -t dir_file_list < <(find "${dir}" -mindepth 1 -maxdepth 1 -type f)
     TARGET_PATH="${dir}"
     for dir_file in "${dir_file_list[@]}"; do
@@ -28,4 +32,7 @@ for dir in "${dir_list[@]}"; do
         append_install_list "${files[@]}"
     done
 done
+TARGET_PATH="/tmp/bullseye"
+list_files files "test.cov"
+append_install_list "${files[@]}"
 build_package "bullseye"

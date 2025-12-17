@@ -437,17 +437,8 @@ DEPENDS+=("MACSio-mpich")
 DEPENDS+=("simul-mpich")
 DEPENDS+=("romio-tests")
 DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
-readarray -t coverage_files < <(find . -name 'test.cov')
-if [ ${#coverage_files[@]} -gt 0 ]; then
-  PACKAGE_TYPE="dir"
-  TARGET_PATH="${daoshome}/TESTING"
-  list_files files "${coverage_files[@]}"
-  BASE_PATH="${tmp}${daoshome}/TESTING"
-  append_install_list "${files[@]}"
-fi
 build_package "daos-tests"
 
-PACKAGE_TYPE="empty"
 build_package "daos-client-tests-mpich"
 
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
