@@ -207,15 +207,22 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 				"((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$";
 	regex_t     preg;
 	regmatch_t  match[MATCH_SIZE];
+	struct vos_file_parts *vfp_tmp;
 	int         rc;
 
 	D_ASSERT(vos_path != NULL && vos_file_parts != NULL);
+
+	D_ALLOC_PTR(vfp_tmp);
+	if (vfp_tmp == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	rc = regcomp(&preg, regex_buf, REG_EXTENDED);
 	if (rc != 0) {
 		print_regx_error(rc, &preg, regex_buf);
 		rc = -DER_INVAL;
-		goto out;
+		goto out_vfp_tmp;
 	}
 
 	rc = regexec(&preg, vos_path, MATCH_SIZE, match, 0);
@@ -236,38 +243,39 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 			rc = -DER_INVAL;
 			goto out_preg;
 		}
-		memcpy(vos_file_parts->vf_db_path, db_path, db_path_len);
-		vos_file_parts->vf_db_path[db_path_len] = '\0';
+		memcpy(vfp_tmp->vf_db_path, db_path, db_path_len);
+		vfp_tmp->vf_db_path[db_path_len] = '\0';
 	} else {
-		rc = parse_db_path(vos_path, match, vos_file_parts->vf_db_path);
+		rc = parse_db_path(vos_path, match, vfp_tmp->vf_db_path);
 		if (!SUCCESS(rc))
 			goto out_preg;
 	}
 
-	rc = parse_pool_uuid(vos_path, match, vos_file_parts->vf_pool_uuid);
+	rc = parse_pool_uuid(vos_path, match, vfp_tmp->vf_pool_uuid);
 	if (rc != 0)
 		goto out_preg;
 
 	if (match[MATCH_RDB_POOL_IDX].rm_so != (regoff_t)-1) {
 		D_ASSERT(match[MATCH_VOS_FILE_NAME_IDX].rm_so == (regoff_t)-1);
-		memcpy(vos_file_parts->vf_vos_file_name, "rdb-pool", sizeof("rdb-pool"));
-		vos_file_parts->vf_target_idx = BIO_SYS_TGT_ID;
-		rc                            = -DER_SUCCESS;
-		goto out_preg;
+		memcpy(vfp_tmp->vf_vos_file_name, "rdb-pool", sizeof("rdb-pool"));
+		vfp_tmp->vf_target_idx        = BIO_SYS_TGT_ID;
+		rc                            = DER_SUCCESS;
+		goto out_vfp_tmp;
 	}
 
-	rc = parse_vos_file_name(vos_path, match, vos_file_parts->vf_vos_file_name);
+	rc = parse_vos_file_name(vos_path, match, vfp_tmp->vf_vos_file_name);
 	if (!SUCCESS(rc))
 		goto out_preg;
 
-	rc = parse_target_idx(vos_path, match, &vos_file_parts->vf_target_idx);
+	rc = parse_target_idx(vos_path, match, &vfp_tmp->vf_target_idx);
 
 out_preg:
 	regfree(&preg);
+out_vfp_tmp:
+	if (SUCCESS(rc))
+		memcpy(vos_file_parts, vfp_tmp, sizeof(struct vos_file_parts));
+	D_FREE(vfp_tmp);
 out:
-	/* Reset to zero if not valid */
-	if (!SUCCESS(rc))
-		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
 	return rc;
 }
 
