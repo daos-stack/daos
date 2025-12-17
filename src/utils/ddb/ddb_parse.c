@@ -244,7 +244,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 		memcpy(vfp_tmp->vf_vos_file_name, "rdb-pool", sizeof("rdb-pool"));
 		vfp_tmp->vf_target_idx = BIO_SYS_TGT_ID;
 		rc                     = DER_SUCCESS;
-		goto out_vfp_tmp;
+		goto out_preg;
 	}
 
 	rc = parse_vos_file_name(vos_path, match, vfp_tmp->vf_vos_file_name);
@@ -255,7 +255,6 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 
 out_preg:
 	regfree(&preg);
-out_vfp_tmp:
 	if (SUCCESS(rc))
 		memcpy(vos_file_parts, vfp_tmp, sizeof(struct vos_file_parts));
 	D_FREE(vfp_tmp);
