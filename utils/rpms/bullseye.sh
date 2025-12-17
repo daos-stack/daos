@@ -22,7 +22,7 @@ PACKAGE_TYPE="dir"
 files=()
 TARGET_PATH="${SL_BULLSEYE_PREFIX}"
 
-readarray -t bullseye_dirs < <(find /opt/BullseyeCoverage -maxdepth 1 -type d)
+readarray -t bullseye_dirs < <(find /opt/BullseyeCoverage -mindepth 1 -maxdepth 1 -type d)
 for dir in "${bullseye_dirs[@]}"; do
     list_files files "${dir}/*"
     append_install_list "${files[@]}"
