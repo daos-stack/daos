@@ -148,7 +148,6 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	/* Check again since IV fetch yield */
 	if (cont->sc_props_fetched)
 		goto done;
-	cont->sc_props_fetched = 1;
 
 	csum_val = cont_props->dcp_csum_type;
 	if (!daos_cont_csum_prop_is_enabled(csum_val)) {
@@ -162,9 +161,25 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 					    daos_contprop2hashtype(csum_val),
 					    cont_props->dcp_chunksize,
 					    cont_props->dcp_srv_verify);
+		if (rc != 0)
+			goto done;
+
 		if (dedup_only)
 			dedup_configure_csummer(cont->sc_csummer, cont_props);
 	}
+
+	rc = vos_cont_save_props(cont->sc_hdl, cont_props);
+	if (rc != 0) {
+		/*
+		 * The failure of saving checksum property copy only potentially affect ddb, but
+		 * it is not fatal for current caller. Let's go ahead with some warning message.
+		 */
+		D_WARN("Cannot locally save container property for " DF_UUID ": " DF_RC "\n",
+		       DP_UUID(cont->sc_uuid), DP_RC(rc));
+		rc = 0;
+	}
+	cont->sc_props_fetched = 1;
+
 done:
 	return rc;
 }
@@ -188,8 +203,8 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 
 	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
 		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), pool->sp_rebuilding,
-			pool->sp_rebuild_scan);
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			atomic_load(&pool->sp_rebuilding), pool->sp_rebuild_scan);
 		return false;
 	}
 
@@ -500,8 +515,11 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				  param->ap_vos_agg ? "VOS" : "EC");
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
-			/* Don't sleep when there is space pressure */
-			msecs = 0;
+			/*
+			 * Introduce a small sleep interval between each round to yield CPU time
+			 * for the flush & GC ULTs, irrespective of space pressure. DAOS-18012.
+			 */
+			msecs = 200;
 		}
 
 		if (param->ap_vos_agg)
@@ -517,7 +535,7 @@ next:
 		 * if no space pressure.
 		 */
 		if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool) && !param->ap_vos_agg &&
-		    msecs != 0)
+		    msecs != 200)
 			msecs = 18000;
 
 		if (msecs != 0)
@@ -2829,8 +2847,9 @@ ds_cont_eph_report(struct ds_pool *pool)
 		D_DEBUG(DB_MD, "Update ec_agg_eph " DF_X64 ", stable_eph " DF_X64 ", " DF_UUID "\n",
 			min_ec_agg_eph, min_stable_eph, DP_UUID(ec_eph->cte_cont_uuid));
 
-		ret = cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid,
-					       min_ec_agg_eph, min_stable_eph);
+		ret =
+		    cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid, min_ec_agg_eph,
+					     min_stable_eph, pool->sp_ec_ephs_req);
 		if (ret == 0) {
 			ec_eph->cte_last_ec_agg_epoch = min_ec_agg_eph;
 			ec_eph->cte_last_stable_epoch = min_stable_eph;

@@ -242,9 +242,9 @@ flush_ult(void *arg)
 		} else if (rc) {	/* This pool doesn't have NVMe partition */
 			sleep_ms = 60000;
 		} else if (sched_req_space_check(child->spc_flush_req) == SCHED_SPACE_PRESS_NONE) {
-			sleep_ms = 500;
+			sleep_ms = 5000;
 		} else {
-			sleep_ms = (nr_flushed < nr_flush) ? 50 : 0;
+			sleep_ms = (nr_flushed < nr_flush) ? 1000 : 0;
 		}
 
 		if (dss_ult_exiting(child->spc_flush_req))
@@ -2798,7 +2798,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	pool->sp_discard_status = 0;
 	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
 	if (rc == 0)
-		ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
+		rc = ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
 
 	ds_pool_put(pool);
 out:
@@ -3120,7 +3120,7 @@ lock:
 	ABT_rwlock_unlock(pool->sp_recov_lock);
 
 	if (rc == 0)
-		ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
+		rc = ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
 
 out:
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_REBUILD, rc,
