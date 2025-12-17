@@ -90,14 +90,14 @@ vos_file_parse_test_errors(void **state)
 
 	/* Test invalid vos paths with too long db path */
 	D_ALLOC(buf, DB_PATH_SIZE + 64);
-	assert_non_null(buf);
+	if (buf == NULL) {
+		fail();
+		return;
+	}
 	memset(buf, 'a', DB_PATH_SIZE + 64);
 	buf[0] = '/';
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
 	memcpy(&buf[DB_PATH_SIZE], "/" MOCKED_POOL_UUID_STR "/vos-0",
 	       sizeof("/" MOCKED_POOL_UUID_STR "/vos-0"));
-#pragma GCC diagnostic pop
 	rc = parse_vos_file_parts(buf, NULL, &parts);
 	D_FREE(buf);
 	assert_rc_equal(rc, -DER_INVAL);
@@ -114,11 +114,11 @@ vos_file_parse_test_errors(void **state)
 
 	/* Test invalid vos paths with too long db path */
 	D_ALLOC(buf, DB_PATH_SIZE + 1);
-	assert_non_null(buf);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
+	if (buf == NULL) {
+		fail();
+		return;
+	}
 	memset(buf, 'a', DB_PATH_SIZE);
-#pragma GCC diagnostic pop
 	buf[0]            = '/';
 	buf[DB_PATH_SIZE] = '\0';
 	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", buf, &parts);
