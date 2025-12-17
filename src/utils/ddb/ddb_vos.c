@@ -39,7 +39,6 @@ dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t
 	if (!SUCCESS(rc))
 		return rc;
 
-
 	/**
 	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
 	 * to modify the pool. However, PMEMOBJ performs several operations that do modify the pool
