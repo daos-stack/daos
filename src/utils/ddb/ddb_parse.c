@@ -134,7 +134,7 @@ parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 	return 0;
 }
 
-static int
+static void
 parse_pool_uuid(const char *vos_path, const regmatch_t *vp_match, uuid_t pool_uuid)
 {
 	const regmatch_t *pu_match = &vp_match[MATCH_POOL_UUID_IDX];
@@ -146,13 +146,8 @@ parse_pool_uuid(const char *vos_path, const regmatch_t *vp_match, uuid_t pool_uu
 
 	memcpy(pool_uuid_str, &vos_path[pu_match->rm_so], UUID_STR_LEN - 1);
 	pool_uuid_str[UUID_STR_LEN - 1] = '\0';
-	rc                           = uuid_parse(pool_uuid_str, pool_uuid);
-	if (!SUCCESS(rc)) {
-		D_CRIT("Invalid Pool UUID '%s' in VOS path '%s'\n", pool_uuid_str, vos_path);
-		return -DER_INVAL;
-	}
-
-	return 0;
+	rc                              = uuid_parse(pool_uuid_str, pool_uuid);
+	D_ASSERTF(rc == 0, "Invalid Pool UUID '%s' in VOS path '%s'\n", pool_uuid_str, vos_path);
 }
 
 static int
@@ -247,9 +242,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 			goto out_preg;
 	}
 
-	rc = parse_pool_uuid(vos_path, match, vfp_tmp->vf_pool_uuid);
-	if (rc != 0)
-		goto out_preg;
+	parse_pool_uuid(vos_path, match, vfp_tmp->vf_pool_uuid);
 
 	if (match[MATCH_RDB_POOL_IDX].rm_so != (regoff_t)-1) {
 		D_ASSERT(match[MATCH_VOS_FILE_NAME_IDX].rm_so == (regoff_t)-1);
