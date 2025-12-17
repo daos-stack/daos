@@ -123,7 +123,7 @@ vos_file_parse_test_errors(void **state)
 	/* Test invalid vos paths with invalid target idx */
 	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-99999999999", NULL,
 				  &parts);
-	assert_rc_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_OVERFLOW);
 
 	/* Test invalid vos paths with too long db path */
 	D_ALLOC_ARRAY_CHECK(buf, DB_PATH_SIZE + 1);

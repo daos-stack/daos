@@ -176,16 +176,19 @@ parse_target_idx(const char *vos_path, const regmatch_t *vp_match, uint32_t *tar
 
 	errno = 0;
 	idx   = strtoull(&vos_path[ti_match->rm_so], &endptr, 10);
-	if (errno != 0 || endptr == &vos_path[ti_match->rm_so] || *endptr != '\0') {
+	if (errno != 0) {
 		D_CRIT("Invalid target index '%s' in VOS path '%s': %s\n",
 		       &vos_path[ti_match->rm_so], vos_path, strerror(errno));
 		return -DER_INVAL;
 	}
+	D_ASSERT(endptr != &vos_path[ti_match->rm_so]);
+	D_ASSERT(*endptr == '\0');
+
 	if (idx > UINT32_MAX) {
 		D_ERROR("Target index '%llu' out of range in VOS path '%s': min=0 , max=%" PRIu32
 			"\n",
 			idx, vos_path, UINT32_MAX);
-		return -DER_INVAL;
+		return -DER_OVERFLOW;
 	}
 	*target_idx = idx;
 
