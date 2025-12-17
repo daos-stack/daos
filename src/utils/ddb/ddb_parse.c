@@ -40,17 +40,19 @@ print_regx_error(int rc, regex_t *preg, const char *regex_buf)
 	D_FREE(buf);
 }
 
+#define POOL_UUID_LEN 36
+
 int
 vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 {
 	enum {
-		DB_PATH_IDX       = 2,
-		POOL_UUID_IDX     = 4,
-		VOS_FILE_NAME_IDX = 7,
-		TARGET_IDX_IDX    = 8,
-		RDB_POOL_IDX      = 10,
-		MATCH_SIZE        = 11,
-		POOL_UUID_LEN     = 36
+		MATCH_DB_PATH_IDX       = 2,
+		MATCH_POOL_UUID_IDX     = 4,
+		MATCH_VOS_FILE_NAME_IDX = 7,
+		MATCH_TARGET_IDX_IDX    = 8,
+		MATCH_RDB_POOL_IDX      = 10,
+		MATCH_SIZE              = 11
+
 	};
 	const char *regex_buf = "^((/*[^/]+(/+[^/]+)*)/+)?"
 				"([0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})/+"
@@ -81,22 +83,23 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 	D_ASSERT(SUCCESS(rc));
 
 	vos_file_parts->vf_db_path[0] = '\0';
-	if ((match[DB_PATH_IDX].rm_eo - match[DB_PATH_IDX].rm_so) != 0) {
-		D_ASSERT(match[DB_PATH_IDX].rm_so == 0);
-		if (match[DB_PATH_IDX].rm_eo >= DB_PATH_SIZE) {
+	if ((match[MATCH_DB_PATH_IDX].rm_eo - match[MATCH_DB_PATH_IDX].rm_so) != 0) {
+		D_ASSERT(match[MATCH_DB_PATH_IDX].rm_so == 0);
+		if (match[MATCH_DB_PATH_IDX].rm_eo >= DB_PATH_SIZE) {
 			D_ERROR("DB path '%.*s' too long in VOS path '%s': get=%i, max=%i\n",
-				match[DB_PATH_IDX].rm_eo, &path[0], path, match[DB_PATH_IDX].rm_eo,
-				DB_PATH_SIZE - 1);
+				match[MATCH_DB_PATH_IDX].rm_eo, &path[0], path,
+				match[MATCH_DB_PATH_IDX].rm_eo, DB_PATH_SIZE - 1);
 			rc = -DER_INVAL;
 			goto out_preg;
 		}
-		memcpy(vos_file_parts->vf_db_path, path, match[DB_PATH_IDX].rm_eo);
-		vos_file_parts->vf_db_path[match[DB_PATH_IDX].rm_eo] = '\0';
+		memcpy(vos_file_parts->vf_db_path, path, match[MATCH_DB_PATH_IDX].rm_eo);
+		vos_file_parts->vf_db_path[match[MATCH_DB_PATH_IDX].rm_eo] = '\0';
 	}
 
-	D_ASSERT(match[POOL_UUID_IDX].rm_so != (regoff_t)-1);
-	D_ASSERT(match[POOL_UUID_IDX].rm_eo - match[POOL_UUID_IDX].rm_so == POOL_UUID_LEN);
-	memcpy(pool_uuid, &path[match[POOL_UUID_IDX].rm_so], POOL_UUID_LEN);
+	D_ASSERT(match[MATCH_POOL_UUID_IDX].rm_so != (regoff_t)-1);
+	D_ASSERT(match[MATCH_POOL_UUID_IDX].rm_eo - match[MATCH_POOL_UUID_IDX].rm_so ==
+		 POOL_UUID_LEN);
+	memcpy(pool_uuid, &path[match[MATCH_POOL_UUID_IDX].rm_so], POOL_UUID_LEN);
 	pool_uuid[POOL_UUID_LEN] = '\0';
 	rc                       = uuid_parse(pool_uuid, vos_file_parts->vf_pool_uuid);
 	if (!SUCCESS(rc)) {
@@ -105,33 +108,34 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 		goto out_preg;
 	}
 
-	if (match[RDB_POOL_IDX].rm_so != (regoff_t)-1) {
-		D_ASSERT(match[VOS_FILE_NAME_IDX].rm_so == (regoff_t)-1);
+	if (match[MATCH_RDB_POOL_IDX].rm_so != (regoff_t)-1) {
+		D_ASSERT(match[MATCH_VOS_FILE_NAME_IDX].rm_so == (regoff_t)-1);
 		memcpy(vos_file_parts->vf_vos_file_name, "rdb-pool", sizeof("rdb-pool"));
 		vos_file_parts->vf_target_idx = 0;
 		rc                            = -DER_SUCCESS;
 		goto out_preg;
 	}
 
-	D_ASSERT(match[VOS_FILE_NAME_IDX].rm_so != (regoff_t)-1);
-	vos_file_name_len = match[VOS_FILE_NAME_IDX].rm_eo - match[VOS_FILE_NAME_IDX].rm_so;
+	D_ASSERT(match[MATCH_VOS_FILE_NAME_IDX].rm_so != (regoff_t)-1);
+	vos_file_name_len =
+	    match[MATCH_VOS_FILE_NAME_IDX].rm_eo - match[MATCH_VOS_FILE_NAME_IDX].rm_so;
 	if (vos_file_name_len + 1 > VOS_FILE_NAME_SIZE) {
 		D_ERROR("VOS file name '%.*s' too long in VOS path '%s': get=%zu, max=%i\n",
-			(int)vos_file_name_len, &path[match[VOS_FILE_NAME_IDX].rm_so], path,
+			(int)vos_file_name_len, &path[match[MATCH_VOS_FILE_NAME_IDX].rm_so], path,
 			vos_file_name_len, VOS_FILE_NAME_SIZE - 1);
 		rc = -DER_INVAL;
 		goto out_preg;
 	}
-	memcpy(vos_file_parts->vf_vos_file_name, &path[match[VOS_FILE_NAME_IDX].rm_so],
+	memcpy(vos_file_parts->vf_vos_file_name, &path[match[MATCH_VOS_FILE_NAME_IDX].rm_so],
 	       vos_file_name_len);
 	vos_file_parts->vf_vos_file_name[vos_file_name_len] = '\0';
 
-	D_ASSERT(match[TARGET_IDX_IDX].rm_so != (regoff_t)-1);
+	D_ASSERT(match[MATCH_TARGET_IDX_IDX].rm_so != (regoff_t)-1);
 	errno      = 0;
-	target_idx = strtoull(&path[match[TARGET_IDX_IDX].rm_so], &endptr, 10);
-	if (errno != 0 || endptr == &path[match[TARGET_IDX_IDX].rm_so] || *endptr != '\0') {
+	target_idx = strtoull(&path[match[MATCH_TARGET_IDX_IDX].rm_so], &endptr, 10);
+	if (errno != 0 || endptr == &path[match[MATCH_TARGET_IDX_IDX].rm_so] || *endptr != '\0') {
 		D_CRIT("Invalid target index '%s' in VOS path '%s': %s\n",
-		       &path[match[TARGET_IDX_IDX].rm_so], path, strerror(errno));
+		       &path[match[MATCH_TARGET_IDX_IDX].rm_so], path, strerror(errno));
 		rc = -DER_INVAL;
 		goto out_preg;
 	}
