@@ -713,7 +713,7 @@ def main():
 
     results.create_junit()
 
-    move_codecov(path_info["DAOS_BASE"])
+    # move_codecov(path_info["DAOS_BASE"])
 
     if args.no_fail_on_error:
         return

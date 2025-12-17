@@ -19,7 +19,7 @@ URL="https://www.bullseye.com/index.html"
 RPM_CHANGELOG="bullseye.changelog"
 PACKAGE_TYPE="dir"
 files=()
-FILTER_LIST=("sample")
+FILTER_LIST=("${SL_BULLSEYE_PREFIX}/sample")
 readarray -t dir_list < <(find "${SL_BULLSEYE_PREFIX}" -mindepth 1 -maxdepth 1 -type d)
 for dir in "${dir_list[@]}"; do
     if filter_file "${dir}"; then
