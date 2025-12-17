@@ -1899,7 +1899,6 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 {
 	struct migr_res_manager *rmg;
 	struct migr_resource    *res;
-	bool                     is_hulk;
 
 	rmg = tls->mpt_rmg;
 	D_ASSERT(rmg != NULL);
@@ -1923,8 +1922,7 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 	D_ASSERT(res->res_units >= units);
 	res->res_units -= units;
 
-	is_hulk = migr_res_is_hulk(res_type, units);
-	if (is_hulk) {
+	if (migr_res_is_hulk(res_type, units)) {
 		D_ASSERT(res->res_hulk == 1);
 		res->res_hulk = 0;
 	}
@@ -2696,7 +2694,7 @@ migrate_obj_punch_one(void *data)
 	tls = arg->pool_tls;
 	if (tls->mpt_fini) {
 		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(arg->pool_uuid));
-		D_GOTO(put, rc = 0);
+		D_GOTO(out, rc = 0);
 	}
 
 	D_DEBUG(DB_REBUILD, DF_RB ": tls %p version %d punch " DF_U64 " " DF_UOID "\n",
@@ -2704,14 +2702,14 @@ migrate_obj_punch_one(void *data)
 
 	rc = migrate_get_cont_child(tls, arg->cont_uuid, &cont, true);
 	if (rc != 0 || cont == NULL)
-		D_GOTO(put, rc);
+		D_GOTO(out, rc);
 
 	D_ASSERT(arg->punched_epoch != 0);
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->punched_epoch,
 			   tls->mpt_version, VOS_OF_REPLAY_PC,
 			   NULL, 0, NULL, NULL);
 	ds_cont_child_put(cont);
-put:
+out:
 	if (rc)
 		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate punch failed", DP_RB_MPT(tls),
 			 DP_UOID(arg->oid));
@@ -4457,6 +4455,9 @@ obj_migrate_init(void)
 	unsigned int ults = MIGR_TGT_ULTS_DEF;
 	int          i;
 	int          rc = 0;
+
+	D_CASSERT(MIGR_TGT_INF_DATA > MIGR_INF_DATA_LWM);
+	D_CASSERT(MIGR_TGT_INF_DATA > MIGR_INF_DATA_HULK);
 
 	d_getenv_uint(ENV_MIGRATE_ULT_CNT, &ults);
 	if (ults < MIGR_TGT_ULTS_MIN)
