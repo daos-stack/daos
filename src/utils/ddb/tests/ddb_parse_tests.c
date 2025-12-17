@@ -80,13 +80,9 @@ assert_parsed_fail(const char *str)
 static void
 parse_vos_file_parts_test_errors(void **state)
 {
-	uuid_t                pool_uuid;
 	struct vos_file_parts parts = {0};
 	char                 *buf;
 	int                   rc;
-
-	rc = uuid_parse(MOCKED_POOL_UUID_STR, pool_uuid);
-	assert_rc_equal(rc, 0);
 
 	/* Test invalid vos paths not respecting regex */
 	rc = parse_vos_file_parts("", NULL, &parts);
