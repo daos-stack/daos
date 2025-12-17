@@ -548,8 +548,7 @@ ddb_test_driver_arguments_parse(uint32_t argc, char **argv, struct ddb_test_driv
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			cmocka_set_test_filter(optarg);
 #else
-			printf("Test filtering disabled at compile time:"
-			       " feature not supported with this version of cmocka.\n");
+			printf("Test filtering disabled at compile time.\n");
 #endif
 			break;
 		case '?':
