@@ -22,7 +22,7 @@ files=()
 FILTER_LIST=("sample")
 readarray -t dir_list < <(find "${SL_BULLSEYE_PREFIX}" -mindepth 1 -maxdepth 1 -type d)
 for dir in "${dir_list[@]}"; do
-    if filter_file "${file}"; then
+    if filter_file "${dir}"; then
       continue
     fi
     readarray -t dir_file_list < <(find "${dir}" -mindepth 1 -maxdepth 1 -type f)
@@ -32,7 +32,7 @@ for dir in "${dir_list[@]}"; do
         append_install_list "${files[@]}"
     done
 done
-TARGET_PATH="/tmp/bullseye"
+TARGET_PATH="/tmp"
 list_files files "test.cov"
 append_install_list "${files[@]}"
 build_package "bullseye"

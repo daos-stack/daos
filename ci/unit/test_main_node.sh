@@ -28,7 +28,7 @@ log_prefix="unit_test"
 
 : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
 if [ -d "${BULLSEYE_DIR}" ]; then
-    export COVFILE="${SL_SRC_DIR}/test.cov"
+    export COVFILE="/tmp/test.cov"
     export PATH="${BULLSEYE_DIR}/bin:$PATH"
 fi
 
