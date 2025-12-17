@@ -115,7 +115,6 @@ parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 	if (pd_match->rm_so == (regoff_t)-1) {
 		/* No DB path provided, use current directory */
 		memcpy(db_path, ".", 2);
-
 		return 0;
 	}
 
