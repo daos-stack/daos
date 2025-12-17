@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2019-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,7 +101,7 @@ parse_path(const char *vos_path, const regmatch_t *path_match, char *db_path)
 	if (db_path_len >= DB_PATH_SIZE) {
 		D_ERROR("DB path '%.*s' too long in VOS path: got=%zu, max=%d\n", (int)db_path_len,
 			&vos_path[0], db_path_len, DB_PATH_SIZE - 1);
-		return -DER_INVAL;
+		return -DER_EXCEEDS_PATH_LEN;
 	}
 	memcpy(db_path, &vos_path[0], db_path_len);
 	db_path[db_path_len] = '\0';
@@ -157,7 +157,7 @@ parse_vos_file_name(const char *vos_path, const regmatch_t *vp_match, char *vos_
 		D_ERROR("VOS file name '%.*s' too long in VOS path '%s': got=%zu, max=%d\n",
 			(int)vos_file_name_len, &vos_path[vf_match->rm_so], vos_path,
 			vos_file_name_len, VOS_FILE_NAME_SIZE - 1);
-		return -DER_INVAL;
+		return -DER_EXCEEDS_PATH_LEN;
 	}
 	memcpy(vos_file_name, &vos_path[vf_match->rm_so], vos_file_name_len + 1);
 
@@ -227,7 +227,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 		if (db_path_len >= DB_PATH_SIZE) {
 			D_ERROR("DB path '%s' too long: got=%zu, max=%d\n", db_path, db_path_len,
 				DB_PATH_SIZE - 1);
-			rc = -DER_INVAL;
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto out_preg;
 		}
 		memcpy(vfp_tmp->vf_db_path, db_path, db_path_len + 1);
