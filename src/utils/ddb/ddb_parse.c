@@ -90,38 +90,14 @@ init_regex_vos_file_parts(regex_t *preg)
 }
 
 static int
-parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
+parse_path(const char *vos_path, const regmatch_t *path_match, char *db_path)
 {
-	const regmatch_t *pr_match = &vp_match[MATCH_DB_PATH_ROOT_IDX];
-	const regmatch_t *pd_match = &vp_match[MATCH_DB_PATH_DIR_IDX];
 	size_t            db_path_len;
 
-	if (pr_match->rm_so != (regoff_t)-1) {
-		D_ASSERT(pr_match->rm_so == 0);
-		D_ASSERT(pr_match->rm_so < pr_match->rm_eo);
+	D_ASSERT(path_match->rm_so == 0);
+	D_ASSERT(path_match->rm_so < path_match->rm_eo);
 
-		db_path_len = pr_match->rm_eo - pr_match->rm_so;
-		if (db_path_len >= DB_PATH_SIZE) {
-			D_ERROR("DB path '%.*s' too long in VOS path: got=%zu, max=%d\n",
-				(int)db_path_len, &vos_path[0], db_path_len, DB_PATH_SIZE - 1);
-			return -DER_INVAL;
-		}
-		memcpy(db_path, &vos_path[0], db_path_len);
-		db_path[db_path_len] = '\0';
-
-		return 0;
-	}
-
-	if (pd_match->rm_so == (regoff_t)-1) {
-		/* No DB path provided, use current directory */
-		memcpy(db_path, ".", 2);
-		return 0;
-	}
-
-	D_ASSERT(pd_match->rm_so == 0);
-	D_ASSERT(pd_match->rm_so < pd_match->rm_eo);
-
-	db_path_len = pd_match->rm_eo - pd_match->rm_so;
+	db_path_len = path_match->rm_eo - path_match->rm_so;
 	if (db_path_len >= DB_PATH_SIZE) {
 		D_ERROR("DB path '%.*s' too long in VOS path: got=%zu, max=%d\n", (int)db_path_len,
 			&vos_path[0], db_path_len, DB_PATH_SIZE - 1);
@@ -131,6 +107,24 @@ parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 	db_path[db_path_len] = '\0';
 
 	return 0;
+}
+
+static int
+parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
+{
+	const regmatch_t *pr_match = &vp_match[MATCH_DB_PATH_ROOT_IDX];
+	const regmatch_t *pd_match = &vp_match[MATCH_DB_PATH_DIR_IDX];
+
+	if (pr_match->rm_so != (regoff_t)-1)
+		return parse_path(vos_path, pr_match, db_path);
+
+	if (pd_match->rm_so == (regoff_t)-1) {
+		/* No DB path provided, use current directory */
+		memcpy(db_path, ".", 2);
+		return 0;
+	}
+
+	return parse_path(vos_path, pd_match, db_path);
 }
 
 static void
