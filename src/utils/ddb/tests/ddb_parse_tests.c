@@ -121,7 +121,6 @@ parse_vos_file_parts_test_errors(void **state)
 				  &parts);
 	assert_rc_equal(rc, -DER_OVERFLOW);
 
-	/* Test invalid vos paths with too long db path */
 	/* Test invalid vos paths with too long db path - MD-on-SSD */
 	D_ALLOC_ARRAY_CHECK(buf, DB_PATH_SIZE + 1);
 	memset(buf, 'a', DB_PATH_SIZE);
