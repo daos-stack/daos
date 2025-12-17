@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2022-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -530,7 +530,7 @@ struct ddb_test_driver_arguments {
 static int
 ddb_test_driver_arguments_parse(uint32_t argc, char **argv, struct ddb_test_driver_arguments *args)
 {
-	struct option   program_options[] = {{"create_vos", optional_argument, NULL, 'c'},
+	struct option   program_options[] = {{"create_vos", no_argument, NULL, 'c'},
 					     {"filter", required_argument, NULL, 'f'},
 					     {NULL}};
 	int		index = 0, opt;
