@@ -28,7 +28,7 @@ safe_strcat(char *dst, const char *src, size_t dst_size)
 
 /**
  * Define the regex match group indices for the different parts of the VOS path. The regex is
- * defined in the parse_vos_file_parts function. The regex is used to parse a VOS path into its
+ * defined in the init_regex_vos_file_parts function. The regex is used to parse a VOS path into its
  * different components, such as the DB path, pool UUID, VOS file name, and target index. The match
  * groups are used to extract these components from the regex match results.
  *
