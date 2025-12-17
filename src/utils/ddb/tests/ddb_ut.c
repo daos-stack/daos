@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,24 +18,24 @@
 int
 ddb_vos_ut_run(void);
 
-struct ddb_test_driver_arguments {
-	bool dtda_create_vos_file;
-};
-
 static int
-ddb_test_driver_arguments_parse(uint32_t argc, char **argv, struct ddb_test_driver_arguments *args)
+ddb_test_driver_arguments_parse(uint32_t argc, char **argv)
 {
-	struct option program_options[] = {{"create_vos", optional_argument, NULL, 'c'}, {NULL}};
+	struct option program_options[] = {
+	    {"filter", required_argument, NULL, 'f'},
+	};
 	int           index             = 0, opt;
-
-	memset(args, 0, sizeof(*args));
 
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "c", program_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "f:", program_options, &index)) != -1) {
 		switch (opt) {
-		case 'c':
-			args->dtda_create_vos_file = true;
+		case 'f':
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+			cmocka_set_test_filter(optarg);
+#else
+			printf("Test filtering not supported with this version of cmocka\n");
+#endif
 			break;
 		case '?':
 			printf("'%c' is unknown\n", optopt);
@@ -71,16 +71,13 @@ char_in_tests(char a, char *str, uint32_t str_len)
 int
 main(int argc, char *argv[])
 {
-	struct ddb_test_driver_arguments args = {0};
 	int                              rc;
 
 	rc = ddb_init();
 	if (rc != 0)
 		return -rc;
 
-	ddb_test_driver_arguments_parse(argc, argv, &args);
-
-	assert_false(args.dtda_create_vos_file);
+	ddb_test_driver_arguments_parse(argc, argv);
 
 #define RUN_TEST_SUIT(c, func)                                                                     \
 	do {                                                                                       \
@@ -90,9 +87,6 @@ main(int argc, char *argv[])
 
 	/* filtering suites and tests */
 	char test_suites[] = "";
-#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-	cmocka_set_test_filter("*dtx_act_discard_invalid*");
-#endif
 	RUN_TEST_SUIT('a', ddb_vos_ut_run);
 
 	ddb_fini();
