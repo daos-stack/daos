@@ -94,7 +94,7 @@ parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 		db_path_len =
 		    vp_match[MATCH_DB_PATH_ROOT_IDX].rm_eo - vp_match[MATCH_DB_PATH_ROOT_IDX].rm_so;
 		if (db_path_len >= DB_PATH_SIZE) {
-			D_ERROR("DB path '%.*s' too long in VOS path: get=%zu, max=%i\n",
+			D_ERROR("DB path '%.*s' too long in VOS path: got=%zu, max=%d\n",
 				(int)db_path_len, &vos_path[0], db_path_len, DB_PATH_SIZE - 1);
 			return -DER_INVAL;
 		}
@@ -116,7 +116,7 @@ parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 
 	db_path_len = vp_match[MATCH_DB_PATH_DIR_IDX].rm_eo - vp_match[MATCH_DB_PATH_DIR_IDX].rm_so;
 	if (db_path_len >= DB_PATH_SIZE) {
-		D_ERROR("DB path '%.*s' too long in VOS path: get=%zu, max=%i\n", (int)db_path_len,
+		D_ERROR("DB path '%.*s' too long in VOS path: got=%zu, max=%d\n", (int)db_path_len,
 			&vos_path[0], db_path_len, DB_PATH_SIZE - 1);
 		return -DER_INVAL;
 	}
@@ -158,7 +158,7 @@ parse_vos_file_name(const char *vos_path, const regmatch_t *vp_match, char *vos_
 	vos_file_name_len =
 	    vp_match[MATCH_VOS_FILE_NAME_IDX].rm_eo - vp_match[MATCH_VOS_FILE_NAME_IDX].rm_so;
 	if (vos_file_name_len >= VOS_FILE_NAME_SIZE) {
-		D_ERROR("VOS file name '%.*s' too long in VOS path '%s': get=%zu, max=%i\n",
+		D_ERROR("VOS file name '%.*s' too long in VOS path '%s': got=%zu, max=%d\n",
 			(int)vos_file_name_len, &vos_path[vp_match[MATCH_VOS_FILE_NAME_IDX].rm_so],
 			vos_path, vos_file_name_len, VOS_FILE_NAME_SIZE - 1);
 		return -DER_INVAL;
@@ -236,7 +236,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 	if (db_path != NULL && db_path[0] != '\0') {
 		size_t db_path_len = strnlen(db_path, PATH_MAX);
 		if (db_path_len >= DB_PATH_SIZE) {
-			D_ERROR("DB path '%s' too long: get=%zu, max=%i\n", db_path, db_path_len,
+			D_ERROR("DB path '%s' too long: got=%zu, max=%d\n", db_path, db_path_len,
 				DB_PATH_SIZE - 1);
 			rc = -DER_INVAL;
 			goto out_preg;
