@@ -60,6 +60,23 @@ assert_parsed_fail(const char *str)
  * -----------------------------------------------
  */
 
+/**
+ * Allocate an array and abort the test immediately on failure.
+ *
+ * Unlike using D_ALLOC_ARRAY() followed by assert_non_null(), this macro
+ * explicitly returns on allocation failure, allowing GCC to determine that
+ * subsequent memcpy()/memset() calls are never reached with a NULL pointer,
+ * thus suppressing spurious null pointer dereference warnings.
+ */
+#define D_ALLOC_ARRAY_CHECK(ptr, count)                                                            \
+	do {                                                                                       \
+		D_ALLOC_ARRAY(ptr, count);                                                         \
+		if (ptr == NULL) {                                                                 \
+			fail();                                                                    \
+			return;                                                                    \
+		}                                                                                  \
+	} while (0)
+
 static void
 vos_file_parse_test_errors(void **state)
 {
@@ -89,11 +106,7 @@ vos_file_parse_test_errors(void **state)
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* Test invalid vos paths with too long db path */
-	D_ALLOC(buf, DB_PATH_SIZE + 64);
-	if (buf == NULL) {
-		fail();
-		return;
-	}
+	D_ALLOC_ARRAY_CHECK(buf, DB_PATH_SIZE + 64);
 	memset(buf, 'a', DB_PATH_SIZE + 64);
 	buf[0] = '/';
 	memcpy(&buf[DB_PATH_SIZE], "/" MOCKED_POOL_UUID_STR "/vos-0",
@@ -113,11 +126,7 @@ vos_file_parse_test_errors(void **state)
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* Test invalid vos paths with too long db path */
-	D_ALLOC(buf, DB_PATH_SIZE + 1);
-	if (buf == NULL) {
-		fail();
-		return;
-	}
+	D_ALLOC_ARRAY_CHECK(buf, DB_PATH_SIZE + 1);
 	memset(buf, 'a', DB_PATH_SIZE);
 	buf[0]            = '/';
 	buf[DB_PATH_SIZE] = '\0';
