@@ -213,12 +213,8 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 
 	rc = regexec(&preg, vos_path, MATCH_SIZE, match, 0);
 	if (rc == REG_NOMATCH) {
-		D_ERROR("Invalid VOS path: '%s'.\n"
-			"Expected format: [/path/to/db/]pool-uuid/(vos-N|rdb-pool)\n"
-			"  - /path/to/db/ : optional directory path\n"
-			"  - pool-uuid    : UUID (e.g., 123e4567-e89b-12d3-a456-426614174000)\n"
-			"  - vos-N        : 'vos-' followed by a number\n"
-			"  - rdb-pool     : literal string\n",
+		D_ERROR("Invalid VOS path: '%s'. Expected format: "
+			"[/path/to/db/]pool-uuid/(vos-N|rdb-pool)\n",
 			vos_path);
 		rc = -DER_INVAL;
 		goto out_preg;
