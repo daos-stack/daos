@@ -21,6 +21,10 @@ RPM_CHANGELOG="bullseye.changelog"
 PACKAGE_TYPE="dir"
 files=()
 TARGET_PATH="${SL_BULLSEYE_PREFIX}"
-list_files files "/opt/BullseyeCoverage/*"
-append_install_list "${files[@]}"
+
+readarray -t bullseye_dirs < <(find /opt/BullseyeCoverage -maxdepth 1 -type d)
+for dir in "${bullseye_dirs[@]}"; do
+    list_files files "/opt/BullseyeCoverage/${dir}/*"
+    append_install_list "${files[@]}"
+
 build_package "bullseye"
