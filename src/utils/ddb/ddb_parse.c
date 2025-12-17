@@ -106,7 +106,7 @@ parse_path(const char *vos_path, const regmatch_t *path_match, char *db_path)
 	memcpy(db_path, &vos_path[0], db_path_len);
 	db_path[db_path_len] = '\0';
 
-	return 0;
+	return DER_SUCCESS;
 }
 
 static int
@@ -161,7 +161,7 @@ parse_vos_file_name(const char *vos_path, const regmatch_t *vp_match, char *vos_
 	}
 	memcpy(vos_file_name, &vos_path[vf_match->rm_so], vos_file_name_len + 1);
 
-	return 0;
+	return DER_SUCCESS;
 }
 
 static int
@@ -192,7 +192,7 @@ parse_target_idx(const char *vos_path, const regmatch_t *vp_match, uint32_t *tar
 	}
 	*target_idx = idx;
 
-	return 0;
+	return DER_SUCCESS;
 }
 
 int
