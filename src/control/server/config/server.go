@@ -208,13 +208,13 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	if cfg.DisableHotplug != nil && *cfg.DisableHotplug {
 		engineCfg.Storage.EnableHotplug = false
 	}
-	if !cfg.AllowTHP {
-		for _, scmCfg := range engineCfg.Storage.Tiers.ScmConfigs() {
-			if scmCfg.Class == storage.ClassRam {
-				scmCfg.Scm.DisableHugepages = true
-			}
-		}
-	}
+	//	if !cfg.AllowTHP {
+	//		for _, scmCfg := range engineCfg.Storage.Tiers.ScmConfigs() {
+	//			if scmCfg.Class == storage.ClassRam {
+	//				scmCfg.Scm.DisableHugepages = true
+	//			}
+	//		}
+	//	}
 }
 
 // WithEngines sets the list of engine configurations.
