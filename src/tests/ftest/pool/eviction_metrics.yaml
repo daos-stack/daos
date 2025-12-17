@@ -37,5 +37,5 @@ mdtest:
   api: DFS
   branching_factor: 1
   depth: 20
-  write_bytes: 8192
-  read_bytes: 8192
+  write_bytes: 4096
+  read_bytes: 4096
