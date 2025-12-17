@@ -911,6 +911,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenHelperStreamCount := -1
 	seenScmCls := storage.ClassNone
 	seenScmClsIdx := -1
+	seenScmHuge := false
+	seenScmHugeIdx := -1
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
@@ -957,6 +959,14 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			}
 			seenScmCls = scmConf.Class
 			seenScmClsIdx = idx
+
+			if seenScmHugeIdx != -1 && scmConf.Scm.DisableHugepages != seenScmHuge {
+				log.Debugf("scm_hugepages_disabled entry %v in %d doesn't match %d",
+					scmConf.Scm.DisableHugepages, idx, seenScmHugeIdx)
+				return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+			}
+			seenScmHuge = scmConf.Scm.DisableHugepages
+			seenScmHugeIdx = idx
 		}
 
 		bdevs := engine.Storage.GetBdevs()

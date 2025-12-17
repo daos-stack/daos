@@ -204,6 +204,7 @@ const (
 	ServerConfigEnableHotplugDeprecated
 	ServerConfigBdevExcludeClash
 	ServerConfigHugepagesDisabledWithNrSet
+	ServerConfigScmHugeEnabled
 )
 
 // SPDK library bindings codes

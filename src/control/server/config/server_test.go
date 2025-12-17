@@ -279,7 +279,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/1").
 					WithStorageClass("ram").
-					WithScmDisableHugepages(),
+					WithScmHugepagesDisabled(),
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -307,7 +307,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/2").
-					WithStorageClass("ram"),
+					WithStorageClass("ram").
+					WithScmHugepagesDisabled(),
 				storage.NewTierConfig().
 					WithStorageClass("file").
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
@@ -441,7 +442,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos").
 					WithStorageClass("ram").
-					WithScmDisableHugepages(),
+					WithScmHugepagesDisabled(),
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0").
@@ -696,7 +697,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -709,7 +710,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/2").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
@@ -731,7 +732,7 @@ func TestServerConfig_Validation(t *testing.T) {
 							storage.NewTierConfig().
 								WithScmMountPoint("/mnt/daos/1").
 								WithStorageClass("ram").
-								WithScmDisableHugepages(),
+								WithScmHugepagesDisabled(),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -754,7 +755,7 @@ func TestServerConfig_Validation(t *testing.T) {
 							storage.NewTierConfig().
 								WithScmMountPoint("/mnt/daos/2").
 								WithStorageClass("ram").
-								WithScmDisableHugepages(),
+								WithScmHugepagesDisabled(),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
@@ -785,7 +786,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -806,7 +807,7 @@ func TestServerConfig_Validation(t *testing.T) {
 							storage.NewTierConfig().
 								WithScmMountPoint("/mnt/daos/1").
 								WithStorageClass("ram").
-								WithScmDisableHugepages(),
+								WithScmHugepagesDisabled(),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -836,7 +837,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/0").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:80:00.0").
@@ -848,7 +849,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0"),
@@ -869,7 +870,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -888,7 +889,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						storage.NewTierConfig().
 							WithScmMountPoint("/mnt/daos/1").
 							WithStorageClass("ram").
-							WithScmDisableHugepages(),
+							WithScmHugepagesDisabled(),
 						storage.NewTierConfig().
 							WithStorageClass("nvme").
 							WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -932,7 +933,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0"),
@@ -951,7 +952,7 @@ func TestServerConfig_Validation(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0").
@@ -1137,7 +1138,7 @@ func TestServerConfig_getMinNrHugepages(t *testing.T) {
 							storage.NewTierConfig().
 								WithScmMountPoint("/mnt/daos/1").
 								WithStorageClass("ram").
-								WithScmDisableHugepages(),
+								WithScmHugepagesDisabled(),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -1273,7 +1274,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 							storage.NewTierConfig().
 								WithScmMountPoint("/mnt/daos/1").
 								WithStorageClass("ram").
-								WithScmDisableHugepages(),
+								WithScmHugepagesDisabled(),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -1293,7 +1294,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 							storage.NewTierConfig().
 								WithScmMountPoint("/mnt/daos/1").
 								WithStorageClass("ram").
-								WithScmDisableHugepages(),
+								WithScmHugepagesDisabled(),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
 								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -1477,7 +1478,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 								storage.NewTierConfig().
 									WithScmMountPoint("/mnt/daos/1").
 									WithStorageClass("ram").
-									WithScmDisableHugepages(),
+									WithScmHugepagesDisabled(),
 								storage.NewTierConfig().
 									WithStorageClass("nvme").
 									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
@@ -1572,6 +1573,7 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 	if linesChanged == 0 {
 		t.Fatalf("no occurrences of %q in file %q", oldTxt, name)
 	}
+	t.Logf("replaceFile: %d lines changed", linesChanged)
 
 	// make sure the tmp file was successfully written to
 	if err := tmp.Close(); err != nil {
@@ -1732,25 +1734,29 @@ func TestServerConfig_Parsing(t *testing.T) {
 				return nil
 			},
 		},
-		"allow_thp enabled and scm hugepages enabled": {
+		"allow_thp true allows scm_hugepages_disabled false": {
 			inTxt:  "    scm_hugepages_disabled: true",
 			outTxt: "    scm_hugepages_disabled: false",
 			expCheck: func(c *Server) error {
-				if c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.DisableHugepages {
-					return errors.New("expecting scm hugepages to be enabled")
+				for _, e := range c.Engines {
+					if e.Storage.Tiers.ScmConfigs()[0].Scm.DisableHugepages {
+						return errors.New("expecting scm hugepages to be enabled")
+					}
 				}
 				return nil
 			},
 		},
-		"allow_thp disabled sets scm huge disabled": {
+		"allow_thp false enforces scm_hugepages_disabled true": {
 			inTxt:  "    scm_hugepages_disabled: true",
 			outTxt: "    scm_hugepages_disabled: false",
 			extraConfig: func(c *Server) *Server {
 				return c.WithAllowTHP(false)
 			},
 			expCheck: func(c *Server) error {
-				if !c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.DisableHugepages {
-					return errors.New("expecting scm hugepages to be disabled")
+				for _, e := range c.Engines {
+					if !e.Storage.Tiers.ScmConfigs()[0].Scm.DisableHugepages {
+						return errors.New("expecting scm hugepages to be disabled")
+					}
 				}
 				return nil
 			},
@@ -2013,12 +2019,24 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				),
 			expLog: "engine 1 has 2 but engine 0 has 1",
 		},
+		"mismatched scm_hugepages_disabled": {
+			configA: configA(),
+			configB: configB().
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("ram").
+						WithScmMountPoint("b").
+						WithScmHugepagesDisabled(),
+				),
+			expErr: FaultConfigScmDiffHugeEnabled(1, 0),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
 			conf := DefaultServer().
+				WithAllowTHP(true). // Enable differences between scm_hugepages_disabled.
 				WithFabricProvider("test").
 				WithMgmtSvcReplicas(
 					fmt.Sprintf("localhost:%d", build.DefaultControlPort)).
