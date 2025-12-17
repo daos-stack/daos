@@ -41,8 +41,6 @@ print_regx_error(int rc, regex_t *preg, const char *regex_buf)
 	D_FREE(buf);
 }
 
-#define POOL_UUID_LEN 36
-
 /**
  * Define the regex match group indices for the different parts of the VOS path. The regex is
  * defined in the parse_vos_file_parts function. The regex is used to parse a VOS path into its
@@ -131,15 +129,15 @@ parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
 static int
 parse_pool_uuid(const char *vos_path, const regmatch_t *vp_match, uuid_t pool_uuid)
 {
-	char pool_uuid_str[POOL_UUID_LEN + 1];
+	char pool_uuid_str[UUID_STR_LEN];
 	int  rc;
 
 	D_ASSERT(vp_match[MATCH_POOL_UUID_IDX].rm_so != (regoff_t)-1);
 	D_ASSERT(vp_match[MATCH_POOL_UUID_IDX].rm_eo - vp_match[MATCH_POOL_UUID_IDX].rm_so ==
-		 POOL_UUID_LEN);
+		 UUID_STR_LEN - 1);
 
-	memcpy(pool_uuid_str, &vos_path[vp_match[MATCH_POOL_UUID_IDX].rm_so], POOL_UUID_LEN);
-	pool_uuid_str[POOL_UUID_LEN] = '\0';
+	memcpy(pool_uuid_str, &vos_path[vp_match[MATCH_POOL_UUID_IDX].rm_so], UUID_STR_LEN - 1);
+	pool_uuid_str[UUID_STR_LEN - 1] = '\0';
 	rc                           = uuid_parse(pool_uuid_str, pool_uuid);
 	if (!SUCCESS(rc)) {
 		D_CRIT("Invalid Pool UUID '%s' in VOS path '%s'\n", pool_uuid_str, vos_path);
