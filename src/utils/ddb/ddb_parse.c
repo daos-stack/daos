@@ -33,6 +33,7 @@ print_regx_error(int rc, regex_t *preg, const char *regex_buf)
 	size_t buf_size;
 
 	buf_size = regerror(rc, preg, NULL, 0);
+	D_ASSERT(buf_size > 0);
 	D_ALLOC_ARRAY(buf, buf_size);
 	D_ASSERT(buf != NULL);
 	regerror(rc, preg, buf, buf_size);
