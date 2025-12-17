@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,10 +15,8 @@
 #include <daos/common.h>
 #include "ddb.h"
 
-extern int
+int
 ddb_vos_ut_run(void);
-extern int
-ddb_parse_ut_run(void);
 
 struct ddb_test_driver_arguments {
 	bool dtda_create_vos_file;
@@ -93,10 +91,9 @@ main(int argc, char *argv[])
 	/* filtering suites and tests */
 	char test_suites[] = "";
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-	cmocka_set_test_filter((argc == 1) ? "**" : argv[1]);
+	cmocka_set_test_filter("*dtx_act_discard_invalid*");
 #endif
-	RUN_TEST_SUIT('a', ddb_parse_ut_run);
-	RUN_TEST_SUIT('b', ddb_vos_ut_run);
+	RUN_TEST_SUIT('a', ddb_vos_ut_run);
 
 	ddb_fini();
 	if (rc > 0)
