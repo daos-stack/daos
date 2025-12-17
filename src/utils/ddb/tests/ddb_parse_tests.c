@@ -78,7 +78,7 @@ assert_parsed_fail(const char *str)
 	} while (0)
 
 static void
-vos_file_parse_test_errors(void **state)
+parse_vos_file_parts_test_errors(void **state)
 {
 	uuid_t                pool_uuid;
 	struct vos_file_parts parts = {0};
@@ -136,7 +136,7 @@ vos_file_parse_test_errors(void **state)
 }
 
 static void
-vos_file_parse_test_success(void **state)
+parse_vos_file_parts_test_success(void **state)
 {
 	uuid_t                expected_uuid;
 	struct vos_file_parts parts;
@@ -529,10 +529,14 @@ int
 ddb_parse_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
-	    TEST(vos_file_parse_test_errors), TEST(vos_file_parse_test_success),
-	    TEST(string_to_argv_tests),       TEST(parse_args_tests),
-	    TEST(parse_dtx_id_tests),         TEST(keys_are_parsed_correctly),
-	    TEST(pool_flags_tests),           TEST(date2cmt_time_tests),
+	    TEST(parse_vos_file_parts_test_errors),
+	    TEST(parse_vos_file_parts_test_success),
+	    TEST(string_to_argv_tests),
+	    TEST(parse_args_tests),
+	    TEST(parse_dtx_id_tests),
+	    TEST(keys_are_parsed_correctly),
+	    TEST(pool_flags_tests),
+	    TEST(date2cmt_time_tests),
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);
