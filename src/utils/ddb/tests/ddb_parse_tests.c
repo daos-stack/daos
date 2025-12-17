@@ -1,6 +1,6 @@
 /**
- * Copyright 2022-2024 Intel Corporation.
- * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -143,7 +143,7 @@ parse_vos_file_parts_test_success(void **state)
 
 	/* Test with root path */
 	rc = parse_vos_file_parts("/" MOCKED_POOL_UUID_STR "/vos-0", NULL, &parts);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("/", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-0", parts.vf_vos_file_name);
@@ -151,7 +151,7 @@ parse_vos_file_parts_test_success(void **state)
 
 	/* Test with absolute path */
 	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", NULL, &parts);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("/mnt/daos", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-0", parts.vf_vos_file_name);
@@ -160,7 +160,7 @@ parse_vos_file_parts_test_success(void **state)
 	/* Test with absolute path and multiple '/' path separators */
 	rc = parse_vos_file_parts("//////mnt////daos/////" MOCKED_POOL_UUID_STR "/////vos-0", NULL,
 				  &parts);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("//////mnt////daos", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-0", parts.vf_vos_file_name);
@@ -169,7 +169,7 @@ parse_vos_file_parts_test_success(void **state)
 	/* Test with relative path */
 	memset(&parts, 0, sizeof(parts));
 	rc = parse_vos_file_parts("mnt/daos/" MOCKED_POOL_UUID_STR "/vos-42", NULL, &parts);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("mnt/daos", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-42", parts.vf_vos_file_name);
@@ -177,7 +177,7 @@ parse_vos_file_parts_test_success(void **state)
 
 	/* Test with relative path */
 	rc = parse_vos_file_parts("./" MOCKED_POOL_UUID_STR "/rdb-pool", NULL, &parts);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(".", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("rdb-pool", parts.vf_vos_file_name);
@@ -186,7 +186,7 @@ parse_vos_file_parts_test_success(void **state)
 	/* Test with null db path */
 	memset(&parts, 1, sizeof(parts));
 	rc = parse_vos_file_parts(MOCKED_POOL_UUID_STR "/vos-909", NULL, &parts);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(".", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-909", parts.vf_vos_file_name);
@@ -195,7 +195,7 @@ parse_vos_file_parts_test_success(void **state)
 	/* Test with different db path */
 	rc =
 	    parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", "/my/db/path", &parts);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("/my/db/path", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-0", parts.vf_vos_file_name);
