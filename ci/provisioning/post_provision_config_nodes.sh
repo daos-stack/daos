@@ -133,10 +133,12 @@ function nvme_bind_all_in_order {
   echo
   # Bind all NVMe devices in order
   echo "Binding NVMe devices to nvme driver in sorted order..."
+  set +e # for debug purpose
   for addr in $(echo "$nvme_pcie_addrs" | sort); do
     echo "Binding $addr"
-    echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/bind > /dev/null 2>&1
+    echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/bind
   done
+  set -e
 }
 
 
@@ -213,7 +215,7 @@ function nvme_reserve_2_disk_per_numa {
 nvme_count=$(nvme_count_devices)
 if [ "$nvme_count" -gt 1 ]; then
   ((nvme_count--)) || true
-#  nvme_unmount_all $nvme_count
+  nvme_unmount_all $nvme_count
   nvme_bind_all_in_order
   nvme_recreate_namespace $nvme_count
   nvme_reserve_2_disk_per_numa $nvme_count
