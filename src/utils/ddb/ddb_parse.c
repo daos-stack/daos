@@ -231,7 +231,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 		rc = -DER_INVAL;
 		goto out_preg;
 	}
-	D_ASSERT(SUCCESS(rc));
+	D_ASSERT(rc == 0);
 
 	if (db_path != NULL && db_path[0] != '\0') {
 		size_t db_path_len;
