@@ -253,7 +253,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 	if (match[MATCH_RDB_POOL_IDX].rm_so != (regoff_t)-1) {
 		D_ASSERT(match[MATCH_VOS_FILE_NAME_IDX].rm_so == (regoff_t)-1);
 		memcpy(vos_file_parts->vf_vos_file_name, "rdb-pool", sizeof("rdb-pool"));
-		vos_file_parts->vf_target_idx = 0;
+		vos_file_parts->vf_target_idx = BIO_SYS_TGT_ID;
 		rc                            = -DER_SUCCESS;
 		goto out_preg;
 	}
