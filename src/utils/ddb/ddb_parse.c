@@ -26,21 +26,6 @@ safe_strcat(char *dst, const char *src, size_t dst_size)
 	strncat(dst, src, remaining_space);
 }
 
-static void
-print_regx_error(int rc, regex_t *preg, const char *regex_buf)
-{
-	char  *buf;
-	size_t buf_size;
-
-	buf_size = regerror(rc, preg, NULL, 0);
-	D_ASSERT(buf_size > 0);
-	D_ALLOC_ARRAY(buf, buf_size);
-	D_ASSERT(buf != NULL);
-	regerror(rc, preg, buf, buf_size);
-	D_CRIT("Invalid regex '%s': %s", regex_buf, buf);
-	D_FREE(buf);
-}
-
 /**
  * Define the regex match group indices for the different parts of the VOS path. The regex is
  * defined in the parse_vos_file_parts function. The regex is used to parse a VOS path into its
@@ -80,6 +65,30 @@ enum {
 	MATCH_SIZE              = 13
 
 };
+
+static void
+init_regex_vos_file_parts(regex_t *preg)
+{
+	const char *regex_buf = "^((/+)|((/*[^/]+(/+[^/]+)*)/+))?"
+				"([0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})/+"
+				"((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$";
+	char       *buf;
+	size_t      buf_size;
+	int         rc;
+
+	rc = regcomp(preg, regex_buf, REG_EXTENDED);
+	if (rc == 0)
+		return;
+
+	buf_size = regerror(rc, preg, NULL, 0);
+	D_ASSERT(buf_size > 0);
+	D_ALLOC_ARRAY(buf, buf_size);
+	D_ASSERT(buf != NULL);
+	regerror(rc, preg, buf, buf_size);
+	D_FATAL("Invalid regex '%s': %s", regex_buf, buf);
+	D_FREE(buf);
+	D_ASSERT(0);
+}
 
 static int
 parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
@@ -202,13 +211,10 @@ int
 parse_vos_file_parts(const char *vos_path, const char *db_path,
 		     struct vos_file_parts *vos_file_parts)
 {
-	const char *regex_buf = "^((/+)|((/*[^/]+(/+[^/]+)*)/+))?"
-				"([0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})/+"
-				"((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$";
-	regex_t     preg;
-	regmatch_t  match[MATCH_SIZE];
+	regex_t                preg;
+	regmatch_t             match[MATCH_SIZE];
 	struct vos_file_parts *vfp_tmp;
-	int         rc;
+	int                    rc;
 
 	D_ASSERT(vos_path != NULL && vos_file_parts != NULL);
 
@@ -218,12 +224,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 		goto out;
 	}
 
-	rc = regcomp(&preg, regex_buf, REG_EXTENDED);
-	if (rc != 0) {
-		print_regx_error(rc, &preg, regex_buf);
-		rc = -DER_INVAL;
-		goto out_vfp_tmp;
-	}
+	init_regex_vos_file_parts(&preg);
 
 	rc = regexec(&preg, vos_path, MATCH_SIZE, match, 0);
 	if (rc == REG_NOMATCH) {
