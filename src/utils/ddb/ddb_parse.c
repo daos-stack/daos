@@ -92,7 +92,7 @@ init_regex_vos_file_parts(regex_t *preg)
 static int
 parse_path(const char *vos_path, const regmatch_t *path_match, char *db_path)
 {
-	size_t            db_path_len;
+	size_t db_path_len;
 
 	D_ASSERT(path_match->rm_so == 0);
 	D_ASSERT(path_match->rm_so < path_match->rm_eo);
@@ -242,8 +242,8 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 	if (match[MATCH_RDB_POOL_IDX].rm_so != (regoff_t)-1) {
 		D_ASSERT(match[MATCH_VOS_FILE_NAME_IDX].rm_so == (regoff_t)-1);
 		memcpy(vfp_tmp->vf_vos_file_name, "rdb-pool", sizeof("rdb-pool"));
-		vfp_tmp->vf_target_idx        = BIO_SYS_TGT_ID;
-		rc                            = DER_SUCCESS;
+		vfp_tmp->vf_target_idx = BIO_SYS_TGT_ID;
+		rc                     = DER_SUCCESS;
 		goto out_vfp_tmp;
 	}
 
