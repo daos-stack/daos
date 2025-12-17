@@ -159,8 +159,7 @@ parse_vos_file_name(const char *vos_path, const regmatch_t *vp_match, char *vos_
 			vos_file_name_len, VOS_FILE_NAME_SIZE - 1);
 		return -DER_INVAL;
 	}
-	memcpy(vos_file_name, &vos_path[vf_match->rm_so], vos_file_name_len);
-	vos_file_name[vos_file_name_len] = '\0';
+	memcpy(vos_file_name, &vos_path[vf_match->rm_so], vos_file_name_len + 1);
 
 	return 0;
 }
