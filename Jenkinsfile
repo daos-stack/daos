@@ -809,7 +809,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost unit_test_post_args('unit_test_logs/')
+                            unitTestPost unit_test_post_args('unit_test')
                             job_status_update()
                         }
                     }
@@ -833,7 +833,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost unit_test_post_args('unit_test_bdev_logs/')
+                            unitTestPost unit_test_post_args('unit_test_bdev')
                             job_status_update()
                         }
                     }
