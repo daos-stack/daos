@@ -352,6 +352,17 @@ d_log_memory(const uint8_t *ptr, size_t size);
 		assert(0);						\
 	} while (0)
 
+#define D_ASSERTF_MEM(cond, ptr, size, fmt, ...)                                                   \
+	do {                                                                                       \
+		if (likely(cond))                                                                  \
+			break;                                                                     \
+		D_FATAL("Assertion '%s' failed: " fmt, #cond, ##__VA_ARGS__);                      \
+		if (d_alt_assert != NULL)                                                          \
+			d_alt_assert(0, #cond, __FILE__, __LINE__);                                \
+		d_log_memory((uint8_t *)ptr, size);                                                \
+		assert(0);                                                                         \
+	} while (0)
+
 /* Assert cond is true with message to report on failure */
 #define D_ASSERTF(cond, fmt, ...)						\
 	do {									\
