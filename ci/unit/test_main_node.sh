@@ -86,8 +86,8 @@ pip install --requirement requirements-utest.txt
 pip install /opt/daos/lib/daos/python/
 
 env | grep -i 'COV' || true
-ls -al /tmp/test.cov
-/opt/BullseyeCoverage/covdir
+ls -al /tmp/test.cov || true
+/opt/BullseyeCoverage/bin/covdir --file /tmp/test.cov || true
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
@@ -95,5 +95,5 @@ HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
 cp /tmp/test.cov "${test_log_dir}/" || true
 
 env | grep -i 'COV' || true
-ls -al /tmp/test.cov
-/opt/BullseyeCoverage/covdir
+ls -al /tmp/test.cov || true
+/opt/BullseyeCoverage/bin/covdir --file /tmp/test.cov || true
