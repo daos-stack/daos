@@ -9,6 +9,7 @@ pushd "${mydir}/../.." || exit 1
 source utils/rpms/package_info.sh
 popd
 
+: "${SL_BULLSEYE_PREFIX:=/opt/BullseyeCoverage}"
 bullseye_url="https://www.bullseye.com/download"
 bullseye_src="${bullseye_url}/BullseyeCoverage-${bullseye_version}-Linux-x64.tar.xz"
 bullseye_out="bullseye.tar.xz"
