@@ -365,6 +365,8 @@ class Test():
         if http_proxy:
             self.env['HTTPS_PROXY'] = http_proxy
 
+        print(f"Test: cmd={self.cmd}, COVFILE={self.env.get('COVFILE')}")
+
     def log_dir(self):
         """Return the log directory"""
         return os.path.join(self.path_info["LOG_DIR"], self.name)

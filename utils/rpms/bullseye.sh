@@ -32,7 +32,7 @@ for dir in "${dir_list[@]}"; do
         append_install_list "${files[@]}"
     done
 done
-TARGET_PATH="/tmp"
+TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos"
 list_files files "test.cov"
 append_install_list "${files[@]}"
 build_package "bullseye"

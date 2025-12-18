@@ -26,11 +26,12 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
-: "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
-if [ -d "${BULLSEYE_DIR}" ]; then
+echo "COVFN_DISABLED=${COVFN_DISABLED}"
+if [ "${COVFN_DISABLED:-false}" != "false" ]; then
+    : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
     export COVFILE="${SL_SRC_DIR}/test.cov"
     export PATH="${BULLSEYE_DIR}/bin:$PATH"
-    cp /tmp/test.cov "${COVFILE}"
+    cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
     ls -al "${COVFILE}"
 fi
 
@@ -87,19 +88,19 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
-env | grep -i 'COV' || true
+env | grep -i 'COVFILE' || true
 ls -al "${COVFILE}" || true
 /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
 
-env | grep -i 'COV' || true
+env | grep -i 'COVFILE' || true
 ls -al "${COVFILE}" || true
 /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 
-if [ -d "${BULLSEYE_DIR}" ]; then
-    ls -al /tmp/test.cov
+if [ "${COVFN_DISABLED:-false}" != "false" ]; then
+    ls -al /tmp/test.cov || true
     cp "${COVFILE}" /tmp/test.cov
-    ls -al /tmp/test.cov
+    ls -al /tmp/test.cov || true
 fi
