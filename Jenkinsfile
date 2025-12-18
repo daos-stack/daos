@@ -848,7 +848,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 180,
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,

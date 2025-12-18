@@ -27,14 +27,20 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
 
 case $STAGE_NAME in
     *Bullseye*)
-	test_log_dir="covc_test_logs"
-	;;
-    *memcheck*)
-	test_log_dir="unit_test_memcheck_logs"
-	;;
+      test_log_dir="covc_test_logs"
+      ;;
+    *bdev with memcheck*)
+      test_log_dir="unit_test_memcheck_bdev_logs"
+      ;;
+    *with memcheck*)
+      test_log_dir="unit_test_memcheck_logs"
+      ;;
+    *bdev*)
+      test_log_dir="unit_test_bdev_logs"
+      ;;
     *Unit*)
-	test_log_dir="unit_test_logs"
-	;;
+      test_log_dir="unit_test_logs"
+      ;;
 esac
 
 mkdir -p "$test_log_dir"
