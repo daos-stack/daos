@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -919,7 +920,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			},
 			expErr: errors.New("neither a valid"),
 		},
-		"led-manage; pci address not of a vmd backing device": {
+		"led-manage; pci address of a non-vmd device": {
 			req: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Led{
 					Led: &ctlpb.LedManageReq{
@@ -927,7 +928,29 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("neither a valid"),
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentDev(1),
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentDev(1)},
+						},
+					},
+				},
+			},
 		},
 		"led-manage; valid pci address of vmd backing device": {
 			req: &ctlpb.SmdManageReq{

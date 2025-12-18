@@ -726,6 +726,9 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 
 	vmd_on = strncmp(pci_dev_type, NVME_PCI_DEV_TYPE_VMD, strlen(NVME_PCI_DEV_TYPE_VMD)) == 0;
 
+	D_DEBUG(DB_MGMT, "led_device_action addr:%s, action:%s", addr_buf,
+		LED_ACTION_NAME(opts->action));
+
 	if (vmd_on) {
 		/* First check the current state of the VMD LED */
 		rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
@@ -746,14 +749,13 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 
 	switch (opts->action) {
 	case CTL__LED_ACTION__GET:
-		if (vmd_on) {
+		if (vmd_on)
 			/* Return early with current device state set */
 			opts->led_state = d_led_state;
-		} else {
-			D_DEBUG(DB_MGMT, "get-led-state not supported for non-VMD device (%s:%s)\n",
+		else
+			/* Leave state as NA */
+			D_ERROR("LED state GET not supported for non-VMD device (type %s:%s)\n",
 				pci_dev_type, addr_buf);
-			opts->status = -DER_NOTSUPPORTED;
-		}
 		return;
 	case CTL__LED_ACTION__SET:
 		break;
@@ -811,7 +813,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	 */
 	ras_notify_eventf(RAS_DEVICE_LED_SET, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL, NULL, NULL,
 			  NULL, NULL, NULL, NULL, NULL, "LED on device %s set to state %s\n",
-			  LED_STATE_NAME(opts->led_state), addr_buf);
+			  addr_buf, LED_STATE_NAME(opts->led_state));
 }
 
 static int
@@ -908,7 +910,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	case CTL__LED_ACTION__SET:
 		opts.action = action;
 		if (state == NULL) {
-			D_ERROR("LED state not set for SET action\n");
+			D_ERROR("LED state not set, missing state field\n");
 			return -DER_INVAL;
 		}
 		opts.led_state = *state;
