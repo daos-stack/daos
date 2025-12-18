@@ -12,14 +12,13 @@ popd
 bullseye_url="https://www.bullseye.com/download"
 bullseye_src="${bullseye_url}/BullseyeCoverage-${bullseye_version}-Linux-x64.tar.xz"
 bullseye_out="bullseye.tar.xz"
-# export SL_BULLSEYE_PREFIX="/opt/BullseyeCoverage"
 
-proxy=""
 if [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
-    proxy="--proxy ${DAOS_HTTPS_PROXY}"
+    curl --proxy "${DAOS_HTTPS_PROXY}" "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
+else
+    curl "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
 fi
 
-curl "${proxy}" "${bullseye_src}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullseye_out}"
 mkdir -p bullseye
 tar -C bullseye --strip-components=1 -xf "${bullseye_out}"
 pushd bullseye
