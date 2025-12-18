@@ -31,7 +31,7 @@ pool: !mux
   default:
     size: 1%
   md_on_ssd_p2:
-    size: 1%
+    size: 2%
     mem_ratio: 25
 
 ior: &ior_base
