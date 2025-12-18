@@ -25,7 +25,7 @@ container:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 
 expected_get_prop:
-  layout_type: "POSIX (1)"
+  layout_type: "POSIX"
   cksum: "crc16"
   cksum_size: 16384
   srv_cksum: "on"
