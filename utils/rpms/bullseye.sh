@@ -35,4 +35,10 @@ done
 TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos"
 list_files files "test.cov"
 append_install_list "${files[@]}"
+
+cat << EOF  > "${tmp}/post_install_bullseye"
+chmod 666 ${SL_BULLSEYE_PREFIX}/daos/test.cov
+EOF
+EXTRA_OPTS+=("--after-install" "${tmp}/post_install_bullseye")
+
 build_package "bullseye"

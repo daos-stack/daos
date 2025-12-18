@@ -29,11 +29,16 @@ log_prefix="unit_test"
 # : "${COVFN_DISABLED:=true}"
 # echo "COVFN_DISABLED=${COVFN_DISABLED}"
 # if [ "${COVFN_DISABLED:-false}" != "false" ]; then
+
+echo "[DEBUG] COVFN_DISABLED: ${COVFN_DISABLED:-}"
+echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
+echo "[DEBUG] COVFILE:        ${COVFILE:-}"
+
 : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
 export COVFILE="${SL_SRC_DIR}/test.cov"
 export PATH="${BULLSEYE_DIR}/bin:$PATH"
 cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
-chmod a+w "${COVFILE}"
+# chmod a+w "${COVFILE}"
 ls -al "${COVFILE}"
 # fi
 
@@ -101,7 +106,8 @@ env | grep -i 'COVFILE' || true
 ls -al "${COVFILE}" || true
 /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 
-if [ "${COVFN_DISABLED:-false}" != "false" ]; then
+# Copy bullseye file to expected location for stashing
+if [ -e "${COVFILE}" ]; then
     ls -al /tmp/test.cov || true
     cp "${COVFILE}" /tmp/test.cov
     ls -al /tmp/test.cov || true
