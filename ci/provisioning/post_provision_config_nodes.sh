@@ -241,8 +241,8 @@ nvme_count=$(nvme_count_devices)
 if [ "$nvme_count" -gt 1 ]; then
   ((nvme_count--)) || true
   #nvme_unmount_all $nvme_count
-  nvme_bind_all_in_order
-  nvme_recreate_namespace $nvme_count
+  #nvme_bind_all_in_order
+  #nvme_recreate_namespace $nvme_count
   #nvme_reserve_2_disk_per_numa $nvme_count
   #setup_spdk_nvme $SPDK_PCI_ALLOWED
 
@@ -326,7 +326,7 @@ function nvme_limit {
 
 # Force only the desired number of NVMe devices to be seen by DAOS tests
 # by mounting the extra ones.
-# nvme_limit
+nvme_limit
 
 systemctl enable nfs-server.service
 systemctl start nfs-server.service
