@@ -146,9 +146,15 @@ function nvme_bind_all_in_order {
   # Bind all NVMe devices in order
   echo "Binding NVMe devices to nvme driver in sorted order..."
   set +e # for debug purpose
+  count=1
   for addr in $(echo "$nvme_pcie_addrs" | sort); do
     echo "Binding $addr"
-    echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/bind
+    if((count <= 2)); then
+      echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/bind
+    else
+      (echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/bind) &
+    fi
+    ((count++))
   done
   set -e
 }
@@ -240,8 +246,8 @@ function setup_spdk_nvme {
 nvme_count=$(nvme_count_devices)
 if [ "$nvme_count" -gt 1 ]; then
   ((nvme_count--)) || true
-  #nvme_unmount_all $nvme_count
-  #nvme_bind_all_in_order
+  nvme_unmount_all $nvme_count
+  nvme_bind_all_in_order
   #nvme_recreate_namespace $nvme_count
   #nvme_reserve_2_disk_per_numa $nvme_count
   #setup_spdk_nvme $SPDK_PCI_ALLOWED
