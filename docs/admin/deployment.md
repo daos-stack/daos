@@ -811,6 +811,10 @@ it is then ready for the storage to be formatted.
 
 ### Transparent HugePage (THP) support
 
+DAOS relies on the use of hugepages in a dedicated manner and turning on transparent hugepages means
+the hugepage memory pool gets used in a model more like a cache. This can have adverse effects on
+DAOS behavior and may cause OOM and DMA buffer allocation failures at high load.
+
 By default the server will fail to start and exit when the server is started with THP enabled.
 
 ```bash
@@ -827,22 +831,7 @@ cat /sys/kernel/mm/transparent_hugepage/enabled
 ```
 
 If `allow_thp: true` parameter is set in server config file global section, the behavior will change
-and the server will start (with THP enabled. SCM tmpfs will be mounted with `huge=always` on `dmg
-storage format` unless `scm_hugepages_disabled: true` is set in the server config file storage section.
-
-```bash
-tmpfs on /mnt/daos0 type tmpfs (rw,noatime,size=79691776k,gid=983,inode64,huge=always,mpol=prefer:0)
-tmpfs on /mnt/daos1 type tmpfs (rw,noatime,size=79691776k,gid=983,inode64,huge=always,mpol=prefer:1)
-```
-
-If `allow_thp: false` or the parameter is unset the default behavior is that the server won’t start
-if THP is enabled in the operating system. SCM tmpfs will be mounted with `huge=never`on `dmg
-storage format`.
-
-```bash
-tmpfs on /mnt/daos1 type tmpfs (rw,noatime,size=79691776k,gid=983,inode64,mpol=prefer:1)
-tmpfs on /mnt/daos0 type tmpfs (rw,noatime,size=79691776k,gid=983,inode64,mpol=prefer:0)
-```
+and the server will start with THP enabled.
 
 
 ## DAOS Server Remote Access
