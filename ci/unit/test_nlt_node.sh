@@ -55,11 +55,15 @@ fi
 echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
 echo "[DEBUG] COVFILE:        ${COVFILE:-}"
 
-ls -al "${COVFILE}" || true
-/opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+if [ -e "${COVFILE}" ]; then
+    echo "Code coverage before running unit tests:"
+    /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+fi
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py --max-log-size 1950MiB \
     --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
 
-ls -al "${COVFILE}" || true
-/opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+if [ -e "${COVFILE}" ]; then
+    echo "Code coverage after running unit tests:"
+    /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+fi

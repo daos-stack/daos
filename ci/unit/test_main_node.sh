@@ -26,11 +26,6 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
-
-echo "[DEBUG] COVFN_DISABLED: ${COVFN_DISABLED:-}"
-echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
-echo "[DEBUG] COVFILE:        ${COVFILE:-}"
-
 : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
 if [ -d "${BULLSEYE_DIR}" ]; then
     export COVFILE="${SL_SRC_DIR}/test.cov"
@@ -38,9 +33,6 @@ if [ -d "${BULLSEYE_DIR}" ]; then
     cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
     ls -al "${COVFILE}"
 fi
-
-echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
-echo "[DEBUG] COVFILE:        ${COVFILE:-}"
 
 cd "${SL_SRC_DIR}"
 mkdir new_dir
@@ -95,20 +87,19 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
-env | grep -i 'COVFILE' || true
-ls -al "${COVFILE}" || true
-/opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+if [ -e "${COVFILE}" ]; then
+    echo "Code coverage before running unit tests:"
+    /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+fi
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
 
-env | grep -i 'COVFILE' || true
-ls -al "${COVFILE}" || true
-/opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
-
-# Copy bullseye file to expected location for stashing
 if [ -e "${COVFILE}" ]; then
-    ls -al /tmp/test.cov || true
+    echo "Code coverage after running unit tests:"
+    /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+
+    # Copy bullseye file to expected location for stashing
     cp "${COVFILE}" /tmp/test.cov
     ls -al /tmp/test.cov || true
 fi

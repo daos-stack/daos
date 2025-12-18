@@ -656,9 +656,6 @@ def main():
 
     os.makedirs(os.path.join(path_info["DAOS_BASE"], "test_results"), exist_ok=True)
 
-    print(f"[DEBUG] COVFILE:   {os.environ.get('COVFILE')}")
-    print(f"[DEBUG] DAOS_BASE: {path_info['DAOS_BASE']}")
-
     aio = None
 
     if args.sudo in ['yes', 'only']:
