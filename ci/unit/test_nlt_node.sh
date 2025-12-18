@@ -41,5 +41,26 @@ pip install /opt/daos/lib/daos/python/
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
+echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
+echo "[DEBUG] COVFILE:        ${COVFILE:-}"
+
+: "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
+if [ -d "${BULLSEYE_DIR}"]; then
+    export COVFILE="${SL_SRC_DIR}/test.cov"
+    export PATH="${BULLSEYE_DIR}/bin:$PATH"
+    cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
+    ls -al "${COVFILE}"
+fi
+
+echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
+echo "[DEBUG] COVFILE:        ${COVFILE:-}"
+
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py --max-log-size 1950MiB \
     --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
+
+# Copy bullseye file to expected location for stashing
+if [ -e "${COVFILE}" ]; then
+    ls -al /tmp/test.cov || true
+    cp "${COVFILE}" /tmp/test.cov
+    ls -al /tmp/test.cov || true
+fi

@@ -14,7 +14,6 @@ import json
 # pylint: disable=broad-except
 import os
 import re
-import shutil
 import subprocess  # nosec
 import sys
 import tempfile
@@ -609,25 +608,6 @@ def run_suites(args, suites, results, aio):
         results.merge(suite.run_suite(args, aio))
 
 
-def move_codecov(base):
-    """Move any code coverage results"""
-    run_cmd(["find", "/", "-name", "test.cov"])
-    try:
-        target = "/tmp/test.cov"
-        if os.path.isfile(target):
-            os.unlink(target)
-        src = os.path.join(base, "test.cov")
-        if os.path.isfile(src):
-            print(f"Moving {src} to {target}")
-            shutil.move(src, target)
-    except Exception:
-        print("Exception trying to copy test.cov")
-        traceback.print_exc()
-    finally:
-        print(f"move_codecov({base})")
-        run_cmd(["find", "/", "-name", "test.cov"])
-
-
 def get_args():
     """Parse the arguments"""
     parser = argparse.ArgumentParser(description='Run DAOS unit tests')
@@ -712,8 +692,6 @@ def main():
     results.print_results()
 
     results.create_junit()
-
-    # move_codecov(path_info["DAOS_BASE"])
 
     if args.no_fail_on_error:
         return

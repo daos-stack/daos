@@ -26,21 +26,21 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
-# : "${COVFN_DISABLED:=true}"
-# echo "COVFN_DISABLED=${COVFN_DISABLED}"
-# if [ "${COVFN_DISABLED:-false}" != "false" ]; then
 
 echo "[DEBUG] COVFN_DISABLED: ${COVFN_DISABLED:-}"
 echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
 echo "[DEBUG] COVFILE:        ${COVFILE:-}"
 
 : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
-export COVFILE="${SL_SRC_DIR}/test.cov"
-export PATH="${BULLSEYE_DIR}/bin:$PATH"
-cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
-# chmod a+w "${COVFILE}"
-ls -al "${COVFILE}"
-# fi
+if [ -d "${BULLSEYE_DIR}"]; then
+    export COVFILE="${SL_SRC_DIR}/test.cov"
+    export PATH="${BULLSEYE_DIR}/bin:$PATH"
+    cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
+    ls -al "${COVFILE}"
+fi
+
+echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
+echo "[DEBUG] COVFILE:        ${COVFILE:-}"
 
 cd "${SL_SRC_DIR}"
 mkdir new_dir

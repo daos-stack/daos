@@ -15,7 +15,7 @@ bullseye_out="bullseye.tar.xz"
 # export SL_BULLSEYE_PREFIX="/opt/BullseyeCoverage"
 
 proxy=""
-if [ -z "${DAOS_HTTPS_PROXY:-}" ]; then
+if [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
     proxy="--proxy ${DAOS_HTTPS_PROXY}"
 fi
 
