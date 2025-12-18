@@ -216,24 +216,17 @@ function nvme_reserve_2_disk_per_numa {
       fi
     fi
     sudo mkfs.ext4 -F "${dev}"
-#    if [ ! -d "${mnt}" ]; then
-#      sudo mkdir -p "${mnt}"
-#    fi
-#    sudo mount "${dev}" "${mnt}"
+    if [ ! -d "${mnt}" ]; then
+      sudo mkdir -p "${mnt}"
+    fi
+    sudo mount "${dev}" "${mnt}"
   done
   SPDK_PCI_ALLOWED=${SPDK_PCI_ALLOWED% }  # remove trailing space
 }
 
-nvme_count=$(nvme_count_devices)
-if [ "$nvme_count" -gt 1 ]; then
-  ((nvme_count--)) || true
-  nvme_unmount_all $nvme_count
-  nvme_bind_all_in_order
-  nvme_recreate_namespace $nvme_count
-  nvme_reserve_2_disk_per_numa $nvme_count
-
+function setup_spdk_nvme {
   if [ -d /usr/share/daos/spdk/scripts/ ] && [ -f /usr/share/daos/spdk/scripts/setup.sh ]; then
-    export PCI_ALLOWED="$SPDK_PCI_ALLOWED"
+    export PCI_ALLOWED="$1"
     pushd /usr/share/daos/spdk/scripts/
     set +e
     sudo ./setup.sh
@@ -242,6 +235,17 @@ if [ "$nvme_count" -gt 1 ]; then
   else
     echo "Required spdk/scripts/setup.sh not found!"
   fi
+}
+
+nvme_count=$(nvme_count_devices)
+if [ "$nvme_count" -gt 1 ]; then
+  ((nvme_count--)) || true
+  #nvme_unmount_all $nvme_count
+  nvme_bind_all_in_order
+  nvme_recreate_namespace $nvme_count
+  #nvme_reserve_2_disk_per_numa $nvme_count
+  #setup_spdk_nvme $SPDK_PCI_ALLOWED
+
 fi
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
