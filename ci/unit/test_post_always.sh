@@ -26,20 +26,23 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
    $(cat "$mydir/test_post_always_node.sh")"
 
 case $STAGE_NAME in
-    *Bullseye*)
-      test_log_dir="covc_test_logs"
+    "Unit Test on "*)
+      test_log_dir="unit_test_logs"
       ;;
-    *bdev with memcheck*)
-      test_log_dir="unit_test_memcheck_bdev_logs"
-      ;;
-    *with memcheck*)
-      test_log_dir="unit_test_memcheck_logs"
-      ;;
-    *bdev*)
+    "Unit Test bdev on "*)
       test_log_dir="unit_test_bdev_logs"
       ;;
-    *Unit*)
-      test_log_dir="unit_test_logs"
+    "NLT on "*)
+      test_log_dir="nlt_logs"
+      ;;
+    "Unit Test with memcheck on "*)
+      test_log_dir="unit_test_memcheck_logs"
+      ;;
+    "Unit Test bdev with memcheck on "*)
+      test_log_dir="unit_test_memcheck_bdev_logs"
+      ;;
+    *)
+      test_log_dir="unkown_test_logs"
       ;;
 esac
 
