@@ -5,7 +5,7 @@ root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
 if [ -z "${SL_ISAL_CRYPTO_PREFIX:-}" ]; then
-  echo "isa-l_crypto must be installed or never built in ${SL_ISAL_CRYPTO_PREFIX:-}"
+  echo "isa-l_crypto must be installed or never built"
   exit 0
 fi
 

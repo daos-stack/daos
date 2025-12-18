@@ -5,7 +5,7 @@ root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
 if [ -z "${SL_PMDK_PREFIX:-}" ]; then
-  echo "pmdk must be installed or never built in ${SL_PMDK_PREFIX:-}"
+  echo "pmdk must be installed or never built"
   exit 0
 fi
 

@@ -365,8 +365,6 @@ class Test():
         if http_proxy:
             self.env['HTTPS_PROXY'] = http_proxy
 
-        print(f"Test: cmd={self.cmd}, COVFILE={self.env.get('COVFILE')}")
-
     def log_dir(self):
         """Return the log directory"""
         return os.path.join(self.path_info["LOG_DIR"], self.name)
@@ -678,8 +676,8 @@ def main():
 
     os.makedirs(os.path.join(path_info["DAOS_BASE"], "test_results"), exist_ok=True)
 
-    print(f"COVFILE:   {os.environ.get('COVFILE')}")
-    print(f"DAOS_BASE: {path_info['DAOS_BASE']}")
+    print(f"[DEBUG] COVFILE:   {os.environ.get('COVFILE')}")
+    print(f"[DEBUG] DAOS_BASE: {path_info['DAOS_BASE']}")
 
     aio = None
 

@@ -245,10 +245,25 @@ String code_coverage_scons_args() {
 
 Map unit_test_post_args(String name) {
     // Get the arguments for unitTestPost
-    Map args = [artifacts: "${name}_logs/"]
+    Map args = [artifacts: ["${name}_logs/"]]
     if (code_coverage_enabled()) {
-        args['artifacts'] += "covc_${name}_logs/"
-        args['artifacts'] += 'covc_vm_test/**'
+        // args['artifacts'].add("covc_${name}_logs/")
+        // args['artifacts'].add('covc_vm_test/**')
+        args['ignore_failure'] = true
+        args['code_coverage'] = true
+    }
+    return args
+}
+
+Map nlt_post_args() {
+    Map args = [
+        artifacts: ['nlt_logs/'],
+        testResults: 'nlt-junit.xml',
+        always_script: 'ci/unit/test_nlt_post.sh',
+        valgrind_stash: 'el8-gcc-nlt-memcheck'
+    ]
+    if (code_coverage_enabled()) {
+        // args['artifacts'].add('covc_nlt_logs/')
         args['ignore_failure'] = true
         args['code_coverage'] = true
     }
@@ -811,12 +826,14 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
+                                     ignore_failure: code_coverage_enabled(),
+                                     code_coverage: code_coverage_enabled(),
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_bdev_logs/']
+                            unitTestPost unit_test_post_args('unit_test_bdev_logs/')
                             job_status_update()
                         }
                     }
@@ -836,6 +853,8 @@ pipeline {
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
+                                     ignore_failure: code_coverage_enabled(),
+                                     code_coverage: code_coverage_enabled(),
                                      inst_rpms: unitPackages()))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
@@ -844,10 +863,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
+                            unitTestPost nlt_post_args()
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -864,7 +880,7 @@ pipeline {
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -889,7 +905,7 @@ pipeline {
                 stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
