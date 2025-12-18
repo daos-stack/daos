@@ -2,7 +2,6 @@ name: daos_server
 port: 10001
 provider: ofi+tcp
 disable_hugepages: true
-allow_thp: true
 control_log_mask: DEBUG
 mgmt_svc_replicas: ['localhost:10001']
 engines:
