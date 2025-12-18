@@ -1846,7 +1846,7 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 			  (int)(tls->mpt_rmg - &migr_eng_res.er_rmgs[0]));
 	}
 
-	res = &rmg->rmg_resources[res_type];
+	res     = &rmg->rmg_resources[res_type];
 	is_hulk = migr_res_is_hulk(res_type, units);
 	while (1) {
 		if (tls->mpt_fini) {
