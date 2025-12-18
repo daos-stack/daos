@@ -92,7 +92,8 @@ struct migr_res_manager {
 
 struct migr_engine_res {
 	/* total ULTs per target, it a tunable which can be set by admin */
-	unsigned int             er_ults;
+	unsigned int             er_max_ults;
+	/* dss_tgt_nr resource managers */
 	struct migr_res_manager *er_rmgs;
 };
 
@@ -1888,8 +1889,11 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 	else
 		tls->mpt_inflight_size += units;
 
-	D_DEBUG(DB_REBUILD, DF_RB " migrate %s: hold units=%lu, used=%lu, limit=%lu, waited=%d\n",
-		DP_RB_MPT(tls), res->res_name, units, res->res_units, res->res_limit, waited);
+	D_DEBUG(DB_REBUILD,
+		"res=%s, hold=%lu, used=%lu, limit=%lu, waited=%d)\n" DF_RB
+		" obj_ults=%u, key_ults=%u, inf_data=" DF_U64 ")\n",
+		res->res_name, units, res->res_units, res->res_limit, waited, DP_RB_MPT(tls),
+		tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt, tls->mpt_inflight_size);
 out:
 	return rc;
 }
@@ -1905,8 +1909,11 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 
 	res = &rmg->rmg_resources[res_type];
 
-	D_DEBUG(DB_REBUILD, DF_RB "migrate %s: release units=%lu, used=%lu, limit=%lu\n",
-		DP_RB_MPT(tls), res->res_name, units, res->res_units, res->res_limit);
+	D_DEBUG(DB_REBUILD,
+		"%s: release=%lu, used=%lu, limit=%lu\n" DF_RB
+		" obj_ults=%u, key_ults=%u, inf_data=" DF_U64 ")\n",
+		res->res_name, units, res->res_units, res->res_limit, DP_RB_MPT(tls),
+		tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt, tls->mpt_inflight_size);
 
 	if (res_type == MIGR_OBJ) {
 		D_ASSERT(tls->mpt_tgt_obj_ult_cnt > 0);
@@ -4466,7 +4473,7 @@ obj_migrate_init(void)
 		ults = MIGR_TGT_ULTS_MAX;
 
 	memset(&migr_eng_res, 0, sizeof(migr_eng_res));
-	migr_eng_res.er_ults = ults;
+	migr_eng_res.er_max_ults = ults;
 
 	D_ASSERT(dss_tgt_nr > 0);
 	D_ALLOC(migr_eng_res.er_rmgs, sizeof(struct migr_res_manager) * dss_tgt_nr);

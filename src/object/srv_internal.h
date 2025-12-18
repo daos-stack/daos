@@ -77,16 +77,13 @@ struct migrate_pool_tls {
 	 */
 	uint32_t                 mpt_tgt_obj_ult_cnt;
 	uint32_t                 mpt_tgt_dkey_ult_cnt;
+	/* The current in-flight data size */
 	uint64_t                 mpt_inflight_size;
 
 	struct migr_res_manager *mpt_rmg;
 
 	/* reference count for the structure */
-	uint64_t		mpt_refcount;
-
-	/* The current in-flight iod, mainly used for controlling
-	 * rebuild in-flight rate to avoid the DMA buffer overflow.
-	 */
+	uint64_t                 mpt_refcount;
 	uint32_t		mpt_opc;
 
 	/* The new layout version for upgrade job */
