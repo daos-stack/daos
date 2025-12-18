@@ -441,8 +441,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos").
-					WithStorageClass("ram").
-					WithScmHugepagesDisabled(),
+					WithStorageClass("ram"),
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0").
@@ -1741,21 +1740,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 				for _, e := range c.Engines {
 					if e.Storage.Tiers.ScmConfigs()[0].Scm.DisableHugepages {
 						return errors.New("expecting scm hugepages to be enabled")
-					}
-				}
-				return nil
-			},
-		},
-		"allow_thp false enforces scm_hugepages_disabled true": {
-			inTxt:  "    scm_hugepages_disabled: true",
-			outTxt: "    scm_hugepages_disabled: false",
-			extraConfig: func(c *Server) *Server {
-				return c.WithAllowTHP(false)
-			},
-			expCheck: func(c *Server) error {
-				for _, e := range c.Engines {
-					if !e.Storage.Tiers.ScmConfigs()[0].Scm.DisableHugepages {
-						return errors.New("expecting scm hugepages to be disabled")
 					}
 				}
 				return nil
