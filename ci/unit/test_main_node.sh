@@ -30,8 +30,7 @@ log_prefix="unit_test"
 if [ -d "${BULLSEYE_DIR}" ]; then
     export COVFILE="${SL_SRC_DIR}/test.cov"
     export PATH="${BULLSEYE_DIR}/bin:$PATH"
-    # cp /tmp/test.cov "${COVFILE}"
-    ln -s /tmp/test.cov "${COVFILE}"
+    cp /tmp/test.cov "${COVFILE}"
     ls -al "${COVFILE}"
 fi
 
@@ -95,8 +94,12 @@ ls -al "${COVFILE}" || true
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
 
-cp /tmp/test.cov "${test_log_dir}/" || true
-
 env | grep -i 'COV' || true
 ls -al "${COVFILE}" || true
 /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+
+if [ -d "${BULLSEYE_DIR}" ]; then
+    ls -al /tmp/test.cov
+    cp "${COVFILE}" /tmp/test.cov
+    ls -al /tmp/test.cov
+fi
