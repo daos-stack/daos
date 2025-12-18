@@ -812,7 +812,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	 * control mechanisms outside of SPDK and/or DAOS.
 	 */
 	ras_notify_eventf(RAS_DEVICE_LED_SET, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL, NULL, NULL,
-			  NULL, NULL, NULL, NULL, NULL, "LED on device %s set to state %s\n",
+			  NULL, NULL, NULL, NULL, NULL, "LED on device %s set to state %s",
 			  addr_buf, LED_STATE_NAME(opts->led_state));
 }
 
