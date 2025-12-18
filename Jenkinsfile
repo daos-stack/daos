@@ -1051,7 +1051,7 @@ pipeline {
                 stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {
