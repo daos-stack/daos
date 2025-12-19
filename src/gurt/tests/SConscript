@@ -10,7 +10,7 @@ import os
 def build_d_log_memory_ut(utenv):
     """Build d_log_memory_ut"""
     utenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_vlog'])
-    libs = ['cmocka', 'uuid', 'yaml', 'm']
+    libs = ['cmocka', 'uuid', 'yaml', 'm', 'pthread']
     srcs = [
         'd_log_memory_ut.c',
         '../debug.c',
