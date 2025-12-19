@@ -123,7 +123,8 @@ function nvme_recreate_namespace {
 
   local NVME_MAX=${1:-$NVME_MAX_GLOBAL}
   local NVME_MIN=${2:-0}
-  for i in $(seq $NVME_MIN $NVME_MAX); do
+  local i=${1:-0}
+  #for i in $(seq $NVME_MIN $NVME_MAX); do
     dev="/dev/nvme${i}"
     dev_ns="${dev}n1"
     echo "Recreating namespace on $dev ..."
@@ -134,9 +135,10 @@ function nvme_recreate_namespace {
     # selects LBA format index 0 (512BK) and no secure erase, just format.
     nvme format $dev_ns --lbaf=0 --ses=0 --force
     nvme reset $dev
-    nvme id-ns $dev_ns |grep -E "lbaf|nvmcap|nsze|ncap|nuse"
-  done
+    #nvme id-ns $dev_ns |grep -E "lbaf|nvmcap|nsze|ncap|nuse" || true
+#  done
   set -e
+  echo "Done done"
 }
 
 function nvme_bind_all_in_order {
@@ -177,7 +179,8 @@ function nvme_bind_all_in_order {
   # Bind all NVMe devices in order
   echo "Binding NVMe devices to nvme driver in sorted order..."
   set +e # for debug purpose
-  count=0
+  local count=0
+  local adr
   for addr in $(echo "$nvme_pcie_addrs" | sort); do
     echo "Binding $addr"
     if((count < 2)); then
