@@ -1192,7 +1192,7 @@ class DmgCommand(DmgCommandBase):
         #     {
         #         "addr": "10.8.1.11:10001",
         #         "state": "joined",
-        #         "fault_domain": "/wolf-11.wolf.hpdd.intel.com",
+        #         "fault_domain": "/wolf-11.wolf.example.com",
         #         "rank": 0,
         #         "uuid": "e7f2cb06-a111-4d55-a6a5-b494b70d62ab",
         #         "fabric_uri": "ofi+sockets://192.168.100.11:31416",
@@ -1202,7 +1202,7 @@ class DmgCommand(DmgCommandBase):
         #     {
         #         "addr": "10.8.1.74:10001",
         #         "state": "excluded",
-        #         "fault_domain": "/wolf-74.wolf.hpdd.intel.com",
+        #         "fault_domain": "/wolf-74.wolf.example.com",
         #         "rank": 1,
         #         "uuid": "db36ab28-fdb0-4822-97e6-89547393ed03",
         #         "fabric_uri": "ofi+sockets://192.168.100.74:31416",

@@ -564,10 +564,10 @@ daos_engine:1 Using NUMA core allocation algorithm
 SCM @ /mnt/daos0: 91 GB Total/91 GB Avail
 Starting I/O Engine instance 0: /home/user/projects/daos/install/bin/daos_engine
 daos_engine:0 Using NUMA core allocation algorithm
-MS leader running on wolf-226.wolf.hpdd.intel.com
-daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+MS leader running on wolf-226.wolf.example.com
+daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.example.com.
 Using NUMA node: 1
-daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.example.com.
 Using NUMA node: 0
 ```
 
@@ -1544,7 +1544,7 @@ Upon successful format, DAOS Control Servers will start DAOS I/O engines that
 have been specified in the server config file.
 
 Successful start-up is indicated by the following on stdout:
-`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
+`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.wolf.example.com.`
 
 ### SCM Format
 
