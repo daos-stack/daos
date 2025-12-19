@@ -17,5 +17,5 @@ if [[ "${build_type}" =~ deps|all ]]; then
   fi
 fi
 if [[ "${build_type}" =~ daos|all ]]; then
-  utils/rpms/daos.sh
+  utils/rpms/daos.sh "${code_coverage}"
 fi

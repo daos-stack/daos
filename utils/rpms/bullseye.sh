@@ -8,6 +8,8 @@ if [ ! -d "${SL_BULLSEYE_PREFIX}" ]; then
   exit 0
 fi
 
+find . -name bullseye.tar.xz
+
 VERSION="${bullseye_version}"
 RELEASE="${bullseye_release}"
 LICENSE="Proprietary"
