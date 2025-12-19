@@ -15,6 +15,7 @@ fi
 export COVFILE="$WORKSPACE/test.cov"
 export PATH="/opt/BullseyeCoverage/bin:$PATH"
 
+cp /opt/BullseyeCoverage/daos/test.cov "${COVFILE}"
 readarray -t cov_files < <(find "${WORKSPACE}" -name test.cov)
 if [ ${#cov_files[@]} -gt 0 ]; then
   covmerge --no-banner --file "${COVFILE}" "${cov_files[@]}"

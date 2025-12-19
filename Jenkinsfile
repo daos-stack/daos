@@ -229,10 +229,12 @@ Boolean code_coverage_enabled() {
 
 String code_coverage_build_args() {
     // Get additional build args for code coverage, if enabled
-    if (!code_coverage_enabled()) {
+    Boolean code_coverage = code_coverage_enabled()
+    if (!code_coverage) {
         return ''
     }
-    return " --build-arg COMPILER=covc --build-arg BULLSEYE_KEY=${env.BULLSEYE_KEY}"
+    return " --build-arg COMPILER=covc --build-arg CODE_COVERAGE=${code_coverage}"
+    // return " --build-arg COMPILER=covc --build-arg BULLSEYE_KEY=${env.BULLSEYE_KEY} --build-arg CODE_COVERAGE=${code_coverage}"
 }
 
 String code_coverage_scons_args() {
@@ -241,6 +243,14 @@ String code_coverage_scons_args() {
         return ''
     }
     return ' COMPILER=covc'
+}
+
+String add_daos_pkgs() {
+    // Get the additional daos package names to install in functional test stages
+    if (code_coverage_enabled()) {
+        return "tests-internal,-code-coverage"
+    }
+    return "tests-internal"
 }
 
 Map unit_test_post_args(String name) {
@@ -937,13 +947,13 @@ pipeline {
                 beforeAgent true
                 //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && !code_coverage_enabled() }
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -974,7 +984,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                    inst_rpms: functionalPackages(1, next_version(), add_daos_pkgs()),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -987,7 +997,7 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label vm9_label('EL9')
@@ -1009,7 +1019,7 @@ pipeline {
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1054,7 +1064,7 @@ pipeline {
                 stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_enabled() }
+                        expression { !skipStage() && !code_coverage_enabled() && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {
@@ -1110,7 +1120,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1130,7 +1140,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1328,7 +1338,12 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: false,
+                                                                parallel_build: true) +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                code_coverage_build_args()
                         }
                     }
                     steps {

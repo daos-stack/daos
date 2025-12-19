@@ -30,7 +30,7 @@ if ls -1 ./*.rpm; then
   cp ./*.rpm /home/daos/rpms/deps
   rm -f ./*.rpm
 fi
-utils/rpms/build_packages.sh daos
+utils/rpms/build_packages.sh daos "${CODE_COVERAGE}"
 mkdir -p /home/daos/rpms/daos
 cp ./*.rpm /home/daos/rpms/daos
 popd || exit 1

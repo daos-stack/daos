@@ -110,6 +110,7 @@ ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_TARGET_TYPE=release
 ARG DAOS_PACKAGES_BUILD=yes
+ARG CODE_COVERAGE=false
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -135,7 +136,7 @@ COPY --chown=daos_server:daos_server utils/sl utils/sl
 # Build third party RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
     export DISTRO="el8" &&                                                  \
-	utils/rpms/build_packages.sh deps &&                                    \
+	utils/rpms/build_packages.sh deps "$CODE_COVERAGE" &&                   \
 	mkdir -p /home/daos/rpms &&                                             \
 	mv *.rpm /home/daos/rpms;                                               \
     }
@@ -181,7 +182,7 @@ COPY --chown=daos_server:daos_server utils utils
 
 # Build DAOS RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
-	utils/rpms/build_packages.sh daos &&                               \
+	utils/rpms/build_packages.sh daos "$CODE_COVERAGE" &&              \
 	mkdir -p /home/daos/rpms &&                                        \
 	cp *.rpm /home/daos/rpms;                                          \
     }
