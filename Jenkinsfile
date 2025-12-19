@@ -669,7 +669,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9') {
+                stage('Build on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !params.CI_el9_NOBUILD && !skipStage() }
@@ -683,7 +683,7 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.2 '
+                                                ' --build-arg POINT_RELEASE=.6 '
 
                         }
                     }
@@ -709,7 +709,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5') {
+                stage('Build on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
@@ -746,7 +746,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.6 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
