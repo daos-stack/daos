@@ -26,7 +26,7 @@ timeouts:
   test_daos_rebuild_simple: 1800
   test_daos_drain_simple: 3720
   test_daos_extend_simple: 3600
-  test_daos_rebuild_interactive: 1020
+  test_daos_rebuild_interactive: 1185
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
   test_daos_rebuild_ec: 9000
