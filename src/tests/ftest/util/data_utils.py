@@ -201,7 +201,7 @@ def assert_dict_subset(subset, full):
                 actual_value = actual[key]
             except KeyError as error:
                 raise AssertionError(
-                    f'Expected key {_format_keys(cur_keys)}') from error
+                    f'Missing expected key {_format_keys(cur_keys)}') from error
 
             if callable(expected_value):
                 # Use custom callable to verify value
