@@ -1214,7 +1214,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() && !code_coverage_enabled() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
             }
             steps {
                 script {

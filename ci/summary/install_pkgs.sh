@@ -27,7 +27,7 @@ bullshtml_vers=1.0.5
 bullshtml_src=https://code.google.com/archive/p/bullshtml/downloads
 bullshtml_tar="bullshtml_${bullshtml_vers}.tar.gz"
 if [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
-    curl --proxy "${DAOS_HTTPS_PROXY}" "${bullshtml_src}/${bullshtml_tar}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullshtml_out}"
+    curl --proxy "${DAOS_HTTPS_PROXY}" "${bullshtml_src}/${bullshtml_tar}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullshtml_tar}"
 else
     curl "${bullshtml_src}/${bullshtml_tar}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullshtml_tar}"
 fi

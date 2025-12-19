@@ -1,13 +1,16 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import glob
 import os
+import shutil
 
 # pylint: disable=import-error,no-name-in-module
 from util.collection_utils import archive_files
-from util.run_utils import run_remote
+from util.run_utils import run_local, run_remote
 
 
 class CodeCoverage():
@@ -73,7 +76,7 @@ class CodeCoverage():
 
         logger.debug(
             "Updating %s bullseye code coverage file permissions", self.__test_env.bullseye_file)
-        command = ["chmod", "777", self.__test_env.bullseye_file]
+        command = ["chmod", "666", self.__test_env.bullseye_file]
         if not run_remote(logger, self.__hosts, " ".join(command)).passed:
             message = "Error updating bullseye code coverage file on at least one host"
             result.fail_test(logger, "Run", message, None)
@@ -97,28 +100,29 @@ class CodeCoverage():
             return True
 
         logger.debug("-" * 80)
-        logger.debug("Collecting bullseye code coverage information on %s:", self.__hosts)
+        logger.debug("Collecting bullseye code coverage information from %s:", self.__hosts)
 
         bullseye_path, bullseye_file = os.path.split(self.__test_env.bullseye_file)
         bullseye_dir = os.path.join(job_results_dir, "bullseye_coverage_logs")
         status = archive_files(
             logger, "bullseye coverage log files", self.__hosts, bullseye_path,
-            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900, result)
+            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900, result, compress=False)
+        if status != 0:
+            message = "Error retrieving bullseye code coverage files from at least one host"
+            result.fail_test(logger, "Run", message, None)
+            return False
 
-        # Rename bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.host.cov.*
-        for item in os.listdir(job_results_dir):
-            item_full = os.path.join(job_results_dir, item)
-            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
-                host_ext = os.path.splitext(item)
-                if len(host_ext) > 1:
-                    os.makedirs(bullseye_dir, exist_ok=True)
-                    for name in os.listdir(item_full):
-                        old_file = os.path.join(item_full, name)
-                        if os.path.isfile(old_file):
-                            new_name = name.split(".")
-                            new_name.insert(1, host_ext[-1][1:])
-                            new_file_name = ".".join(new_name)
-                            new_file = os.path.join(bullseye_dir, new_file_name)
-                            logger.debug("Renaming %s to %s", old_file, new_file)
-                            os.rename(old_file, new_file)
-        return status == 0
+        # Combine the bullseye code coverage files from each host into one file
+        logger.debug("Merging bullseye code coverage files")
+        os.makedirs(bullseye_dir, exist_ok=True)
+        shutil.copy(self.__test_env.bullseye_src, bullseye_dir)
+        command = ("/opt/BullseyeCoverage/bin/covmerge --no-banner --file "
+                   f"{os.path.join(bullseye_dir, 'test.cov')} {bullseye_dir}.*/test.cov")
+        if not run_local(logger, command).passed:
+            message = "Error merging bullseye code coverage files"
+            result.fail_test(logger, "Run", message, None)
+            return False
+        for directory in glob.glob(f"{bullseye_dir}.*"):
+            if os.path.isdir(directory):
+                shutil.rmtree(directory, ignore_errors=True)
+        return True
