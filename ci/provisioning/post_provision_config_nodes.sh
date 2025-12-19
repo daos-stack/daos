@@ -135,7 +135,7 @@ function nvme_recreate_namespace {
     # selects LBA format index 0 (512BK) and no secure erase, just format.
     nvme format $dev_ns --lbaf=0 --ses=0 --force
     nvme reset $dev
-    #nvme id-ns $dev_ns |grep -E "lbaf|nvmcap|nsze|ncap|nuse" || true
+    nvme id-ns $dev_ns |grep -E "lbaf|nvmcap|nsze|ncap|nuse" || true
 #  done
   set -e
   echo "Done done"
@@ -189,7 +189,7 @@ function nvme_bind_all_in_order {
     else
       (echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/bind) &
     fi
-    ((count++))
+    ((count++)) || true
   done
   set -e
 }
@@ -251,8 +251,8 @@ function setup_spdk_nvme {
 nvme_count=$(nvme_count_devices)
 if [ "$nvme_count" -gt 1 ]; then
   ((nvme_count--)) || true
-  nvme_unmount_all $nvme_count
-  nvme_bind_all_in_order
+  #nvme_unmount_all $nvme_count
+  #nvme_bind_all_in_order
   #nvme_recreate_namespace $nvme_count
   #nvme_reserve_2_disk_per_numa $nvme_count
   #setup_spdk_nvme $SPDK_PCI_ALLOWED
@@ -310,6 +310,9 @@ function nvme_limit {
                 mount_nvme_drive "$nvme"
             else
                 ((nvme_count++)) || true
+                number=${nvme#nvme}; number=${number%%n*}
+                echo "$number"
+                nvme_recreate_namespace $number
             fi
         done
         nvme_count=0
@@ -318,17 +321,23 @@ function nvme_limit {
                 mount_nvme_drive "$nvme"
             else
                 ((nvme_count++)) || true
+                number=${nvme#nvme}; number=${number%%n*}
+                echo "$number"
+                nvme_recreate_namespace $number
             fi
         done
     else
         echo "balanced NVMe configuration not possible"
+        nvme_count=0
         for nvme in "${numa0_devices[@]}" "${numa1_devices[@]}"; do
             ((needed = "$DAOS_CI_NVME_NUMA_LIMIT" + 1)) || true
-            nvme_count=0
             if [ "$nvme_count" -ge "$needed" ]; then
                 mount_nvme_drive "$nvme"
             else
                 ((nvme_count++)) || true
+                number=${nvme#nvme}; number=${number%%n*}
+                echo "$number"
+                nvme_recreate_namespace $number
             fi
         done
     fi
@@ -338,6 +347,14 @@ function nvme_limit {
 # Force only the desired number of NVMe devices to be seen by DAOS tests
 # by mounting the extra ones.
 nvme_limit
+
+if [ -d /usr/share/daos/spdk/scripts/ ] && [ -f /usr/share/daos/spdk/scripts/setup.sh ]; then
+  /usr/share/daos/spdk/scripts/setup.sh status
+fi
+
+if command -v daos_server >/dev/null 2>&1; then
+    daos_server nvme scan
+fi
 
 systemctl enable nfs-server.service
 systemctl start nfs-server.service
