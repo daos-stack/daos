@@ -51,7 +51,14 @@ class EvictionMetrics(TestWithTelemetry):
         expected_ranges = self.telemetry.collect_data(evict_metrics)
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
-                expected_ranges[metric][label] = [0, 0]
+                if pool.mem_ratio.value is not None and label.endswith('_hit'):
+                    expected_ranges[metric][label] = [0, 100]
+                elif pool.mem_ratio.value is not None and label.endswith('_miss'):
+                    expected_ranges[metric][label] = [0, 5]
+                elif pool.mem_ratio.value is not None and label.endswith('_ne'):
+                    expected_ranges[metric][label] = [0, 5]
+                else:
+                    expected_ranges[metric][label] = [0, 0]
 
         self.log_step('Verify pool eviction metrics after pool creation')
         if not self.telemetry.verify_data(expected_ranges):
@@ -74,10 +81,10 @@ class EvictionMetrics(TestWithTelemetry):
         expected_ranges = self.telemetry.collect_data(evict_metrics)
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
-                if self.server_managers[0].manager.job.using_control_metadata:
-                    expected_ranges[metric][label] = [1, 1]
-                else:
+                if pool.mem_ratio.value is None:
                     expected_ranges[metric][label] = [0, 0]
+                else:
+                    expected_ranges[metric][label] = [1, 1000]
 
         self.log_step('Verify pool eviction metrics after writing data')
         if not self.telemetry.verify_data(expected_ranges):

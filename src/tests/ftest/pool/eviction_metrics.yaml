@@ -35,6 +35,7 @@ mdtest:
   ppn: 32
   test_dir: "/"
   api: DFS
+  flags: "-C -F -P -G 27 -N 1 -Y -v -u -L"
   branching_factor: 1
   depth: 20
   write_bytes: 4096
