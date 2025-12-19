@@ -425,7 +425,7 @@ append_install_list "${files[@]}"
 build_package "daos-client-tests-openmpi" "noautoreq"
 
 # Code coverage
-if [ "${code_coverage}" != "false" ]; then
+if [[ "${code_coverage}" != "false" ]]; then
   code_coverage_prefix="/opt/BullseyeCoverage"
   EXTERNAL_DEPENDS=("${bullseye_normal}")
   TARGET_PATH="${code_coverage_prefix}/daos"

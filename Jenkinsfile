@@ -804,6 +804,7 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: code_coverage_enabled(),
                                      code_coverage: code_coverage_enabled(),
+                                     coverage_stash: 'unit_test_bullseye',
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
@@ -828,6 +829,7 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: code_coverage_enabled(),
                                      code_coverage: code_coverage_enabled(),
+                                     coverage_stash: 'unit_test_bdev_bullseye',
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
@@ -841,7 +843,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
+                        expression { params.CI_NLT_TEST && !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -855,6 +857,7 @@ pipeline {
                                      unstash_tests: false,
                                      ignore_failure: code_coverage_enabled(),
                                      code_coverage: code_coverage_enabled(),
+                                     coverage_stash: 'nlt_bullseye',
                                      inst_rpms: unitPackages()))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
@@ -934,7 +937,7 @@ pipeline {
                 beforeAgent true
                 //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && !code_coverage_enabled() }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -1201,7 +1204,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
+                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() && !code_coverage_enabled() }
             }
             steps {
                 script {
@@ -1310,6 +1313,47 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
+        stage('Test Summary') {
+            when {
+                beforeAgent true
+                expression { true }
+            }
+            parallel {
+                stage('Bullseye Report') {
+                    when {
+                        beforeAgent true
+                        expression { code_coverage_enabled() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(add_repos: false)
+                        }
+                    }
+                    steps {
+                        script {
+                            sh label: 'Install packages',
+                                script: './ci/summary/install_pkgs.sh'
+                            job_step_update(
+                                runScriptWithStashes(
+                                    label: 'Generate Bullseye Report',
+                                    script: 'ci/summary/bullseye_report.sh',
+                                    stashes: ['unit_test_bullseye',
+                                              'unit_test_bdev_bullseye',
+                                              'nlt_bullseye']))
+                        }
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'bullseye_report/*',
+                                             allowEmptyArchive: false
+                            job_status_update()
+                        }
+                    }
+                } // stage('Code Coverage Report')
+            } // parallel
+        } // stage('Test Summary')
     } // stages
     post {
         always {

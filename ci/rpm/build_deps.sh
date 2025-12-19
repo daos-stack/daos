@@ -6,7 +6,7 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 cd /home/daos/pre || exit 1
 scons install --build-deps=only USE_INSTALLED=all PREFIX=/opt/daos TARGET_TYPE=release -j 32
 
-if [ "${code_coverage}" == "true" ] ; then
+if [[ "${code_coverage}" == "true" ]] ; then
     pushd "${mydir}/../.." || exit 1
     utils/rpms/bullseye_build.sh "${bullseye_key}"
 fi

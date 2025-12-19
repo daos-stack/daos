@@ -12,7 +12,7 @@ if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/mercury.sh
   utils/rpms/pmdk.sh
   utils/rpms/spdk.sh
-  if [ "${code_coverage}" != "false" ]; then
+  if [[ "${code_coverage}" != "false" ]]; then
     utils/rpms/bullseye.sh
   fi
 fi
