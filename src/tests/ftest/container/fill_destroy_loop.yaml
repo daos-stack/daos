@@ -31,7 +31,7 @@ pool: !mux
   default:
     size: 1%
   md_on_ssd_p2:
-    size: 2%
+    size: 3%
     mem_ratio: 25
 
 ior: &ior_base
@@ -39,8 +39,8 @@ ior: &ior_base
   repetitions: 1
   api: DFS
   dfs_oclass: SX
-  transfer_size: 4194304 # 4MiB
-  block_size: 536870912 # 512MiB
+  transfer_size: 8388608 # 8MiB
+  block_size: 805306368 # 768MiB
 
 ior_write:
   flags: "-w -W -k -G 1"
