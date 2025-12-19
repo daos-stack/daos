@@ -41,7 +41,8 @@ class EvictionMetrics(TestWithTelemetry):
             mem_file_bytes = int(_result["response"]["mem_file_bytes"])
         except Exception as error:      # pylint: disable=broad-except
             self.fail(f"Error extracting mem_file_bytes for dmg pool create output: {error}")
-        self.log.debug("%s mem_file_bytes: %s", pool, mem_file_bytes)
+        self.log.debug("%s mem_file_bytes:  %s", pool, mem_file_bytes)
+        self.log.debug("%s mem_ratio.value: %s", pool, pool.mem_ratio.value)
 
         self.log_step('Creating a container (dmg container create)')
         container = self.get_container(pool)
@@ -59,6 +60,7 @@ class EvictionMetrics(TestWithTelemetry):
                     expected_ranges[metric][label] = [0, 5]
                 else:
                     expected_ranges[metric][label] = [0, 0]
+        self.log.debug("%s expected_ranges: %s", pool, expected_ranges)
 
         self.log_step('Verify pool eviction metrics after pool creation')
         if not self.telemetry.verify_data(expected_ranges):
@@ -85,6 +87,7 @@ class EvictionMetrics(TestWithTelemetry):
                     expected_ranges[metric][label] = [0, 0]
                 else:
                     expected_ranges[metric][label] = [1, 1000]
+        self.log.debug("%s expected_ranges: %s", pool, expected_ranges)
 
         self.log_step('Verify pool eviction metrics after writing data')
         if not self.telemetry.verify_data(expected_ranges):
