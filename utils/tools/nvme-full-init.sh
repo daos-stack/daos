@@ -134,7 +134,7 @@ function nvme_setup {
   if [ "$nvme_count" -gt 1 ]; then
     ((nvme_count--)) || true
   else
-    return 1
+    return 0
   fi
   local nvme_dev nvme_pci_address numa_node
   local numa0_devices=()
