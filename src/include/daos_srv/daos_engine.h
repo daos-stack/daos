@@ -846,4 +846,11 @@ dss_select_module_version(int module_id, uint8_t *module_ver)
 		return dss_select_module_version(module_id, version);                              \
 	}
 
+int
+dss_vos_pool_create(const char *path, unsigned char *uuid, daos_size_t scm_size,
+		    daos_size_t data_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,
+		    daos_handle_t *pool);
+int
+dss_vos_pool_open(const char *path, unsigned char *uuid, unsigned int flags, daos_handle_t *pool);
+
 #endif /* __DSS_API_H__ */
