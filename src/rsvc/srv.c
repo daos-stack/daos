@@ -419,6 +419,8 @@ init_map_distd(struct ds_rsvc *svc)
 {
 	int rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	D_ASSERT(svc->s_map_distd == ABT_THREAD_NULL);
 	svc->s_map_dist = false;
 	svc->s_map_dist_inp = false;
@@ -441,6 +443,7 @@ init_map_distd(struct ds_rsvc *svc)
 static void
 drain_map_distd(struct ds_rsvc *svc)
 {
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	svc->s_map_distd_stop = true;
 	ABT_cond_broadcast(svc->s_map_dist_cv);
 }
@@ -450,6 +453,7 @@ fini_map_distd(struct ds_rsvc *svc)
 {
 	int rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = ABT_thread_free(&svc->s_map_distd);
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 }
@@ -462,6 +466,7 @@ fini_map_distd(struct ds_rsvc *svc)
 void
 ds_rsvc_begin_stepping_up(struct ds_rsvc *svc)
 {
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	change_state(svc, DS_RSVC_STEPPING_UP);
 	ABT_mutex_unlock(svc->s_mutex);
 }
@@ -476,6 +481,8 @@ ds_rsvc_end_stepping_up(struct ds_rsvc *svc, int rc_in, enum ds_rsvc_state state
 {
 	bool map_distd_initialized = false;
 	int  rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
 	D_DEBUG(DB_MD, "%s: ending stepping up: rc=" DF_RC " state=%s\n", svc->s_name, DP_RC(rc_in),
 		ds_rsvc_state_str(state));
@@ -599,6 +606,8 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 {
 	struct ds_rsvc *svc = arg;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	D_DEBUG(DB_MD, "%s: stepping down from "DF_U64"\n", svc->s_name, term);
 	ABT_mutex_lock(svc->s_mutex);
 
@@ -682,6 +691,7 @@ map_distd(void *arg)
 {
 	struct ds_rsvc *svc = arg;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	D_DEBUG(DB_MD, "%s: start\n", svc->s_name);
 	ABT_mutex_lock(svc->s_map_dist_mutex);
 	for (;;) {
@@ -742,6 +752,7 @@ break_out:
 void
 ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 {
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	svc->s_map_dist = true;
 	ABT_cond_broadcast(svc->s_map_dist_cv);
 	D_DEBUG(DB_MD, "%s: requested map distribution\n", svc->s_name);
@@ -759,6 +770,7 @@ ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 void
 ds_rsvc_query_map_dist(struct ds_rsvc *svc, uint32_t *version, bool *idle)
 {
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	if (version != NULL)
 		*version = svc->s_map_dist_ver;
 	if (idle != NULL)
@@ -773,6 +785,7 @@ ds_rsvc_query_map_dist(struct ds_rsvc *svc, uint32_t *version, bool *idle)
 void
 ds_rsvc_wait_map_dist(struct ds_rsvc *svc)
 {
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	D_DEBUG(DB_MD, "%s: begin", svc->s_name);
 	ABT_mutex_lock(svc->s_map_dist_mutex);
 	for (;;) {
