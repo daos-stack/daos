@@ -193,7 +193,7 @@ function nvme_setup {
   if [ "$nvme_count" -gt 1 ]; then
     ((nvme_count--)) || true
   else
-    return 1
+    return 0
   fi
   local nvme_dev nvme_pci_address numa_node
   local numa0_devices=()
@@ -233,15 +233,9 @@ function nvme_setup {
 }
 
 function setup_spdk_nvme {
-  if [ -d /usr/share/daos/spdk/scripts/ ] && [ -f /usr/share/daos/spdk/scripts/setup.sh ]; then
-    pushd /usr/share/daos/spdk/scripts/
     set +e
-    sudo ./setup.sh status
+    sudo "$SPDK_SETUP_CMD" status
     set -e
-    popd
-  else
-    echo "Required spdk/scripts/setup.sh not found!"
-  fi
 }
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
@@ -252,7 +246,6 @@ if lspci | grep -i nvme; then
   export COVFILE=/tmp/test.cov
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
-
 
 #FOR now limit to 2 devices per CPU NUMA node
 : "${DAOS_CI_NVME_NUMA_LIMIT:=2}"
