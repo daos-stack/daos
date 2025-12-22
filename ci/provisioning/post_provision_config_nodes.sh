@@ -75,41 +75,61 @@ fi
 # addresses varies from restart to restart, resulting in error messages such as
 # "Failed to initialize SSD: [xxxx:xx:xx.x]' when DAOS engines are started.
 
-NVME_MAX_GLOBAL=15
-function nvme_count_devices {
-  local count
-  count=$(lspci -D | grep -E 'Non-Volatile memory controller' | wc -l)
-  echo $count
+SPDK_SETUP_CMD="/usr/share/daos/spdk/scripts/setup.sh"
+
+if [ ! -d $(dirname "$SPDK_SETUP_CMD") ] || [ ! -f "$SPDK_SETUP_CMD" ]; then
+    echo "Required scripts directory or setup.sh not found!"
+    exit 1
+fi
+
+function get_nvme_count_devices {
+  local nvme_count=$(lspci -D | grep -E 'Non-Volatile memory controller' | wc -l)
+  echo $nvme_count
 }
 
-function nvme_unmount_all {
-  local NVME_MAX=${1:-$NVME_MAX_GLOBAL}
-  echo "Unmounting all /dev/nvme[0-${NVME_MAX}]n1 mountpoints."
-  set +e # we can try to unmount unexisted disks
-  for i in $(seq 0 $NVME_MAX); do
-    nvme="nvme${i}n1"
-    dev="/dev/${nvme}"
-    mnt="/mnt/${nvme}"
-    if [ -b "$dev" ]; then
-      mp=$(lsblk -nr -o MOUNTPOINT "$dev")
-      if [ -n "$mp" ]; then
-        echo "Unmounting $dev from $mp"
-        sudo umount -f "$dev"|| sudo umount -f "$mp"
-      elif [ -d "${mnt}" ]; then
-        echo "Unmounting ${mnt}"
-        sudo umount -f "${mnt}"
-      fi
-    elif [ -d "${mnt}" ]; then
-      echo "Force umount of ${mnt}"
-      sudo umount -f "${mnt}"
-    fi
-    rm -rf $mnt
-  done
-  set -e
+function pci_dev_is_mounted {
+  local pci_dev="${1:?Usage: pci_dev_is_mounted <pci_device_address>}"
+  $SPDK_SETUP_CMD setup | grep "$pci_dev" | grep "mount@" > /dev/null
+}
+
+function pci_dev_has_filesystem {
+  local pci_dev="${1:?Usage: pci_dev_has_filesystem <pci_device_address>}"
+  $SPDK_SETUP_CMD setup | grep "$pci_dev" | grep "data@" > /dev/null
+}
+
+function nvme_dev_is_mounted {
+  local nvme_dev="${1:-?Usage: nvme_dev_is_mounted <nvme_device>}"
+  $SPDK_SETUP_CMD setup | grep "$nvme_dev" | grep "mount@" > /dev/null
+}
+
+function nvme_dev_has_data {
+  local nvme_dev="${1:-?Usage: nvme_dev_has_data <nvme_device>}"
+  $SPDK_SETUP_CMD setup | grep "data@${nvme_dev}" > /dev/null
+}
+
+function pci_dev_get_numa {
+  local pci_dev="${1:?Usage: pci_dev_get_numa <pci_device_address>}"
+  local pci_dev_numa_path="/sys/bus/pci/devices/${pci_dev}/numa_node"
+  cat "${pci_dev_numa_path}"
+}
+
+function nvme_dev_get_first_by_pcie_addr() {
+  local pci_dev="${1:?Usage: nvme_dev_get_first_by_pcie_addr <pci_device_address>}"
+  local nvme_dir="/sys/bus/pci/devices/$pci_dev/nvme"
+  if [ -d "$nvme_dir" ]; then
+    for symlink in "$nvme_dir"/*; do
+      [ -e "$symlink" ] || continue
+      local nvme_dev=$(basename "$symlink")
+      echo -n "${nvme_dev}"
+      return
+    done
+  else
+    echo "ERROR nvme_dev_get_first_by_pcie_addr can not find nvme for $pci_dev"
+    exit 1
+  fi
 }
 
 function nvme_recreate_namespace {
-  set +e
 # lbaf 0 : ms:0   lbads:9  rp:0x1 (in use)   → 512B blocks
 # lbaf 1 : ms:0   lbads:12 rp:0              → 4096B blocks (4K)
 # lbaf 2 : ms:8   lbads:9  rp:0x3            → 512B + 8B metadata
@@ -121,143 +141,108 @@ function nvme_recreate_namespace {
 # ms = metadata size per block (0, 8, or 64 bytes).
 # rp = relative performance hint.
 
-  local NVME_MAX=${1:-$NVME_MAX_GLOBAL}
-  local NVME_MIN=${2:-0}
-  local i=${1:-0}
-  #for i in $(seq $NVME_MIN $NVME_MAX); do
-    dev="/dev/nvme${i}"
-    dev_ns="${dev}n1"
-    echo "Recreating namespace on $dev ..."
-    nvme delete-ns $dev -n 0x1
-    nvme reset $dev
-    nvme create-ns $dev --nsze=0x1bf1f72b0 --ncap=0x1bf1f72b0 --flbas=0
-    nvme attach-ns $dev -n 0x1 -c 0x41
-    # selects LBA format index 0 (512BK) and no secure erase, just format.
-    nvme format $dev_ns --lbaf=0 --ses=0 --force
-    nvme reset $dev
-    nvme id-ns $dev_ns |grep -E "lbaf|nvmcap|nsze|ncap|nuse" || true
-#  done
-  set -e
-  echo "Done done"
+  local nvme_dev="${1:?Usage: nvme_dev_get_first_by_pcie_addr <pci_device_address>}"
+  local nvme_dev_path="/dev/${nvme_dev}"
+  local nvme_dev_ns_path="${nvme_dev_path}n1"
+  echo "Recreating namespace on $nvme_dev_path ..."
+  nvme delete-ns $nvme_dev_path -n 0x1
+  nvme reset $nvme_dev_path
+  nvme create-ns $nvme_dev_path --nsze=0x1bf1f72b0 --ncap=0x1bf1f72b0 --flbas=0
+  nvme attach-ns $nvme_dev_path -n 0x1 -c 0x41
+  # selects LBA format index 0 (512BK) and no secure erase, just format
+  nvme format $nvme_dev_ns_path --lbaf=0 --ses=0 --force
+  nvme reset $nvme_dev_path
+  #nvme id-ns $nvme_dev_ns_path |grep -E "lbaf|nvmcap|nsze|ncap|nuse"
+  echo "${nvme_dev_ns_path} done"
 }
 
-function nvme_bind_all_in_order {
-  # Find all PCI addresses for NVMe controllers
-  local nvme_pcie_addrs
-  nvme_pcie_addrs=$(lspci -D | awk '/Non-Volatile memory controller/{print $1}')
-
-  if [ -z "$nvme_pcie_addrs" ]; then
-    echo "No NVMe PCI devices found."
-    return 1
-  fi
-
-  #echo "Found PCI NVMe addresses:"
-  #echo "$nvme_pcie_addrs"
-  #echo
-
-  for dir in /sys/class/nvme/*/; do
-    numa=$(cat ${dir}numa_node)
-    echo "$numa $dir: $(ls -la ${dir} | grep device | awk -F'-> ' '{print $2}' | sed 's|.*/||')"
-  done
-
-  # Unbind all NVMe devices
-  echo "Unbinding NVMe devices from nvme driver (or vfio-pci driver) ..."
-  set +e # it's ok if a device isn't bound to one of the drivers
-  for addr in $nvme_pcie_addrs; do
-    if [ -e "/sys/bus/pci/drivers/nvme/${addr}" ]; then
-      echo "Unbinding $addr from nvme"
-      echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/unbind
-    fi
-    if [ -e "/sys/bus/pci/drivers/vfio-pci/${addr}" ]; then
-      echo "Unbinding $addr from vfio-pci"
-      echo "$addr" | sudo tee /sys/bus/pci/drivers/vfio-pci/unbind
-    fi
-  done
-  set -e
-
-  echo
-  # Bind all NVMe devices in order
-  echo "Binding NVMe devices to nvme driver in sorted order..."
-  set +e # for debug purpose
+# Format ext4 on each element of array after "limit" is reached.
+mkfs_on_nvme_over_limit() {
+  local devices=("${!1}")  # array is passed as a name, bash uses indirection via name[@]
+  local limit="$2"
   local count=0
-  local adr
-  for addr in $(echo "$nvme_pcie_addrs" | sort); do
-    echo "Binding $addr"
-    if((count < 2)); then
-      echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/bind
-      nvme_recreate_namespace $count $count
+  local nvme_dev_ns
+  for nvme_dev in "${devices[@]}"; do
+    if [ "$count" -ge "$limit" ]; then
+      nvme_dev_ns_path="/dev/${nvme_dev}n1"
+        if [ ! -e $nvme_dev_ns_path ]; then
+        echo "INFO recreate namespace 1 on /dev/$nvme_dev"
+          nvme_recreate_namespace "$nvme_dev"
+        fi
+      if ! blkid -t TYPE=ext4 "$nvme_dev_ns_path" >/dev/null 2>&1; then 
+        echo "INFO mkfs on $nvme_dev_ns_path"
+        sudo mkfs.ext4 -F "$nvme_dev_ns_path" > /dev/null
+      else
+        echo "SKIP mkfs on $nvme_dev_ns_path"
+      fi
     else
-      (echo "$addr" | sudo tee /sys/bus/pci/drivers/nvme/bind) &
+      if nvme_dev_has_data "$nvme_dev"; then
+        echo "INFO clean /dev/${nvme_dev}"
+        nvme_recreate_namespace "$nvme_dev"
+      else
+        echo "SKIP clean /dev/${nvme_dev}"
+      fi
     fi
     ((count++)) || true
   done
-  set -e
 }
 
+function nvme_setup {
+  local nvme_per_numa="${1:-?Usage: nvme_setup <nvme_per_numa_limit>}"
+  local nvme_count=$(get_nvme_count_devices)
+  if [ "$nvme_count" -gt 1 ]; then
+    ((nvme_count--)) || true
+  else
+    return 1
+  fi
+  local nvme_dev nvme_pci_address numa_node
+  local numa0_devices=()
+  local numa1_devices=()
+  local nvme_pcie_address_all=$(lspci -D | \
+    awk '/Non-Volatile memory controller/{print $1}' | sort)
 
-# FOR now limit to 2 devices per CPU NUMA node
-: "${DAOS_CI_NVME_NUMA_LIMIT:=2}"
-
-SPDK_PCI_ALLOWED=""
-function nvme_reserve_2_disk_per_numa {
-  local NVME_MAX=${1:-$NVME_MAX_GLOBAL}
-  local numa_node_0=0
-  local numa_node_1=0
-  for i in $(seq 0 $NVME_MAX); do
-    nvme="nvme${i}"
-    numa_path="/sys/class/nvme/${nvme}/numa_node"
-    dev="/dev/${nvme}n1"
-    mnt="/mnt/${nvme}n1"
-    numa_node="$(cat "$numa_path")"
-    pci_addr=$(basename "$(readlink -f /sys/class/nvme/${nvme}/device)")
-    echo "$nvme: NUMA node $numa_node, PCI addr $pci_addr, numa_node_0 $numa_node_0, numa_node_1 $numa_node_1"
+  for nvme_pci_address in $nvme_pcie_address_all; do
+    # Skip already mounted namespace
+    if pci_dev_is_mounted $nvme_pci_address; then
+      echo "Skip already mounted namespace $nvme_pci_address"
+      continue
+    fi
+    #echo "Binding $nvme_pci_address"
+    #echo "$nvme_pci_address" | sudo tee /sys/bus/pci/drivers/nvme/bind
+    nvme_dev=$(nvme_dev_get_first_by_pcie_addr "$nvme_pci_address")
+    numa_node="$(pci_dev_get_numa "$nvme_pci_address")"
     if [ "$numa_node" -eq 0 ]; then
-      ((numa_node_0++)) || true
-      if [ "$numa_node_0" -le $DAOS_CI_NVME_NUMA_LIMIT ]; then
-        SPDK_PCI_ALLOWED="$SPDK_PCI_ALLOWED$pci_addr "
-        echo "NUMA0: ${nvme} -> ${pci_addr}"
-        continue
-      fi
+      numa0_devices+=("$nvme_dev")
     else
-      ((numa_node_1++)) || true
-      if [ "$numa_node_1" -le $DAOS_CI_NVME_NUMA_LIMIT ]; then
-        SPDK_PCI_ALLOWED="$SPDK_PCI_ALLOWED$pci_addr "
-        echo "NUMA1: ${nvme} -> ${pci_addr}"
-        continue
-      fi
+      numa1_devices+=("$nvme_dev")
     fi
-    sudo mkfs.ext4 -F "${dev}"
-    if [ ! -d "${mnt}" ]; then
-      sudo mkdir -p "${mnt}"
-    fi
-    sudo mount "${dev}" "${mnt}"
   done
-  SPDK_PCI_ALLOWED=${SPDK_PCI_ALLOWED% }  # remove trailing space
+  echo NUMA0 PCIe devices: "${numa0_devices[@]}"
+  echo NUMA1 PCIe devices: "${numa1_devices[@]}"
+  if [ "${#numa0_devices[@]}" -ge "$nvme_per_numa" ] && \
+    [ "${#numa1_devices[@]}" -ge "$nvme_per_numa" ]; then
+    echo "balanced NVMe configuration possible"
+    mkfs_on_nvme_over_limit numa0_devices[@] "$nvme_per_numa"
+    mkfs_on_nvme_over_limit numa1_devices[@] "$nvme_per_numa"
+  else
+    echo "balanced NVMe configuration not possible"
+    nvme_per_numa=$((nvme_per_numa + nvme_per_numa))
+    combined=( "${numa0_devices[@]}" "${numa1_devices[@]}" )
+    mkfs_on_nvme_over_limit combined[@] "$nvme_per_numa"
+  fi
 }
 
 function setup_spdk_nvme {
   if [ -d /usr/share/daos/spdk/scripts/ ] && [ -f /usr/share/daos/spdk/scripts/setup.sh ]; then
-    export PCI_ALLOWED="$1"
     pushd /usr/share/daos/spdk/scripts/
     set +e
-    sudo ./setup.sh
+    sudo ./setup.sh status
     set -e
     popd
   else
     echo "Required spdk/scripts/setup.sh not found!"
   fi
 }
-
-nvme_count=$(nvme_count_devices)
-if [ "$nvme_count" -gt 1 ]; then
-  ((nvme_count--)) || true
-  #nvme_unmount_all $nvme_count
-  #nvme_bind_all_in_order
-  #nvme_recreate_namespace $nvme_count
-  #nvme_reserve_2_disk_per_numa $nvme_count
-  #setup_spdk_nvme $SPDK_PCI_ALLOWED
-
-fi
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
 # to nvme.  Sometimes the device gets unbound from vfio-pci, but it is not removed the iommu group
@@ -268,90 +253,12 @@ if lspci | grep -i nvme; then
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 
-function mount_nvme_drive {
-    local drive="$1"
-    file_system=$(file -sL "/dev/$drive")
-    if  [[ "$file_system" != *"ext4 filesystem"* ]]; then
-        yes | mkfs -t ext4 "/dev/$drive"
-    fi
-    mkdir -p "/mnt/$drive"
-    mount "/dev/$drive" "/mnt/$drive"
-}
 
+#FOR now limit to 2 devices per CPU NUMA node
+: "${DAOS_CI_NVME_NUMA_LIMIT:=2}"
 
-nvme_class="/sys/class/nvme/"
-function nvme_limit {
-    set +x
-    if [ ! -d "${nvme_class}" ] || [ -z "$(ls -A "${nvme_class}")" ]; then
-        echo "No NVMe devices found"
-        return
-    fi
-    local numa0_devices=()
-    local numa1_devices=()
-    for nvme_path in "$nvme_class"*; do
-        nvme="$(basename "$nvme_path")n1"
-        numa_node="$(cat "${nvme_path}/numa_node")"
-        if mount | grep "$nvme"; then
-            continue
-        fi
-        if [ "$numa_node" -eq 0 ]; then
-            numa0_devices+=("$nvme")
-        else
-            numa1_devices+=("$nvme")
-        fi
-    done
-    echo numa0 "${numa0_devices[@]}"
-    echo numa1 "${numa1_devices[@]}"
-    if [ "${#numa0_devices[@]}" -gt 0 ] && [ "${#numa1_devices[@]}" -gt 0 ]; then
-        echo "balanced NVMe configuration possible"
-        nvme_count=0
-        for nvme in "${numa0_devices[@]}"; do
-            if [ "$nvme_count" -ge "${DAOS_CI_NVME_NUMA_LIMIT}" ]; then
-                mount_nvme_drive "$nvme"
-            else
-                ((nvme_count++)) || true
-                number=${nvme#nvme}; number=${number%%n*}
-                echo "$number"
-                nvme_recreate_namespace $number
-            fi
-        done
-        nvme_count=0
-        for nvme in "${numa1_devices[@]}"; do
-            if [ "$nvme_count" -ge "${DAOS_CI_NVME_NUMA_LIMIT}" ]; then
-                mount_nvme_drive "$nvme"
-            else
-                ((nvme_count++)) || true
-                number=${nvme#nvme}; number=${number%%n*}
-                echo "$number"
-                nvme_recreate_namespace $number
-            fi
-        done
-    else
-        echo "balanced NVMe configuration not possible"
-        nvme_count=0
-        for nvme in "${numa0_devices[@]}" "${numa1_devices[@]}"; do
-            ((needed = "$DAOS_CI_NVME_NUMA_LIMIT" + 1)) || true
-            if [ "$nvme_count" -ge "$needed" ]; then
-                mount_nvme_drive "$nvme"
-            else
-                ((nvme_count++)) || true
-                number=${nvme#nvme}; number=${number%%n*}
-                echo "$number"
-                nvme_recreate_namespace $number
-            fi
-        done
-    fi
-    set -x
-}
-
-# Force only the desired number of NVMe devices to be seen by DAOS tests
-# by mounting the extra ones.
-nvme_limit
-
-if [ -d /usr/share/daos/spdk/scripts/ ] && [ -f /usr/share/daos/spdk/scripts/setup.sh ]; then
-  /usr/share/daos/spdk/scripts/setup.sh status
-fi
-
+nvme_setup "$DAOS_CI_NVME_NUMA_LIMIT"
+setup_spdk_nvme
 if command -v daos_server >/dev/null 2>&1; then
     daos_server nvme scan
 fi
