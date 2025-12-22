@@ -6200,7 +6200,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	rc = obj_sgls_dup(obj_auxi, args, true);
 	if (rc) {
-		D_ERROR(DF_OID" obj_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_ERROR(DF_OID " obj_sgls_dup failed %d\n", DP_OID(obj->cob_md.omd_id), rc);
 		D_GOTO(out_task, rc);
 	}
 
