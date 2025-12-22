@@ -168,11 +168,10 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	int		    rc;
 
 	/**
-	 * Since the key's structure does not have a magic value, checking the ilog root (which has
-	 * a magic value) is the only way to verify the pointer actually points to a valid data.
+	 * Since the key's structure does not have a magic value and the ilog root (which has
+	 * a magic value) is already destroyed at this stage there is no way to verify the pointer
+	 * actually points to a valid data.
 	 */
-	D_ASSERTF_MEM(ilog_root_is_valid(&key->kr_ilog), key, sizeof(struct vos_krec_df),
-		      "Invalid ilog root detected\n");
 
 	if (key->kr_bmap & KREC_BF_NO_AKEY && gc->gc_type == GC_DKEY) {
 		/** Special case, this will defer to the free callback
