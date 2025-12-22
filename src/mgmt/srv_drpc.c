@@ -1984,7 +1984,6 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp.infos[i] = &resp_infos[i];
 		mgmt__pool_query_target_info__init(resp.infos[i]);
 
-		resp.infos[i]->type = (Mgmt__PoolQueryTargetInfo__TargetType) infos[i].ta_type;
 		resp.infos[i]->state = (Mgmt__PoolQueryTargetInfo__TargetState) infos[i].ta_state;
 		D_ALLOC_ARRAY(resp.infos[i]->space, DAOS_MEDIA_MAX);
 		if (resp.infos[i]->space == NULL)
