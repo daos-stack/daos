@@ -252,7 +252,7 @@ pipeline {
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
                             'Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
-               defaultValue: '10',
+               defaultValue: '5',
                description: 'Test-repeat to use for this run.  Specifies the ' +
                             'number of times to repeat each functional test. ' +
                             'CAUTION: only use in combination with a reduced ' +
@@ -389,8 +389,9 @@ pipeline {
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_node-hdr-200_202-205X',
+               //defaultValue: 'ci_node-hdr-200_202-205X',
                // defaultValue: 'ci_node-hdr-210_212-219X',
+               defaultValue: 'ci_node-hdr-220_222-225X',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
