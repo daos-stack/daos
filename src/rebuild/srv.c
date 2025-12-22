@@ -124,8 +124,8 @@ rebuild_pool_tls_create(uuid_t pool_uuid, uuid_t poh_uuid, uuid_t coh_uuid,
 	rebuild_pool_tls->rebuild_pool_ver = ver;
 	rebuild_pool_tls->rebuild_pool_gen = gen;
 	uuid_copy(rebuild_pool_tls->rebuild_pool_uuid, pool_uuid);
-	rebuild_pool_tls->rebuild_pool_scanning = 1;
-	rebuild_pool_tls->rebuild_pool_scan_done = 0;
+	rebuild_pool_tls->rebuild_pool_scan_prepping     = 1;
+	rebuild_pool_tls->rebuild_pool_scan_running      = 1;
 	rebuild_pool_tls->rebuild_pool_obj_count = 0;
 	rebuild_pool_tls->rebuild_pool_reclaim_obj_count = 0;
 	rebuild_pool_tls->rebuild_tree_hdl = DAOS_HDL_INVAL;
@@ -428,12 +428,12 @@ dss_rebuild_check_one(void *data)
 	if (pool_tls == NULL)
 		return 0;
 
-	D_DEBUG(DB_REBUILD, "%d scanning %d status: "DF_RC"\n", idx,
-		pool_tls->rebuild_pool_scanning,
+	D_DEBUG(DB_REBUILD, "%d scanning %d/%d status: " DF_RC "\n", idx,
+		pool_tls->rebuild_pool_scan_prepping, pool_tls->rebuild_pool_scan_running,
 		DP_RC(pool_tls->rebuild_pool_status));
 
 	ABT_mutex_lock(status->lock);
-	if (pool_tls->rebuild_pool_scanning)
+	if (pool_tls->rebuild_pool_scan_prepping || pool_tls->rebuild_pool_scan_running)
 		status->scanning = 1;
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
