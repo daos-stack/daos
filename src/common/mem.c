@@ -3343,6 +3343,7 @@ cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
 	uint32_t		 pg_id;
 	int			 i, rc = 0;
 	int                      retry_cnt;
+	bool                     pages_evicted = false;
 
 	for (i = 0; i < page_nr; i++) {
 		pg_id = pages[i];
@@ -3362,6 +3363,7 @@ retry:
 			if (free_pinfo != NULL) {
 				cache_push_free_page(cache, free_pinfo);
 				free_pinfo = NULL;
+				pages_evicted = true;
 			}
 			if (is_id_evictable(cache, pg_id) != pinfo->pi_evictable) {
 				pinfo->pi_evictable = is_id_evictable(cache, pg_id);
@@ -3392,6 +3394,7 @@ retry:
 			} else {
 				pinfo = free_pinfo;
 				free_pinfo = NULL;
+				pages_evicted = true;
 			}
 		} else {
 			pinfo = cache_pop_free_page(cache);
@@ -3407,6 +3410,10 @@ retry:
 		/* Map an empty page, doesn't need to load page */
 		pinfo->pi_loaded = 1;
 	}
+	if (rc || (pages_evicted && cache->ca_unpin_waiters)) {
+		cache->ca_unpin_waiters = 0;
+		cache->ca_store->stor_ops->so_waitqueue_wakeup(cache->ca_unpin_wq, true);
+	}
 
 	return rc;
 }
@@ -3416,9 +3423,9 @@ cache_pin_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, bool for
 {
 	struct umem_page_info	*pinfo, *free_pinfo = NULL;
 	uint32_t		 pg_id;
-	int			 i, processed = 0, pinned = 0, rc = 0;
-	int                      pages_evicted = 0;
+	int                      i, processed = 0, pinned = 0, rc = 0;
 	int                      retry_cnt;
+	bool                     pages_evicted = false;
 
 	for (i = 0; i < page_nr; i++) {
 		pg_id = pages[i];
@@ -3433,6 +3440,7 @@ retry:
 			if (free_pinfo != NULL) {
 				cache_push_free_page(cache, free_pinfo);
 				free_pinfo = NULL;
+				pages_evicted = true;
 			}
 			goto next;
 		}
@@ -3453,7 +3461,7 @@ retry:
 		} else {
 			pinfo = free_pinfo;
 			free_pinfo = NULL;
-			pages_evicted = 1;
+			pages_evicted = true;
 		}
 
 		inc_cache_stats(cache, UMEM_CACHE_STATS_MISS);
@@ -3478,7 +3486,7 @@ next:
 		pinfo->pi_sys = for_sys;
 	}
 
-	if ((pages_evicted) && (cache->ca_unpin_waiters)) {
+	if (pages_evicted && cache->ca_unpin_waiters) {
 		cache->ca_unpin_waiters = 0;
 		cache->ca_store->stor_ops->so_waitqueue_wakeup(cache->ca_unpin_wq, true);
 	}
@@ -3491,6 +3499,10 @@ error:
 		D_ASSERT(pinfo != NULL);
 		cache_unpin_page(cache, pinfo);
 
+	}
+	if (cache->ca_unpin_waiters) {
+		cache->ca_unpin_waiters = 0;
+		cache->ca_store->stor_ops->so_waitqueue_wakeup(cache->ca_unpin_wq, true);
 	}
 	return rc;
 }
