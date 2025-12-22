@@ -87,12 +87,11 @@ type (
 		SelfHealPolicy   string               `json:"self_heal_policy"`
 	}
 
-	PoolQueryTargetType  int32
+	// PoolQueryTargetState represents the current state of the pool target.
 	PoolQueryTargetState int32
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type          PoolQueryTargetType  `json:"target_type"`
 		State         PoolQueryTargetState `json:"target_state"`
 		Space         []*StorageUsageStats `json:"space"`
 		MemFileBytes  uint64               `json:"mem_file_bytes"`
@@ -453,18 +452,6 @@ func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 	*prs = PoolRebuildState(state)
 
 	return nil
-}
-
-func (ptt PoolQueryTargetType) String() string {
-	ptts, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)]
-	if !ok {
-		return "invalid"
-	}
-	return strings.ToLower(ptts)
-}
-
-func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + pqtt.String() + `"`), nil
 }
 
 const (
