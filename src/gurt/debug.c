@@ -635,7 +635,7 @@ d_log_memory(const uint8_t *ptr, size_t size)
 	int         rc;
 
 	/** printed immediately in case reading the memory cause a crash */
-	D_EMIT("ptr=%p, size=%zu\n", ptr, size);
+	D_FATAL("ptr=%p, size=%zu\n", ptr, size);
 
 	if (ptr == NULL || size == 0) {
 		return;
@@ -656,7 +656,7 @@ d_log_memory(const uint8_t *ptr, size_t size)
 
 		/** print a complete line and reset the output buffer */
 		if (i % 16 == 15) {
-			D_EMIT("%s\n", buf);
+			D_FATAL("%s\n", buf);
 			out       = buf;
 			out_space = D_LOG_MEMORY_LINE_LENGTH;
 		}
@@ -664,6 +664,6 @@ d_log_memory(const uint8_t *ptr, size_t size)
 
 	/** print an incomplete line */
 	if (out_space < D_LOG_MEMORY_LINE_LENGTH) {
-		D_EMIT("%s\n", buf);
+		D_FATAL("%s\n", buf);
 	}
 }

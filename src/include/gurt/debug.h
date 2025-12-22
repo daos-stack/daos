@@ -323,7 +323,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 					     const char*, const int));
 
 /**
- * \brief D_EMIT the provided memory range in hex.
+ * \brief D_FATAL the provided memory range in hex.
  *
  * \param[in] ptr	Start of the memory range.
  * \param[in] size	Size of the memory range.
@@ -357,9 +357,9 @@ d_log_memory(const uint8_t *ptr, size_t size);
 		if (likely(cond))                                                                  \
 			break;                                                                     \
 		D_FATAL("Assertion '%s' failed: " fmt, #cond, ##__VA_ARGS__);                      \
+		d_log_memory((uint8_t *)ptr, size);                                                \
 		if (d_alt_assert != NULL)                                                          \
 			d_alt_assert(0, #cond, __FILE__, __LINE__);                                \
-		d_log_memory((uint8_t *)ptr, size);                                                \
 		assert(0);                                                                         \
 	} while (0)
 
