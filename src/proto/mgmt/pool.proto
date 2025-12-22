@@ -315,14 +315,7 @@ message StorageTargetUsage {
 // PoolQueryTargetInfo represents pool target query info for a single target.
 // The RPC response type (PoolQueryTargetResponse) contains a sequence of these.
 message PoolQueryTargetInfo {
-	enum TargetType { // See enum daos_target_type_t
-		UNKNOWN = 0;
-		HDD = 1; // Rotating disk
-		SSD = 2; // Flash-based
-		PM = 3; // Persistent memory
-		VM = 4; // Volatile memory
-	}
-	TargetType type = 1; // Target type jsee enum daos_target_type_t
+	reserved 1;
 
 	enum TargetState { // See enum daos_target_state_t
 		STATE_UNKNOWN = 0;
