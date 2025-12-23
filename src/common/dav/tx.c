@@ -1558,9 +1558,26 @@ dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 void
 dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 {
+	int rc, tx_inprogress = 0;
+
 	DAV_DBG("actvcnt=%zu", actvcnt);
+	if (get_tx()->stage != DAV_TX_STAGE_NONE)
+		tx_inprogress = 1;
+
 	DAV_API_START();
+	if (!tx_inprogress) {
+		rc = lw_tx_begin(pop);
+		if (rc) {
+			D_ERROR("Failed to start local tx. %d\n", rc);
+			return;
+		}
+	}
+
 	palloc_cancel(pop->do_heap, actv, actvcnt);
+
+	if (!tx_inprogress)
+		lw_tx_end(pop, NULL);
+
 	DAV_API_END();
 }
 
