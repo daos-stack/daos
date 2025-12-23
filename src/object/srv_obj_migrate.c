@@ -1832,6 +1832,8 @@ migrate_one_destroy(struct migrate_one *mrone)
 
 	if (mrone->mo_iods_csums)
 		D_FREE(mrone->mo_iods_csums);
+	if (mrone->mo_obj_arg)
+		migrate_obj_put(mrone->mo_obj_arg);
 	if (mrone->mo_tls)
 		migrate_pool_tls_put(mrone->mo_tls);
 
@@ -1962,8 +1964,7 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 static void
 migrate_one_ult(void *arg)
 {
-	struct migrate_one	*mrone = arg;
-	struct iter_obj_arg     *obj_arg;
+	struct migrate_one      *mrone = arg;
 	struct migrate_pool_tls	*tls;
 	daos_size_t		data_size;
 	int			rc = 0;
@@ -1971,7 +1972,6 @@ migrate_one_ult(void *arg)
 	while (daos_fail_check(DAOS_REBUILD_TGT_REBUILD_HANG))
 		dss_sleep(0);
 
-	obj_arg = mrone->mo_obj_arg;
 	tls = mrone->mo_tls;
 	if (tls->mpt_fini) {
 		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(mrone->mo_pool_uuid));
@@ -2017,7 +2017,6 @@ migrate_one_ult(void *arg)
 		tls->mpt_fini = 1;
 	}
 out:
-	migrate_obj_put(obj_arg);
 	migrate_res_release(tls, MIGR_KEY, 1);
 	migrate_one_destroy(mrone);
 }
@@ -2791,7 +2790,6 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 		rc = dss_ult_create(migrate_one_ult, mrone, DSS_XS_SELF, 0, MIGRATE_STACK_SIZE,
 				    NULL);
 		if (rc) {
-			migrate_obj_put(arg);
 			migrate_res_release(tls, MIGR_KEY, 1);
 			migrate_one_destroy(mrone);
 			break;
@@ -3312,8 +3310,8 @@ out:
 		DP_RB_MPT(tls), DP_UOID(arg->oid), arg->shard, tls->mpt_tgt_obj_ult_cnt,
 		tls->mpt_tgt_dkey_ult_cnt, tls->mpt_obj_count, DP_RC(rc));
 free_notls:
-	migrate_obj_put(arg);
 	migrate_res_release(tls, MIGR_OBJ, 1);
+	migrate_obj_put(arg);
 }
 
 struct migrate_obj_val {
