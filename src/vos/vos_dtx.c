@@ -474,9 +474,9 @@ vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df)
 	while (!UMOFF_IS_NULL(cont_df->cd_dtx_committed_head)) {
 		dbd_off = cont_df->cd_dtx_committed_head;
 		dbd = umem_off2ptr(umm, dbd_off);
-		D_ASSERTF_MEM(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC, dbd, DTX_ACT_BLOB_SIZE,
-			      "dbd_magic = %#x != DTX_ACT_BLOB_MAGIC (%#x)\n", dbd->dbd_magic,
-			      DTX_ACT_BLOB_MAGIC);
+		D_ASSERTF_MEM(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC, dbd, DTX_CMT_BLOB_SIZE,
+			      "dbd_magic = %#x != DTX_CMT_BLOB_MAGIC (%#x)\n", dbd->dbd_magic,
+			      DTX_CMT_BLOB_MAGIC);
 		cont_df->cd_dtx_committed_head = dbd->dbd_next;
 		rc = umem_free(umm, dbd_off);
 		if (rc != 0)
