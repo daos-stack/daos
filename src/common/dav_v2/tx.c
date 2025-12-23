@@ -1733,6 +1733,8 @@ dav_reserve_v2(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t typ
 
 	if (palloc_reserve(pop->do_heap, size, constructor_alloc, &carg, type_num, 0,
 			   CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), act) != 0) {
+		if (!tx_inprogress)
+			lw_tx_end(pop, NULL);
 		DAV_API_END();
 		return 0;
 	}

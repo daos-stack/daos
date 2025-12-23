@@ -1505,6 +1505,8 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
 
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
+		if (!tx_inprogress)
+			lw_tx_end(pop, NULL);
 		DAV_API_END();
 		return 0;
 	}
