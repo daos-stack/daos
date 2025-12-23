@@ -7,7 +7,7 @@
 from command_utils_base import CommandWithParameters, FormattedParameter
 from run_utils import run_remote
 
-  
+
 class DlckCommand(CommandWithParameters):
     """Defines the basic structures of dlck command."""
 
@@ -27,14 +27,12 @@ class DlckCommand(CommandWithParameters):
                 None.
             sudo (bool, optional): Whether to run dlck with sudo. Defaults to True.
             env_str (str, optional): Environment variable string to prepend to command.
-        
         """
         super().__init__("/run/dlck/*", "dlck", path)
         # Pass environment variable string
         self.env_str = ""
         if env_str is not None:
-           self.env_str = str(env_str)        
-
+           self.env_str = str(env_str)
 
         # We need to run with sudo.
         self.sudo = sudo
@@ -68,10 +66,9 @@ class DlckCommand(CommandWithParameters):
         if self.sudo:
             value = " ".join(["sudo -E -n", value])
         return value
-    
+
     def run(self):
         """Run the dlck command.
-
         Args:
             host (NodeSet): Host(s) on which to run the command.
             command (str): Environment Variable string + dlck sub-command to run.
@@ -82,7 +79,6 @@ class DlckCommand(CommandWithParameters):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
         return run_remote(
             self.log, self.host, command=self.env_str + str(self), verbose=self.verbose,

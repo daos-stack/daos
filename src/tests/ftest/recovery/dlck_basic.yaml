@@ -9,10 +9,10 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      targets: 4 
+      targets: 4
       storage: auto
     1:
-      targets: 4 
+      targets: 4
       storage: auto
 
 setup:
