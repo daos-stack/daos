@@ -784,8 +784,13 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	opc_info = rpc_priv->crp_opc_info;
 	co_ops = opc_info->coi_co_ops;
 
-	if (rpc_priv->crp_fail_hlc)
-		D_GOTO(forward_done, rc = -DER_HLC_SYNC);
+	if (rpc_priv->crp_fail_hlc) {
+		rc = -DER_HLC_SYNC;
+		RPC_ERROR(rpc_priv, "crp_fail_hlc (group %s) failed: " DF_RC "\n",
+			  co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
+		crt_corpc_fail_parent_rpc(rpc_priv, rc);
+		D_GOTO(forward_done, rc);
+	}
 
 	/* Invoke pre-forward callback first if it is registered */
 	if (co_ops && co_ops->co_pre_forward) {
@@ -796,7 +801,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 				  co_info->co_grp_priv->gp_pub.cg_grpid,
 				  DP_RC(rc));
 			crt_corpc_fail_parent_rpc(rpc_priv, rc);
-			D_GOTO(forward_done, rc = 0);
+			D_GOTO(forward_done, rc);
 		}
 	}
 
@@ -807,8 +812,9 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (co_info->co_grp_priv->gp_self == CRT_NO_RANK) {
 		RPC_TRACE(DB_NET, rpc_priv, "%s: self rank not known yet\n",
 			  co_info->co_grp_priv->gp_pub.cg_grpid);
-		crt_corpc_fail_parent_rpc(rpc_priv, -DER_GRPVER);
-		D_GOTO(forward_done, rc = 0);
+		rc = -DER_GRPVER;
+		crt_corpc_fail_parent_rpc(rpc_priv, rc);
+		D_GOTO(forward_done, rc);
 	}
 
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
@@ -824,7 +830,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 			   "crt_tree_get_children(group %s) failed: "DF_RC"\n",
 			   co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
-		D_GOTO(forward_done, rc = 0);
+		D_GOTO(forward_done, rc);
 	}
 
 	co_info->co_child_num     = (children_rank_list == NULL) ? 0 : children_rank_list->rl_nr;
@@ -839,7 +845,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		rc = -DER_GRPVER;
 		co_info->co_child_num = 0;
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
-		D_GOTO(forward_done, rc = 0);
+		D_GOTO(forward_done, rc);
 	}
 
 	/* firstly forward RPC to children if any */
@@ -858,7 +864,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv, "crt_req_create(tgt_ep: %d) failed: " DF_RC "\n",
 				  tgt_ep.ep_rank, DP_RC(rc));
 			crt_corpc_fail_child_rpc(rpc_priv, co_info->co_child_num - i, rc);
-			D_GOTO(forward_done, rc = 0);
+			D_GOTO(forward_done, rc);
 		}
 		D_ASSERT(child_rpc != NULL);
 		D_ASSERT(child_rpc->cr_output_size == rpc_priv->crp_pub.cr_output_size);
@@ -893,28 +899,26 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 			if (i != (co_info->co_child_num - 1))
 				crt_corpc_fail_child_rpc(rpc_priv, co_info->co_child_num - i - 1,
 							 rc);
-			D_GOTO(forward_done, rc = 0);
+			D_GOTO(forward_done, rc);
 		}
 	}
 
 forward_done:
-	if (rc != 0 && rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT)
-		co_failout = true;
-
-	/* NOOP bcast (no child and root excluded) */
-	if (co_info->co_child_num == 0 && (co_info->co_root_excluded || co_failout)) {
-		crt_corpc_complete(rpc_priv);
-		/* reset to 0 as it already replied by crt_corpc_complete() */
+	if (rc != 0) {
+		/* reset rc to 0 as it already failed the parent/child RPC and
+		 * will be replied/completed by crt_corpc_complete().
+		 */
 		rc = 0;
+		if (rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT)
+			co_failout = true;
 	}
 
-	if (co_info->co_root_excluded == 1 || co_failout) {
-		if (co_info->co_grp_priv->gp_self == co_info->co_root) {
-			/* don't return error for root to avoid RPC_DECREF in
-			 * fail case in crt_req_send.
-			 */
-			rc = 0;
-		}
+	/* need not call local RPC handler */
+	if (co_info->co_root_excluded || co_failout) {
+		/* NOOP bcast (no child and root excluded) */
+		if (co_info->co_child_num == 0)
+			crt_corpc_complete(rpc_priv);
+
 		/* Corresponding the initial ref 1 in crt_rpc_handler_common() ->
 		 * crt_rpc_priv_init(rpc_priv, crt_ctx, true).
 		 * That ref commonly will be released by crt_rpc_common_hdlr() -> crt_handle_rpc(),
