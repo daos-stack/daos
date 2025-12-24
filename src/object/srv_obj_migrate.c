@@ -519,9 +519,10 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 			D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_REBUILD, "TLS %p create for "DF_UUID" "DF_UUID"/"DF_UUID
-		" ver %d "DF_RC"\n", pool_tls, DP_UUID(pool_tls->mpt_pool_uuid),
-		DP_UUID(pool_hdl_uuid), DP_UUID(co_hdl_uuid), version, DP_RC(rc));
+	D_DEBUG(DB_REBUILD,
+		"TLS %p create for " DF_UUID " " DF_UUID "/" DF_UUID " ver %d " DF_RC "\n",
+		pool_tls, DP_UUID(pool_tls->mpt_pool_uuid), DP_UUID(pool_hdl_uuid),
+		DP_UUID(co_hdl_uuid), version, DP_RC(rc));
 	d_list_add(&pool_tls->mpt_list, &obj_tls->ot_pool_list);
 	migrate_pool_tls_get(pool_tls);
 out:
@@ -529,7 +530,7 @@ out:
 		ds_pool_child_put(pool_child);
 
 	D_DEBUG(DB_TRACE, "create tls " DF_UUID ": " DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
- 	if (rc != 0) {
+	if (rc != 0) {
 		migrate_pool_tls_put(pool_tls);
 	} else {
 		*p_tls = pool_tls;
@@ -1782,7 +1783,7 @@ migrate_tgt_enter(struct migrate_pool_tls *tls, int ult_type, bool *yielded)
 	ult_cnt = migrate_tgt_ult_cnt(tls, ult_type);
 	while (tls->mpt_inflight_max_ult / 2 <= ult_cnt) {
 		D_DEBUG(DB_REBUILD, "tgt %u max %u\n", ult_cnt, tls->mpt_inflight_max_ult);
- 
+
 		if (yielded)
 			*yielded = true;
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
@@ -3212,10 +3213,11 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 
 	d_iov_set(&val_iov, &val, sizeof(struct migrate_obj_val));
 	rc = obj_tree_insert(toh, cont_arg->cont_uuid, -1, oid, &val_iov);
-	D_DEBUG(DB_REBUILD, "Insert "DF_UUID"/"DF_UUID"/"DF_UOID": ver %u "
-		"ult %u/%u "DF_RC"\n", DP_UUID(tls->mpt_pool_uuid),
-		DP_UUID(cont_arg->cont_uuid), DP_UOID(oid), tls->mpt_version,
-		tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt, DP_RC(rc));
+	D_DEBUG(DB_REBUILD,
+		"Insert " DF_UUID "/" DF_UUID "/" DF_UOID ": ver %u "
+		"ult %u/%u " DF_RC "\n",
+		DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont_arg->cont_uuid), DP_UOID(oid),
+		tls->mpt_version, tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt, DP_RC(rc));
 
 	return 0;
 free:
@@ -3775,7 +3777,7 @@ struct migrate_query_arg {
 	ABT_mutex status_lock;
 	struct ds_migrate_status dms;
 	uint32_t version;
-	uint32_t ult_running;
+	uint32_t                 ult_running;
 	uint32_t total_ult_cnt;
 	uint32_t generation;
 };
@@ -3799,9 +3801,9 @@ migrate_check_one(void *data)
 	arg->total_ult_cnt = tls->mpt_tgt_obj_ult_cnt + tls->mpt_tgt_dkey_ult_cnt;
 	arg->ult_running += tls->mpt_ult_running;
 	ABT_mutex_unlock(arg->status_lock);
-	D_DEBUG(DB_REBUILD, "status %d/%d/ ult %u/%u  rec/obj/size "
-		DF_U64"/"DF_U64"/"DF_U64"\n", tls->mpt_status,
-		arg->dms.dm_status, tls->mpt_tgt_obj_ult_cnt,
+	D_DEBUG(DB_REBUILD,
+		"status %d/%d/ ult %u/%u  rec/obj/size " DF_U64 "/" DF_U64 "/" DF_U64 "\n",
+		tls->mpt_status, arg->dms.dm_status, tls->mpt_tgt_obj_ult_cnt,
 		tls->mpt_tgt_dkey_ult_cnt, tls->mpt_rec_count, tls->mpt_obj_count, tls->mpt_size);
 
 	migrate_pool_tls_put(tls);
@@ -3812,7 +3814,7 @@ int
 ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 			struct ds_migrate_status *dms)
 {
-	struct migrate_query_arg	arg = { 0 };
+	struct migrate_query_arg        arg = {0};
 	int				rc;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);

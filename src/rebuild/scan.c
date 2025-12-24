@@ -896,7 +896,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			  DF_UUID " rebuilding %d\n", DP_UUID(rpt->rt_pool_uuid),
 			  atomic_load(&rpt->rt_pool->sp_rebuilding));
 		/* Wait for EC aggregation to abort before discard the object */
-		D_INFO(DF_UUID" wait for ec agg abort, rebuilding %d.\n",
+		D_INFO(DF_UUID " wait for ec agg abort, rebuilding %d.\n",
 		       DP_UUID(entry->ie_couuid), atomic_load(&rpt->rt_pool->sp_rebuilding));
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {

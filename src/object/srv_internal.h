@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -92,8 +93,7 @@ struct migrate_pool_tls {
 	uint32_t		mpt_new_layout_ver;
 
 	/* migrate leader ULT */
-	unsigned int		mpt_ult_running:1,
-				mpt_fini:1;
+	unsigned int             mpt_ult_running : 1, mpt_fini : 1;
 
 	/* migration init error */
 	int			mpt_init_err;
