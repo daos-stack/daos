@@ -2301,8 +2301,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_INFO("finishing rebuild for "DF_UUID", map_ver=%u refcount %u\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_refcount);
 
-	D_ASSERT(rpt->rt_pool->sp_rebuilding > 0);
-	rpt->rt_pool->sp_rebuilding--;
+	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuilding) > 0);
+	atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
 	rpt->rt_pool->sp_rebuild_scan = 0;
 
 	ABT_mutex_lock(rpt->rt_lock);
