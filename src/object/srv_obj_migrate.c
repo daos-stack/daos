@@ -525,16 +525,12 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 	d_list_add(&pool_tls->mpt_list, &obj_tls->ot_pool_list);
 	migrate_pool_tls_get(pool_tls);
 out:
-	if (rc && pool_tls)
-		migrate_pool_tls_destroy(pool_tls);
-
 	if (pool_child != NULL)
 		ds_pool_child_put(pool_child);
 
 	D_DEBUG(DB_TRACE, "create tls " DF_UUID ": " DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
  	if (rc != 0) {
-		if (pool_tls != NULL)
-			migrate_pool_tls_put(pool_tls);
+		migrate_pool_tls_put(pool_tls);
 	} else {
 		*p_tls = pool_tls;
 	}
