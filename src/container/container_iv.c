@@ -745,6 +745,12 @@ cont_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	if (ref_rc != 0) {
+		DL_WARN(ref_rc, DF_UUID "bypass refresh, IV class id %d.",
+			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		return ref_rc;
+	}
+
 	return cont_iv_ent_update(entry, key, src, priv);
 }
 
