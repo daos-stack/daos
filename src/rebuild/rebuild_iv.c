@@ -186,6 +186,13 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rpt->rt_leader_term != src_iv->riv_leader_term)
 		goto out;
 
+	if (ref_rc != 0) {
+		rc = ref_rc;
+		DL_WARN(rc, DF_UUID "bypass refresh, IV class id %d.",
+			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		goto out;
+	}
+
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	dst_iv->riv_global_done = src_iv->riv_global_done;
