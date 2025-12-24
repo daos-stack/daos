@@ -193,6 +193,10 @@ Example Paths:
 
 	if opts.Args.VosPath != "" {
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "open") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "close") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "prov_mem") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "smd_sync") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
@@ -214,7 +218,21 @@ Example Paths:
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
 		if opts.Args.RunCmd != "" {
-			err := runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
+			var paras []string
+			var skip bool = true
+
+			for _, v := range args {
+				if v == string(opts.Args.VosPath) && skip {
+					skip = false
+					continue
+				}
+
+				if v != string(opts.Args.RunCmd) {
+					paras = append(paras, v)
+				}
+			}
+
+			err := runCmdStr(app, string(opts.Args.RunCmd), paras...)
 			if err != nil {
 				log.Errorf("Error running command %q %s\n", string(opts.Args.RunCmd), err)
 			}

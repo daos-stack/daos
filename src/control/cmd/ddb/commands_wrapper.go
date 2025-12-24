@@ -258,11 +258,13 @@ func ddbFeature(ctx *DdbContext, path, db_path, enable, disable string, show boo
 	return daosError(C.ddb_run_feature(&ctx.ctx, &options))
 }
 
-func ddbRmPool(ctx *DdbContext, path string) error {
+func ddbRmPool(ctx *DdbContext, path string, db_path string) error {
 	/* Set up the options */
 	options := C.struct_rm_pool_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
+	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
 	/* Run the c code command */
 	return daosError(C.ddb_run_rm_pool(&ctx.ctx, &options))
 }
