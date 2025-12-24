@@ -1490,11 +1490,11 @@ test_tx_reserve_publish_cancel(void **state)
 	rc = umem_tx_add_ptr(umm, rsrv_ptr2, 128);
 	assert_int_equal(rc, 0);
 	strcpy(rsrv_ptr2, "leader");
+	umem_cancel(umm, rsrvd_act);
 	rc = umem_tx_abort(umm, 1);
 	assert_false(rc == 0);
 	assert_int_equal(memcmp(rsrv_ptr1, local_buf, 980), 0);
 	assert_int_equal(memcmp(rsrv_ptr2, local_buf, 128), 0);
-	umem_cancel(umm, rsrvd_act);
 	validate_persist_activity(1, 0);
 	utest_get_scm_used_space(arg->ta_utx, &cur_mem_used);
 	assert_true(cur_mem_used >= initial_mem_used);
@@ -1621,11 +1621,11 @@ test_tx_bucket_reserve_publish_cancel(void **state)
 	rc = umem_tx_add_ptr(umm, rsrv_ptr2, 128);
 	assert_int_equal(rc, 0);
 	strcpy(rsrv_ptr2, "leader");
+	umem_cancel(umm, rsrvd_act);
 	rc = umem_tx_abort(umm, 1);
 	assert_false(rc == 0);
 	assert_int_equal(memcmp(rsrv_ptr1, local_buf, 980), 0);
 	assert_int_equal(memcmp(rsrv_ptr2, local_buf, 128), 0);
-	umem_cancel(umm, rsrvd_act);
 	validate_persist_activity(1, 0);
 	utest_get_scm_used_space(arg->ta_utx, &cur_mem_used);
 	assert_true(cur_mem_used >= initial_mem_used);
