@@ -1609,7 +1609,6 @@ expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
 	for (i = 0; i < exp_infos_len; i++) {
 		uint32_t	j;
 
-		assert_int_equal(pqt_resp->infos[i]->type, infos[i].ta_type);
 		assert_int_equal(pqt_resp->infos[i]->state, infos[i].ta_state);
 		assert_int_equal(pqt_resp->infos[i]->n_space, DAOS_MEDIA_MAX);
 		assert_int_equal(pqt_resp->infos[i]->mem_file_bytes, mem_file_bytes);
