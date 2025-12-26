@@ -1365,3 +1365,41 @@ bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type type)
 		return NULL;
 	}
 }
+
+/*
+ * Check if any blob (WAL, meta or data) is created for a pool target,
+ * return true if any blob is created, otherwise return false.
+ */
+bool
+bio_pool_tgt_created(uuid_t pool_id, int tgt_id, enum bio_mc_flags flags)
+{
+	enum smd_dev_type st;
+	spdk_blob_id      blob_id;
+	int               rc;
+
+	/* Always return true for pmem mode */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		return true;
+
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		if (flags & BIO_MC_FL_RDB) {
+			if (st == SMD_DEV_TYPE_DATA)
+				continue;
+			rc = smd_rdb_get_blob(pool_id, tgt_id, st, &blob_id);
+		} else {
+			rc = smd_pool_get_blob(pool_id, tgt_id, st, &blob_id);
+		}
+
+		if (rc == 0) {
+			return true;
+		} else if (rc == -DER_NONEXIST) {
+			continue;
+		} else if (rc) {
+			DL_ERROR(rc, "Failed to query pool " DF_UUID " tgt:%d", DP_UUID(pool_id),
+				 tgt_id);
+			continue;
+		}
+	}
+
+	return false;
+}
