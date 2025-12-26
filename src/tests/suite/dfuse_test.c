@@ -214,10 +214,33 @@ is_fd_large(int fd)
 	return (fd > 100000);
 }
 
+/* randomize the elements in an array */
+static void
+randomize(int *list, int size, int num_exch)
+{
+	int i;
+	int idx_1;
+	int idx_2;
+	int tmp;
+
+	for (i = 0; i < num_exch; i++) {
+		idx_1 = rand() % size;
+		idx_2 = idx_1;
+		while (idx_2 == idx_1)
+			idx_2 = rand() % size;
+		tmp         = list[idx_1];
+		list[idx_1] = list[idx_2];
+		list[idx_2] = tmp;
+	}
+}
+
+#define MAX_FD (8192)
+
 extern int __open(const char *pathname, int flags, ...);
 void
 do_open(void **state)
 {
+	int   i;
 	int   fd;
 	int   rc;
 	int   len;
@@ -227,6 +250,7 @@ do_open(void **state)
 	bool  use_dfuse    = true;
 	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
 	char  native_mount_dir[] = "/tmp/dfuse-test";
+	int  *fd_list;
 
 	if (strstr(test_dir, native_mount_dir))
 		use_dfuse = false;
@@ -238,6 +262,33 @@ do_open(void **state)
 	if (strstr(env_ldpreload, "libpil4dfs.so") != NULL)
 		/* libioil cannot pass this test since low fds are only temporarily blocked */
 		with_pil4dfs = true;
+
+	fd_list = malloc(sizeof(int) * MAX_FD);
+	assert_true(fd_list != NULL);
+
+	for (i = 0; i < MAX_FD; i++) {
+		fd_list[i] = open(test_dir, O_PATH | O_DIRECTORY);
+		assert_true(fd_list[i] > 0);
+		if (with_pil4dfs && use_dfuse)
+			assert_true(is_fd_large(fd_list[i]));
+	}
+	randomize(fd_list, MAX_FD, MAX_FD);
+	for (i = 0; i < MAX_FD; i++) {
+		rc = close(fd_list[i]);
+		assert_true(rc == 0);
+	}
+
+	for (i = 0; i < MAX_FD; i++) {
+		fd_list[i] = open(test_dir, O_PATH | O_DIRECTORY);
+		assert_true(fd_list[i] > 0);
+		if (with_pil4dfs && use_dfuse)
+			assert_true(is_fd_large(fd_list[i]));
+	}
+	randomize(fd_list, MAX_FD, MAX_FD);
+	for (i = 0; i < MAX_FD; i++) {
+		rc = close(fd_list[i]);
+		assert_true(rc == 0);
+	}
 
 	len = snprintf(path, sizeof(path) - 1, "%s/open_file", test_dir);
 	assert_true(len < (sizeof(path) - 1));
@@ -264,6 +315,30 @@ do_open(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
+	for (i = 0; i < MAX_FD; i++) {
+		fd_list[i] = open(path, O_RDONLY);
+		assert_true(fd_list[i] > 0);
+		if (with_pil4dfs && use_dfuse)
+			assert_true(is_fd_large(fd_list[i]));
+	}
+	randomize(fd_list, MAX_FD, MAX_FD);
+	for (i = 0; i < MAX_FD; i++) {
+		rc = close(fd_list[i]);
+		assert_true(rc == 0);
+	}
+
+	for (i = 0; i < MAX_FD; i++) {
+		fd_list[i] = open(path, O_RDONLY);
+		assert_true(fd_list[i] > 0);
+		if (with_pil4dfs && use_dfuse)
+			assert_true(is_fd_large(fd_list[i]));
+	}
+	randomize(fd_list, MAX_FD, MAX_FD);
+	for (i = 0; i < MAX_FD; i++) {
+		rc = close(fd_list[i]);
+		assert_true(rc == 0);
+	}
+
 	rc = unlink(path);
 	assert_return_code(rc, errno);
 
@@ -278,6 +353,8 @@ do_open(void **state)
 
 	rc = unlink(path);
 	assert_return_code(rc, errno);
+
+	free(fd_list);
 }
 
 void

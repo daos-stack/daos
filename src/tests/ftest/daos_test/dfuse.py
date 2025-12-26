@@ -95,6 +95,8 @@ class DaosCoreTestDfuse(TestWithServers):
             daos_test_env['DD_MASK'] = 'all'
             daos_test_env['DD_SUBSYS'] = 'all'
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+            daos_test_env['D_IL_MAX_FD'] = '8192'
+            daos_test_env['D_IL_MAX_DIR'] = '8192'
 
             if il_lib == 'libpil4dfs.so':
                 daos_test_env['D_IL_MOUNT_POINT'] = mount_dir
