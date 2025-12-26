@@ -3246,6 +3246,27 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version,
 	D_FREE(oeo->oeo_csum_iov.iov_buf);
 }
 
+static void
+dump_enum_anchor(daos_unit_oid_t uoid, daos_anchor_t *anchor, char *str)
+{
+	int      nr = DAOS_ANCHOR_BUF_MAX / 8;
+	int      i;
+	uint64_t data[nr];
+
+	D_DEBUG(DB_REBUILD, DF_UOID "%s anchor -", DP_UOID(uoid), str);
+	D_DEBUG(DB_REBUILD, "type %d, shard %d, flags 0x%x\n", anchor->da_type, anchor->da_shard,
+		anchor->da_flags);
+	for (i = 0; i < nr; i++)
+		data[i] = *(uint64_t *)((char *)anchor->da_buf + i * 8);
+	if (nr >= 13)
+		D_DEBUG(DB_REBUILD,
+			"da_buf " DF_X64 "," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64
+			"," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64
+			"," DF_X64,
+			data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+			data[8], data[9], data[10], data[11], data[12]);
+}
+
 static int
 obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	       struct vos_iter_anchors *anchors, struct ds_obj_enum_arg *enum_arg,
@@ -3314,6 +3335,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
 		param.ip_flags |= VOS_IT_RECX_VISIBLE;
+		dump_enum_anchor(oei->oei_oid, &anchors->ia_dkey, "dkey");
+		dump_enum_anchor(oei->oei_oid, &anchors->ia_akey, "akey");
 		if (daos_anchor_get_flags(&anchors->ia_dkey) &
 		      DIOF_WITH_SPEC_EPOCH) {
 			/* For obj verification case. */
@@ -3331,7 +3354,12 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		enum_arg->chk_key2big = 1;
 		enum_arg->need_punch = 1;
 		enum_arg->copy_data_cb = vos_iter_copy;
-		fill_oid(oei->oei_oid, enum_arg);
+		rc                     = fill_oid(oei->oei_oid, enum_arg);
+		if (rc != 0) {
+			rc = -DER_KEY2BIG;
+			DL_ERROR(rc, DF_UOID "fill oid failed", DP_UOID(oei->oei_oid));
+			goto failed;
+		}
 	}
 
 	/*

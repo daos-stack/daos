@@ -62,6 +62,7 @@ struct rank_eph {
 	d_rank_t	re_rank;
 	daos_epoch_t	re_ec_agg_eph;
 	daos_epoch_t	re_stable_eph;
+	uint64_t        re_ec_agg_eph_update_ts; /* re_ec_agg_eph update timestamp */
 };
 
 /* container EC aggregation epoch and stable epoch control descriptor, which is only on leader */

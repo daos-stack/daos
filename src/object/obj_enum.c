@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -689,9 +690,8 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		ptr = sgl_indexed_byte(sgl, &sgl_idx);
 		D_ASSERTF(ptr != NULL, "kds and sgl don't line up");
 
-		D_DEBUG(DB_REBUILD, "process %d, type %d, ptr %p, len "DF_U64
-			", total %zd\n", i, kds->kd_val_type, ptr,
-			kds->kd_key_len, sgl->sg_iovs[0].iov_len);
+		D_DEBUG(DB_REBUILD, "process %d/%d, type %d, ptr %p, len " DF_U64 ", total %zd\n",
+			i, nr, kds->kd_val_type, ptr, kds->kd_key_len, sgl->sg_iovs[0].iov_len);
 		if (kds->kd_val_type == 0 ||
 		    (kds->kd_val_type != type && type != -1)) {
 			sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);

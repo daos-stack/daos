@@ -1734,6 +1734,7 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
 		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
 		eph_ldr->cte_server_ephs[i].re_stable_eph = 0;
+		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = daos_gettime_coarse();
 	}
 	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
 	*leader_p = eph_ldr;
@@ -1790,8 +1791,11 @@ retry:
 
 	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 		if (eph_ldr->cte_server_ephs[i].re_rank == rank) {
-			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph)
+			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph) {
 				eph_ldr->cte_server_ephs[i].re_ec_agg_eph = ec_agg_eph;
+				eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts =
+				    daos_gettime_coarse();
+			}
 			if (eph_ldr->cte_server_ephs[i].re_stable_eph < stable_eph)
 				eph_ldr->cte_server_ephs[i].re_stable_eph = stable_eph;
 			break;
@@ -2056,6 +2060,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	uint64_t			 cur_eph, new_eph;
 	daos_epoch_t			 min_ec_agg_eph;
 	daos_epoch_t			 min_stable_eph;
+	uint64_t                         cur_ts;
 	int				 i;
 	int				 rc = 0;
 
@@ -2090,6 +2095,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		min_ec_agg_eph = DAOS_EPOCH_MAX;
 		min_stable_eph = DAOS_EPOCH_MAX;
+		cur_ts         = daos_gettime_coarse();
 		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 			d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
 
@@ -2098,6 +2104,14 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 					DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank);
 				continue;
 			}
+
+			if (pool->sp_reclaim != DAOS_RECLAIM_DISABLED &&
+			    cur_ts > eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts + 600)
+				D_WARN(DF_CONT ": Sluggish EC boundary report from rank %d, " DF_U64
+					       " Seconds.",
+				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank,
+				       cur_ts -
+					   eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts);
 
 			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
 				min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
