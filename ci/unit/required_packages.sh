@@ -27,6 +27,7 @@ pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
       $(utils/rpms/package_version.sh pmdk lib pmemobj)              \
       $(utils/rpms/package_version.sh pmdk debug pmemobj)            \
       $(utils/rpms/package_version.sh pmdk debug pmem)               \
+      $(utils/rpms/package_version.sh bullseye normal)               \
       fuse3                                                          \
       gotestsum                                                      \
       hwloc-devel                                                    \
