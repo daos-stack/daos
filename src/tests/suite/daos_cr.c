@@ -454,6 +454,7 @@ cr_ins_wait(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 		cr_dci_fini(dci);
 
 		rc = dmg_check_query(dmg_config_file, pool_nr, uuids, dci);
+		D_PRINT("Should not have a non-zero return value.\n");
 		assert_rc_equal(rc, 0);
 
 		if (!cr_ins_status_init(dci->dci_status) && !cr_ins_status_running(dci->dci_status))
