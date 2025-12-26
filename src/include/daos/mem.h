@@ -284,6 +284,10 @@ struct umem_cache {
 	uint32_t         ca_reserve_waiters;
 	/** Waitqueue for free page reserve: umem_cache_reserve() */
 	void            *ca_reserve_wq;
+	/** Waiters for evictable pages to be unpinned */
+	uint32_t         ca_unpin_waiters;
+	/** Waitqueue for waiters for evictable pages to be unpinned */
+	void            *ca_unpin_wq;
 	/** TODO: some other global status */
 	uint64_t        *ptr2off;
 	uintptr_t       *off2ptr;
