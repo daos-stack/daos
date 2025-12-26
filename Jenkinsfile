@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@osalyk/SRE-3459') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -310,7 +311,7 @@ pipeline {
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
-                     description: 'Run the Unit Test on EL 8 test stage')
+                     description: 'Run the Unit Test on EL 9.6 test stage')
         booleanParam(name: 'CI_NLT_TEST',
                      defaultValue: true,
                      description: 'Run the NLT test stage')
@@ -726,7 +727,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8.8') {
+                stage('Unit Test') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -735,11 +736,14 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                            job_step_update(
+                                unitTest(timeout_time: 60,
+                                        unstash_opt: true,
+                                        inst_repos: daosRepos(),
+                                        inst_rpms: unitPackages([image_version: "el9"]),
+                                        image_version: 'el9.6',
+                                        )
+                            )
                     }
                     post {
                         always {
@@ -748,7 +752,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8.8') {
+                stage('Unit Test bdev') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -761,7 +765,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages([image_version: "el9"]),
+                                     image_version: 'el9.6'))
                     }
                     post {
                         always {
@@ -785,7 +790,8 @@ pipeline {
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages([image_version: "el8"]),
+                                     image_version: 'el8.8'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
@@ -810,7 +816,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test with memcheck on EL 8.8') {
+                stage('Unit Test with memcheck') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -824,18 +830,19 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages([image_version: "el9"]),
+                                     image_version: 'el9.6'))
                     }
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck'
+                                         valgrind_stash: 'el9-gcc-unit-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8.8')
-                stage('Unit Test bdev with memcheck on EL 8.8') {
+                } // stage('Unit Test with memcheck')
+                stage('Unit Test bdev with memcheck') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -849,17 +856,18 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages([image_version: "el9"]),
+                                     image_version: 'el9.6'))
                     }
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
                                                      'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+                                         valgrind_stash: 'el9-gcc-unit-memcheck-bdev'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test bdev with memcheck on EL 8')
+                } // stage('Unit Test bdev with memcheck')
             }
         }
         stage('Test') {
