@@ -1665,6 +1665,9 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 {
 	struct dcs_csum_info	 *ci_to_compare = NULL;
 	struct csum_enum_args	*args = arg;
+	struct daos_csummer      *csummer         = args->csummer;
+	bool                      skip_key_calc   = csummer->dcs_skip_key_calc;
+	bool                      skip_key_verify = csummer->dcs_skip_key_verify;
 	d_iov_t			 enum_type_val;
 	int rc;
 
@@ -1691,14 +1694,17 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 
 		d_iov_set(&enum_type_val, buf, rec_data_len);
 
+		/* NB: csum_enum_verify_recx/sv() calls daos_csummer_verify_iod() with dummy
+		 * iod which has no akey.
+		 */
+		csummer->dcs_skip_key_calc   = true;
+		csummer->dcs_skip_key_verify = true;
 		if (kd->kd_val_type == OBJ_ITER_RECX)
-			rc = csum_enum_verify_recx(args->csummer, rec,
-						   &enum_type_val,
-						   ci_to_compare);
+			rc = csum_enum_verify_recx(csummer, rec, &enum_type_val, ci_to_compare);
 		else
-			rc = csum_enum_verify_sv(args->csummer, rec,
-						 &enum_type_val,
-						 ci_to_compare);
+			rc = csum_enum_verify_sv(csummer, rec, &enum_type_val, ci_to_compare);
+		csummer->dcs_skip_key_calc   = skip_key_calc;
+		csummer->dcs_skip_key_verify = skip_key_verify;
 		if (rc != 0)
 			return rc;
 		break;
@@ -1717,9 +1723,7 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 		ci_cast(&ci_to_compare, args->csum_iov);
 		ci_move_next_iov(ci_to_compare, args->csum_iov);
 
-		rc = daos_csummer_verify_key(args->csummer,
-					     &enum_type_val, ci_to_compare);
-
+		rc = daos_csummer_verify_key(csummer, &enum_type_val, ci_to_compare);
 		if (rc != 0) {
 			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
 				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
