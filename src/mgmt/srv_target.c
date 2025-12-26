@@ -702,7 +702,7 @@ tgt_create_preallocate(void *arg)
 			rc = ds_mgmt_tgt_preallocate_parallel(
 			    tca->tca_ptrec->dptr_uuid, tca->tca_scm_size / dss_tgt_nr, dss_tgt_nr,
 			    &tca->tca_ptrec->cancel_create, newborns_path,
-			    dss_bind_to_xstream_cpuset);
+			    dss_bind_to_xstream_cpuset, NULL);
 		}
 		if (rc)
 			goto out;
