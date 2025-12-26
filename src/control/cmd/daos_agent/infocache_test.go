@@ -102,7 +102,7 @@ func TestAgent_newCachedAttachInfo(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	expSys := "my_system"
+	expSys := "GetAttachInfo-daos_server"
 	expRefreshInterval := time.Second
 	expClient := control.NewMockInvoker(log, &control.MockInvokerConfig{})
 

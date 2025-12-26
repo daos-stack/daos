@@ -222,7 +222,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 
 			db := raft.MockDatabaseWithAddr(t, log, msReplica.Addr)
 			m := system.NewMembership(log, db)
-			tc.svc = newMgmtSvc(harness, m, db, nil, nil)
+			tc.svc = newMgmtSvc(harness, m, db, nil, nil, nil)
 			if _, err := tc.svc.membership.Add(msReplica); err != nil {
 				t.Fatal(err)
 			}

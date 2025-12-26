@@ -12,7 +12,9 @@ import (
 	"crypto"
 	"fmt"
 	"path/filepath"
+	"slices"
 
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -24,15 +26,18 @@ import (
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
-	log    logging.Logger
-	config *security.TransportConfig
+	log              logging.Logger
+	config           *security.TransportConfig
+	validAuthFlavors []auth.Flavor
 }
 
 // NewSecurityModule creates a new security module with a transport config
-func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *SecurityModule {
+func NewSecurityModule(log logging.Logger, tc *security.TransportConfig, vaf []auth.Flavor) *SecurityModule {
+
 	return &SecurityModule{
-		log:    log,
-		config: tc,
+		log:              log,
+		config:           tc,
+		validAuthFlavors: vaf,
 	}
 }
 
@@ -61,6 +66,10 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 			return m.validateRespWithStatus(daos.NoCert)
 		}
 		key = cert.PublicKey
+	}
+
+	if !slices.Contains(m.validAuthFlavors, cred.GetToken().Flavor) {
+		return nil, errors.Errorf("token has authentication flavor not supported by server.")
 	}
 
 	// Check our verifier

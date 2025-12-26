@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -53,6 +54,17 @@ type deprecatedParams struct {
 	EnableHotplug *bool    `yaml:"enable_hotplug,omitempty"` // deprecated in 2.8
 }
 
+// AuthenticationConfig contains configuation details for valid authentication
+type AuthenticationConfig struct {
+	ValidAuth []string `yaml:"valid_auth"`
+}
+
+func DefaultAuthenticationConfig() *AuthenticationConfig {
+	return &AuthenticationConfig{
+		ValidAuth: []string{auth.Flavor_name[int32(auth.Flavor_AUTH_SYS)]},
+	}
+}
+
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
@@ -78,6 +90,9 @@ type Server struct {
 	CoreDumpFilter     uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars      []string                  `yaml:"client_env_vars,omitempty"`
 	SupportConfig      SupportConfig             `yaml:"support_config,omitempty"`
+
+	// authentication
+	AuthenticationConfig *AuthenticationConfig `yaml:"auth_config"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -346,14 +361,15 @@ func (cfg *Server) WithTelemetryPort(port int) *Server {
 // populated with defaults.
 func DefaultServer() *Server {
 	return &Server{
-		SystemName:        build.DefaultSystemName,
-		SocketDir:         defaultRuntimeDir,
-		ControlPort:       build.DefaultControlPort,
-		TransportConfig:   security.DefaultServerTransportConfig(),
-		Hyperthreads:      false,
-		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
-		Path:              defaultConfigPath,
-		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
+		SystemName:           build.DefaultSystemName,
+		SocketDir:            defaultRuntimeDir,
+		ControlPort:          build.DefaultControlPort,
+		TransportConfig:      security.DefaultServerTransportConfig(),
+		AuthenticationConfig: DefaultAuthenticationConfig(),
+		Hyperthreads:         false,
+		SystemRamReserved:    storage.DefaultSysMemRsvd / humanize.GiByte,
+		Path:                 defaultConfigPath,
+		ControlLogMask:       common.ControlLogLevel(logging.LogLevelInfo),
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}

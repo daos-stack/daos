@@ -35,7 +35,7 @@ func TestSrvSecurityModule_ID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, nil)
+	mod := NewSecurityModule(log, nil, nil)
 
 	test.AssertEqual(t, mod.ID(), daos.ModuleSecurity, "wrong drpc module")
 }
@@ -71,7 +71,7 @@ func TestSrv_SecurityModule_GetMethod(t *testing.T) {
 			parent := test.MustLogContext(t)
 			log := logging.FromContext(parent)
 
-			mod := NewSecurityModule(log, insecureTransportConfig())
+			mod := NewSecurityModule(log, insecureTransportConfig(), nil)
 
 			method, err := mod.GetMethod(tc.methodID)
 
@@ -90,7 +90,7 @@ func TestSrvSecurityModule_ValidateCred_InvalidReq(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, insecureTransportConfig())
+	mod := NewSecurityModule(log, insecureTransportConfig(), nil)
 	// Put garbage in the body
 	resp, err := callValidateCreds(t, mod, []byte{byte(123), byte(90), byte(255)})
 
@@ -141,7 +141,7 @@ func TestSrvSecurityModule_ValidateCred_NoCred(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, insecureTransportConfig())
+	mod := NewSecurityModule(log, insecureTransportConfig(), nil)
 	reqBytes := marshal(t, &auth.ValidateCredReq{})
 
 	resp, err := callValidateCreds(t, mod, reqBytes)
@@ -159,7 +159,7 @@ func TestSrvSecurityModule_ValidateCred_NoToken(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, insecureTransportConfig())
+	mod := NewSecurityModule(log, insecureTransportConfig(), nil)
 	reqBytes := getMarshaledValidateCredReq(t, nil, &auth.Token{
 		Flavor: auth.Flavor_AUTH_NONE,
 		Data:   []byte{byte(1), byte(2)},
@@ -180,7 +180,7 @@ func TestSrvSecurityModule_ValidateCred_NoVerifier(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, insecureTransportConfig())
+	mod := NewSecurityModule(log, insecureTransportConfig(), nil)
 	reqBytes := getMarshaledValidateCredReq(t, &auth.Token{
 		Flavor: auth.Flavor_AUTH_NONE,
 		Data:   []byte{byte(1), byte(2)},
@@ -225,7 +225,7 @@ func TestSrvSecurityModule_ValidateCred_Insecure_OK(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, insecureTransportConfig())
+	mod := NewSecurityModule(log, insecureTransportConfig(), []auth.Flavor{auth.Flavor_AUTH_SYS})
 
 	token := getValidToken(t)
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, nil))
@@ -245,7 +245,7 @@ func TestSrvSecurityModule_ValidateCred_Insecure_BadVerifier(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, insecureTransportConfig())
+	mod := NewSecurityModule(log, insecureTransportConfig(), []auth.Flavor{auth.Flavor_AUTH_SYS})
 
 	token := getValidToken(t)
 	reqBytes := getMarshaledValidateCredReq(t, token, &auth.Token{Data: []byte{0x1}}) // junk verifier
@@ -302,7 +302,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_OK(t *testing.T) {
 
 	key := generateTestCert(t, tmpDir)
 
-	mod := NewSecurityModule(log, secureTransportConfig(tmpDir))
+	mod := NewSecurityModule(log, secureTransportConfig(tmpDir), []auth.Flavor{auth.Flavor_AUTH_SYS})
 	token := getValidToken(t)
 
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, key))
@@ -322,7 +322,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_LoadingCertFailed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, secureTransportConfig("some/fake/path"))
+	mod := NewSecurityModule(log, secureTransportConfig("some/fake/path"), nil)
 	token := getValidToken(t)
 
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, nil))
@@ -347,7 +347,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_BadVerifier(t *testing.T) {
 
 	_ = generateTestCert(t, tmpDir)
 
-	mod := NewSecurityModule(log, secureTransportConfig(tmpDir))
+	mod := NewSecurityModule(log, secureTransportConfig(tmpDir), []auth.Flavor{auth.Flavor_AUTH_SYS})
 	token := getValidToken(t)
 
 	// unsigned hash instead of signed by cert

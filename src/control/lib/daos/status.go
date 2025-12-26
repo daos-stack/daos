@@ -120,6 +120,8 @@ const (
 	MercuryFatalError Status = -C.DER_HG_FATAL
 	// NoService indicates the pool service is not up and didn't process the pool request
 	NoService Status = -C.DER_NO_SERVICE
+	// FailedSign indicates the DAOS agent was not able to return a signed credential
+	FailedSign Status = -C.DER_FAILED_SIGN
 )
 
 const (

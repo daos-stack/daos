@@ -85,7 +85,7 @@ func TestMgmt_ListContainers(t *testing.T) {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
-					events.NewPubSub(test.Context(t), log))
+					events.NewPubSub(test.Context(t), log), nil)
 			},
 			req:    validListContReq(),
 			expErr: FaultHarnessNotStarted,
@@ -185,7 +185,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
-					events.NewPubSub(test.Context(t), log))
+					events.NewPubSub(test.Context(t), log), nil)
 			},
 			req:    validContSetOwnerReq(),
 			expErr: FaultHarnessNotStarted,

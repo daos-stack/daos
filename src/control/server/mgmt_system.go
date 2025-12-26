@@ -129,6 +129,14 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		}
 	}
 
+	vaf := make([]uint32, len(svc.validAuthFlavors))
+
+	for index, value := range svc.validAuthFlavors {
+		vaf[index] = uint32(value)
+	}
+
+	resp.ValidAuthFlavors = vaf
+
 	return resp, nil
 }
 

@@ -110,8 +110,12 @@ func (cmd *startCmd) Execute(_ []string) error {
 	secCfg := &securityConfig{
 		transport:   cmd.cfg.TransportConfig,
 		credentials: cmd.cfg.CredentialConfig,
+		infoCache:   cache,
+		sys:         cmd.cfg.SystemName,
 	}
-	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
+	module := NewSecurityModule(cmd.Logger, secCfg)
+
+	drpcServer.RegisterRPCModule(module)
 	mgmtMod := &mgmtModule{
 		log:           cmd.Logger,
 		sys:           cmd.cfg.SystemName,

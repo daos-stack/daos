@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
@@ -83,9 +84,10 @@ type mgmtSvc struct {
 	serialReqs        batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
+	validAuthFlavors  []auth.Flavor
 }
 
-func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
+func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub, a []auth.Flavor) *mgmtSvc {
 	return &mgmtSvc{
 		log:               h.log,
 		harness:           h,
@@ -99,6 +101,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		batchReqs:         make(batchReqChan),
 		serialReqs:        make(batchReqChan),
 		groupUpdateReqs:   make(chan bool),
+		validAuthFlavors:  a,
 	}
 }
 

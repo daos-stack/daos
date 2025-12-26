@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
@@ -70,6 +71,7 @@ type drpcServerSetupReq struct {
 	sockDir string
 	engines []Engine
 	tc      *security.TransportConfig
+	vaf     []auth.Flavor
 	sysdb   *raft.Database
 	events  *events.PubSub
 }
@@ -90,8 +92,10 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 		return errors.Wrap(err, "unable to create socket server")
 	}
 
+	securityModule := NewSecurityModule(req.log, req.tc, req.vaf)
+
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.tc))
+	drpcServer.RegisterRPCModule(securityModule)
 	drpcServer.RegisterRPCModule(newMgmtModule())
 	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.sysdb, req.engines, req.events))
 

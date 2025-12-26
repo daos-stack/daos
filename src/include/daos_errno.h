@@ -201,6 +201,8 @@ extern "C" {
 	ACTION(DER_CONTROL_INCOMPAT, One or more control plane components are incompatible)        \
 	/** No service available */                                                                \
 	ACTION(DER_NO_SERVICE, No service available)                                               \
+	/** Faild to sign credential */                                                            \
+	ACTION(DER_FAILED_SIGN, Faild to sign credential)                                          \
 	/** The TX ID may be reused. */                                                            \
 	ACTION(DER_TX_ID_REUSED, TX ID may be reused)                                              \
 	/** Re-update again */                                                                     \

@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -158,6 +159,8 @@ type server struct {
 	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
 	onShutdown       []func()
+
+	validAuthFlavors []auth.Flavor
 }
 
 func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -173,13 +176,19 @@ func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.Fault
 
 	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
+	validAuthFlavors, err := auth.ParseValidAuthFlavors(cfg.AuthenticationConfig.ValidAuth)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get valid authentication flavors")
+	}
+
 	return &server{
-		log:         log,
-		cfg:         cfg,
-		hostname:    hostname,
-		runningUser: cu,
-		faultDomain: faultDomain,
-		harness:     harness,
+		log:              log,
+		cfg:              cfg,
+		hostname:         hostname,
+		runningUser:      cu,
+		faultDomain:      faultDomain,
+		harness:          harness,
+		validAuthFlavors: validAuthFlavors,
 	}, nil
 }
 
@@ -246,7 +255,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 
 	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
 		network.DefaultFabricScanner(srv.log))
-	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
+	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub, srv.validAuthFlavors)
 
 	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
 		return srv.cfg.SystemName
@@ -507,6 +516,7 @@ func (srv *server) start(ctx context.Context) error {
 		sockDir: srv.cfg.SocketDir,
 		engines: srv.harness.Instances(),
 		tc:      srv.cfg.TransportConfig,
+		vaf:     srv.validAuthFlavors,
 		sysdb:   srv.sysdb,
 		events:  srv.pubSub,
 	}

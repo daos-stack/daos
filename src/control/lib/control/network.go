@@ -22,6 +22,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -241,6 +242,7 @@ type (
 		ClientNetHint           ClientNetworkHint     `json:"client_net_hint"`
 		AlternateClientNetHints []ClientNetworkHint   `json:"secondary_client_net_hints"`
 		BuildInfo               BuildInfo             `json:"build_info"`
+		ValidAuthFlavors        []auth.Flavor         `json:"valid_auth_flavors"`
 	}
 )
 

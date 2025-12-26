@@ -29,7 +29,7 @@ enum drpc_module {
 
 enum drpc_sec_agent_method {
 	DRPC_METHOD_SEC_AGENT_REQUEST_CREDS	= 101,
-
+	DRPC_METHOD_SEC_AGENT_REQUEST_AUTH_FLAVORS	= 102,
 	NUM_DRPC_SEC_AGENT_METHODS		/* Must be last */
 };
 

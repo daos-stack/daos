@@ -21,22 +21,39 @@
 #include "acl.h"
 
 /* Prototypes for static helper functions */
-static int request_credentials_via_drpc(Drpc__Response **response);
+static int request_flavor_via_drpc(Drpc__Response **response);
+static int prepare_credential_request_accman(Auth__GetCredReq *args, Drpc__Call	*request);
+static int request_credentials_via_drpc(Drpc__Response **response, Auth__Flavor flavor);
+static int process_flavor_response(Drpc__Response *response, Auth__Flavor *flavor);
 static int process_credential_response(Drpc__Response *response,
 				       d_iov_t *creds);
+static int get_flavor_from_response(Drpc__Response *response, Auth__Flavor *flavor);
 static int get_cred_from_response(Drpc__Response *response, d_iov_t *cred);
 
 int
 dc_sec_request_creds(d_iov_t *creds)
 {
 	Drpc__Response	*response = NULL;
+	Auth__Flavor	flavor = AUTH__FLAVOR__AUTH_NONE;
 	int		rc;
 
 	if (creds == NULL) {
 		return -DER_INVAL;
 	}
 
-	rc = request_credentials_via_drpc(&response);
+	rc = request_flavor_via_drpc(&response);
+	if (rc != DER_SUCCESS) {
+		drpc_response_free(response);
+		return rc;
+	}
+
+	rc = process_flavor_response(response, &flavor);
+	if (rc != DER_SUCCESS) {
+		drpc_response_free(response);
+		return rc;
+	}
+
+	rc = request_credentials_via_drpc(&response, flavor);
 	if (rc != DER_SUCCESS) {
 		drpc_response_free(response);
 		return rc;
@@ -48,16 +65,49 @@ dc_sec_request_creds(d_iov_t *creds)
 	return rc;
 }
 
+/** Constant that represents the upper bound size of a string encoded delegation credential token for the access manager. */
+#define MAX_DELEGATION_TOKEN_SIZE 10000
+
+static int 
+get_delegation_token(const char *delegation_token_filename, Auth__GetCredReq *args)
+{
+	if (delegation_token_filename == NULL) {
+		D_ERROR("No path set. Please specify a valid path in $AM_PATH\n");
+		return -DER_INVAL;
+	}
+
+	FILE *token_fptr = fopen(delegation_token_filename, "r");
+
+	if (token_fptr == NULL) {
+		D_ERROR("AM path is not a valid file. Please specify a valid path in $AM_PATH\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC(args->data.data, MAX_DELEGATION_TOKEN_SIZE);
+	if (args == NULL) {
+		D_ERROR("Failed to allocate buffer for delegation token.\n");
+		return -DER_NOMEM;
+	}
+
+	args->data.len = fread(args->data.data, 1, MAX_DELEGATION_TOKEN_SIZE, token_fptr);
+	if (args->data.len == 0) {
+		D_ERROR("Found an empty file.\n");
+		return -DER_INVAL;
+	}
+
+	fclose(token_fptr);
+	return -DER_SUCCESS;
+}
+
 static int
-request_credentials_via_drpc(Drpc__Response **response)
+request_flavor_via_drpc(Drpc__Response **response)
 {
 	Drpc__Call	*request;
 	struct drpc	*agent_socket;
 	int		rc;
 
 	if (dc_agent_sockpath == NULL) {
-		D_ERROR("DAOS Socket Path is Uninitialized\n");
-		return -DER_UNINIT;
+		dc_agent_sockpath = DEFAULT_DAOS_AGENT_DRPC_SOCK;
 	}
 
 	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
@@ -68,7 +118,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 
 	rc = drpc_call_create(agent_socket,
 			      DRPC_MODULE_SEC_AGENT,
-			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
+			      DRPC_METHOD_SEC_AGENT_REQUEST_AUTH_FLAVORS,
 			      &request);
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("Couldn't allocate dRPC call "DF_RC"\n", DP_RC(rc));
@@ -78,9 +128,92 @@ request_credentials_via_drpc(Drpc__Response **response)
 
 	rc = drpc_call(agent_socket, R_SYNC, request, response);
 
+	return rc;
+}
+
+static int
+prepare_credential_request_accman(Auth__GetCredReq *args, Drpc__Call *request) {
+	char *delegation_token_path = getenv("TOKEN_PATH");
+	int rc = get_delegation_token(delegation_token_path, args);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Error in retrieving delegation token\n");
+		return rc;
+	}
+	D_ALLOC(request->body.data, MAX_DELEGATION_TOKEN_SIZE);
+	request->body.len = auth__get_cred_req__pack(args, request->body.data);
+	return rc;
+}
+
+static int
+request_credentials_via_drpc(Drpc__Response **response, Auth__Flavor flavor)
+{
+	Drpc__Call	*request;
+	struct drpc	*agent_socket;
+	int		rc;
+
+	if (dc_agent_sockpath == NULL) {
+		dc_agent_sockpath = DEFAULT_DAOS_AGENT_DRPC_SOCK;
+	}
+
+	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Can't connect to agent socket "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+	
+	rc = drpc_call_create(agent_socket,
+			      DRPC_MODULE_SEC_AGENT,
+			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
+			      &request);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Couldn't allocate dRPC call "DF_RC"\n", DP_RC(rc));
+		drpc_close(agent_socket);
+		return rc;
+	}
+
+	Auth__GetCredReq args = AUTH__GET_CRED_REQ__INIT;
+	args.flavor = flavor;
+
+	switch (flavor) {
+	case AUTH__FLAVOR__AUTH_NONE:
+		D_ERROR("Auth flavor was 'none'\n");
+		return -1;
+	
+	case AUTH__FLAVOR__AUTH_SYS:
+		break;
+	
+	case AUTH__FLAVOR__AUTH_ACCMAN:
+		prepare_credential_request_accman(&args, request);
+		break;
+
+	default:
+		D_ERROR("Auth flavor was: %d\n", flavor);
+		return -1;
+	}
+
+	rc = drpc_call(agent_socket, R_SYNC, request, response);
+
 	drpc_close(agent_socket);
 	drpc_call_free(request);
 	return rc;
+}
+
+static int
+process_flavor_response(Drpc__Response *response, Auth__Flavor *flavor)
+{
+	if (response == NULL) {
+		D_ERROR("Response was null\n");
+		return -DER_NOREPLY;
+	}
+
+	if (response->status != DRPC__STATUS__SUCCESS) {
+		/* Recipient could not parse our message */
+		D_ERROR("Agent credential drpc request failed: %d\n",
+			response->status);
+		return -DER_MISC;
+	}
+
+	return get_flavor_from_response(response, flavor);
 }
 
 static int
@@ -116,6 +249,45 @@ auth_cred_to_iov(Auth__Credential *cred, d_iov_t *iov)
 	d_iov_set(iov, packed, len);
 
 	return 0;
+}
+
+static int
+get_flavor_from_response(Drpc__Response *response, Auth__Flavor *flavor)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int			rc = 0;
+	Auth__GetValidFlavorsResp	*flavors_resp = NULL;
+
+	flavors_resp = auth__get_valid_flavors_resp__unpack(&alloc.alloc,
+						response->body.len,
+						response->body.data);
+	if (alloc.oom)
+		return -DER_NOMEM;
+	if (flavors_resp == NULL) {
+		D_ERROR("Body was not a GetCredentialResp\n");
+		return -DER_PROTO;
+	}
+
+	if (flavors_resp->status != 0) {
+		D_ERROR("dRPC call reported failure, status=%d\n",
+			flavors_resp->status);
+		D_GOTO(out, rc = flavors_resp->status);
+	}
+
+	if (flavors_resp->validauthflavors == NULL) {
+		D_ERROR("No valid auth flavors included\n");
+		D_GOTO(out, rc = -DER_PROTO);
+	}
+
+	if (flavors_resp->n_validauthflavors == 0) {
+		D_ERROR("No valid auth flavors included\n");
+		D_GOTO(out, rc = -DER_PROTO);
+	}
+
+	*flavor = flavors_resp->validauthflavors[0];
+out:
+	auth__get_valid_flavors_resp__free_unpacked(flavors_resp, &alloc.alloc);
+	return rc;
 }
 
 static int
