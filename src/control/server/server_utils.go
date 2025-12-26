@@ -749,6 +749,8 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
+	// TODO 17427: Register subscriber for RASEngineEvictSuicide RasTypeInfo to handle local
+	//             event and restart suicided rank.
 }
 
 func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
@@ -826,6 +828,8 @@ func registerLeaderSubscriptions(srv *server) {
 				handleRankDead(ctx, srv, evt)
 			}
 		}))
+	// TODO 17427: Register subscriber for RASEngineEvictSuicide RasTypeInfo to handle local
+	//             event and restart suicided rank.
 
 	// Add a debounce to throttle multiple SWIM Rank Dead events for the same rank/incarnation.
 	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {
