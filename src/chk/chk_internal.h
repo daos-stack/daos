@@ -1173,6 +1173,14 @@ chk_pools_find_slowest(struct chk_instance *ins, int *done)
 			phase = cpr->cpr_bk.cb_phase;
 	}
 
+	/* All pools have been processed, but some check engines are running, let's wait them. */
+	if (*done > 0 && !d_list_empty(&ins->ci_rank_list) && ins->ci_orphan_done) {
+		D_ASSERT(ins->ci_is_leader);
+
+		phase = CHK_INVAL_PHASE;
+		*done = 0;
+	}
+
 	return phase;
 }
 

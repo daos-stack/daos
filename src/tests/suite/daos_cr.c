@@ -3427,12 +3427,6 @@ cr_fail_sync_orphan(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	/* Check leader may be completed earlier than check engines in this case, double check. */
-	cr_ins_wait(0, NULL, &dci);
-
-	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
-	assert_rc_equal(rc, 0);
-
 	cr_debug_set_params(arg, 0);
 
 	rc = cr_mode_switch(false);
