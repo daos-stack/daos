@@ -916,7 +916,7 @@ hold_obj(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t *ep
 			assert_rc_equal(rc, 0);
 		}
 
-		rc = vos_obj_incarnate(*obj_p, epr, bound, flags, intent, ts_set);
+		rc = vos_obj_incarnate(*obj_p, epr, bound, flags, intent, ts_set, NULL);
 
 		if (umm != NULL)
 			rc = umem_tx_end(umm, rc);
