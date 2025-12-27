@@ -138,6 +138,15 @@ daos_lru_ref_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
 }
 
 /**
+ * Whether the item is evicted or not.
+ */
+static inline bool
+daos_lru_is_evicted(struct daos_llink *llink)
+{
+	return llink->ll_evicted != 0;
+}
+
+/**
  * Evict the item from LRU before releasing the refcount on it, wait until
  * the caller is the last one holds refcount.
  *
