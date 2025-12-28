@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -355,6 +356,21 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 int
 daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 			struct dcs_csum_info *csum);
+
+/**
+ * Verify a value to a checksum
+ *
+ * @param obj		The daos_csummer obj
+ * @param recx		extent for array value (NULL for single value)
+ * @param rsize		element/value size
+ * @param val		The key to verify
+ * @param csum_info	The dcs_csum_info that describes the checksum
+ *
+ * @return		0 for success, -DER_CSUM if corruption is detected
+ */
+int
+daos_csummer_verify_value(struct daos_csummer *obj, daos_recx_t *recx, daos_size_t rsize,
+			  d_iov_t *val, struct dcs_csum_info *csum_info);
 
 /**
  * Calculate the needed memory for all the structures that will
