@@ -701,6 +701,20 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr, uint8_t *skips
 		sizes[i] = iods[idx].iod_size;
 		D_DEBUG(DB_IO, DF_UOID" %d:"DF_U64"\n", DP_UOID(orw->orw_oid),
 			i, iods[idx].iod_size);
+		if ((orw->orw_flags & ORF_FOR_MIGRATION) && sizes[i] == 0) {
+			D_INFO(DF_CONT " obj " DF_UOID "rebuild fetch zero iod_size, i:%d/idx:%d, "
+				       "iod_nr %d, orw_epoch " DF_X64 ", orw_epoch_first " DF_X64
+				       " may cause DER_DATA_LOSS",
+			       DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid), DP_UOID(orw->orw_oid),
+			       i, idx, iods[idx].iod_nr, orw->orw_epoch, orw->orw_epoch_first);
+			if (iods[idx].iod_type == DAOS_IOD_ARRAY) {
+				int j;
+
+				for (j = 0; j < min(8, iods[idx].iod_nr); j++)
+					D_INFO("recx[%d] - " DF_RECX, j,
+					       DP_RECX(iods[idx].iod_recxs[j]));
+			}
+		}
 		idx++;
 	}
 
@@ -1368,7 +1382,7 @@ struct ec_agg_boundary_arg {
 };
 
 static int
-obj_fetch_ec_agg_boundary(void *data)
+obj_fetch_ec_agg_boundary_ult(void *data)
 {
 	struct ec_agg_boundary_arg *arg = data;
 	int                         rc;
@@ -1379,6 +1393,33 @@ obj_fetch_ec_agg_boundary(void *data)
 			 DP_CONT(arg->eab_pool->sp_uuid, arg->eab_co_uuid));
 
 	return rc;
+}
+
+static int
+obj_fetch_ec_agg_boundary(struct obj_io_context *ioc, daos_unit_oid_t *uoid)
+{
+	struct ec_agg_boundary_arg arg;
+	int                        rc;
+
+	arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
+	uuid_copy(arg.eab_co_uuid, ioc->ioc_coc->sc_uuid);
+	rc = dss_ult_execute(obj_fetch_ec_agg_boundary_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (rc) {
+		DL_ERROR(rc, DF_CONT ", " DF_UOID " fetch ec_agg_boundary failed.",
+			 DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
+			 DP_UOID(*uoid));
+		return rc;
+	}
+	if (ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
+		rc = -DER_FETCH_AGAIN;
+		DL_INFO(rc, DF_CONT ", " DF_UOID " zero ec_agg_boundary.",
+			DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid), DP_UOID(*uoid));
+		return rc;
+	}
+	D_DEBUG(DB_IO, DF_CONT ", " DF_UOID " fetched ec_agg_eph_boundary " DF_X64 "\n",
+		DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid), DP_UOID(*uoid),
+		ioc->ioc_coc->sc_ec_agg_eph_boundary);
+	return 0;
 }
 
 static int
@@ -1503,29 +1544,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		}
 		if ((ec_deg_fetch || (ec_recov && get_parity_list)) &&
 		    ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
-			struct ec_agg_boundary_arg arg;
-
-			arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
-			uuid_copy(arg.eab_co_uuid, ioc->ioc_coc->sc_uuid);
-			rc = dss_ult_execute(obj_fetch_ec_agg_boundary, &arg, NULL, NULL,
-					     DSS_XS_SYS, 0, 0);
+			rc = obj_fetch_ec_agg_boundary(ioc, &orw->orw_oid);
 			if (rc) {
 				DL_ERROR(rc, DF_CONT ", " DF_UOID " fetch ec_agg_boundary failed.",
 					 DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
 					 DP_UOID(orw->orw_oid));
 				goto out;
 			}
-			if (ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
-				rc = -DER_FETCH_AGAIN;
-				DL_INFO(rc, DF_CONT ", " DF_UOID " zero ec_agg_boundary.",
-					DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
-					DP_UOID(orw->orw_oid));
-				goto out;
-			}
-			D_DEBUG(DB_IO,
-				DF_CONT ", " DF_UOID " fetched ec_agg_eph_boundary " DF_X64 "\n",
-				DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
-				DP_UOID(orw->orw_oid), ioc->ioc_coc->sc_ec_agg_eph_boundary);
+			D_ASSERT(ioc->ioc_coc->sc_ec_agg_eph_valid);
 		}
 		if (get_parity_list) {
 			D_ASSERT(!ec_deg_fetch);
@@ -3029,6 +3055,20 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		 */
 		if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
 			uint64_t rebuild_epoch;
+
+			if (ioc.ioc_coc->sc_ec_agg_eph_valid == 0) {
+				rc = obj_fetch_ec_agg_boundary(&ioc, &orw->orw_oid);
+				if (rc) {
+					DL_ERROR(rc,
+						 DF_CONT ", " DF_UOID " fetch ec_agg_boundary "
+							 "failed.",
+						 DP_CONT(ioc.ioc_coc->sc_pool_uuid,
+							 ioc.ioc_coc->sc_uuid),
+						 DP_UOID(orw->orw_oid));
+					goto out;
+				}
+				D_ASSERT(ioc.ioc_coc->sc_ec_agg_eph_valid);
+			}
 
 			D_ASSERTF(orw->orw_epoch <= orw->orw_epoch_first,
 				  "bad orw_epoch " DF_X64 ", orw_epoch_first " DF_X64 "\n",
