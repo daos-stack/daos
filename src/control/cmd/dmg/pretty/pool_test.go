@@ -54,50 +54,46 @@ func TestPretty_PrintPoolQueryTargetResponse(t *testing.T) {
 				Status: 0,
 				Infos: []*daos.PoolQueryTargetInfo{
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDown,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDownOut,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down
+Target: state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -111,107 +107,46 @@ Target: type unknown, state up_in
 				Status: 0,
 				Infos: []*daos.PoolQueryTargetInfo{
 					{
-						Type:  0,
 						State: 42,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDownOut,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state invalid
+Target: state invalid
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state up_in
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVME):
-  Total size: 100 GB
-  Free: 90 GB
-`,
-		},
-		"invalid target type": {
-			pqtr: &control.PoolQueryTargetResp{
-				Status: 0,
-				Infos: []*daos.PoolQueryTargetInfo{
-					{
-						Type:  42,
-						State: daos.PoolTargetStateDown,
-						Space: []*daos.StorageUsageStats{tier0, tier1},
-					},
-					{
-						Type:  0,
-						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{tier0, tier1},
-					},
-					{
-						Type:  0,
-						State: daos.PoolTargetStateDownOut,
-						Space: []*daos.StorageUsageStats{tier0, tier1},
-					},
-					{
-						Type:  0,
-						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{tier0, tier1},
-					},
-				},
-			},
-			expPrintStr: `
-Target: type invalid, state down
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVME):
-  Total size: 100 GB
-  Free: 90 GB
-Target: type unknown, state up_in
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVME):
-  Total size: 100 GB
-  Free: 90 GB
-Target: type unknown, state down_out
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVME):
-  Total size: 100 GB
-  Free: 90 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -225,7 +160,6 @@ Target: type unknown, state up_in
 				Status: 0,
 				Infos: []*daos.PoolQueryTargetInfo{
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDown,
 						Space: []*daos.StorageUsageStats{
 							tier0, tier1,
@@ -236,7 +170,6 @@ Target: type unknown, state up_in
 						},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{
 							tier0, tier1,
@@ -247,7 +180,6 @@ Target: type unknown, state up_in
 						},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDownOut,
 						Space: []*daos.StorageUsageStats{
 							tier0, tier1,
@@ -259,7 +191,6 @@ Target: type unknown, state up_in
 						},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{
 							tier0, tier1,
@@ -272,7 +203,7 @@ Target: type unknown, state up_in
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down
+Target: state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -282,7 +213,7 @@ Target: type unknown, state down
 - Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -292,7 +223,7 @@ Target: type unknown, state up_in
 - Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -302,7 +233,7 @@ Target: type unknown, state down_out
 - Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB

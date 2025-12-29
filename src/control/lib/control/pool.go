@@ -642,7 +642,6 @@ func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQuer
 // For using the pretty printer that dmg uses for this target info.
 func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*daos.PoolQueryTargetInfo, error) {
 	pqti := new(daos.PoolQueryTargetInfo)
-	pqti.Type = daos.PoolQueryTargetType(pbInfo.Type)
 	pqti.State = daos.PoolQueryTargetState(pbInfo.State)
 	pqti.Space = []*daos.StorageUsageStats{
 		{
