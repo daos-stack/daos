@@ -883,15 +883,10 @@ dtx_handle_reinit(struct dtx_handle *dth)
 
 	dth->dth_modify_shared      = 0;
 	dth->dth_active             = 0;
-	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started   = 0;
 	dth->dth_cos_done           = 0;
-
-	dth->dth_op_seq = 0;
-	dth->dth_oid_cnt = 0;
-	dth->dth_oid_cap = 0;
-	D_FREE(dth->dth_oid_array);
-	dth->dth_dkey_hash = 0;
+	dth->dth_op_seq             = 0;
+	dth->dth_dkey_hash          = 0;
 	vos_dtx_rsrvd_fini(dth);
 
 	return vos_dtx_rsrvd_init(dth);
@@ -926,32 +921,29 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 		dth->dth_coh        = xoh;
 	}
 
-	dth->dth_ver = pm_ver;
-	dth->dth_refs = 1;
-	dth->dth_mbs = mbs;
-
-	dth->dth_pinned = 0;
-	dth->dth_cos_done = 0;
-	dth->dth_modify_shared = 0;
-	dth->dth_active = 0;
-	dth->dth_touched_leader_oid = 0;
-	dth->dth_local_tx_started = 0;
-	dth->dth_solo = (flags & DTX_SOLO) ? 1 : 0;
-	dth->dth_drop_cmt = (flags & DTX_DROP_CMT) ? 1 : 0;
-	dth->dth_dist = (flags & DTX_DIST) ? 1 : 0;
-	dth->dth_for_migration = (flags & DTX_FOR_MIGRATION) ? 1 : 0;
+	dth->dth_ver                = pm_ver;
+	dth->dth_refs               = 1;
+	dth->dth_mbs                = mbs;
+	dth->dth_pinned             = 0;
+	dth->dth_cos_done           = 0;
+	dth->dth_modify_shared      = 0;
+	dth->dth_active             = 0;
+	dth->dth_local_tx_started   = 0;
+	dth->dth_solo               = (flags & DTX_SOLO) ? 1 : 0;
+	dth->dth_drop_cmt           = (flags & DTX_DROP_CMT) ? 1 : 0;
+	dth->dth_dist               = (flags & DTX_DIST) ? 1 : 0;
+	dth->dth_for_migration      = (flags & DTX_FOR_MIGRATION) ? 1 : 0;
 	dth->dth_ignore_uncommitted = (flags & DTX_IGNORE_UNCOMMITTED) ? 1 : 0;
-	dth->dth_prepared = (flags & DTX_PREPARED) ? 1 : 0;
-	dth->dth_epoch_owner = (flags & DTX_EPOCH_OWNER) ? 1 : 0;
-	dth->dth_aborted = 0;
-	dth->dth_already = 0;
-	dth->dth_need_validation = 0;
+	dth->dth_prepared           = (flags & DTX_PREPARED) ? 1 : 0;
+	dth->dth_epoch_owner        = (flags & DTX_EPOCH_OWNER) ? 1 : 0;
+	dth->dth_aborted            = 0;
+	dth->dth_already            = 0;
+	dth->dth_need_validation    = 0;
 	dth->dth_local              = (flags & DTX_LOCAL) ? 1 : 0;
-
-	dth->dth_dti_cos = dti_cos;
-	dth->dth_dti_cos_count = dti_cos_cnt;
-	dth->dth_ent = NULL;
-	dth->dth_flags = leader ? DTE_LEADER : 0;
+	dth->dth_dti_cos            = dti_cos;
+	dth->dth_dti_cos_count      = dti_cos_cnt;
+	dth->dth_ent                = NULL;
+	dth->dth_flags              = leader ? DTE_LEADER : 0;
 
 	if (flags & DTX_SYNC) {
 		dth->dth_flags |= DTE_BLOCK;
@@ -960,12 +952,11 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 		dth->dth_sync = 0;
 	}
 
-	dth->dth_op_seq = 0;
-	dth->dth_oid_cnt = 0;
-	dth->dth_oid_cap = 0;
-	dth->dth_oid_array = NULL;
-
-	dth->dth_dkey_hash = 0;
+	dth->dth_op_seq          = 0;
+	dth->dth_local_oid_cnt   = 0;
+	dth->dth_local_oid_cap   = 0;
+	dth->dth_local_oid_array = NULL;
+	dth->dth_dkey_hash       = 0;
 
 	if (!(flags & DTX_LOCAL)) {
 		if (daos_is_zero_dti(dti))
@@ -1001,83 +992,6 @@ error:
 	return rc;
 }
 
-static int
-dtx_insert_oid(struct dtx_handle *dth, daos_unit_oid_t *oid, bool touch_leader)
-{
-	int	start = 0;
-	int	end = dth->dth_oid_cnt - 1;
-	int	at;
-	int	rc = 0;
-
-	do {
-		at = (start + end) / 2;
-		rc = daos_unit_oid_compare(dth->dth_oid_array[at], *oid);
-		if (rc == 0)
-			return 0;
-
-		if (rc > 0)
-			end = at - 1;
-		else
-			start = at + 1;
-	} while (start <= end);
-
-	if (dth->dth_oid_cnt == dth->dth_oid_cap) {
-		daos_unit_oid_t		*oid_array;
-
-		D_ALLOC_ARRAY(oid_array, dth->dth_oid_cap << 1);
-		if (oid_array == NULL)
-			return -DER_NOMEM;
-
-		if (rc > 0) {
-			/* Insert before dth->dth_oid_array[at]. */
-			if (at > 0)
-				memcpy(&oid_array[0], &dth->dth_oid_array[0],
-				       sizeof(*oid) * at);
-			oid_array[at] = *oid;
-			memcpy(&oid_array[at + 1], &dth->dth_oid_array[at],
-			       sizeof(*oid) * (dth->dth_oid_cnt - at));
-		} else {
-			/* Insert after dth->dth_oid_array[at]. */
-			memcpy(&oid_array[0], &dth->dth_oid_array[0],
-			       sizeof(*oid) * (at + 1));
-			oid_array[at + 1] = *oid;
-			if (at < dth->dth_oid_cnt - 1)
-				memcpy(&oid_array[at + 2],
-				&dth->dth_oid_array[at + 1],
-				sizeof(*oid) * (dth->dth_oid_cnt - 1 - at));
-		}
-
-		D_FREE(dth->dth_oid_array);
-		dth->dth_oid_array = oid_array;
-		dth->dth_oid_cap <<= 1;
-
-		goto out;
-	}
-
-	if (rc > 0) {
-		/* Insert before dth->dth_oid_array[at]. */
-		memmove(&dth->dth_oid_array[at + 1],
-			&dth->dth_oid_array[at],
-			sizeof(*oid) * (dth->dth_oid_cnt - at));
-		dth->dth_oid_array[at] = *oid;
-	} else {
-		/* Insert after dth->dth_oid_array[at]. */
-		if (at < dth->dth_oid_cnt - 1)
-			memmove(&dth->dth_oid_array[at + 2],
-				&dth->dth_oid_array[at + 1],
-				sizeof(*oid) * (dth->dth_oid_cnt - 1 - at));
-		dth->dth_oid_array[at + 1] = *oid;
-	}
-
-out:
-	if (touch_leader)
-		dth->dth_touched_leader_oid = 1;
-
-	dth->dth_oid_cnt++;
-
-	return 0;
-}
-
 void
 dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth)
 {
@@ -1110,51 +1024,6 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 	dth->dth_dkey_hash = dkey_hash;
 	dth->dth_op_seq++;
 
-	rc = daos_unit_oid_compare(dth->dth_leader_oid, *oid);
-	if (rc == 0) {
-		if (dth->dth_oid_array == NULL)
-			dth->dth_touched_leader_oid = 1;
-
-		if (dth->dth_touched_leader_oid)
-			goto out;
-
-		rc = dtx_insert_oid(dth, oid, true);
-
-		D_GOTO(out, rc);
-	}
-
-	if (dth->dth_oid_array == NULL) {
-		D_ASSERT(dth->dth_oid_cnt == 0);
-
-		/* 4 slots by default to hold rename case. */
-		dth->dth_oid_cap = 4;
-		D_ALLOC_ARRAY(dth->dth_oid_array, dth->dth_oid_cap);
-		if (dth->dth_oid_array == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		if (!dth->dth_touched_leader_oid) {
-			dth->dth_oid_array[0] = *oid;
-			dth->dth_oid_cnt = 1;
-
-			D_GOTO(out, rc = 0);
-		}
-
-		dth->dth_oid_cnt = 2;
-
-		if (rc > 0) {
-			dth->dth_oid_array[0] = *oid;
-			dth->dth_oid_array[1] = dth->dth_leader_oid;
-		} else {
-			dth->dth_oid_array[0] = dth->dth_leader_oid;
-			dth->dth_oid_array[1] = *oid;
-		}
-
-		D_GOTO(out, rc = 0);
-	}
-
-	rc = dtx_insert_oid(dth, oid, false);
-
-out:
 	D_DEBUG(DB_IO, "Sub init DTX "DF_DTI" for object "DF_UOID
 		" dkey %lu, opc seq %d: "DF_RC"\n",
 		DP_DTI(&dth->dth_xid), DP_UOID(*oid),
@@ -1493,7 +1362,6 @@ out:
 		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count,
 		dth->dth_cos_done ? dth->dth_dti_cos_count : 0, DP_RC(result));
 
-	D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);
 	d_tm_dec_gauge(dtx_tls_get()->dt_dtx_leader_total, 1);
 
@@ -1617,7 +1485,6 @@ fini:
 	vos_dtx_detach(dth);
 
 out:
-	D_FREE(dth->dth_oid_array);
 	D_FREE(dth);
 
 	return result;

@@ -470,10 +470,6 @@ struct vos_dtx_act_ent {
 	 * then 'dae_oids' points to the 'dae_oid_inline'.
 	 *
 	 * Otherwise, 'dae_oids' points to new buffer to hold more.
-	 *
-	 * These information is used for EC aggregation optimization.
-	 * If server restarts, then we will lose the optimization but
-	 * it is not fatal.
 	 */
 	daos_unit_oid_t			*dae_oids;
 	/* The time (hlc) when the DTX entry is created. */
@@ -484,6 +480,9 @@ struct vos_dtx_act_ent {
 	d_list_t			 dae_link;
 	/* Back pointer to the DTX handle. */
 	struct dtx_handle		*dae_dth;
+
+	/* The capacity of dae_oids if it points to new allocated area. */
+	uint32_t                         dae_oid_cap;
 
 	unsigned int			 dae_committable:1,
 					 dae_committing:1,
@@ -854,6 +853,9 @@ vos_dtx_post_handle(struct vos_container *cont,
  */
 int
 vos_dtx_act_reindex(struct vos_container *cont);
+
+int
+vos_dtx_record_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t oid);
 
 enum vos_tree_class {
 	/** the first reserved tree class */
@@ -1336,7 +1338,8 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh, struct vos_object *obj);
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
+	     struct vos_object *obj);
 
 /** Finish the transaction and publish or cancel the reservations or
  *  return if err == 0 and it's a multi-modification transaction that
@@ -1927,20 +1930,6 @@ vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum v
 
 	return false;
 }
-
-/**
- * Insert object ID and its parent container into the array of objects touched by the ongoing
- * local transaction.
- *
- * \param[in] dth	DTX handle for ongoing local transaction
- * \param[in] cont	VOS container
- * \param[in] oid	Object ID
- *
- * \return		0		: Success.
- *			-DER_NOMEM	: Run out of the volatile memory.
- */
-int
-vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
 
 static inline bool
 vos_pool_is_p2(struct vos_pool *pool)

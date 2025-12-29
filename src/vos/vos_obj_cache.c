@@ -424,7 +424,7 @@ vos_obj_release(struct vos_object *obj, uint64_t flags, bool evict)
 	else if (flags & VOS_OBJ_DISCARD)
 		obj->obj_discard = 0;
 
-	obj_release(occ, obj, evict);
+	obj_release(occ, obj, evict || obj->obj_zombie);
 }
 
 /** Move local object to the lru cache */
@@ -525,11 +525,12 @@ vos_obj_check_discard(struct vos_container *cont, daos_unit_oid_t oid, uint64_t 
 
 int
 vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t bound,
-		  uint64_t flags, uint32_t intent, struct vos_ts_set *ts_set)
+		  uint64_t flags, uint32_t intent, struct vos_ts_set *ts_set, bool *created)
 {
-	struct vos_container	*cont = obj->obj_cont;
-	uint32_t		 cond_mask = 0;
-	int			 rc;
+	struct vos_container *cont      = obj->obj_cont;
+	struct dtx_handle    *dth       = vos_dth_get(cont->vc_pool->vp_sysdb);
+	uint32_t              cond_mask = 0;
+	int                   rc;
 
 	D_ASSERT((flags & (VOS_OBJ_AGGREGATE | VOS_OBJ_DISCARD)) == 0);
 	D_ASSERT(intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE ||
@@ -544,6 +545,14 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 			return rc;
 		}
 		D_ASSERT(obj->obj_df);
+
+		if (created != NULL)
+			*created = true;
+		rc = vos_dtx_record_oid(dth, cont, obj->obj_id);
+		if (rc != 0) {
+			vos_obj_evict_by_oid(cont, obj->obj_id);
+			return rc;
+		}
 	} else {
 		vos_ilog_ts_ignore(vos_obj2umm(obj), &obj->obj_df->vo_ilog);
 	}
@@ -553,8 +562,7 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 		return -DER_UPDATE_AGAIN;
 
 	/* Check the sync epoch */
-	if (intent != DAOS_INTENT_MARK && epr->epr_hi <= obj->obj_sync_epoch &&
-	    vos_dth_get(obj->obj_cont->vc_pool->vp_sysdb) != NULL) {
+	if (intent != DAOS_INTENT_MARK && epr->epr_hi <= obj->obj_sync_epoch && dth != NULL) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the
 		 * object with old epoch. Let's ask the caller to retry with

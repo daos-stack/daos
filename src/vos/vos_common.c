@@ -215,12 +215,22 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 }
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
+	     struct vos_object *obj)
 {
 	int	rc;
 
-	if (dth == NULL)
-		return umem_tx_begin(umm, vos_txd_get(is_sysdb));
+	if (dth == NULL) {
+		/* CPU may yield when umem_tx_begin, related object maybe evicted during that. */
+		rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
+		if (rc == 0 && unlikely(vos_obj_is_evicted(obj))) {
+			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(1), need to restart TX.\n",
+				DP_UOID(obj->obj_id));
+			rc = umem_tx_end(umm, -DER_TX_RESTART);
+		}
+
+		return rc;
+	}
 
 	D_ASSERT(!is_sysdb);
 	/** Note: On successful return, dth tls gets set and will be cleared by the corresponding
@@ -235,6 +245,14 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
 
 	rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
 	if (rc == 0) {
+		/* CPU may yield when umem_tx_begin, related object maybe evicted during that. */
+		if (unlikely(vos_obj_is_evicted(obj))) {
+			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(2), need to restart TX.\n",
+				DP_UOID(obj->obj_id));
+
+			return umem_tx_end(umm, -DER_TX_RESTART);
+		}
+
 		dth->dth_local_tx_started = 1;
 		vos_dth_set(dth, false);
 	}
@@ -251,13 +269,7 @@ vos_local_tx_abort(struct dtx_handle *dth)
 		return;
 
 	/**
-	 * Since a local transaction spawns always a single pool an eaither one of the containers
-	 * can be used to access the pool.
-	 */
-	record = &dth->dth_local_oid_array[0];
-
-	/**
-	 * Evict all objects touched by the aborted transaction from the object cache to make sure
+	 * Evict all objects created by the aborted transaction from the object cache to make sure
 	 * no invalid pointer stays there. Not all of the touched objects have to be evicted but
 	 * for simplicity's sake all of them are.
 	 */
