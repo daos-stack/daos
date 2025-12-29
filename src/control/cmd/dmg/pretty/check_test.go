@@ -203,11 +203,6 @@ Inconsistency Reports:
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: checkTime,
 					},
-					"pool-5": {
-						UUID:   "pool-5",
-						Status: chkpb.CheckPoolStatus_CPS_UNCHECKED.String(),
-						Phase:  chkpb.CheckScanPhase_CSP_PREPARE.String(),
-					},
 				},
 				Reports: []*control.SystemCheckReport{
 					{
@@ -261,6 +256,85 @@ ID  Class                        Pool   Resolution
 --  -----                        ----   ----------        
 0x1 POOL_BAD_SVCL                pool-1 IGNORE            
 0x2 POOL_BAD_LABEL               pool-2 TRUST_MS          
+0x3 POOL_LESS_SVC_WITHOUT_QUORUM pool-3 TRUST_PS          
+0x4 POOL_NONEXIST_ON_ENGINE      pool-4 DISCARD (dry run) 
+
+`,
+		},
+		"non-verbose with unchecked pools": {
+			resp: &control.SystemCheckQueryResp{
+				Status:    control.SystemCheckStatusCompleted,
+				ScanPhase: control.SystemCheckScanPhaseDone,
+				Pools: map[string]*control.SystemCheckPoolInfo{
+					"pool-1": {
+						UUID:      "pool-1",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-2": {
+						UUID:   "pool-2",
+						Status: chkpb.CheckPoolStatus_CPS_UNCHECKED.String(),
+						Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+					},
+					"pool-3": {
+						UUID:      "pool-3",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-5": {
+						UUID:   "pool-5",
+						Status: chkpb.CheckPoolStatus_CPS_UNCHECKED.String(),
+						Phase:  chkpb.CheckScanPhase_CSP_PREPARE.String(),
+					},
+				},
+				Reports: []*control.SystemCheckReport{
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      1,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_SVCL,
+							Action:   chkpb.CheckInconsistAction_CIA_IGNORE,
+							Msg:      "message 1",
+							PoolUuid: "pool-1",
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      3,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_LESS_SVC_WITHOUT_QUORUM,
+							Action:   chkpb.CheckInconsistAction_CIA_TRUST_PS,
+							Msg:      "message 3",
+							PoolUuid: "pool-3",
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      4,
+							Result:   int32(chkpb.CheckResult_DRY_RUN),
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE,
+							Action:   chkpb.CheckInconsistAction_CIA_DISCARD,
+							Msg:      "message 4",
+							PoolUuid: "pool-4",
+						},
+					},
+				},
+			},
+			expOut: `
+DAOS System Checker Info
+  Current status: COMPLETED
+  Current phase: DONE (Check completed)
+  Checked 3 pools
+
+Unchecked Pools:
+  Pool pool-2: 0 ranks, status: CPS_UNCHECKED, phase: CSP_DONE
+  Pool pool-5: 0 ranks, status: CPS_UNCHECKED, phase: CSP_PREPARE
+
+Inconsistency Reports:
+- Resolved:
+ID  Class                        Pool   Resolution        
+--  -----                        ----   ----------        
+0x1 POOL_BAD_SVCL                pool-1 IGNORE            
 0x3 POOL_LESS_SVC_WITHOUT_QUORUM pool-3 TRUST_PS          
 0x4 POOL_NONEXIST_ON_ENGINE      pool-4 DISCARD (dry run) 
 

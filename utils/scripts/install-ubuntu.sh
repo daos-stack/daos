@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (C) Copyright 2025 Google LLC
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -53,6 +54,7 @@ apt-get install ${apt_get_install_args} \
     libyaml-dev \
     locales \
     maven \
+    nasm \
     numactl \
     openjdk-8-jdk \
     pandoc \
@@ -65,6 +67,7 @@ apt-get install ${apt_get_install_args} \
     sudo \
     uuid-dev \
     valgrind \
+    libncurses-dev \
     yasm
 
 sudo gem install fpm
