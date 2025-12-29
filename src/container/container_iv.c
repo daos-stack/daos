@@ -742,6 +742,12 @@ cont_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	if (ref_rc != 0) {
+		DL_WARN(ref_rc, DF_UUID "bypass refresh, IV class id %d.",
+			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		return ref_rc;
+	}
+
 	return cont_iv_ent_update(entry, key, src, priv);
 }
 
@@ -1115,6 +1121,12 @@ out_eventual:
 	return rc;
 }
 
+static inline bool
+cont_iv_retryable_error(int rc)
+{
+	return daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY;
+}
+
 static int
 cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 				  daos_epoch_t stable_eph, unsigned int shortcut,
@@ -1135,30 +1147,58 @@ cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_ag
 		return rc;
 	}
 
-	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
-			    shortcut, sync_mode, true /* retry */);
-	if (rc)
+	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry), shortcut, sync_mode,
+			    false);
+	if (rc && !cont_iv_retryable_error(rc))
 		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
 			DP_UUID(cont_uuid), op, DP_RC(rc));
 	return rc;
 }
 
+static int
+cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+			daos_epoch_t stable_eph, unsigned int shortcut, unsigned int sync_mode,
+			uint32_t op, struct sched_request *req)
+{
+	int sleep_ms = 1000; /* 1 second retry interval */
+	int rc       = 0;
+
+	while (1) {
+		rc = cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
+						       shortcut, sync_mode, op);
+		if (rc == 0)
+			break;
+
+		/* Only retry on specific errors */
+		if (!cont_iv_retryable_error(rc))
+			break;
+
+		if (req && dss_ult_exiting(req)) {
+			rc = -DER_SHUTDOWN;
+			break;
+		}
+
+		dss_sleep(sleep_ms);
+	}
+
+	return rc;
+}
+
 int
 cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			 daos_epoch_t stable_eph)
+			 daos_epoch_t stable_eph, struct sched_request *req)
 {
-	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
-						 CRT_IV_SHORTCUT_TO_ROOT,
-						 CRT_IV_SYNC_NONE,
-						 IV_CONT_TRACK_EPOCH_REPORT);
+	return cont_iv_track_eph_retry(ns, cont_uuid, ec_agg_eph, stable_eph,
+				       CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE,
+				       IV_CONT_TRACK_EPOCH_REPORT, req);
 }
 
 int
 cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			  daos_epoch_t stable_eph)
+			  daos_epoch_t stable_eph, struct sched_request *req)
 {
-	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph, 0,
-						 CRT_IV_SYNC_EAGER, IV_CONT_TRACK_EPOCH);
+	return cont_iv_track_eph_retry(ns, cont_uuid, ec_agg_eph, stable_eph, 0, CRT_IV_SYNC_EAGER,
+				       IV_CONT_TRACK_EPOCH, req);
 }
 
 int
@@ -1734,7 +1774,7 @@ ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 	/* Return a retry-able error when the srv handle not propagated */
 	if (d_list_empty(&pool_child->spc_srv_cont_hdl)) {
 		struct copy_hdl_arg arg;
-		int                 rc;
+		int                 rc, ret;
 
 		/*
 		 * Sometimes the srv container handle failed to be propagated to the pool
@@ -1750,8 +1790,10 @@ ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 			}
 		}
 		ds_pool_child_put(pool_child);
-		D_INFO(DF_UUID ": Server handle isn't propagated yet.\n", DP_UUID(po_uuid));
-		return -DER_STALE;
+		ret = -DER_STALE;
+		DL_INFO(ret, DF_UUID ": Server handle isn't propagated yet %d.", DP_UUID(po_uuid),
+			rc);
+		return ret;
 	}
 
 srv_hdl_ready:

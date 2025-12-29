@@ -2,13 +2,13 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers: 2
+
 timeout: 600
+
 # Remove this once DAOS-5134 is resolved
 setup:
   start_servers_once: false
-pool:
-  scm_size: 8G
-  nvme_size: 16G
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -16,8 +16,6 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: DEBUG
       env_vars:
@@ -26,8 +24,6 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: DEBUG
       env_vars:
@@ -35,12 +31,19 @@ server_config:
       storage: auto
   transport_config:
     allow_insecure: true
+
 agent_config:
   transport_config:
     allow_insecure: true
+
 dmg:
   transport_config:
     allow_insecure: true
+
+pool:
+  scm_size: 8G
+  nvme_size: 16G
+
 daos_tests:
   num_clients: 1
   test_name:

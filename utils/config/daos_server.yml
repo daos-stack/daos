@@ -228,6 +228,17 @@
 #allow_numa_imbalance: true
 #
 #
+
+## Allow DAOS server to run with transparent hugepages (THP) enabled on the host machine.
+#
+## WARNING: Transparent hugepages can conflict with how the DAOS server uses hugepages, and enabling
+## them may cause intermittent errors. Unless transparent hugepages are required by another
+## application on the machine, it is strongly recommended to leave this setting disabled.
+#
+## default: false
+#allow_thp: true
+#
+#
 ## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
 ## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
 ## reserved when calculating RAM-disk sizes for all engines.
@@ -240,7 +251,7 @@
 ## minimum of 4gib. Increasing the value may help avoid the potential of OOM killer terminating
 ## engine processes but could also result in stopping DAOS from using available memory resources.
 #
-## default: 26
+## default: 64
 #system_ram_reserved: 5
 #
 #
@@ -573,6 +584,11 @@
 #    # PMem namespaces (currently only one per engine supported).
 #    #class: dcpm
 #    #scm_list: [/dev/pmem1]
+#
+#    # When class is set to ram, tmpfs will be mounted with hugepage
+#    # support, if the kernel supports it. If this is not desirable,
+#    # the behavior may be disabled here.
+#    scm_hugepages_disabled: true
 #
 #  -
 #    # Backend block device type. Force a SPDK driver to be used by this engine

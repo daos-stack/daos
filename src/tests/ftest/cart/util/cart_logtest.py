@@ -15,11 +15,10 @@ from collections import Counter, OrderedDict
 
 import cart_logparse
 
-HAVE_TABULATE = True
 try:
     import tabulate
 except ImportError:
-    HAVE_TABULATE = False
+    tabulate = None
 
 
 class LogCheckError(Exception):
@@ -767,7 +766,7 @@ class RpcReporting():
                 errors.append("ERROR: Opcode {}: Alloc'd Total = {}, Dealloc'd Total = {}".
                               format(operation, counts['ALLOCATED'], counts['DEALLOCATED']))
 
-        if HAVE_TABULATE:
+        if tabulate is not None:
             print('Opcode State Transition Tally')
             print(tabulate.tabulate(table,
                                     headers=headers,

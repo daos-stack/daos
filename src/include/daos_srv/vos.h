@@ -1055,6 +1055,17 @@ int
 vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch);
 
 /**
+ * Save property for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param props	[IN]	Pointer to container property to be saved.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_save_props(daos_handle_t coh, struct cont_props *props);
+
+/**
  * Query the gap between the max allowed aggregation epoch and current HLC.
  *
  * \return		The gap value in seconds.
@@ -1579,7 +1590,7 @@ struct cont_scrub {
 	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
-	bool			 scs_props_fetched;
+	bool                     scs_csummer_inited;
 };
 
 /*
@@ -1799,7 +1810,8 @@ bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
 /* Timing statistic of DTX entries */
-#define DTX_TIME_STAT_COUNT 3
+enum { DTX_TIME_STAT_MIN = 0, DTX_TIME_STAT_MAX, DTX_TIME_STAT_MEAN, DTX_TIME_STAT_COUNT };
+
 struct dtx_time_stat {
 	daos_epoch_t dts_epoch[DTX_TIME_STAT_COUNT];
 	uint64_t     dts_cmt_time[DTX_TIME_STAT_COUNT];

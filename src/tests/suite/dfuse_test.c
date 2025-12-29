@@ -586,6 +586,15 @@ do_mtime(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
+	usleep(10000);
+	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+	rc              = utimensat(root, "mtime_file", NULL, 0);
+	assert_return_code(rc, errno);
+	rc = fstatat(root, "mtime_file", &stbuf, 0);
+	assert_return_code(rc, errno);
+	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+
 	rc = unlinkat(root, "mtime_file", 0);
 	assert_return_code(rc, errno);
 
