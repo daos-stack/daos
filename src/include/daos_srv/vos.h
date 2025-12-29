@@ -1590,7 +1590,7 @@ struct cont_scrub {
 	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
-	bool			 scs_props_fetched;
+	bool                     scs_csummer_inited;
 };
 
 /*
