@@ -979,7 +979,7 @@ vos_self_nvme_init(const char *vos_path, bool init_spdk)
 		goto out;
 
 	/* Only use hugepages if NVME SSD configuration existed. */
-	fd = open(nvme_conf, O_RDONLY, 0600);
+	fd = open(nvme_conf, O_RDONLY);
 	if (fd < 0) {
 		rc = bio_nvme_init_ext(NULL, VOS_NVME_NUMA_NODE, 0, 0, VOS_NVME_NR_TARGET, true,
 				       init_spdk);
