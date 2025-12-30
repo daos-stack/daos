@@ -252,7 +252,7 @@ pipeline {
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
                             'Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
-               defaultValue: '10',
+               defaultValue: '',
                description: 'Test-repeat to use for this run.  Specifies the ' +
                             'number of times to repeat each functional test. ' +
                             'CAUTION: only use in combination with a reduced ' +
@@ -303,7 +303,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Do not build sources and RPMs on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
@@ -389,8 +389,7 @@ pipeline {
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_node-hdr-200_202-205X',
-               // defaultValue: 'ci_node-hdr-210_212-219X',
+               defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
@@ -405,8 +404,8 @@ pipeline {
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION',
-               defaultValue: 'el9.5',
-               description: 'Label to use for 5 node Functional Hardware Medium (MD on SSD) stages')
+               defaultValue: 'el9.6',
+               description: 'Version of OS used in all Functional Hardware Medium stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -632,7 +631,6 @@ pipeline {
                         }
                     }
                 }
-/*
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
@@ -723,9 +721,7 @@ pipeline {
                         }
                     }
                 }
-*/
             }
-
         }
         stage('Unit Tests') {
             when {
@@ -1181,6 +1177,7 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1194,6 +1191,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1207,6 +1205,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1220,6 +1219,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
