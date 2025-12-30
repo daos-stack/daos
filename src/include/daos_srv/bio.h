@@ -1202,4 +1202,18 @@ bool bio_meta_is_empty(struct bio_meta_context *mc);
  */
 int bio_meta_clear_empty(struct bio_meta_context *mc);
 
+/*
+ * Check if any blob is created for a pool target. This function is supposed to
+ * be called in md-on-ssd mode.
+ *
+ * \param[in]	pool_id		pool UUID
+ * \param[in]	tgt_id		VOS target ID
+ * \param[in]	flags		bio_mc_flags
+ *
+ * \return			true, when any blob is created for the pool target
+ *				false, when no blob is created
+ */
+bool
+bio_pool_tgt_created(uuid_t pool_id, int tgt_id, enum bio_mc_flags flags);
+
 #endif /* __BIO_API_H__ */
