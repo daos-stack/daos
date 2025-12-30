@@ -237,8 +237,7 @@ chk_leader_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 	chk_pool_stop_all(ins, pool_status, NULL);
 
 	if ((bcast && ins_status == CHK__CHECK_INST_STATUS__CIS_FAILED) ||
-	    ins_status == CHK__CHECK_INST_STATUS__CIS_IMPLICATED ||
-	    unlikely(ins_status == CHK__CHECK_INST_STATUS__CIS_COMPLETED && !ins->ci_orphan_done)) {
+	    ins_status == CHK__CHECK_INST_STATUS__CIS_IMPLICATED || !ins->ci_orphan_done) {
 		iv.ci_gen = cbk->cb_gen;
 		iv.ci_phase = ins_phase != CHK_INVAL_PHASE ? ins_phase : cbk->cb_phase;
 		iv.ci_ins_status = ins_status;
@@ -305,31 +304,24 @@ chk_leader_post_repair(struct chk_instance *ins, struct chk_pool_rec *cpr,
 			       DP_UUID(cpr->cpr_uuid), rc);
 	}
 
-	/*
-	 * If the operation failed and 'failout' is set, then do nothing here.
-	 * chk_leader_exit will handle all the IV and bookmark related things.
-	 */
-	if (*result == 0 || !(ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)) {
-		if (notify) {
-			iv.ci_gen = cbk->cb_gen;
-			uuid_copy(iv.ci_uuid, cpr->cpr_uuid);
-			iv.ci_ins_status = ins->ci_bk.cb_ins_status;
-			iv.ci_phase = cbk->cb_phase;
-			iv.ci_pool_status = cbk->cb_pool_status;
+	if (notify) {
+		uuid_copy(iv.ci_uuid, cpr->cpr_uuid);
+		iv.ci_gen         = cbk->cb_gen;
+		iv.ci_ins_status  = ins->ci_bk.cb_ins_status;
+		iv.ci_phase       = cbk->cb_phase;
+		iv.ci_pool_status = cbk->cb_pool_status;
 
-			/* Synchronously notify the engines that check on the pool got failure. */
-			rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
-					   CRT_IV_SYNC_EAGER, true);
-			D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-				 DF_LEADER" notify the engines that the check for pool "
-				 DF_UUIDF" is done with status %u: rc = %d\n",
-				 DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), iv.ci_pool_status, rc);
-			if (rc == 0)
-				cpr->cpr_notified_exit = 1;
-		}
-
-		*result = 0;
+		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER,
+				   true);
+		DL_CDEBUG(rc != 0, DLOG_WARN, DLOG_INFO, rc,
+			  DF_LEADER " notify engines that check pool " DF_UUIDF " done, status %u",
+			  DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), iv.ci_pool_status);
+		if (rc == 0)
+			cpr->cpr_notified_exit = 1;
 	}
+
+	if (!(ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
+		*result = 0;
 
 	if (update) {
 		rc = chk_bk_update_leader(&ins->ci_bk);
@@ -2284,7 +2276,8 @@ check_dead:
 
 		ins_phase = chk_pools_find_slowest(ins, &done);
 
-		if (ins_phase >= CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS && !ins->ci_orphan_done &&
+		if (ins_phase != CHK_INVAL_PHASE &&
+		    ins_phase >= CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS && !ins->ci_orphan_done &&
 		    !DAOS_FAIL_CHECK(DAOS_CHK_SYNC_ORPHAN_PROCESS)) {
 			iv.ci_gen = cbk->cb_gen;
 			iv.ci_phase = ins_phase;
@@ -2316,7 +2309,7 @@ check_dead:
 			D_GOTO(out, rc);
 		}
 
-		if (cbk->cb_phase == CHK_INVAL_PHASE || cbk->cb_phase < ins_phase) {
+		if (ins_phase != CHK_INVAL_PHASE && ins_phase > cbk->cb_phase) {
 			D_INFO(DF_LEADER" moves from phase %u to phase %u\n",
 			       DP_LEADER(ins), cbk->cb_phase, ins_phase);
 
