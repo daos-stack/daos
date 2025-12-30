@@ -301,7 +301,7 @@ rebuild_objects_send_ult(void *data)
 	arg.ephs = ephs;
 	arg.punched_ephs = punched_ephs;
 	arg.rpt = rpt;
-	while (!tls->rebuild_pool_scan_done || !dbtree_is_empty(tls->rebuild_tree_hdl)) {
+	while (tls->rebuild_pool_scan_running || !dbtree_is_empty(tls->rebuild_tree_hdl)) {
 		if (rpt->rt_stable_epoch == 0) {
 			dss_sleep(0);
 			continue;
@@ -340,7 +340,7 @@ out:
 }
 
 static int
-rebuild_scan_done(void *data)
+rebuild_scan_prepared(void *data)
 {
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls *tls;
@@ -348,7 +348,7 @@ rebuild_scan_done(void *data)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
 	if (tls != NULL)
-		tls->rebuild_pool_scanning = 0;
+		tls->rebuild_pool_scan_prepping = 0;
 
 	return 0;
 }
@@ -1056,7 +1056,7 @@ rebuild_scanner(void *data)
 out:
 	if (child)
 		ds_pool_child_put(child);
-	tls->rebuild_pool_scan_done = 1;
+	tls->rebuild_pool_scan_running = 0;
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_free(&ult_send);
 
@@ -1123,8 +1123,9 @@ rebuild_scan_leader(void *data)
 			DP_UUID(rpt->rt_pool_uuid));
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = ds_pool_task_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				     PO_COMP_ST_DOWNOUT, rebuild_scan_done, rpt, 0);
+	rc = ds_pool_task_collective(rpt->rt_pool_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     rebuild_scan_prepared, rpt, 0);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
