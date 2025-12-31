@@ -129,8 +129,7 @@ class DdbTest(TestWithServers):
         md_on_ssd = check_ram_used(server_manager=self.server_managers[0], log=self.log)
         if md_on_ssd:
             self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
-            mkdir_command = f"mkdir {daos_load_path}"
-            self.run_cmd_check_result(command=mkdir_command)
+            self.run_cmd_check_result(command=f"mkdir {daos_load_path}")
 
         self.log_step("Create a pool and a container.")
         pool = self.get_pool()
@@ -166,15 +165,18 @@ class DdbTest(TestWithServers):
             self.log_step("MD-on-SSD: Load pool dir to %s", daos_load_path)
             db_path = os.path.join(
                 self.log_dir, "control_metadata", "daos_control", "engine0")
-            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
+            ddb_command.prov_mem(
+                db_path=os.path.join(
+                    self.log_dir, "control_metadata", "daos_control", "engine0"),
+                    mpfs_mount=daos_load_path)
 
         self.log_step("Verify container UUID.")
         if md_on_ssd:
             # "ddb ls" command for MD-on-SSD is quite different.
             # PMEM: ddb /mnt/daos/<pool_uuid>/vos-0 ls
-            # MD-on-SSD: ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control/engine0 /mnt/daos_load/<pool_uuid>/vos-0 ls
-            db_path_arg = " ".join(["--db_path", db_path])
-            ddb_command.db_path.update(value=db_path_arg)
+            # MD-on-SSD: ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control
+            # /engine0 /mnt/daos_load/<pool_uuid>/vos-0 ls
+            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
             vos_path = os.path.join(daos_load_path, pool.uuid.lower(), "vos-0")
             ddb_command.vos_path.update(value=vos_path)
         cmd_result = ddb_command.list_component()
@@ -280,10 +282,8 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step("MD-on-SSD: Clean %s", daos_load_path)
-            umount_cmd = f"umount {daos_load_path}"
-            self.run_cmd_check_result(command=umount_cmd)
-            rm_command = f"rm -rf {daos_load_path}"
-            self.run_cmd_check_result(command=rm_command)
+            self.run_cmd_check_result(command=f"umount {daos_load_path}")
+            self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
 
         self.log_step("Restart the server for the cleanup.")
         self.get_dmg_command().system_start()
