@@ -1028,6 +1028,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg system stop command object."""
                 super().__init__("/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
+                self.full = FormattedParameter("--full", False)
                 self.ranks = FormattedParameter("--ranks={}")
 
     class TelemetrySubCommand(CommandWithSubCommand):
