@@ -3327,20 +3327,28 @@ const ProtobufCMessageDescriptor mgmt__storage_usage_stats__descriptor =
   (ProtobufCMessageInit) mgmt__storage_usage_stats__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue mgmt__pool_rebuild_status__state__enum_values_by_number[3] =
+static const ProtobufCEnumValue mgmt__pool_rebuild_status__state__enum_values_by_number[7] =
 {
   { "BUSY", "MGMT__POOL_REBUILD_STATUS__STATE__BUSY", 0 },
   { "IDLE", "MGMT__POOL_REBUILD_STATUS__STATE__IDLE", 1 },
   { "DONE", "MGMT__POOL_REBUILD_STATUS__STATE__DONE", 2 },
+  { "STOPPING", "MGMT__POOL_REBUILD_STATUS__STATE__STOPPING", 3 },
+  { "StOPPED", "MGMT__POOL_REBUILD_STATUS__STATE__StOPPED", 4 },
+  { "FAILING", "MGMT__POOL_REBUILD_STATUS__STATE__FAILING", 5 },
+  { "FAILED", "MGMT__POOL_REBUILD_STATUS__STATE__FAILED", 6 },
 };
 static const ProtobufCIntRange mgmt__pool_rebuild_status__state__value_ranges[] = {
-{0, 0},{0, 3}
+{0, 0},{0, 7}
 };
-static const ProtobufCEnumValueIndex mgmt__pool_rebuild_status__state__enum_values_by_name[3] =
+static const ProtobufCEnumValueIndex mgmt__pool_rebuild_status__state__enum_values_by_name[7] =
 {
   { "BUSY", 0 },
   { "DONE", 2 },
+  { "FAILED", 6 },
+  { "FAILING", 5 },
   { "IDLE", 1 },
+  { "STOPPING", 3 },
+  { "StOPPED", 4 },
 };
 const ProtobufCEnumDescriptor mgmt__pool_rebuild_status__state__descriptor =
 {
@@ -3349,9 +3357,9 @@ const ProtobufCEnumDescriptor mgmt__pool_rebuild_status__state__descriptor =
   "State",
   "Mgmt__PoolRebuildStatus__State",
   "mgmt",
-  3,
+  7,
   mgmt__pool_rebuild_status__state__enum_values_by_number,
-  3,
+  7,
   mgmt__pool_rebuild_status__state__enum_values_by_name,
   1,
   mgmt__pool_rebuild_status__state__value_ranges,

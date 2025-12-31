@@ -1752,18 +1752,38 @@ static void
 pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 			      struct daos_rebuild_status *info)
 {
+	bool cancelled = (info->rs_errno == -DER_OP_CANCELED);
+
 	rebuild->status = info->rs_errno;
 	if (rebuild->status == 0) {
 		rebuild->objects = info->rs_obj_nr;
 		rebuild->records = info->rs_rec_nr;
 	}
 
-	if ((info->rs_version == 0) || (info->rs_state == DRS_NOT_STARTED))
-		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
-	else if (info->rs_state == DRS_COMPLETED)
-		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
-	else
-		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
+	if ((info->rs_version == 0) || (info->rs_state == DRS_NOT_STARTED)) {
+		if (cancelled) {
+			rebuild->state  = MGMT__POOL_REBUILD_STATUS__STATE__STOPPED;
+			rebuild->status = 0;
+		} else if (info->rs_errno != 0) {
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__FAILED;
+		} else {
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
+		}
+	} else if (info->rs_state == DRS_COMPLETED) {
+		if (info->rs_errno != 0)
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__FAILED;
+		else
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
+	} else {
+		if (cancelled) {
+			rebuild->state  = MGMT__POOL_REBUILD_STATUS__STATE__STOPPING;
+			rebuild->status = 0;
+		} else if (info->rs_errno != 0) {
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__FAILING;
+		} else {
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
+		}
+	}
 }
 
 static void
