@@ -168,7 +168,7 @@ class DdbTest(TestWithServers):
             ddb_command.prov_mem(
                 db_path=os.path.join(
                     self.log_dir, "control_metadata", "daos_control", "engine0"),
-                    mpfs_mount=daos_load_path)
+                mpfs_mount=daos_load_path)
 
         self.log_step("Verify container UUID.")
         if md_on_ssd:
