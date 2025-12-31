@@ -10,6 +10,7 @@ from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
+from run_utils import run_remote
 
 
 class DaosRacerParallelTest(TestWithServers):
@@ -34,8 +35,22 @@ class DaosRacerParallelTest(TestWithServers):
         :avocado: tags=io,daos_racer
         :avocado: tags=DaosRacerParallelTest,test_daos_racer_parallel
         """
+        # Debug missing libdpar_mpi.so
+        run_remote(
+            self.log, self.hostlist_clients,
+            'ls -l /usr/mpi/gcc/openmpi-4.1.7rc1/lib | grep -i libdpar')
+        run_remote(
+            self.log, self.hostlist_clients,
+            'ls -l /usr/mpi/gcc/openmpi-4.1.7rc1/lib64 | grep -i libdpar')
+        run_remote(
+            self.log, self.hostlist_clients,
+            'ls -l /usr/lib | grep -i libdpar')
+        run_remote(
+            self.log, self.hostlist_clients,
+            'ls -l /usr/lib64 | grep -i libdpar')
+
         # Create the dmg command
-        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], self.get_dmg_command())
+        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients, self.get_dmg_command())
         daos_racer.get_params(self)
 
         # Create the orterun command
@@ -53,8 +68,6 @@ class DaosRacerParallelTest(TestWithServers):
             job_manager.run()
 
         except CommandFailure as error:
-            msg = f"daos_racer failed: {error}"
-            self.log.error(msg)
-            self.fail(msg)
+            self.fail(f"daos_racer failed: {error}")
 
         self.log.info("Test passed!")
