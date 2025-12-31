@@ -34,7 +34,7 @@ engines:
     nr_xs_helpers: 4          # count of I/O offload threads per engine
     fabric_iface: ib0
     fabric_iface_port: 31416
-    log_mask: ERR
+    log_mask: ERROR
     log_file: /var/log/daos/daos_engine.0.log
 
     # Storage definitions (one per tier)
@@ -56,7 +56,7 @@ engines:
     nr_xs_helpers: 4          # count of I/O offload threads per engine
     fabric_iface: ib1
     fabric_iface_port: 32416
-    log_mask: ERR
+    log_mask: ERROR
     log_file: /var/log/daos/daos_engine.1.log
 
     storage:
