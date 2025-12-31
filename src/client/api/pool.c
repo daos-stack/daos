@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +34,13 @@ daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 	args->pool	= pool;
 	args->grp	= sys;
 	args->flags	= flags;
+	/* Check for retry timeout from environment variable */
+	args->retry_timeout = DAOS_CLI_CONNECT_RETRY_TIMEOUT_DEFAULT;
+	char *retry_env     = NULL;
+	if (d_agetenv_str(&retry_env, "DAOS_CLI_CONNECT_RETRY_TIMEOUT") == 0) {
+		args->retry_timeout = atoi(retry_env);
+		d_freeenv_str(&retry_env);
+	}
 	args->poh	= poh;
 	args->info	= info;
 	uuid_clear(args->uuid);
