@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1049,6 +1050,38 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 	daos_csummer_free_ci(obj, &csum_info_verify);
 
 	return 0;
+}
+
+int
+daos_csummer_verify_value(struct daos_csummer *csummer, daos_recx_t *recx, daos_size_t rsize,
+			  d_iov_t *val, struct dcs_csum_info *csum_info)
+{
+	struct dcs_iod_csums iod_csum   = {0};
+	daos_iod_t           iod        = {0};
+	d_sg_list_t          sgl        = {0};
+	bool                 skip_key_c = csummer->dcs_skip_key_calc;
+	bool                 skip_key_v = csummer->dcs_skip_key_verify;
+	int                  rc;
+
+	iod.iod_nr    = 1;
+	iod.iod_size  = rsize;
+	iod.iod_recxs = recx;
+	iod.iod_type  = recx ? DAOS_IOD_ARRAY : DAOS_IOD_SINGLE;
+
+	iod_csum.ic_nr   = 1;
+	iod_csum.ic_data = csum_info;
+
+	sgl.sg_iovs   = val;
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+
+	csummer->dcs_skip_key_calc   = true;
+	csummer->dcs_skip_key_verify = true;
+	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, &iod_csum, NULL, 0, NULL);
+	csummer->dcs_skip_key_calc   = skip_key_c;
+	csummer->dcs_skip_key_verify = skip_key_v;
+
+	return rc;
 }
 
 int
