@@ -459,6 +459,12 @@ daos_cont_serialize_md(char *filename, daos_prop_t *props, int num_attrs,
 	hid_t	usr_attr_name_vtype = 0;
 	hid_t	usr_attr_val_vtype = 0;
 
+	rc = H5open();
+	if (rc < 0) {
+		D_ERROR("Failed to initialize HDF5 library\n");
+		return -DER_MISC;
+	}
+
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
@@ -530,6 +536,10 @@ out:
 		H5Tclose(usr_attr_val_vtype);
 	if (file_id > 0)
 		H5Fclose(file_id);
+	if (H5close() < 0) {
+		D_ERROR("Failed to finalize HDF5 library\n");
+		return -DER_MISC;
+	}
 	return rc;
 }
 
@@ -1101,6 +1111,12 @@ daos_cont_deserialize_props(daos_handle_t poh, char *filename,
 	int	rc = 0;
 	hid_t	file_id = 0;
 
+	rc = H5open();
+	if (rc < 0) {
+		D_ERROR("Failed to initialize HDF5 library\n");
+		return -DER_MISC;
+	}
+
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
@@ -1120,6 +1136,10 @@ daos_cont_deserialize_props(daos_handle_t poh, char *filename,
 out:
 	if (file_id > 0)
 		H5Fclose(file_id);
+	if (H5close() < 0) {
+		D_ERROR("Failed to finalize HDF5 library\n");
+		return -DER_MISC;
+	}
 	return rc;
 }
 
@@ -1219,6 +1239,11 @@ daos_cont_deserialize_attrs(char *filename, uint64_t *num_attrs,
 	hid_t			file_id = 0;
 	htri_t			usr_attrs_exist;
 
+	rc = H5open();
+	if (rc < 0) {
+		D_ERROR("Failed to initialize HDF5 library\n");
+		return -DER_MISC;
+	}
 
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1241,6 +1266,10 @@ daos_cont_deserialize_attrs(char *filename, uint64_t *num_attrs,
 out:
 	if (file_id > 0)
 		H5Fclose(file_id);
+	if (H5close() < 0) {
+		D_ERROR("Failed to finalize HDF5 library\n");
+		return -DER_MISC;
+	}
 	return rc;
 }
 
