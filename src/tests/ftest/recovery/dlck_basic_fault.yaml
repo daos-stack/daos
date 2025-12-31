@@ -1,0 +1,49 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+
+timeout: 500
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      storage: auto
+    1:
+      targets: 4
+      storage: auto
+
+setup:
+  start_servers_once: True
+
+pool:
+  size: 50%
+
+dlck:
+  scm_mount: /mnt/daos0
+
+faults: !mux
+  create_log_dir:
+    fault_list:
+      - DLCK_FAULT_CREATE_LOG_DIR
+
+dlck_test_additional_faults:
+  fault_list:
+    - DLCK_FAULT_CREATE_POOL_DIR
+    - DLCK_FAULT_ENGINE_START
+    - DLCK_FAULT_ENGINE_EXEC
+    - DLCK_FAULT_ENGINE_JOIN
+    - DLCK_FAULT_ENGINE_STOP
+    - DAOS_FAULT_POOL_NVME_HEALTH
+    - DAOS_FAULT_POOL_OPEN_BIO
+    - DAOS_FAULT_POOL_OPEN_UMEM
+    - DAOS_FAULT_POOL_OPEN_MAGIC
+    - DAOS_FAULT_POOL_OPEN_VERSION
+    - DAOS_FAULT_POOL_OPEN_UUID
+    - DAOS_FAULT_BTREE_OPEN_INV_CLASS
+    - DAOS_FAULT_BTREE_OPEN_UNREG_CLASS
+    - DAOS_FAULT_BTREE_FEATURES
+    - DAOS_FAULT_POOL_EXT_PADDING
+    - DAOS_FAULT_POOL_EXT_RESERVED
