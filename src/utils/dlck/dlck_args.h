@@ -26,6 +26,7 @@
 /** all short options */
 #define KEY_COMMON_OPTIONS              'o'
 #define KEY_COMMON_WRITE_MODE           'w'
+#define KEY_COMMON_VERBOSE              'v'
 #define KEY_FILES                       'f'
 /** the options below follow the daos_engine options */
 #define KEY_ENGINE_NUMA_NODE            'p'
@@ -47,6 +48,7 @@
 struct dlck_args_common {
 	struct checker_options options;
 	bool          write_mode; /** false by default (dry run) */
+	bool                   verbose;    /** false by default */
 };
 
 /**
