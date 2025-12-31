@@ -165,10 +165,7 @@ class DdbTest(TestWithServers):
             self.log_step("MD-on-SSD: Load pool dir to %s", daos_load_path)
             db_path = os.path.join(
                 self.log_dir, "control_metadata", "daos_control", "engine0")
-            ddb_command.prov_mem(
-                db_path=os.path.join(
-                    self.log_dir, "control_metadata", "daos_control", "engine0"),
-                mpfs_mount=daos_load_path)
+            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
 
         self.log_step("Verify container UUID.")
         if md_on_ssd:
@@ -195,8 +192,9 @@ class DdbTest(TestWithServers):
         actual_uuid = match.group(1).lower()
         expected_uuid = container.uuid.lower()
         if actual_uuid != expected_uuid:
-            msg = f"Unexpected container UUID! Expected = {expected_uuid}; Actual = {actual_uuid}"
-            errors.append(msg)
+            errors.append(
+                f"Unexpected container UUID! Expected = {expected_uuid}; Actual = "
+                f"{actual_uuid}")
 
         self.log_step("Verify object count in the container.")
         cmd_result = ddb_command.list_component(component_path="[0]")
@@ -243,9 +241,9 @@ class DdbTest(TestWithServers):
         self.log_step("Verify there are two dkeys for every object.")
         expected_dkey_count = object_count * dkey_count
         if actual_dkey_count != expected_dkey_count:
-            msg = (f"Unexpected number of dkeys! Expected = {expected_dkey_count}; "
-                   f"Actual = {actual_dkey_count}")
-            errors.append(msg)
+            errors.append(
+                f"Unexpected number of dkeys! Expected = {expected_dkey_count}; "
+                f"Actual = {actual_dkey_count}")
 
         msg = ("Verify there is one akey for every dkey. Also verify the key string and "
                "the size.")
