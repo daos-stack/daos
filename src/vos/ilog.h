@@ -340,6 +340,16 @@ ilog_is_punch(const struct ilog_entry *entry)
 		entry->ie_id.id_update_minor_eph;
 }
 
+/**
+ * Validate ilog's root.
+ *
+ * \param[in] ilog_df
+ *
+ * \return true if the root is valid.
+ */
+bool
+ilog_root_is_valid(struct ilog_df *ilog_df);
+
 /** Validate the provided ilog.
  *
  * Note: It is designed for catastrophic recovery. Not to perform at run-time.
