@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -122,6 +123,12 @@ vos_obj_release(struct vos_object *obj, uint64_t flags, bool evict);
 void vos_obj_evict(struct vos_object *obj);
 
 int vos_obj_evict_by_oid(struct vos_container *cont, daos_unit_oid_t oid);
+
+static inline bool
+vos_obj_is_evicted(struct vos_object *obj)
+{
+	return obj != NULL && daos_lru_is_evicted(&obj->obj_llink);
+}
 
 /**
  * Create an object cache.
@@ -246,6 +253,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_
  * \param flags		[IN]		Object flags
  * \param intent	[IN]		The request intent.
  * \param ts_set	[IN]		Timestamp set
+ * \param created	[OUR]		Whether new object is created or not.
  *
  * \return	0			Object is successfully incarnated.
  * \return	-DER_NONEXIST		The conditions for success don't apply
@@ -255,7 +263,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_
  */
 int
 vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t bound,
-		  uint64_t flags, uint32_t intent, struct vos_ts_set *ts_set);
+		  uint64_t flags, uint32_t intent, struct vos_ts_set *ts_set, bool *created);
 
 /**
  * Check if an operation will be conflicting with other ongoing operations over the

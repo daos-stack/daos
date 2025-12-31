@@ -2553,40 +2553,15 @@ update_cancel(struct vos_io_context *ioc)
 }
 
 int
-vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid)
-{
-	struct dtx_local_oid_record *oid_array = NULL;
-	struct dtx_local_oid_record *record    = NULL;
-
-	/** The array has to grow to accommodate the next record. */
-	if (dth->dth_local_oid_cnt == dth->dth_local_oid_cap) {
-		D_REALLOC_ARRAY(oid_array, dth->dth_local_oid_array, dth->dth_local_oid_cap,
-				dth->dth_local_oid_cap << 1);
-		if (oid_array == NULL)
-			return -DER_NOMEM;
-
-		dth->dth_local_oid_array = oid_array;
-		dth->dth_local_oid_cap <<= 1;
-	}
-
-	record           = &dth->dth_local_oid_array[dth->dth_local_oid_cnt];
-	record->dor_cont = cont;
-	vos_cont_addref(cont);
-	record->dor_oid = *oid;
-	dth->dth_local_oid_cnt++;
-
-	return 0;
-}
-
-int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth)
 {
-	struct vos_dtx_act_ent	**daes = NULL;
-	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
-	struct umem_instance	*umem;
+	struct vos_dtx_act_ent **daes = NULL;
+	struct vos_dtx_cmt_ent **dces = NULL;
+	struct vos_io_context   *ioc  = vos_ioh2ioc(ioh);
+	struct umem_instance    *umem;
 	bool			 tx_started = false;
+	bool                     created    = false;
 	uint16_t		 minor_epc;
 	uint64_t		 flags = VOS_OBJ_CREATE | VOS_OBJ_VISIBLE;
 
@@ -2598,6 +2573,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
+	if (unlikely(vos_obj_is_evicted(ioc->ic_pinned_obj))) {
+		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted during update, need to restart TX.\n",
+			DP_UOID(ioc->ic_oid));
+
+		D_GOTO(abort, err = -DER_TX_RESTART);
+	}
+
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
 
@@ -2606,7 +2588,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
-	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
+	if (ioc->ic_pinned_obj != NULL)
+		D_ASSERT(ioc->ic_pinned_obj == ioc->ic_obj);
+
+	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb, ioc->ic_obj);
 	if (err != 0)
 		goto abort;
 
@@ -2637,8 +2622,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_FREE(daes);
 	}
 
-	err = vos_obj_incarnate(ioc->ic_obj, &ioc->ic_epr, ioc->ic_bound, flags,
-				DAOS_INTENT_UPDATE, ioc->ic_ts_set);
+	err = vos_obj_incarnate(ioc->ic_obj, &ioc->ic_epr, ioc->ic_bound, flags, DAOS_INTENT_UPDATE,
+				ioc->ic_ts_set, &created);
 	if (err != 0)
 		goto abort;
 
@@ -2661,10 +2646,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (vos_ts_set_check_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
 		err = -DER_TX_RESTART;
 		goto abort;
-	}
-
-	if (dtx_is_valid_handle(dth) && dth->dth_local) {
-		err = vos_insert_oid(dth, ioc->ic_cont, &ioc->ic_oid);
 	}
 
 abort:
@@ -2727,7 +2708,7 @@ abort:
 		*size = ioc->ic_io_size;
 	D_FREE(daes);
 	D_FREE(dces);
-	vos_ioc_destroy(ioc, err != 0);
+	vos_ioc_destroy(ioc, err != 0 && created);
 
 	return err;
 }

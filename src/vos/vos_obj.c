@@ -421,6 +421,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_ts_set       *ts_set;
 	struct vos_container    *cont;
 	struct vos_object       *obj        = NULL;
+	bool                     created    = false;
 	bool                     punch_obj  = false;
 	bool                     tx_started = false;
 	uint64_t		 hold_flags;
@@ -494,7 +495,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
-	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb);
+	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb, obj);
 	if (rc != 0)
 		goto reset;
 
@@ -523,7 +524,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	/* NB: punch always generate a new incarnation of the object */
-	rc = vos_obj_incarnate(obj, &epr, bound, hold_flags, DAOS_INTENT_PUNCH, ts_set);
+	rc = vos_obj_incarnate(obj, &epr, bound, hold_flags, DAOS_INTENT_PUNCH, ts_set, &created);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
 			rc = key_punch(obj, epr.epr_hi, bound, pm_ver, dkey,
@@ -571,13 +572,8 @@ reset:
 		vos_ts_set_update(ts_set, epr.epr_hi);
 	}
 
-	if (rc == 0) {
+	if (rc == 0)
 		vos_ts_set_wupdate(ts_set, epr.epr_hi);
-
-		if (dtx_is_valid_handle(dth) && dth->dth_local) {
-			rc = vos_insert_oid(dth, cont, &oid);
-		}
-	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, tx_started, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
@@ -592,7 +588,7 @@ reset:
 	}
 
 	if (obj != NULL)
-		vos_obj_release(obj, 0, rc != 0);
+		vos_obj_release(obj, 0, rc != 0 && created);
 
 	D_FREE(daes);
 	D_FREE(dces);
@@ -723,7 +719,7 @@ vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete
 	rc = umem_tx_end(umm, rc);
 
 out:
-	vos_obj_release(obj, 0, rc == 0);
+	vos_obj_release(obj, 0, false);
 	return rc;
 }
 
@@ -801,7 +797,7 @@ out_tree:
 out_tx:
 	rc = umem_tx_end(umm, rc);
 out:
-	vos_obj_release(obj, 0, true);
+	vos_obj_release(obj, 0, false);
 	return rc;
 }
 
@@ -816,7 +812,8 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
 	daos_handle_t         toh = DAOS_HDL_INVAL;
 	int                   rc  = 0;
 	int                   i;
-	bool                  dirty = false;
+	bool                  dirty   = false;
+	bool                  created = false;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -842,17 +839,24 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
 		}
 	}
 
+restart:
 	rc = vos_obj_hold(cont, oid, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE,
 			  DAOS_INTENT_MARK, &obj, NULL);
 	if (rc != 0)
 		goto log;
 
-	rc = umem_tx_begin(umm, NULL);
+	rc = vos_tx_begin(NULL, umm, cont->vc_pool->vp_sysdb, obj);
+	if (unlikely(rc == -DER_TX_RESTART)) {
+		vos_obj_release(obj, 0, true);
+		obj = NULL;
+		goto restart;
+	}
+
 	if (rc != 0)
 		goto log;
 
 	rc = vos_obj_incarnate(obj, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE, DAOS_INTENT_MARK,
-			       NULL);
+			       NULL, &created);
 	if (rc != 0)
 		goto out;
 
@@ -906,12 +910,14 @@ log:
 			  ", dkey (empty), akey_nr %u, epoch " DF_X64 ", pm_ver %u",
 			  DP_UOID(oid), akey_nr, epoch, pm_ver);
 
+	if (rc == -DER_ALREADY)
+		rc = 0;
 	if (daos_handle_is_valid(toh))
 		dbtree_close(toh);
 	if (obj != NULL)
-		vos_obj_release(obj, 0, true);
+		vos_obj_release(obj, 0, rc != 0 && created);
 
-	return rc == -DER_ALREADY ? 0 : rc;
+	return rc;
 }
 
 static int
