@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-18348') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -218,10 +219,78 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     return false
 }
 
+Boolean code_coverage_enabled() {
+    // Determine if code coverage is enabled for the build
+    if (startedByTimer()) {
+        env.COVFN_DISABLED = 'false'
+    }
+    return env.COVFN_DISABLED == 'false'
+}
+
+String code_coverage_build_args() {
+    // Get additional build args for code coverage, if enabled
+    Boolean code_coverage = code_coverage_enabled()
+    if (!code_coverage) {
+        return ''
+    }
+    return " --build-arg COMPILER=covc --build-arg CODE_COVERAGE=${code_coverage}"
+    // return " --build-arg COMPILER=covc --build-arg BULLSEYE_KEY=${env.BULLSEYE_KEY} --build-arg CODE_COVERAGE=${code_coverage}"
+}
+
+String code_coverage_scons_args() {
+    // Get additional scons args for code coverage, if enabled
+    if (!code_coverage_enabled()) {
+        return ''
+    }
+    return ' COMPILER=covc'
+}
+
+String add_daos_pkgs() {
+    // Get the additional daos package names to install in functional test stages
+    if (code_coverage_enabled()) {
+        return "tests-internal,-code-coverage"
+    }
+    return "tests-internal"
+}
+
+Map unit_test_post_args(String name) {
+    // Get the arguments for unitTestPost
+    Map args = [artifacts: ["${name}_logs/"]]
+    if (code_coverage_enabled()) {
+        // args['artifacts'].add("covc_${name}_logs/")
+        // args['artifacts'].add('covc_vm_test/**')
+        args['ignore_failure'] = true
+        args['code_coverage'] = true
+    }
+    return args
+}
+
+Map nlt_post_args() {
+    Map args = [
+        artifacts: ['nlt_logs/'],
+        testResults: 'nlt-junit.xml',
+        always_script: 'ci/unit/test_nlt_post.sh',
+        valgrind_stash: 'el8-gcc-nlt-memcheck'
+    ]
+    if (code_coverage_enabled()) {
+        // args['artifacts'].add('covc_nlt_logs/')
+        args['ignore_failure'] = true
+        args['code_coverage'] = true
+    }
+    return args
+}
+
 pipeline {
     agent { label 'lightweight' }
 
+    triggers {
+        // Generate a code coverage report each Sunday
+        /* groovylint-disable-next-line AddEmptyString */
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 6 * * 0' : '')
+    }
+
     environment {
+        BULLSEYE_KEY = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = '-ici_key'
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
@@ -305,6 +374,9 @@ pipeline {
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on Leap 15')
+        // booleanParam(name: 'CI_CODE_COVERAGE',
+        //              defaultValue: false,
+        //              description: 'Enable Bullseye code coverage report')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -537,24 +609,26 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                code_coverage_build_args()
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
+                                script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} ${code_coverage_enabled()}"
                             sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
+                                script: "./ci/rpm/build_deps.sh ${code_coverage_enabled()} ${env.BULLSEYE_KEY}"
                             job_step_update(
                                 sconsBuild(parallel_build: true,
-                                        stash_files: 'ci/test_files_to_stash.txt',
-                                        build_deps: 'no',
-                                        stash_opt: true,
-                                        scons_args: sconsArgs() +
-                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_args: sconsArgs() +
+                                                       ' PREFIX=/opt/daos TARGET_TYPE=release' +
+                                                       code_coverage_scons_args()))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
+                                script: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL} ${code_coverage_enabled()}"
                         }
                     }
                     post {
@@ -577,7 +651,7 @@ pipeline {
                 stage('Build on EL 9.6') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('el9') }
+                        expression { !skip_build_stage('el9') && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {
@@ -631,7 +705,7 @@ pipeline {
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('leap15') }
+                        expression { !skip_build_stage('leap15') && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {
@@ -682,7 +756,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('leap15', 'icc') }
+                        expression { !skip_build_stage('leap15', 'icc') && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {
@@ -738,12 +812,15 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
+                                     ignore_failure: code_coverage_enabled(),
+                                     code_coverage: code_coverage_enabled(),
+                                     coverage_stash: 'unit_test_bullseye',
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_logs/']
+                            unitTestPost unit_test_post_args('unit_test')
                             job_status_update()
                         }
                     }
@@ -760,12 +837,15 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
+                                     ignore_failure: code_coverage_enabled(),
+                                     code_coverage: code_coverage_enabled(),
+                                     coverage_stash: 'unit_test_bdev_bullseye',
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages()))
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_bdev_logs/']
+                            unitTestPost unit_test_post_args('unit_test_bdev')
                             job_status_update()
                         }
                     }
@@ -773,18 +853,21 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
+                        expression { params.CI_NLT_TEST && !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 180,
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
+                                     ignore_failure: code_coverage_enabled(),
+                                     code_coverage: code_coverage_enabled(),
+                                     coverage_stash: 'nlt_bullseye',
                                      inst_rpms: unitPackages()))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
@@ -793,10 +876,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
+                            unitTestPost nlt_post_args()
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -813,7 +893,7 @@ pipeline {
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -838,7 +918,7 @@ pipeline {
                 stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -873,7 +953,7 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -904,7 +984,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                    inst_rpms: functionalPackages(1, next_version(), add_daos_pkgs()),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -917,7 +997,7 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label vm9_label('EL9')
@@ -939,7 +1019,7 @@ pipeline {
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -984,7 +1064,7 @@ pipeline {
                 stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !code_coverage_enabled() && !code_coverage_enabled() }
                     }
                     agent {
                         dockerfile {
@@ -1040,7 +1120,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1060,7 +1140,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() && !code_coverage_enabled() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1144,6 +1224,7 @@ pipeline {
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1156,6 +1237,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
@@ -1168,6 +1250,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1181,6 +1264,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1194,6 +1278,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1207,6 +1292,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1220,6 +1306,7 @@ pipeline {
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1232,6 +1319,7 @@ pipeline {
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1243,6 +1331,52 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
+        stage('Test Summary') {
+            when {
+                beforeAgent true
+                expression { true }
+            }
+            parallel {
+                stage('Bullseye Report') {
+                    when {
+                        beforeAgent true
+                        expression { code_coverage_enabled() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: false,
+                                                                parallel_build: true) +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                code_coverage_build_args()
+                        }
+                    }
+                    steps {
+                        script {
+                            sh label: 'Install packages',
+                                script: './ci/summary/install_pkgs.sh'
+                            job_step_update(
+                                runScriptWithStashes(
+                                    label: 'Generate Bullseye Report',
+                                    script: 'ci/summary/bullseye_report.sh',
+                                    stashes: ['unit_test_bullseye',
+                                              'unit_test_bdev_bullseye',
+                                              'nlt_bullseye']))
+                        }
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'bullseye_report/*',
+                                             allowEmptyArchive: false
+                            job_status_update()
+                        }
+                    }
+                } // stage('Code Coverage Report')
+            } // parallel
+        } // stage('Test Summary')
     } // stages
     post {
         always {

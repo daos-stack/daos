@@ -19,23 +19,13 @@ rm -rf test_results
 mkdir test_results
 chmod 777 test_results
 
-# Check if this is a Bulleye stage
-USE_BULLSEYE=false
+# Check if this is a bdev stage
 BDEV_TEST=false
 case $STAGE_NAME in
-  *Bullseye**)
-  USE_BULLSEYE=true
-  ;;
   *bdev**)
   BDEV_TEST=true
   ;;
 esac
-
-if $USE_BULLSEYE; then
-  rm -rf bullseye
-  mkdir -p bullseye
-  tar -C bullseye --strip-components=1 -xf bullseye.tar
-fi
 
 NODE=${NODELIST%%,*}
 

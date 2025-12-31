@@ -16,20 +16,21 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-env
+env | sort -n
 
 pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
+CODE_COVERAGE="${3:-false}"
 rm -f ./*.rpm
 rm -rf /home/daos/rpms/*
-utils/rpms/build_packages.sh deps
+utils/rpms/build_packages.sh deps "${CODE_COVERAGE}"
 if ls -1 ./*.rpm; then
   mkdir -p /home/daos/rpms/deps
   cp ./*.rpm /home/daos/rpms/deps
   rm -f ./*.rpm
 fi
-utils/rpms/build_packages.sh daos
+utils/rpms/build_packages.sh daos "${CODE_COVERAGE}"
 mkdir -p /home/daos/rpms/daos
 cp ./*.rpm /home/daos/rpms/daos
 popd || exit 1

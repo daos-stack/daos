@@ -439,9 +439,10 @@ def get_base_env(clean=False):
     env['FI_UNIVERSE_SIZE'] = '128'
 
     # If set, retain the HTTPS_PROXY for valgrind
-    http_proxy = os.environ.get('HTTPS_PROXY')
-    if http_proxy:
-        env['HTTPS_PROXY'] = http_proxy
+    for _name in ['HTTPS_PROXY', 'COVFILE']:
+        _value = os.environ.get(_name)
+        if _value:
+            env[_name] = _value
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
@@ -449,6 +450,8 @@ def get_base_env(clean=False):
 
     # Otherwise max number of contexts will be limited by number of cores
     env['CRT_CTX_NUM'] = '32'
+
+    print(f"get_base_env(): env={env}")
 
     return env
 
