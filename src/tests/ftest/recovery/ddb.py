@@ -174,8 +174,8 @@ class DdbTest(TestWithServers):
             # MD-on-SSD: ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control
             # /engine0 /mnt/daos_load/<pool_uuid>/vos-0 ls
             ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
-            vos_path = os.path.join(daos_load_path, pool.uuid.lower(), "vos-0")
-            ddb_command.vos_path.update(value=vos_path)
+            ddb_command.vos_path.update(
+                value=os.path.join(daos_load_path, pool.uuid.lower(), "vos-0"))
         cmd_result = ddb_command.list_component()
         # Sample output.
         #   Listing contents of '/'
@@ -245,9 +245,9 @@ class DdbTest(TestWithServers):
                 f"Unexpected number of dkeys! Expected = {expected_dkey_count}; "
                 f"Actual = {actual_dkey_count}")
 
-        msg = ("Verify there is one akey for every dkey. Also verify the key string and "
-               "the size.")
-        self.log_step(msg)
+        self.log_step(
+            "Verify there is one akey for every dkey. Also verify the key string and "
+            "the size.")
         akey_count = 0
         for obj_index in range(object_count):
             for dkey_index in range(dkey_count):
