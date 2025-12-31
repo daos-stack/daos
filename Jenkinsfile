@@ -741,7 +741,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.6 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
@@ -755,7 +755,7 @@ pipeline {
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --build-arg COMPILER=icc' +
-                                                ' --build-arg POINT_RELEASE=.6 '
+                                                ' --build-arg POINT_RELEASE=.5 '
 
                         }
                     }
