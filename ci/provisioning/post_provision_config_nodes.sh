@@ -126,7 +126,7 @@ function nvme_dev_get_first_by_pcie_addr() {
       return
     done
   else
-    echo "ERROR nvme_dev_get_first_by_pcie_addr can not find nvme for $pci_device_address"
+    echo "ERROR: nvme_dev_get_first_by_pcie_addr can not find nvme for $pci_device_address"
     exit 1
   fi
 }
@@ -184,20 +184,30 @@ function nvme_recreate_namespace {
 # ms = metadata size per block (0, 8, or 64 bytes).
 # rp = relative performance hint.
 
-  local nvme_device="${1:?Usage: nvme_recreate_namespace <nvme_device>}"
+  local nvme_device="${1:?Usage: nvme_recreate_namespace <nvme_device>  [skip_delete:true|false]}"
+  local skip_delete="${2:-false}"  # true to skip, default false (delete enabled)
   local nvme_device_path="/dev/${nvme_device}"
   local nvme_device_ns_path="${nvme_device_path}n1"
   local nvme_create_ns_opts
   #echo "Recreating namespace on $nvme_device_path ..."
+  # Optionally skip delete step
+  if [[ "$skip_delete" != "true" ]]; then
+    nvme delete-ns "$nvme_device_path" -n 0x1 || \
+      { echo "ERROR: delete the ${nvme_device_path} namespace failed"; exit 1; }
+    nvme reset "$nvme_device_path" || \
+      { echo "ERROR: reset the ${nvme_device_path} device failed"; exit 1; }
+  else
+    echo "INFO: Skipping namespace delete on $nvme_device_path"
+  fi
   nvme delete-ns "$nvme_device_path" -n 0x1 || \
-    { echo "ERROR delete the ${nvme_device_path} namespace failed"; exit 1; }
+    { echo "ERROR: delete the ${nvme_device_path} namespace failed"; exit 1; }
   nvme reset "$nvme_device_path" || \
-    { echo "ERROR reset the ${nvme_device_path} device failed"; exit 1; }
+    { echo "ERROR: reset the ${nvme_device_path} device failed"; exit 1; }
   nvme_create_ns_opts=$(nvme_calc_full_nsze_ncap "${nvme_device_path}") 
   nvme create-ns "$nvme_device_path" $nvme_create_ns_opts --flbas=0 || \
-    { echo "ERROR create the ${nvme_device_path} namespace failed"; exit 1; }
+    { echo "ERROR: create the ${nvme_device_path} namespace failed"; exit 1; }
   nvme attach-ns "$nvme_device_path" -n 0x1 -c 0x41 || \
-    { echo "ERROR attach the ${nvme_device_path} namespace failed"; exit 1; }
+    { echo "ERROR: attach the ${nvme_device_path} namespace failed"; exit 1; }
   # Wait up to 5 seconds for device node to appear
   for i in {1..10}; do
     if [ -b "$nvme_device_ns_path" ]; then
@@ -211,9 +221,9 @@ function nvme_recreate_namespace {
   fi
   # selects LBA format index 0 (512B) and no secure erase, just format
   nvme format "$nvme_device_ns_path" --lbaf=0 --ses=0 --force || \
-    { echo "ERROR format the ${nvme_device_ns_path} namespace failed"; exit 1; }
+    { echo "ERROR: format the ${nvme_device_ns_path} namespace failed"; exit 1; }
   nvme reset "$nvme_device_path" || \
-    { echo "ERROR reset the ${nvme_device_path} namespace failed"; exit 1; }
+    { echo "ERROR: reset the ${nvme_device_path} namespace failed"; exit 1; }
   nvme id-ns "$nvme_device_ns_path" |grep -E "lbaf|nvmcap|nsze|ncap|nuse"
   #echo "Recreating namespace on ${nvme_device_ns_path} done"
 }
@@ -227,12 +237,13 @@ function mkfs_on_nvme_over_limit {
   local nvme_pci_address nvme_device nvme_device_ns_path
   for nvme_pci_address in "${nvme_pci_address_array[@]}"; do
     nvme_device=$(nvme_dev_get_first_by_pcie_addr "$nvme_pci_address")
+    nvme_device_ns_path="/dev/${nvme_device}n1"
+    # always recreate namespace if it does not exist
+    if [ ! -e "$nvme_device_ns_path" ]; then
+      echo "INFO recreate namespace 1 on /dev/${nvme_device} ${nvme_pci_address}"
+      nvme_recreate_namespace "$nvme_device" true
+    fi
     if [ "$count" -ge "$daos_nvme_numa_limit" ]; then
-      nvme_device_ns_path="/dev/${nvme_device}n1"
-        if [ ! -e "$nvme_device_ns_path" ]; then
-          echo "INFO recreate namespace 1 on /dev/${nvme_device} ${nvme_pci_address}"
-          nvme_recreate_namespace "$nvme_device"
-        fi
       if ! blkid -t TYPE=ext4 "$nvme_device_ns_path" >/dev/null 2>&1; then
         echo "INFO mkfs on $nvme_device_ns_path"
         sudo mkfs.ext4 -F "$nvme_device_ns_path" > /dev/null
