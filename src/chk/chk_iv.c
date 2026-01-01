@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -180,6 +181,62 @@ struct ds_iv_class_ops chk_iv_ops = {
 	.ivc_ent_refresh	= chk_iv_ent_refresh,
 	.ivc_value_alloc	= chk_iv_value_alloc,
 };
+
+void
+chk_iv_ns_destroy(struct chk_instance *ins)
+{
+	if (ins->ci_iv_ns != NULL) {
+		if (ins->ci_iv_ns->iv_refcount == 1)
+			ds_iv_ns_cleanup(ins->ci_iv_ns);
+		ds_iv_ns_put(ins->ci_iv_ns);
+		ins->ci_iv_ns = NULL;
+	}
+
+	if (ins->ci_iv_group != NULL) {
+		crt_group_secondary_destroy(ins->ci_iv_group);
+		ins->ci_iv_group = NULL;
+	}
+}
+
+int
+chk_iv_ns_create(struct chk_instance *ins, uuid_t uuid, d_rank_t leader, uint32_t ns_ver)
+{
+	char uuid_str[DAOS_UUID_STR_SIZE];
+	int  rc;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	rc = crt_group_secondary_create(uuid_str, NULL, NULL, &ins->ci_iv_group);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, uuid, ins->ci_iv_group, &ins->ci_iv_id,
+			     &ins->ci_iv_ns);
+	if (rc != 0)
+		goto out;
+
+	rc = chk_iv_ns_update(ins, ns_ver);
+	if (rc == 0)
+		ds_iv_ns_update(ins->ci_iv_ns, leader, ins->ci_iv_ns->iv_master_term + 1);
+
+out:
+	if (rc != 0)
+		chk_iv_ns_destroy(ins);
+	return rc;
+}
+
+int
+chk_iv_ns_update(struct chk_instance *ins, uint32_t ns_ver)
+{
+	int rc;
+
+	/* Let secondary rank == primary rank. */
+	rc = crt_group_secondary_modify(ins->ci_iv_group, ins->ci_ranks, ins->ci_ranks,
+					CRT_GROUP_MOD_OP_REPLACE, ns_ver);
+	if (rc == 0)
+		ins->ci_ns_ver = ns_ver;
+
+	return rc;
+}
 
 int
 chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode, bool retry)
