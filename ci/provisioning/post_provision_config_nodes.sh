@@ -268,9 +268,7 @@ function nvme_setup {
   local nvme_count nvme_pcie_address_all nvme_pci_address numa_node  
   
   nvme_count=$(get_nvme_count_devices)
-  if [ "$nvme_count" -gt 1 ]; then
-    ((nvme_count--)) || true
-  else
+  if [ "$nvme_count" -le 1 ]; then
     return 0
   fi
   
