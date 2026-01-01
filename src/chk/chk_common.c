@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1073,8 +1073,7 @@ chk_policy_refresh(uint32_t policy_nr, struct chk_policy *policies, struct chk_p
 }
 
 int
-chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
-		 uint32_t policy_nr, struct chk_policy *policies,
+chk_prop_prepare(d_rank_t leader, uint32_t flags, uint32_t policy_nr, struct chk_policy *policies,
 		 d_rank_list_t *ranks, struct chk_property *prop)
 {
 	int rc = 0;
@@ -1086,11 +1085,8 @@ chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
 		prop->cp_flags &= ~CHK__CHECK_FLAG__CF_FAILOUT;
 	if (flags & CHK__CHECK_FLAG__CF_NO_AUTO)
 		prop->cp_flags &= ~CHK__CHECK_FLAG__CF_AUTO;
-	prop->cp_flags |= flags & ~(CHK__CHECK_FLAG__CF_RESET |
-				    CHK__CHECK_FLAG__CF_ORPHAN_POOL |
-				    CHK__CHECK_FLAG__CF_NO_FAILOUT |
-				    CHK__CHECK_FLAG__CF_NO_AUTO);
-	prop->cp_phase = phase;
+	prop->cp_flags |= flags & ~(CHK__CHECK_FLAG__CF_RESET | CHK__CHECK_FLAG__CF_ORPHAN_POOL |
+				    CHK__CHECK_FLAG__CF_NO_FAILOUT | CHK__CHECK_FLAG__CF_NO_AUTO);
 	if (ranks != NULL)
 		prop->cp_rank_nr = ranks->rl_nr;
 
@@ -1301,10 +1297,7 @@ chk_ins_fini(struct chk_instance **p_ins)
 		return;
 
 	ins->ci_inited = 0;
-	chk_iv_ns_cleanup(&ins->ci_iv_ns);
-
-	if (ins->ci_iv_group != NULL)
-		crt_group_secondary_destroy(ins->ci_iv_group);
+	chk_iv_ns_destroy(ins);
 
 	d_rank_list_free(ins->ci_ranks);
 	D_ASSERT(d_list_empty(&ins->ci_dead_ranks));
