@@ -134,39 +134,37 @@ function nvme_dev_get_first_by_pcie_addr() {
 
 # Calculates --nsze and --ncap for a device so the namespace spans the full usable capacity
 nvme_calc_full_nsze_ncap() {
-    local nvme_dev="${1:?Usage: nvme_calc_full_nsze_ncap <nvme_device_path>}"
+    local nvme_device="${1:?Usage: nvme_calc_full_nsze_ncap <nvme_device>}"
     # Query the NVMe device info for total logical blocks and LBA size
-    local id_ctrl
-    id_ctrl=$(nvme id-ctrl "$nvme_dev") || {
-        echo "ERROR: nvme id-ctrl failed on $nvme_dev"
-        return 1
-    }
-
-    # Extract total NVM capacity in bytes (nvmcap)
-    # nvme-cli prints: "nvmcap    : 4000884572160"
+    # Prefer tnvmcap, fallback to unvmcap if tnvmcap not found
     local nvmcap_bytes
-    nvmcap_bytes=$(echo "$id_ctrl" | awk -F: '/nvmcap/ {gsub(/ /, "", $2); print $2}')
-    if [[ -z "$nvmcap_bytes" ]]; then
-        echo "ERROR: Could not find nvmcap in nvme id-ctrl output"
+    nvmcap_bytes=$(nvme id-ctrl "$nvme_device" 2>/dev/null | \
+        awk -F: '
+            /tnvmcap/ {gsub(/[^0-9]/,"",$2); print $2; found=1; exit}
+            /unvmcap/ && !found {gsub(/[^0-9]/,"",$2); val=$2}
+            END{if(!found && val) print val}
+        ')
+    
+    if [[ -z "$nvmcap_bytes" || "$nvmcap_bytes" -eq 0 ]]; then
+        echo "ERROR: Could not find tnvmcap or unvmcap in nvme id-ctrl output" >&2
         return 1
     fi
 
     # Extract the size of a logical block (lba size), usually from nvme id-ns or id-ctrl
-    local lbads
-    local id_ns
-    id_ns=$(nvme id-ns "${nvme_dev}n1" 2>/dev/null || nvme id-ns "${nvme_dev}n1" 2>/dev/null)
+    local lbads id_ns lba_bytes lba_count
+    id_ns=$(nvme id-ns "${nvme_device}n1" 2>/dev/null || true)
     if [[ -n "$id_ns" ]]; then
         # Look for "lbads" line in id-ns output
-        lbads=$(echo "$id_ns" | awk -F: '/lbads/ {gsub(/ /, "", $2); print $2}')
+        lbads=$(echo "$id_ns" | awk -F: '/lbads/ {gsub(/[^0-9]/,"",$2); print $2; exit}')
     fi
     if [[ -z "$lbads" ]]; then
         # fallback: Try to get LBA (logical block addressing) from id-ctrl if possible, else default to 512
-        lbads=9 # Default for 512 bytes
+        lbads=9 # Default for 512 bytes (2^9)
     fi
-    local lba_bytes=$((2 ** lbads))
+    lba_bytes=$((2 ** lbads))
 
     # Calculate number of logical blocks
-    local lba_count=$(( nvmcap_bytes / lba_bytes ))
+    lba_count=$(( nvmcap_bytes / lba_bytes ))
 
     # Output as hexadecimal format for nvme-cli
     printf -- "--nsze=0x%x --ncap=0x%x\n" "$lba_count" "$lba_count"
