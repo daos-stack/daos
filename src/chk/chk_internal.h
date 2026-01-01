@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1171,6 +1171,14 @@ chk_pools_find_slowest(struct chk_instance *ins, int *done)
 
 		if (cpr->cpr_bk.cb_phase < phase)
 			phase = cpr->cpr_bk.cb_phase;
+	}
+
+	/* All pools have been done, some check engines are still running, leader needs to wait. */
+	if (ins->ci_orphan_done && *done > 0 && !d_list_empty(&ins->ci_rank_list)) {
+		D_ASSERT(ins->ci_is_leader);
+
+		phase = CHK_INVAL_PHASE;
+		*done = 0;
 	}
 
 	return phase;

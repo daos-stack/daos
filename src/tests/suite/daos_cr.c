@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3425,12 +3425,6 @@ cr_fail_sync_orphan(void **state)
 	assert_rc_equal(rc, 0);
 
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
-	assert_rc_equal(rc, 0);
-
-	/* Check leader may be completed earlier than check engines in this case, double check. */
-	cr_ins_wait(0, NULL, &dci);
-
-	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
 
 	cr_debug_set_params(arg, 0);
