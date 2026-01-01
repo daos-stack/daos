@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -131,6 +131,47 @@ function nvme_dev_get_first_by_pcie_addr() {
   fi
 }
 
+
+# Calculates --nsze and --ncap for a device so the namespace spans the full usable capacity
+nvme_calc_full_nsze_ncap() {
+    local nvme_dev="${1:?Usage: nvme_calc_full_nsze_ncap <nvme_device_path>}"
+    # Query the NVMe device info for total logical blocks and LBA size
+    local id_ctrl
+    id_ctrl=$(nvme id-ctrl "$nvme_dev") || {
+        echo "ERROR: nvme id-ctrl failed on $nvme_dev"
+        return 1
+    }
+
+    # Extract total NVM capacity in bytes (nvmcap)
+    # nvme-cli prints: "nvmcap    : 4000884572160"
+    local nvmcap_bytes
+    nvmcap_bytes=$(echo "$id_ctrl" | awk -F: '/nvmcap/ {gsub(/ /, "", $2); print $2}')
+    if [[ -z "$nvmcap_bytes" ]]; then
+        echo "ERROR: Could not find nvmcap in nvme id-ctrl output"
+        return 1
+    fi
+
+    # Extract the size of a logical block (lba size), usually from nvme id-ns or id-ctrl
+    local lbads
+    local id_ns
+    id_ns=$(nvme id-ns "${nvme_dev}n1" 2>/dev/null || nvme id-ns "${nvme_dev}n1" 2>/dev/null)
+    if [[ -n "$id_ns" ]]; then
+        # Look for "lbads" line in id-ns output
+        lbads=$(echo "$id_ns" | awk -F: '/lbads/ {gsub(/ /, "", $2); print $2}')
+    fi
+    if [[ -z "$lbads" ]]; then
+        # fallback: Try to get LBA (logical block addressing) from id-ctrl if possible, else default to 512
+        lbads=9 # Default for 512 bytes
+    fi
+    local lba_bytes=$((2 ** lbads))
+
+    # Calculate number of logical blocks
+    local lba_count=$(( nvmcap_bytes / lba_bytes ))
+
+    # Output as hexadecimal format for nvme-cli
+    printf -- "--nsze=0x%x --ncap=0x%x\n" "$lba_count" "$lba_count"
+}
+
 function nvme_recreate_namespace {
 # lbaf 0 : ms:0   lbads:9  rp:0x1 (in use)   → 512B blocks
 # lbaf 1 : ms:0   lbads:12 rp:0              → 4096B blocks (4K)
@@ -146,16 +187,29 @@ function nvme_recreate_namespace {
   local nvme_device="${1:?Usage: nvme_recreate_namespace <nvme_device>}"
   local nvme_device_path="/dev/${nvme_device}"
   local nvme_device_ns_path="${nvme_device_path}n1"
+  local nvme_create_ns_opts
   #echo "Recreating namespace on $nvme_device_path ..."
   nvme delete-ns "$nvme_device_path" -n 0x1 || \
     { echo "ERROR delete the ${nvme_device_path} namespace failed"; exit 1; }
   nvme reset "$nvme_device_path" || \
     { echo "ERROR reset the ${nvme_device_path} device failed"; exit 1; }
-  nvme create-ns "$nvme_device_path" --nsze=0x1bf1f72b0 --ncap=0x1bf1f72b0 --flbas=0 || \
+  nvme_create_ns_opts=$(nvme_calc_full_nsze_ncap "${nvme_device_path}") 
+  nvme create-ns "$nvme_device_path" $nvme_create_ns_opts --flbas=0 || \
     { echo "ERROR create the ${nvme_device_path} namespace failed"; exit 1; }
   nvme attach-ns "$nvme_device_path" -n 0x1 -c 0x41 || \
     { echo "ERROR attach the ${nvme_device_path} namespace failed"; exit 1; }
-  # selects LBA format index 0 (512BK) and no secure erase, just format
+  # Wait up to 5 seconds for device node to appear
+  for i in {1..10}; do
+    if [ -b "$nvme_device_ns_path" ]; then
+        break
+    fi
+    sleep "$i"
+  done
+  if [ ! -b "$nvme_device_ns_path" ]; then
+    echo "ERROR: Namespace $nvme_device_ns_path did not appear after attach"
+    exit 1
+  fi
+  # selects LBA format index 0 (512B) and no secure erase, just format
   nvme format "$nvme_device_ns_path" --lbaf=0 --ses=0 --force || \
     { echo "ERROR format the ${nvme_device_ns_path} namespace failed"; exit 1; }
   nvme reset "$nvme_device_path" || \
@@ -247,7 +301,7 @@ function nvme_setup {
   fi
 }
 
-function setup_spdk_nvme {
+function spdk_setup_status {
     set +e
     if check_spdk_setup_cmd; then
        sudo "$SPDK_SETUP_CMD" status
@@ -258,8 +312,9 @@ function setup_spdk_nvme {
 #For now limit to 2 devices per CPU NUMA node
 : "${DAOS_CI_NVME_NUMA_LIMIT:=2}"
 
+spdk_setup_status
 nvme_setup "$DAOS_CI_NVME_NUMA_LIMIT"
-setup_spdk_nvme
+spdk_setup_status
 if command -v daos_server >/dev/null 2>&1; then
     daos_server nvme scan
 fi

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1257,6 +1257,7 @@ class TestGroup():
         run_local(logger, f"ls -al '{self._test_env.app_dir}'")
         return 0
 
+    # pylint: disable=too-many-locals
     def run_tests(self, logger, result, repeat, slurm_setup, sparse, fail_fast, stop_daos, archive,
                   rename, jenkins_log, core_files, threshold, user_create, code_coverage,
                   job_results_dir, logdir, clear_mounts, cleanup_files):
