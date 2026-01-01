@@ -91,8 +91,9 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_si
 	char       *rdb_path           = NULL;
 	bool        dummy_cancel_state = false;
 	int         rc;
-	int         fd;
+	int         fd, tgt_id;
 	struct stat statbuf;
+	uint8_t    *skip_bitmap = NULL;
 
 	D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
 
@@ -132,9 +133,22 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_si
 		goto out;
 	}
 
+	D_ASSERT(tgt_nr > 0);
+	D_ALLOC(skip_bitmap, (tgt_nr + 7) / 8);
+	if (skip_bitmap == NULL) {
+		rc = -DER_NOMEM;
+		D_ERROR("Failed to allocate target bitmap.\n");
+		goto out;
+	}
+
+	for (tgt_id = 0; tgt_id < tgt_nr; tgt_id++) {
+		if (!bio_pool_tgt_created(pool_uuid, tgt_id, 0))
+			setbit(skip_bitmap, tgt_id);
+	}
+
 	/** create VOS files */
 	rc = ds_mgmt_tgt_preallocate_parallel(pool_uuid, scm_size, tgt_nr, &dummy_cancel_state,
-					      newborns_path, bind_cpu_fn);
+					      newborns_path, bind_cpu_fn, skip_bitmap);
 	if (rc) {
 		D_ERROR(DF_UUID ": failed to create tgt vos files: " DF_RC "\n", DP_UUID(pool_uuid),
 			DP_RC(rc));
@@ -182,6 +196,7 @@ out:
 	D_FREE(newborns_path);
 	D_FREE(pool_newborns_path);
 	D_FREE(pool_path);
+	D_FREE(skip_bitmap);
 
 	return rc;
 }
@@ -307,7 +322,7 @@ ds_mgmt_tgt_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr
 int
 ds_mgmt_tgt_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
 				 bool *cancel_pending, const char *newborns_path,
-				 bind_cpu_fn_t bind_cpu_fn)
+				 bind_cpu_fn_t bind_cpu_fn, uint8_t *skip_bitmap)
 {
 	int                  i;
 	int                  rc;
@@ -326,6 +341,8 @@ ds_mgmt_tgt_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate);
 
 	for (i = 0; i < tgt_nr; i++) {
+		if (skip_bitmap && isset(skip_bitmap, i))
+			continue;
 		entry = &thrds_list[i];
 		uuid_copy(entry->tvt_args.tvpa_uuid, uuid);
 		entry->tvt_args.tvpa_scm_size      = scm_size;

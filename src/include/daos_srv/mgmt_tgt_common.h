@@ -74,11 +74,12 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_si
  * \param[in] cancel_pending	If true, preallocate will abort
  * \param[in] newborns_path	Base path for store vos/rdb files
  * \param[in] bind_cpu_fn	e.g. `dss_bind_to_xstream_cpuset`
+ * \param[in] skip_bitmap	Bitmap for the targets being skipped
  */
 int
 ds_mgmt_tgt_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
 				 bool *cancel_pending, const char *newborns_path,
-				 bind_cpu_fn_t bind_cpu_fn);
+				 bind_cpu_fn_t bind_cpu_fn, uint8_t *skip_bitmap);
 
 /**
  * Sequential recreate vos files.
