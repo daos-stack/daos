@@ -204,6 +204,7 @@ struct feature_options {
 
 struct rm_pool_options {
 	const char *path;
+	const char *db_path;
 };
 
 struct dev_list_options {
