@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2789,7 +2789,7 @@ ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to start check\n");
 
 	rc = ds_mgmt_check_start(req->n_ranks, req->ranks, req->n_policies, req->policies,
-				 req->n_uuids, req->uuids, req->flags, -1 /* phase */);
+				 req->n_uuids, req->uuids, req->flags);
 	if (rc < 0)
 		D_ERROR("Failed to start check: "DF_RC"\n", DP_RC(rc));
 
