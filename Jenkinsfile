@@ -5,7 +5,7 @@
 /* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -403,6 +403,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION',
+               defaultValue: 'el8.8',
+               description: 'Version of OS used in all Functional Hardware Medium stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -628,6 +631,7 @@ pipeline {
                         }
                     }
                 }
+/*
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
@@ -718,6 +722,7 @@ pipeline {
                         }
                     }
                 }
+*/
             }
         }
         stage('Unit Tests') {
@@ -1147,6 +1152,7 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1159,6 +1165,7 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1172,6 +1179,7 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1185,6 +1193,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1198,6 +1207,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1211,6 +1221,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                            image_version: params.FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
