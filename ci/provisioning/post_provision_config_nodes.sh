@@ -85,7 +85,7 @@ fi
 # "Failed to initialize SSD: [xxxx:xx:xx.x]' when DAOS engines are started.
 SPDK_SETUP_CMD="/usr/share/daos/spdk/scripts/setup.sh"
 
-function check_spdk_setup_cmd {
+check_spdk_setup_cmd () {
   if [ ! -d "$(dirname "$SPDK_SETUP_CMD")" ] || [ ! -f "$SPDK_SETUP_CMD" ]; then
     echo -n "Required SPDK scripts directory $(dirname "$SPDK_SETUP_CMD")"
     echo " or setup.sh not found!"
@@ -94,27 +94,47 @@ function check_spdk_setup_cmd {
   return 0
 }
 
-function get_nvme_count_devices {
+get_nvme_count_devices () {
   lspci -D | grep -c -E "Non-Volatile memory controller" || true
 }
 
-function pci_device_is_mounted {
-  local pci_device_address="${1:?Usage: pci_device_is_mounted <pci_device_address>}"
-  $SPDK_SETUP_CMD status 2>&1 | grep "$pci_device_address" | grep -q "mount@"
+declare -A MOUNTED_PCI_DEVICES
+declare -A PCI_DEVICES_WITH_DATA
+pci_device_create_cache () {
+  MOUNTED_PCI_DEVICES=()
+  PCI_DEVICES_WITH_DATA=()
+  if check_spdk_setup_cmd; then
+    local status_output line pci_device_address
+    status_output="$($SPDK_SETUP_CMD status 2>&1)"
+    while read -r line; do
+      pci_device_address="${line%% *}"
+      if [[ "$pci_device_address" =~ ^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9]$ ]]; then
+        [[ "$line" == *"Active devices: mount@"* ]] && MOUNTED_PCI_DEVICES["$pci_device_address"]=1
+        [[ "$line" == *"Active devices: data@"* ]] && PCI_DEVICES_WITH_DATA["$pci_device_address"]=1
+      fi
+    done <<< "$status_output"
+  fi
+  echo "Cached ${#MOUNTED_PCI_DEVICES[@]} mounted PCI devices"
+  echo "Cached ${#PCI_DEVICES_WITH_DATA[@]} PCI devices with data"
 }
 
-function pci_device_has_data {
-  local pci_device_address="${1:?Usage: pci_device_is_mounted <pci_device_address>}"
-  $SPDK_SETUP_CMD status 2>&1 | grep "$pci_device_address" | grep -q "data@"
+pci_device_is_mounted() {
+    local pci_device_address="${1:?Usage: pci_device_is_mounted <pci_device_address>}"
+    [[ -v MOUNTED_PCI_DEVICES[$pci_device_address] ]]
 }
 
-function pci_device_get_numa {
+pci_device_has_data() {
+    local pci_device_address="${1:?Usage: pci_device_has_data <pci_device_address>}"
+    [[ -v PCI_DEVICES_WITH_DATA[$pci_device_address] ]]
+}
+
+pci_device_get_numa () {
   local pci_device="${1:?Usage: pci_device_get_numa <pci_device_address>}"
   local pci_device_numa_path="/sys/bus/pci/devices/${pci_device}/numa_node"
   cat "${pci_device_numa_path}"
 }
 
-function nvme_dev_get_first_by_pcie_addr() {
+nvme_dev_get_first_by_pcie_addr (){
   local pci_device_address="${1:?Usage: nvme_dev_get_first_by_pcie_addr <pci_device_address>}"
   local nvme_dir="/sys/bus/pci/devices/$pci_device_address/nvme"
   local nvme_device symlink
@@ -131,9 +151,8 @@ function nvme_dev_get_first_by_pcie_addr() {
   fi
 }
 
-
 # Calculates --nsze and --ncap for a device so the namespace spans the full usable capacity
-nvme_calc_full_nsze_ncap() {
+nvme_calc_full_nsze_ncap () {
     local nvme_device="${1:?Usage: nvme_calc_full_nsze_ncap <nvme_device>}"
     # Query the NVMe device info for total logical blocks and LBA size
     # Prefer tnvmcap, fallback to unvmcap if tnvmcap not found
@@ -151,7 +170,7 @@ nvme_calc_full_nsze_ncap() {
     fi
 
     # Extract the size of a logical block (lba size), usually from nvme id-ns or id-ctrl
-    local lbads id_ns lba_bytes lba_count
+    local lbads="" id_ns="" lba_bytes="" lba_count=""
     id_ns=$(nvme id-ns "${nvme_device}n1" 2>/dev/null || true)
     if [[ -n "$id_ns" ]]; then
         # Look for "lbads" line in id-ns output
@@ -159,7 +178,7 @@ nvme_calc_full_nsze_ncap() {
     fi
     if [[ -z "$lbads" ]]; then
         # fallback: Try to get LBA (logical block addressing) from id-ctrl if possible, else default to 512
-        lbads=9 # Default for 512 bytes (2^9)
+        lbads=12 # Default for 4096 bytes (2^12 = 4096)
     fi
     lba_bytes=$((2 ** lbads))
 
@@ -170,7 +189,7 @@ nvme_calc_full_nsze_ncap() {
     printf -- "--nsze=0x%x --ncap=0x%x\n" "$lba_count" "$lba_count"
 }
 
-function nvme_recreate_namespace {
+nvme_recreate_namespace (){
 # lbaf 0 : ms:0   lbads:9  rp:0x1 (in use)   → 512B blocks
 # lbaf 1 : ms:0   lbads:12 rp:0              → 4096B blocks (4K)
 # lbaf 2 : ms:8   lbads:9  rp:0x3            → 512B + 8B metadata
@@ -187,7 +206,6 @@ function nvme_recreate_namespace {
   local nvme_device_path="/dev/${nvme_device}"
   local nvme_device_ns_path="${nvme_device_path}n1"
   local nvme_create_ns_opts
-  #echo "Recreating namespace on $nvme_device_path ..."
   # Optionally skip delete step
   if [[ "$skip_delete" != "true" ]]; then
     nvme delete-ns "$nvme_device_path" -n 0x1 || \
@@ -197,17 +215,16 @@ function nvme_recreate_namespace {
   else
     echo "INFO: Skipping namespace delete on $nvme_device_path"
   fi
-  nvme delete-ns "$nvme_device_path" -n 0x1 || \
-    { echo "ERROR: delete the ${nvme_device_path} namespace failed"; exit 1; }
   nvme reset "$nvme_device_path" || \
     { echo "ERROR: reset the ${nvme_device_path} device failed"; exit 1; }
+  
   nvme_create_ns_opts=$(nvme_calc_full_nsze_ncap "${nvme_device_path}") 
   nvme create-ns "$nvme_device_path" $nvme_create_ns_opts --flbas=0 || \
     { echo "ERROR: create the ${nvme_device_path} namespace failed"; exit 1; }
   nvme attach-ns "$nvme_device_path" -n 0x1 -c 0x41 || \
     { echo "ERROR: attach the ${nvme_device_path} namespace failed"; exit 1; }
   # Wait up to 5 seconds for device node to appear
-  for i in {1..10}; do
+  for i in {1..5}; do
     if [ -b "$nvme_device_ns_path" ]; then
         break
     fi
@@ -223,11 +240,10 @@ function nvme_recreate_namespace {
   nvme reset "$nvme_device_path" || \
     { echo "ERROR: reset the ${nvme_device_path} namespace failed"; exit 1; }
   nvme id-ns "$nvme_device_ns_path" |grep -E "lbaf|nvmcap|nsze|ncap|nuse"
-  #echo "Recreating namespace on ${nvme_device_ns_path} done"
 }
 
 # Format ext4 on each element of array after "daos_reserved" is reached.
-function mkfs_on_nvme_over_limit {
+mkfs_on_nvme_over_limit () {
   local daos_nvme_numa_limit="${1:?Usage: mkfs_on_nvme_over_limit <daos_nvme_numa_limit> <nvme_pci_address_array>}"
   shift
   local nvme_pci_address_array=("$@")
@@ -260,7 +276,7 @@ function mkfs_on_nvme_over_limit {
   done
 }
 
-function nvme_setup {
+nvme_setup (){
   local daos_nvme_numa_limit="${1:-?Usage: nvme_setup <daos_nvme_numa_limit>}"
   local numa0_pci_devices=()
   local numa1_pci_devices=()
@@ -268,13 +284,17 @@ function nvme_setup {
   local nvme_count nvme_pcie_address_all nvme_pci_address numa_node  
   
   nvme_count=$(get_nvme_count_devices)
-  if [ "$nvme_count" -le 1 ]; then
+  if [ "$nvme_count" -le 1 ]; then # Expect at least 2 NVMe devices for proper setup
     return 0
   fi
   
   if ! check_spdk_setup_cmd; then
     exit 1
   fi
+
+  set +x
+  pci_device_create_cache
+  set -x
 
   nvme_pcie_address_all=$(lspci -D | awk '/Non-Volatile memory controller/{print $1}' | sort)
 
@@ -284,8 +304,6 @@ function nvme_setup {
       echo "Skip already mounted namespace $nvme_pci_address"
       continue
     fi
-    #echo "Binding $nvme_pci_address"
-    #echo "$nvme_pci_address" | sudo tee /sys/bus/pci/drivers/nvme/bind
     numa_node="$(pci_device_get_numa "$nvme_pci_address")"
     if [ "$numa_node" -eq 0 ]; then
       numa0_pci_devices+=("$nvme_pci_address")
@@ -311,7 +329,7 @@ function nvme_setup {
 function spdk_setup_status {
     set +e
     if check_spdk_setup_cmd; then
-       sudo "$SPDK_SETUP_CMD" status
+       "$SPDK_SETUP_CMD" status
     fi
     set -e
 }
