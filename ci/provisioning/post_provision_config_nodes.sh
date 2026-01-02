@@ -151,8 +151,8 @@ nvme_dev_get_first_by_pcie_addr (){
   fi
 }
 
-# Calculates --nsze and --ncap for a device so the namespace spans the full usable capacity
-nvme_calc_full_nsze_ncap () {
+# Calculates --nsze for a device so the namespace spans the full usable capacity
+nvme_calc_full_nsze () {
     local nvme_device="${1:?Usage: nvme_calc_full_nsze_ncap <nvme_device>}"
     # Query the NVMe device info for total logical blocks and LBA size
     # Prefer tnvmcap, fallback to unvmcap if tnvmcap not found
@@ -186,7 +186,7 @@ nvme_calc_full_nsze_ncap () {
     lba_count=$(( nvmcap_bytes / lba_bytes ))
 
     # Output as hexadecimal format for nvme-cli
-    printf -- "--nsze=0x%x --ncap=0x%x\n" "$lba_count" "$lba_count"
+    printf -- "0x%x\n" "$lba_count"
 }
 
 nvme_recreate_namespace (){
@@ -205,10 +205,10 @@ nvme_recreate_namespace (){
   local skip_delete="${2:-false}"  # true to skip, default false (delete enabled)
   local nvme_device_path="/dev/${nvme_device}"
   local nvme_device_ns_path="${nvme_device_path}n1"
-  local nvme_create_ns_opts
+  local nvme_nsze nvme_cntlid
   # Optionally skip delete step
   if [[ "$skip_delete" != "true" ]]; then
-    nvme delete-ns "$nvme_device_path" -n 0x1 || \
+    nvme delete-ns "$nvme_device_path" -n 1 || \
       { echo "ERROR: delete the ${nvme_device_path} namespace failed"; exit 1; }
     nvme reset "$nvme_device_path" || \
       { echo "ERROR: reset the ${nvme_device_path} device failed"; exit 1; }
@@ -218,10 +218,11 @@ nvme_recreate_namespace (){
   nvme reset "$nvme_device_path" || \
     { echo "ERROR: reset the ${nvme_device_path} device failed"; exit 1; }
   
-  nvme_create_ns_opts=$(nvme_calc_full_nsze_ncap "${nvme_device_path}") 
-  nvme create-ns "$nvme_device_path" $nvme_create_ns_opts --flbas=0 || \
+  nvme_nsze=$(nvme_calc_full_nsze "${nvme_device_path}")
+  nvme create-ns "$nvme_device_path" "--nsze=${nvme_nsze}" "--ncap=${nvme_nsze}" --flbas=0 || \
     { echo "ERROR: create the ${nvme_device_path} namespace failed"; exit 1; }
-  nvme attach-ns "$nvme_device_path" -n 0x1 -c 0x41 || \
+  nvme_cntlid=$(nvme id-ctrl "$nvme_device_path" | grep -iw cntlid | cut -d: -f2 | tr -d ' ')
+  nvme attach-ns "$nvme_device_path" -n 1 -c "$nvme_cntlid" || \
     { echo "ERROR: attach the ${nvme_device_path} namespace failed"; exit 1; }
   # Wait up to 5 seconds for device node to appear
   for i in {1..5}; do
