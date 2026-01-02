@@ -404,7 +404,7 @@ pipeline {
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION',
-               defaultValue: 'el9.6',
+               defaultValue: 'el8.8',
                description: 'Version of OS used in all Functional Hardware Medium stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
