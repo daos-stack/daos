@@ -11,6 +11,9 @@ server_config:
     0:
       log_file: daos_server0.log
       nr_xs_helpers: 1
+      # Objects are placed in different targets, or in different vos-x, so we need to use
+      # 1 target to make the test steps simpler.
+      targets: 1
       storage: auto
 
 # In CI, all tests in ddb.py are ran in a single launch.py execution. In that case, the

@@ -162,7 +162,7 @@ class DdbTest(TestWithServers):
 
         db_path = None
         if md_on_ssd:
-            self.log_step("MD-on-SSD: Load pool dir to %s", daos_load_path)
+            self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
             db_path = os.path.join(
                 self.log_dir, "control_metadata", "daos_control", "engine0")
             ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
@@ -279,7 +279,7 @@ class DdbTest(TestWithServers):
             errors.append(msg)
 
         if md_on_ssd:
-            self.log_step("MD-on-SSD: Clean %s", daos_load_path)
+            self.log_step(f"MD-on-SSD: Clean {daos_load_path}")
             self.run_cmd_check_result(command=f"umount {daos_load_path}")
             self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
 
