@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,9 +68,9 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	shards[count] = obj_val->shard;
 	arg->count++;
 
-	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" ephs "DF_U64
-		"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
-		DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
+	D_DEBUG(DB_REBUILD,
+		"send oid/con " DF_UOID "/" DF_UUID " ephs " DF_X64 " shard %d cnt %d tgt_id %d\n",
+		DP_UOID(oids[count]), DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
 		arg->count, arg->tgt_id);
 
 	rc = dbtree_iter_delete(ih, NULL);

@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -702,17 +702,19 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr, uint8_t *skips
 		D_DEBUG(DB_IO, DF_UOID" %d:"DF_U64"\n", DP_UOID(orw->orw_oid),
 			i, iods[idx].iod_size);
 		if ((orw->orw_flags & ORF_FOR_MIGRATION) && sizes[i] == 0) {
-			D_INFO(DF_CONT " obj " DF_UOID "rebuild fetch zero iod_size, i:%d/idx:%d, "
-				       "iod_nr %d, orw_epoch " DF_X64 ", orw_epoch_first " DF_X64
-				       " may cause DER_DATA_LOSS",
-			       DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid), DP_UOID(orw->orw_oid),
-			       i, idx, iods[idx].iod_nr, orw->orw_epoch, orw->orw_epoch_first);
+			D_DEBUG(DB_REBUILD,
+				DF_CONT " obj " DF_UOID "rebuild fetch zero iod_size, "
+					"i:%d/idx:%d, iod_nr %d, orw_epoch " DF_X64
+					", orw_epoch_first " DF_X64 " may cause DER_DATA_LOSS",
+				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+				DP_UOID(orw->orw_oid), i, idx, iods[idx].iod_nr, orw->orw_epoch,
+				orw->orw_epoch_first);
 			if (iods[idx].iod_type == DAOS_IOD_ARRAY) {
 				int j;
 
 				for (j = 0; j < min(8, iods[idx].iod_nr); j++)
-					D_INFO("recx[%d] - " DF_RECX, j,
-					       DP_RECX(iods[idx].iod_recxs[j]));
+					D_DEBUG(DB_REBUILD, "recx[%d] - " DF_RECX, j,
+						DP_RECX(iods[idx].iod_recxs[j]));
 			}
 		}
 		idx++;
