@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -107,6 +107,9 @@ struct rpc_proto {
 	uint32_t      *ver_array;
 	uint32_t       array_size;
 	uint32_t       timeout;
+	uint32_t       default_timeout;
+	uint32_t       first_timeout_rank;
+	crt_context_t  ctx;
 };
 
 static void
@@ -119,6 +122,10 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 		int      nr_ranks;
 		d_rank_t rank;
 
+		if (cb_info->pq_rc == -DER_TIMEDOUT && rproto->first_timeout_rank == CRT_NO_RANK &&
+		    rproto->timeout < rproto->default_timeout)
+			rproto->first_timeout_rank = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
+
 		/** select next rank to issue the retry proto query rpc to */
 		nr_ranks = dc_mgmt_net_get_num_srv_ranks();
 		D_ASSERT(nr_ranks > 0);
@@ -127,21 +134,34 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 
 		/** We tried all engines and found none alive */
 		if (rproto->num_retries_left <= 0) {
-			D_ERROR("crt_proto_query_with_ctx() failed -- All %d targets tried\n",
-				nr_ranks);
-			rproto->rc        = cb_info->pq_rc;
-			rproto->completed = true;
-			return;
+			if (rproto->first_timeout_rank == CRT_NO_RANK) {
+				D_ERROR("crt_proto_query_with_ctx() failed, all %d targets tried\n",
+					nr_ranks);
+				rproto->rc        = cb_info->pq_rc;
+				rproto->completed = true;
+				return;
+			}
+
+			/* More retry to the first timeout rank with default timeout. */
+			rank                       = rproto->first_timeout_rank;
+			rproto->first_timeout_rank = CRT_NO_RANK;
+			rproto->timeout            = rproto->default_timeout;
+			rproto->num_retries_left   = 1; /* Only once */
+
+			D_NOTE("No target respond during first cycle quick proto query. Retry once "
+			       "to former first timeout rank %u with longer timeout value %u\n",
+			       rank, rproto->timeout);
+		} else {
+			rank = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
+			rproto->timeout += 3;
 		}
 
-		rank             = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
 		D_ASSERT(rank != CRT_NO_RANK);
 		rproto->ep.ep_rank = rank;
 
-		rproto->timeout += 3;
 		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc, rproto->ver_array,
 					      rproto->array_size, rproto->timeout, query_cb, rproto,
-					      daos_get_crt_ctx());
+					      rproto->ctx);
 		if (rc) {
 			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
 			rproto->rc = rc;
@@ -185,14 +205,20 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	rproto->num_retries_left = nr_ranks;
 	rank             = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
 	D_ASSERT(rank != CRT_NO_RANK);
-	rproto->ep.ep_rank = rank;
 
-	rproto->ep.ep_tag  = 0;
-	rproto->ver_array = ver_array;
-	rproto->array_size = count;
-	rproto->ep.ep_grp  = sys->sy_group;
-	rproto->base_opc = base_opc;
-	rproto->timeout    = 3;
+	rproto->ep.ep_rank         = rank;
+	rproto->ep.ep_tag          = 0;
+	rproto->ver_array          = ver_array;
+	rproto->array_size         = count;
+	rproto->ep.ep_grp          = sys->sy_group;
+	rproto->base_opc           = base_opc;
+	rproto->timeout            = 3;
+	rproto->first_timeout_rank = CRT_NO_RANK;
+	rproto->ctx                = ctx;
+
+	rc = crt_context_get_timeout(ctx, &rproto->default_timeout);
+	D_ASSERT(rc == 0);
+	D_ASSERT(rproto->default_timeout != 0);
 
 	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc, ver_array, count, rproto->timeout,
 				      query_cb, rproto, ctx);
