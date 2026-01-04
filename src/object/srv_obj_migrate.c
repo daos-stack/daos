@@ -2603,9 +2603,18 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	if (rc == 1 &&
 	     (is_ec_data_shard_by_tgt_off(unpack_tgt_off, &arg->oc_attr) ||
 	     (io->ui_oid.id_layout_ver > 0 && io->ui_oid.id_shard != parity_shard))) {
-		D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " ignore shard " DF_KEY "/%u/%d/%u/%d.\n",
-			DP_RB_MPT(tls), DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
-			(int)obj_ec_shard_off(obj, io->ui_dkey_hash, 0), parity_shard, rc);
+		if (daos_is_dkey_uint64(io->ui_oid.id_pub) && io->ui_dkey.iov_len == 8)
+			D_DEBUG(DB_REBUILD,
+				DF_RB ": " DF_UOID " ignore shard, int dkey " DF_U64
+				      "/%u/%d/%u/%d.\n",
+				DP_RB_MPT(tls), DP_UOID(io->ui_oid),
+				*(uint64_t *)io->ui_dkey.iov_buf, shard,
+				(int)obj_ec_shard_off(obj, io->ui_dkey_hash, 0), parity_shard, rc);
+		else
+			D_DEBUG(DB_REBUILD,
+				DF_RB ": " DF_UOID " ignore shard " DF_KEY "/%u/%d/%u/%d.\n",
+				DP_RB_MPT(tls), DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
+				(int)obj_ec_shard_off(obj, io->ui_dkey_hash, 0), parity_shard, rc);
 		D_GOTO(put, rc = 0);
 	}
 	rc = 0;
@@ -2621,11 +2630,19 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 			continue;
 		}
 
-		D_DEBUG(DB_REBUILD,
-			DF_RB ": " DF_UOID " unpack " DF_KEY " for shard "
-			      "%u/%u/%u/" DF_X64 "/%u\n",
-			DP_RB_MPT(tls), DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
-			unpack_tgt_off, migrate_tgt_off, io->ui_dkey_hash, parity_shard);
+		if (daos_is_dkey_uint64(io->ui_oid.id_pub) && io->ui_dkey.iov_len == 8)
+			D_DEBUG(DB_REBUILD,
+				DF_RB ": " DF_UOID " unpack int dkey " DF_U64 " for shard "
+				      "%u/%u/%u/" DF_X64 "/%u\n",
+				DP_RB_MPT(tls), DP_UOID(io->ui_oid),
+				*(uint64_t *)io->ui_dkey.iov_buf, shard, unpack_tgt_off,
+				migrate_tgt_off, io->ui_dkey_hash, parity_shard);
+		else
+			D_DEBUG(DB_REBUILD,
+				DF_RB ": " DF_UOID " unpack " DF_KEY " for shard "
+				      "%u/%u/%u/" DF_X64 "/%u\n",
+				DP_RB_MPT(tls), DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
+				unpack_tgt_off, migrate_tgt_off, io->ui_dkey_hash, parity_shard);
 
 		/**
 		 * Since we do not need split the rebuild into parity rebuild
@@ -2663,8 +2680,14 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	if (!create_migrate_one) {
 		struct ds_cont_child *cont = NULL;
 
-		D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID "/" DF_KEY " does not need rebuild.\n",
-			DP_RB_MPT(tls), DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey));
+		if (daos_is_dkey_uint64(io->ui_oid.id_pub) && io->ui_dkey.iov_len == 8)
+			D_DEBUG(DB_REBUILD,
+				DF_RB ": " DF_UOID "/int dkey: " DF_U64 " does not need rebuild.",
+				DP_RB_MPT(tls), DP_UOID(io->ui_oid),
+				*(uint64_t *)io->ui_dkey.iov_buf);
+		else
+			D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID "/" DF_KEY " does not need rebuild.",
+				DP_RB_MPT(tls), DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey));
 
 		/* Create the vos container when no record need to be rebuilt for this shard,
 		 * for the case of reintegrate the container was discarded ahead.
