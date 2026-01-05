@@ -739,6 +739,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	if (amode == O_RDONLY) {
 		/* default: no caching enabled */
 		char dcache_type[8] = "";
+		bool d_enable_datacache = false;
 
 		d_getenv_str(dcache_type, 8, "DFS_DCACHE_TYPE");
 		rc = 0;
@@ -749,6 +750,12 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 		if (rc) {
 			D_ERROR("Failed to create dcache: %d (%s)\n", rc, strerror(rc));
 			goto err_root;
+		}
+		d_getenv_bool("DFS_ENABLE_DATACACHE", &d_enable_datacache);
+		if (d_enable_datacache) {
+			dfs->datacache = shm_lru_get_cache(CACHE_DATA);
+		} else {
+			dfs->datacache = NULL;
 		}
 	}
 

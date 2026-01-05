@@ -61,6 +61,8 @@ struct d_shm_hdr {
 
 	/* the offset to LRU directory entry cache */
 	long int         off_lru_cache_dentry;
+	/* the offset to LRU data cache */
+	long int         off_lru_cache_data;
 
 	/* the total size of shared memory region */
 	uint64_t         size;

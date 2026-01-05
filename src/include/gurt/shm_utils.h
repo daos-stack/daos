@@ -381,6 +381,14 @@ typedef struct shm_lru_node  shm_lru_node_t;
 
 enum SHM_LRU_CACHE_TYPE { CACHE_DENTRY = 0, CACHE_DATA };
 
+/* key for data caching: dfs hash (uint64_t) + object id of file (sizeof(uint64_t) * 2) + offset */
+#define KEY_SIZE_FILE_ID_OFF        (sizeof(uint64_t) + sizeof(uint64_t) * 2 + sizeof(off_t))
+
+/* key for file size caching: dfs hash (uint64_t) + object id of file (sizeof(uint64_t) * 2) */
+#define KEY_SIZE_FILESIZE           (sizeof(uint64_t) * 3)
+
+#define DEFAULT_CACHE_DATA_CAPACITY (2048)
+
 /**
  * create LRU cache
  *
@@ -409,6 +417,14 @@ void
 shm_lru_node_dec_ref(shm_lru_node_t *node);
 
 /**
+ * get the data size of an LRU node
+ *
+ * \param[in] node		LRU node
+ */
+uint32_t
+shm_lru_rec_data_size(shm_lru_node_t *node);
+
+/**
  * create/update LRU record
  *
  * We currently assume data are same for the same key if multiple put() are trying to insert/update
@@ -424,6 +440,23 @@ shm_lru_node_dec_ref(shm_lru_node_t *node);
  */
 int
 shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, uint32_t data_size);
+
+/**
+ * create/update LRU record using shallow copy (assigning data pointer instead of allocating memory
+ * for data plus memcpy) and increase reference count by 1 to avoid the record evicted.
+ *
+ * \param[in] cache		LRU cache
+ * \param[in] key		key
+ * \param[in] key_size		size of key in bytes
+ * \param[in] data		data
+ * \param[in] data_size		size of data in bytes
+ * \param[in] node_found	LRU cache node containing the key
+ *
+ * \return			error code
+ */
+int
+shm_lru_put_shallow_cp(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data,
+		       uint32_t data_size, shm_lru_node_t **node_found);
 
 /**
  * query LRU cache. If entry is found, its reference count is increase by 1. Need to call

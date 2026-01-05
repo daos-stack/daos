@@ -50,6 +50,8 @@ typedef struct {
 	daos_size_t		arr_nr_short_read;
 	/** (on read only) the number of records that were actually read from the array */
 	daos_size_t		arr_nr_read;
+	/** return file size when arr_nr_short_read is positive */
+	daos_size_t             file_size;
 } daos_array_iod_t;
 
 /** DAOS array stat (size, modification time) information */

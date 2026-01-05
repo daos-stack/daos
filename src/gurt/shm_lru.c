@@ -22,7 +22,7 @@ extern struct d_shm_hdr *d_shm_head;
 /* Create a new LRU node */
 static int
 lru_create_node(shm_lru_cache_t *cache, shm_lru_cache_var_t *subcache, void *key, uint32_t key_size,
-		void *data, uint32_t data_size, shm_lru_node_t **new_node)
+		void *data, uint32_t data_size, shm_lru_node_t **new_node, bool shallow_cp)
 {
 	shm_lru_node_t *node_list;
 	shm_lru_node_t *node;
@@ -61,14 +61,19 @@ lru_create_node(shm_lru_cache_t *cache, shm_lru_cache_var_t *subcache, void *key
 		/* data are too long or has unknown size, dynamically allocate
 		 * space for data
 		 */
-		buf_data = shm_alloc(data_size);
-		if (buf_data == NULL) {
-			if (buf_key)
-				shm_free(buf_key);
-			return ENOMEM;
+		if (shallow_cp) {
+			/* use provided data buffer */
+			node->off_data = (long int)data - (long int)cache;
+		} else {
+			buf_data = shm_alloc(data_size);
+			if (buf_data == NULL) {
+				if (buf_key)
+					shm_free(buf_key);
+				return ENOMEM;
+			}
+			node->off_data = (long int)buf_data - (long int)cache;
+			memcpy(buf_data, data, data_size);
 		}
-		node->off_data = (long int)buf_data - (long int)cache;
-		memcpy(buf_data, data, data_size);
 	} else {
 		/* make sure data size not longer than buffer */
 		D_ASSERT(data_size <= cache->data_size);
@@ -78,7 +83,7 @@ lru_create_node(shm_lru_cache_t *cache, shm_lru_cache_var_t *subcache, void *key
 	}
 	node->data_size = data_size;
 
-	atomic_store(&node->ref_count, 0);
+	atomic_store(&node->ref_count, shallow_cp ? 1 : 0);
 	node->off_prev  = 0;
 	node->off_next  = 0;
 	node->off_hnext = 0;
@@ -356,7 +361,87 @@ shm_lru_put(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data, ui
 	}
 	D_ASSERT(sub_cache->size < cache->capacity_per_subcache);
 
-	rc = lru_create_node(cache, sub_cache, key, key_size, data, data_size, &node_new);
+	rc = lru_create_node(cache, sub_cache, key, key_size, data, data_size, &node_new, false);
+	if (rc)
+		return rc;
+	node_new->idx_bucket = index;
+	node_new->off_hnext  = off_bucket[index];
+	off_bucket[index]    = (long int)node_new - (long int)cache;
+
+	/* Insert at LRU head */
+	node_new->off_next = sub_cache->off_head;
+	if (sub_cache->off_head) {
+		node_head = (shm_lru_node_t *)((long int)cache + (long int)sub_cache->off_head);
+		node_head->off_prev = (long int)node_new - (long int)cache;
+	}
+	sub_cache->off_head = (long int)node_new - (long int)cache;
+
+	if (!sub_cache->off_tail)
+		sub_cache->off_tail = (long int)node_new - (long int)cache;
+
+	sub_cache->size++;
+	if (sub_cache->size == cache->capacity_per_subcache)
+		sub_cache->first_av = -1;
+
+	shm_mutex_unlock(&sub_cache->lock);
+	return 0;
+}
+
+int
+shm_lru_put_shallow_cp(shm_lru_cache_t *cache, void *key, uint32_t key_size, void *data,
+		       uint32_t data_size, shm_lru_node_t **node_found)
+{
+	int                  rc;
+	uint64_t             hash;
+	uint32_t             idx_subcache;
+	uint32_t             index;
+	shm_lru_cache_var_t *sub_cache;
+	int                 *off_bucket;
+	int                  offset;
+	shm_lru_node_t      *node;
+	shm_lru_node_t      *node_head;
+	shm_lru_node_t      *node_new;
+
+	/* supports shallow copy only when dynamic allocation is used */
+	if (cache->prealloc_data == 1)
+		return EINVAL;
+
+	if (cache == NULL || key == NULL || data == NULL || node_found == NULL)
+		return EINVAL;
+
+	hash         = d_hash_murmur64(key, key_size, 0);
+	idx_subcache = (cache->n_subcache == 1) ? (0) : (uint32_t)(hash % cache->n_subcache);
+	index        = (uint32_t)(hash % cache->capacity_per_subcache);
+	sub_cache    = (shm_lru_cache_var_t *)((long int)cache + sizeof(shm_lru_cache_t) +
+                                            idx_subcache * cache->size_per_subcache);
+	off_bucket   = (int *)((long int)cache + (long int)sub_cache->off_hashbuckets);
+	offset       = off_bucket[index];
+
+	shm_mutex_lock(&sub_cache->lock);
+	while (offset) {
+		node = (shm_lru_node_t *)((long int)cache + offset);
+		if (key_cmp(cache, node, key, key_size) == 0) {
+			/* key exists in cache, fail to insert and return EEXIST. It's ok for
+			 * caching read-only files.
+			 */
+			lru_move_to_head(cache, sub_cache, node);
+			shm_mutex_unlock(&sub_cache->lock);
+			return EEXIST;
+		}
+		offset = (long int)node->off_hnext;
+	}
+
+	/* Not found, remove one node near tail and create new node */
+	if (sub_cache->size >= cache->capacity_per_subcache) {
+		rc = lru_remove_near_tail(cache, sub_cache);
+		if (rc) {
+			shm_mutex_unlock(&sub_cache->lock);
+			return rc;
+		}
+	}
+	D_ASSERT(sub_cache->size < cache->capacity_per_subcache);
+
+	rc = lru_create_node(cache, sub_cache, key, key_size, data, data_size, &node_new, true);
 	if (rc)
 		return rc;
 	node_new->idx_bucket = index;
@@ -388,6 +473,13 @@ shm_lru_node_dec_ref(shm_lru_node_t *node)
 	D_ASSERT(node != NULL);
 
 	atomic_fetch_add(&node->ref_count, -1);
+}
+
+uint32_t
+shm_lru_rec_data_size(shm_lru_node_t *node)
+{
+	D_ASSERT(node != NULL);
+	return node->data_size;
 }
 
 int
@@ -540,9 +632,20 @@ shm_lru_destroy_cache(shm_lru_cache_t *cache)
 shm_lru_cache_t *
 shm_lru_get_cache(enum SHM_LRU_CACHE_TYPE type)
 {
+	int rc;
+
+	if (d_shm_head == NULL) {
+		rc = shm_init();
+		if (rc)
+			return NULL;
+	}
+
 	switch (type) {
 	case CACHE_DENTRY:
 		return (shm_lru_cache_t *)((long int)d_shm_head + d_shm_head->off_lru_cache_dentry);
+
+	case CACHE_DATA:
+		return (shm_lru_cache_t *)((long int)d_shm_head + d_shm_head->off_lru_cache_data);
 
 	default:
 		return NULL;

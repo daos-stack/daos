@@ -98,6 +98,7 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 	uint32_t         cpu_count;
 	uint32_t         dentry_cache_capacity;
 	shm_lru_cache_t *lru_cache_dentry;
+	shm_lru_cache_t *lru_cache_data;
 
 	cpu_count = get_cpu_core();
 	if (cpu_count == INVALID_NUM_CORE)
@@ -175,6 +176,14 @@ create_shm_region(uint64_t shm_size, uint64_t shm_pool_size)
 		goto err_unmap;
 	}
 	d_shm_head->off_lru_cache_dentry = (long int)lru_cache_dentry - (long int)d_shm_head;
+
+	rc = shm_lru_create_cache(true, DEFAULT_CACHE_DATA_CAPACITY, KEY_SIZE_FILE_ID_OFF, 0,
+				  &lru_cache_data);
+	if (rc) {
+		D_ERROR("Failed to create data cache: %d (%s)\n", rc, strerror(rc));
+		goto err_unmap;
+	}
+	d_shm_head->off_lru_cache_data = (long int)lru_cache_data - (long int)d_shm_head;
 
 	return 0;
 
