@@ -3333,7 +3333,7 @@ static const ProtobufCEnumValue mgmt__pool_rebuild_status__state__enum_values_by
   { "IDLE", "MGMT__POOL_REBUILD_STATUS__STATE__IDLE", 1 },
   { "DONE", "MGMT__POOL_REBUILD_STATUS__STATE__DONE", 2 },
   { "STOPPING", "MGMT__POOL_REBUILD_STATUS__STATE__STOPPING", 3 },
-  { "StOPPED", "MGMT__POOL_REBUILD_STATUS__STATE__StOPPED", 4 },
+  { "STOPPED", "MGMT__POOL_REBUILD_STATUS__STATE__STOPPED", 4 },
   { "FAILING", "MGMT__POOL_REBUILD_STATUS__STATE__FAILING", 5 },
   { "FAILED", "MGMT__POOL_REBUILD_STATUS__STATE__FAILED", 6 },
 };
@@ -3347,8 +3347,8 @@ static const ProtobufCEnumValueIndex mgmt__pool_rebuild_status__state__enum_valu
   { "FAILED", 6 },
   { "FAILING", 5 },
   { "IDLE", 1 },
+  { "STOPPED", 4 },
   { "STOPPING", 3 },
-  { "StOPPED", 4 },
 };
 const ProtobufCEnumDescriptor mgmt__pool_rebuild_status__state__descriptor =
 {
