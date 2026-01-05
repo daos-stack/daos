@@ -371,6 +371,43 @@ Pool space info:
 	}
 }
 
+func TestPretty_PrintPoolSelfHealDisable(t *testing.T) {
+	for name, tc := range map[string]struct {
+		poolSelfHeal string
+		sysSelfHeal  string
+		expPrintStr  string
+	}{
+		"defaults": {
+			poolSelfHeal: "exclude;rebuild",
+			sysSelfHeal:  "exclude;pool_exclude;pool_rebuild",
+		},
+		"no pool flags": {
+			poolSelfHeal: "none",
+			sysSelfHeal:  "exclude;pool_exclude;pool_rebuild",
+			expPrintStr:  "exclude disabled on pool due to [pool] policy\nrebuild disabled on pool due to [pool] policy\n",
+		},
+		"no system flags": {
+			poolSelfHeal: "exclude;rebuild",
+			sysSelfHeal:  "none",
+			expPrintStr:  "exclude disabled on pool due to [system] policy\nrebuild disabled on pool due to [system] policy\n",
+		},
+		"no flags": {
+			poolSelfHeal: "none",
+			sysSelfHeal:  "none",
+			expPrintStr:  "exclude disabled on pool due to [pool system] policies\nrebuild disabled on pool due to [pool system] policies\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			PrintPoolSelfHealDisable(tc.poolSelfHeal, tc.sysSelfHeal, &bld)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected print string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 	for name, tc := range map[string]struct {
 		pqti        *daos.PoolQueryTargetInfo
@@ -382,7 +419,6 @@ func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 		},
 		"valid: single target (unknown, down_out)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDownOut,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -398,7 +434,7 @@ func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -409,7 +445,6 @@ Target: type unknown, state down_out
 		},
 		"valid: single target (unknown, down)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDown,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -425,7 +460,7 @@ Target: type unknown, state down_out
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down
+Target: state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -436,7 +471,6 @@ Target: type unknown, state down
 		},
 		"valid: single target (unknown, up)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateUp,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -452,7 +486,7 @@ Target: type unknown, state down
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state up
+Target: state up
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -463,7 +497,6 @@ Target: type unknown, state up
 		},
 		"valid: single target (unknown, up_in)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateUpIn,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -479,7 +512,7 @@ Target: type unknown, state up
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -490,7 +523,6 @@ Target: type unknown, state up_in
 		},
 		"valid: single target (unknown, new)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateNew,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -506,7 +538,7 @@ Target: type unknown, state up_in
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state new
+Target: state new
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -517,7 +549,6 @@ Target: type unknown, state new
 		},
 		"valid: single target (unknown, drain)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDrain,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -534,7 +565,7 @@ Target: type unknown, state new
 				MemFileBytes: 3000000000,
 			},
 			expPrintStr: `
-Target: type unknown, state drain
+Target: state drain
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -545,7 +576,6 @@ Target: type unknown, state drain
 		},
 		"valid: single target (unknown, down_out): MD-on-SSD": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDownOut,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -563,7 +593,7 @@ Target: type unknown, state drain
 				MdOnSsdActive: true,
 			},
 			expPrintStr: `
-Target: type unknown, state down_out
+Target: state down_out
 - Metadata storage:
   Total size: 6.0 GB
   Free: 5.0 GB

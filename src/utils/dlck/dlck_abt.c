@@ -50,41 +50,6 @@ dlck_abt_attr_free(ABT_thread_attr *attr)
 }
 
 int
-dlck_abt_init(struct dlck_engine *engine)
-{
-	int rc;
-
-	rc = ABT_init(0, NULL);
-	if (rc != ABT_SUCCESS) {
-		return dss_abterr2der(rc);
-	}
-
-	rc = ABT_mutex_create(&engine->open_mtx);
-	if (rc != ABT_SUCCESS) {
-		(void)ABT_finalize();
-		return dss_abterr2der(rc);
-	}
-
-	return DER_SUCCESS;
-}
-
-int
-dlck_abt_fini(struct dlck_engine *engine)
-{
-	int rc;
-
-	rc = ABT_mutex_free(&engine->open_mtx);
-	if (rc != ABT_SUCCESS) {
-		(void)ABT_finalize();
-		return dss_abterr2der(rc);
-	}
-
-	rc = ABT_finalize();
-
-	return dss_abterr2der(rc);
-}
-
-int
 dlck_xstream_create(struct dlck_xstream *xs)
 {
 	int rc;

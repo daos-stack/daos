@@ -121,7 +121,7 @@ func TestPretty_PrintSystemQueryResp(t *testing.T) {
 	}{
 		"empty response": {
 			resp:           &control.SystemQueryResp{},
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Query matches no ranks in system
 `,
@@ -130,7 +130,7 @@ Query matches no ranks in system
 			resp:           &control.SystemQueryResp{},
 			absentHosts:    "foo[7,8,9]",
 			absentRanks:    "7-9",
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Query matches no ranks in system
 Unknown 3 hosts: foo[7-9]
@@ -143,7 +143,7 @@ Unknown 3 ranks: 7-9
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank State  
 ---- -----  
@@ -159,7 +159,7 @@ Rank State
 			},
 			absentHosts:    "foo[7,8,9]",
 			absentRanks:    "7-9",
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank  State        
 ----  -----        
@@ -175,7 +175,7 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State  Reason 
@@ -192,7 +192,7 @@ Rank UUID                                 Control Address Fault Domain State  Re
 			},
 			absentHosts:    "foo[7,8,9]",
 			absentRanks:    "7-9",
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State  Reason 
@@ -215,7 +215,7 @@ Unknown 3 ranks: 7-9
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State    
 ----      -----    
@@ -331,7 +331,7 @@ System property self_heal flags disabled: exclude, pool_exclude, pool_rebuild
 				},
 			},
 			absentRanks:    "7-9",
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State        
 ----      -----        
@@ -356,7 +356,7 @@ Rank      State
 			},
 			absentHosts:    "foo[7,8,9]",
 			absentRanks:    "7-9",
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State        
 ----      -----        
@@ -380,7 +380,7 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State    Reason 
@@ -409,7 +409,7 @@ Rank UUID                                 Control Address Fault Domain State    
 			},
 			absentHosts:    "foo[7,8,9]",
 			absentRanks:    "7-9",
-			selfHealPolicy: daos.DefaultSelfHealFlagsStr,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State    Reason 

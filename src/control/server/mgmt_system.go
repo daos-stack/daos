@@ -826,12 +826,16 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		Absenthosts: missHosts.String(),
 	}
 
-	// Retrieve system self-heal property.
-	selfHeal, err := svc.getSysSelfHeal()
-	if err != nil {
+	// Retrieve system self-heal property. Assume default value where all flags are set if
+	// property isn't present.
+	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
+	if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf(err.Error())
+	} else if err != nil {
 		return nil, err
+	} else {
+		resp.SysSelfHealPolicy = selfHeal
 	}
-	resp.SysSelfHealPolicy = selfHeal
 
 	if hitRanks.Count() == 0 {
 		// If the membership is empty, this replica is likely waiting
@@ -1312,6 +1316,11 @@ type poolRanksOpSig func(context.Context, control.UnaryInvoker, *control.PoolRan
 func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, ctlApiCall poolRanksOpSig) ([]*control.PoolRanksResp, error) {
 	resps := []*control.PoolRanksResp{}
 
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return nil, err
+	}
+
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
 		if rs.Count() == 0 {
@@ -1323,6 +1332,9 @@ func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs [
 			Ranks: rs.Ranks(),
 		}
 		req.Sys = sys
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
 
 		svc.log.Tracef("%T: %+v", req, req)
 
@@ -1428,6 +1440,11 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 		return &mgmtpb.SystemRebuildManageResp{}, nil // Successful no-op.
 	}
 
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return nil, err
+	}
+
 	var results []*control.PoolRebuildManageResult
 	for _, id := range poolIDs {
 		opCode := control.PoolRebuildOpCode(pbReq.OpCode)
@@ -1437,6 +1454,10 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 			OpCode: opCode,
 			Force:  pbReq.Force,
 		}
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
+
 		svc.log.Tracef("%T: %+v", req, req)
 
 		result := &control.PoolRebuildManageResult{
@@ -1464,13 +1485,8 @@ func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.Syste
 // selfHealExcludeRanks fetches a list of detected dead ranks from the leader's engine and updates
 // states within the control-plane membership appropriately.
 func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
-	mapVer, err := svc.sysdb.CurMapVersion()
-	if err == nil {
-		return err
-	}
-	req := &mgmtpb.GetGroupStatusReq{
-		MapVersion: mapVer,
-	}
+	// DAOS-18163 TODO: Pass a real, nonzero map version.
+	req := &mgmtpb.GetGroupStatusReq{}
 
 	// Fetch dead rank list from leader's engine with group status dRPC call.
 	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodGroupStatusGet, req)
@@ -1529,12 +1545,21 @@ func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) erro
 		return nil // Successful no-op.
 	}
 
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return err
+	}
+
 	var successes, failures []string
 	for _, id := range poolIDs {
 		req := &control.PoolSelfHealEvalReq{
 			ID:         id,
 			SysPropVal: propVal,
 		}
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
+
 		svc.log.Tracef("%T: %+v", req, req)
 
 		if err := control.PoolSelfHealEval(ctx, svc.rpcClient, req); err != nil {
@@ -1570,7 +1595,7 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		return nil, err
 	}
 
-	// Retrieve system self-heal property.
+	// Retrieve system self-heal property. Assume a system property exists when running eval.
 	selfHeal, err := svc.getSysSelfHeal()
 	if err != nil {
 		return nil, err
@@ -1579,7 +1604,7 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 	svc.log.Debugf("system property self_heal='%+v'", selfHeal)
 
 	// Exclude engines based on SWIM status if system property bit set.
-	if daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagExclude) {
+	if daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagExclude) {
 		if err := svc.selfHealExcludeRanks(ctx); err != nil {
 			return nil, errors.Wrap(err, "excluding ranks based on self_heal.exclude")
 		}
@@ -1588,11 +1613,10 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 	// If pool_exclude or pool_rebuild is set, send the latest self_heal value to all PSs, who
 	// will handle the reevaluation. This involves calling into the leader engine with self_heal
 	// value for each pool and calling dsc_pool_svc_eval_self_heal() in dRPC handler.
-	if !daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagPoolRebuild) &&
-		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SelfHealFlagPoolExclude) {
+	if !daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagPoolRebuild) &&
+		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagPoolExclude) {
 		return new(mgmtpb.DaosResp), nil
 	}
-
 	if err := svc.selfHealNotifyPSes(ctx, selfHeal); err != nil {
 		return nil, errors.Wrapf(err, "notify pool services of self_heal=%q", selfHeal)
 	}

@@ -87,10 +87,10 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_u
 		       uint32_t new_gl_ver, unsigned int migrate_opc, uint64_t *enqueue_id,
 		       uint32_t *max_delay);
 int
-ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
-		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
-		  daos_unit_oid_t *oids, daos_epoch_t *epochs, daos_epoch_t *punched_epochs,
-		  unsigned int *shards, uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
+ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid, uint32_t version,
+		  uint32_t generation, uint64_t max_eph, uint32_t opc, daos_unit_oid_t *oids,
+		  daos_epoch_t *epochs, daos_epoch_t *punched_epochs, unsigned int *shards,
+		  uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
 void
 ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 

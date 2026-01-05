@@ -21,19 +21,6 @@ extern "C" {
 
 #include <daos_prop.h>
 
-/** Type of storage target */
-typedef enum {
-	DAOS_TP_UNKNOWN,
-	/** Rotating disk */
-	DAOS_TP_HDD,
-	/** Flash-based */
-	DAOS_TP_SSD,
-	/** Persistent memory */
-	DAOS_TP_PM,
-	/** Volatile memory */
-	DAOS_TP_VM,
-} daos_target_type_t;
-
 /** Current state of the storage target */
 typedef enum {
 	DAOS_TS_UNKNOWN,
@@ -75,8 +62,8 @@ struct daos_space {
 
 /** Target information */
 typedef struct {
-	/** Target type */
-	daos_target_type_t	ta_type;
+	/** padding - not used */
+	uint32_t                ta_padding;
 	/** Target state */
 	daos_target_state_t	ta_state;
 	/** Target performance */
@@ -169,6 +156,8 @@ enum daos_pool_info_bit {
 	DPI_ENGINES_DEAD = 1ULL << 4,
 	/** true to query pool's maximum supported rebuild layout version */
 	DPI_REBUILD_MAX_LAYOUT_VER = 1ULL << 5,
+	/** true to query pool's self_heal policy. currently fetch implemented in control plane */
+	DPI_SELF_HEAL_POLICY = 1ULL << 6,
 	/** query all above optional info */
 	DPI_ALL = -1,
 };

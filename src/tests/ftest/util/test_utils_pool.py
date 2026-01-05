@@ -12,6 +12,7 @@ from time import sleep, time
 
 from avocado import TestFail, fail_on
 from command_utils import BasicParameter
+from data_utils import assert_dict_subset
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, check_file_exists
@@ -847,6 +848,24 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
 
+    def rebuild_start(self, *args, **kwargs):
+        """Use dmg to start rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_start(self.identifier, *args, **kwargs)
+
+    def rebuild_stop(self, *args, **kwargs):
+        """Use dmg to stop rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
+
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
         """Set Property.
@@ -1387,6 +1406,9 @@ class TestPool(TestDaosApiBase):
             # If the current state is busy or idle w/o a version increase after previously being
             # busy then rebuild is running
             self._rebuild_data["check"] = "running"
+        elif self._rebuild_data["state"] == "idle" and self._rebuild_data["status"] == -2027:
+            # Rebuild was explicitly stopped
+            self._rebuild_data["check"] = "stopped"
         elif self._rebuild_data["check"] is None:
             # Otherwise rebuild has yet to start
             self._rebuild_data["check"] = "not yet started"
@@ -1398,8 +1420,8 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to start or end.
 
         Args:
-            expected (str): which rebuild data check to wait for: 'running' or 'completed'
-            interval (int): number of seconds to wait in between rebuild completion checks
+            expected (str): which rebuild data check to wait for: 'running', 'completed', 'stopped'
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
@@ -1461,7 +1483,7 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to start.
 
         Args:
-            interval (int): number of seconds to wait in between rebuild completion checks
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
@@ -1473,13 +1495,25 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to end.
 
         Args:
-            interval (int): number of seconds to wait in between rebuild completion checks
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
 
         """
         self._wait_for_rebuild("completed", interval)
+
+    def wait_for_rebuild_to_stop(self, interval=1):
+        """Wait for the rebuild to stop without completing.
+
+        Args:
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
+
+        Raises:
+            DaosTestError: if waiting for rebuild times out.
+
+        """
+        self._wait_for_rebuild("stopped", interval)
 
     def measure_rebuild_time(self, operation, interval=1):
         """Measure rebuild time.
@@ -1568,3 +1602,24 @@ class TestPool(TestDaosApiBase):
         else:
             self.log.info("%s does not exist on %s", pool_dir, host)
         return result[0]
+
+    def verify_query(self, expected_response, use_cached_query=False):
+        """Verify dmg pool query returns expected values.
+
+        Args:
+            expected_response (dict): Expected key/value pairs from dmg pool query.
+                Can be a subset of the full response, where only expected keys are verified.
+                Expected value can be type callable(actual_value) -> bool for custom verification.
+            use_cached_query (bool, optional): Whether to use the last cached query.
+                Defaults to False, which issues a new query.
+
+        Raises:
+            AssertionError: if the pool query response does not match expected values
+
+        """
+        # Only refresh the cache if requested or not yet cached
+        if not use_cached_query or 'response' not in self.query_data:
+            self.set_query_data()
+        response = self.query_data['response']
+
+        assert_dict_subset(expected_response, response)

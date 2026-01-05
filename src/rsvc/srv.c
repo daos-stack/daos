@@ -114,18 +114,27 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	}
 
 	if (rsvc_class(class)->sc_map_dist != NULL) {
+		rc = ABT_mutex_create(&svc->s_map_dist_mutex);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("%s: failed to create map_dist_mutex: %d\n", svc->s_name, rc);
+			rc = dss_abterr2der(rc);
+			goto err_leader_ref_cv;
+		}
 		rc = ABT_cond_create(&svc->s_map_dist_cv);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("%s: failed to create map_dist_cv: %d\n",
 				svc->s_name, rc);
 			rc = dss_abterr2der(rc);
-			goto err_leader_ref_cv;
+			goto err_map_dist_mutex;
 		}
 	}
 
 	*svcp = svc;
 	return 0;
 
+err_map_dist_mutex:
+	if (rsvc_class(class)->sc_map_dist != NULL)
+		ABT_mutex_free(&svc->s_map_dist_mutex);
 err_leader_ref_cv:
 	ABT_cond_free(&svc->s_leader_ref_cv);
 err_state_cv:
@@ -148,8 +157,10 @@ fini_free(struct ds_rsvc *svc)
 	D_ASSERT(d_list_empty(&svc->s_entry));
 	D_ASSERTF(svc->s_ref == 0, "%d\n", svc->s_ref);
 	D_ASSERTF(svc->s_leader_ref == 0, "%d\n", svc->s_leader_ref);
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
 		ABT_cond_free(&svc->s_map_dist_cv);
+		ABT_mutex_free(&svc->s_map_dist_mutex);
+	}
 	ABT_cond_free(&svc->s_leader_ref_cv);
 	ABT_cond_free(&svc->s_state_cv);
 	ABT_mutex_free(&svc->s_mutex);
@@ -443,45 +454,57 @@ fini_map_distd(struct ds_rsvc *svc)
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 }
 
-static int
-rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
+/**
+ * Release svc->s_mutex, which the caller must hold when calling. Change the
+ * state of \a svc to STEPPING_UP. The caller must call ds_rsvc_end_stepping_up
+ * after this function returns.
+ */
+void
+ds_rsvc_begin_stepping_up(struct ds_rsvc *svc)
 {
-	struct ds_rsvc *svc = arg;
-	bool		map_distd_initialized = false;
-	int		rc;
-
-	ABT_mutex_lock(svc->s_mutex);
-	if (svc->s_stop) {
-		D_DEBUG(DB_MD, "%s: skip term "DF_U64" due to stopping\n",
-			svc->s_name, term);
-		rc = 0;
-		goto out_mutex;
-	}
-	D_ASSERTF(svc->s_state == DS_RSVC_DOWN, "%d\n", svc->s_state);
-	svc->s_term = term;
 	change_state(svc, DS_RSVC_STEPPING_UP);
-	D_DEBUG(DB_MD, "%s: stepping up to "DF_U64"\n", svc->s_name,
-		svc->s_term);
+	ABT_mutex_unlock(svc->s_mutex);
+}
+
+/**
+ * Acquire svc->s_mutex, which the caller must release when appropriate. Change
+ * the state of \a svc to \a state upon errors. If \a rc_in is nonzero, it will
+ * be returned to the caller.
+ */
+int
+ds_rsvc_end_stepping_up(struct ds_rsvc *svc, int rc_in, enum ds_rsvc_state state)
+{
+	bool map_distd_initialized = false;
+	int  rc;
+
+	D_DEBUG(DB_MD, "%s: ending stepping up: rc=" DF_RC " state=%s\n", svc->s_name, DP_RC(rc_in),
+		ds_rsvc_state_str(state));
+	D_ASSERT(state == DS_RSVC_UP_EMPTY || state == DS_RSVC_DOWN);
+
+	if (rc_in != 0) {
+		rc = rc_in;
+		goto out;
+	}
 
 	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
 		rc = init_map_distd(svc);
-		if (rc != 0)
-			goto out_mutex;
+		if (rc != 0) {
+			DL_ERROR(rc, "%s: failed to initialize map_distd", svc->s_name);
+			goto out;
+		}
 		map_distd_initialized = true;
 	}
 
-	ABT_mutex_unlock(svc->s_mutex);
-	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
-	ABT_mutex_lock(svc->s_mutex);
-	if (rc == DER_UNINIT) {
-		change_state(svc, DS_RSVC_UP_EMPTY);
-		rc = 0;
-		goto out_mutex;
-	} else if (rc != 0) {
-		D_DEBUG(DB_MD, "%s: failed to step up to "DF_U64": "DF_RC"\n",
-			svc->s_name, term, DP_RC(rc));
-		if (map_distd_initialized)
-			drain_map_distd(svc);
+	if (state == DS_RSVC_UP_EMPTY && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_STEP_UP))
+		rc = -DER_GRPVER;
+	else
+		rc = rsvc_class(svc->s_class)->sc_step_up(svc);
+	if (rc != 0) {
+		if (rc == DER_UNINIT)
+			D_DEBUG(DB_MD, "%s: new db\n", svc->s_name);
+		else
+			D_DEBUG(DB_MD, "%s: failed to step up to " DF_U64 ": " DF_RC "\n",
+				svc->s_name, svc->s_term, DP_RC(rc));
 		/*
 		 * For certain harder-to-recover errors, trigger a replica stop
 		 * to avoid reporting them too many times. (A better strategy
@@ -491,15 +514,54 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		 */
 		if (rc == -DER_DF_INCOMPT)
 			rc = -DER_SHUTDOWN;
-		change_state(svc, DS_RSVC_DOWN);
-		goto out_mutex;
+		if (map_distd_initialized) {
+			drain_map_distd(svc);
+			fini_map_distd(svc);
+		}
 	}
 
-	change_state(svc, DS_RSVC_UP);
+out:
+	ABT_mutex_lock(svc->s_mutex);
+	if (rc == 0) {
+		change_state(svc, DS_RSVC_UP);
+	} else if (rc == DER_UNINIT) {
+		change_state(svc, DS_RSVC_UP_EMPTY);
+		rc = 0;
+	} else {
+		change_state(svc, state);
+		/*
+		 * If the error is from this function, and we are returning to
+		 * UP_EMPTY, then resign the leadership so that a new leader
+		 * will retry stepping up.
+		 */
+		if (rc_in == 0 && state == DS_RSVC_UP_EMPTY)
+			rdb_resign(svc->s_db, svc->s_term);
+	}
+	return rc;
+}
+
+static int
+rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
+{
+	struct ds_rsvc *svc = arg;
+	int             rc;
+
+	ABT_mutex_lock(svc->s_mutex);
+	if (svc->s_stop) {
+		D_DEBUG(DB_MD, "%s: skip term " DF_U64 " due to stopping\n", svc->s_name, term);
+		rc = 0;
+		goto out_mutex;
+	}
+	D_ASSERTF(svc->s_state == DS_RSVC_DOWN, "%d\n", svc->s_state);
+	svc->s_term = term;
+	D_DEBUG(DB_MD, "%s: stepping up to " DF_U64 "\n", svc->s_name, svc->s_term);
+
+	ds_rsvc_begin_stepping_up(svc);
+
+	rc = ds_rsvc_end_stepping_up(svc, 0 /* rc_in */, DS_RSVC_DOWN);
+
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
-	if (rc != 0 && map_distd_initialized)
-		fini_map_distd(svc);
 	return rc;
 }
 
@@ -520,23 +582,13 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 	D_ASSERTF(svc->s_state == DS_RSVC_UP_EMPTY, "%d\n", svc->s_state);
 
+	ds_rsvc_begin_stepping_up(svc);
+
 	D_DEBUG(DB_MD, "%s: calling sc_bootstrap\n", svc->s_name);
 	rc = rsvc_class(svc->s_class)->sc_bootstrap(svc, arg);
-	if (rc != 0)
-		goto out_mutex;
 
-	/* Try stepping up again. */
-	D_DEBUG(DB_MD, "%s: calling sc_step_up\n", svc->s_name);
-	ABT_mutex_unlock(svc->s_mutex);
-	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
-	ABT_mutex_lock(svc->s_mutex);
-	if (rc != 0) {
-		D_ASSERT(rc != DER_UNINIT);
-		goto out_mutex;
-	}
+	rc = ds_rsvc_end_stepping_up(svc, rc, DS_RSVC_UP_EMPTY);
 
-	change_state(svc, DS_RSVC_UP);
-out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
 	D_DEBUG(DB_MD, "%s: bootstrapped: "DF_RC"\n", svc->s_name, DP_RC(rc));
 	return rc;
@@ -545,37 +597,48 @@ out_mutex:
 static void
 rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 {
-	struct ds_rsvc    *svc = arg;
-	enum ds_rsvc_state entry_state;
+	struct ds_rsvc *svc = arg;
 
 	D_DEBUG(DB_MD, "%s: stepping down from "DF_U64"\n", svc->s_name, term);
 	ABT_mutex_lock(svc->s_mutex);
-	D_ASSERTF(svc->s_term == term, DF_U64" == "DF_U64"\n", svc->s_term, term);
-	entry_state = svc->s_state;
-	D_ASSERT(entry_state == DS_RSVC_UP_EMPTY || entry_state == DS_RSVC_UP);
 
-	/* Stop accepting new leader references (ds_rsvc_lookup_leader). */
-	change_state(svc, DS_RSVC_STEPPING_DOWN);
+	/*
+	 * There must have been a successful rsvc_step_up_cb call, which changes
+	 * the state to either UP_EMPTY or UP. From UP_EMPTY, however, there may
+	 * have been a bootstrap_self or ds_pool_create_handler calls either of
+	 * which changes the state first to STEPPING_UP and then to either
+	 * UP_EMPTY or UP.
+	 */
+	while (svc->s_state != DS_RSVC_UP_EMPTY && svc->s_state != DS_RSVC_UP) {
+		D_ASSERTF(svc->s_state == DS_RSVC_STEPPING_UP, "unexpected state %s\n",
+			  ds_rsvc_state_str(svc->s_state));
+		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
+	}
+	D_ASSERTF(svc->s_term == term, DF_U64 " == " DF_U64 "\n", svc->s_term, term);
 
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
-		drain_map_distd(svc);
+	if (svc->s_state == DS_RSVC_UP) {
+		/* Stop accepting new leader references (ds_rsvc_lookup_leader). */
+		change_state(svc, DS_RSVC_STEPPING_DOWN);
 
-	if (entry_state == DS_RSVC_UP)
+		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+			drain_map_distd(svc);
+
 		rsvc_class(svc->s_class)->sc_drain(svc);
 
-	/* Wait for all leader references to be released. */
-	for (;;) {
-		if (svc->s_leader_ref == 0)
-			break;
-		D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n", svc->s_name, svc->s_leader_ref);
-		ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
-	}
+		/* Wait for all leader references to be released. */
+		for (;;) {
+			if (svc->s_leader_ref == 0)
+				break;
+			D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n", svc->s_name,
+				svc->s_leader_ref);
+			ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
+		}
 
-	if (entry_state == DS_RSVC_UP)
 		rsvc_class(svc->s_class)->sc_step_down(svc);
 
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
-		fini_map_distd(svc);
+		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+			fini_map_distd(svc);
+	}
 
 	change_state(svc, DS_RSVC_DOWN);
 	ABT_mutex_unlock(svc->s_mutex);
@@ -620,7 +683,7 @@ map_distd(void *arg)
 	struct ds_rsvc *svc = arg;
 
 	D_DEBUG(DB_MD, "%s: start\n", svc->s_name);
-	ABT_mutex_lock(svc->s_mutex);
+	ABT_mutex_lock(svc->s_map_dist_mutex);
 	for (;;) {
 		uint32_t version;
 		int      rc;
@@ -634,9 +697,9 @@ map_distd(void *arg)
 				svc->s_map_dist_inp = true;
 				break;
 			}
-			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+			sched_cond_wait(svc->s_map_dist_cv, svc->s_map_dist_mutex);
 		}
-		ABT_mutex_unlock(svc->s_mutex);
+		ABT_mutex_unlock(svc->s_map_dist_mutex);
 
 		rc = rsvc_class(svc->s_class)->sc_map_dist(svc, &version);
 		if (rc != 0) {
@@ -647,7 +710,7 @@ map_distd(void *arg)
 			dss_sleep(3000 /* ms */);
 		}
 
-		ABT_mutex_lock(svc->s_mutex);
+		ABT_mutex_lock(svc->s_map_dist_mutex);
 		/* Stop serving the request. */
 		svc->s_map_dist_inp = false;
 		if (rc == 0) {
@@ -664,7 +727,7 @@ map_distd(void *arg)
 		}
 	}
 break_out:
-	ABT_mutex_unlock(svc->s_mutex);
+	ABT_mutex_unlock(svc->s_map_dist_mutex);
 	put_leader(svc);
 	D_DEBUG(DB_MD, "%s: stop\n", svc->s_name);
 	ds_rsvc_put(svc);
@@ -711,15 +774,15 @@ void
 ds_rsvc_wait_map_dist(struct ds_rsvc *svc)
 {
 	D_DEBUG(DB_MD, "%s: begin", svc->s_name);
-	ABT_mutex_lock(svc->s_mutex);
+	ABT_mutex_lock(svc->s_map_dist_mutex);
 	for (;;) {
 		if (svc->s_map_distd_stop)
 			break;
 		if (!svc->s_map_dist && !svc->s_map_dist_inp)
 			break;
-		sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+		sched_cond_wait(svc->s_map_dist_cv, svc->s_map_dist_mutex);
 	}
-	ABT_mutex_unlock(svc->s_mutex);
+	ABT_mutex_unlock(svc->s_map_dist_mutex);
 	D_DEBUG(DB_MD, "%s: end", svc->s_name);
 }
 
@@ -739,16 +802,16 @@ start_mode_str(enum ds_rsvc_start_mode mode)
 }
 
 static bool
-self_only(d_rank_list_t *replicas)
+self_only(struct rdb_create_params *p)
 {
-	return (replicas != NULL && replicas->rl_nr == 1 &&
-		replicas->rl_ranks[0] == dss_self_rank());
+	return p->rcp_replicas != NULL && p->rcp_replicas_len == 1 &&
+	       rdb_replica_id_compare(p->rcp_replicas[0], p->rcp_id) == 0;
 }
 
 static int
 start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term,
-      enum ds_rsvc_start_mode mode, size_t size, uint32_t vos_df_version, d_rank_list_t *replicas,
-      void *arg, struct ds_rsvc **svcp)
+      enum ds_rsvc_start_mode mode, struct rdb_create_params *create_params, void *arg,
+      struct ds_rsvc **svcp)
 {
 	struct rdb_storage     *storage;
 	struct ds_rsvc	       *svc = NULL;
@@ -760,8 +823,8 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term,
 	svc->s_ref++;
 
 	if (mode == DS_RSVC_CREATE)
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, term, size, vos_df_version,
-				replicas, &rsvc_rdb_cbs, svc, &storage);
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, term, create_params, &rsvc_rdb_cbs,
+				svc, &storage);
 	else
 		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, term, &rsvc_rdb_cbs, svc, &storage);
 	if (rc != 0)
@@ -777,7 +840,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term,
 	if (rc != 0)
 		goto err_storage;
 
-	if (mode == DS_RSVC_CREATE && self_only(replicas) &&
+	if (mode == DS_RSVC_CREATE && self_only(create_params) &&
 	    rsvc_class(class)->sc_bootstrap != NULL) {
 		rc = bootstrap_self(svc, arg);
 		if (rc != 0)
@@ -871,31 +934,25 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
 
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
 
-	ABT_mutex_lock(svc->s_mutex);
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
 		drain_map_distd(svc);
-	ABT_mutex_unlock(svc->s_mutex);
-	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
 		fini_map_distd(svc);
+	}
 
 	ds_rsvc_put(svc);
 	return 0;
 }
 
 /**
- * Start a replicated service. If \a mode is not DS_RSVC_CREATE, all remaining
- * input parameters are ignored; otherwise, create the replica first. If \a
- * replicas is NULL, all remaining input parameters are ignored; otherwise,
- * bootstrap the replicated service.
+ * Start a replicated service. If \a mode is DS_RSVC_CREATE, create the replica
+ * first; otherwise, \a create_params is ignored.
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID
  * \param[in]	db_uuid		DB UUID
  * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	mode		mode of starting the replicated service
- * \param[in]	size		replica size in bytes
- * \param[in]	vos_df_version	version of VOS durable format
- * \param[in]	replicas	optional initial membership
+ * \param[in]	create_params	parameters used when \a mode is DS_RSVC_CREATE
  * \param[in]	arg		argument for cbs.sc_bootstrap
  *
  * \retval -DER_ALREADY		replicated service already started
@@ -904,8 +961,7 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
  */
 int
 ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t caller_term,
-	      enum ds_rsvc_start_mode mode, size_t size, uint32_t vos_df_version,
-	      d_rank_list_t *replicas, void *arg)
+	      enum ds_rsvc_start_mode mode, struct rdb_create_params *create_params, void *arg)
 {
 	struct ds_rsvc		*svc = NULL;
 	d_list_t		*entry;
@@ -915,38 +971,74 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
+		rdb_replica_id_t rid;
+
 		svc = rsvc_obj(entry);
-		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name, svc->s_stop);
-		if (mode == DS_RSVC_DICTATE && !svc->s_stop) {
+		rid = rdb_get_replica_id(svc->s_db);
+		D_DEBUG(DB_MD, "%s: found " RDB_F_RID ": stop=%d mode=%s replicas=%p\n",
+			svc->s_name, RDB_P_RID(rid), svc->s_stop, start_mode_str(mode),
+			mode == DS_RSVC_CREATE ? create_params->rcp_replicas : NULL);
+		if (mode == DS_RSVC_CREATE && create_params->rcp_replicas != NULL) {
+			D_ERROR("%s: creating and bootstrapping existing replica not allowed\n",
+				svc->s_name);
+			rc = -DER_EXIST;
+			goto out_svc;
+		} else if (mode == DS_RSVC_CREATE && rid.rri_gen < create_params->rcp_id.rri_gen) {
+			int n = 10;
+
+			/*
+			 * Destroy the older replica and continue. Note that the destroy only
+			 * happens when the last svc reference is released.
+			 */
+			D_INFO("%s: destroying older replica " RDB_F_RID " for " RDB_F_RID "\n",
+			       svc->s_name, RDB_P_RID(rid), RDB_P_RID(create_params->rcp_id));
+			rc = ds_rsvc_stop(class, id, caller_term, true /* destroy */);
+			if (rc != 0) {
+				DL_ERROR(rc, "%s: failed to destroy existing replica", svc->s_name);
+				goto out_svc;
+			}
+			while (svc->s_ref > 1 && n > 0) {
+				dss_sleep(1000);
+				n--;
+			}
+			if (svc->s_ref > 1) {
+				D_ERROR("%s: gave up waiting for other service references\n",
+					svc->s_name);
+				rc = -DER_CANCELED;
+				goto out_svc;
+			}
+		} else if (mode == DS_RSVC_CREATE && rid.rri_gen > create_params->rcp_id.rri_gen) {
+			D_ERROR("%s: found newer replica: " RDB_F_RID " > " RDB_F_RID "\n",
+				svc->s_name, RDB_P_RID(rid), RDB_P_RID(create_params->rcp_id));
+			rc = -DER_EXIST;
+			goto out_svc;
+		} else if (mode == DS_RSVC_DICTATE && !svc->s_stop) {
 			/*
 			 * If we need to dictate, and the service is not
 			 * stopping, then stop it, which should not fail in
 			 * this case, and continue.
 			 */
 			rc = ds_rsvc_stop(class, id, caller_term, false /* destroy */);
-			D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
-			ds_rsvc_put(svc);
+			D_ASSERTF(rc == 0, DF_RC "\n", DP_RC(rc));
 		} else {
 			if (caller_term != RDB_NIL_TERM) {
 				rc = rdb_ping(svc->s_db, caller_term);
 				if (rc != 0) {
 					D_CDEBUG(rc == -DER_STALE, DB_MD, DLOG_ERR,
 						 "%s: failed to ping local replica\n", svc->s_name);
-					ds_rsvc_put(svc);
-					goto out;
+					goto out_svc;
 				}
 			}
 			if (svc->s_stop)
 				rc = -DER_CANCELED;
 			else
 				rc = -DER_ALREADY;
-			ds_rsvc_put(svc);
-			goto out;
+			goto out_svc;
 		}
+		ds_rsvc_put(svc);
 	}
 
-	rc = start(class, id, db_uuid, caller_term, mode, size, vos_df_version, replicas, arg,
-		   &svc);
+	rc = start(class, id, db_uuid, caller_term, mode, create_params, arg, &svc);
 	if (rc != 0)
 		goto out;
 
@@ -959,6 +1051,7 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 	}
 
 	D_DEBUG(DB_MD, "%s: started replicated service\n", svc->s_name);
+out_svc:
 	ds_rsvc_put(svc);
 out:
 	if (rc != 0 && rc != -DER_ALREADY && !(mode == DS_RSVC_CREATE && rc == -DER_EXIST))
@@ -1100,21 +1193,53 @@ int
 ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 		       uint32_t vos_df_version)
 {
-	int	rc;
+	int i;
+	int rc = 0;
 
-	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks, svc->s_term,
-				DS_RSVC_CREATE, false /* bootstrap */, size, vos_df_version);
+	/* Add one by one to reduce waste of replica generations. */
+	for (i = 0; i < ranks->rl_nr; i++) {
+		d_rank_t                     r = ranks->rl_ranks[i];
+		d_rank_list_t                rl;
+		rdb_replica_id_t             id;
+		int                          ids_len = 1;
+		struct ds_rsvc_create_params create_params;
 
-	/* TODO: Attempt to only add replicas that were successfully started */
-	if (rc != 0)
-		goto out_stop;
-	rc = rdb_add_replicas(svc->s_db, ranks);
-out_stop:
-	/* Clean up ranks that were not added */
-	if (ranks->rl_nr > 0) {
-		D_ASSERT(rc != 0);
-		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, ranks, NULL, svc->s_term,
-				  true /* destroy */);
+		rl.rl_ranks = &r;
+		rl.rl_nr    = 1;
+
+		id.rri_rank = r;
+
+		/* This allocation cannot be rolled back. */
+		rc = rdb_alloc_replica_gen(svc->s_db, svc->s_term, &id.rri_gen);
+		if (rc != 0)
+			break;
+
+		create_params.scp_bootstrap      = false;
+		create_params.scp_size           = size;
+		create_params.scp_vos_df_version = vos_df_version;
+		create_params.scp_layout_version = rdb_get_version(svc->s_db);
+		create_params.scp_replicas       = &id;
+		create_params.scp_replicas_len   = 1;
+
+		rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, &rl, svc->s_term,
+					DS_RSVC_CREATE, &create_params);
+		if (rc != 0)
+			break;
+
+		rc = rdb_modify_replicas(svc->s_db, RDB_REPLICA_ADD, &id, &ids_len);
+		if (rc != 0) {
+			ds_rsvc_dist_stop(svc->s_class, &svc->s_id, &rl, NULL, svc->s_term,
+					  true /* destroy */);
+			break;
+		}
+	}
+
+	/* Remove all i successfully-added ranks from ranks. */
+	if (i > 0) {
+		ranks->rl_nr -= i;
+		if (ranks->rl_nr > 0)
+			memmove(&ranks->rl_ranks[0], &ranks->rl_ranks[i],
+				ranks->rl_nr * sizeof(ranks->rl_ranks[0]));
 	}
 	return rc;
 }
@@ -1148,22 +1273,70 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ra
 }
 
 int
-ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
+ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, bool destroy)
 {
-	d_rank_list_t	*stop_ranks;
-	int		 rc;
+	d_rank_list_t    *stop_ranks;
+	rdb_replica_id_t *all;
+	int               all_len;
+	rdb_replica_id_t *to_remove;
+	int               to_remove_len = 0;
+	int               i;
+	int               rc;
 
-	rc = daos_rank_list_dup(&stop_ranks, ranks);
+	rc = d_rank_list_dup(&stop_ranks, ranks);
 	if (rc != 0)
-		return rc;
-	rc = rdb_remove_replicas(svc->s_db, ranks);
+		goto out;
 
-	/* filter out failed ranks */
-	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
-	if (stop_ranks->rl_nr > 0)
-		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks, NULL, svc->s_term,
-				  true /* destroy */);
+	/* Fill to_remove with replica IDs of ranks. */
+	rc = rdb_get_replicas(svc->s_db, &all, &all_len);
+	if (rc != 0)
+		goto out_stop_ranks;
+	D_ALLOC_ARRAY(to_remove, ranks->rl_nr);
+	if (to_remove == NULL) {
+		rc = -DER_NOMEM;
+		goto out_all;
+	}
+	for (i = 0; i < ranks->rl_nr; i++) {
+		d_rank_t rank = ranks->rl_ranks[i];
+		int      j;
+
+		for (j = 0; j < all_len; j++) {
+			if (all[j].rri_rank == rank) {
+				to_remove[to_remove_len] = all[j];
+				to_remove_len++;
+				break;
+			}
+		}
+		if (j == all_len) {
+			D_ERROR("%s: rank %u not found in replica list\n", svc->s_name, rank);
+			rc = -DER_NONEXIST;
+			goto out_to_remove;
+		}
+	}
+
+	rc = rdb_modify_replicas(svc->s_db, RDB_REPLICA_REMOVE, to_remove, &to_remove_len);
+
+	/* Update ranks with to_remove (those that couldn't be removed). */
+	D_ASSERTF(ranks->rl_nr >= to_remove_len, "%d >= %d\n", ranks->rl_nr, to_remove_len);
+	ranks->rl_nr = to_remove_len;
+	for (i = 0; i < to_remove_len; i++)
+		ranks->rl_ranks[i] = to_remove[i].rri_rank;
+
+	if (destroy) {
+		/* filter out failed ranks */
+		d_rank_list_filter(ranks, stop_ranks, true /* exclude */);
+		if (stop_ranks->rl_nr > 0)
+			ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks, NULL, svc->s_term,
+					  true /* destroy */);
+	}
+
+out_to_remove:
+	D_FREE(to_remove);
+out_all:
+	D_FREE(all);
+out_stop_ranks:
 	d_rank_list_free(stop_ranks);
+out:
 	return rc;
 }
 
@@ -1177,7 +1350,7 @@ ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
 	if (rc != 0)
 		return rc;
-	rc = ds_rsvc_remove_replicas_s(svc, ranks);
+	rc = ds_rsvc_remove_replicas_s(svc, ranks, true /* destroy */);
 	ds_rsvc_set_hint(svc, hint);
 	ds_rsvc_put_leader(svc);
 	return rc;
@@ -1233,22 +1406,22 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
  * \param[in]	ranks		list of replica ranks
  * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	mode		mode of starting the replicated service
- * \param[in]	bootstrap	create with an initial list of replicas if \a mode is DS_RSVC_CREATE
- * \param[in]	size		size of each replica in bytes if \a mode is DS_RSVC_CREATE
- * \param[in]	vos_df_version	version of VOS durable format if \a mode is DS_RSVC_CREATE
+ * \param[in]	create_params	parameters used when \a mode is DS_RSVC_CREATE
  */
 int
 ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		   const d_rank_list_t *ranks, uint64_t caller_term, enum ds_rsvc_start_mode mode,
-		   bool bootstrap, size_t size, uint32_t vos_df_version)
+		   struct ds_rsvc_create_params *create_params)
 {
 	crt_rpc_t		*rpc;
 	struct rsvc_start_in	*in;
 	struct rsvc_start_out	*out;
 	int			 rc;
 
-	D_ASSERT(!bootstrap || ranks != NULL);
-	D_ASSERT(mode != DS_RSVC_DICTATE || ranks->rl_nr == 1);
+	D_ASSERT(mode != DS_RSVC_CREATE ||
+		 (create_params != NULL && create_params->scp_replicas != NULL &&
+		  create_params->scp_replicas_len > 0));
+	D_ASSERT(mode != DS_RSVC_DICTATE || (ranks != NULL && ranks->rl_nr == 1));
 	D_DEBUG(DB_MD, DF_UUID": %s DB\n", DP_UUID(dbid), start_mode_str(mode));
 
 	rc = bcast_create(RSVC_START, ranks != NULL /* filter_invert */,
@@ -1257,21 +1430,23 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		goto out;
 	in = crt_req_get(rpc);
 	in->sai_class = class;
-	rc = daos_iov_copy(&in->sai_svc_id, id);
-	if (rc != 0)
-		goto out_rpc;
+	in->sai_svc_id = *id;
 	uuid_copy(in->sai_db_uuid, dbid);
 	in->sai_mode = mode;
-	if (mode == DS_RSVC_CREATE && bootstrap)
-		in->sai_flags |= RDB_AF_BOOTSTRAP;
-	in->sai_size = size;
-	in->sai_vos_df_version = vos_df_version;
 	in->sai_term = caller_term;
-	in->sai_ranks = (d_rank_list_t *)ranks;
+	if (mode == DS_RSVC_CREATE) {
+		if (create_params->scp_bootstrap)
+			in->sai_flags |= RDB_AF_BOOTSTRAP;
+		in->sai_size               = create_params->scp_size;
+		in->sai_vos_df_version     = create_params->scp_vos_df_version;
+		in->sai_layout_version     = create_params->scp_layout_version;
+		in->sai_replicas.ca_arrays = create_params->scp_replicas;
+		in->sai_replicas.ca_count  = create_params->scp_replicas_len;
+	}
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
-		goto out_mem;
+		goto out_rpc;
 
 	out = crt_reply_get(rpc);
 	rc = out->sao_rc;
@@ -1284,8 +1459,6 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		rc = out->sao_rc_errval;
 	}
 
-out_mem:
-	daos_iov_free(&in->sai_svc_id);
 out_rpc:
 	crt_req_decref(rpc);
 out:
@@ -1297,23 +1470,44 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 {
 	struct rsvc_start_in	*in = crt_req_get(rpc);
 	struct rsvc_start_out	*out = crt_reply_get(rpc);
-	bool			 bootstrap = in->sai_flags & RDB_AF_BOOTSTRAP;
+	struct rdb_create_params create_params;
+	bool                     create = in->sai_mode == DS_RSVC_CREATE;
 	int			 rc;
 
-	if (bootstrap && in->sai_ranks == NULL) {
-		rc = -DER_PROTO;
-		goto out;
-	}
+	if (create) {
+		d_rank_t         self_rank = dss_self_rank();
+		rdb_replica_id_t self;
+		bool             bootstrap = in->sai_flags & RDB_AF_BOOTSTRAP;
+		int              i;
 
-	if (in->sai_mode == DS_RSVC_DICTATE &&
-	    (in->sai_ranks == NULL || in->sai_ranks->rl_nr != 1)) {
-		rc = -DER_PROTO;
-		goto out;
+		if (in->sai_replicas.ca_arrays == NULL || in->sai_replicas.ca_count == 0) {
+			D_ERROR(DF_UUID ": no replica IDs\n", DP_UUID(in->sai_db_uuid));
+			rc = -DER_PROTO;
+			goto out;
+		}
+
+		/* Find self replica ID in in->sai_replicas. */
+		for (i = 0; i < in->sai_replicas.ca_count; i++)
+			if (in->sai_replicas.ca_arrays[i].rri_rank == self_rank)
+				break;
+		if (i == in->sai_replicas.ca_count) {
+			D_ERROR(DF_UUID ": self not in replica IDs: self=%u replicas=" DF_U64 "\n",
+				DP_UUID(in->sai_db_uuid), self_rank, in->sai_replicas.ca_count);
+			rc = -DER_PROTO;
+			goto out;
+		}
+		self = in->sai_replicas.ca_arrays[i];
+
+		create_params.rcp_size           = in->sai_size;
+		create_params.rcp_vos_df_version = in->sai_vos_df_version;
+		create_params.rcp_layout_version = in->sai_layout_version;
+		create_params.rcp_id             = self;
+		create_params.rcp_replicas       = bootstrap ? in->sai_replicas.ca_arrays : NULL;
+		create_params.rcp_replicas_len   = bootstrap ? in->sai_replicas.ca_count : 0;
 	}
 
 	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid, in->sai_term,
-			   in->sai_mode, in->sai_size, in->sai_vos_df_version,
-			   bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
+			   in->sai_mode, create ? &create_params : NULL, NULL /* arg */);
 	if (rc == -DER_ALREADY)
 		rc = 0;
 

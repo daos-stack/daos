@@ -172,6 +172,21 @@ crt_proc_struct_rdb_local(crt_proc_t proc, crt_proc_op_t proc_op,
 	return 0;
 }
 
+int
+crt_proc_rdb_replica_id_t(crt_proc_t proc, crt_proc_op_t proc_op, rdb_replica_id_t *p)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &p->rri_rank);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_uint32_t(proc, proc_op, &p->rri_gen);
+	if (unlikely(rc))
+		return rc;
+
+	return 0;
+}
+
 CRT_RPC_DEFINE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
 
 static int
@@ -218,24 +233,42 @@ struct crt_proto_format rdb_proto_fmt = {
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_RDB_MODULE, 0)
 };
 
+/* Create an RDB RPC and fill the rdb_op_in fields. */
 int
-rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
+rdb_create_raft_rpc(struct rdb *db, crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 {
-	crt_opcode_t		opc_full;
-	crt_endpoint_t		ep;
+	rdb_replica_id_t        id = rdb_replica_id_decode(raft_node_get_id(node));
+	crt_opcode_t            opc_full;
+	crt_endpoint_t          ep;
 	struct dss_module_info *info = dss_get_module_info();
 	int                     rc;
 	uint8_t                 rdb_ver;
+	struct rdb_op_in       *in;
 
 	rc = rdb_rpc_protocol(&rdb_ver);
-	if (rc)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to get RDB RPC protocol", DP_DB(db));
 		return rc;
+	}
+	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, rdb_ver);
 
-	opc_full   = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, rdb_ver);
-	ep.ep_grp = NULL;
-	ep.ep_rank = raft_node_get_id(node);
-	ep.ep_tag = daos_rpc_tag(DAOS_REQ_RDB, 0);
-	return crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
+	ep.ep_grp  = NULL;
+	ep.ep_rank = id.rri_rank;
+	ep.ep_tag  = daos_rpc_tag(DAOS_REQ_RDB, 0);
+
+	rc = crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to create RPC %u to " RDB_F_RID, DP_DB(db), opc,
+			 RDB_P_RID(id));
+		return rc;
+	}
+
+	in = crt_req_get(*rpc);
+	uuid_copy(in->ri_uuid, db->d_uuid);
+	in->ri_from = db->d_replica_id;
+	in->ri_to   = id;
+
+	return 0;
 }
 
 struct rdb_raft_rpc {

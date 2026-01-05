@@ -1,7 +1,9 @@
 hosts:
   test_servers: 5
   test_clients: 3
+
 timeout: 600
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -10,24 +12,23 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
       storage: auto
+
 pool:
   size: 53%
+
 container:
   type: POSIX
   control_method: daos
+
 mdtest:
   client_processes:
     np_48:
