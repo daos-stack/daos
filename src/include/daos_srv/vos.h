@@ -723,16 +723,6 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, d_sg_list_t *sgls, struct dtx_handle *dth);
 
-// FIXME DAOS-17321 -- Old checksum fetch API, to be removed later
-#if 0
-/**
- * TODO DAOS-17321
- */
-int
-vos_csum_fetch(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t oid, daos_iod_t *iod,
-	       struct daos_recx_ep_list *rel, struct dcs_ci_list *cil);
-#endif
-
 /**
  * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
