@@ -213,8 +213,7 @@ ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx)
 			return rc;
 		}
 
-		snprintf(tctx->dvt_pmem_file, ARRAY_SIZE(tctx->dvt_pmem_file),
-			 "%s/ddb_vos_test", dir);
+		snprintf(tctx->dvt_pmem_file, ARRAY_SIZE(tctx->dvt_pmem_file), "%s/vos-0", dir);
 	}
 	if (uuid_is_null(tctx->dvt_pool_uuid))
 		uuid_parse(pool_uuid, tctx->dvt_pool_uuid);
@@ -648,7 +647,7 @@ int main(int argc, char *argv[])
 		/* filtering suites and tests */
 		char test_suites[] = "";
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-		cmocka_set_test_filter("**");
+		cmocka_set_test_filter((argc == 1) ? "**" : argv[1]);
 #endif
 		RUN_TEST_SUIT('a', ddb_parse_tests_run);
 		RUN_TEST_SUIT('b', ddb_vos_tests_run);

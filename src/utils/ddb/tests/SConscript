@@ -50,10 +50,11 @@ def scons():
     prereqs.require(tenv, 'argobots', 'spdk', 'pmdk')
     # Required for dtx_act_discard_invalid tests.
     # This function is validated by its respective unit tests.
-    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_dtx_discard_invalid'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_dtx_discard_invalid', '-Wl,--wrap=regcomp',
+                                 '-Wl,--wrap=uuid_parse', '-Wl,--wrap=strtoull'])
 
     libs = ['uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj']
-    src = ['ddb_ut.c', 'ddb_vos_ut.c']
+    src = ['ddb_ut.c', 'ddb_vos_ut.c', 'ddb_parse_ut.c']
     # vos and mock object files to wrap vos symbols
     vos_obj = tenv.Object(Glob('../../../vos/*.c'))
     mock_obj = tenv.Object(Glob('../../../dtx/tests/*_mock.c'))
