@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -192,7 +192,7 @@ class ServerFillUp(IorTestBase):
         # Created new container or use the existing container for reading
         if create_cont:
             self.create_container()
-        self.ior_local_cmd.dfs_cont.update(self.nvme_local_cont.uuid)
+        self.ior_local_cmd.dfs_cont.update(self.nvme_local_cont)
 
         # Define the job manager for the IOR command
         job_manager_main = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
