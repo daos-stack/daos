@@ -280,8 +280,8 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
-        using_control_metadata = self.server_managers[0].manager.job.using_control_metadata
-        if count == 0 or using_control_metadata:
+        dmg_command = self.get_dmg_command()
+        if self.server_managers[0].manager.job.using_control_metadata:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
             self.log.info(msg)
@@ -299,7 +299,6 @@ class PoolListConsolidationTest(TestWithServers):
         pool = self.get_pool(svcn=3)
 
         self.log_step("Stop servers")
-        dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
@@ -317,8 +316,7 @@ class PoolListConsolidationTest(TestWithServers):
                 if check_out[0]:
                     command = f"rm {rdb_pool_path}"
                     command_root = command_as_user(command=command, user="root")
-                    if not run_remote(
-                        log=self.log, hosts=node, command=command_root).passed:
+                    if not run_remote(log=self.log, hosts=node, command=command_root).passed:
                         self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                     self.log.info("Remove %s from %s", rdb_pool_path, str(node))
                     count += 1
