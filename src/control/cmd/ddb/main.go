@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/desertbit/columnize"
 	"github.com/desertbit/go-shlex"
 	"github.com/desertbit/grumble"
 	"github.com/jessevdk/go-flags"
@@ -53,6 +54,43 @@ type cliOptions struct {
 		RunCmdArgs []string   `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
 }
+
+const helpCommandsHeader = `
+Available commands:
+
+`
+
+const helpVosTreePath = `
+Path
+
+Many of the commands take a VOS tree path. The format for this path
+is [cont]/[obj]/[dkey]/[akey]/[extent].
+- cont - the full container uuid.
+- obj - the object id.
+- keys (akey, dkey) - there are multiple types of keys
+   -- string keys are simply the string value. If the size of the
+      key is greater than strlen(key), then the size is included at
+      the end of the string value. Example: 'akey{5}' is the key: akey
+      with a null terminator at the end.
+   -- number keys are formatted as '{[type]: NNN}' where type is
+      'uint8, uint16, uint32, or uint64'. NNN can be a decimal or
+      hex number. Example: '{uint32: 123456}'
+   -- binary keys are formatted as '{bin: 0xHHH}' where HHH is the hex
+      representation of the binary key. Example: '{bin: 0x1a2b}'
+- extent for array values - in the format {lo-hi}.
+
+To make it easier to navigate the tree, indexes can be
+used instead of the path part. The index is in the format [i]. Indexes
+and actual path values can be used together
+
+Example Paths:
+/3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
+[0]/[1]/[2]/[1]/[9]
+/[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
+
+`
+
+const grumbleUnknownCmdErr = "unknown command, try 'help'"
 
 type vosPathStr string
 
@@ -128,6 +166,57 @@ func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 	return nil
 }
 
+// One cannot relay on grumble to print the list of commands since app does not allow executing
+// the help command from the outside of the interactive mode.
+// This method extracts commands and their respective help (short) messages in the simplest possible way,
+// put them in columns and print them using the provided log.
+func printCommands(app *grumble.App, log *logging.LeveledLogger) {
+	var output []string
+	for _, c := range app.Commands().All() {
+		if c.Name == "quit" {
+			continue
+		}
+		row := c.Name + columnize.DefaultConfig().Delim + c.Help
+		output = append(output, row)
+	}
+	log.Info(helpCommandsHeader + columnize.SimpleFormat(output) + "\n\n")
+}
+
+func printGeneralHelp(app *grumble.App, generalMsg string, log *logging.LeveledLogger) {
+	log.Info(generalMsg + "\n") // standard help from go-flags
+	printCommands(app, log)     // list of commands
+	log.Info(helpVosTreePath)   // extra info on VOS Tree Path syntax
+}
+
+// Ask grumble to generate a help message for the requested command.
+// Caveat: There is no way of forcing grumble to use use log to print the generated message so
+// the output goes directly to stdout.
+func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger) {
+	err := runCmdStr(app, string(opts.Args.RunCmd), "--help")
+	if err != nil {
+		if err.Error() == grumbleUnknownCmdErr {
+			log.Errorf("unknown command '%s'", string(opts.Args.RunCmd))
+			printCommands(app, log)
+		} else {
+			log.Error(err.Error())
+		}
+		os.Exit(1)
+	}
+}
+
+func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) {
+	// ctx is not necessary since this instance of the app is not intended to run any of the commands
+	app := createGrumbleApp(nil)
+
+	if string(opts.Args.RunCmd) == "" {
+		printGeneralHelp(app, generalMsg, log)
+	} else {
+		printCmdHelp(app, opts, log)
+	}
+
+	os.Exit(0)
+}
+
 func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.HelpFlag|flags.IgnoreUnknown)
 	p.Name = "ddb"
@@ -139,31 +228,6 @@ shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
 the '-w' option must be included. If supplied, the VOS file supplied in
 the first positional parameter will be opened before commands are executed.
-
-Many of the commands take a vos tree path. The format for this path
-is [cont]/[obj]/[dkey]/[akey]/[extent].
-- cont - the full container uuid.
-- obj - the object id.
-- keys (akey, dkey) - there are multiple types of keys
-   -- string keys are simply the string value. If the size of the
-      key is greater than strlen(key), then the size is included at
-      the end of the string value. Example: 'akey{5}' is the key: akey
-      with a null terminator at the end.
-   -- number keys are formatted as '{[type]: NNN}' where type is
-      'uint8, uint16, uint32, or uint64'. NNN can be a decimal or
-      hex number. Example: '{uint32: 123456}'
-   -- binary keys are formatted as '{bin: 0xHHH}' where HHH is the hex
-      representation of the binary key. Example: '{bin: 0x1a2b}'
-- extent for array values - in the format {lo-hi}.
-
-To make it easier to navigate the tree, indexes can be
-used instead of the path part. The index is in the format [i]. Indexes
-and actual path values can be used together
-
-Example Paths:
-/3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
-[0]/[1]/[2]/[1]/[9]
-/[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
 `
 
 	// Set the traceback level such that a crash results in
@@ -171,7 +235,11 @@ Example Paths:
 	debug.SetTraceback("crash")
 
 	if _, err := p.ParseArgs(args); err != nil {
-		return err
+		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+			printHelp(fe.Error(), opts, log)
+		} else {
+			return err
+		}
 	}
 
 	if opts.Version {
@@ -255,10 +323,6 @@ func main() {
 	log := logging.NewCommandLineLogger()
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
-		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
-			log.Info(fe.Error())
-			os.Exit(0)
-		}
 		exitWithError(log, err)
 	}
 }
