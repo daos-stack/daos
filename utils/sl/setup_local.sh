@@ -1,12 +1,10 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
-#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 #  * (C) Copyright 2025 Google LLC
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
-set -uex
 
 echo "$PWD"
 VARS_FILE=.build_vars.sh
@@ -28,7 +26,6 @@ fi
 echo "Build vars file found: ${VARS_LOCAL}"
 # shellcheck disable=SC1090
 . "${VARS_LOCAL}"
-cat "${VARS_LOCAL}"
 
 os="$(uname)"
 if [ "$os" = "Darwin" ]; then
