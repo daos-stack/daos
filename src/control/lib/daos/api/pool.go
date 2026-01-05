@@ -412,7 +412,6 @@ func PoolQuery(ctx context.Context, sysName, poolID string, queryMask daos.PoolQ
 
 func newPoolTargetInfo(ptinfo *C.daos_target_info_t) *daos.PoolQueryTargetInfo {
 	return &daos.PoolQueryTargetInfo{
-		Type:  daos.PoolQueryTargetType(ptinfo.ta_type),
 		State: daos.PoolQueryTargetState(ptinfo.ta_state),
 		Space: []*daos.StorageUsageStats{
 			{
