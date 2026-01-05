@@ -189,9 +189,10 @@ func printGeneralHelp(app *grumble.App, generalMsg string, log *logging.LeveledL
 }
 
 // Ask grumble to generate a help message for the requested command.
-// Caveat: There is no way of forcing grumble to use use log to print the generated message so
-// the output goes directly to stdout.
-func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger) {
+// Caveat: There is no known easy way of forcing grumble to use log to print the generated message
+// so the output goes directly to stdout.
+// Returns false in case the opts.Args.RunCmd is unknown.
+func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger) bool {
 	err := runCmdStr(app, string(opts.Args.RunCmd), "--help")
 	if err != nil {
 		if err.Error() == grumbleUnknownCmdErr {
@@ -200,21 +201,27 @@ func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger
 		} else {
 			log.Error(err.Error())
 		}
-		os.Exit(1)
+		return false
 	}
+	return true
 }
 
-func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) {
+// Prints either general or command-specific help message.
+// Returns a reasonable return code in case the caller chooses to terminate the process.
+func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) int {
 	// ctx is not necessary since this instance of the app is not intended to run any of the commands
 	app := createGrumbleApp(nil)
 
 	if string(opts.Args.RunCmd) == "" {
 		printGeneralHelp(app, generalMsg, log)
+		return 0
 	} else {
-		printCmdHelp(app, opts, log)
+		if printCmdHelp(app, opts, log) {
+			return 0
+		} else {
+			return 1
+		}
 	}
-
-	os.Exit(0)
 }
 
 func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
@@ -236,7 +243,7 @@ the first positional parameter will be opened before commands are executed.
 
 	if _, err := p.ParseArgs(args); err != nil {
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
-			printHelp(fe.Error(), opts, log)
+			os.Exit(printHelp(fe.Error(), opts, log))
 		} else {
 			return err
 		}
