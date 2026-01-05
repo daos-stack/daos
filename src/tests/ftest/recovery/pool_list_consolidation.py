@@ -307,7 +307,7 @@ class PoolListConsolidationTest(TestWithServers):
         rdb_pool_paths = [rdb_pool_path_0, rdb_pool_path_1]
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
-        # Iterate both pool mount points of both ranks. i.e., 4 ranks total.
+        # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
         for host in hosts:
             for rdb_pool_path in rdb_pool_paths:
                 node = NodeSet(host)
