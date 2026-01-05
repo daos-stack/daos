@@ -24,20 +24,13 @@ sudo dnf install --allowerasing -y "${bullseye_pkg}" || echo "${bullseye_pkg} no
 
 # Install bullshtml
 bullshtml_vers=1.0.5
-bullshtml_src=https://code.google.com/archive/p/bullshtml/downloads
+bullshtml_src=https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/bullshtml
 bullshtml_tar="bullshtml_${bullshtml_vers}.tar.gz"
 if [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
-    curl --proxy "${DAOS_HTTPS_PROXY}" "${bullshtml_src}/${bullshtml_tar}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullshtml_tar}"
-else
-    curl "${bullshtml_src}/${bullshtml_tar}" --retry 10 --retry-max-time 60 --silent --show-error -o "${bullshtml_tar}"
+    export https_proxy="${DAOS_HTTPS_PROXY}"
 fi
-tar -C bullshtml --strip-components=1 -xf "${bullshtml_tar}"
-pushd bullshtml
-if [ ! -e build ]; then
-    ./gradlew build
-fi
-popd
-rm -f ./bullshtml.jar
-cp bullshtml/build/libs/bullshtml-*.jar ./bullshtml.jar
+wget "${bullshtml_src}/${bullshtml_tar}"
+tar --strip-components=1 -xf "${bullshtml_tar}"
+
 # bullshtml_pkg="$(utils/rpms/package_version.sh bullshtml normal)"
 # sudo dnf install --allowerasing -y "${bullshtml_pkg}" || echo "${bullshtml_pkg} not available"
