@@ -27,34 +27,11 @@ if [ ! -e "$COVFILE" ]; then
   exit 1
 else
   ls -al "${COVFILE}"
+  covdir -m
 fi
 
-# Exclude tests
-covselect --file test.cov --source "*/src/tests/*" --disable
-covselect --file test.cov --source "*/src/bio/smd/tests/*" --disable
-covselect --file test.cov --source "*/src/cart/crt_self_test.h" --disable
-covselect --file test.cov --source "*/src/cart/crt_self_test_client.c" --disable
-covselect --file test.cov --source "*/src/cart/crt_self_test_service.c" --disable
-covselect --file test.cov --source "*/src/client/api/tests/*" --disable
-covselect --file test.cov --source "*/src/common/tests/*" --disable
-covselect --file test.cov --source "*/src/common/tests_dmg_helpers.c" --disable
-covselect --file test.cov --source "*/src/common/tests_lib.c" --disable
-covselect --file test.cov --source "*/src/dtx/tests/*" --disable
-covselect --file test.cov --source "*/src/engine/tests/*" --disable
-covselect --file test.cov --source "*/src/gurt/examples/*" --disable
-covselect --file test.cov --source "*/src/gurt/tests/*" --disable
-covselect --file test.cov --source "*/src/mgmt/tests/*" --disable
-covselect --file test.cov --source "*/src/object/tests/*" --disable
-covselect --file test.cov --source "*/src/placement/tests/*" --disable
-covselect --file test.cov --source "*/src/rdb/tests/*" --disable
-covselect --file test.cov --source "*/src/security/tests/*" --disable
-# covselect --file test.cov --source "*/src/utils/daos_autotest.c" --disable
-covselect --file test.cov --source "*/src/utils/crt_launch/*" --disable
-covselect --file test.cov --source "*/src/utils/self_test/*" --disable
-covselect --file test.cov --source "*/src/vea/tests/*" --disable
-covselect --file test.cov --source "*/src/vos/tests/*" --disable
-ls -al "${COVFILE}"
+# Generate the html report
+# java -jar bullshtml.jar bullseye_code_coverage_report
+covhtml bullseye_code_coverage_report
+# ls -al bullseye_code_coverage_report
 
-# Generate the report
-java -jar bullshtml.jar bullseye_code_coverage_report
-ls -al bullseye_code_coverage_report
