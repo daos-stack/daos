@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
 // (C) Copyright 2025 Vdura Inc.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -439,6 +439,30 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxAggr(ctx, c.Args.String("path"), c.Flags.Uint64("cmt_time"), c.Flags.String("cmt_date"))
+		},
+		Completer: nil,
+	})
+	// Command csum_dump
+	app.AddCommand(&grumble.Command{
+		Name:    "csum_dump",
+		Aliases: nil,
+		Help:    "Dump visible checksum(s)",
+		LongHelp: `Dump visible checksum(s) to the screen or in a file.  The vos
+path should be a complete path, including the akey and if the value is an array
+value it should include the extent. If a path to a file was provided then the
+value(s) will be written to the file, else it will be printed to the screen.
+With array values it is possible to define the maximal epoch of the visible record
+extent to select`,
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to dump.")
+			a.String("dst", "Optional, destination vos tree path to a value.", grumble.Default(""))
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("e", "epoch", math.MaxUint64, "Maximal epoch of the visible array value to select (default EPOCH_MAX).")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbCsumDump(ctx, c.Args.String("path"), c.Args.String("dst"), c.Flags.Uint64("epoch"))
 		},
 		Completer: nil,
 	})

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2315,9 +2315,9 @@ io_sgl_fetch(void **state)
 	/* Write/Update */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1,
 			    &iod, NULL, &sgl);
+	d_sgl_fini(&sgl, false);
 	if (rc)
 		goto exit;
-	d_sgl_fini(&sgl, false);
 	inc_cntr(arg->ta_flags);
 
 	/* Allocate memory for the scatter-gather list */
@@ -2445,6 +2445,97 @@ io_fetch_hole(void **state)
 	/* Test if ground truth matches fetch_buf */
 	assert_memory_equal(ground_truth, fetch_buf, 3 * 1024);
 }
+
+#if 0
+/* FIXME DAOS-17321:
+ * - uss array and single value
+ * - use different diff csum algorithms
+ * - verify csum after fetch
+ * - use shard smaller than array size
+ * - Use overlap recx
+ * */
+static void
+io_array_csum(void **state)
+{
+	struct io_test_args  *arg;
+	daos_key_t            dkey;
+	daos_key_t            akey;
+	daos_recx_t           rex;
+	daos_iod_t            iod;
+	d_sg_list_t           sgl;
+	struct dcs_ci_list    cil;
+	struct dcs_iod_csums *iod_csums;
+	struct daos_csummer  *csummer;
+	char                  dkey_buf[UPDATE_DKEY_SIZE];
+	char                  akey_buf[UPDATE_AKEY_SIZE];
+	char                  update_buf[SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE * 4];
+	int                   rc;
+
+	arg = *state;
+
+	/* Set up dkey and akey */
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	rex.rx_idx = hash_key(&dkey, is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	rex.rx_nr  = 1;
+
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_size  = SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE;
+	iod.iod_name  = akey;
+	iod.iod_recxs = &rex;
+	iod.iod_nr    = 4;
+
+	/* Fill the buffer with random letters */
+	dts_buf_render(&update_buf[0], SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE * 4);
+	/* Attach the buffer to the scatter-gather list */
+	rc = d_sgl_init(&sgl, 1);
+	if (rc)
+		goto out;
+	d_iov_set(sgl.sg_iovs, &update_buf[0], SGL_TEST_BUF_COUNT *
+		     SGL_TEST_BUF_SIZE * 4);
+
+	/* Add csumer */
+	rc = io_test_add_csums(&iod, &sgl, &csummer, &iod_csums);
+	if (rc)
+		goto out_sgl;
+
+	/* Write/Update */
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1,
+			    &iod, iod_csums, &sgl);
+	if (rc)
+		goto out_csummer;
+	inc_cntr(arg->ta_flags);
+
+	/* TODO DAOS-17321 -- call vos_obj_update with checksum enabled.
+	 * io_test_obj_fetch is an example of function using checksum.
+	 */
+	rc = dcs_csum_info_list_init(&cil, 0);
+	if (rc)
+		goto out_csummer;
+
+	rc = vos_csum_fetch(arg->ctx.tc_co_hdl, &dkey, arg->oid, &iod, &cil);
+	if (rc)
+		goto out_cil;
+
+	/* TODO DAOS-17321 -- Verify csum */
+
+out_cil:
+	dcs_csum_info_list_fini(&cil);
+
+out_csummer:
+	daos_csummer_free_ic(csummer, &iod_csums);
+	daos_csummer_destroy(&csummer);
+
+out_sgl:
+	d_sgl_fini(&sgl, false);
+
+out:
+	assert_rc_equal(rc, 0);
+}
+#endif
 
 static void
 io_pool_overflow_test(void **state)
@@ -3064,6 +3155,7 @@ static const struct CMUnitTest io_tests[] = {
     {"VOS206: Simple scatter-gather list test, multiple update buffers", io_sgl_update, NULL, NULL},
     {"VOS207: Simple scatter-gather list test, multiple fetch buffers", io_sgl_fetch, NULL, NULL},
     {"VOS208: Extent hole test", io_fetch_hole, NULL, NULL},
+    /* {"VOS209: Simple csum buffers", io_array_csum, NULL, NULL}, */
     {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
     {"VOS222: overwrite test", io_idx_overwrite, NULL, NULL},
     {"VOS245.0: Object iter test (for oid)", oid_iter_test, oid_iter_test_setup, NULL},

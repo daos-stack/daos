@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -905,6 +905,7 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
  * I/O and release resources.
  *
  * TODO: add more detail descriptions for punched or missing records.
+ * TODO DAOS-17321 -- Add description for csum handling.
  *
  * \param[in] coh	Container open handle
  * \param[in] oid	Object ID
