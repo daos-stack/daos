@@ -40,14 +40,37 @@ TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos"
 list_files files "test.cov"
 append_install_list "${files[@]}"
 
-# Add sources for covhtml command
+# Create tar file containing all source files for the covhtml command
 readarray -t src_file_list < <("${SL_BULLSEYE_PREFIX}/bin/covmgr" -l --file test.cov)
-for src_file in "${src_file_list[@]}"; do
-  dir_name=$(dirname "${src_file}")
-  TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos/${dir_name}"
-  list_files files "${src_file}"
-  append_install_list "${files[@]}"
-done
+if [ ${#src_file_list[@]} -gt 0 ]; then
+  tar -czf "${tmp}/bullseye_sources.tar.gz" "${src_file_list[@]}" 2>/dev/null || {
+    echo "Warning: Some source files may not exist, creating tar with existing files only"
+    existing_files=()
+    for src_file in "${src_file_list[@]}"; do
+      if [ -f "${src_file}" ]; then
+        existing_files+=("${src_file}")
+      fi
+    done
+    if [ ${#existing_files[@]} -gt 0 ]; then
+      tar -czf "${tmp}/bullseye_sources.tar.gz" "${existing_files[@]}"
+      echo "Created tar file with ${#existing_files[@]} existing source files"
+    else
+      echo "No source files found to archive"
+    fi
+  }
+else
+  echo "No source files found in src_file_list"
+fi
+list_files files "${tmp}/bullseye_sources.tar.gz"
+append_install_list "${files[@]}"
+
+# # Add sources for covhtml command
+# for src_file in "${src_file_list[@]}"; do
+#   dir_name=$(dirname "${src_file}")
+#   TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos/${dir_name}"
+#   list_files files "${src_file}"
+#   append_install_list "${files[@]}"
+# done
 
 # Update test.cov permissions
 cat << EOF  > "${tmp}/post_install_bullseye"
