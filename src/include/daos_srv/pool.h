@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -566,7 +566,8 @@ int
 ds_pool_prop_recov_cont_reset(struct rdb_tx *tx, struct ds_rsvc *rsvc);
 
 static inline bool
-is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)
+is_pool_rebuild_allowed(struct ds_pool *pool, uint64_t self_heal, bool self_heal_applicable,
+			bool check_delayed_rebuild)
 {
 	uint64_t flags = DAOS_SELF_HEAL_AUTO_REBUILD;
 
@@ -575,7 +576,7 @@ is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)
 
 	if (pool->sp_disable_rebuild)
 		return false;
-	if (!(pool->sp_self_heal & flags))
+	if (self_heal_applicable && !(self_heal & flags))
 		return false;
 
 	return true;
