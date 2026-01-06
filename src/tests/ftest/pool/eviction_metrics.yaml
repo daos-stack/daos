@@ -31,11 +31,12 @@ container:
 mdtest:
   dfs_oclass: S1
   dfs_dir_oclass: SX
+  dfs_destroy: False
   manager: "MPICH"
   ppn: 32
   test_dir: "/"
   api: DFS
-  flags: "-C -F -P -G 27 -N 1 -Y -v -u -L"
+  flags: "-C -F -G 27 -N 1 -Y -u -L"
   branching_factor: 1
   depth: 20
   write_bytes: 4096

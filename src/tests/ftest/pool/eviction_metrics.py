@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,11 +52,11 @@ class EvictionMetrics(TestWithTelemetry):
         expected_ranges = self.telemetry.collect_data(evict_metrics)
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
-                if pool.mem_ratio.value is not None and label.endswith('_hit'):
+                if pool.mem_ratio.value is not None and metric.endswith('_hit'):
                     expected_ranges[metric][label] = [0, 100]
-                elif pool.mem_ratio.value is not None and label.endswith('_miss'):
+                elif pool.mem_ratio.value is not None and metric.endswith('_miss'):
                     expected_ranges[metric][label] = [0, 5]
-                elif pool.mem_ratio.value is not None and label.endswith('_ne'):
+                elif pool.mem_ratio.value is not None and metric.endswith('_ne'):
                     expected_ranges[metric][label] = [0, 5]
                 else:
                     expected_ranges[metric][label] = [0, 0]
