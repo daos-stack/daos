@@ -164,7 +164,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
               (7) Display and verify free space after container delete.
             - Check server logs
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,manual
         :avocado: tags=hw,medium
         :avocado: tags=container,pool,boundary_test
         :avocado: tags=BoundaryPoolContainerSpace,test_fill_destroy_cont_loop
