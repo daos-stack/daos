@@ -10,8 +10,6 @@ server_config:
   engines:
     0:
       targets: 4
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       env_vars:
         - DD_MASK=group_metadata_only
@@ -19,8 +17,6 @@ server_config:
       storage: auto
     1:
       targets: 4
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       env_vars:
         - DD_MASK=group_metadata_only

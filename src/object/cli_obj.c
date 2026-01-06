@@ -4138,8 +4138,10 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 	obj_auxi_shards_iterate(obj_auxi, update_sub_anchor_cb, NULL);
 
 	sub_anchors = (struct shard_anchors *)anchor->da_sub_anchors;
-	if (!d_list_empty(&sub_anchors->sa_merged_list))
+	if (!d_list_empty(&sub_anchors->sa_merged_list)) {
+		D_ASSERT(obj_auxi->opc != DAOS_OBJ_RPC_ENUMERATE);
 		return;
+	}
 
 	if (sub_anchors_is_eof(sub_anchors)) {
 		daos_obj_list_t *obj_args;
@@ -4148,6 +4150,18 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 
 		obj_args = dc_task_get_args(obj_auxi->obj_task);
 		sub_anchors_free(obj_args, obj_auxi->opc);
+	} else if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE) {
+		for (int i = 0; i < sub_anchors->sa_anchors_nr; i++) {
+			daos_anchor_t *sub_anchor;
+
+			sub_anchor = &sub_anchors->sa_anchors[i].ssa_anchor;
+			if (!daos_anchor_is_eof(sub_anchor)) {
+				D_DEBUG(DB_REBUILD, "shard %d sub_anchor %d/%d non EOF",
+					sub_anchors->sa_anchors[i].ssa_shard, i,
+					sub_anchors->sa_anchors_nr);
+				break;
+			}
+		}
 	}
 }
 
@@ -6468,7 +6482,7 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi, struct shard_anch
 		}
 
 		if (obj_args->recxs != NULL) {
-			if (sub_anchor->ssa_recxs != NULL && sub_anchors->sa_nr == nr)
+			if (sub_anchor->ssa_recxs != NULL && sub_anchors->sa_nr != nr)
 				D_FREE(sub_anchor->ssa_recxs);
 
 			if (sub_anchor->ssa_recxs == NULL) {

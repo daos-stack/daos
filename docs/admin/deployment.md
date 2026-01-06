@@ -438,7 +438,7 @@ per engine. The command redirects stderr to /dev/null and stdout to a temporary 
 installation is from a source build.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server config generate -p ofi+tcp --use-tmpfs-scm 2>/dev/null | tee ~/configs/tmp.yml
+$ daos_server config generate -p ofi+tcp --use-tmpfs-scm 2>/dev/null | tee ~/configs/tmp.yml
 port: 10001
 transport_config:
   allow_insecure: false
@@ -496,6 +496,7 @@ disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 16384
 disable_hugepages: false
+allow_thp: false
 control_log_mask: INFO
 control_log_file: /var/log/daos/daos_server.log
 core_dump_filter: 19
@@ -512,7 +513,7 @@ Now we start the `daos_server` service from the generated config which loads suc
 and runs until the point where a storage format is required, as expected.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server start -i -o ~/configs/tmp.yml
+$ daos_server start -i -o ~/configs/tmp.yml
 DAOS Server config loaded from /home/user/configs/tmp.yml
 install/bin/daos_server logging to file /tmp/daos_server.log
 NOTICE: Configuration includes only one MS replica. This provides no redundancy in the event of a MS replica failure.
@@ -534,12 +535,12 @@ Note the subsequent system query command may not show ranks started immediately 
 format command returns so it is recommended to leave a short delay (~5s) before invoking.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/dmg storage format -i
+$ dmg storage format -i
 Format Summary:
   Hosts     SCM Devices NVMe Devices
   -----     ----------- ------------
   localhost 2           16
-[user@wolf-226 daos]$ install/bin/dmg system query -i
+$ dmg system query -i
 Rank  State
 ----  -----
 [0-1] Joined
@@ -564,17 +565,17 @@ daos_engine:1 Using NUMA core allocation algorithm
 SCM @ /mnt/daos0: 91 GB Total/91 GB Avail
 Starting I/O Engine instance 0: /home/user/projects/daos/install/bin/daos_engine
 daos_engine:0 Using NUMA core allocation algorithm
-MS leader running on wolf-226.wolf.hpdd.intel.com
-daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+MS leader running on wolf-226.domain
+daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.domain.
 Using NUMA node: 1
-daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.domain.
 Using NUMA node: 0
 ```
 
 For reference, the hardware scan results for the target storage server are included below.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server nvme scan
+$ daos_server nvme scan
 Scan locally-attached NVMe storage...
 NVMe PCI     Model              FW Revision Socket ID Capacity
 --------     -----              ----------- --------- --------
@@ -595,7 +596,7 @@ NVMe PCI     Model              FW Revision Socket ID Capacity
 0000:e0:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
 0000:e1:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
 
-[user@wolf-226 daos]$ install/bin/daos_server network scan
+$ daos_server network scan
 ---------
 localhost
 ---------
@@ -807,6 +808,32 @@ configuration file with a populated per-engine section can be stored in
 `/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service
 it is then ready for the storage to be formatted.
 
+
+### Transparent HugePage (THP) support
+
+DAOS relies on the use of hugepages in a dedicated manner and turning on transparent hugepages means
+the hugepage memory pool gets used in a model more like a cache. This can have adverse effects on
+DAOS behavior and may cause OOM and DMA buffer allocation failures at high load.
+
+By default the server will fail to start and exit when the server is started with THP enabled.
+
+```bash
+DEBUG 2025/12/14 09:54:32.537839 main.go:87: server: code = 623 description = "transparent hugepage (THP) enabled on storage server, DAOS requires THP to be disabled"
+ERROR: server: code = 623 description = "transparent hugepage (THP) enabled on storage server, DAOS requires THP to be disabled"
+ERROR: server: code = 623 resolution = "disable THP by adding 'transparent_hugepage=never' kernel parameter in the grub configuration file then reboot and restart daos_server"
+```
+
+The following command can be used to verify whether THP is enabled:
+
+```bash
+cat /sys/kernel/mm/transparent_hugepage/enabled
+[always] madvise never
+```
+
+If `allow_thp: true` parameter is set in server config file global section, the behavior will change
+and the server will start with THP enabled.
+
+
 ## DAOS Server Remote Access
 
 Remote tasking of the DAOS system and individual DAOS Server processes can be
@@ -895,7 +922,7 @@ resetting modules into "MemoryMode" through resource allocations.
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
 
-#### Multiple PMem namespaces per socket (Experimental)
+#### Multiple PMem namespaces per socket
 
 By default the `daos_server scm prepare` command will create one PMem namespace on each PMem
 region.
@@ -968,12 +995,12 @@ fallback to using UIO user-space driver with SPDK instead.
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
-bash-4.2$ dmg storage scan
+$ dmg storage scan
 Hosts        SCM Total             NVMe Total
 -----        ---------             ----------
 wolf-[71-72] 6.4 TB (2 namespaces) 3.1 TB (3 controllers)
 
-bash-4.2$ dmg storage scan --verbose
+$ dmg storage scan --verbose
 ------------
 wolf-[71-72]
 ------------
@@ -1018,7 +1045,7 @@ manual reset to do so.
 SSD health state can be verified via `dmg storage scan --nvme-health`:
 
 ```bash
-bash-4.2$ dmg storage scan --nvme-health
+$ dmg storage scan --nvme-health
 -------
 wolf-71
 -------
@@ -1298,7 +1325,7 @@ To illustrate, assume a cluster with homogeneous hardware configurations that
 returns the following from scan for each host:
 
 ```bash
-[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] storage scan --verbose
+$ dmg -l wolf-7[1-2] storage scan --verbose
 -------
 wolf-7[1-2]
 -------
@@ -1544,7 +1571,7 @@ Upon successful format, DAOS Control Servers will start DAOS I/O engines that
 have been specified in the server config file.
 
 Successful start-up is indicated by the following on stdout:
-`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
+`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.domain.`
 
 ### SCM Format
 
