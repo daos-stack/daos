@@ -153,7 +153,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				      rc == -DER_TX_RESTART || rc == -DER_EXIST ||
 				      rc == -DER_NONEXIST || rc == -DER_ALREADY ||
 				      rc == -DER_CHKPT_BUSY,
-				  DLOG_DBG, DLOG_ERR, rc, DF_UOID " %s end failed",
+				  DLOG_DBG, DLOG_ERR, rc, DF_UOID " %s end SAMIR failed",
 				  DP_UOID(orwi->orw_oid), update ? "Update" : "Fetch");
 			if (status == 0)
 				status = rc;

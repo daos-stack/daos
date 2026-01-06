@@ -85,7 +85,7 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         pool_count = self.params.get("pool_count", "/run/test_recycle_pools_hw/*", 0)
         deltas_bytes = self.get_deltas("test_recycle_pools_hw")
         deltas_bytes[:] = [it * self.engines_count for it in deltas_bytes]
-        self.log.info("Test pool creation and destruction")
+        self.log.info("Test pool creation and destruction --- SAMIR --- 2 --")
         self.log.info("\t- pool_count=%d", pool_count)
         self.log_deltas(*deltas_bytes)
 
