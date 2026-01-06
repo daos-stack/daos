@@ -10,8 +10,6 @@ if [ ! -d "${SL_BULLSEYE_PREFIX}" ]; then
   exit 0
 fi
 
-find . -name bullseye.tar.xz
-
 VERSION="${bullseye_version}"
 RELEASE="${bullseye_release}"
 LICENSE="Proprietary"
@@ -21,6 +19,8 @@ URL="https://www.bullseye.com/index.html"
 RPM_CHANGELOG="bullseye.changelog"
 PACKAGE_TYPE="dir"
 files=()
+
+# Add bullseye files
 FILTER_LIST=("${SL_BULLSEYE_PREFIX}/sample")
 readarray -t dir_list < <(find "${SL_BULLSEYE_PREFIX}" -mindepth 1 -maxdepth 1 -type d)
 for dir in "${dir_list[@]}"; do
@@ -34,16 +34,22 @@ for dir in "${dir_list[@]}"; do
     append_install_list "${files[@]}"
   done
 done
+
+# Add test.cov file
 TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos"
 list_files files "test.cov"
 append_install_list "${files[@]}"
 
+# Add sources for covhtml command
 readarray -t src_file_list < <("${SL_BULLSEYE_PREFIX}/bin/covmgr" -l --file test.cov)
 for src_file in "${src_file_list[@]}"; do
+  dir_name=$(dirname "${src_file}")
+  TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos/${dir_name}"
   list_files files "${src_file}"
   append_install_list "${files[@]}"
 done
 
+# Update test.cov permissions
 cat << EOF  > "${tmp}/post_install_bullseye"
 chmod 666 ${SL_BULLSEYE_PREFIX}/daos/test.cov
 EOF
