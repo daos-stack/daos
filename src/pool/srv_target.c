@@ -909,6 +909,13 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
 	pool->sp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+	/*
+	 * Set proper default chkpt parameters to ensure the checkpoint working
+	 * before the pool property being propagated.
+	 */
+	pool->sp_checkpoint_mode   = DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT;
+	pool->sp_checkpoint_freq   = DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT;
+	pool->sp_checkpoint_thresh = DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT;
 
 	/** set up ds_pool metrics */
 	rc = ds_pool_metrics_start(pool);

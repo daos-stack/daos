@@ -320,7 +320,6 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		iommuDisabled   bool
 		srvCfgExtra     func(*config.Server) *config.Server
 		memInfo1        *common.SysMemInfo // Before prepBdevStorage()
 		memInfo2        *common.SysMemInfo // After prepBdevStorage()
@@ -328,6 +327,10 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 		hugepagesTotal  int                // Values for all NUMA nodes, will be split per-node.
 		bmbc            *bdev.MockBackendConfig
 		overrideUser    string
+		iommuDisabled   bool
+		iommuCheckErr   error
+		thpEnabled      bool
+		thpCheckErr     error
 		expPrepErr      error
 		expPrepCalls    []storage.BdevPrepareRequest
 		expMemSize      int
@@ -379,6 +382,13 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      16384,
 			expHugepageSize: 2,
 		},
+		"iommu check error": {
+			iommuCheckErr: errors.New("fail"),
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: errors.New("iommu check: fail"),
+		},
 		"iommu disabled": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -421,6 +431,40 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			},
 			expMemSize:      16384,
 			expHugepageSize: 2,
+		},
+		"thp check error": {
+			thpCheckErr: errors.New("fail"),
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: errors.New("transparent hugepage check: fail"),
+		},
+		"thp enabled": {
+			thpEnabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: FaultTransparentHugepageEnabled,
+		},
+		"thp enabled; override flag set": {
+			thpEnabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithAllowTHP(true).
+					WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				defCleanDualEngine,
+				{
+					HugeNodes:  "nodes_hp[0]=8192,nodes_hp[1]=8192",
+					TargetUser: username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+						storage.BdevPciAddrSep, test.MockPCIAddr(1)),
+					EnableVMD: true,
+				},
+			},
+			expHugepageSize: 2,
+			// Allocation change logged.
+			expNotice: true,
 		},
 		"no bdevs configured; hugepages disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -1064,6 +1108,16 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				cfg = tc.srvCfgExtra(cfg)
 			}
 
+			// Defaults are IOMMU=ON and THP=OFF.
+			iommuChecker := mockIOMMUDetector{
+				enabled: !tc.iommuDisabled,
+				err:     tc.iommuCheckErr,
+			}
+			thpChecker := mockTHPDetector{
+				enabled: tc.thpEnabled,
+				err:     tc.thpCheckErr,
+			}
+
 			mockAffSrc := func(l logging.Logger, e *engine.Config) (uint, error) {
 				iface := e.Fabric.Interface
 				l.Debugf("eval affinity of iface %q", iface)
@@ -1156,7 +1210,7 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				srv.runningUser = &user.User{Username: tc.overrideUser}
 			}
 
-			gotPrepErr := prepBdevStorage(srv, !tc.iommuDisabled, tc.memInfo1)
+			gotPrepErr := prepBdevStorage(srv, tc.memInfo1, iommuChecker, thpChecker)
 
 			mbb.RLock()
 			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls, prepCmpOpt); diff != "" {
@@ -1187,13 +1241,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			test.AssertEqual(t, tc.expHugepageSize, ei.runner.GetConfig().HugepageSz,
 				"unexpected huge page size")
 
-			txtMod := ""
-			if !tc.expNotice {
-				txtMod = "no "
+			gotNotice := strings.Contains(buf.String(), "NOTICE")
+			if tc.expNotice && !gotNotice {
+				t.Fatal("expected NOTICE level message but got none")
+			} else if !tc.expNotice && gotNotice {
+				t.Fatal("expected no NOTICE level message but got one")
 			}
-			msg := fmt.Sprintf("expected %sNOTICE level message", txtMod)
-			test.AssertEqual(t, tc.expNotice, strings.Contains(buf.String(), "NOTICE"),
-				msg)
 		})
 	}
 }
