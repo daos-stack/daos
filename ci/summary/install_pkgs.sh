@@ -10,13 +10,18 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-ci_envs="$mydir/../parse_ci_envs.sh"
-if [ -e "${ci_envs}" ]; then
-    # shellcheck source=parse_ci_envs.sh disable=SC1091
-    source "${ci_envs}"
-fi
+files=("$mydir/../parse_ci_envs.sh" "$mydir/../provision/post_provision_config_common_functions.sh")
+for src_file in "${files[@]}"; do
+    if [ -e "${src_file}" ]; then
+        # shellcheck source=parse_ci_envs.sh disable=SC1091
+        source "${src_file}"
+    fi
+done
 
 env | sort -n
+
+# Add a repo for this build
+add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}"
 
 # Install bullseye
 bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"
