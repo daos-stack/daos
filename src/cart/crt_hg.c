@@ -1601,6 +1601,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
+	/* corresponds to decref in crt_hg_reply_send_cb */
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);

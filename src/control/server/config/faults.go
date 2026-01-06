@@ -167,6 +167,15 @@ func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
+func FaultConfigScmDiffHugeEnabled(curIdx, seenIdx int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigScmHugeEnabled,
+		fmt.Sprintf("the scm_hugepages_disabled in engine %d is different from engine %d",
+			curIdx, seenIdx),
+		"ensure that each I/O Engine has the same setting for this parameter and restart",
+	)
+}
+
 func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigOverlappingBdevDeviceList,
