@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -355,6 +355,154 @@ Pool space info:
 - Data storage:
   Total size: 4 B
   Free: 2 B, min:0 B, max:0 B, mean:0 B
+`, poolUUID.String()),
+		},
+		"rebuild state idle": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateIdle,
+					Status:  0,
+					Objects: 0,
+					Records: 0,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+`, poolUUID.String()),
+		},
+		"rebuild state stopped": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateStopped,
+					Status:  0,
+					Objects: 0,
+					Records: 0,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild stopped, 0 objs, 0 recs
+`, poolUUID.String()),
+		},
+		"rebuild state failed with idle": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:  daos.PoolRebuildStateFailed,
+					Status: -5,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild failed, status=-5
+`, poolUUID.String()),
+		},
+		"rebuild state done": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateDone,
+					Status:  0,
+					Objects: 200,
+					Records: 1000,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild done, 200 objs, 1000 recs
+`, poolUUID.String()),
+		},
+		"rebuild state failed with done": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:  daos.PoolRebuildStateFailed,
+					Status: -10,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild failed, status=-10
+`, poolUUID.String()),
+		},
+		"rebuild state busy": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateBusy,
+					Status:  0,
+					Objects: 150,
+					Records: 750,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild busy, 150 objs, 750 recs
+`, poolUUID.String()),
+		},
+		"rebuild state stopping": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateStopping,
+					Status:  0,
+					Objects: 100,
+					Records: 500,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild stopping, 100 objs, 500 recs
+`, poolUUID.String()),
+		},
+		"rebuild state failing": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateFailing,
+					Status:  -1,
+					Objects: 75,
+					Records: 300,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild failed, status=-1
 `, poolUUID.String()),
 		},
 	} {

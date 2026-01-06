@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -2007,6 +2007,182 @@ func TestControl_PoolQuery(t *testing.T) {
 				},
 			},
 			expErr: errors.New("> 1 occurrences of prop 4 in resp"),
+		},
+		"query with rebuild state stopping": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_STOPPING,
+							Objects: 100,
+							Records: 500,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateStopping,
+						Objects: 100,
+						Records: 500,
+					},
+				},
+			},
+		},
+		"query with rebuild state stopped": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_STOPPED,
+							Objects: 0,
+							Records: 0,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateStopped,
+						Objects: 0,
+						Records: 0,
+					},
+				},
+			},
+		},
+		"query with rebuild state failing": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_FAILING,
+							Status:  -1,
+							Objects: 75,
+							Records: 300,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateFailing,
+						Status:  -1,
+						Objects: 75,
+						Records: 300,
+					},
+				},
+			},
+		},
+		"query with rebuild state failed": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:  mgmtpb.PoolRebuildStatus_FAILED,
+							Status: -5,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:  daos.PoolRebuildStateFailed,
+						Status: -5,
+					},
+				},
+			},
+		},
+		"query with rebuild state done": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_DONE,
+							Objects: 200,
+							Records: 1000,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateDone,
+						Objects: 200,
+						Records: 1000,
+					},
+				},
+			},
+		},
+		"query with rebuild state idle": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State: mgmtpb.PoolRebuildStatus_IDLE,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State: daos.PoolRebuildStateIdle,
+					},
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

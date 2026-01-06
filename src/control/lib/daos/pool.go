@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -428,6 +428,14 @@ const (
 	PoolRebuildStateDone = PoolRebuildState(mgmtpb.PoolRebuildStatus_DONE)
 	// PoolRebuildStateBusy indicates that the rebuild process is in progress.
 	PoolRebuildStateBusy = PoolRebuildState(mgmtpb.PoolRebuildStatus_BUSY)
+	// PoolRebuildStateStopping indicates that the rebuild process is stopping (transient).
+	PoolRebuildStateStopping = PoolRebuildState(mgmtpb.PoolRebuildStatus_STOPPING)
+	// PoolRebuildStateStopped indicates that the rebuild process has stopped.
+	PoolRebuildStateStopped = PoolRebuildState(mgmtpb.PoolRebuildStatus_STOPPED)
+	// PoolRebuildStateFailing indicates that the rebuild process is failing (transient).
+	PoolRebuildStateFailing = PoolRebuildState(mgmtpb.PoolRebuildStatus_FAILING)
+	// PoolRebuildStateFailed indicates that the rebuild process has failed.
+	PoolRebuildStateFailed = PoolRebuildState(mgmtpb.PoolRebuildStatus_FAILED)
 )
 
 func (prs PoolRebuildState) String() string {

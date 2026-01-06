@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -335,6 +335,94 @@ func TestDaos_PoolQueryMaskUnmarshalJSON(t *testing.T) {
 			if diff := cmp.Diff(tc.expString, testMask.String()); diff != "" {
 				t.Fatalf("Unexpected mask after UnmarshalJSON (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestDaos_PoolRebuildState_String(t *testing.T) {
+	for name, tc := range map[string]struct {
+		state     PoolRebuildState
+		expString string
+	}{
+		"idle":     {PoolRebuildStateIdle, "idle"},
+		"busy":     {PoolRebuildStateBusy, "busy"},
+		"done":     {PoolRebuildStateDone, "done"},
+		"stopping": {PoolRebuildStateStopping, "stopping"},
+		"stopped":  {PoolRebuildStateStopped, "stopped"},
+		"failing":  {PoolRebuildStateFailing, "failing"},
+		"failed":   {PoolRebuildStateFailed, "failed"},
+		"unknown":  {PoolRebuildState(999), "unknown"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotString := tc.state.String()
+
+			test.AssertEqual(t, tc.expString, gotString, "unexpected string value")
+		})
+	}
+}
+
+func TestDaos_PoolRebuildState_MarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		state   PoolRebuildState
+		expJSON string
+		expErr  error
+	}{
+		"idle":     {PoolRebuildStateIdle, `"idle"`, nil},
+		"busy":     {PoolRebuildStateBusy, `"busy"`, nil},
+		"done":     {PoolRebuildStateDone, `"done"`, nil},
+		"stopping": {PoolRebuildStateStopping, `"stopping"`, nil},
+		"stopped":  {PoolRebuildStateStopped, `"stopped"`, nil},
+		"failing":  {PoolRebuildStateFailing, `"failing"`, nil},
+		"failed":   {PoolRebuildStateFailed, `"failed"`, nil},
+		"unknown":  {PoolRebuildState(999), `"unknown"`, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotJSON, gotErr := tc.state.MarshalJSON()
+
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expJSON, string(gotJSON), "unexpected JSON")
+		})
+	}
+}
+
+func TestDaos_PoolRebuildState_UnmarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		json     string
+		expState PoolRebuildState
+		expErr   error
+	}{
+		"idle":               {`"idle"`, PoolRebuildStateIdle, nil},
+		"busy":               {`"busy"`, PoolRebuildStateBusy, nil},
+		"done":               {`"done"`, PoolRebuildStateDone, nil},
+		"stopping":           {`"stopping"`, PoolRebuildStateStopping, nil},
+		"stopped":            {`"stopped"`, PoolRebuildStateStopped, nil},
+		"failing":            {`"failing"`, PoolRebuildStateFailing, nil},
+		"failed":             {`"failed"`, PoolRebuildStateFailed, nil},
+		"uppercase idle":     {`"IDLE"`, PoolRebuildStateIdle, nil},
+		"uppercase busy":     {`"BUSY"`, PoolRebuildStateBusy, nil},
+		"uppercase done":     {`"DONE"`, PoolRebuildStateDone, nil},
+		"uppercase stopping": {`"STOPPING"`, PoolRebuildStateStopping, nil},
+		"uppercase stopped":  {`"STOPPED"`, PoolRebuildStateStopped, nil},
+		"uppercase failing":  {`"FAILING"`, PoolRebuildStateFailing, nil},
+		"uppercase failed":   {`"FAILED"`, PoolRebuildStateFailed, nil},
+		"mixed case stopped": {`"StOpPeD"`, PoolRebuildStateStopped, nil},
+		"invalid":            {`"invalid"`, PoolRebuildState(0), errors.New("failed to unmarshal")},
+		"empty":              {`""`, PoolRebuildState(0), errors.New("failed to unmarshal")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var gotState PoolRebuildState
+			gotErr := gotState.UnmarshalJSON([]byte(tc.json))
+
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expState, gotState, "unexpected state")
 		})
 	}
 }
