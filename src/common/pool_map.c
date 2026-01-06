@@ -1999,6 +1999,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 	struct pool_domain	*tmp;
 	int			 i;
 
+	D_ASSERT(map != NULL);
 	if (pool_map_empty(map)) {
 		D_ERROR("Uninitialized pool map\n");
 		return 0;
@@ -2051,6 +2052,7 @@ int
 pool_map_find_ranks(struct pool_map *map, uint32_t id,
 		    struct pool_domain **domain_pp)
 {
+	D_ASSERT(map != NULL);
 	return pool_map_find_domain(map, PO_COMP_TP_RANK, id,
 				    domain_pp);
 }
@@ -2109,6 +2111,7 @@ pool_map_find_dom_by_rank(struct pool_map *map, uint32_t rank)
 	int			doms_cnt;
 	int			i;
 
+	D_ASSERT(map != NULL);
 	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
 	if (doms_cnt <= 0)
 		return NULL;
@@ -2191,6 +2194,7 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 {
 	struct pool_domain	*dom;
 
+	D_ASSERT(map != NULL);
 	dom = pool_map_find_dom_by_rank(map, rank);
 	if (dom == NULL)
 		return 0;

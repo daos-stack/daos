@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -121,8 +122,10 @@ struct daos_rebuild_status {
 		int32_t		rs_state;
 		int32_t		rs_done;
 	};
+	/** Maximum supported layout version */
+	uint16_t                rs_max_supported_layout_ver;
 	/** padding of rebuild status */
-	int32_t			rs_padding32;
+	int16_t                 rs_padding16;
 
 	/** Failure on which rank */
 	int32_t			rs_fail_rank;
@@ -164,6 +167,8 @@ enum daos_pool_info_bit {
 	DPI_ENGINES_DISABLED = 1ULL << 3,
 	/** true to include (in \a ranks) engines marked DEAD by SWIM. */
 	DPI_ENGINES_DEAD = 1ULL << 4,
+	/** true to query pool's maximum supported rebuild layout version */
+	DPI_REBUILD_MAX_LAYOUT_VER = 1ULL << 5,
 	/** query all above optional info */
 	DPI_ALL = -1,
 };

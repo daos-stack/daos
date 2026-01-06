@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1198,44 +1199,63 @@ tx_known_committed(struct wal_super_info *si, uint64_t tx_id)
 	return (wal_id_cmp(si, tx_id, si->si_commit_id) <= 0);
 }
 
+static inline void
+dump_tx_hdr(struct wal_super_info *si, struct wal_trans_head *hdr)
+{
+	D_ERROR("[WAL header] ckp_id:" DF_U64 "/%u, commit_id:" DF_U64 "/%u\n", si->si_ckp_id,
+		si->si_ckp_blks, si->si_commit_id, si->si_commit_blks);
+	D_ERROR("[TX header] magic:%x, gen:%u, id:" DF_U64 ", ents:%u, payload:%u\n", hdr->th_magic,
+		hdr->th_gen, hdr->th_id, hdr->th_tot_ents, hdr->th_tot_payload);
+}
+
 static int
 verify_tx_hdr(struct wal_super_info *si, struct wal_trans_head *hdr, uint64_t tx_id)
 {
 	bool	committed = tx_known_committed(si, tx_id);
+	int     rc        = 0;
 
 	if (hdr->th_magic != WAL_HDR_MAGIC) {
 		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Mismatched WAL head magic, %x != %x\n",
 			 hdr->th_magic, WAL_HDR_MAGIC);
-		return committed ? -DER_INVAL : 1;
+		rc = committed ? -DER_INVAL : 1;
+		goto out;
 	}
 
 	if (hdr->th_gen != si->si_header.wh_gen) {
 		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Mismatched WAL generation, %u != %u\n",
 			 hdr->th_gen, si->si_header.wh_gen);
-		return committed ? -DER_INVAL : 1;
+		rc = committed ? -DER_INVAL : 1;
+		goto out;
 	}
 
 	if (id2seq(hdr->th_id) < id2seq(tx_id)) {
 		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Stale sequence number detected, %u < %u\n",
 			 id2seq(hdr->th_id), id2seq(tx_id));
-		return committed ? -DER_INVAL : 1;
+		rc = committed ? -DER_INVAL : 1;
+		goto out;
 	} else if (id2seq(hdr->th_id) > id2seq(tx_id)) {
 		D_ERROR("Invalid sequence number detected, %u > %u\n",
 			id2seq(hdr->th_id), id2seq(tx_id));
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 	if (hdr->th_id != tx_id) {
 		D_ERROR("Mismatched transaction ID. "DF_U64" != "DF_U64"\n", hdr->th_id, tx_id);
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 	if (hdr->th_tot_ents == 0) {
 		D_ERROR("Invalid entry number\n");
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		goto out;
 	}
+out:
+	if (rc < 0)
+		dump_tx_hdr(si, hdr);
 
-	return 0;
+	return rc;
 }
 
 static int
@@ -1795,7 +1815,7 @@ out:
 			wrs->wrs_tx_cnt = total_tx;
 		}
 	} else {
-		D_ERROR("WAL replay failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "WAL replay failed, nr_replayed:%u", nr_replayed);
 	}
 
 	D_FREE(dbuf);
@@ -1841,19 +1861,21 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	unmap_start = id2off(wal_next_id(si, si->si_ckp_id, si->si_ckp_blks));
 	unmap_end = id2off(wal_next_id(si, tx_id, blk_desc.bd_blks));
 
-	/* Unmap the checkpointed regions */
-	rc = unmap_wal(mc, unmap_start, unmap_end, purged_blks);
-	if (rc)	/* Flush the WAL header anyway */
-		D_ERROR("Unmap checkpointed region failed. "DF_RC"\n", DP_RC(rc));
-
 	si->si_ckp_id = tx_id;
 	si->si_ckp_blks = blk_desc.bd_blks;
-	wakeup_reserve_waiters(si, false);
-
 	/* Flush the WAL header */
 	rc = bio_wal_flush_header(mc);
-	if (rc)
-		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));
+	if (rc) {
+		DL_ERROR(rc, "Flush WAL header failed.");
+		goto out;
+	}
+
+	/* Unmap the checkpointed region */
+	rc = unmap_wal(mc, unmap_start, unmap_end, purged_blks);
+	if (rc) /* Wakeup waiters even if unmap failed */
+		DL_ERROR(rc, "Unmap checkpointed region failed.");
+
+	wakeup_reserve_waiters(si, false);
 out:
 	D_FREE(buf);
 	return rc;

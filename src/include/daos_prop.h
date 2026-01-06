@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -141,6 +142,8 @@ enum daos_pool_props {
 	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
 	DAOS_PROP_PO_MAX,
 };
+
+#define DAOS_PROP_PO_NUM                (DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
 
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)

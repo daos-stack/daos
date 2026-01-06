@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,7 +27,7 @@ import (
 
 func mockEvtEngineDied(t *testing.T) *events.RASEvent {
 	t.Helper()
-	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
+	return events.NewEngineDiedEvent("foo", 0, 0, 123, common.NormalExit, 1234)
 }
 
 func TestControl_eventNotify(t *testing.T) {
@@ -194,7 +195,7 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 			expShouldLog:       false,
 			expShouldLogSyslog: true,
 			expSyslogOut: `
-prio27 id: [engine_died] ts: [%s] host: [foo] type: [STATE_CHANGE] sev: [ERROR] msg: [DAOS engine 0 exited unexpectedly: process exited with 0] pid: [1234] rank: [0]
+prio27 id: [engine_died] ts: [%s] host: [foo] type: [STATE_CHANGE] sev: [ERROR] msg: [DAOS engine 0 exited unexpectedly: process exited with 0] pid: [1234] rank: [0] incarnation: [123]
 `,
 		},
 	} {

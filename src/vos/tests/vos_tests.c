@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -89,6 +90,8 @@ run_all_tests(int keys)
 	failed += run_ilog_tests(cfg_desc_io);
 	failed += run_csum_extent_tests(cfg_desc_io);
 	failed += run_wal_tests(cfg_desc_io);
+	failed += run_evtree_tests(cfg_desc_io);
+	failed += run_tree_tests(cfg_desc_io);
 
 	failed += run_io_test(&type_list[0], ARRAY_SIZE(type_list), keys, cfg_desc_io);
 

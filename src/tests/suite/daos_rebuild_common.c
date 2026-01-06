@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -624,19 +625,24 @@ void make_buffer(char *buffer, char start, int total)
 static void
 write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 {
-	char		key[32];
-	daos_recx_t	recx;
-	int		i;
-	char		single_data[LARGE_SINGLE_VALUE_SIZE];
+	char        key[32];
+	daos_recx_t recx;
+	int         small_size = 5;
+	int         i;
+	char       *single_data;
+
+	assert_true(small_size <= size);
+
+	D_ALLOC(single_data, LARGE_SINGLE_VALUE_SIZE);
+	assert_non_null(single_data);
 
 	for (i = 0; i < KEY_NR; i++) {
 		req->iod_type = DAOS_IOD_ARRAY;
 
 		sprintf(key, "dkey_small_%d", index);
-		recx.rx_nr = 5;
+		recx.rx_nr  = small_size;
 		recx.rx_idx = off + i * 10485760;
-		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
-			     data, size, req);
+		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1, data, small_size, req);
 
 		sprintf(key, "dkey_%d", index);
 		recx.rx_nr = size;
@@ -658,6 +664,8 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 		insert_single(key, "a_key", 0, single_data,
 			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, req);
 	}
+
+	D_FREE(single_data);
 }
 
 static void

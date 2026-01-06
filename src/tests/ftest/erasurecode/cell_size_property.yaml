@@ -26,17 +26,14 @@ server_config:
 pool:
   control_method: dmg
   size: 93%
-  cell_size: !mux
-    cell_size_4K:
-      properties: ec_cell_sz:4096
-    cell_size_64K:
-      properties: ec_cell_sz:65536
-    cell_size_111K:
-      properties: ec_cell_sz:131072
+  cell_sizes:
+    - 4096
+    - 65536
+    - 131072
 container:
   type: POSIX
   control_method: daos
-  cont_cell_size:
+  cell_sizes:
     - 4096
     - 65536
     - 131072
@@ -45,12 +42,10 @@ ior:
   api: "DFS"
   client_processes:
     np: 48
-  dfs_destroy: False
   iorflags:
     flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile
-  repetitions: 1
-  ior_transfer_size:
+  transfer_sizes:
     - 8M
     - 4K
   block_size: 64M

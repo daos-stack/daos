@@ -415,7 +415,7 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2001
     if [ ${#inst_rpms[@]} -gt 0 ]; then
-        if ! retry_dnf 360 install "${inst_rpms[@]/%/${DAOS_VERSION:-}}"; then
+        if ! retry_dnf 360 install "${inst_rpms[@]/%/${DAOS_VERSION:-}}" --setopt=allow_vendor_change=True; then
             rc=${PIPESTATUS[0]}
             dump_repos
             echo "Failed to install packages"

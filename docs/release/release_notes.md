@@ -2,6 +2,67 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
+## DAOS Version 2.6.4 (2025-10-29)
+
+The DAOS 2.6.4 release includes the daos-2.6.4-7 RPM packages and their prerequisites.
+It contains the following updates on top of DAOS 2.6.3:
+
+* Libfabric has been updated to version 1.20.0.
+* Mercury has been upgraded to version 2.4.0-7.
+* Argobots has been upgraded to version 1.2-3.
+* Libisal has been upgraded to version 2.31.1-7.
+* pmemobj has been upgraded to version 2.1.0-6.
+
+### Bug fixes and improvements
+
+This release includes fixes and improvements, including:
+
+* Avoid potential races between rebuild and EC aggregation by serializing these two operations;
+  this prevents inconsistencies between data and parity.
+* Store EC aggregation epoch in RDB so the rebuild system retains the value after system restart.
+* Add two new DFUSE options: --dump-handles to dump pool, container, and DFS handles when mounting
+  dfuse on a client. Other clients can use the dumped information to mount dfuse by using the
+  --read-handles option. This mechanism uses the local2global and global2local to serialize and
+  share handles from a root process to other processes.
+* Correct how the JCH placement algorithm invokes CRC functions and improve data balancing.
+* Fixes for EC object consistency verification so it can detect inconsistencies between data
+  and parity.
+* Merge small or fragmented buffers on the client side to reduce IOV count and mitigate resource
+  exhaustion during network bulk transfers.
+* Enable EC\_xP3 and use EC\_xP3 for automatic object-class selection.
+* Fix a bug in the rebuild system related to waking up throttled ULTs, improving rebuild
+  performance.
+* Fix pool/container handle behavior after fork.
+* Multiple fixes for DTX background services to avoid orphan DTX entries and inconsistent DTX
+  participant states caused by intermittent network failures.
+* Workaround for SPDK AMD IOMMU support.
+* Fix a race condition between fetch and aggregation that could cause degraded fetch to return
+  an incorrect view of data.
+* Reset the DTX base UUID after fork to avoid parent and child processes generating identical
+  DTX IDs.
+* Fix a race between DTX refresh and abort that could leave a transaction in an unexpected state.
+* Multiple fixes for EC degraded fetch of single values.
+* Fix size queries for array values protected by erasure coding.
+* Allow modification of a pool's redundancy factor on existing pools.
+* Fix a race between DTX aggregation and container close that could cause an assertion failure.
+* Multiple fixes in the rebuild system to prevent rebuild hangs on unstable networks.
+* Increase the retry delay for collective RPCs to avoid generating large bursts of network traffic.
+* Set the DFS chunk size on container creation (if not set by the caller) to a multiple of the full
+  EC stripe length to avoid misalignment. This ensures that the default DFS chunk size does not
+  create partial stripe updates if the IO size is full stripe. This auto setting works for
+  containers created with rd_fac 1 or 2. EC for rd_fac 3 was newly added and missed in this
+  optimization so users would have to set the chunk-size manually for that. This will be fixed next
+  release.
+* Remove the separate RPM build for raft.
+* Add a new environment variable, D\_QUOTA\_BULKS. When enabled, it limits the number of active
+  Mercury bulk allocations by postponing those that exceed the limit.
+* DMG's exclude, drain, and reintegrate operations accept --ranks or --rank-hosts in ranged
+  format, allowing the same operation to be applied to those ranks across all pools they belong to.
+* Ensure server-side verification does not cause a target to be disabled because of checksum
+  errors that are unrelated to the device.
+* Avoid returning non-retryable errors to clients when an SSD is marked FAULTY, allowing
+  applications to continue accessing data in degraded mode.
+
 ## DAOS Version 2.6.3 (2025-03-26)
 
 The DAOS 2.6.3 release includes the daos-2.6.3-4 RPM packages and its prerequisites.

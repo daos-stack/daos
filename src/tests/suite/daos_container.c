@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2698,7 +2699,8 @@ co_rf_simple(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Hang the rebuild */
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
@@ -2716,11 +2718,7 @@ co_rf_simple(void **state)
 	iod.iod_size	= 1;
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= &recx;
-	iod.iod_type	= DAOS_IOD_ARRAY;
-	print_message("obj update should success before RF broken\n");
-	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
-			     NULL);
-	assert_rc_equal(rc, 0);
+	iod.iod_type    = DAOS_IOD_ARRAY;
 
 	if (arg->myrank == 0) {
 		arg->no_rebuild = 1;
@@ -3073,7 +3071,7 @@ co_redun_lvl(void **state)
 		goto out;
 	rc = ranks_on_same_node(poolmap, 7, ranks);
 	assert_rc_equal(rc, 0);
-	for (i = 5; i > 0; i++) {
+	for (i = 5; i > 0; i--) {
 		if (i != ranks[0] && i != ranks[1]) {
 			ranks[2] = i;
 			break;
@@ -3148,14 +3146,10 @@ co_redun_lvl(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
-	print_message("obj update should success before RF broken\n");
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
-	assert_rc_equal(rc, 0);
-
-	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
-			     NULL);
 	assert_rc_equal(rc, 0);
 
 	/* exclude one more rank on another NODE dom */

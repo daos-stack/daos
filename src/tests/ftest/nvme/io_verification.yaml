@@ -21,19 +21,15 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool:
-  ior_sequence_pool_qty: 4
-  pool_0:
-    control_method: dmg
-    size: 20%
-  pool_1:
-    control_method: dmg
-    size: 30%
-  pool_2:
-    control_method: dmg
-    size: 50%
-  pool_3:
-    control_method: dmg
-    size: 60%
+  num_pools: 4
+pool_0:
+  size: 20%
+pool_1:
+  size: 30%
+pool_2:
+  size: 50%
+pool_3:
+  size: 60%
 container:
   type: POSIX
   control_method: daos

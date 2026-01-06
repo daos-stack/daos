@@ -764,7 +764,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if (rc == -DER_TIMEDOUT &&
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -1415,13 +1415,14 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			    daos_epoch_t update_eph,
 			    uint32_t flags, struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t		 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
-	daos_handle_t		 ioh;
-	int			 rc, rc1, i, sgl_cnt = 0;
-	d_iov_t			csum_iov = {0};
-	struct daos_csummer	*csummer = NULL;
-	struct dcs_iod_csums	*iod_csums = NULL;
-	d_iov_t			*p_csum_iov = NULL;
+	d_sg_list_t           sgls[OBJ_ENUM_UNPACK_MAX_IODS];
+	daos_handle_t         ioh;
+	int                   sgl_cnt    = 0;
+	d_iov_t               csum_iov   = {0};
+	struct daos_csummer  *csummer    = NULL;
+	struct dcs_iod_csums *iod_csums  = NULL;
+	d_iov_t              *p_csum_iov = NULL;
+	int                   rc, rc1, i;
 
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
@@ -1920,9 +1921,7 @@ migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx, bool *yielded)
 		D_DEBUG(DB_REBUILD, "tgt%d:%u max %u\n",
 			tgt_idx, tgt_cnt, tls->mpt_inflight_max_ult / dss_tgt_nr);
 		*yielded = true;
-		ABT_mutex_lock(tls->mpt_inflight_mutex);
-		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
-		ABT_mutex_unlock(tls->mpt_inflight_mutex);
+		dss_sleep(0);
 		if (tls->mpt_fini)
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 
@@ -1962,29 +1961,6 @@ out:
 }
 
 static void
-migrate_system_try_wakeup(struct migrate_pool_tls *tls)
-{
-	bool wakeup = false;
-	int i;
-
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	for (i = 0; i < dss_tgt_nr; i++) {
-		uint32_t total_cnt;
-
-		total_cnt = atomic_load(&tls->mpt_obj_ult_cnts[i]) +
-			    atomic_load(&tls->mpt_dkey_ult_cnts[i]);
-		if (tls->mpt_inflight_max_ult / dss_tgt_nr > total_cnt)
-			wakeup = true;
-	}
-
-	if (wakeup) {
-		ABT_mutex_lock(tls->mpt_inflight_mutex);
-		ABT_cond_broadcast(tls->mpt_inflight_cond);
-		ABT_mutex_unlock(tls->mpt_inflight_mutex);
-	}
-}
-
-static void
 migrate_system_exit(struct migrate_pool_tls *tls, unsigned int tgt_idx)
 {
 	/* NB: this will only be called during errr handling. In normal case
@@ -1992,7 +1968,6 @@ migrate_system_exit(struct migrate_pool_tls *tls, unsigned int tgt_idx)
 	 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	atomic_fetch_sub(&tls->mpt_obj_ult_cnts[tgt_idx], 1);
-	migrate_system_try_wakeup(tls);
 }
 
 static void
@@ -2081,8 +2056,13 @@ migrate_one_ult(void *arg)
 	 *   (nonexistent)
 	 * This is just a workaround...
 	 */
-	if (rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0)
+	if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
+		DL_ERROR(rc, DF_RB ": " DF_UOID " rebuild failed, set mpt_fini for tgt %d.",
+			 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), dss_get_module_info()->dmi_tgt_id);
 		tls->mpt_status = rc;
+		D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
+		tls->mpt_fini = 1;
+	}
 out:
 	migrate_one_destroy(mrone);
 	if (tls != NULL) {
@@ -2843,6 +2823,14 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 			DP_KEY(&mrone->mo_dkey), arg->tgt_idx,
 			mrone->mo_iod_num);
 
+		if (tls->mpt_status != 0) {
+			DL_ERROR(tls->mpt_status, DF_RB ": " DF_UOID " rebuild failed already",
+				 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid));
+			d_list_del_init(&mrone->mo_list);
+			migrate_one_destroy(mrone);
+			continue;
+		}
+
 		rc = migrate_tgt_enter(tls);
 		if (rc)
 			break;
@@ -2891,6 +2879,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	uint32_t		 minimum_nr;
 	uint32_t		 enum_flags;
 	uint32_t		 num;
+	int                       waited = 0;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
@@ -3054,7 +3043,10 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
 			 * aggregation yet, so let's retry.
 			 */
-			D_DEBUG(DB_REBUILD, DF_UOID "retry with %d \n", DP_UOID(arg->oid), rc);
+			waited++;
+			dss_sleep(5000);
+			D_DEBUG(DB_REBUILD, DF_UOID "retry %d secs with %d \n", DP_UOID(arg->oid),
+				waited * 5, rc);
 			rc = 0;
 			continue;
 		} else if (rc) {
@@ -3153,6 +3145,7 @@ migrate_fini_one_ult(void *data)
 	if (tls == NULL)
 		return 0;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
@@ -3183,6 +3176,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	struct migrate_stop_arg arg;
 	int			 rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	if (tls == NULL || tls->mpt_fini) {
 		if (tls != NULL)
@@ -3927,7 +3921,6 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	if (dms != NULL)
 		*dms = arg.dms;
 
-	migrate_system_try_wakeup(tls);
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u migrating=%s,"
 		" obj_count="DF_U64", rec_count="DF_U64
 		" size="DF_U64" ult cnt %u status %d\n",

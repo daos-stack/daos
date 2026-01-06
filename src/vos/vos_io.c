@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1007,11 +1008,41 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			holes += lo - index;
 		}
 
-		/* Hole extent, with_shadow case only used for EC obj */
-		if (bio_addr_is_hole(&ent->en_addr) ||
-		    (with_shadow && (ent->en_epoch < shadow_ep))) {
+		if ((with_shadow && (ent->en_epoch < shadow_ep))) {
 			index = lo + nr;
 			holes += nr;
+			continue;
+		}
+
+		/* Hole extent, with_shadow case only used for EC obj */
+		if (bio_addr_is_hole(&ent->en_addr)) {
+			if (with_shadow) {
+				if (holes != 0) {
+					/* process the prev hole */
+					rc = save_recx(ioc, lo - holes, holes, shadow_ep, inob,
+						       DRT_SHADOW);
+					if (rc != 0)
+						goto failed;
+					biov_set_hole(&biov, holes * inob);
+					/* skip the hole */
+					rc = iod_fetch(ioc, &biov);
+					if (rc != 0)
+						goto failed;
+					holes = 0;
+				}
+				/* process this punch ext, for degraded fetch just skip it */
+				index = lo + nr;
+				holes = nr;
+				biov_set_hole(&biov, holes * inob);
+				/* skip the hole */
+				rc = iod_fetch(ioc, &biov);
+				if (rc != 0)
+					goto failed;
+				holes = 0;
+			} else {
+				index = lo + nr;
+				holes += nr;
+			}
 			continue;
 		}
 

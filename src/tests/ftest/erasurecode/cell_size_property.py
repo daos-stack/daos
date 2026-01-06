@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -50,43 +51,46 @@ class EcodCellSizeProperty(IorTestBase):
         :avocado: tags=ec,ec_ior,daos_cmd
         :avocado: tags=EcodCellSizeProperty,ec_cell_property,test_ec_pool_property
         """
-        ior_transfer_size = self.params.get("ior_transfer_size",
-                                            '/run/ior/iorflags/*')
-        cont_cell_size = self.params.get("cont_cell_size",
-                                         '/run/container/*')
-        # Create the pool
-        self.add_pool()
+        pool_cell_sizes = self.params.get("cell_sizes", "/run/pool/*")
+        cont_cell_sizes = self.params.get("cell_sizes", "/run/container/*")
+        ior_transfer_sizes = self.params.get("transfer_sizes", "/run/ior/*")
 
-        # Verify pool EC cell size
-        pool_prop_expected = int(self.pool.properties.value.split(":")[1])
-        self.assertEqual(pool_prop_expected,
-                         self.pool.get_property("ec_cell_sz"))
+        for pool_cell_size in pool_cell_sizes:
+            # Create the pool
+            self.pool = self.get_pool(properties=f"ec_cell_sz:{pool_cell_size}")
 
-        # Run IOR for different Transfer size and container cell size.
-        for tx_size, cont_cell in product(ior_transfer_size,
-                                          cont_cell_size):
-            # Initial container
-            self.add_container(self.pool, create=False)
+            # Verify pool EC cell size
+            pool_prop_expected = int(self.pool.properties.value.split(":")[1])
+            self.assertEqual(
+                pool_prop_expected, self.pool.get_property("ec_cell_sz"),
+                "pool get-prop ec_cell_sz does not match set property")
 
-            # Use the default pool property for container and do not update
-            if cont_cell != pool_prop_expected:
-                self.container.properties.update("ec_cell_sz:{}"
-                                                 .format(cont_cell))
+            # Run IOR for different Transfer size and container cell size.
+            for tx_size, cont_cell in product(ior_transfer_sizes, cont_cell_sizes):
+                # Initial container
+                self.add_container(self.pool, create=False)
 
-            # Create the container and open handle
-            self.container.create()
-            self.container.open()
+                # Use the default pool property for container and do not update
+                if cont_cell != pool_prop_expected:
+                    self.container.properties.update(f"ec_cell_sz:{cont_cell}")
 
-            # Verify container EC cell size property
-            self.verify_cont_ec_cell_size(cont_cell)
+                # Create the container and open handle
+                self.container.create()
+                self.container.open()
 
-            # Update IOR Command and Run
-            self.update_ior_cmd_with_pool(create_cont=False)
-            self.ior_cmd.transfer_size.update(tx_size)
-            self.run_ior_with_pool(create_pool=False, create_cont=False)
+                # Verify container EC cell size property
+                self.verify_cont_ec_cell_size(cont_cell)
 
-            # Verify container EC cell size property after IOR
-            self.verify_cont_ec_cell_size(cont_cell)
+                # Update IOR Command and Run
+                self.update_ior_cmd_with_pool(create_cont=False)
+                self.ior_cmd.transfer_size.update(tx_size)
+                self.run_ior_with_pool(create_pool=False, create_cont=False)
 
-            # Destroy the container.
-            self.container.destroy()
+                # Verify container EC cell size property after IOR
+                self.verify_cont_ec_cell_size(cont_cell)
+
+                # Destroy the container.
+                self.container.destroy()
+
+            # Destroy the pool
+            self.pool.destroy()

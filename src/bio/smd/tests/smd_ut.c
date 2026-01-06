@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2025 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -159,7 +160,7 @@ db_traverse(struct sys_db *db, char *table, sys_db_trav_cb_t cb, void *args)
 		d_iov_t		key;
 
 		d_iov_set(&key, chain->uc_key, chain->uc_key_size);
-		cb(db, table, &key, args);
+		cb(db, table, &key, args, NULL);
 	}
 	return 0;
 }

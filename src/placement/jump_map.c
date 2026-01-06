@@ -1,6 +1,7 @@
 /**
  *
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,7 +47,7 @@ jm_obj_placement_fini(struct jm_obj_placement *jmop)
 #define LOCAL_PD_ARRAY_SIZE	(4)
 static int
 jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_domain *root,
-	       struct jm_obj_placement *jmop)
+	       struct jm_obj_placement *jmop, uint32_t layout_ver)
 {
 	struct pool_domain	*pds, *pd;
 	uint8_t			*pd_used = NULL;
@@ -114,9 +115,9 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	}
 
 	oid = md->omd_id;
-	key = oid.hi ^ oid.lo;
+	key = jm_oid_hash(layout_ver, oid);
 	for (i = 0; i < jmop->jmop_pd_nr; i++) {
-		key = crc(key, i);
+		key         = (layout_ver <= 1) ? crc(key, i) : jm_crc(key, i, 0xcafebabe);
 		selected_pd = d_hash_jump(key, jmap->jmp_pd_nr);
 		do {
 			selected_pd = selected_pd % jmap->jmp_pd_nr;
@@ -242,8 +243,8 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
  */
 static int
 jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
-		      struct daos_obj_shard_md *shard_md,
-		      struct jm_obj_placement *jmop)
+		      struct daos_obj_shard_md *shard_md, struct jm_obj_placement *jmop,
+		      uint32_t layout_ver)
 {
 	struct daos_oclass_attr *oc_attr;
 	struct pool_domain      *root;
@@ -305,7 +306,7 @@ jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	D_ASSERT(jmop->jmop_grp_nr > 0);
 	D_ASSERT(jmop->jmop_grp_size > 0);
 
-	rc = jm_obj_pd_init(jmap, md, root, jmop);
+	rc = jm_obj_pd_init(jmap, md, root, jmop, layout_ver);
 	if (rc == 0)
 		D_DEBUG(DB_PL, "obj="DF_OID"/ grp_size=%u grp_nr=%d, pd_nr=%u pd_grp_size=%u\n",
 			DP_OID(oid), jmop->jmop_grp_size, jmop->jmop_grp_nr,
@@ -404,7 +405,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 	current = remap_list->next;
 	spare_tgt = NULL;
 	oid = md->omd_id;
-	key = oid.hi ^ oid.lo;
+	key         = jm_oid_hash(layout_ver, oid);
 	spares_left = count_available_spares(jmap, layout, failed_in_layout);
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
@@ -435,13 +436,16 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			dgu = f_shard->fs_data;
 
 			D_ASSERT(dgu != NULL);
-			rebuild_key = crc(key, f_shard->fs_shard_idx);
+			if (layout_ver <= 1)
+				rebuild_key = crc(key, crc(key, f_shard->fs_shard_idx));
+			else /* hash OID differently so we don't land to the same target */
+				rebuild_key = jm_crc(oid.lo, oid.hi, 0xDead2Bad);
+
 			curr_pd = jm_obj_shard_pd(jmop, shard_id);
-			get_target(root, curr_pd, layout_ver, &spare_tgt, &spare_dom,
-				   crc(key, rebuild_key), dom_used, dom_full,
-				   dgu->dgu_used, dgu->dgu_real, tgts_used,
-				   shard_id, allow_version, gen_mode, fdom_lvl,
-				   jmop->jmop_grp_size, &spares_left, &spare_avail);
+			get_target(root, curr_pd, layout_ver, &spare_tgt, &spare_dom, rebuild_key,
+				   dom_used, dom_full, dgu->dgu_used, dgu->dgu_real, tgts_used,
+				   shard_id, allow_version, gen_mode, fdom_lvl, jmop->jmop_grp_size,
+				   &spares_left, &spare_avail);
 			if (layout_ver > 0) {
 				/*
 				 * After 2.4 (layout_ver > 0), it will always assign each shard
@@ -644,7 +648,8 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	oid = md->omd_id;
-	key = oid.hi ^ oid.lo;
+	key = jm_oid_hash(layout_ver, oid);
+
 	if (daos_obj_is_srank(oid))
 		spec_oid = true;
 
@@ -1012,7 +1017,7 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 	D_DEBUG(DB_PL, "Determining location for object: "DF_OID", ver: %d, pda %u\n",
 		DP_OID(oid), md->omd_ver, md->omd_pda);
 
-	rc = jm_obj_placement_init(jmap, md, shard_md, &jmop);
+	rc = jm_obj_placement_init(jmap, md, shard_md, &jmop, layout_version);
 	if (rc) {
 		D_ERROR("jm_obj_placement_init failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -1115,7 +1120,7 @@ jump_map_obj_find_diff(struct pl_map *map, uint32_t layout_ver, struct daos_obj_
 	}
 
 	jmap = pl_map2jmap(map);
-	rc = jm_obj_placement_init(jmap, md, shard_md, &jop);
+	rc   = jm_obj_placement_init(jmap, md, shard_md, &jop, layout_ver);
 	if (rc) {
 		D_ERROR("jm_obj_placement_init failed, rc %d.\n", rc);
 		return rc;

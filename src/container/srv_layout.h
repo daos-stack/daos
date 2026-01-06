@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -137,6 +138,7 @@ extern d_iov_t ds_cont_prop_co_md_times;	/* co_md_times */
 extern d_iov_t ds_cont_prop_cont_obj_version;	/* uint32_t */
 extern d_iov_t ds_cont_prop_nhandles;		/* uint32_t */
 extern d_iov_t ds_cont_prop_oit_oids;		/* snapshot OIT OID KVS */
+extern d_iov_t ds_cont_prop_ec_agg_eph;         /* uint64_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 struct co_md_times {

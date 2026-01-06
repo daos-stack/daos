@@ -197,16 +197,13 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 	if (!d_rank_list_identical(pg_targets, targets)) {
 		char *pg_str, *tgt_str;
 
-		pg_str = d_rank_list_to_str(pg_ranks);
-		if (pg_str == NULL) {
-			rc = -DER_NOMEM;
+		rc = d_rank_list_to_str(pg_ranks, &pg_str);
+		if (rc != 0)
 			D_GOTO(out, rc);
-		}
 
-		tgt_str = d_rank_list_to_str(targets);
-		if (tgt_str == NULL) {
+		rc = d_rank_list_to_str(targets, &tgt_str);
+		if (rc != 0) {
 			D_FREE(pg_str);
-			rc = -DER_NOMEM;
 			D_GOTO(out, rc);
 		}
 
@@ -399,6 +396,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  *					   Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
  *					   The caller must free the list with d_rank_list_free().
  * \param[out]		dead_ranks	   Optional, returned storage ranks marked DEAD by SWIM.
+ * \param[in]		deadline	   Unix time deadline in milliseconds
  * \param[in][out]	pool_info	   Query results
  * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
@@ -409,7 +407,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info,
+		   d_rank_list_t **dead_ranks, uint64_t deadline, daos_pool_info_t *pool_info,
 		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
 {
 	if (pool_info == NULL) {
@@ -419,8 +417,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), ranks,
-				  dead_ranks, pool_info, pool_layout_ver, upgrade_layout_ver);
+	return dsc_pool_svc_query(pool_uuid, svc_ranks, deadline, ranks, dead_ranks, pool_info,
+				  pool_layout_ver, upgrade_layout_ver);
 }
 
 /**
@@ -602,7 +600,13 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	int              rc;
 
 	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
-		D_ERROR("invalid property list\n");
+		D_ERROR("no properties in prop list\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (!daos_prop_valid(prop, true, true)) {
+		D_ERROR("invalid properties\n");
 		rc = -DER_INVAL;
 		goto out;
 	}

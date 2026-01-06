@@ -118,7 +118,7 @@ setup(void)
 	bool start = true;
 
 	if (!engine_in_check()) {
-		d_getenv_bool("DAOS_START_POOL_SVC", &start);
+		d_getenv_bool("DAOS_START_POOLS", &start);
 		if (start)
 			return ds_pool_start_all();
 	}

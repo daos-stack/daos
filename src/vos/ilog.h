@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -318,5 +319,19 @@ ilog_is_punch(const struct ilog_entry *entry)
 	return entry->ie_id.id_punch_minor_eph >
 		entry->ie_id.id_update_minor_eph;
 }
+
+/** Validate the provided ilog.
+ *
+ * Note: It is designed for catastrophic recovery. Not to perform at run-time.
+ *
+ * \param	umm[in]		unified memory class instance
+ * \param	rec[in]		offset of the ilog
+ * \param	dtx_lid[in]	expected local DTX id
+ * \param	epoch[in]	expected epoch
+ *
+ * \return true if ilog is valid.
+ **/
+bool
+ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch);
 
 #endif /* __ILOG_H__ */

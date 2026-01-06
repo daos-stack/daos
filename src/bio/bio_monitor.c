@@ -680,7 +680,8 @@ out:
 static bool
 is_bbs_faulty(struct bio_blobstore *bbs)
 {
-	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
+	struct bio_dev_health *bdh       = &bbs->bb_dev_health;
+	struct nvme_stats     *dev_stats = &bdh->bdh_health_state;
 
 	/*
 	 * Used for DAOS NVMe Recovery Tests. Will trigger bs faulty reaction
@@ -706,6 +707,12 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 				dev_stats->bio_write_errs);
 			return true;
 		}
+	}
+
+	/* Auto-faulty for stalled I/O stalled is always enabled */
+	if (bdh->bdh_io_stalled) {
+		D_ERROR("I/O stalled on NVMe device " DF_UUID "\n", DP_UUID(bbs->bb_dev->bb_uuid));
+		return true;
 	}
 
 	if (!glb_criteria.fc_enabled)
