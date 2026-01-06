@@ -5,7 +5,7 @@
 /* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -1350,7 +1350,7 @@ pipeline {
                                                                 deps_build: false,
                                                                 parallel_build: true) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg REPOS="' + daosRepos() + '"' +
                                                 code_coverage_build_args()
                         }
                     }

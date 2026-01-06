@@ -29,7 +29,7 @@ bullshtml_tar="bullshtml_${bullshtml_vers}.tar.gz"
 if [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
     export https_proxy="${DAOS_HTTPS_PROXY}"
 fi
-sudo apt-get install -y wget
+sudo dnf install -y wget
 wget "${bullshtml_src}/${bullshtml_tar}"
 tar --strip-components=1 -xf "${bullshtml_tar}"
 exit 0
