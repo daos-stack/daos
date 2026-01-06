@@ -38,7 +38,7 @@ TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos"
 list_files files "test.cov"
 append_install_list "${files[@]}"
 
-readarray -t file_list < <("${SL_BULLSEYE_PREFIX}/bin/covmgr" -l)
+readarray -t file_list < <("${SL_BULLSEYE_PREFIX}/bin/covmgr" -l --file test.cov)
 for dir in "${file_list[@]}"; do
   list_files files "${dir_file}"
   append_install_list "${files[@]}"
