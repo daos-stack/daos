@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -958,53 +958,63 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		char                        sbuf[RBLD_SBUF_LEN];
 		double                      now;
 		char                       *str;
-		d_rank_list_t               excluded      = {0};
+		d_rank_list_t               rank_list     = {0};
 		bool                        rebuild_abort = false;
 		int                         i;
 
+		now = ABT_get_wtime();
 		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = map_ranks_init(pool->sp_map,
-				    PO_COMP_ST_UP | PO_COMP_ST_DOWN |
-				    PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW,
-				    &excluded);
+				    PO_COMP_ST_UP | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
+					PO_COMP_ST_NEW,
+				    &rank_list);
 		if (rc != 0) {
 			D_INFO(DF_RB ": get rank list: %d\n", DP_RB_RGT(rgt), rc);
 			ABT_rwlock_unlock(pool->sp_lock);
 			goto sleep;
 		}
 
-		for (i = 0; i < excluded.rl_nr; i++) {
+		for (i = 0; i < rank_list.rl_nr; i++) {
 			struct pool_domain *dom;
 
-			dom = pool_map_find_dom_by_rank(pool->sp_map, excluded.rl_ranks[i]);
+			dom = pool_map_find_dom_by_rank(pool->sp_map, rank_list.rl_ranks[i]);
 			D_ASSERT(dom != NULL);
 
 			if (rgt->rgt_opc == RB_OP_REBUILD) {
 				if (dom->do_comp.co_status == PO_COMP_ST_UP) {
 					if (dom->do_comp.co_in_ver > rgt->rgt_rebuild_ver) {
-						D_INFO(DF_RB ": cancel rebuild co_in_ver=%u\n",
-						       DP_RB_RGT(rgt), dom->do_comp.co_in_ver);
+						D_INFO(DF_RB ": cancel rebuild due to new REINT, "
+							     "co_rank %d, co_in_ver %u\n",
+						       DP_RB_RGT(rgt), dom->do_comp.co_rank,
+						       dom->do_comp.co_in_ver);
 						rebuild_abort = true;
 						break;
-					} else {
-						continue;
 					}
 				} else if (dom->do_comp.co_status == PO_COMP_ST_DOWN) {
 					if (dom->do_comp.co_fseq > rgt->rgt_rebuild_ver) {
-						D_INFO(DF_RB ": cancel rebuild co_fseq=%u\n",
-						       DP_RB_RGT(rgt), dom->do_comp.co_fseq);
+						D_INFO(DF_RB ": cancel rebuild due to new DOWN, "
+							     "co_rank %d, co_fseq %u\n",
+						       DP_RB_RGT(rgt), dom->do_comp.co_rank,
+						       dom->do_comp.co_fseq);
 						rebuild_abort = true;
 						break;
 					}
 				}
 			}
-			D_INFO(DF_RB " exclude rank %d/%x.\n", DP_RB_RGT(rgt), dom->do_comp.co_rank,
-			       dom->do_comp.co_status);
-			rebuild_leader_set_status(rgt, dom->do_comp.co_rank,
-						  -1, SCAN_DONE | PULL_DONE);
+
+			if (now - last_print > 20)
+				D_INFO(DF_RB " rank %d, status 0x%x.\n", DP_RB_RGT(rgt),
+				       dom->do_comp.co_rank, dom->do_comp.co_status);
+
+			/* for PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW ranks
+			 * set the completion as no progress/completion will be reported from them.
+			 */
+			if (dom->do_comp.co_status != PO_COMP_ST_UP)
+				rebuild_leader_set_status(rgt, dom->do_comp.co_rank, -1,
+							  SCAN_DONE | PULL_DONE);
 		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		map_ranks_fini(&excluded);
+		map_ranks_fini(&rank_list);
 
 		if (rebuild_abort) {
 			rgt->rgt_abort = 1;
@@ -1048,7 +1058,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			break;
 		}
 
-		now = ABT_get_wtime();
 		/* print something at least for each 10 seconds */
 		if (now - last_print > 10) {
 			last_print = now;
