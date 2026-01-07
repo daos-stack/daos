@@ -72,9 +72,10 @@ append_install_list "${files[@]}"
 #   append_install_list "${files[@]}"
 # done
 
-# Update test.cov permissions
+# Fix file permissions
 cat << EOF  > "${tmp}/post_install_bullseye"
 chmod 666 ${SL_BULLSEYE_PREFIX}/daos/test.cov
+chmod 666 ${SL_BULLSEYE_PREFIX}/daos/bullseye_sources.tar.gz
 EOF
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_bullseye")
 
