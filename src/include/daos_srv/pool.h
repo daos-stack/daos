@@ -566,17 +566,13 @@ int
 ds_pool_prop_recov_cont_reset(struct rdb_tx *tx, struct ds_rsvc *rsvc);
 
 static inline bool
-is_pool_rebuild_allowed(struct ds_pool *pool, uint64_t self_heal, bool self_heal_applicable,
-			bool check_delayed_rebuild)
+is_pool_rebuild_allowed(struct ds_pool *pool, uint64_t self_heal, bool auto_recovery)
 {
-	uint64_t flags = DAOS_SELF_HEAL_AUTO_REBUILD;
-
-	if (check_delayed_rebuild)
-		flags |= DAOS_SELF_HEAL_DELAY_REBUILD;
-
 	if (pool->sp_disable_rebuild)
 		return false;
-	if (self_heal_applicable && !(self_heal & flags))
+
+	if (auto_recovery &&
+	    !(self_heal & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)))
 		return false;
 
 	return true;

@@ -2591,13 +2591,12 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 	return rc;
 }
 
-/* Regenerate the rebuild tasks when changing the leader, or manually starting rebuilds.
- * self_heal_applicable argument applies to both sys_self_heal and pool self_heal (found in prop).
- * For leader change caller it is applicable ; for manual start caller, it is not applicable.
+/* Regenerate rebuild tasks when changing the leader, or manually starting rebuilds.
+ * auto_recovery (true for leader change, false for manual) applies to both sys_self_heal and prop.
  */
 int
 ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal,
-			   bool self_heal_applicable, uint64_t delay_sec)
+			   bool auto_recovery, uint64_t delay_sec)
 {
 	struct daos_prop_entry *entry;
 	char                   *env;
@@ -2605,8 +2604,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys
 
 	rebuild_gst.rg_abort = 0;
 
-	/* do not regenerate task if system.self_heal is applicable but does not enable rebuild */
-	if (self_heal_applicable && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+	if (auto_recovery && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
 		D_DEBUG(DB_REBUILD, DF_UUID ": pool_rebuild disabled in sys_self_heal\n",
 			DP_UUID(pool->sp_uuid));
 		return DER_SUCCESS;
@@ -2627,11 +2625,9 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys
 		return DER_SUCCESS;
 	}
 
-	/* regenerate task only if pool.self_heal is applicable and rebuild is fully enabled. */
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
 	D_ASSERT(entry != NULL);
-	if (is_pool_rebuild_allowed(pool, entry->dpe_val /* self_heal */, self_heal_applicable,
-				    true /* check_delayed_rebuild */)) {
+	if (is_pool_rebuild_allowed(pool, entry->dpe_val /* self_heal */, auto_recovery)) {
 		rc = regenerate_task_of_type(
 		    pool, PO_COMP_ST_DOWN,
 		    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : delay_sec);
@@ -2642,7 +2638,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys
 		if (rc != 0)
 			return rc;
 	} else {
-		D_DEBUG(DB_REBUILD, DF_UUID" self healing is disabled\n",
+		D_DEBUG(DB_REBUILD, "Pool " DF_UUID " self healing is disabled\n",
 			DP_UUID(pool->sp_uuid));
 	}
 
