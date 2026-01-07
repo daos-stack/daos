@@ -127,7 +127,7 @@ int vos_obj_evict_by_oid(struct vos_container *cont, daos_unit_oid_t oid);
 static inline bool
 vos_obj_is_evicted(struct vos_object *obj)
 {
-	return obj != NULL && daos_lru_is_evicted(&obj->obj_llink);
+	return daos_lru_is_evicted(&obj->obj_llink);
 }
 
 /**

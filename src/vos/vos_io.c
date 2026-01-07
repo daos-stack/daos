@@ -2572,7 +2572,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
-	if (unlikely(vos_obj_is_evicted(ioc->ic_pinned_obj))) {
+	if (ioc->ic_pinned_obj != NULL && unlikely(vos_obj_is_evicted(ioc->ic_pinned_obj))) {
 		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted during update, need to restart TX.\n",
 			DP_UOID(ioc->ic_oid));
 

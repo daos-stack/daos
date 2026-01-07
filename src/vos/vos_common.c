@@ -223,7 +223,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
 	if (dth == NULL) {
 		/* CPU may yield when umem_tx_begin, related object maybe evicted during that. */
 		rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
-		if (rc == 0 && unlikely(vos_obj_is_evicted(obj))) {
+		if (rc == 0 && obj != NULL && unlikely(vos_obj_is_evicted(obj))) {
 			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(1), need to restart TX.\n",
 				DP_UOID(obj->obj_id));
 			rc = umem_tx_end(umm, -DER_TX_RESTART);
@@ -246,7 +246,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
 	rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
 	if (rc == 0) {
 		/* CPU may yield when umem_tx_begin, related object maybe evicted during that. */
-		if (unlikely(vos_obj_is_evicted(obj))) {
+		if (obj != NULL && unlikely(vos_obj_is_evicted(obj))) {
 			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(2), need to restart TX.\n",
 				DP_UOID(obj->obj_id));
 
