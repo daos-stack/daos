@@ -28,7 +28,7 @@ class EvictionMetrics(TestWithTelemetry):
         5. Verify page eviction
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
         :avocado: tags=EvictionMetrics,test_eviction_metrics
         """

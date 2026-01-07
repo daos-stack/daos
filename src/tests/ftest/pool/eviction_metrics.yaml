@@ -3,7 +3,7 @@ launch:
 
 hosts:
   test_servers: 1
-  test_clients: 7
+  test_clients: 3
 
 timeout: 16000
 
