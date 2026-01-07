@@ -1,18 +1,15 @@
 #!/bin/bash
-
-# Script for installing packages used for CI summary steps
+#
+#  Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+# Script for generating a bullseye code coverage report summary
 set -uex
-
-#!/bin/bash
-
-# Script for generating a bullseye code coverage report
-set -eux
 
 if [ ! -d '/opt/BullseyeCoverage/bin' ]; then
   echo 'Bullseye not found.'
   exit 1
 fi
-export COVFILE="$WORKSPACE/test.cov"
+export COVFILE="${WORKSPACE:-/tmp}/test.cov"
 export PATH="/opt/BullseyeCoverage/bin:$PATH"
 
 # Merge all coverage files
@@ -27,11 +24,13 @@ if [ ! -e "$COVFILE" ]; then
   exit 1
 else
   ls -al "${COVFILE}"
-  covdir -m
+  # covdir -m
 fi
 
 # Generate the html report
-# java -jar bullshtml.jar bullseye_code_coverage_report
-covhtml bullseye_code_coverage_report
-# ls -al bullseye_code_coverage_report
+rm -fr bullseye_code_coverage_report || true
+mkdir bullseye_code_coverage_report
+java -jar bullshtml.jar bullseye_code_coverage_report
+# covhtml bullseye_code_coverage_report
+ls -al bullseye_code_coverage_report
 
