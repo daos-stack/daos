@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -45,6 +45,7 @@ type Provider struct {
 	scm           ScmProvider
 	bdev          BdevProvider
 	vmdEnabled    bool
+	getTopology   topologyGetter
 }
 
 // DefaultProvider returns a provider populated with default parameters.
@@ -52,8 +53,10 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 	if engineStorage == nil {
 		engineStorage = new(Config)
 	}
-	return NewProvider(log, idx, engineStorage, system.DefaultProvider(),
+	p := NewProvider(log, idx, engineStorage, system.DefaultProvider(),
 		NewScmForwarder(log), NewBdevForwarder(log), NewMetadataForwarder(log))
+	p.getTopology = hwloc.NewProvider(log).GetTopology
+	return p
 }
 
 // FormatControlMetadata formats the storage used for control metadata.
@@ -606,10 +609,11 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger, ctrl
 	vmdEnabled := p.vmdEnabled
 	engineIndex := p.engineIndex
 	engineStorage := p.engineStorage
+	getTopology := p.getTopology
 	p.RUnlock()
 
 	req, err := BdevWriteConfigRequestFromConfig(ctx, log, engineStorage,
-		vmdEnabled, hwloc.NewProvider(log).GetTopology)
+		vmdEnabled, getTopology)
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
@@ -718,4 +722,10 @@ func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemP
 		bdev:          bdev,
 		metadata:      meta,
 	}
+}
+
+// setTopologyGetter sets the topology getter function for the provider. This is
+// used in tests to inject a mock topology.
+func (p *Provider) setTopologyGetter(fn topologyGetter) {
+	p.getTopology = fn
 }

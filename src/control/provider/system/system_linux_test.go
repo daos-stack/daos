@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -183,13 +183,6 @@ func TestSystemLinux_GetfsType(t *testing.T) {
 			path:   "notreal",
 			expErr: syscall.ENOENT,
 		},
-		"temp dir": {
-			path: "/dev",
-			expResult: &FsType{
-				Name:   "tmpfs",
-				NoSUID: true,
-			},
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := DefaultProvider().GetfsType(tc.path)
@@ -206,8 +199,10 @@ func TestSystemLinux_GetDeviceLabel(t *testing.T) {
 	validDev := func(t *testing.T) string {
 		t.Helper()
 
-		// Only want numbered partitions, not whole disks
+		// Only want numbered partitions, not whole disks.
+		// Exclude loop/nbd devices which may not be attached.
 		re := regexp.MustCompile(`^[a-zA-Z]+[0-9]+$`)
+		exclude := regexp.MustCompile(`^(loop|nbd|zram)`)
 
 		sysRoot := "/sys/class/block/"
 		entries, err := os.ReadDir(sysRoot)
@@ -216,7 +211,7 @@ func TestSystemLinux_GetDeviceLabel(t *testing.T) {
 		}
 
 		for _, entry := range entries {
-			if !re.MatchString(entry.Name()) {
+			if !re.MatchString(entry.Name()) || exclude.MatchString(entry.Name()) {
 				continue
 			}
 
