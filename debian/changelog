@@ -1,3 +1,9 @@
+daos (2.6.4-13) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Bump version
+
+ -- Phillip Henderson <phillip.henderson@hpe.com>  Thu, 8 Jan 2026 12:57:00 -0500
+
 daos (2.6.4-11) unstable; urgency=medium
   [ Phillip Henderson ]
   * Bump version
