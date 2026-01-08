@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,6 +42,10 @@
 #define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
 #define DF_RANGE "{lo: %lu, hi: %lu, nr: %lu}"
 #define DP_RANGE(r) (r).dcr_lo, (r).dcr_hi, (r).dcr_nr
+
+#define	DF_CI2 "{nr: %d, len: %d, csum: %lu, %lu, csum_buf_len: %d}"
+#define	DP_CI2(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), ci2csum2(ci), (ci).cs_buf_len
+
 /**
  * -----------------------------------------------------------
  * DAOS Checksummer
@@ -497,6 +501,9 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len);
 
 uint64_t
 ci2csum(struct dcs_csum_info ci);
+
+uint64_t
+ci2csum2(struct dcs_csum_info ci);
 
 
 /**

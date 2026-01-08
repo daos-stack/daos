@@ -475,6 +475,9 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg);
 int
 crt_reply_send(crt_rpc_t *req);
 
+uint64_t
+crt_rpc_get_rpcid(crt_rpc_t *rpc);
+
 /**
  * Send an RPC reply and free the input buffer immediately.
  * Only to be called on the server side.
