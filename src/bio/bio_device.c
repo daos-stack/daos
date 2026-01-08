@@ -1080,7 +1080,7 @@ set_power_mgmt_completion(struct spdk_bdev_io *bdev_io, bool success, void *cb_a
 		D_ERROR("Set power management failed for device %s, NVMe status code/type: %d/%d\n",
 			d_bdev->bb_name, sc, sct);
 	} else {
-		D_INFO("Power management set to 0x1 for device %s\n", d_bdev->bb_name);
+		D_INFO("Power management value set on device %s\n", d_bdev->bb_name);
 	}
 
 	spdk_bdev_free_io(bdev_io);
@@ -1092,6 +1092,10 @@ bio_set_power_mgmt(struct bio_bdev *d_bdev, struct spdk_io_channel *channel)
 	struct spdk_bdev    *bdev;
 	struct spdk_nvme_cmd cmd;
 	int                  rc;
+
+	/* If default has not been overwritten, skip setting the value */
+	if (bio_spdk_power_mgmt_val == UINT32_MAX)
+		return 0;
 
 	D_ASSERT(d_bdev != NULL);
 	D_ASSERT(d_bdev->bb_desc != NULL);
@@ -1117,7 +1121,7 @@ bio_set_power_mgmt(struct bio_bdev *d_bdev, struct spdk_io_channel *channel)
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opc   = SPDK_NVME_OPC_SET_FEATURES;
 	cmd.cdw10 = SPDK_NVME_FEAT_POWER_MANAGEMENT;
-	cmd.cdw11 = 0x1;
+	cmd.cdw11 = bio_spdk_power_mgmt_val;
 
 	rc = spdk_bdev_nvme_admin_passthru(d_bdev->bb_desc, channel, &cmd, NULL, 0,
 					   set_power_mgmt_completion, d_bdev);
