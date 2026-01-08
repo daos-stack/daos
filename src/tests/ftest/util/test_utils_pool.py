@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -272,7 +272,7 @@ class TestPool(TestDaosApiBase):
         self.gid = os.getegid()
 
         self.mode = BasicParameter(None)
-        self.name = BasicParameter(None)            # server group name
+        self.name = BasicParameter(None)                                # server group name
         self.svcn = BasicParameter(None)
         self.target_list = BasicParameter(None)
         self.nranks = BasicParameter(None)
@@ -281,9 +281,9 @@ class TestPool(TestDaosApiBase):
         self.mem_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
-        self.prop_name = BasicParameter(None)       # name of property to be set
-        self.prop_value = BasicParameter(None)      # value of property
-        self.properties = BasicParameter(None)      # string of cs name:value
+        self.prop_name = BasicParameter(None)                           # name of property to be set
+        self.prop_value = BasicParameter(None)                          # value of property
+        self.properties = BasicParameter(None, "rd_fac:0,space_rb:0")   # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.pool_query_delay = BasicParameter(None)

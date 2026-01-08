@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -367,7 +367,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.dir_oclass = BasicParameter(None)
         self.file_oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
-        self.properties = BasicParameter(None, "cksum:off")
+        self.properties = BasicParameter(None, "cksum:off,rd_fac:0")
         self.acl_file = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
