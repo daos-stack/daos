@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -720,6 +720,8 @@ void trigger_faulty_reaction(struct bio_blobstore *bbs);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 struct bio_dev_info *
 alloc_dev_info(uuid_t dev_id, struct bio_bdev *d_bdev, struct smd_dev_info *s_info);
+int
+bio_set_power_mgmt(struct bio_bdev *d_bdev, struct spdk_io_channel *channel);
 
 /* bio_config.c */
 int

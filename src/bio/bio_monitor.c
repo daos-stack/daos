@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1013,6 +1013,12 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	channel = spdk_bdev_get_io_channel(bb->bb_dev_health.bdh_desc);
 	D_ASSERT(channel != NULL);
 	bb->bb_dev_health.bdh_io_channel = channel;
+
+	/* Set NVMe power management to 0x1 */
+	rc = bio_set_power_mgmt(bb->bb_dev, channel);
+	if (rc != 0 && rc != -DER_NOTSUPPORTED)
+		D_WARN("Failed to set power management for device %s: " DF_RC "\n", bdev_name,
+		       DP_RC(rc));
 
 	/* Set the NVMe SSD PCI Vendor ID */
 	bio_set_vendor_id(bb, bdev_name);

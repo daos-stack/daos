@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1066,4 +1066,66 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 
 	return led_manage(xs_ctxt, pci_addr, (Ctl__LedAction)action, (Ctl__LedState *)state,
 			  duration);
+}
+
+static void
+set_power_mgmt_completion(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
+{
+	struct bio_bdev *d_bdev = cb_arg;
+	int              sc, sct;
+	uint32_t         cdw0;
+
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
+	if (sc) {
+		D_ERROR("Set power management failed for device %s, NVMe status code/type: %d/%d\n",
+			d_bdev->bb_name, sc, sct);
+	} else {
+		D_INFO("Power management set to 0x1 for device %s\n", d_bdev->bb_name);
+	}
+
+	spdk_bdev_free_io(bdev_io);
+}
+
+int
+bio_set_power_mgmt(struct bio_bdev *d_bdev, struct spdk_io_channel *channel)
+{
+	struct spdk_bdev    *bdev;
+	struct spdk_nvme_cmd cmd;
+	int                  rc;
+
+	D_ASSERT(d_bdev != NULL);
+	D_ASSERT(d_bdev->bb_desc != NULL);
+	D_ASSERT(channel != NULL);
+
+	bdev = spdk_bdev_desc_get_bdev(d_bdev->bb_desc);
+	if (bdev == NULL) {
+		D_ERROR("No bdev associated with device descriptor\n");
+		return -DER_INVAL;
+	}
+
+	if (get_bdev_type(bdev) != BDEV_CLASS_NVME) {
+		D_DEBUG(DB_MGMT, "Device %s is not NVMe, skipping power management\n",
+			d_bdev->bb_name);
+		return 0;
+	}
+
+	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
+		D_ERROR("Bdev NVMe admin passthru not supported for %s\n", d_bdev->bb_name);
+		return -DER_NOTSUPPORTED;
+	}
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opc   = SPDK_NVME_OPC_SET_FEATURES;
+	cmd.cdw10 = SPDK_NVME_FEAT_POWER_MANAGEMENT;
+	cmd.cdw11 = 0x1;
+
+	rc = spdk_bdev_nvme_admin_passthru(d_bdev->bb_desc, channel, &cmd, NULL, 0,
+					   set_power_mgmt_completion, d_bdev);
+	if (rc) {
+		D_ERROR("Failed to submit power management command for %s, rc:%d\n",
+			d_bdev->bb_name, rc);
+		return daos_errno2der(-rc);
+	}
+
+	return 0;
 }
