@@ -25,7 +25,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
     """
 
     IOR_NOSPACE = "No space left on device"
-    DER_NOSPACE = "-1007"
 
     def check_server_logs(self):
         """Check if GC engine errors have occurred during the test
@@ -119,8 +118,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy,
                 bytes_to_human(free_space_after_destroy), free_space_after_destroy))
         # Wait for a minute if the initial space is not released.
-        cnt = 0
-        while cnt < 10:
+        for _ in range(10):
             if (free_space_after_destroy - free_space_init) < delta_bytes:
                 break
             self.log.info(
@@ -130,7 +128,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 free_space_init - delta_bytes)
             time.sleep(6)
             free_space_after_destroy = self.pool.get_pool_free_space()
-            cnt += 1
+
         self.assertAlmostEqual(
             free_space_init, free_space_after_destroy, delta=delta_bytes,
             msg="Deleting container did not restore all free pool space: "
@@ -174,10 +172,10 @@ class BoundaryPoolContainerSpace(TestWithServers):
         reclaim_props = self.params.get("reclaim_props", "/run/test_config/*", [])
 
         # create pool
-        self.log_step("==>Create Pool")
+        self.log_step("Create Pool")
         self.add_pool()
 
-        self.log_step("==>Starting test loops to fill and destroy container")
+        self.log_step("Starting test loops to fill and destroy container")
         for loop_cnt in range(1, test_loop + 1):
             self.log.info("==>Starting test loop: %i ...", loop_cnt)
 
@@ -199,5 +197,5 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
             self.write_pool_until_nospace(loop_cnt)
 
-        self.log_step("==>Check server logs for errors")
+        self.log_step("Check server logs for errors")
         self.check_server_logs()
