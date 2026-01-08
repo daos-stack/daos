@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1447,7 +1448,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	int			 i, nr, rc = 0;
 
 	/* Get pool map to check the target status */
-	pool_child = ds_pool_child_lookup(pool_id);
+	pool_child = ds_pool_child_find(pool_id);
 	if (pool_child == NULL) {
 		D_ERROR(DF_UUID": Pool child not found\n", DP_UUID(pool_id));
 		/*
