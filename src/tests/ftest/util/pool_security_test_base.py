@@ -515,7 +515,7 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (4)Verify the pool create status
         self.log.info("  (4)dmg.run() result=\n%s", self.pool.dmg.result)
-        if "ERR" in self.pool.dmg.result.stderr_text:
+        if "ERROR" in self.pool.dmg.result.stderr_text:
             self.fail("##(4)Unexpected error from pool create.")
 
         # (5)Get the pool's acl list

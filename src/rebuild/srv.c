@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1433,7 +1433,7 @@ rpt_put(struct rebuild_tgt_pool_tracker *rpt)
 		 * ds_rebuild_running_query(), but rpt_destroy() -> ds_pool_put() can only
 		 * be called in system XS.
 		 * If dss_ult_execute failed that due to fatal system error (no memory
-		 * or ABT failure), throw an ERR log.
+		 * or ABT failure), throw an ERROR log.
 		 */
 		rc = dss_ult_execute(rpt_put_destroy, rpt, NULL, NULL, DSS_XS_SYS, 0, 0);
 		if (rc)
