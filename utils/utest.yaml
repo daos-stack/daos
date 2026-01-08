@@ -52,6 +52,7 @@
 - name: gurt
   base: "BUILD_DIR"
   tests:
+    - cmd: ["src/gurt/tests/d_log_memory_ut"]
     - cmd: ["src/gurt/tests/test_gurt"]
     - cmd: ["src/gurt/tests/test_gurt_telem_producer"]
 - name: DTX
