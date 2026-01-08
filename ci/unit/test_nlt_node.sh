@@ -42,10 +42,10 @@ sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
 nlt_args=()
-nlt_args+=("--max-log-size 1950MiB")
-nlt_args+=("--dfuse-dir /localhome/jenkins/")
-nlt_args+=("--log-usage-save nltir.xml")
-nlt_args+=("--log-usage-export nltr.json")
+nlt_args+=(--max-log-size 1950MiB)
+nlt_args+=(--dfuse-dir /localhome/jenkins/)
+nlt_args+=(--log-usage-save nltir.xml)
+nlt_args+=(--log-usage-export nltr.json)
 
 echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
 echo "[DEBUG] COVFILE:        ${COVFILE:-}"
@@ -56,7 +56,7 @@ if [ -d "${BULLSEYE_DIR}" ]; then
     export PATH="${BULLSEYE_DIR}/bin:$PATH"
     cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
     ls -al "${COVFILE}"
-    nlt_args+=("--memcheck no")
+    nlt_args+=(--memcheck no)
 fi
 
 echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
