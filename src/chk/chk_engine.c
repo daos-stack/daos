@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1981,7 +1981,7 @@ chk_engine_sched(void *args)
 			D_GOTO(out, rc);
 		}
 
-		if (ins_phase > cbk->cb_phase) {
+		if (ins_phase != CHK_INVAL_PHASE && ins_phase > cbk->cb_phase) {
 			D_INFO(DF_ENGINE" on rank %u moves from phase %u to phase %u\n",
 			       DP_ENGINE(ins), myrank, cbk->cb_phase, ins_phase);
 
