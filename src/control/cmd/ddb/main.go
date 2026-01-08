@@ -238,7 +238,9 @@ the '-w' option must be included.
 If the command requires it, the VOS file provided as the first positional
 parameter will be opened before any commands are executed. See the
 command‑specific help for details. When the VOS file is not required, it is
-ignored; however, it must still be supplied, and it may be empty ("").
+ignored; however, it must still be supplied, and it may be empty (""), e.g.
+
+ddb "" ls --help
 `
 
 	// Set the traceback level such that a crash results in
