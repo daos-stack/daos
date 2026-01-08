@@ -215,12 +215,12 @@ func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) 
 	if string(opts.Args.RunCmd) == "" {
 		printGeneralHelp(app, generalMsg, log)
 		return 0
+	}
+
+	if printCmdHelp(app, opts, log) {
+		return 0
 	} else {
-		if printCmdHelp(app, opts, log) {
-			return 0
-		} else {
-			return 1
-		}
+		return 1
 	}
 }
 
@@ -250,9 +250,9 @@ ddb "" ls --help
 	if _, err := p.ParseArgs(args); err != nil {
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
 			os.Exit(printHelp(fe.Error(), opts, log))
-		} else {
-			return err
 		}
+
+		return err
 	}
 
 	if opts.Version {
