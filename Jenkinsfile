@@ -853,7 +853,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() && !code_coverage_enabled() }
+                        expression { params.CI_NLT_TEST && !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
