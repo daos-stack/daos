@@ -72,8 +72,6 @@ class EvictionMetrics(TestWithTelemetry):
         read_bytes = self.params.get('read_bytes', MDTEST_NAMESPACE, None)
         ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
         mdtest_params = {"num_of_files_dirs": math.ceil(mem_file_bytes / read_bytes) + 1}
-        # Debug
-        mdtest_params["num_of_files_dirs"] /= 1000
         run_mdtest(
             self, self.hostlist_clients, self.workdir, None, container, processes, ppn, manager,
             mdtest_params=mdtest_params)
@@ -86,7 +84,7 @@ class EvictionMetrics(TestWithTelemetry):
                 if pool.mem_ratio.value is None:
                     expected_ranges[metric][label] = [0, 0]
                 else:
-                    expected_ranges[metric][label] = [1, 1000]
+                    expected_ranges[metric][label] = [1, 10000000]
         self.log.debug("%s expected_ranges: %s", pool, expected_ranges)
 
         self.log_step('Verify pool eviction metrics after writing data')
