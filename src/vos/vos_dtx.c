@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -151,37 +151,21 @@ out:
 }
 
 static void
-dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
-		    struct dtx_handle *dth, bool evict, bool keep_df)
+dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool evict,
+		    bool keep_df)
 {
-	if (evict) {
-		daos_unit_oid_t	*oids;
-		int		 count;
-		int		 i;
+	if (evict && dae->dae_oids != NULL) {
+		int i;
 
-		if (dth != NULL) {
-			if (dth->dth_oid_array != NULL) {
-				D_ASSERT(dth->dth_oid_cnt > 0);
-
-				count = dth->dth_oid_cnt;
-				oids = dth->dth_oid_array;
-			} else {
-				count = 1;
-				oids = &dth->dth_leader_oid;
-			}
-		} else {
-			count = dae->dae_oid_cnt;
-			oids = dae->dae_oids;
-		}
-
-		for (i = 0; i < count; i++)
-			vos_obj_evict_by_oid(cont, oids[i]);
+		for (i = 0; i < dae->dae_oid_cnt; i++)
+			vos_obj_evict_by_oid(cont, dae->dae_oids[i]);
 	}
 
 	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
 	    dae->dae_oids != &DAE_OID(dae)) {
 		D_FREE(dae->dae_oids);
 		dae->dae_oid_cnt = 0;
+		dae->dae_oid_cap = 0;
 	}
 
 	DAE_REC_OFF(dae) = UMOFF_NULL;
@@ -254,7 +238,7 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		D_ASSERT(dae != NULL);
 		*(struct vos_dtx_act_ent **)args = dae;
 	} else if (dae != NULL) {
-		dtx_act_ent_cleanup(tins->ti_priv, dae, NULL, true, false);
+		dtx_act_ent_cleanup(tins->ti_priv, dae, true, false);
 	}
 
 	return 0;
@@ -474,6 +458,9 @@ vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df)
 	while (!UMOFF_IS_NULL(cont_df->cd_dtx_committed_head)) {
 		dbd_off = cont_df->cd_dtx_committed_head;
 		dbd = umem_off2ptr(umm, dbd_off);
+		D_ASSERTF_MEM(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC, dbd, DTX_CMT_BLOB_SIZE,
+			      "dbd_magic = %#x != DTX_CMT_BLOB_MAGIC (%#x)\n", dbd->dbd_magic,
+			      DTX_CMT_BLOB_MAGIC);
 		cont_df->cd_dtx_committed_head = dbd->dbd_next;
 		rc = umem_free(umm, dbd_off);
 		if (rc != 0)
@@ -493,6 +480,9 @@ vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df)
 	while (!UMOFF_IS_NULL(cont_df->cd_dtx_active_head)) {
 		dbd_off = cont_df->cd_dtx_active_head;
 		dbd = umem_off2ptr(umm, dbd_off);
+		D_ASSERTF_MEM(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC, dbd, DTX_ACT_BLOB_SIZE,
+			      "dbd_magic = %#x != DTX_ACT_BLOB_MAGIC (%#x)\n", dbd->dbd_magic,
+			      DTX_ACT_BLOB_MAGIC);
 
 		for (i = 0; i < dbd->dbd_index; i++) {
 			dae_df = &dbd->dbd_active_data[i];
@@ -879,7 +869,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 			rc = dbtree_delete(cont->vc_dtx_active_hdl,
 					   BTR_PROBE_BYPASS, &kiov, &dae);
 			if (rc == 0) {
-				dtx_act_ent_cleanup(cont, dae, NULL, false, false);
+				dtx_act_ent_cleanup(cont, dae, false, false);
 				dtx_evict_lid(cont, dae);
 			}
 
@@ -1845,30 +1835,6 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	    (dth->dth_modification_cnt > 0))
 		dth->dth_sync = 1;
 
-	if (dth->dth_oid_array != NULL) {
-		D_ASSERT(dth->dth_oid_cnt > 0);
-
-		dae->dae_oid_cnt = dth->dth_oid_cnt;
-		if (dth->dth_oid_cnt == 1) {
-			dae->dae_oid_inline = dth->dth_oid_array[0];
-			dae->dae_oids = &dae->dae_oid_inline;
-		} else {
-			size = sizeof(daos_unit_oid_t) * dth->dth_oid_cnt;
-			D_ALLOC_NZ(dae->dae_oids, size);
-			if (dae->dae_oids == NULL) {
-				/* Not fatal. */
-				D_WARN("No DRAM to store ACT DTX OIDs "
-				       DF_DTI"\n", DP_DTI(&DAE_XID(dae)));
-				dae->dae_oid_cnt = 0;
-			} else {
-				memcpy(dae->dae_oids, dth->dth_oid_array, size);
-			}
-		}
-	} else {
-		dae->dae_oids = &DAE_OID(dae);
-		dae->dae_oid_cnt = 1;
-	}
-
 	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae))) {
 		memcpy(DAE_MBS_INLINE(dae), dth->dth_mbs->dm_data,
 		       DAE_MBS_DSIZE(dae));
@@ -2441,7 +2407,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 			DAE_FLAGS(daes[i]) |= DTE_PARTIAL_COMMITTED;
 
 			daes[i]->dae_committing = 0;
-			dtx_act_ent_cleanup(cont, daes[i], NULL, false, true);
+			dtx_act_ent_cleanup(cont, daes[i], false, true);
 			continue;
 		}
 
@@ -2467,13 +2433,13 @@ vos_dtx_post_handle(struct vos_container *cont,
 
 				daes[i]->dae_aborted = 1;
 				daes[i]->dae_aborting = 0;
-				dtx_act_ent_cleanup(cont, daes[i], NULL, true, false);
+				dtx_act_ent_cleanup(cont, daes[i], true, false);
 			} else {
 				D_ASSERT(daes[i]->dae_aborting == 0);
 
 				daes[i]->dae_committed = 1;
 				daes[i]->dae_committing = 0;
-				dtx_act_ent_cleanup(cont, daes[i], NULL, false, false);
+				dtx_act_ent_cleanup(cont, daes[i], false, false);
 			}
 			DAE_FLAGS(daes[i]) &= ~(DTE_CORRUPTED | DTE_ORPHAN | DTE_PARTIAL_COMMITTED);
 		}
@@ -3659,7 +3625,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		 */
 		if (dae != NULL) {
 			D_ASSERT(!vos_dae_is_prepare(dae));
-			dtx_act_ent_cleanup(cont, dae, dth, true, false);
+			dtx_act_ent_cleanup(cont, dae, true, false);
 		}
 	} else {
 		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
@@ -3682,7 +3648,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		if (DAE_EPOCH(dae) != dth->dth_epoch)
 			goto out;
 
-		dtx_act_ent_cleanup(cont, dae, dth, true, false);
+		dtx_act_ent_cleanup(cont, dae, true, false);
 
 		rc = dbtree_delete(cont->vc_dtx_active_hdl,
 				   riov.iov_buf != NULL ? BTR_PROBE_BYPASS : BTR_PROBE_EQ,
@@ -4040,7 +4006,7 @@ vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh)
 		goto error;
 	}
 
-	rc = vos_tx_begin(dth, umm, pool->vp_sysdb);
+	rc = vos_tx_begin(dth, umm, pool->vp_sysdb, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to start transaction: rc=" DF_RC "\n", DP_RC(rc));
 		goto error;
@@ -4165,5 +4131,70 @@ vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat 
 	rc   = 0;
 
 out:
+	return rc;
+}
+
+int
+vos_dtx_record_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t oid)
+{
+	struct dtx_local_oid_record *oid_array;
+	struct dtx_local_oid_record *record;
+	struct vos_dtx_act_ent      *dae;
+	daos_unit_oid_t             *oids;
+	int                          rc = 0;
+
+	if (dth == NULL)
+		D_GOTO(out, rc = 0);
+
+	if (dth->dth_local) {
+		if (dth->dth_local_oid_cnt == dth->dth_local_oid_cap) {
+			D_REALLOC_ARRAY(oid_array, dth->dth_local_oid_array, dth->dth_local_oid_cap,
+					dth->dth_local_oid_cap << 1);
+			if (oid_array == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			dth->dth_local_oid_array = oid_array;
+			dth->dth_local_oid_cap <<= 1;
+		}
+
+		record           = &dth->dth_local_oid_array[dth->dth_local_oid_cnt];
+		record->dor_cont = cont;
+		vos_cont_addref(cont);
+		record->dor_oid = oid;
+		dth->dth_local_oid_cnt++;
+
+		D_GOTO(out, rc = 0);
+	}
+
+	if (daos_is_zero_dti(&dth->dth_xid))
+		D_GOTO(out, rc = 0);
+
+	dae = dth->dth_ent;
+	D_ASSERT(dae != NULL);
+
+	if (dae->dae_oid_cnt == 0) {
+		if (daos_unit_oid_compare(oid, DAE_OID(dae)) == 0)
+			dae->dae_oids = &DAE_OID(dae);
+		else
+			dae->dae_oids = &dae->dae_oid_inline;
+	} else if (dae->dae_oid_cnt >= dae->dae_oid_cap) {
+		D_ALLOC_ARRAY(oids, dae->dae_oid_cnt << 1);
+		if (oids == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		memcpy(oids, dae->dae_oids, sizeof(*oids) * dae->dae_oid_cnt);
+		if (dae->dae_oids != &DAE_OID(dae) && dae->dae_oids != &dae->dae_oid_inline)
+			D_FREE(dae->dae_oids);
+
+		dae->dae_oids    = oids;
+		dae->dae_oid_cap = dae->dae_oid_cnt << 1;
+	}
+
+	dae->dae_oids[dae->dae_oid_cnt++] = oid;
+
+out:
+	if (rc != 0)
+		D_ERROR("Failed to record oid " DF_UOID ": " DF_RC "\n", DP_UOID(oid), DP_RC(rc));
+
 	return rc;
 }
