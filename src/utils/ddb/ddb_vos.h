@@ -155,6 +155,36 @@ typedef int (*dv_dump_value_cb)(void *cb_arg, d_iov_t *value);
 int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb,
 		  void *cb_arg);
 
+/**
+ * Callback invoked by dv_dump_csum() with the fetched checksum information.
+ *
+ * @param cb_arg  User-provided argument passed through from dv_dump_csum().
+ * @param rel     Recx/epoch list describing the stored extents. NULL for single-value akeys;
+ *                non-NULL for array akeys. The caller must not free this pointer.
+ * @param cil     Checksum info list. Valid only for the duration of the callback.
+ * @return        0 on success; a negative error code is propagated back to the caller of
+ *                dv_dump_csum().
+ */
+typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *rel,
+			       struct dcs_ci_list *cil);
+
+/**
+ * Fetch and dump the checksum information for the akey identified by \a path.
+ *
+ * @param poh      Open pool handle.
+ * @param path     VOS tree path identifying the container, object, dkey, and akey.
+ *                 For array akeys, path->vtp_recx selects the extent to inspect.
+ * @param epoch    Epoch for the fetch. Only used for array akeys; single-value akeys
+ *                 always fetch the latest epoch.
+ * @param dump_cb  Callback invoked with the result. If NULL, the function returns 0
+ *                 without opening the container or calling VOS.
+ * @param cb_arg   Opaque argument forwarded to \a dump_cb.
+ * @return         0 on success, or a negative error code.
+ */
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	     dv_dump_csum_cb dump_cb, void *cb_arg);
+
 struct ddb_ilog_entry {
 	uint32_t	die_idx;
 	int32_t		die_status;

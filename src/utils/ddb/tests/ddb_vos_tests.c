@@ -1104,6 +1104,24 @@ dv_test_teardown(void **state)
 	return 0;
 }
 
+static int
+dv_test_csum_setup(void **state)
+{
+	assert_success(dv_test_setup(state));
+	assert_success(ddb_test_csum_setup(state));
+
+	return 0;
+}
+
+static int
+dv_test_csum_teardown(void **state)
+{
+	assert_success(ddb_test_csum_teardown(state));
+	assert_success(dv_test_teardown(state));
+
+	return 0;
+}
+
 static void
 pool_flags_tests(void **state)
 {
@@ -1209,11 +1227,216 @@ read_only_vs_write_mode_test(void **state)
 				SHA256_DIGEST_LEN);
 }
 
+/* Callback that returns *(int *)cb_args, or 0 if cb_args is NULL. */
+static int
+csum_cb_return_rc(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	return (cb_args != NULL) ? (*(int *)cb_args) : (0);
+}
+
+static void
+dump_csum_error_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey    = g_dkeys[0];
+	path.vtp_akey    = g_akeys[0]; /* single value type */
+	path.vtp_is_recx = false;
+
+	/* invalid poh: error comes from vos_cont_open, not the callback (which would return 0) */
+	rc = dv_dump_csum(DAOS_HDL_INVAL, &path, DAOS_EPOCH_MAX, csum_cb_return_rc, NULL);
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
+static int
+check_csum_sv_cb_001(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	assert_null(cb_args);
+	assert_null(rel);
+	assert_non_null(cil);
+
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+
+	return 0;
+}
+
+static int
+check_csum_sv_cb_002(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx   *csum_ctx;
+	struct dcs_csum_info *ci;
+
+	assert_non_null(cb_args);
+	assert_null(rel);
+	assert_non_null(cil);
+
+	csum_ctx = cb_args;
+	assert_int_equal(csum_ctx->dct_sv_size, DVT_FAKE_SV_SIZE);
+	assert_int_equal(csum_ctx->dct_chunk_size, DVT_FAKE_CHUNK_SIZE);
+	assert_int_equal(csum_ctx->dct_csum_type, DVT_FAKE_CSUM_TYPE);
+
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 1);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
+						   csum_ctx->dct_sv_ic->ic_data));
+
+	return 0;
+}
+
+static void
+dump_csum_sv_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey    = g_dkeys[0];
+	path.vtp_akey    = g_akeys[0]; /* single value type */
+	path.vtp_is_recx = false;
+
+	/* no csum info */
+	path.vtp_oid = g_oids[0];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_001, NULL);
+	assert_success(rc);
+
+	/* with csum info */
+	path.vtp_oid = g_oids[1];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_002, csum_ctx);
+	assert_success(rc);
+
+	/* with csum info, without callback */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, csum_ctx);
+	assert_success(rc);
+
+	/* callback failure is propagated */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, csum_cb_return_rc,
+				    &(int){-DER_INVAL});
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
+static int
+check_csum_recx_cb_001(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	assert_null(cb_args);
+	assert_non_null(rel);
+	assert_non_null(cil);
+
+	assert_int_equal(rel->re_nr, DVT_FAKE_RECX_COUNT);
+	assert_int_equal(rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(rel->re_items[0].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(rel->re_items[0].re_ep, 1);
+	assert_int_equal(rel->re_items[1].re_recx.rx_idx, DVT_FAKE_RECX_SIZE / 2);
+	/*
+	 * VOS_OF_FETCH_CSUM records the full stored extent, not the IOD intersection:
+	 * recx 1 starts at rx_idx=DVT_FAKE_RECX_SIZE/2 but its rx_nr is DVT_FAKE_RECX_SIZE.
+	 */
+	assert_int_equal(rel->re_items[1].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(rel->re_items[1].re_ep, 2);
+
+	/* No csum was stored for g_oids[0], so the checksum info list is empty. */
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+
+	return 0;
+}
+
+static int
+check_csum_recx_cb_002(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx   *csum_ctx;
+	struct dcs_csum_info *ci;
+
+	assert_non_null(cb_args);
+	assert_non_null(rel);
+	assert_non_null(cil);
+
+	csum_ctx = cb_args;
+	assert_int_equal(csum_ctx->dct_recx_size, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(csum_ctx->dct_chunk_size, DVT_FAKE_CHUNK_SIZE);
+	assert_int_equal(csum_ctx->dct_csum_type, DVT_FAKE_CSUM_TYPE);
+
+	assert_int_equal(rel->re_nr, DVT_FAKE_RECX_COUNT);
+	assert_int_equal(rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(rel->re_items[0].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(rel->re_items[0].re_ep, 1);
+	assert_int_equal(rel->re_items[1].re_recx.rx_idx, DVT_FAKE_RECX_SIZE / 2);
+	assert_int_equal(rel->re_items[1].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(rel->re_items[1].re_ep, 2);
+
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, DVT_FAKE_RECX_COUNT);
+
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 2);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
+						   csum_ctx->dct_recx_ics[0]->ic_data));
+
+	ci = dcs_csum_info_get(cil, 1);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 2);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
+						   csum_ctx->dct_recx_ics[1]->ic_data));
+
+	return 0;
+}
+
+static void
+dump_csum_recx_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey        = g_dkeys[0];
+	path.vtp_akey        = g_akeys[1]; /* array value type */
+	path.vtp_is_recx     = true;
+	path.vtp_recx.rx_idx = 0;
+	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
+
+	/* no csum info */
+	path.vtp_oid = g_oids[0];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_001, NULL);
+	assert_success(rc);
+
+	/* with csum info */
+	path.vtp_oid = g_oids[1];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_002, csum_ctx);
+	assert_success(rc);
+
+	/* with csum info, without callback */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, csum_ctx);
+	assert_success(rc);
+
+	/* callback failure is propagated */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, csum_cb_return_rc,
+				    &(int){-DER_INVAL});
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
 /*
  * All these tests use the same VOS tree that is created at suit_setup. Therefore, tests
  * that modify the state of the tree (delete, add, etc) should be run after all others.
  */
 #define TEST(x) { #x, x, dv_test_setup, dv_test_teardown }
+
+/* Checksum tests need special setup/teardown */
+#define TEST_CSUM(test) {#test, test, dv_test_csum_setup, dv_test_csum_teardown}
+
 const struct CMUnitTest dv_test_cases[] = {
     {"open_pool", open_pool_test, NULL, NULL}, /* don't want this test to run with setup */
     TEST(list_items_test),
@@ -1240,6 +1463,9 @@ const struct CMUnitTest dv_test_cases[] = {
     {"pool_flag_update", pool_flags_tests, NULL, NULL},
     {"read_only_vs_write_mode", read_only_vs_write_mode_test, NULL,
      NULL}, /* don't want this test to run with setup */
+    TEST_CSUM(dump_csum_error_tests),
+    TEST_CSUM(dump_csum_sv_tests),
+    TEST_CSUM(dump_csum_recx_tests),
 };
 
 int
