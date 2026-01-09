@@ -190,10 +190,10 @@ Boolean skip_pragma_set(String name, String def_val='false') {
 }
 
 Boolean skip_build_stage(String distro='', String compiler='gcc') {
-    // Skip the stage if the CI_<distro>_NOBUILD parameter is set
+    // Skip the stage if the CI_BUILD_<distro> parameter is not set
     if (distro) {
-        if (startedByUser() && paramsValue("CI_${distro}_NOBUILD", false)) {
-            println("[${env.STAGE_NAME}] Skipping build stage due to CI_${distro}_NOBUILD")
+        if (startedByUser() && !paramsValue("CI_BUILD_${distro}", false)) {
+            println("[${env.STAGE_NAME}] Skipping build stage due to CI_BUILD_${distro} parameter")
             return true
         }
     }
@@ -224,7 +224,7 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
 
 Boolean code_coverage_enabled() {
     // Determine if code coverage is enabled for the build
-    return !skip_build_stage(distro: 'bullseye', compiler: 'covc')
+    return !skip_build_stage('bullseye', 'covc')
     // if (paramsValue('CI_CODE_COVERAGE', true) == true) {
     //     env.COVFN_DISABLED = 'false'
     // }
@@ -490,21 +490,18 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_el8_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on EL 8')
-        booleanParam(name: 'CI_el9_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on EL 9')
-        booleanParam(name: 'CI_leap15_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on Leap 15')
-        booleanParam(name: 'CI_bullseye_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs with Bullseye')
-        // booleanParam(name: 'CI_CODE_COVERAGE',
-        //              defaultValue: true,
-        //              description: 'Enable Bullseye code coverage report')
+        booleanParam(name: 'CI_BUILD_el8',
+                     defaultValue: true,
+                     description: 'Build sources and RPMs on EL 8')
+        booleanParam(name: 'CI_BUILD_el9',
+                     defaultValue: true,
+                     description: 'Build sources and RPMs on EL 9')
+        booleanParam(name: 'CI_BUILD_leap15',
+                     defaultValue: true,
+                     description: 'Build sources and RPMs on Leap 15')
+        booleanParam(name: 'CI_BUILD_bullseye',
+                     defaultValue: true,
+                     description: 'Build sources and RPMs with Bullseye Code Coverage')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -517,9 +514,9 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
-        booleanParam(name: 'CI_UNIT_TEST_CODE_COVERAGE',
+        booleanParam(name: 'CI_UNIT_TEST_BULLSEYE',
                      defaultValue: true,
-                     description: 'Run the Unit Test with Code Coverage on EL 8 test stage')
+                     description: 'Run the Unit Test with Bullseye Code Coverage test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
