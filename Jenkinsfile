@@ -313,7 +313,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     }
     Boolean run_stage = !skip_build_stage(distro, compiler)
     if ( run_stage && bullseye == 'true' && !code_coverage_enabled() ) {
-        println("[${env.STAGE_NAME}] Skipping build stage due to code coverage being disabled")
+        println("[${name}] Skipping build stage due to code coverage being disabled: run_stage=${run_stage}, bullseye=${bullseye}, code_coverage_enabled=${code_coverage_enabled()}")
         run_stage = false
     }
     return {
@@ -363,6 +363,50 @@ def scriptedBuildStage(Map kwargs = [:]) {
         }
     }
 }
+
+/**
+ * scriptedUnitTestStage
+ *
+ * Get a unit test stage in scripted syntax.
+ *
+ * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
+ *  name                the unit test stage name
+ *  nodeLabel           the node label to use
+ *  unitTestArgs        Map of arguments to pass to unitTest()
+ *  stashArgs           Map of arguments to pass to optional stash() call
+ *  unitTestPostArgs    Map of arguments to pass to unitTestPost()
+ *  runCondition        Optional additional Boolean condition to determine if the stage should run
+ * @return a scripted stage to run in a pipeline
+ */
+def scriptedUnitTestStage(Map kwargs = [:]) {
+    String name = kwargs.get('name', 'Unknown Unit Test')
+    String nodeLabel = kwargs.get('nodeLabel', params.CI_UNIT_VM1_LABEL)
+    Map unitTestArgs = kwargs.get('unitTestArgs', [:])
+    Map stashArgs = kwargs.get('stashArgs', [:])
+    Map unitTestPostArgs = kwargs.get('unitTestPostArgs', [:])
+    Boolean runCondition = kwargs.get('runCondition', true)
+
+    return {
+        if (!skipStage() && runCondition) {
+            node(nodeLabel) {
+                try {
+                    // Execute the unit test
+                    job_step_update(unitTest(unitTestArgs))
+                    if (stashArgs) {
+                        stash(stashArgs)
+                    }
+                } finally {
+                    // Always execute post actions
+                    if (unitTestPostArgs) {
+                        unitTestPost(unitTestPostArgs)
+                    }
+                    job_status_update()
+                }
+            }
+        }
+    }
+}
+
 
 pipeline {
     agent { label 'lightweight' }
@@ -750,7 +794,7 @@ pipeline {
                             distro:'leap15',
                             compiler: 'icc',
                             dockerfile: 'utils/docker/Dockerfile.leap.15',
-                            build_rpms: true,
+                            build_rpms: false,
                             release: env.DAOS_RELVAL,
                             docker_build_args: dockerBuildArgs(repo_type: 'stable',
                                                                deps_build: true,
