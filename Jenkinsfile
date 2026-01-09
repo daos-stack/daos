@@ -203,6 +203,9 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     if (distro && compiler) {
         pragma_names << "build-${distro}-${compiler}"
     }
+    else if (distro) {
+        pragma_names << "build-${distro}"
+    }
     Boolean any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
     if (any_pragma_skip) {
         println("[${env.STAGE_NAME}] Skipping build stage for due to Skip-[${pragma_names}] pragma")
@@ -221,19 +224,19 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
 
 Boolean code_coverage_enabled() {
     // Determine if code coverage is enabled for the build
-    if (paramsValue('CI_CODE_COVERAGE', true) == true) {
-        env.COVFN_DISABLED = 'false'
-    }
-    return env.COVFN_DISABLED == 'false'
+    return !skip_build_stage(distro: 'bullseye', compiler: 'covc')
+    // if (paramsValue('CI_CODE_COVERAGE', true) == true) {
+    //     env.COVFN_DISABLED = 'false'
+    // }
+    // return env.COVFN_DISABLED == 'false'
 }
 
 String code_coverage_build_args() {
     // Get additional build args for code coverage, if enabled
-    Boolean code_coverage = code_coverage_enabled()
-    if (!code_coverage) {
+    if (!code_coverage_enabled()) {
         return ''
     }
-    return " --build-arg COMPILER=covc --build-arg CODE_COVERAGE=${code_coverage}"
+    return " --build-arg COMPILER=covc --build-arg CODE_COVERAGE=true"
 }
 
 String code_coverage_scons_args() {
@@ -286,53 +289,50 @@ Map nlt_post_args() {
  *
  * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
  *  name                        the build stage name
+ *  runCondition                Optional additional condition to determine if the stage should run
  *  distro                      the shorthand distro name, e.g. el9
  *  compiler                    the compiler to use, e.g. gcc
  *  dockerfile                  the dockerfile to use
- *  build_rpms                  whether or not to build rpms
+ *  buildRpms                   whether or not to build rpms
  *  release                     the DAOS RPM release value to use
- *  docker_build_args           optional docker build arguments
- *  scons_build_args            optional scons build arguments
+ *  dockerBuildArgs             optional docker build arguments
+ *  sconsBuildArgs              optional scons build arguments
  *  artifacts                   optional artifacts name to archive
  * @return a scripted stage to run in a pipeline
  */
 def scriptedBuildStage(Map kwargs = [:]) {
     String name = kwargs.get('name', 'Unknown Build Stage')
+    Boolean runCondition = kwargs.get('runCondition', true)
     String distro = kwargs.get('distro', 'el8')
     String compiler = kwargs.get('compiler', 'gcc')
     String dockerfile = kwargs.get('dockerfile', 'utils/docker/Dockerfile.el.8')
-    Boolean build_rpms = kwargs.get('build_rpms', true)
+    Boolean buildRpms = kwargs.get('buildRpms', true)
     String release = kwargs.get('release', env.DAOS_RELVAL)
-    String docker_build_args = kwargs.get('docker_build_args', '')
-    Map scons_build_args = kwargs.get('scons_build_args', [:])
+    String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
+    Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
     String upload_distro = kwargs.get('upload_distro', distro)
     String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
     String bullseye = 'false'
     if (compiler == 'covc') {
         bullseye = 'true'
     }
-    Boolean run_stage = !skip_build_stage(distro, compiler)
-    if ( run_stage && bullseye == 'true' && !code_coverage_enabled() ) {
-        println("[${name}] Skipping build stage due to code coverage being disabled: run_stage=${run_stage}, bullseye=${bullseye}, code_coverage_enabled=${code_coverage_enabled()}")
-        run_stage = false
-    }
     return {
-        if (run_stage) {
+        if (!skipStage() && runCondition) {
             node('docker_runner') {
                 def dockerImage = docker.build(
                     "${sanitized_JOB_NAME()}-${distro}",
                     " -t ${sanitized_JOB_NAME()}-${distro} " +
-                    docker_build_args +
+                    dockerBuildArgs +
                     " -f ${dockerfile} ."
                 )
                 try {
-                    if (build_rpms) {
+                    if (buildRpms) {
                         dockerImage.inside() {
                             sh label: 'Install RPMs',
                                 script: "./ci/rpm/install_deps.sh ${distro} ${release} ${bullseye}"
                             sh label: 'Build deps',
                                 script: "./ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}"
-                            job_step_update(sconsBuild(scons_build_args))
+                            job_step_update(sconsBuild(sconsBuildArgs))
                             sh label: 'Generate RPMs',
                                 script: "./ci/rpm/gen_rpms.sh ${distro} ${release}"
                             // Success actions
@@ -341,7 +341,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                     }
                     else {
                         dockerImage.inside() {
-                            job_step_update(sconsBuild(scons_build_args))
+                            job_step_update(sconsBuild(sconsBuildArgs))
                         }
                     }
                 } catch (Exception e) {
@@ -354,12 +354,15 @@ def scriptedBuildStage(Map kwargs = [:]) {
                     throw e
                 } finally {
                     // Cleanup actions
-                    if (build_rpms) {
+                    if (buildRpms) {
                         uploadNewRPMs(distro, 'cleanup')
                     }
                     job_status_update()
                 }
             }
+        }
+        else {
+            println("[${name}] Skipping build stage: skipStage()=${skipStage()}, runCondition=${runCondition}")
         }
     }
 }
@@ -371,20 +374,20 @@ def scriptedBuildStage(Map kwargs = [:]) {
  *
  * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
  *  name                the unit test stage name
+ *  runCondition        Optional additional condition to determine if the stage should run
  *  nodeLabel           the node label to use
  *  unitTestArgs        Map of arguments to pass to unitTest()
  *  stashArgs           Map of arguments to pass to optional stash() call
  *  unitTestPostArgs    Map of arguments to pass to unitTestPost()
- *  runCondition        Optional additional Boolean condition to determine if the stage should run
  * @return a scripted stage to run in a pipeline
  */
 def scriptedUnitTestStage(Map kwargs = [:]) {
     String name = kwargs.get('name', 'Unknown Unit Test')
+    Boolean runCondition = kwargs.get('runCondition', true)
     String nodeLabel = kwargs.get('nodeLabel', params.CI_UNIT_VM1_LABEL)
     Map unitTestArgs = kwargs.get('unitTestArgs', [:])
     Map stashArgs = kwargs.get('stashArgs', [:])
     Map unitTestPostArgs = kwargs.get('unitTestPostArgs', [:])
-    Boolean runCondition = kwargs.get('runCondition', true)
 
     return {
         if (!skipStage() && runCondition) {
@@ -496,9 +499,12 @@ pipeline {
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on Leap 15')
-        booleanParam(name: 'CI_CODE_COVERAGE',
-                     defaultValue: true,
-                     description: 'Enable Bullseye code coverage report')
+        booleanParam(name: 'CI_bullseye_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build sources and RPMs with Bullseye')
+        // booleanParam(name: 'CI_CODE_COVERAGE',
+        //              defaultValue: true,
+        //              description: 'Enable Bullseye code coverage report')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -726,16 +732,16 @@ pipeline {
                             distro:'el8',
                             compiler: 'gcc',
                             dockerfile: 'utils/docker/Dockerfile.el.8',
-                            build_rpms: true,
+                            buildRpms: true,
                             release: env.DAOS_RELVAL,
-                            docker_build_args: dockerBuildArgs(repo_type: 'stable',
-                                                               deps_build: false,
-                                                               parallel_build: true) +
-                                               " -t ${sanitized_JOB_NAME()}-el8" +
-                                               ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                               ' --build-arg DAOS_KEEP_SRC=yes' +
-                                               ' --build-arg REPOS="' + prRepos() + '"',
-                            scons_build_args: [
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             " -t ${sanitized_JOB_NAME()}-el8" +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg REPOS="' + prRepos() + '"',
+                            sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
                                 build_deps: 'no',
@@ -749,17 +755,17 @@ pipeline {
                             distro:'el9',
                             compiler: 'gcc',
                             dockerfile: 'utils/docker/Dockerfile.el.9',
-                            build_rpms: true,
+                            buildRpms: true,
                             release: env.DAOS_RELVAL,
-                            docker_build_args: dockerBuildArgs(repo_type: 'stable',
-                                                               deps_build: false,
-                                                               parallel_build: true) +
-                                               " -t ${sanitized_JOB_NAME()}-el9" +
-                                               ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                               ' --build-arg DAOS_KEEP_SRC=yes' +
-                                               ' --build-arg REPOS="' + prRepos() + '"' +
-                                               ' --build-arg POINT_RELEASE=.6',
-                            scons_build_args: [
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             " -t ${sanitized_JOB_NAME()}-el9" +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg REPOS="' + prRepos() + '"' +
+                                             ' --build-arg POINT_RELEASE=.6',
+                            sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
                                 build_deps: 'no',
@@ -773,16 +779,16 @@ pipeline {
                             distro:'leap15',
                             compiler: 'gcc',
                             dockerfile: 'utils/docker/Dockerfile.leap.15',
-                            build_rpms: true,
+                            buildRpms: true,
                             release: env.DAOS_RELVAL,
-                            docker_build_args: dockerBuildArgs(repo_type: 'stable',
-                                                               deps_build: false,
-                                                               parallel_build: true) +
-                                               " -t ${sanitized_JOB_NAME()}-leap15" +
-                                               ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                               ' --build-arg DAOS_KEEP_SRC=yes' +
-                                               ' --build-arg POINT_RELEASE=.5',
-                            scons_build_args: [
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             " -t ${sanitized_JOB_NAME()}-leap15" +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg POINT_RELEASE=.5',
+                            sconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'yes',
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
@@ -794,16 +800,16 @@ pipeline {
                             distro:'leap15',
                             compiler: 'icc',
                             dockerfile: 'utils/docker/Dockerfile.leap.15',
-                            build_rpms: false,
+                            buildRpms: false,
                             release: env.DAOS_RELVAL,
-                            docker_build_args: dockerBuildArgs(repo_type: 'stable',
-                                                               deps_build: true,
-                                                               parallel_build: true) +
-                                               " -t ${sanitized_JOB_NAME()}-leap15-icc" +
-                                               ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                               ' --build-arg COMPILER=icc' +
-                                               ' --build-arg POINT_RELEASE=.5',
-                            scons_build_args: [
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: true,
+                                                             parallel_build: true) +
+                                             " -t ${sanitized_JOB_NAME()}-leap15-icc" +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg COMPILER=icc' +
+                                             ' --build-arg POINT_RELEASE=.5',
+                            sconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'yes',
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
@@ -812,20 +818,21 @@ pipeline {
                         ),
                         'Build on EL 8.8 with Bullseye': scriptedBuildStage(
                             name: 'Build on EL 8.8 with Bullseye',
+                            runCondition: code_coverage_enabled(),
                             distro:'el8',
                             compiler: 'covc',
                             dockerfile: 'utils/docker/Dockerfile.el.8',
-                            build_rpms: true,
+                            buildRpms: true,
                             release: "${env.DAOS_RELVAL}.bullseye",
-                            docker_build_args: dockerBuildArgs(repo_type: 'stable',
-                                                               deps_build: false,
-                                                               parallel_build: true) +
-                                               " -t ${sanitized_JOB_NAME()}-el8-covc" +
-                                               ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                               ' --build-arg DAOS_KEEP_SRC=yes' +
-                                               ' --build-arg REPOS="' + prRepos() + '"' +
-                                               code_coverage_build_args(),
-                            scons_build_args: [
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             " -t ${sanitized_JOB_NAME()}-el8-covc" +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg REPOS="' + prRepos() + '"' +
+                                             code_coverage_build_args(),
+                            sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
                                 build_deps: 'no',
