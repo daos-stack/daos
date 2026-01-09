@@ -310,6 +310,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String release = kwargs.get('release', env.DAOS_RELVAL)
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
     Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
+    String rpmDistro = kwargs.get('rpmDistro', distro)
     String upload_distro = kwargs.get('upload_distro', distro)
     String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
     String bullseye = 'false'
@@ -329,12 +330,12 @@ def scriptedBuildStage(Map kwargs = [:]) {
                     if (buildRpms) {
                         dockerImage.inside() {
                             sh label: 'Install RPMs',
-                                script: "./ci/rpm/install_deps.sh ${distro} ${release} ${bullseye}"
+                                script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
                             sh label: 'Build deps',
                                 script: "./ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}"
                             job_step_update(sconsBuild(sconsBuildArgs))
                             sh label: 'Generate RPMs',
-                                script: "./ci/rpm/gen_rpms.sh ${distro} ${release}"
+                                script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release}"
                             // Success actions
                             uploadNewRPMs(upload_distro, 'success')
                         }
@@ -379,6 +380,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
  *  unitTestArgs        Map of arguments to pass to unitTest()
  *  stashArgs           Map of arguments to pass to optional stash() call
  *  unitTestPostArgs    Map of arguments to pass to unitTestPost()
+ *  recordIssuesArgs    Map of arguments to pass to recordIssues()
  * @return a scripted stage to run in a pipeline
  */
 def scriptedUnitTestStage(Map kwargs = [:]) {
@@ -388,6 +390,7 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
     Map unitTestArgs = kwargs.get('unitTestArgs', [:])
     Map stashArgs = kwargs.get('stashArgs', [:])
     Map unitTestPostArgs = kwargs.get('unitTestPostArgs', [:])
+    Map recordIssuesArgs = kwargs.get('recordIssuesArgs', [:])
 
     return {
         if (!skipStage() && runCondition) {
@@ -402,6 +405,9 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
                     // Always execute post actions
                     if (unitTestPostArgs) {
                         unitTestPost(unitTestPostArgs)
+                    }
+                    if (recordIssuesArgs) {
+                        recordIssues(recordIssuesArgs)
                     }
                     job_status_update()
                 }
@@ -737,7 +743,7 @@ pipeline {
                                              " -t ${sanitized_JOB_NAME()}-el8" +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg REPOS="' + prRepos() + '"',
+                                             ' --build-arg REPOS="' + prRepos('el8') + '"',
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
@@ -760,7 +766,7 @@ pipeline {
                                              " -t ${sanitized_JOB_NAME()}-el9" +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg REPOS="' + prRepos() + '"' +
+                                             ' --build-arg REPOS="' + prRepos('el9') + '"' +
                                              ' --build-arg POINT_RELEASE=.6',
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -774,6 +780,7 @@ pipeline {
                         'Build on Leap 15.5': scriptedBuildStage(
                             name: 'Build on Leap 15.5',
                             distro:'leap15',
+                            rpmDistro: 'suse.lp155',
                             compiler: 'gcc',
                             dockerfile: 'utils/docker/Dockerfile.leap.15',
                             buildRpms: true,
@@ -827,7 +834,7 @@ pipeline {
                                              " -t ${sanitized_JOB_NAME()}-el8-covc" +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg REPOS="' + prRepos() + '"' +
+                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
                                              code_coverage_build_args(),
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -849,174 +856,132 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('Unit Test on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     ignore_failure: code_coverage_enabled(),
-                                     code_coverage: code_coverage_enabled(),
-                                     coverage_stash: 'unit_test_bullseye',
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
-                    }
-                    post {
-                        always {
-                            unitTestPost unit_test_post_args('unit_test')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Unit Test bdev on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_NVME_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     ignore_failure: code_coverage_enabled(),
-                                     code_coverage: code_coverage_enabled(),
-                                     coverage_stash: 'unit_test_bdev_bullseye',
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
-                    }
-                    post {
-                        always {
-                            unitTestPost unit_test_post_args('unit_test_bdev')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('NLT on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
-                    }
-                    agent {
-                        label params.CI_NLT_1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 180,
-                                     inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
-                                     unstash_opt: true,
-                                     unstash_tests: false,
-                                     ignore_failure: code_coverage_enabled(),
-                                     code_coverage: code_coverage_enabled(),
-                                     coverage_stash: 'nlt_bullseye',
-                                     inst_rpms: unitPackages()))
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
-                        //                 skipPublishingChecks: true,
-                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
-                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
-                    }
-                    post {
-                        always {
-                            unitTestPost nlt_post_args()
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         name: 'NLT server leaks',
-                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: 'nlt-server-leaks.json',
-                                           name: 'NLT server results',
-                                           id: 'NLT_server'),
-                                         scm: 'daos-stack/daos'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Unit Test with memcheck on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_UNIT_MEMCHECK && !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 160,
-                                     unstash_opt: true,
-                                     ignore_failure: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test with memcheck on EL 8.8')
-                stage('Unit Test bdev with memcheck on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_UNIT_MEMCHECK && !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_NVME_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 180,
-                                     unstash_opt: true,
-                                     ignore_failure: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
-                                                     'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test bdev with memcheck on EL 8')
-                stage('Unit Test with Code Coverage on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_UNIT_TEST_CODE_COVERAGE && !skipStage() && code_coverage_enabled() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     ignore_failure: 'true',
-                                     code_coverage: 'true',
-                                     coverage_stash: 'unit_test_bullseye',
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
-                    }
-                    post {
-                        always {
-                            unitTestPost unit_test_post_args('unit_test')
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test with Code Coverage on EL 8.8')
-            }
-        }
+            steps {
+                script {
+                    parallel(
+                        'Unit Test on EL 8.8': scriptedUnitTestStage(
+                            name: 'Unit Test on EL 8.8',
+                            runCondition: params.CI_UNIT_TEST,
+                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+                            unitTestArgs: [
+                                timeout_time: 60,
+                                unstash_opt: true,
+                                inst_repos: daosRepos(),
+                                inst_rpms: unitPackages()
+                            ],
+                            unitTestPostArgs: [
+                                artifacts: ['unit_test_logs/']
+                            ]
+                        ),
+                        'Unit Test bdev on EL 8.8': scriptedUnitTestStage(
+                            name: 'Unit Test bdev on EL 8.8',
+                            runCondition: params.CI_UNIT_TEST,
+                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+                            unitTestArgs: [
+                                timeout_time: 60,
+                                unstash_opt: true,
+                                inst_repos: daosRepos(),
+                                inst_rpms: unitPackages()
+                            ],
+                            unitTestPostArgs: [
+                                artifacts: ['unit_test_bdev_logs/']
+                            ]
+                        ),
+                        'NLT on EL 8.8': scriptedUnitTestStage(
+                            name: 'NLT on EL 8.8',
+                            runCondition: params.CI_NLT_TEST,
+                            nodeLabel: params.CI_NLT_1_LABEL,
+                            unitTestArgs: [
+                                timeout_time: 60,
+                                inst_repos: daosRepos(),
+                                test_script: 'ci/unit/test_nlt.sh',
+                                unstash_opt: true,
+                                unstash_tests: false,
+                                // ignore_failure: code_coverage_enabled(),
+                                // code_coverage: code_coverage_enabled(),
+                                // coverage_stash: 'nlt_bullseye',
+                                inst_rpms: unitPackages()
+                            ],
+                            stashArgs: [
+                                name: 'nltr',
+                                includes: 'nltr.json',
+                                allowEmpty: true
+                            ],
+                            unitTestPostArgs: [
+                                artifacts: ['nlt_logs/'],
+                                testResults: 'nlt-junit.xml',
+                                always_script: 'ci/unit/test_nlt_post.sh',
+                                valgrind_stash: 'el8-gcc-nlt-memcheck'
+                            ],
+                            recordIssuesArgs: [
+                                enabledForFailure: true,
+                                failOnError: false,
+                                ignoreQualityGate: true,
+                                name: 'NLT server leaks',
+                                qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+                                tool: issues(pattern: 'nlt-server-leaks.json',
+                                             name: 'NLT server results',
+                                             id: 'NLT_server'),
+                                scm: 'daos-stack/daos'
+                            ]
+                        ),
+                        'Unit Test with memcheck on EL 8.8': scriptedUnitTestStage(
+                            name: 'Unit Test with memcheck on EL 8.8',
+                            runCondition: params.CI_UNIT_TEST_MEMCHECK,
+                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+                            unitTestArgs: [
+                                timeout_time: 160,
+                                unstash_opt: true,
+                                ignore_failure: true,
+                                inst_repos: daosRepos(),
+                                inst_rpms: unitPackages()
+                            ],
+                            unitTestPostArgs: [
+                                artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                            'unit_test_memcheck_logs/**/*.log'],
+                                valgrind_stash: 'el8-gcc-unit-memcheck'
+                            ]
+                        ),
+                        'Unit Test bdev with memcheck on EL 8.8': scriptedUnitTestStage(
+                            name: 'Unit Test bdev with memcheck on EL 8.8',
+                            runCondition: params.CI_UNIT_TEST_MEMCHECK,
+                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+                            unitTestArgs: [
+                                timeout_time: 180,
+                                unstash_opt: true,
+                                ignore_failure: true,
+                                inst_repos: daosRepos(),
+                                inst_rpms: unitPackages()
+                            ],
+                            unitTestPostArgs: [
+                                artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+                                            'unit_test_memcheck_bdev_logs/**/*.log'],
+                                valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+                            ]
+                        ),
+                        'Unit Test with Bullseye on EL 8.8': scriptedUnitTestStage(
+                            name: 'Unit Test with Bullseye on EL 8.8',
+                            runCondition: params.CI_UNIT_TEST_BULLSEYE && code_coverage_enabled(),
+                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+                            unitTestArgs: [
+                                timeout_time: 120,
+                                unstash_opt: true,
+                                ignore_failure: true,
+                                code_coverage: true,
+                                coverage_stash: 'el8-gcc-unit-bullseye',
+                                inst_repos: daosRepos(),
+                                inst_rpms: unitPackages()
+                            ],
+                            unitTestPostArgs: [
+                                artifacts: ['unit_test_bullseye_logs/'],
+                                ignore_failure: true,
+                                code_coverage: true
+                            ]
+                        )
+                    ) // parallel
+                } // script
+            } // steps
+        } // stage('Unit Tests')
         stage('Test') {
             when {
                 beforeAgent true
