@@ -318,27 +318,24 @@ def scriptedBuildStage(Map kwargs = [:]) {
         bullseye = 'true'
     }
     return {
-        if (!skipStage() && runCondition) {
+        if (!skip_build_stage(distro, compiler) && runCondition) {
             node('docker_runner') {
                 def dockerImage = docker.build(
                     "${sanitized_JOB_NAME()}-${distro}-${compiler}", dockerBuildArgs)
                 try {
-                    if (buildRpms) {
-                        dockerImage.inside() {
+                    dockerImage.inside() {
+                        if (buildRpms) {
                             sh label: 'Install RPMs',
                                 script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
                             sh label: 'Build deps',
                                 script: "./ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}"
-                            job_step_update(sconsBuild(sconsBuildArgs))
+                        }
+                        job_step_update(sconsBuild(sconsBuildArgs))
+                        if (buildRpms) {
                             sh label: 'Generate RPMs',
                                 script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release}"
                             // Success actions
                             uploadNewRPMs(upload_distro, 'success')
-                        }
-                    }
-                    else {
-                        dockerImage.inside() {
-                            job_step_update(sconsBuild(sconsBuildArgs))
                         }
                     }
                 } catch (Exception e) {
@@ -813,18 +810,17 @@ pipeline {
                             artifacts: "config.log-leap15-intelc"
                         ),
                         'Build on EL 8.8 with Bullseye': scriptedBuildStage(
-                            name: 'Build on EL 8.8 with Bullseye',
+                            name: 'Build on EL 8.8',
                             runCondition: code_coverage_enabled(),
                             distro:'el8',
                             compiler: 'covc',
                             buildRpms: true,
-                            release: "${env.DAOS_RELVAL}.bullseye",
+                            release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             code_coverage_build_args() +
                                              ' --build-arg REPOS="' + prRepos('el8') + '"' +
                                              ' -f utils/docker/Dockerfile.el.8 .',
                             sconsBuildArgs: [
@@ -832,11 +828,34 @@ pipeline {
                                 stash_files: 'ci/test_files_to_stash.txt',
                                 build_deps: 'no',
                                 stash_opt: true,
-                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release' +
-                                            code_coverage_scons_args()
+                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            upload_distro: 'el8-bullseye',
                             artifacts: "config.log-el8-covc"
+                            // name: 'Build on EL 8.8 with Bullseye',
+                            // runCondition: code_coverage_enabled(),
+                            // distro:'el8',
+                            // compiler: 'covc',
+                            // buildRpms: true,
+                            // release: "${env.DAOS_RELVAL}.bullseye",
+                            // dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                            //                                  deps_build: false,
+                            //                                  parallel_build: true) +
+                            //                  ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                            //                  ' --build-arg DAOS_KEEP_SRC=yes' +
+                            //                  ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                            //                  ' --build-arg COMPILER=covc' +
+                            //                  ' --build-arg CODE_COVERAGE=true' +
+                            //                  ' -f utils/docker/Dockerfile.el.8 .',
+                            // sconsBuildArgs: [
+                            //     parallel_build: true,
+                            //     stash_files: 'ci/test_files_to_stash.txt',
+                            //     build_deps: 'no',
+                            //     stash_opt: true,
+                            //     scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release' +
+                            //                 ' COMPILER=covc'
+                            // ],
+                            // upload_distro: 'el8-bullseye',
+                            // artifacts: "config.log-el8-covc"
                         )
                     ) // parallel
                 } // script
