@@ -58,14 +58,14 @@ char *g_akeys_str[] = {
 
 char *g_invalid_key_str = "invalid key";
 
-daos_unit_oid_t	g_oids[10];
-uuid_t		g_uuids[10];
-daos_key_t	g_dkeys[10];
-daos_key_t	g_akeys[10];
-daos_recx_t	g_recxs[10];
-daos_key_t	g_invalid_key;
-daos_recx_t	g_invalid_recx = {.rx_nr = 9999, .rx_idx = 9999};
-
+daos_unit_oid_t g_oids[10];
+uuid_t          g_uuids[10];
+daos_key_t      g_dkeys[10];
+daos_key_t      g_akeys[10];
+daos_recx_t     g_recxs[10];
+daos_key_t      g_invalid_key;
+daos_recx_t     g_invalid_recx  = {.rx_nr = 9999, .rx_idx = 9999};
+const char     *g_csum_uuid_str = "12345678-1234-1234-1234-123456789101";
 
 daos_unit_oid_t
 dvt_gen_uoid(uint32_t i)
@@ -615,6 +615,241 @@ char_in_tests(char a, char *str, uint32_t str_len)
 	}
 
 	return false;
+}
+
+static int
+csum_test_sv_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
+{
+	struct dt_csum_ctx *csum_ctx;
+	daos_iod_t          iod;
+	char               *buf;
+	int                 rc;
+
+	csum_ctx = tctx->dvt_extra;
+
+	D_ALLOC(buf, csum_ctx->dct_sv_size);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	d_iov_set(&iod.iod_name, g_akeys_str[0], strlen(g_akeys_str[0]));
+	iod.iod_nr    = 1;
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	iod.iod_size  = csum_ctx->dct_sv_size;
+	iod.iod_recxs = NULL;
+
+	// Objects with even OID index will not have checksum info calculated
+	memset(buf, 'a', csum_ctx->dct_sv_size);
+	d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_sv_size);
+	rc = vos_obj_update(coh, g_oids[0], 1, 0, 0, &g_dkeys[0], 1, &iod, NULL, sgl);
+	if (rc != 0)
+		goto out_buf;
+
+	// Objects with odd OID index will have checksum info calculated
+	memset(buf, 'b', csum_ctx->dct_sv_size);
+	d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_sv_size);
+	rc = daos_csummer_calc_iods(csum_ctx->dct_csummer, sgl, &iod, NULL, 1, false, NULL, 0,
+				    &csum_ctx->dct_sv_ic);
+	if (rc != 0)
+		goto out_buf;
+	rc =
+	    vos_obj_update(coh, g_oids[1], 1, 0, 0, &g_dkeys[0], 1, &iod, csum_ctx->dct_sv_ic, sgl);
+	if (rc != 0)
+		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ic);
+
+out_buf:
+	D_FREE(buf);
+out:
+	return rc;
+}
+
+static int
+csum_test_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
+{
+	struct dt_csum_ctx *csum_ctx;
+	daos_iod_t          iod;
+	char               *buf;
+	char                filler;
+	daos_recx_t         recx;
+	int                 recx_idx;
+	daos_epoch_t        epoch;
+	int                 rc;
+
+	csum_ctx = tctx->dvt_extra;
+
+	D_ALLOC(buf, csum_ctx->dct_recx_size);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	d_iov_set(&iod.iod_name, g_akeys_str[1], strlen(g_akeys_str[1]));
+	iod.iod_nr   = 1;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+
+	recx.rx_nr = csum_ctx->dct_recx_size;
+
+	// Objects with even OID index will not have checksum info calculated
+	epoch  = 1;
+	filler = 'c';
+	for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_SIZE; recx_idx++) {
+		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / 2;
+		iod.iod_recxs = &recx;
+
+		memset(buf, filler, csum_ctx->dct_recx_size);
+		d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_recx_size);
+
+		rc = vos_obj_update(coh, g_oids[0], epoch, 0, 0, &g_dkeys[0], 1, &iod, NULL, sgl);
+		if (rc != 0)
+			goto out_buf;
+
+		epoch++;
+		filler++;
+	}
+
+	// Objects with odd OID index will have checksum info calculated
+	epoch = 1;
+	for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_SIZE; recx_idx++) {
+		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / 2;
+		iod.iod_recxs = &recx;
+
+		memset(buf, filler, csum_ctx->dct_recx_size);
+		d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_recx_size);
+
+		rc = daos_csummer_calc_iods(csum_ctx->dct_csummer, sgl, &iod, NULL, 1, false, NULL,
+					    0, &csum_ctx->dct_recx_ics[recx_idx]);
+		if (rc)
+			goto out_ics;
+		rc = vos_obj_update(coh, g_oids[1], epoch, 0, 0, &g_dkeys[0], 1, &iod,
+				    csum_ctx->dct_recx_ics[recx_idx], sgl);
+		if (rc != 0)
+			goto out_ics;
+
+		epoch++;
+		filler++;
+	}
+
+out_ics:
+	if (rc != 0) {
+		for (recx_idx = 0; recx_idx < 2; recx_idx++) {
+			if (csum_ctx->dct_recx_ics[recx_idx] == NULL)
+				break;
+			daos_csummer_free_ic(csum_ctx->dct_csummer,
+					     &csum_ctx->dct_recx_ics[recx_idx]);
+		}
+	}
+out_buf:
+	D_FREE(buf);
+out:
+	return rc;
+}
+
+int
+ddb_test_csum_setup(void **state)
+{
+	struct dt_vos_pool_ctx *tctx;
+	struct dt_csum_ctx     *csum_ctx;
+	daos_handle_t           poh;
+	daos_handle_t           coh;
+	d_sg_list_t             sgl;
+	int                     rc;
+
+	tctx            = *state;
+	tctx->dvt_extra = NULL;
+
+	D_ALLOC_PTR(csum_ctx);
+	if (csum_ctx == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	csum_ctx->dct_sv_size    = 1u << 10;
+	csum_ctx->dct_recx_size  = 1u << 13;
+	csum_ctx->dct_chunk_size = 1u << 12;
+	csum_ctx->dct_csum_type  = HASH_TYPE_CRC64;
+	csum_ctx->dct_sv_ic      = NULL;
+	memset(&csum_ctx->dct_recx_ics[0], 0, sizeof(csum_ctx->dct_recx_ics));
+	rc = daos_csummer_init_with_type(&csum_ctx->dct_csummer, csum_ctx->dct_csum_type,
+					 csum_ctx->dct_chunk_size, 0);
+	if (rc != 0)
+		goto out_csum_ctx;
+	tctx->dvt_extra = csum_ctx;
+
+	rc = vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &poh);
+	if (rc != 0)
+		goto out_csummer;
+
+	rc = uuid_parse(g_csum_uuid_str, csum_ctx->dct_cont_uuid);
+	if (rc != 0)
+		goto out_pool;
+	rc = vos_cont_create(poh, csum_ctx->dct_cont_uuid);
+	if (rc != 0)
+		goto out_pool;
+	rc = vos_cont_open(poh, csum_ctx->dct_cont_uuid, &coh);
+	if (rc != 0)
+		goto out_cont_destroy;
+
+	rc = d_sgl_init(&sgl, 1);
+	if (rc != 0)
+		goto out_cont_close;
+
+	rc = csum_test_sv_setup(tctx, coh, &sgl);
+	if (rc != 0)
+		goto out_sgl;
+	rc = csum_test_recx_setup(tctx, coh, &sgl);
+
+out_sgl:
+	d_sgl_fini(&sgl, false);
+out_cont_close:
+	vos_cont_close(coh);
+out_cont_destroy:
+	if (rc != 0)
+		vos_cont_destroy(poh, csum_ctx->dct_cont_uuid);
+out_pool:
+	vos_pool_close(poh);
+out_csummer:
+	if (rc != 0)
+		daos_csummer_destroy(&csum_ctx->dct_csummer);
+out_csum_ctx:
+	if (rc != 0) {
+		D_FREE(csum_ctx);
+		tctx->dvt_extra = NULL;
+	}
+out:
+	return rc;
+}
+
+int
+ddb_test_csum_teardown(void **state)
+{
+	struct dt_vos_pool_ctx *tctx;
+	struct dt_csum_ctx     *csum_ctx;
+	daos_handle_t           poh;
+	int                     ci_idx;
+	int                     rc = 0;
+
+	tctx     = *state;
+	csum_ctx = tctx->dvt_extra;
+	if (csum_ctx == NULL)
+		goto out;
+
+	rc = vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &poh);
+	if (rc != 0)
+		goto out;
+
+	daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ic);
+	for (ci_idx = 0; ci_idx < DVT_FAKE_RECX_SIZE; ci_idx++)
+		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_recx_ics[ci_idx]);
+	daos_csummer_destroy(&csum_ctx->dct_csummer);
+
+	vos_cont_destroy(poh, csum_ctx->dct_cont_uuid);
+
+	D_FREE(csum_ctx);
+
+	vos_pool_close(poh);
+out:
+	return rc;
 }
 
 /*
