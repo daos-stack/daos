@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -137,6 +137,11 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
 		} else {
 			fmt.Fprintf(w, "- Rebuild failed, status=%d\n", pi.Rebuild.Status)
+		}
+		if pi.Rebuild.Degraded {
+			fmt.Fprintln(w, "- Data redundancy: degraded")
+		} else {
+			fmt.Fprintln(w, "- Data redundancy: normal")
 		}
 	} else {
 		fmt.Fprintln(w, "- No rebuild status available.")
