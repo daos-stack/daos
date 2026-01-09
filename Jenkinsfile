@@ -221,7 +221,7 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
 
 Boolean code_coverage_enabled() {
     // Determine if code coverage is enabled for the build
-    if (startedByTimer()) {
+    if (paramsValue('CI_CODE_COVERAGE', true) == true) {
         env.COVFN_DISABLED = 'false'
     }
     return env.COVFN_DISABLED == 'false'
@@ -234,7 +234,6 @@ String code_coverage_build_args() {
         return ''
     }
     return " --build-arg COMPILER=covc --build-arg CODE_COVERAGE=${code_coverage}"
-    // return " --build-arg COMPILER=covc --build-arg BULLSEYE_KEY=${env.BULLSEYE_KEY} --build-arg CODE_COVERAGE=${code_coverage}"
 }
 
 String code_coverage_scons_args() {
@@ -247,10 +246,10 @@ String code_coverage_scons_args() {
 
 String add_daos_pkgs() {
     // Get the additional daos package names to install in functional test stages
-    if (code_coverage_enabled()) {
-        return "tests-internal,-code-coverage"
-    }
-    return "tests-internal"
+    // if (code_coverage_enabled()) {
+    //     return 'tests-internal,-code-coverage'
+    // }
+    return 'tests-internal'
 }
 
 Map unit_test_post_args(String name) {
@@ -282,12 +281,6 @@ Map nlt_post_args() {
 
 pipeline {
     agent { label 'lightweight' }
-
-    triggers {
-        // Generate a code coverage report each Sunday
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 6 * * 0' : '')
-    }
 
     environment {
         BULLSEYE_KEY = credentials('bullseye_license_key')
@@ -374,9 +367,9 @@ pipeline {
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on Leap 15')
-        // booleanParam(name: 'CI_CODE_COVERAGE',
-        //              defaultValue: false,
-        //              description: 'Enable Bullseye code coverage report')
+        booleanParam(name: 'CI_CODE_COVERAGE',
+                     defaultValue: true,
+                     description: 'Enable Bullseye code coverage report')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -389,6 +382,9 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
+        booleanParam(name: 'CI_UNIT_TEST_CODE_COVERAGE',
+                     defaultValue: true,
+                     description: 'Run the Unit Test with Code Coverage on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
@@ -609,26 +605,24 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                code_coverage_build_args()
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} ${code_coverage_enabled()}"
+                                script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL}"
                             sh label: 'Build deps',
-                                script: "./ci/rpm/build_deps.sh ${code_coverage_enabled()} ${env.BULLSEYE_KEY}"
+                                script: "./ci/rpm/build_deps.sh"
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
                                            scons_args: sconsArgs() +
-                                                       ' PREFIX=/opt/daos TARGET_TYPE=release' +
-                                                       code_coverage_scons_args()))
+                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL} ${code_coverage_enabled()}"
+                                script: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL}"
                         }
                     }
                     post {
@@ -651,7 +645,7 @@ pipeline {
                 stage('Build on EL 9.6') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('el9') && !code_coverage_enabled() }
+                        expression { !skip_build_stage('el9') }
                     }
                     agent {
                         dockerfile {
@@ -665,7 +659,6 @@ pipeline {
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.6 '
-
                         }
                     }
                     steps {
@@ -705,7 +698,7 @@ pipeline {
                 stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('leap15') && !code_coverage_enabled() }
+                        expression { !skip_build_stage('leap15') }
                     }
                     agent {
                         dockerfile {
@@ -756,7 +749,7 @@ pipeline {
                 stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('leap15', 'icc') && !code_coverage_enabled() }
+                        expression { !skip_build_stage('leap15', 'icc') }
                     }
                     agent {
                         dockerfile {
@@ -788,6 +781,61 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on EL 8.8 with Code Coverage') {
+                    when {
+                        beforeAgent true
+                        expression { !skip_build_stage('el8') && code_coverage_enabled() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: false,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-el8 " +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=.6 ' +
+                                                code_coverage_build_args()
+                        }
+                    }
+                    steps {
+                        script {
+                            sh label: 'Install RPMs',
+                                script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} true"
+                            sh label: 'Build deps',
+                                script: "./ci/rpm/build_deps.sh true ${env.BULLSEYE_KEY}"
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_args: sconsArgs() +
+                                                       ' PREFIX=/opt/daos TARGET_TYPE=release' +
+                                                       ' COMPILER=covc'))
+                            sh label: 'Generate RPMs',
+                                script: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL}-bullseye true"
+                        }
+                    }
+                    post {
+                        success {
+                            uploadNewRPMs('el8', 'success')
+                        }
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-el8-covc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-el8-covc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
+                            uploadNewRPMs('el8', 'cleanup')
                             job_status_update()
                         }
                     }
@@ -893,7 +941,7 @@ pipeline {
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_enabled() }
+                        expression { params.CI_UNIT_MEMCHECK && !skipStage() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -918,7 +966,7 @@ pipeline {
                 stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_enabled() }
+                        expression { params.CI_UNIT_MEMCHECK && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -940,6 +988,31 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck on EL 8')
+                stage('Unit Test with Code Coverage on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { params.CI_UNIT_TEST_CODE_COVERAGE && !skipStage() && code_coverage_enabled() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     ignore_failure: 'true',
+                                     code_coverage: 'true',
+                                     coverage_stash: 'unit_test_bullseye',
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost unit_test_post_args('unit_test')
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit Test with Code Coverage on EL 8.8')
             }
         }
         stage('Test') {
@@ -953,7 +1026,7 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_enabled() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -997,7 +1070,7 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_enabled() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label vm9_label('EL9')
@@ -1019,7 +1092,7 @@ pipeline {
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_enabled() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1064,7 +1137,7 @@ pipeline {
                 stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !code_coverage_enabled() && !code_coverage_enabled() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -1120,7 +1193,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() && !code_coverage_enabled() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1140,7 +1213,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() && !code_coverage_enabled() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL

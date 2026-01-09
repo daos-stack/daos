@@ -30,17 +30,16 @@ add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}"
 bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"
 sudo dnf install --allowerasing -y "${bullseye_pkg}" || echo "${bullseye_pkg} not available"
 
-# Install bullshtml
-bullshtml_vers=1.0.5
-bullshtml_src=https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/bullshtml
-bullshtml_tar="bullshtml_${bullshtml_vers}.tar.gz"
-if [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
-    export https_proxy="${DAOS_HTTPS_PROXY}"
-fi
-sudo dnf install -y wget
-wget "${bullshtml_src}/${bullshtml_tar}"
-tar --strip-components=1 -xf "${bullshtml_tar}"
-exit 0
+# # Install bullshtml
+# bullshtml_vers=1.0.5
+# bullshtml_src=https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/bullshtml
+# bullshtml_tar="bullshtml_${bullshtml_vers}.tar.gz"
+# if [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
+#     export https_proxy="${DAOS_HTTPS_PROXY}"
+# fi
+# sudo dnf install -y wget
+# wget "${bullshtml_src}/${bullshtml_tar}"
+# tar --strip-components=1 -xf "${bullshtml_tar}"
 
 # bullshtml_pkg="$(utils/rpms/package_version.sh bullshtml normal)"
 # sudo dnf install --allowerasing -y "${bullshtml_pkg}" || echo "${bullshtml_pkg} not available"
