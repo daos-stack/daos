@@ -18,19 +18,22 @@
 #include <libgen.h>
 #include <sys/stat.h>
 
-extern bool		 g_verbose;
-extern const char	*g_uuids_str[10];
-extern const char	*g_invalid_uuid_str;
-extern uuid_t		 g_uuids[10];
-extern daos_unit_oid_t	 g_oids[10];
-extern daos_unit_oid_t	 g_invalid_oid;
-extern char		*g_dkeys_str[10];
-extern char		*g_akeys_str[10];
-extern daos_key_t	 g_dkeys[10];
-extern daos_key_t	 g_akeys[10];
-extern daos_key_t	 g_invalid_key;
-extern daos_recx_t	 g_recxs[10];
-extern daos_recx_t	 g_invalid_recx;
+extern bool                      g_verbose;
+extern const char               *g_uuids_str[10];
+extern const char               *g_invalid_uuid_str;
+extern uuid_t                    g_uuids[10];
+extern daos_unit_oid_t           g_oids[10];
+extern daos_unit_oid_t           g_invalid_oid;
+extern char                     *g_dkeys_str[10];
+extern char                     *g_akeys_str[10];
+extern daos_key_t                g_dkeys[10];
+extern daos_key_t                g_akeys[10];
+extern daos_key_t                g_invalid_key;
+extern daos_recx_t               g_recxs[10];
+extern daos_recx_t               g_invalid_recx;
+extern const enum DAOS_HASH_TYPE g_csum_type;
+extern const size_t              g_csum_chunk_size;
+extern struct daos_csummer      *g_csummer;
 
 struct dt_vos_pool_ctx {
 	daos_handle_t	dvt_poh;

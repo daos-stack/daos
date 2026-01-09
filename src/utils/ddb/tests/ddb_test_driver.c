@@ -66,6 +66,9 @@ daos_recx_t	g_recxs[10];
 daos_key_t	g_invalid_key;
 daos_recx_t	g_invalid_recx = {.rx_nr = 9999, .rx_idx = 9999};
 
+const enum DAOS_HASH_TYPE g_csum_type       = HASH_TYPE_CRC64;
+const size_t              g_csum_chunk_size = 1u << 12;
+struct daos_csummer      *g_csummer;
 
 daos_unit_oid_t
 dvt_gen_uoid(uint32_t i)
@@ -87,6 +90,8 @@ void
 dvt_vos_insert_recx(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, char *akey_str,
 		    daos_recx_t *recx, daos_epoch_t epoch)
 {
+	struct dcs_iod_csums *ic;
+
 	daos_key_t dkey = DEFINE_IOV(dkey_str);
 
 	d_iov_t iov = DEFINE_IOV("This is a recx value");
@@ -100,13 +105,19 @@ dvt_vos_insert_recx(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, cha
 		.iod_recxs = recx
 	};
 
-	assert_success(vos_obj_update(coh, uoid, epoch, 0, 0, &dkey, 1, &iod, NULL, &sgl));
+	assert_success(daos_csummer_calc_iods(g_csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic));
+
+	assert_success(vos_obj_update(coh, uoid, epoch, 0, 0, &dkey, 1, &iod, ic, &sgl));
+
+	daos_csummer_free_ic(g_csummer, &ic);
 }
 
 void
 dvt_vos_insert_single(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, char *akey_str,
 		      char *data_str, daos_epoch_t epoch)
 {
+	struct dcs_iod_csums *ic;
+
 	daos_key_t dkey = DEFINE_IOV(dkey_str);
 
 	d_iov_t iov = DEFINE_IOV(data_str);
@@ -119,7 +130,11 @@ dvt_vos_insert_single(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, c
 		.iod_size = strlen(data_str)
 	};
 
-	assert_success(vos_obj_update(coh, uoid, epoch, 0, 0, &dkey, 1, &iod, NULL, &sgl));
+	assert_success(daos_csummer_calc_iods(g_csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic));
+
+	assert_success(vos_obj_update(coh, uoid, epoch, 0, 0, &dkey, 1, &iod, ic, &sgl));
+
+	daos_csummer_free_ic(g_csummer, &ic);
 }
 
 /*
@@ -282,6 +297,8 @@ ddb_test_setup_vos(void **state)
 	assert_non_null(tctx);
 	vos_self_init("/mnt/daos", false, 0);
 
+	assert_success(daos_csummer_init_with_type(&g_csummer, g_csum_type, g_csum_chunk_size, 0));
+
 	assert_success(ddb_test_pool_setup(tctx));
 
 	assert_success(vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &poh));
@@ -319,6 +336,8 @@ ddb_teardown_vos(void **state)
 		assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
 		vos_self_fini();
 	}
+
+	daos_csummer_destroy(&g_csummer);
 
 	close(tctx->dvt_fd);
 	D_FREE(tctx);

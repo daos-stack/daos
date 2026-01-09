@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -503,6 +504,92 @@ get_obj_ilog_tests(void **state)
 	assert_int_equal(1, fake_dump_ilog_entry_called);
 
 	vos_cont_close(coh);
+}
+
+static int
+dump_csum_sv_cb(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	struct dcs_csum_info *ci;
+	struct hash_ft       *hf;
+
+	assert_true(cb_args == dump_csum_sv_cb);
+
+	assert_null(rel);
+
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 1);
+	hf = daos_mhash_type2algo(ci->cs_type);
+	assert_int_equal(hf->cf_type, g_csum_type);
+
+	return 0;
+}
+
+static void
+dump_csum_sv_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, g_uuids[0]);
+	path.vtp_oid     = g_oids[0];
+	path.vtp_dkey    = g_dkeys[0];
+	path.vtp_akey    = g_akeys[1]; /* single value type */
+	path.vtp_is_recx = false;
+	rc               = dv_dump_csum(DAOS_HDL_INVAL, &path, DAOS_EPOCH_MAX, NULL, NULL);
+	assert_rc_equal(-DER_INVAL, rc);
+
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_sv_cb, dump_csum_sv_cb);
+	assert_success(rc);
+}
+
+static int
+dump_csum_recx_cb(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	struct dcs_csum_info *ci;
+	struct hash_ft       *hf;
+
+	assert_true(cb_args == dump_csum_recx_cb);
+
+	assert_non_null(rel);
+	assert_int_equal(rel->re_nr, 1);
+	assert_int_equal(rel->re_items[0].re_recx.rx_idx, g_recxs[0].rx_idx);
+	assert_int_equal(rel->re_items[0].re_recx.rx_nr, g_recxs[0].rx_nr);
+	assert_int_equal(rel->re_items[0].re_ep, 1);
+
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 1);
+	hf = daos_mhash_type2algo(ci->cs_type);
+	assert_int_equal(hf->cf_type, g_csum_type);
+
+	return 0;
+}
+
+static void
+dump_csum_recx_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, g_uuids[0]);
+	path.vtp_oid     = g_oids[0];
+	path.vtp_dkey    = g_dkeys[0];
+	path.vtp_akey    = g_akeys[0]; /* recx type */
+	path.vtp_recx    = g_recxs[0];
+	path.vtp_is_recx = true;
+
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_recx_cb,
+			  dump_csum_recx_cb);
+	assert_success(rc);
 }
 
 static void
@@ -1134,6 +1221,8 @@ const struct CMUnitTest dv_test_cases[] = {
     TEST(get_recx_from_idx_tests),
     TEST(get_value_tests),
     TEST(get_obj_ilog_tests),
+    TEST(dump_csum_sv_tests),
+    TEST(dump_csum_recx_tests),
     TEST(abort_obj_ilog_tests),
     TEST(get_dkey_ilog_tests),
     TEST(abort_dkey_ilog_tests),
