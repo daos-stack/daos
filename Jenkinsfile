@@ -279,6 +279,78 @@ Map nlt_post_args() {
     return args
 }
 
+/**
+ * scriptedBuildStage
+ *
+ * Get a build stage in scripted syntax.
+ *
+ * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
+ *      distro                      the shorthand distro name, e.g. el9
+ *      compiler                    the compiler to use, e.g. gcc
+ *      dockerfile                  the dockerfile to use
+ *      config Map containing:
+ *          dockerBuildArgs         optional docker build arguments
+ *          buildDeps               build_deps argument for sconsBuild
+ *          stashOpt                stash_opt argument for sconsBuild
+ *          sconsArgs               scons_args argument for sconsBuild
+ *          daosReleaseValue        relval to use when generating RPMs
+ * @return a scripted stage to run in a pipeline
+ */
+def scriptedBuildStage(String distro, String compiler, String dockerfile, Map config) {
+    String relVal = config.get('daosReleaseValue', env.DAOS_RELVAL)
+    String code_coverage = 'false'
+    if (compiler == 'covc') {
+        code_coverage = 'true'
+    }
+    Boolean run_stage = !skip_build_stage(distro, compiler)
+    if ( run_stage && code_coverage == 'true' && !code_coverage_enabled() ) {
+        println("[${env.STAGE_NAME}] Skipping build stage due to code coverage being disabled")
+        run_stage = false
+    }
+    return {
+        if (run_stage) {
+            node('docker_runner') {
+                def dockerImage = docker.build(
+                    "${sanitized_JOB_NAME()}-${distro}",
+                    " -t ${sanitized_JOB_NAME()}-${distro} " +
+                    config.get('dockerBuildArgs', '') +
+                    " -f ${dockerfile} ."
+                )
+                try {
+                    dockerImage.inside() {
+                        sh label: 'Install RPMs',
+                           script: "./ci/rpm/install_deps.sh ${distro} ${relVal} ${code_coverage}"
+                        sh label: 'Build deps',
+                           script: "./ci/rpm/build_deps.sh ${code_coverage} ${env.BULLSEYE_KEY}"
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: config.get('buildDeps', 'no'),
+                                       stash_opt: config.get('stashOpt', true),
+                                       scons_args: config.get('sconsArgs', sconsArgs())))
+                        sh label: 'Generate RPMs',
+                           script: "./ci/rpm/gen_rpms.sh ${distro} ${relVal}"
+                        // Success actions
+                        uploadNewRPMs(distro, 'success')
+                    }
+                } catch (Exception e) {
+                    // Unsuccessful actions
+                    sh """if [ -f config.log ]; then
+                              mv config.log config.log-${distro}-${compiler}
+                          fi"""
+                    archiveArtifacts artifacts: "config.log-${distro}-${compiler}",
+                                     allowEmptyArchive: true
+                    throw e
+                } finally {
+                    // Cleanup actions
+                    uploadNewRPMs(distro, 'cleanup')
+                    job_status_update()
+                }
+            }
+        }
+    }
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -589,259 +661,97 @@ pipeline {
                 beforeAgent true
                 expression { !skip_build_stage() }
             }
-            parallel {
-                stage('Build on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('el8') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL}"
-                            sh label: 'Build deps',
-                                script: "./ci/rpm/build_deps.sh"
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                           stash_files: 'ci/test_files_to_stash.txt',
-                                           build_deps: 'no',
-                                           stash_opt: true,
-                                           scons_args: sconsArgs() +
-                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL}"
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('el8', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('el8', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 9.6') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('el9') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.6 '
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                           stash_files: 'ci/test_files_to_stash.txt',
-                                           build_deps: 'no',
-                                           stash_opt: true,
-                                           scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('el9', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el9-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el9-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('el9', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('leap15') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: false) +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg POINT_RELEASE=.5 '
-
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                scons_args: sconsFaultsArgs() +
-                                ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                build_deps: 'yes'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('leap15', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('leap15', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('leap15', 'icc') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-icc" +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg COMPILER=icc' +
-                                                ' --build-arg POINT_RELEASE=.5 '
-
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-intelc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 8.8 with Code Coverage') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('el8') && code_coverage_enabled() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.6 ' +
-                                                code_coverage_build_args()
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} true"
-                            sh label: 'Build deps',
-                                script: "./ci/rpm/build_deps.sh true ${env.BULLSEYE_KEY}"
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                           stash_files: 'ci/test_files_to_stash.txt',
-                                           build_deps: 'no',
-                                           stash_opt: true,
-                                           scons_args: sconsArgs() +
-                                                       ' PREFIX=/opt/daos TARGET_TYPE=release' +
-                                                       ' COMPILER=covc'))
-                            sh label: 'Generate RPMs',
-                                script: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL}-bullseye true"
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('el8', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-covc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-covc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('el8', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
-            }
-        }
+            steps {
+                script {
+                    parallel(
+                        'Build on EL 8.8': scriptedBuildStage(
+                            'el8',
+                            'gcc',
+                            'utils/docker/Dockerfile.el.8',
+                            [daosReleaseValue: env.DAOS_RELVAL,
+                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                              deps_build: false,
+                                                              parallel_build: true) +
+                                              " -t ${sanitized_JOB_NAME()}-el8" +
+                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                              ' --build-arg DAOS_KEEP_SRC=yes' +
+                                              ' --build-arg REPOS="' + prRepos() + '"',
+                             build_deps: 'no',
+                             stash_opt: true,
+                             sconsArgs: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release']
+                        ),
+                        'Build on EL 9.6': scriptedBuildStage(
+                            'el9',
+                            'gcc',
+                            'utils/docker/Dockerfile.el.9',
+                            [daosReleaseValue: env.DAOS_RELVAL,
+                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                              deps_build: false,
+                                                              parallel_build: true) +
+                                              " -t ${sanitized_JOB_NAME()}-el9" +
+                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                              ' --build-arg DAOS_KEEP_SRC=yes' +
+                                              ' --build-arg REPOS="' + prRepos() + '"' +
+                                              ' --build-arg POINT_RELEASE=.6',
+                             build_deps: 'no',
+                             stash_opt: true,
+                             sconsArgs: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release']
+                        ),
+                        'Build on Leap 15.5': scriptedBuildStage(
+                            'leap15',
+                            'gcc',
+                            'utils/docker/Dockerfile.leap.15',
+                            [daosReleaseValue: env.DAOS_RELVAL,
+                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                              parallel_build: true,
+                                                              deps_build: false) +
+                                              " -t ${sanitized_JOB_NAME()}-leap15" +
+                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                              ' --build-arg DAOS_KEEP_SRC=yes' +
+                                              ' --build-arg POINT_RELEASE=.5',
+                             build_deps: 'yes',
+                             stash_opt: false,
+                             sconsArgs: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release']
+                        ),
+                        'Build on Leap 15.5 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
+                            'leap15',
+                            'icc',
+                            'utils/docker/Dockerfile.leap.15',
+                            [daosReleaseValue: env.DAOS_RELVAL,
+                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                              parallel_build: true,
+                                                              deps_build: true) +
+                                              " -t ${sanitized_JOB_NAME()}-leap15-icc" +
+                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                              ' --build-arg COMPILER=icc' +
+                                              ' --build-arg POINT_RELEASE=.5',
+                             build_deps: 'no',
+                             stash_opt: false,
+                             sconsArgs: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release']
+                        ),
+                        'Build on EL 8.8 with Bullseye': scriptedBuildStage(
+                            'el8',
+                            'covc',
+                            'utils/docker/Dockerfile.el.8',
+                            [daosReleaseValue: env.DAOS_RELVAL,
+                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                              deps_build: false,
+                                                              parallel_build: true) +
+                                              " -t ${sanitized_JOB_NAME()}-el8" +
+                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                              ' --build-arg DAOS_KEEP_SRC=yes' +
+                                              ' --build-arg REPOS="' + prRepos() + '"' +
+                                              code_coverage_build_args(),
+                             build_deps: 'no',
+                             stash_opt: true,
+                             sconsArgs: sconsArgs() +
+                                        ' PREFIX=/opt/daos TARGET_TYPE=release' +
+                                        code_coverage_scons_args()]
+                        )
+                    ) // parallel
+                } // script
+            } // steps
+        } // stage('Build')
         stage('Unit Tests') {
             when {
                 beforeAgent true
