@@ -292,11 +292,12 @@ Map nlt_post_args() {
  *  runCondition                Optional additional condition to determine if the stage should run
  *  distro                      the shorthand distro name, e.g. el9
  *  compiler                    the compiler to use, e.g. gcc
- *  dockerfile                  the dockerfile to use
  *  buildRpms                   whether or not to build rpms
  *  release                     the DAOS RPM release value to use
  *  dockerBuildArgs             optional docker build arguments
  *  sconsBuildArgs              optional scons build arguments
+ *  rpmDistro                   the distro to use for rpm building; defaults to distro
+ *  upload_distro               the distro to use when uploading rpms; defaults to distro
  *  artifacts                   optional artifacts name to archive
  * @return a scripted stage to run in a pipeline
  */
@@ -305,7 +306,6 @@ def scriptedBuildStage(Map kwargs = [:]) {
     Boolean runCondition = kwargs.get('runCondition', true)
     String distro = kwargs.get('distro', 'el8')
     String compiler = kwargs.get('compiler', 'gcc')
-    String dockerfile = kwargs.get('dockerfile', 'utils/docker/Dockerfile.el.8')
     Boolean buildRpms = kwargs.get('buildRpms', true)
     String release = kwargs.get('release', env.DAOS_RELVAL)
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
@@ -321,11 +321,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
         if (!skipStage() && runCondition) {
             node('docker_runner') {
                 def dockerImage = docker.build(
-                    "${sanitized_JOB_NAME()}-${distro}",
-                    " -t ${sanitized_JOB_NAME()}-${distro} " +
-                    dockerBuildArgs +
-                    " -f ${dockerfile} ."
-                )
+                    "${sanitized_JOB_NAME()}-${distro}-${compiler}", dockerBuildArgs)
                 try {
                     if (buildRpms) {
                         dockerImage.inside() {
@@ -734,16 +730,15 @@ pipeline {
                             name: 'Build on EL 8.8',
                             distro:'el8',
                             compiler: 'gcc',
-                            dockerfile: 'utils/docker/Dockerfile.el.8',
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
-                                             " -t ${sanitized_JOB_NAME()}-el8" +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg REPOS="' + prRepos('el8') + '"',
+                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                                             " -f utils/docker/Dockerfile.el.8 .",
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
@@ -757,17 +752,16 @@ pipeline {
                             name: 'Build on EL 9.6',
                             distro:'el9',
                             compiler: 'gcc',
-                            dockerfile: 'utils/docker/Dockerfile.el.9',
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
-                                             " -t ${sanitized_JOB_NAME()}-el9" +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el9') + '"' +
-                                             ' --build-arg POINT_RELEASE=.6',
+                                             ' --build-arg POINT_RELEASE=.6' +
+                                             " -f utils/docker/Dockerfile.el.9 .",
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
@@ -782,16 +776,15 @@ pipeline {
                             distro:'leap15',
                             rpmDistro: 'suse.lp155',
                             compiler: 'gcc',
-                            dockerfile: 'utils/docker/Dockerfile.leap.15',
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
-                                             " -t ${sanitized_JOB_NAME()}-leap15" +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg POINT_RELEASE=.5',
+                                             ' --build-arg POINT_RELEASE=.5' +
+                                             " -f utils/docker/Dockerfile.leap.15 .",
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'yes',
@@ -803,16 +796,15 @@ pipeline {
                             name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
                             distro:'leap15',
                             compiler: 'icc',
-                            dockerfile: 'utils/docker/Dockerfile.leap.15',
                             buildRpms: false,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: true,
                                                              parallel_build: true) +
-                                             " -t ${sanitized_JOB_NAME()}-leap15-icc" +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg COMPILER=icc' +
-                                             ' --build-arg POINT_RELEASE=.5',
+                                             ' --build-arg POINT_RELEASE=.5' +
+                                             " -f utils/docker/Dockerfile.leap.15 .",
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'yes',
@@ -825,17 +817,16 @@ pipeline {
                             runCondition: code_coverage_enabled(),
                             distro:'el8',
                             compiler: 'covc',
-                            dockerfile: 'utils/docker/Dockerfile.el.8',
                             buildRpms: true,
                             release: "${env.DAOS_RELVAL}.bullseye",
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
-                                             " -t ${sanitized_JOB_NAME()}-el8-covc" +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el8') + '"' +
-                                             code_coverage_build_args(),
+                                             code_coverage_build_args() +
+                                             " -f utils/docker/Dockerfile.el.8 .",
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
