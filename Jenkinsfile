@@ -296,14 +296,15 @@ Map nlt_post_args() {
  *          daosReleaseValue        relval to use when generating RPMs
  * @return a scripted stage to run in a pipeline
  */
-def scriptedBuildStage(String distro, String compiler, String dockerfile, Map config) {
+def scriptedBuildStage(String distro, String compiler, String dockerfile, Boolean build_rpms,
+                       Map config) {
     String relVal = config.get('daosReleaseValue', env.DAOS_RELVAL)
-    String code_coverage = 'false'
+    String bullseye = 'false'
     if (compiler == 'covc') {
-        code_coverage = 'true'
+        bullseye = 'true'
     }
     Boolean run_stage = !skip_build_stage(distro, compiler)
-    if ( run_stage && code_coverage == 'true' && !code_coverage_enabled() ) {
+    if ( run_stage && bullseye == 'true' && !code_coverage_enabled() ) {
         println("[${env.STAGE_NAME}] Skipping build stage due to code coverage being disabled")
         run_stage = false
     }
@@ -317,21 +318,31 @@ def scriptedBuildStage(String distro, String compiler, String dockerfile, Map co
                     " -f ${dockerfile} ."
                 )
                 try {
-                    dockerImage.inside() {
-                        sh label: 'Install RPMs',
-                           script: "./ci/rpm/install_deps.sh ${distro} ${relVal} ${code_coverage}"
-                        sh label: 'Build deps',
-                           script: "./ci/rpm/build_deps.sh ${code_coverage} ${env.BULLSEYE_KEY}"
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: config.get('buildDeps', 'no'),
-                                       stash_opt: config.get('stashOpt', true),
-                                       scons_args: config.get('sconsArgs', sconsArgs())))
-                        sh label: 'Generate RPMs',
-                           script: "./ci/rpm/gen_rpms.sh ${distro} ${relVal}"
-                        // Success actions
-                        uploadNewRPMs(distro, 'success')
+                    if (build_rpms) {
+                        dockerImage.inside() {
+                            sh label: 'Install RPMs',
+                                script: "./ci/rpm/install_deps.sh ${distro} ${relVal} ${bullseye}"
+                            sh label: 'Build deps',
+                                script: "./ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}"
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: config.get('buildDeps', 'no'),
+                                           stash_opt: config.get('stashOpt', true),
+                                           scons_args: config.get('sconsArgs', sconsArgs())))
+                            sh label: 'Generate RPMs',
+                                script: "./ci/rpm/gen_rpms.sh ${distro} ${relVal}"
+                            // Success actions
+                            uploadNewRPMs(distro, 'success')
+                        }
+                    }
+                    else {
+                        dockerImage.inside() {
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           build_deps: config.get('buildDeps', 'no'),
+                                           scons_args: config.get('sconsArgs', sconsArgs())))
+                        }
                     }
                 } catch (Exception e) {
                     // Unsuccessful actions
@@ -668,6 +679,7 @@ pipeline {
                             'el8',
                             'gcc',
                             'utils/docker/Dockerfile.el.8',
+                            true,
                             [daosReleaseValue: env.DAOS_RELVAL,
                              dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                               deps_build: false,
@@ -684,6 +696,7 @@ pipeline {
                             'el9',
                             'gcc',
                             'utils/docker/Dockerfile.el.9',
+                            true,
                             [daosReleaseValue: env.DAOS_RELVAL,
                              dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                               deps_build: false,
@@ -701,6 +714,7 @@ pipeline {
                             'leap15',
                             'gcc',
                             'utils/docker/Dockerfile.leap.15',
+                            true,
                             [daosReleaseValue: env.DAOS_RELVAL,
                              dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                               parallel_build: true,
@@ -717,6 +731,7 @@ pipeline {
                             'leap15',
                             'icc',
                             'utils/docker/Dockerfile.leap.15',
+                            false,
                             [daosReleaseValue: env.DAOS_RELVAL,
                              dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                               parallel_build: true,
@@ -733,7 +748,8 @@ pipeline {
                             'el8',
                             'covc',
                             'utils/docker/Dockerfile.el.8',
-                            [daosReleaseValue: env.DAOS_RELVAL,
+                            true,
+                            [daosReleaseValue: "${env.DAOS_RELVAL}.bullseye",
                              dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                               deps_build: false,
                                                               parallel_build: true) +
