@@ -288,6 +288,9 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		return;
 	}
 
+	if (status->dtx_resync_version != resync_ver)
+		D_INFO(DF_RB " rank %d, update dtx_resync_version from %d to %d", DP_RB_RGT(rgt),
+		       rank, status->dtx_resync_version, resync_ver);
 	status->dtx_resync_version = resync_ver;
 	if (flags & SCAN_DONE)
 		status->scan_done = 1;
@@ -309,6 +312,7 @@ rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t
 	D_INFO("rank %u is not included in this rebuild.\n", rank);
 }
 
+#define RB_DTX_RESYNC_VER_SKIP ((uint32_t)-1)
 static uint32_t
 rebuild_get_global_dtx_resync_ver(struct rebuild_global_pool_tracker *rgt)
 {
@@ -318,7 +322,7 @@ rebuild_get_global_dtx_resync_ver(struct rebuild_global_pool_tracker *rgt)
 	D_ASSERT(rgt->rgt_servers_number > 0);
 	D_ASSERT(rgt->rgt_servers != NULL);
 	for (i = 0; i < rgt->rgt_servers_number; i++) {
-		if (rgt->rgt_servers[i].dtx_resync_version == (uint32_t)(-1))
+		if (rgt->rgt_servers[i].dtx_resync_version == RB_DTX_RESYNC_VER_SKIP)
 			continue;
 
 		if (min > rgt->rgt_servers[i].dtx_resync_version)
@@ -1006,11 +1010,17 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 				D_INFO(DF_RB " rank %d, status 0x%x.\n", DP_RB_RGT(rgt),
 				       dom->do_comp.co_rank, dom->do_comp.co_status);
 
-			/* for PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW ranks
-			 * set the completion as no progress/completion will be reported from them.
+			/* Some engines don't participate the rebuild that will not report
+			 * progress/completion or dtx resync version through IV, mark the complete/
+			 * skip.
+			 * 1) PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW ranks
+			 * 2) PO_COMP_ST_UP but co_in_ver > rebuild_ver also will be excluded from
+			 *    rebuild request, see rebuild_scan_broadcast().
 			 */
-			if (dom->do_comp.co_status != PO_COMP_ST_UP)
-				rebuild_leader_set_status(rgt, dom->do_comp.co_rank, -1,
+			if (dom->do_comp.co_status != PO_COMP_ST_UP ||
+			    dom->do_comp.co_in_ver > rgt->rgt_rebuild_ver)
+				rebuild_leader_set_status(rgt, dom->do_comp.co_rank,
+							  RB_DTX_RESYNC_VER_SKIP,
 							  SCAN_DONE | PULL_DONE);
 		}
 		ABT_rwlock_unlock(pool->sp_lock);
@@ -1313,11 +1323,15 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 
 			dom = pool_map_find_dom_by_rank(pool->sp_map, up_ranks.rl_ranks[i]);
 			D_ASSERT(dom != NULL);
-			D_DEBUG(DB_REBUILD, DF_RB " rank %u co_in_ver %u\n", DP_RB_RGT(rgt),
-				up_ranks.rl_ranks[i], dom->do_comp.co_in_ver);
-			if (dom->do_comp.co_in_ver < rgt->rgt_rebuild_ver)
+			D_DEBUG(DB_REBUILD, DF_RB " rank %u co_in_ver %u, rebuild_ver %u.\n",
+				DP_RB_RGT(rgt), up_ranks.rl_ranks[i], dom->do_comp.co_in_ver,
+				rgt->rgt_rebuild_ver);
+			if (dom->do_comp.co_in_ver <= rgt->rgt_rebuild_ver)
 				continue;
 
+			D_INFO(DF_RB " bypass UP rank %u co_in_ver %u exceed rebuild_ver %u\n",
+			       DP_RB_RGT(rgt), up_ranks.rl_ranks[i], dom->do_comp.co_in_ver,
+			       rgt->rgt_rebuild_ver);
 			excluded->rl_ranks[nr++] = up_ranks.rl_ranks[i];
 		}
 		excluded->rl_nr = nr;
@@ -1327,13 +1341,11 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx, pool, DAOS_REBUILD_MODULE,
 				  REBUILD_OBJECTS_SCAN, rebuild_ver, &rpc, NULL, excluded, NULL);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_RB " pool map broadcast failed", DP_RB_RGT(rgt));
+		DL_ERROR(rc, DF_RB " failed to create scan broadcast request", DP_RB_RGT(rgt));
 		D_GOTO(out, rc);
 	}
 
 	rsi = crt_req_get(rpc);
-	D_DEBUG(DB_REBUILD, DF_RB " scan broadcast\n", DP_RB_RGT(rgt));
-
 	uuid_copy(rsi->rsi_pool_uuid, pool->sp_uuid);
 	rsi->rsi_ns_id = pool->sp_iv_ns->iv_ns_id;
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
@@ -1352,11 +1364,13 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	rso = crt_reply_get(rpc);
 	if (rc == 0)
 		rc = rso->rso_status;
+	else
+		DL_ERROR(rc, DF_RB " scan broadcast send failed.", DP_RB_RGT(rgt));
 
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
-	D_DEBUG(DB_REBUILD, DF_RB " " DF_RC " got stable/reclaim epoch " DF_X64 "/" DF_X64 "\n",
-		DP_RB_RGT(rgt), DP_RC(rc), rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch);
+	DL_INFO(rc, DF_RB " got stable/reclaim epoch " DF_X64 "/" DF_X64, DP_RB_RGT(rgt),
+		rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch);
 	crt_req_decref(rpc);
 out:
 	if (excluded)
@@ -2787,6 +2801,7 @@ rebuild_tgt_status_check_ult(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
 	struct sched_req_attr	attr = { 0 };
+	uint32_t                         reported_dtx_resyc_ver = 0;
 
 	D_ASSERT(rpt != NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rpt->rt_pool_uuid);
@@ -2890,6 +2905,11 @@ rebuild_tgt_status_check_ult(void *arg)
 				rpt->rt_reported_obj_cnt = status.obj_count;
 				rpt->rt_reported_rec_cnt = status.rec_count;
 				rpt->rt_reported_size = status.size;
+				if (iv.riv_dtx_resyc_version > reported_dtx_resyc_ver) {
+					D_INFO(DF_RB "reported riv_dtx_resyc_version %d",
+					       DP_RB_RPT(rpt), iv.riv_dtx_resyc_version);
+					reported_dtx_resyc_ver = iv.riv_dtx_resyc_version;
+				}
 			} else {
 				DL_WARN(rc, DF_RB " rebuild iv update failed", DP_RB_RPT(rpt));
 				/* Already finished rebuild, cannot find rebuild status on leader
