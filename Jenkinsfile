@@ -302,13 +302,11 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String compiler = kwargs.get('compiler', 'gcc')
     String dockerfile = kwargs.get('dockerfile', 'utils/docker/Dockerfile.el.8')
     Boolean build_rpms = kwargs.get('build_rpms', true)
-    String release = config.get('release', env.DAOS_RELVAL)
+    String release = kwargs.get('release', env.DAOS_RELVAL)
     String docker_build_args = kwargs.get('docker_build_args', '')
     Map scons_build_args = kwargs.get('scons_build_args', [:])
     String upload_distro = kwargs.get('upload_distro', distro)
     String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
-    
-    // Map config = kwargs.get('config', [:])
     String bullseye = 'false'
     if (compiler == 'covc') {
         bullseye = 'true'
