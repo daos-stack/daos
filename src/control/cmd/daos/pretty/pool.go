@@ -164,7 +164,7 @@ func PrintPoolQueryTargetInfo(pqti *daos.PoolQueryTargetInfo, out io.Writer) err
 	w := txtfmt.NewErrWriter(out)
 
 	// Maintain output compatibility with the `daos pool query-targets` output.
-	fmt.Fprintf(w, "Target: type %s, state %s\n", pqti.Type, pqti.State)
+	fmt.Fprintf(w, "Target: state %s\n", pqti.State)
 	if pqti.Space != nil {
 		if pqti.MdOnSsdActive {
 			printPoolTiersMdOnSsd(pqti.MemFileBytes, pqti.Space, w, false)

@@ -742,6 +742,12 @@ cont_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	if (ref_rc != 0) {
+		DL_WARN(ref_rc, DF_UUID "bypass refresh, IV class id %d.",
+			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		return ref_rc;
+	}
+
 	return cont_iv_ent_update(entry, key, src, priv);
 }
 
@@ -1581,19 +1587,22 @@ cont_iv_prop_fetch_ult(void *data)
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "cont_iv_fetch failed");
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
+			  DF_CONT ": cont_iv_fetch failed", DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 
 	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, &prop_fetch);
 	if (rc) {
-		D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": cont_iv_prop_g2l failed",
+			 DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_prop_copy(prop, prop_fetch);
 	if (rc) {
-		D_ERROR("daos_prop_copy failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": daos_prop_copy failed",
+			 DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 
@@ -1768,7 +1777,7 @@ ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 	/* Return a retry-able error when the srv handle not propagated */
 	if (d_list_empty(&pool_child->spc_srv_cont_hdl)) {
 		struct copy_hdl_arg arg;
-		int                 rc;
+		int                 rc, ret;
 
 		/*
 		 * Sometimes the srv container handle failed to be propagated to the pool
@@ -1784,8 +1793,10 @@ ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 			}
 		}
 		ds_pool_child_put(pool_child);
-		D_INFO(DF_UUID ": Server handle isn't propagated yet.\n", DP_UUID(po_uuid));
-		return -DER_STALE;
+		ret = -DER_STALE;
+		DL_INFO(ret, DF_UUID ": Server handle isn't propagated yet %d.", DP_UUID(po_uuid),
+			rc);
+		return ret;
 	}
 
 srv_hdl_ready:

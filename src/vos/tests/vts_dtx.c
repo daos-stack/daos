@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,40 +51,13 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 
 	vts_init_dte(&dth->dth_dte);
 
-	dth->dth_coh = coh;
-	dth->dth_epoch = epoch;
-	dth->dth_leader_oid = *oid;
-
-	dth->dth_pinned = 0;
-	dth->dth_sync = 0;
-	dth->dth_cos_done = 0;
-	dth->dth_touched_leader_oid = 0;
-	dth->dth_local_tx_started = 0;
-	dth->dth_solo = 0;
-	dth->dth_drop_cmt = 0;
-	dth->dth_modify_shared = 0;
-	dth->dth_active = 0;
-	dth->dth_dist = 0;
-	dth->dth_for_migration = 0;
-	dth->dth_ignore_uncommitted = 0;
-	dth->dth_prepared = 0;
-	dth->dth_epoch_owner = 0;
-	dth->dth_aborted = 0;
-	dth->dth_already = 0;
-	dth->dth_need_validation = 0;
-
-	dth->dth_dti_cos_count = 0;
-	dth->dth_dti_cos = NULL;
-	dth->dth_ent = NULL;
-	dth->dth_flags = DTE_LEADER;
+	dth->dth_coh              = coh;
+	dth->dth_epoch            = epoch;
+	dth->dth_leader_oid       = *oid;
+	dth->dth_flags            = DTE_LEADER;
 	dth->dth_modification_cnt = 1;
-
-	dth->dth_op_seq = 1;
-	dth->dth_oid_cnt = 0;
-	dth->dth_oid_cap = 0;
-	dth->dth_oid_array = NULL;
-
-	dth->dth_dkey_hash = dkey_hash;
+	dth->dth_op_seq           = 1;
+	dth->dth_dkey_hash        = dkey_hash;
 
 	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
