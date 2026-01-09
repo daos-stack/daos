@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -762,8 +762,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	case CTL__LED_ACTION__RESET:
 		/* Reset intercepted earlier in call-stack and converted to set */
 		D_ERROR("Reset action unsupported in this code path\n");
-		opts->status = -DER_INVAL;
-		return;
+		D_ASSERT(false);
 	default:
 		D_ERROR("Unrecognized LED action requested\n");
 		opts->status = -DER_INVAL;
@@ -803,7 +802,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (d_led_state != opts->led_state) {
 		D_ERROR("Unexpected LED state on %s, want %s got %s\n", addr_buf,
 			LED_STATE_NAME(opts->led_state), LED_STATE_NAME(d_led_state));
-		opts->status = -DER_INVAL;
+		opts->status = -DER_MISC;
 		return;
 	}
 
