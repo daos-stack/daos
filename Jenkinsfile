@@ -738,7 +738,7 @@ pipeline {
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el8') + '"' +
-                                             " -f utils/docker/Dockerfile.el.8 .",
+                                             ' -f utils/docker/Dockerfile.el.8 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
@@ -761,7 +761,7 @@ pipeline {
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el9') + '"' +
                                              ' --build-arg POINT_RELEASE=.6' +
-                                             " -f utils/docker/Dockerfile.el.9 .",
+                                             ' -f utils/docker/Dockerfile.el.9 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
@@ -784,7 +784,7 @@ pipeline {
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg POINT_RELEASE=.5' +
-                                             " -f utils/docker/Dockerfile.leap.15 .",
+                                             ' -f utils/docker/Dockerfile.leap.15 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'yes',
@@ -804,7 +804,7 @@ pipeline {
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg COMPILER=icc' +
                                              ' --build-arg POINT_RELEASE=.5' +
-                                             " -f utils/docker/Dockerfile.leap.15 .",
+                                             ' -f utils/docker/Dockerfile.leap.15 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'yes',
@@ -824,9 +824,9 @@ pipeline {
                                                              parallel_build: true) +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
                                              code_coverage_build_args() +
-                                             " -f utils/docker/Dockerfile.el.8 .",
+                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                                             ' -f utils/docker/Dockerfile.el.8 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
