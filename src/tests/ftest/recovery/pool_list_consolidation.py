@@ -1,6 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -192,7 +192,7 @@ class PoolListConsolidationTest(TestWithServers):
             list: Error list.
 
         """
-        pool_path = self.server_managers[0].get_vos_path(pool)
+        pool_path = self.server_managers[0].get_vos_paths(pool)[0]
         check_out = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_path, directory=True)
         if check_out[0]:
@@ -289,7 +289,7 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
-        rdb_pool_path = f"{self.server_managers[0].get_vos_path(pool)}/rdb-pool"
+        rdb_pool_path = f"{self.server_managers[0].get_vos_paths(pool)[0]}/rdb-pool"
         command = f"sudo rm {rdb_pool_path}"
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
