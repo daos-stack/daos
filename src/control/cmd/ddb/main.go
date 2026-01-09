@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,15 +42,15 @@ func exitWithError(log logging.Logger, err error) {
 }
 
 type cliOptions struct {
-	Debug     bool   `long:"debug" description:"enable debug output"`
-	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
-	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
-	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
-	Version   bool   `short:"v" long:"version" description:"Show version"`
+	Debug     bool       `long:"debug" description:"enable debug output"`
+	WriteMode bool       `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
+	CmdFile   string     `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
+	SysdbPath string     `long:"db_path" short:"p" description:"Path to the sys db."`
+	VosPath   vosPathStr `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
+	Version   bool       `short:"v" long:"version" description:"Show version"`
 	Args      struct {
-		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
-		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
-		RunCmdArgs []string   `positional-arg-name:"ddb_command_args"`
+		RunCmd     ddbCmdStr `positional-arg-name:"ddb_command"`
+		RunCmdArgs []string  `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
 }
 
@@ -191,14 +191,14 @@ Example Paths:
 	defer cleanup()
 	app := createGrumbleApp(ctx)
 
-	if opts.Args.VosPath != "" {
+	if opts.VosPath != "" {
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
-			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-			if err := ddbOpen(ctx, string(opts.Args.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
-				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+			log.Debugf("Connect to path: %s\n", opts.VosPath)
+			if err := ddbOpen(ctx, string(opts.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
+				return errors.Wrapf(err, "Error opening path: %s", opts.VosPath)
 			}
 		}
 	}
@@ -207,8 +207,8 @@ Example Paths:
 		return errors.New("Cannot use both command file and a command string")
 	}
 
-	if opts.Args.VosPath != "" {
-		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
+	if opts.VosPath != "" {
+		ctx.ctx.dc_pool_path = C.CString(string(opts.VosPath))
 		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
 	}
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,7 +38,7 @@ class DdbCommandBase(CommandWithParameters):
         self.single_command = BasicParameter(None, position=2)
 
         # VOS file path.
-        self.vos_path = BasicParameter(None, position=1)
+        self.vos_path = FormattedParameter("--vos-path {}")
 
         # Members needed for run().
         self.verbose = verbose
