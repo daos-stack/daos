@@ -727,8 +727,10 @@ dtx_batched_commit(void *arg)
 		}
 
 		if (DAOS_FAIL_CHECK(DAOS_DTX_NO_BATCHED_CMT) ||
-		    DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
+		    DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE)) {
+			sleep_time = 500;
 			goto check;
+		}
 
 		dbca = d_list_entry(dmi->dmi_dtx_batched_cont_open_list.next,
 				    struct dtx_batched_cont_args, dbca_sys_link);
