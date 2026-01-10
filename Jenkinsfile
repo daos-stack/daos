@@ -315,6 +315,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String rpmDistro = kwargs.get('rpmDistro', distro)
     String uploadDistro = kwargs.get('uploadDistro', distro)
     String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
+    String sanitizedStageName = sanitized_JOB_NAME(name)    // jobStatusKey()
     String bullseye = 'false'
     if (compiler == 'covc') {
         bullseye = 'true'
@@ -323,7 +324,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
         if (runCondition) {
             node('docker_runner') {
                 def dockerImage = docker.build(
-                    "${sanitized_JOB_NAME(name)}-${distro}-${compiler}", dockerBuildArgs)
+                    "${sanitizedStageName}-${distro}-${compiler}", dockerBuildArgs)
                 try {
                     dockerImage.inside() {
                         if (buildRpms) {
@@ -404,7 +405,7 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
                     if (recordIssuesArgs) {
                         recordIssues(recordIssuesArgs)
                     }
-                    job_status_update()
+                    job_status_update(name)
                 }
             }
         }
