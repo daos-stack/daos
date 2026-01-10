@@ -319,7 +319,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     }
     return {
         if (!skip_build_stage(distro, compiler) && runCondition) {
-            node("docker_runner_${distro}_${compiler}") {
+            node('docker_runner') {
                 def dockerImage = docker.build(
                     "${sanitized_JOB_NAME()}-${distro}-${compiler}", dockerBuildArgs)
                 try {
