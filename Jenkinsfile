@@ -189,8 +189,9 @@ Boolean skip_pragma_set(String name, String def_val='false') {
 Boolean skip_build_stage(String distro='', String compiler='gcc') {
     // Skip the stage if the CI_BUILD_<distro> parameter is not set
     if (distro) {
-        if (startedByUser() && !paramsValue("CI_BUILD_${distro}", false)) {
-            println("[${env.STAGE_NAME}] Skipping build stage due to CI_BUILD_${distro} parameter")
+        String param_name = "CI_BUILD_${distro.toUpperCase()}"
+        if (startedByUser() && !paramsValue(param_name, false)) {
+            println("[${env.STAGE_NAME}] Skipping build stage due to ${param_name} parameter")
             return true
         }
     }
@@ -515,16 +516,19 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_BUILD_el8',
+        booleanParam(name: 'CI_BUILD_EL8',
                      defaultValue: true,
                      description: 'Build sources and RPMs on EL 8')
-        booleanParam(name: 'CI_BUILD_el9',
+        booleanParam(name: 'CI_BUILD_EL9',
                      defaultValue: true,
                      description: 'Build sources and RPMs on EL 9')
-        booleanParam(name: 'CI_BUILD_leap15',
+        booleanParam(name: 'CI_BUILD_LEAP15',
                      defaultValue: true,
                      description: 'Build sources and RPMs on Leap 15')
-        booleanParam(name: 'CI_BUILD_bullseye',
+        booleanParam(name: 'CI_BUILD_LEAP15_ICC',
+                     defaultValue: false,
+                     description: 'Build sources on Leap 15 with Intel-C')
+        booleanParam(name: 'CI_BUILD_BULLSEYE',
                      defaultValue: true,
                      description: 'Build sources and RPMs with Bullseye Code Coverage')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
@@ -815,27 +819,28 @@ pipeline {
                             ],
                             artifacts: "config.log-leap15-gcc"
                         ),
-                        // 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
-                        //     name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
-                        //     distro:'leap15',
-                        //     compiler: 'icc',
-                        //     buildRpms: false,
-                        //     release: env.DAOS_RELVAL,
-                        //     dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
-                        //                                      deps_build: true,
-                        //                                      parallel_build: true) +
-                        //                      ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                        //                      ' --build-arg DAOS_KEEP_SRC=yes' +
-                        //                      ' --build-arg POINT_RELEASE=.5' +
-                        //                      ' --build-arg COMPILER=icc' +
-                        //                      ' -f utils/docker/Dockerfile.leap.15 .',
-                        //     sconsBuildArgs: [
-                        //         parallel_build: true,
-                        //         build_deps: 'yes',
-                        //         scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
-                        //     ],
-                        //     artifacts: "config.log-leap15-intelc"
-                        // ),
+                        'Build on Leap 15.5 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
+                            name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
+                            distro:'leap15',
+                            compiler: 'icc',
+                            runCondition: !skip_build_stage('leap15_icc'),
+                            buildRpms: false,
+                            release: env.DAOS_RELVAL,
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: true,
+                                                             parallel_build: true) +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg POINT_RELEASE=.5' +
+                                             ' --build-arg COMPILER=icc' +
+                                             ' -f utils/docker/Dockerfile.leap.15 .',
+                            sconsBuildArgs: [
+                                parallel_build: true,
+                                build_deps: 'yes',
+                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
+                            ],
+                            artifacts: "config.log-leap15-intelc"
+                        ),
                         'Build on EL 8.8 with Bullseye': scriptedBuildStage(
                             name: 'Build on EL 8.8 with Bullseye',
                             distro:'el8',
