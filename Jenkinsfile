@@ -91,9 +91,6 @@ String next_version() {
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-String sanitized_JOB_NAME(String name) {
-    return name.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
-}
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -222,6 +219,23 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     return false
 }
 
+Boolean skip_unit_test_stage(String name) {
+    // Skip the unit test stage if the CI_UNIT_TEST_<name> parameter is not set
+    if (startedByUser() && !paramsValue("CI_UNIT_TEST_${name.toUpperCase()}", true)) {
+        println("[${env.STAGE_NAME}] Skipping unit test stage due to CI_UNIT_TEST_${name.toUpperCase()} parameter")
+        return true
+    }
+
+    // Skip the unit test stage if any Skip-unit-test-<name> pragmas are true
+    if (skip_pragma_set("unit-test-${name.toLowerCase()}")) {
+        println("[${env.STAGE_NAME}] Skipping unit test stage due to Skip-unit-test-${name.toLowerCase()} pragma")
+        return true
+    }
+
+    // Otherwise run the unit test stage
+    return false
+}
+
 Boolean code_coverage_enabled() {
     // Determine if code coverage is enabled for the build
     return !skip_build_stage('bullseye', 'covc')
@@ -321,44 +335,48 @@ def scriptedBuildStage(Map kwargs = [:]) {
         bullseye = 'true'
     }
     return {
-        if (runCondition) {
-            node('docker_runner') {
-                def dockerImage = docker.build(dockerTag, dockerBuildArgs)
-                try {
-                    dockerImage.inside() {
-                        if (buildRpms) {
-                            sh label: 'Install RPMs',
-                                script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
-                            sh label: 'Build deps',
-                                script: "./ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}"
+        stage("${name}") {
+            if (runCondition) {
+                node('docker_runner') {
+                    def dockerImage = docker.build(dockerTag, dockerBuildArgs)
+                    try {
+                        dockerImage.inside() {
+                            if (buildRpms) {
+                                sh label: 'Install RPMs',
+                                    script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
+                                sh label: 'Build deps',
+                                    script: "./ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}"
+                            }
+                            job_step_update(sconsBuild(sconsBuildArgs))
+                            if (buildRpms) {
+                                sh label: 'Generate RPMs',
+                                    script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release}"
+                                // Success actions
+                                uploadNewRPMs(uploadDistro, 'success')
+                            }
                         }
-                        job_step_update(sconsBuild(sconsBuildArgs))
+                    } catch (Exception e) {
+                        // Unsuccessful actions
+                        sh """if [ -f config.log ]; then
+                                mv config.log ${artifacts}
+                            fi"""
+                        archiveArtifacts artifacts: "${artifacts}",
+                                        allowEmptyArchive: true
+                        throw e
+                    } finally {
+                        // Cleanup actions
                         if (buildRpms) {
-                            sh label: 'Generate RPMs',
-                                script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release}"
-                            // Success actions
-                            uploadNewRPMs(uploadDistro, 'success')
+                            uploadNewRPMs(uploadDistro, 'cleanup')
                         }
+                        jobStatusUpdate(job_status_internal, name)
                     }
-                } catch (Exception e) {
-                    // Unsuccessful actions
-                    sh """if [ -f config.log ]; then
-                              mv config.log ${artifacts}
-                          fi"""
-                    archiveArtifacts artifacts: "${artifacts}",
-                                     allowEmptyArchive: true
-                    throw e
-                } finally {
-                    // Cleanup actions
-                    if (buildRpms) {
-                        uploadNewRPMs(uploadDistro, 'cleanup')
-                    }
-                    job_status_update(name)
                 }
             }
-        }
-        else {
-            println("[${name}] Skipping build stage: runCondition=${runCondition}")
+            else {
+                println("[${name}] Skipping build stage: runCondition=${runCondition}")
+                Utils.markStageSkippedForConditional("${name}")
+            }
+            println("[${name}] Finished with ${job_status_internal}")
         }
     }
 }
@@ -380,7 +398,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
  */
 def scriptedUnitTestStage(Map kwargs = [:]) {
     String name = kwargs.get('name', 'Unknown Unit Test')
-    Boolean runCondition = kwargs.get('runCondition', true)
+    Boolean runCondition = kwargs.get('runCondition', !skip_unit_test_stage(name))
     String nodeLabel = kwargs.get('nodeLabel', params.CI_UNIT_VM1_LABEL)
     Map unitTestArgs = kwargs.get('unitTestArgs', [:])
     Map stashArgs = kwargs.get('stashArgs', [:])
@@ -388,25 +406,32 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
     Map recordIssuesArgs = kwargs.get('recordIssuesArgs', [:])
 
     return {
-        if (!skipStage() && runCondition) {
-            node(nodeLabel) {
-                try {
-                    // Execute the unit test
-                    job_step_update(unitTest(unitTestArgs))
-                    if (stashArgs) {
-                        stash(stashArgs)
+        stage("${name}") {
+            if (runCondition) {
+                node(nodeLabel) {
+                    try {
+                        // Execute the unit test
+                        job_step_update(unitTest(unitTestArgs))
+                        if (stashArgs) {
+                            stash(stashArgs)
+                        }
+                    } finally {
+                        // Always execute post actions
+                        if (unitTestPostArgs) {
+                            unitTestPost(unitTestPostArgs)
+                        }
+                        if (recordIssuesArgs) {
+                            recordIssues(recordIssuesArgs)
+                        }
+                        jobStatusUpdate(job_status_internal, name)
                     }
-                } finally {
-                    // Always execute post actions
-                    if (unitTestPostArgs) {
-                        unitTestPost(unitTestPostArgs)
-                    }
-                    if (recordIssuesArgs) {
-                        recordIssues(recordIssuesArgs)
-                    }
-                    job_status_update(name)
                 }
             }
+            else {
+                println("[${name}] Skipping unit test stage")
+                Utils.markStageSkippedForConditional("${name}")
+            }
+            println("[${name}] Finished with ${job_status_internal}")
         }
     }
 }
