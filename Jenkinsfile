@@ -91,8 +91,8 @@ String next_version() {
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-String sanitized_JOB_NAME() {
-    return JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+String sanitized_JOB_NAME(String name) {
+    return name.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 }
 
 // bail out of branch builds that are not on a whitelist
@@ -313,7 +313,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
     Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
     String rpmDistro = kwargs.get('rpmDistro', distro)
-    String upload_distro = kwargs.get('upload_distro', distro)
+    String uploadDistro = kwargs.get('uploadDistro', distro)
     String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
     String bullseye = 'false'
     if (compiler == 'covc') {
@@ -323,7 +323,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
         if (runCondition) {
             node('docker_runner') {
                 def dockerImage = docker.build(
-                    "${sanitized_JOB_NAME()}-${distro}-${compiler}", dockerBuildArgs)
+                    "${sanitized_JOB_NAME(name)}-${distro}-${compiler}", dockerBuildArgs)
                 try {
                     dockerImage.inside() {
                         if (buildRpms) {
@@ -337,7 +337,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                             sh label: 'Generate RPMs',
                                 script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release}"
                             // Success actions
-                            uploadNewRPMs(upload_distro, 'success')
+                            uploadNewRPMs(uploadDistro, 'success')
                         }
                     }
                 } catch (Exception e) {
@@ -351,9 +351,9 @@ def scriptedBuildStage(Map kwargs = [:]) {
                 } finally {
                     // Cleanup actions
                     if (buildRpms) {
-                        uploadNewRPMs(distro, 'cleanup')
+                        uploadNewRPMs(uploadDistro, 'cleanup')
                     }
-                    job_status_update()
+                    job_status_update(name)
                 }
             }
         }
