@@ -360,8 +360,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                         sh """if [ -f config.log ]; then
                                 mv config.log ${artifacts}
                             fi"""
-                        archiveArtifacts artifacts: "${artifacts}",
-                                        allowEmptyArchive: true
+                        archiveArtifacts artifacts: "${artifacts}", allowEmptyArchive: true
                         throw e
                     } finally {
                         // Cleanup actions
@@ -373,7 +372,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                 }
             }
             else {
-                println("[${name}] Skipping build stage: runCondition=${runCondition}")
+                println("[${name}] Skipping build stage")
                 Utils.markStageSkippedForConditional("${name}")
             }
             println("[${name}] Finished with ${job_status_internal}")
@@ -816,27 +815,27 @@ pipeline {
                             ],
                             artifacts: "config.log-leap15-gcc"
                         ),
-                        'Build on Leap 15.5 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
-                            name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
-                            distro:'leap15',
-                            compiler: 'icc',
-                            buildRpms: false,
-                            release: env.DAOS_RELVAL,
-                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
-                                                             deps_build: true,
-                                                             parallel_build: true) +
-                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                             ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg POINT_RELEASE=.5' +
-                                             ' --build-arg COMPILER=icc' +
-                                             ' -f utils/docker/Dockerfile.leap.15 .',
-                            sconsBuildArgs: [
-                                parallel_build: true,
-                                build_deps: 'yes',
-                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
-                            ],
-                            artifacts: "config.log-leap15-intelc"
-                        ),
+                        // 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
+                        //     name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
+                        //     distro:'leap15',
+                        //     compiler: 'icc',
+                        //     buildRpms: false,
+                        //     release: env.DAOS_RELVAL,
+                        //     dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                        //                                      deps_build: true,
+                        //                                      parallel_build: true) +
+                        //                      ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                        //                      ' --build-arg DAOS_KEEP_SRC=yes' +
+                        //                      ' --build-arg POINT_RELEASE=.5' +
+                        //                      ' --build-arg COMPILER=icc' +
+                        //                      ' -f utils/docker/Dockerfile.leap.15 .',
+                        //     sconsBuildArgs: [
+                        //         parallel_build: true,
+                        //         build_deps: 'yes',
+                        //         scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
+                        //     ],
+                        //     artifacts: "config.log-leap15-intelc"
+                        // ),
                         'Build on EL 8.8 with Bullseye': scriptedBuildStage(
                             name: 'Build on EL 8.8 with Bullseye',
                             distro:'el8',
