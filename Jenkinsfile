@@ -289,23 +289,25 @@ Map nlt_post_args() {
  *
  * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
  *  name                        the build stage name
- *  runCondition                Optional additional condition to determine if the stage should run
- *  distro                      the shorthand distro name, e.g. el9
- *  compiler                    the compiler to use, e.g. gcc
- *  buildRpms                   whether or not to build rpms
- *  release                     the DAOS RPM release value to use
+ *  distro                      the shorthand distro name; defaults to 'el8'
+ *  compiler                    the compiler to use; defaults to 'gcc'
+ *  runCondition                optional condition to determine if the stage should run; defaults
+ *                                to !skip_build_stage(distro, compiler)
+ *  buildRpms                   whether or not to build rpms; defaults to true
+ *  release                     the DAOS RPM release value to use; defaults to env.DAOS_RELVAL
  *  dockerBuildArgs             optional docker build arguments
  *  sconsBuildArgs              optional scons build arguments
  *  rpmDistro                   the distro to use for rpm building; defaults to distro
  *  upload_distro               the distro to use when uploading rpms; defaults to distro
- *  artifacts                   optional artifacts name to archive
+ *  artifacts                   optional artifacts name to archive; defaults to
+ *                                "config.log-${distro}-${compiler}"
  * @return a scripted stage to run in a pipeline
  */
 def scriptedBuildStage(Map kwargs = [:]) {
     String name = kwargs.get('name', 'Unknown Build Stage')
-    Boolean runCondition = kwargs.get('runCondition', true)
     String distro = kwargs.get('distro', 'el8')
     String compiler = kwargs.get('compiler', 'gcc')
+    Boolean runCondition = kwargs.get('runCondition', !skip_build_stage(distro, compiler))
     Boolean buildRpms = kwargs.get('buildRpms', true)
     String release = kwargs.get('release', env.DAOS_RELVAL)
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
@@ -318,7 +320,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
         bullseye = 'true'
     }
     return {
-        if (!skip_build_stage(distro, compiler) && runCondition) {
+        if (runCondition) {
             node('docker_runner') {
                 def dockerImage = docker.build(
                     "${sanitized_JOB_NAME()}-${distro}-${compiler}", dockerBuildArgs)
@@ -356,7 +358,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
             }
         }
         else {
-            println("[${name}] Skipping build stage: skipStage()=${skipStage()}, runCondition=${runCondition}")
+            println("[${name}] Skipping build stage: runCondition=${runCondition}")
         }
     }
 }
@@ -799,8 +801,9 @@ pipeline {
                                                              deps_build: true,
                                                              parallel_build: true) +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                             ' --build-arg COMPILER=icc' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg POINT_RELEASE=.5' +
+                                             ' --build-arg COMPILER=icc' +
                                              ' -f utils/docker/Dockerfile.leap.15 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -811,9 +814,9 @@ pipeline {
                         ),
                         'Build on EL 8.8 with Bullseye': scriptedBuildStage(
                             name: 'Build on EL 8.8 with Bullseye',
-                            runCondition: code_coverage_enabled(),
                             distro:'el8',
                             compiler: 'covc',
+                            runCondition: !skip_build_stage('bullseye', 'covc') && code_coverage_enabled(),
                             buildRpms: true,
                             release: "${env.DAOS_RELVAL}.bullseye",
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
