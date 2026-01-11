@@ -64,6 +64,8 @@ func (fl *faultLocation) UnmarshalFlag(fv string) error {
 		*fl = faultLocation(C.DAOS_CHK_CONT_ORPHAN)
 	case "DAOS_CHK_CONT_BAD_LABEL":
 		*fl = faultLocation(C.DAOS_CHK_CONT_BAD_LABEL)
+	case "DAOS_CHK_ORPHAN_POOL_SHARD":
+    	*fl = faultLocation(C.DAOS_CHK_ORPHAN_POOL_SHARD)
 	default:
 		return errors.Errorf("unhandled fault location %q", fv)
 	}
@@ -155,6 +157,15 @@ func (cmd *containerFaultCmd) Execute(_ []string) error {
 		}
 		cspCmd.Logger = cmd.Logger
 		return cspCmd.Execute(nil)
+	case faultLocation(C.DAOS_CHK_ORPHAN_POOL_SHARD):
+		// Set the fail value to specify which rank should be the orphan shard
+		cmd.Debugf("setting orphan pool shard rank to %d", cmd.Rank)
+		rc := C.daos_debug_set_params(nil, C.d_rank_t(cmd.Rank), C.DMG_KEY_FAIL_VALUE, C.uint64_t(cmd.Rank), 0, nil)
+		if err := daosError(rc); err != nil {
+			return errors.Wrap(err, "failed to set orphan pool shard rank")
+		}
+		cmd.Debugf("DAOS_CHK_ORPHAN_POOL_SHARD fault injection set with rank %d", cmd.Rank)
+		return nil
 	}
 	return nil
 }
