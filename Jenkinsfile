@@ -3,7 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -704,7 +704,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.6') {
+                stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
@@ -717,7 +717,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
-                                                ' --build-arg POINT_RELEASE=.6 '
+                                                ' --build-arg POINT_RELEASE=.5 '
 
                         }
                     }
