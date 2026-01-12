@@ -1044,15 +1044,18 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 
 	if (tr_addr != NULL) {
 		addr_len = strnlen(tr_addr, SPDK_NVMF_TRADDR_MAX_LEN + 1);
-		if (addr_len == SPDK_NVMF_TRADDR_MAX_LEN + 1)
+		if (addr_len == SPDK_NVMF_TRADDR_MAX_LEN + 1) {
+			DL_ERROR
 			return -DER_INVAL;
-	}
+		}
 
 	if (addr_len == 0) {
 		rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
 		if (rc != 0) {
-			DL_ERROR(rc, "Failed to read PCI addr from dev UUID");
-			return rc;
+			DL_WARN(rc, "Failed to read PCI addr from device" DF_UUID " (is it AIO?)",
+				DP_UUID(dev_uuid));
+			/* Return zero in the case of simulated devices */
+			return 0;
 		}
 
 		if (tr_addr != NULL) {
