@@ -709,7 +709,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.6') {
+                stage('Build on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
@@ -722,7 +722,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
-                                                ' --build-arg POINT_RELEASE=.6 '
+                                                ' --build-arg POINT_RELEASE=.5 '
 
                         }
                     }
