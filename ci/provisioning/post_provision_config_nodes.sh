@@ -267,8 +267,10 @@ mkfs_on_nvme_over_limit () {
       fi
     else
       if pci_device_has_data "$nvme_pci_address"; then
-        echo "INFO clean /dev/${nvme_device} ${nvme_pci_address}"
-        nvme_recreate_namespace "$nvme_device"
+        echo "INFO clean /dev/${nvme_device} ${nvme_pci_address} with blkdiscard"
+        blkdiscard "$nvme_device_ns_path" || \
+          { echo "ERROR: blkdiscard on ${nvme_device_ns_path} failed"; exit 1; }
+        # nvme_recreate_namespace "$nvme_device"
       else
         echo "SKIP clean /dev/${nvme_device} ${nvme_pci_address}"
       fi
