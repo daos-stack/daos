@@ -262,7 +262,7 @@ Pool space info:
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
 		},
-		"rebuild failed": {
+		"rebuild failing": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateTargetsExcluded,
@@ -275,10 +275,11 @@ Pool space info:
 				PoolLayoutVer:    1,
 				UpgradeLayoutVer: 2,
 				Rebuild: &daos.PoolRebuildStatus{
-					Status:  2,
-					State:   daos.PoolRebuildStateBusy,
-					Objects: 42,
-					Records: 21,
+					Status:       -2,
+					State:        daos.PoolRebuildStateBusy,
+					DerivedState: daos.PoolRebuildStateFailing,
+					Objects:      42,
+					Records:      21,
 				},
 				TierStats: []*daos.StorageUsageStats{
 					{
@@ -298,7 +299,7 @@ Pool space info:
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
-- Rebuild failed, status=2
+- Rebuild failing (state=busy, status=-2)
 Pool space info:
 - Target count:1
 - Storage tier 0 (SCM):
@@ -364,10 +365,11 @@ Pool space info:
 				ActiveTargets: 8,
 				State:         daos.PoolServiceStateReady,
 				Rebuild: &daos.PoolRebuildStatus{
-					State:   daos.PoolRebuildStateIdle,
-					Status:  0,
-					Objects: 0,
-					Records: 0,
+					State:        daos.PoolRebuildStateIdle,
+					DerivedState: daos.PoolRebuildStateIdle,
+					Status:       0,
+					Objects:      0,
+					Records:      0,
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
@@ -383,16 +385,17 @@ Pool health info:
 				ActiveTargets: 8,
 				State:         daos.PoolServiceStateReady,
 				Rebuild: &daos.PoolRebuildStatus{
-					State:   daos.PoolRebuildStateStopped,
-					Status:  0,
-					Objects: 0,
-					Records: 0,
+					State:        daos.PoolRebuildStateDone,
+					DerivedState: daos.PoolRebuildStateStopped,
+					Status:       int32(daos.OpCanceled),
+					Objects:      0,
+					Records:      0,
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
 Pool health info:
-- Rebuild stopped, 0 objs, 0 recs
+- Rebuild stopped (state=done, status=-2027)
 `, poolUUID.String()),
 		},
 		"rebuild state done": {
@@ -402,10 +405,11 @@ Pool health info:
 				ActiveTargets: 8,
 				State:         daos.PoolServiceStateReady,
 				Rebuild: &daos.PoolRebuildStatus{
-					State:   daos.PoolRebuildStateDone,
-					Status:  0,
-					Objects: 200,
-					Records: 1000,
+					State:        daos.PoolRebuildStateDone,
+					DerivedState: daos.PoolRebuildStateDone,
+					Status:       0,
+					Objects:      200,
+					Records:      1000,
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
@@ -421,14 +425,15 @@ Pool health info:
 				ActiveTargets: 8,
 				State:         daos.PoolServiceStateReady,
 				Rebuild: &daos.PoolRebuildStatus{
-					State:  daos.PoolRebuildStateFailed,
-					Status: int32(daos.OpCanceled),
+					State:        daos.PoolRebuildStateDone,
+					DerivedState: daos.PoolRebuildStateFailed,
+					Status:       -1,
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
 Pool health info:
-- Rebuild failed, status=-2027
+- Rebuild failed (state=done, status=-1)
 `, poolUUID.String()),
 		},
 		"rebuild state busy": {
@@ -438,10 +443,11 @@ Pool health info:
 				ActiveTargets: 8,
 				State:         daos.PoolServiceStateReady,
 				Rebuild: &daos.PoolRebuildStatus{
-					State:   daos.PoolRebuildStateBusy,
-					Status:  0,
-					Objects: 150,
-					Records: 750,
+					State:        daos.PoolRebuildStateBusy,
+					DerivedState: daos.PoolRebuildStateBusy,
+					Status:       0,
+					Objects:      150,
+					Records:      750,
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
@@ -457,16 +463,17 @@ Pool health info:
 				ActiveTargets: 8,
 				State:         daos.PoolServiceStateReady,
 				Rebuild: &daos.PoolRebuildStatus{
-					State:   daos.PoolRebuildStateStopping,
-					Status:  0,
-					Objects: 100,
-					Records: 500,
+					State:        daos.PoolRebuildStateBusy,
+					DerivedState: daos.PoolRebuildStateStopping,
+					Status:       int32(daos.OpCanceled),
+					Objects:      100,
+					Records:      500,
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
 Pool health info:
-- Rebuild stopping, 100 objs, 500 recs
+- Rebuild stopping (state=busy, status=-2027)
 `, poolUUID.String()),
 		},
 		"rebuild state failing": {
@@ -476,16 +483,17 @@ Pool health info:
 				ActiveTargets: 8,
 				State:         daos.PoolServiceStateReady,
 				Rebuild: &daos.PoolRebuildStatus{
-					State:   daos.PoolRebuildStateFailing,
-					Status:  -1,
-					Objects: 75,
-					Records: 300,
+					State:        daos.PoolRebuildStateBusy,
+					DerivedState: daos.PoolRebuildStateFailing,
+					Status:       -1,
+					Objects:      75,
+					Records:      300,
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
 Pool health info:
-- Rebuild failed, status=-1
+- Rebuild failing (state=busy, status=-1)
 `, poolUUID.String()),
 		},
 	} {

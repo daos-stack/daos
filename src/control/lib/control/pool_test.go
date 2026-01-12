@@ -1882,9 +1882,10 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateIdle,
-						Objects: 1,
-						Records: 2,
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
+						Objects:      1,
+						Records:      2,
 					},
 					TierStats: []*daos.StorageUsageStats{
 						{
@@ -1942,9 +1943,10 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateIdle,
-						Objects: 1,
-						Records: 2,
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
+						Objects:      1,
+						Records:      2,
 					},
 					TierStats: []*daos.StorageUsageStats{
 						{
@@ -2008,7 +2010,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			},
 			expErr: errors.New("> 1 occurrences of prop 4 in resp"),
 		},
-		"query with rebuild state stopping": {
+		"query with rebuild state busy with DER_OP_CANCELED (stopping)": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
@@ -2017,7 +2019,8 @@ func TestControl_PoolQuery(t *testing.T) {
 						ActiveTargets: 42,
 						State:         mgmtpb.PoolServiceState_Ready,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
-							State:   mgmtpb.PoolRebuildStatus_STOPPING,
+							Status:  int32(daos.OpCanceled),
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 100,
 							Records: 500,
 						},
@@ -2031,14 +2034,16 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateStopping,
-						Objects: 100,
-						Records: 500,
+						Status:       int32(daos.OpCanceled),
+						State:        daos.PoolRebuildStateBusy,
+						DerivedState: daos.PoolRebuildStateStopping,
+						Objects:      100,
+						Records:      500,
 					},
 				},
 			},
 		},
-		"query with rebuild state stopped": {
+		"query with rebuild state idle with DER_OP_CANCELED (stopped)": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
@@ -2047,7 +2052,8 @@ func TestControl_PoolQuery(t *testing.T) {
 						ActiveTargets: 42,
 						State:         mgmtpb.PoolServiceState_Ready,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
-							State:   mgmtpb.PoolRebuildStatus_STOPPED,
+							Status:  int32(daos.OpCanceled),
+							State:   mgmtpb.PoolRebuildStatus_IDLE,
 							Objects: 0,
 							Records: 0,
 						},
@@ -2061,14 +2067,16 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateStopped,
-						Objects: 0,
-						Records: 0,
+						Status:       int32(daos.OpCanceled),
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateStopped,
+						Objects:      0,
+						Records:      0,
 					},
 				},
 			},
 		},
-		"query with rebuild state failing": {
+		"query with rebuild state busy with error (failing)": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
@@ -2077,7 +2085,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						ActiveTargets: 42,
 						State:         mgmtpb.PoolServiceState_Ready,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
-							State:   mgmtpb.PoolRebuildStatus_FAILING,
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Status:  -1,
 							Objects: 75,
 							Records: 300,
@@ -2092,15 +2100,16 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateFailing,
-						Status:  -1,
-						Objects: 75,
-						Records: 300,
+						State:        daos.PoolRebuildStateBusy,
+						DerivedState: daos.PoolRebuildStateFailing,
+						Status:       -1,
+						Objects:      75,
+						Records:      300,
 					},
 				},
 			},
 		},
-		"query with rebuild state failed": {
+		"query with rebuild state idle with error (failed)": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
@@ -2109,7 +2118,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						ActiveTargets: 42,
 						State:         mgmtpb.PoolServiceState_Ready,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
-							State:  mgmtpb.PoolRebuildStatus_FAILED,
+							State:  mgmtpb.PoolRebuildStatus_IDLE,
 							Status: -5,
 						},
 					},
@@ -2122,8 +2131,9 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:  daos.PoolRebuildStateFailed,
-						Status: -5,
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateFailed,
+						Status:       -5,
 					},
 				},
 			},
@@ -2151,9 +2161,10 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateDone,
-						Objects: 200,
-						Records: 1000,
+						State:        daos.PoolRebuildStateDone,
+						DerivedState: daos.PoolRebuildStateDone,
+						Objects:      200,
+						Records:      1000,
 					},
 				},
 			},
@@ -2179,7 +2190,8 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State: daos.PoolRebuildStateIdle,
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
 					},
 				},
 			},
@@ -2748,9 +2760,10 @@ func TestControl_ListPools(t *testing.T) {
 			rebuildState = daos.PoolRebuildStateBusy
 		}
 		return &daos.PoolRebuildStatus{
-			State:   rebuildState,
-			Objects: 1,
-			Records: 2,
+			State:        rebuildState,
+			DerivedState: rebuildState,
+			Objects:      1,
+			Records:      2,
 		}
 	}
 	expTierStats := []*daos.StorageUsageStats{

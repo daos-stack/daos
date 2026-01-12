@@ -215,6 +215,7 @@ message PoolRebuildStatus {
 	State state = 2;
 	uint64 objects = 3;
 	uint64 records = 4;
+	State  derived_state = 5;
 }
 
 enum PoolServiceState {

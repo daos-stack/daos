@@ -1490,7 +1490,7 @@ test_drpc_pool_query_rebuild_busy_success(void **state)
 }
 
 static void
-test_drpc_pool_query_rebuild_idle_misc_err(void **state)
+test_drpc_pool_query_rebuild_idle_err(void **state)
 {
 	Drpc__Call       call     = DRPC__CALL__INIT;
 	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
@@ -1514,14 +1514,14 @@ test_drpc_pool_query_rebuild_idle_misc_err(void **state)
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__FAILED, &resp);
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__IDLE, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
 
 static void
-test_drpc_pool_query_rebuild_done_misc_err(void **state)
+test_drpc_pool_query_rebuild_done_err(void **state)
 {
 	Drpc__Call       call     = DRPC__CALL__INIT;
 	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
@@ -1545,14 +1545,14 @@ test_drpc_pool_query_rebuild_done_misc_err(void **state)
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__FAILED, &resp);
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__DONE, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
 
 static void
-test_drpc_pool_query_rebuild_busy_misc_err(void **state)
+test_drpc_pool_query_rebuild_busy_err(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
@@ -1576,102 +1576,7 @@ test_drpc_pool_query_rebuild_busy_misc_err(void **state)
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__FAILING, &resp);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-static void
-test_drpc_pool_query_rebuild_idle_cancelled(void **state)
-{
-	Drpc__Call       call     = DRPC__CALL__INIT;
-	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
-	daos_pool_info_t exp_info = {0};
-
-	init_test_pool_info(&exp_info);
-	exp_info.pi_rebuild_st.rs_version = 1;
-	exp_info.pi_rebuild_st.rs_state   = DRS_NOT_STARTED;
-
-	ds_mgmt_pool_query_info_out  = exp_info;
-	ds_mgmt_pool_query_mem_bytes = 11;
-	/*
-	 * rebuild results returned to us shouldn't include the number of
-	 * objects/records if there's an error.
-	 */
-	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_obj_nr = 42;
-	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_rec_nr = 999;
-	/* rebuild errno should have been reset if DER_OP_CANCELED returned */
-	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_errno = -DER_OP_CANCELED;
-
-	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
-
-	ds_mgmt_drpc_pool_query(&call, &resp);
-
-	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__STOPPED, &resp);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-static void
-test_drpc_pool_query_rebuild_done_cancelled(void **state)
-{
-	Drpc__Call       call     = DRPC__CALL__INIT;
-	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
-	daos_pool_info_t exp_info = {0};
-
-	init_test_pool_info(&exp_info);
-	exp_info.pi_rebuild_st.rs_version = 1;
-	exp_info.pi_rebuild_st.rs_errno   = -DER_OP_CANCELED;
-	exp_info.pi_rebuild_st.rs_state   = DRS_COMPLETED;
-
-	ds_mgmt_pool_query_info_out  = exp_info;
-	ds_mgmt_pool_query_mem_bytes = 11;
-	/*
-	 * rebuild results returned to us shouldn't include the number of
-	 * objects/records if there's an error.
-	 */
-	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_obj_nr = 42;
-	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_rec_nr = 999;
-
-	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
-
-	ds_mgmt_drpc_pool_query(&call, &resp);
-
-	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__FAILED, &resp);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-static void
-test_drpc_pool_query_rebuild_busy_cancelled(void **state)
-{
-	Drpc__Call       call     = DRPC__CALL__INIT;
-	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
-	daos_pool_info_t exp_info = {0};
-
-	init_test_pool_info(&exp_info);
-	exp_info.pi_rebuild_st.rs_version = 1;
-	exp_info.pi_rebuild_st.rs_state   = DRS_IN_PROGRESS;
-
-	ds_mgmt_pool_query_info_out  = exp_info;
-	ds_mgmt_pool_query_mem_bytes = 11;
-	/*
-	 * rebuild results returned to us shouldn't include the number of
-	 * objects/records if there's an error.
-	 */
-	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_obj_nr = 42;
-	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_rec_nr = 999;
-	/* rebuild errno should have been reset if DER_OP_CANCELED returned */
-	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_errno = -DER_OP_CANCELED;
-
-	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
-
-	ds_mgmt_drpc_pool_query(&call, &resp);
-
-	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__STOPPING, &resp);
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -3565,12 +3470,9 @@ main(void)
 	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_success),
 	    QUERY_TEST(test_drpc_pool_query_rebuild_done_success),
 	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_success),
-	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_misc_err),
-	    QUERY_TEST(test_drpc_pool_query_rebuild_done_misc_err),
-	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_misc_err),
-	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_cancelled),
-	    QUERY_TEST(test_drpc_pool_query_rebuild_done_cancelled),
-	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_cancelled),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_err),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_done_err),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_err),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_bad_uuid),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_mgmt_svc_fails),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_with_targets),

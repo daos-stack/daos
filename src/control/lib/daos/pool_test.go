@@ -426,3 +426,138 @@ func TestDaos_PoolRebuildState_UnmarshalJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestDaos_PoolInfo_UpdateRebuildStatus(t *testing.T) {
+	for name, tc := range map[string]struct {
+		poolInfo        *PoolInfo
+		expDerivedState PoolRebuildState
+		expErr          error
+	}{
+		"nil rebuild status": {
+			poolInfo: &PoolInfo{},
+		},
+		"idle state with status 0": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State: PoolRebuildStateIdle,
+				},
+			},
+			expDerivedState: PoolRebuildStateIdle,
+		},
+		"idle state with canceled status": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State:  PoolRebuildStateIdle,
+					Status: int32(OpCanceled),
+				},
+			},
+			expDerivedState: PoolRebuildStateStopped,
+		},
+		"idle state with non-zero non-canceled status": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State:  PoolRebuildStateIdle,
+					Status: -1008,
+				},
+			},
+			expDerivedState: PoolRebuildStateFailed,
+		},
+		"done state with status 0": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State: PoolRebuildStateDone,
+				},
+			},
+			expDerivedState: PoolRebuildStateDone,
+		},
+		"done state with non-zero status": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State:  PoolRebuildStateDone,
+					Status: -1009,
+				},
+			},
+			expDerivedState: PoolRebuildStateFailed,
+		},
+		"busy state with status 0": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State: PoolRebuildStateBusy,
+				},
+			},
+			expDerivedState: PoolRebuildStateBusy,
+		},
+		"busy state with canceled status": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State:  PoolRebuildStateBusy,
+					Status: int32(OpCanceled),
+				},
+			},
+			expDerivedState: PoolRebuildStateStopping,
+		},
+		"busy state with non-zero non-canceled status": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State:  PoolRebuildStateBusy,
+					Status: -1010,
+				},
+			},
+			expDerivedState: PoolRebuildStateFailing,
+		},
+		"illegal stopped state": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State: PoolRebuildStateStopped,
+				},
+			},
+			expErr: errors.New("illegal rebuild state"),
+		},
+		"illegal stopping state": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State: PoolRebuildStateStopping,
+				},
+			},
+			expErr: errors.New("illegal rebuild state"),
+		},
+		"illegal failed state": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State: PoolRebuildStateFailed,
+				},
+			},
+			expErr: errors.New("illegal rebuild state"),
+		},
+		"illegal failing state": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State: PoolRebuildStateFailing,
+				},
+			},
+			expErr: errors.New("illegal rebuild state"),
+		},
+		"illegal rebuild state value": {
+			poolInfo: &PoolInfo{
+				Rebuild: &PoolRebuildStatus{
+					State: PoolRebuildState(999),
+				},
+			},
+			expErr: errors.New("illegal rebuild state value"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := tc.poolInfo.UpdateRebuildStatus()
+
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if tc.poolInfo.Rebuild != nil {
+				test.AssertEqual(t, tc.expDerivedState, tc.poolInfo.Rebuild.DerivedState,
+					"unexpected derived state")
+			}
+		})
+	}
+}

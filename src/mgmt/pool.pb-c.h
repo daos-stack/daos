@@ -774,10 +774,11 @@ struct  _Mgmt__PoolRebuildStatus
   Mgmt__PoolRebuildStatus__State state;
   uint64_t objects;
   uint64_t records;
+  Mgmt__PoolRebuildStatus__State derived_state;
 };
 #define MGMT__POOL_REBUILD_STATUS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_rebuild_status__descriptor) \
-    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0 }
+    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY }
 
 
 /*

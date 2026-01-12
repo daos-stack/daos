@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -579,6 +579,10 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 	}
 
 	if err := resp.UpdateState(); err != nil {
+		return nil, err
+	}
+
+	if err := resp.UpdateRebuildStatus(); err != nil {
 		return nil, err
 	}
 

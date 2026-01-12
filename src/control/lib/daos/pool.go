@@ -57,6 +57,7 @@ type (
 	PoolRebuildStatus struct {
 		Status       int32            `json:"status"`
 		State        PoolRebuildState `json:"state"`
+		DerivedState PoolRebuildState `json:"derived_state"`
 		Objects      uint64           `json:"objects"`
 		Records      uint64           `json:"records"`
 		TotalObjects uint64           `json:"total_objects"`
@@ -311,6 +312,40 @@ func (pi *PoolInfo) RebuildState() string {
 		return "Unknown"
 	}
 	return pi.Rebuild.State.String()
+}
+
+// UpdateRebuildStatus evaluates a derived state to indicate transient rebuild conditions.
+func (pi *PoolInfo) UpdateRebuildStatus() error {
+	if pi.Rebuild == nil {
+		return nil
+	}
+	if pi.Rebuild.State > PoolRebuildStateDone {
+		return errors.New("illegal rebuild state value")
+	}
+	ds := pi.Rebuild.State
+
+	switch pi.Rebuild.State {
+	case PoolRebuildStateIdle:
+		if pi.Rebuild.Status == int32(OpCanceled) {
+			ds = PoolRebuildStateStopped
+		} else if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailed
+		}
+	case PoolRebuildStateDone:
+		if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailed
+		}
+	case PoolRebuildStateBusy:
+		if pi.Rebuild.Status == int32(OpCanceled) {
+			ds = PoolRebuildStateStopping
+		} else if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailing
+		}
+	}
+
+	pi.Rebuild.DerivedState = ds
+
+	return nil
 }
 
 // Name retrieves effective name for pool from either label or UUID.
