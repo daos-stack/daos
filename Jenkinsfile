@@ -297,6 +297,11 @@ Map nlt_post_args() {
     return args
 }
 
+String getScriptOutput(String script, String args='') {
+    return sh(script: "${script} ${args}", returnStdout: true).trim()
+}
+
+
 /**
  * scriptedBuildStage
  *
@@ -305,6 +310,7 @@ Map nlt_post_args() {
  * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
  *  name                        the build stage name
  *  distro                      the shorthand distro name; defaults to 'el8'
+ *  rpmDistro                   the distro to use for rpm building; defaults to distro
  *  compiler                    the compiler to use; defaults to 'gcc'
  *  runCondition                optional condition to determine if the stage should run; defaults
  *                                to !skip_build_stage(distro, compiler)
@@ -312,24 +318,23 @@ Map nlt_post_args() {
  *  release                     the DAOS RPM release value to use; defaults to env.DAOS_RELVAL
  *  dockerBuildArgs             optional docker build arguments
  *  sconsBuildArgs              optional scons build arguments
- *  rpmDistro                   the distro to use for rpm building; defaults to distro
- *  upload_distro               the distro to use when uploading rpms; defaults to distro
  *  artifacts                   optional artifacts name to archive; defaults to
  *                                "config.log-${distro}-${compiler}"
+ *  uploadTarget                the distro to use when uploading rpms; defaults to distro
  * @return a scripted stage to run in a pipeline
  */
 def scriptedBuildStage(Map kwargs = [:]) {
     String name = kwargs.get('name', 'Unknown Build Stage')
     String distro = kwargs.get('distro', 'el8')
+    String rpmDistro = kwargs.get('rpmDistro', distro)
     String compiler = kwargs.get('compiler', 'gcc')
     Boolean runCondition = kwargs.get('runCondition', !skip_build_stage(distro, compiler))
     Boolean buildRpms = kwargs.get('buildRpms', true)
     String release = kwargs.get('release', env.DAOS_RELVAL)
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
     Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
-    String rpmDistro = kwargs.get('rpmDistro', distro)
-    String uploadDistro = kwargs.get('uploadDistro', distro)
     String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
+    String uploadTarget = kwargs.get('uploadTarget', distro)
     String dockerTag = jobStatusKey("${name}-${distro}-${compiler}").toLowerCase()
     String bullseye = 'false'
     if (compiler == 'covc') {
@@ -353,7 +358,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                                 sh label: 'Generate RPMs',
                                     script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release}"
                                 // Success actions
-                                uploadNewRPMs(uploadDistro, 'success')
+                                uploadNewRPMs(uploadTarget, 'success')
                             }
                         }
                     } catch (Exception e) {
@@ -366,7 +371,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                     } finally {
                         // Cleanup actions
                         if (buildRpms) {
-                            uploadNewRPMs(uploadDistro, 'cleanup')
+                            uploadNewRPMs(uploadTarget, 'cleanup')
                         }
                         jobStatusUpdate(job_status_internal, name)
                     }
@@ -526,7 +531,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Build sources and RPMs on Leap 15')
         booleanParam(name: 'CI_BUILD_LEAP15_ICC',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Build sources on Leap 15 with Intel-C')
         booleanParam(name: 'CI_BUILD_BULLSEYE',
                      defaultValue: true,
@@ -865,8 +870,8 @@ pipeline {
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release' +
                                             ' COMPILER=covc'
                             ],
-                            upload_distro: 'el8-bullseye',
-                            artifacts: "config.log-el8-covc"
+                            artifacts: "config.log-el8-covc",
+                            uploadTarget: 'el8-bullseye'
                         )
                     ) // parallel
                 } // script
@@ -888,7 +893,7 @@ pipeline {
                                 timeout_time: 60,
                                 unstash_opt: true,
                                 inst_repos: daosRepos(),
-                                inst_rpms: unitPackages()
+                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')
                             ],
                             unitTestPostArgs: [
                                 artifacts: ['unit_test_logs/']
@@ -902,7 +907,7 @@ pipeline {
                                 timeout_time: 60,
                                 unstash_opt: true,
                                 inst_repos: daosRepos(),
-                                inst_rpms: unitPackages()
+                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')
                             ],
                             unitTestPostArgs: [
                                 artifacts: ['unit_test_bdev_logs/']
@@ -921,7 +926,7 @@ pipeline {
                                 // ignore_failure: code_coverage_enabled(),
                                 // code_coverage: code_coverage_enabled(),
                                 // coverage_stash: 'nlt_bullseye',
-                                inst_rpms: unitPackages()
+                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')
                             ],
                             stashArgs: [
                                 name: 'nltr',
@@ -955,7 +960,7 @@ pipeline {
                                 unstash_opt: true,
                                 ignore_failure: true,
                                 inst_repos: daosRepos(),
-                                inst_rpms: unitPackages()
+                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')
                             ],
                             unitTestPostArgs: [
                                 artifacts: ['unit_test_memcheck_logs.tar.gz',
@@ -972,7 +977,7 @@ pipeline {
                                 unstash_opt: true,
                                 ignore_failure: true,
                                 inst_repos: daosRepos(),
-                                inst_rpms: unitPackages()
+                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')
                             ],
                             unitTestPostArgs: [
                                 artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
@@ -991,7 +996,7 @@ pipeline {
                                 code_coverage: true,
                                 coverage_stash: 'el8-gcc-unit-bullseye',
                                 inst_repos: daosRepos(),
-                                inst_rpms: unitPackages()
+                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true')
                             ],
                             unitTestPostArgs: [
                                 artifacts: ['unit_test_bullseye_logs/'],
