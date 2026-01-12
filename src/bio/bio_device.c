@@ -1072,7 +1072,8 @@ static void
 set_power_mgmt_completion(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
 {
 	struct bio_bdev *d_bdev = cb_arg;
-	int              sc, sct;
+	int              sc;
+	int              sct;
 	uint32_t         cdw0;
 
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
@@ -1110,7 +1111,7 @@ bio_set_power_mgmt(struct bio_bdev *d_bdev, struct spdk_io_channel *channel)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME) {
 		D_DEBUG(DB_MGMT, "Device %s is not NVMe, skipping power management\n",
 			d_bdev->bb_name);
-		return 0;
+		return -DER_NOTSUPPORTED;
 	}
 
 	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {

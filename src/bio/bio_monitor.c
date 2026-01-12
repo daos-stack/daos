@@ -1014,7 +1014,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	D_ASSERT(channel != NULL);
 	bb->bb_dev_health.bdh_io_channel = channel;
 
-	/* Set NVMe power management to 0x1 */
+	/* Set NVMe power management */
 	rc = bio_set_power_mgmt(bb->bb_dev, channel);
 	if (rc != 0 && rc != -DER_NOTSUPPORTED)
 		D_WARN("Failed to set power management for device %s: " DF_RC "\n", bdev_name,
