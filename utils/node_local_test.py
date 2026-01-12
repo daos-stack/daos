@@ -2,7 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Google LLC
 (C) Copyright 2025 Enakta Labs Ltd
 
@@ -1015,7 +1015,8 @@ class DaosServer():
         else:
             size = 1024 * 4
 
-        rc = self.run_dmg(['pool', 'create', 'NLT', '--scm-size', f'{size}M', '--properties', 'rd_fac:0,space_rb:0'])
+        rc = self.run_dmg(['pool', 'create', 'NLT', '--scm-size', f'{size}M', '--properties',
+                           'rd_fac:0,space_rb:0'])
         print(rc)
         assert rc.returncode == 0
         self.fetch_pools()
