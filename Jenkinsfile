@@ -404,7 +404,7 @@ pipeline {
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_IMAGE_VERSION',
-               defaultValue: 'el8.8',
+               defaultValue: 'el9.7',
                description: 'Version of OS used in all Functional Hardware Medium stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
@@ -577,7 +577,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9.6') {
+                stage('Build on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -593,7 +593,7 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.6 '
+                                                ' --build-arg POINT_RELEASE=.7 '
 
                         }
                     }
