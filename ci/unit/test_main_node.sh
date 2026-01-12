@@ -27,7 +27,7 @@ sudo mount --bind build "${SL_SRC_DIR}"
 log_prefix="unit_test"
 
 : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
-if [ -d "${BULLSEYE_DIR}" ]; then
+if [[ -d "${BULLSEYE_DIR}" ]]; then
     export COVFILE="${SL_SRC_DIR}/test.cov"
     export PATH="${BULLSEYE_DIR}/bin:$PATH"
     cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
@@ -87,7 +87,7 @@ pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
 
-if [ -e "${COVFILE}" ]; then
+if [[ -n "${COVFILE:-}" ]]; then
     echo "Code coverage before running unit tests:"
     /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 fi
@@ -95,7 +95,7 @@ fi
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
 
-if [ -e "${COVFILE}" ]; then
+if [[ -n "${COVFILE:-}" ]]; then
     echo "Code coverage after running unit tests:"
     /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 

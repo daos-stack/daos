@@ -40,10 +40,10 @@ pkgs+=("pciutils-devel")
 pkgs+=("protobuf-c")
 pkgs+=("valgrind-devel")
 
-if ("${code_coverage}" == "true") ; then
+if [ "${code_coverage}" == "true" ] ; then
     pkgs+=("$(utils/rpms/package_version.sh bullseye normal)")
 fi
 
 # output with trailing newline suppressed
-echo  -e "${pkgs[@]}\c"
+printf "${pkgs[*]}"
 exit 0
