@@ -486,7 +486,7 @@ $  systemctl status scratch_fs-root_dfuse.mount
      Docs: man:fstab(5)
            man:systemd-fstab-generator(8)
 
-Sep 23 15:55:33 wolf-170.wolf.hpdd.intel.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
+Sep 23 15:55:33 wolf-170.wolf.example.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
 $  systemctl start scratch_fs-root_dfuse.mount
 $  df -h | grep fuse
 dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
@@ -505,8 +505,8 @@ $  systemctl status scratch_fs-root_dfuse.mount
    CGroup: /system.slice/scratch_fs-root_dfuse.mount
            └─4173 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
 
-Sep 23 15:57:52 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
-Sep 23 15:57:53 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+Sep 23 15:57:52 wolf-170.wolf.example.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 15:57:53 wolf-170.wolf.example.com systemd[1]: Mounted /scratch_fs/root_dfuse.
 $  systemctl stop scratch_fs-root_dfuse.mount
 $  systemctl status scratch_fs-root_dfuse.mount
 ● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
@@ -520,11 +520,11 @@ $  systemctl status scratch_fs-root_dfuse.mount
    Memory: 540.0K
    CGroup: /system.slice/scratch_fs-root_dfuse.mount
 
-Sep 23 15:57:52 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
-Sep 23 15:57:53 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
-Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounting /scratch_fs/root_dfuse...
-Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
-Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounted /scratch_fs/root_dfuse.
+Sep 23 15:57:52 wolf-170.wolf.example.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 15:57:53 wolf-170.wolf.example.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+Sep 23 15:58:32 wolf-170.wolf.example.com systemd[1]: Unmounting /scratch_fs/root_dfuse...
+Sep 23 15:58:32 wolf-170.wolf.example.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
+Sep 23 15:58:32 wolf-170.wolf.example.com systemd[1]: Unmounted /scratch_fs/root_dfuse.
 $
 ```
 
@@ -580,8 +580,8 @@ $  systemctl status scratch_fs-root_dfuse.mount
    CGroup: /system.slice/scratch_fs-root_dfuse.mount
            └─2346 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
 
-Sep 23 16:13:34 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
-Sep 23 16:13:35 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+Sep 23 16:13:34 wolf-170.wolf.example.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 16:13:35 wolf-170.wolf.example.com systemd[1]: Mounted /scratch_fs/root_dfuse.
 $
 ```
 
