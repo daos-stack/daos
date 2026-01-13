@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -927,6 +927,7 @@ enum {
 #define DAOS_CHK_FAIL_REPORT_POOL2	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb8)
 #define DAOS_CHK_ENGINE_DEATH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb9)
 #define DAOS_CHK_VERIFY_CONT_SHARDS     (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xba)
+#define DAOS_CHK_ORPHAN_POOL_SHARD        (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xbb)
 
 #define DAOS_MGMT_FAIL_CREATE_QUERY       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xe0)
 
