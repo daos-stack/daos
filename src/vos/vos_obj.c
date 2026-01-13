@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -494,7 +494,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
-	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb);
+	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb, obj);
 	if (rc != 0)
 		goto reset;
 
@@ -572,11 +572,9 @@ reset:
 	}
 
 	if (rc == 0) {
-		vos_ts_set_wupdate(ts_set, epr.epr_hi);
-
-		if (dtx_is_valid_handle(dth) && dth->dth_local) {
-			rc = vos_insert_oid(dth, cont, &oid);
-		}
+		rc = vos_dtx_record_oid(dth, cont, oid);
+		if (rc == 0)
+			vos_ts_set_wupdate(ts_set, epr.epr_hi);
 	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, tx_started, NULL, rc);
@@ -592,7 +590,7 @@ reset:
 	}
 
 	if (obj != NULL)
-		vos_obj_release(obj, 0, rc != 0);
+		vos_obj_release(obj, 0, rc != 0 && tx_started);
 
 	D_FREE(daes);
 	D_FREE(dces);
@@ -816,7 +814,8 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
 	daos_handle_t         toh = DAOS_HDL_INVAL;
 	int                   rc  = 0;
 	int                   i;
-	bool                  dirty = false;
+	bool                  dirty      = false;
+	bool                  tx_started = false;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -842,6 +841,7 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
 		}
 	}
 
+restart:
 	rc = vos_obj_hold(cont, oid, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE,
 			  DAOS_INTENT_MARK, &obj, NULL);
 	if (rc != 0)
@@ -850,6 +850,16 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
 	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto log;
+
+	if (unlikely(vos_obj_is_evicted(obj))) {
+		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted, needs to restart TX.\n", DP_UOID(oid));
+		umem_tx_end(umm, -DER_TX_RESTART);
+		vos_obj_release(obj, 0, false);
+		obj = NULL;
+		goto restart;
+	}
+
+	tx_started = true;
 
 	rc = vos_obj_incarnate(obj, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE, DAOS_INTENT_MARK,
 			       NULL);
@@ -906,12 +916,14 @@ log:
 			  ", dkey (empty), akey_nr %u, epoch " DF_X64 ", pm_ver %u",
 			  DP_UOID(oid), akey_nr, epoch, pm_ver);
 
+	if (rc == -DER_ALREADY)
+		rc = 0;
 	if (daos_handle_is_valid(toh))
 		dbtree_close(toh);
 	if (obj != NULL)
-		vos_obj_release(obj, 0, true);
+		vos_obj_release(obj, 0, rc != 0 && tx_started);
 
-	return rc == -DER_ALREADY ? 0 : rc;
+	return rc;
 }
 
 static int
