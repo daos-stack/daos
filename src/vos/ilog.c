@@ -1649,6 +1649,15 @@ ilog_version_get(daos_handle_t loh)
 }
 
 bool
+ilog_root_is_valid(struct ilog_df *ilog_df)
+{
+	struct ilog_root *root = (struct ilog_root *)ilog_df;
+	D_ASSERT(root != NULL);
+
+	return ILOG_MAGIC_VALID(root->lr_magic);
+}
+
+bool
 ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch)
 {
 	struct ilog_root  *root = umem_off2ptr(umm, umem_off2offset(rec));
