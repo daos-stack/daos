@@ -441,6 +441,63 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
     }
 }
 
+/**
+ * scriptedSummaryStage
+ *
+ * Get a summary stage in scripted syntax.
+ *
+ * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
+ *  name                        the summary stage name
+ *  distro                      the shorthand distro name; defaults to 'el8'
+ *  compiler                    the compiler to use; defaults to 'gcc'
+ *  runCondition                Optional additional condition to determine if the stage should run
+ *  dockerBuildArgs             optional docker build arguments
+ *  installScript               optional script to install RPMs
+ *  runScriptArgs               Map of arguments to pass to runScriptWithStashes()
+ *  archiveArtifactsArgs        Map of arguments to pass to archiveArtifacts()
+ * @return a scripted stage to run in a pipeline
+ */
+def scriptedSummaryStage(Map kwargs = [:]) {
+    String name = kwargs.get('name', 'Unknown Summary Stage')
+    String distro = kwargs.get('distro', 'el8')
+    String compiler = kwargs.get('compiler', 'gcc')
+    Boolean runCondition = kwargs.get('runCondition', true)
+    String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
+    String installScript = kwargs.get('installScript', '')
+    Map runScriptArgs = kwargs.get('runScriptArgs', [:])
+    Map archiveArtifactsArgs = kwargs.get('archiveArtifactsArgs', [:])
+    String dockerTag = jobStatusKey("${name}-${distro}-${compiler}").toLowerCase()
+
+    return {
+        stage("${name}") {
+            if (runCondition) {
+                node('docker_runner') {
+                    def dockerImage = docker.build(dockerTag, dockerBuildArgs)
+                    try {
+                        dockerImage.inside() {
+                            if (installScript) {
+                                sh label: 'Install RPMs',
+                                    script: installScript
+                            }
+                            job_step_update(runScriptWithStashes(runScriptArgs))
+                        }
+                    } finally {
+                        // Cleanup actions
+                        if (archiveArtifactsArgs) {
+                            archiveArtifacts(archiveArtifactsArgs)
+                        }
+                        jobStatusUpdate(job_status_internal, name)
+                    }
+                }
+            }
+            else {
+                println("[${name}] Skipping summary stage")
+                Utils.markStageSkippedForConditional("${name}")
+            }
+            println("[${name}] Finished with ${job_status_internal}")
+        }
+    }
+}
 
 pipeline {
     agent { label 'lightweight' }
@@ -968,7 +1025,7 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
                                 testResults: 'test_results/*.xml',
-                                always_script: 'ci/unit/test_post_always.sh'
+                                always_script: 'ci/unit/test_post_always.sh',
                                 with_valgrind: 'memcheck',
                                 ignore_failure: true,
                             ],
@@ -1012,7 +1069,7 @@ pipeline {
                                 testResults: 'test_results/*.xml',
                                 always_script: 'ci/unit/test_post_always.sh',
                                 ignore_failure: true,
-                                coverage_stash: 'unit_test_bullseye',
+                                coverage_stash: 'unit_test_bullseye'
                             ],
                             unitTestPostArgs: [
                                 artifacts: ['unit_test_bullseye_logs/'],
@@ -1035,7 +1092,7 @@ pipeline {
                                 unstash_tests: false,
                                 ignore_failure: true,
                                 code_coverage: true,
-                                coverage_stash: 'nlt-bullseye',
+                                coverage_stash: 'nlt-bullseye'
                             ],
                             stashArgs: [
                                 name: 'nltr-bullseye',
@@ -1459,46 +1516,78 @@ pipeline {
                 beforeAgent true
                 expression { true }
             }
-            parallel {
-                stage('Bullseye Report') {
-                    when {
-                        beforeAgent true
-                        expression { code_coverage_enabled() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
-                                                                parallel_build: true) +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg REPOS="' + daosRepos() + '"' +
-                                                code_coverage_build_args()
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install packages',
-                                script: './ci/summary/install_pkgs.sh'
-                            job_step_update(
-                                runScriptWithStashes(
-                                    label: 'Generate Bullseye Report',
-                                    script: 'ci/summary/bullseye_report.sh',
-                                    stashes: ['unit_test_bullseye',
-                                              'unit_test_bdev_bullseye',
-                                              'nlt_bullseye']))
-                        }
-                    }
-                    post {
-                        always {
-                            archiveArtifacts artifacts: 'bullseye_report/*',
-                                             allowEmptyArchive: false
-                            job_status_update()
-                        }
-                    }
-                } // stage('Code Coverage Report')
-            } // parallel
+            steps {
+                script {
+                    parallel(
+                        'Bullseye Report': scriptedSummaryStage(
+                            name: 'Bullseye Report',
+                            distro: 'el8',
+                            compiler: 'covc',
+                            runCondition: code_coverage_enabled(),
+                            nodeLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs(
+                                repo_type: 'stable',
+                                deps_build: false,
+                                parallel_build: true) +
+                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                ' --build-arg REPOS="' + daosRepos() + '"' +
+                                code_coverage_build_args(),
+                            installScript: './ci/summary/install_pkgs.sh',
+                            runScriptArgs: [
+                                label: 'Generate Bullseye Report',
+                                script: 'ci/summary/bullseye_report.sh',
+                                stashes: ['unit_test_bullseye',
+                                          'unit_test_bdev_bullseye',
+                                          'nlt_bullseye']
+                            ],
+                            archiveArtifactsArgs: [
+                                artifacts: 'bullseye_report/*',
+                                allowEmptyArchive: false
+                            ]
+                        )
+                    ) // parallel
+                } // script
+            } // steps
+            // parallel {
+            //     stage('Bullseye Report') {
+            //         when {
+            //             beforeAgent true
+            //             expression { code_coverage_enabled() }
+            //         }
+            //         agent {
+            //             dockerfile {
+            //                 filename 'utils/docker/Dockerfile.el.8'
+            //                 label 'docker_runner'
+            //                 additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+            //                                                     deps_build: false,
+            //                                                     parallel_build: true) +
+            //                                     ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+            //                                     ' --build-arg REPOS="' + daosRepos() + '"' +
+            //                                     code_coverage_build_args()
+            //             }
+            //         }
+            //         steps {
+            //             script {
+            //                 sh label: 'Install packages',
+            //                     script: './ci/summary/install_pkgs.sh'
+            //                 job_step_update(
+            //                     runScriptWithStashes(
+            //                         label: 'Generate Bullseye Report',
+            //                         script: 'ci/summary/bullseye_report.sh',
+            //                         stashes: ['unit_test_bullseye',
+            //                                   'unit_test_bdev_bullseye',
+            //                                   'nlt_bullseye']))
+            //             }
+            //         }
+            //         post {
+            //             always {
+            //                 archiveArtifacts artifacts: 'bullseye_report/*',
+            //                                  allowEmptyArchive: false
+            //                 job_status_update()
+            //             }
+            //         }
+            //     } // stage('Code Coverage Report')
+            // } // parallel
         } // stage('Test Summary')
     } // stages
     post {
