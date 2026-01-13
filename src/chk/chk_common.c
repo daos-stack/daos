@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1189,6 +1189,20 @@ trust_status:
 	*status_dst = status_src;
 }
 
+void
+chk_ins_cleanup(struct chk_instance *ins)
+{
+	chk_stop_sched(ins);
+	ins->ci_inited = 0;
+
+	chk_iv_ns_cleanup(&ins->ci_iv_ns);
+
+	if (ins->ci_iv_group != NULL) {
+		crt_group_secondary_destroy(ins->ci_iv_group);
+		ins->ci_iv_group = NULL;
+	}
+}
+
 int
 chk_ins_init(struct chk_instance **p_ins)
 {
@@ -1252,11 +1266,8 @@ chk_ins_fini(struct chk_instance **p_ins)
 	if (ins == NULL)
 		return;
 
-	ins->ci_inited = 0;
-	chk_iv_ns_cleanup(&ins->ci_iv_ns);
-
-	if (ins->ci_iv_group != NULL)
-		crt_group_secondary_destroy(ins->ci_iv_group);
+	D_ASSERT(ins->ci_iv_ns == NULL);
+	D_ASSERT(ins->ci_iv_group == NULL);
 
 	d_rank_list_free(ins->ci_ranks);
 	D_ASSERT(d_list_empty(&ins->ci_dead_ranks));

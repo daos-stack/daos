@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2940,6 +2941,7 @@ remote:
 	if (rc != 0)
 		goto out_stop_remote;
 
+	ins->ci_pause         = 0;
 	ins->ci_sched_running = 1;
 
 	rc = dss_ult_create(chk_leader_sched, ins, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ,
@@ -3040,6 +3042,8 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	int			 rc = 0;
 	int			 i;
+
+	CHK_IS_READY(ins);
 
 	if (ins->ci_starting)
 		D_GOTO(log, rc = -DER_BUSY);
@@ -3255,6 +3259,8 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 	int				 i;
 	bool				 skip;
 
+	CHK_IS_READY(ins);
+
 	/*
 	 * NOTE: Similar as stop case, we need the ability to query check information from
 	 *	 new leader if the old one dead. But the information from new leader may be
@@ -3389,6 +3395,8 @@ chk_leader_prop(chk_prop_cb_t prop_cb, void *buf)
 {
 	struct chk_property	*prop = &chk_leader->ci_prop;
 
+	CHK_IS_READY(chk_leader);
+
 	return prop_cb(buf, prop->cp_policies, CHK_POLICY_MAX - 1, prop->cp_flags);
 }
 
@@ -3460,6 +3468,8 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 	struct chk_pending_rec	*cpr_tmp = NULL;
 	uint32_t		 cla = 0;
 	int			 rc;
+
+	CHK_IS_READY(ins);
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
@@ -3533,6 +3543,8 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	int			 rc;
+
+	CHK_IS_READY(ins);
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
@@ -3657,6 +3669,8 @@ chk_leader_notify(struct chk_iv *iv)
 	d_iov_t			 riov;
 	int			 rc = 0;
 
+	CHK_IS_READY(ins);
+
 	/* Ignore the notification that is not applicable to current rank. */
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
@@ -3736,6 +3750,8 @@ chk_leader_rejoin(uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags, 
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	int			 rc = 0;
 
+	CHK_IS_READY(ins);
+
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
 
@@ -3763,15 +3779,6 @@ out:
 		 DP_LEADER(ins), cbk->cb_ins_status, rank, gen, DP_UUID(iv_uuid), DP_RC(rc));
 
 	return rc;
-}
-
-void
-chk_leader_pause(void)
-{
-	struct chk_instance	*ins = chk_leader;
-
-	chk_stop_sched(ins);
-	D_ASSERT(d_list_empty(&ins->ci_rank_list));
 }
 
 static void
@@ -3828,18 +3835,12 @@ out:
 }
 
 int
-chk_leader_init(void)
+chk_leader_setup(void)
 {
-	struct chk_traverse_pools_args	 ctpa = { 0 };
-	struct chk_bookmark		*cbk;
-	int				 rc;
-
-	rc = chk_ins_init(&chk_leader);
-	if (rc != 0)
-		goto fini;
-
-	chk_leader->ci_is_leader = 1;
-	chk_report_seq_init(chk_leader);
+	struct chk_instance           *ins  = chk_leader;
+	struct chk_bookmark           *cbk  = &ins->ci_bk;
+	struct chk_traverse_pools_args ctpa = {0};
+	int                            rc;
 
 	/*
 	 * DAOS global consistency check depends on all related engines' local
@@ -3848,7 +3849,6 @@ chk_leader_init(void)
 	 * related local inconsistency firstly.
 	 */
 
-	cbk = &chk_leader->ci_bk;
 	rc = chk_bk_fetch_leader(cbk);
 	if (rc == -DER_NONEXIST)
 		goto prop;
@@ -3883,8 +3883,8 @@ chk_leader_init(void)
 		cbk->cb_time.ct_stop_time = time(NULL);
 		rc = chk_bk_update_leader(cbk);
 		if (rc != 0) {
-			D_ERROR(DF_LEADER" failed to reset ins status as 'PAUSED': "DF_RC"\n",
-				DP_LEADER(chk_leader), DP_RC(rc));
+			D_ERROR(DF_LEADER " failed to reset ins status as 'PAUSED': " DF_RC "\n",
+				DP_LEADER(ins), DP_RC(rc));
 			goto fini;
 		}
 
@@ -3895,19 +3895,44 @@ chk_leader_init(void)
 		 * but related check query result may be confused for user.
 		 */
 		if (rc != 0)
-			D_WARN(DF_LEADER" failed to reset pools status as 'PAUSED': "DF_RC"\n",
-				DP_LEADER(chk_leader), DP_RC(rc));
+			D_WARN(DF_LEADER " failed to reset pools status as 'PAUSED': " DF_RC "\n",
+			       DP_LEADER(ins), DP_RC(rc));
 	}
 
 prop:
-	rc = chk_prop_fetch(&chk_leader->ci_prop, &chk_leader->ci_ranks);
+	rc = chk_prop_fetch(&ins->ci_prop, &ins->ci_ranks);
 	if (rc == 0 || rc == -DER_NONEXIST)
 		rc = crt_register_event_cb(chk_rank_event_cb, NULL);
 fini:
-	if (rc != 0)
-		chk_ins_fini(&chk_leader);
-	else
-		chk_leader->ci_inited = 1;
+	if (rc != 0) {
+		chk_ins_fini(&ins);
+	} else {
+		chk_report_seq_init(ins);
+		ins->ci_inited = 1;
+		ins->ci_pause  = 0;
+	}
+
+	return rc;
+}
+
+void
+chk_leader_cleanup(void)
+{
+	struct chk_instance *ins = chk_leader;
+
+	chk_ins_cleanup(ins);
+	D_ASSERT(d_list_empty(&ins->ci_rank_list));
+}
+
+int
+chk_leader_init(void)
+{
+	int rc;
+
+	rc = chk_ins_init(&chk_leader);
+	if (rc == 0)
+		chk_leader->ci_is_leader = 1;
+
 	return rc;
 }
 
