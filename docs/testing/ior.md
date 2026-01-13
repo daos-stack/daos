@@ -54,7 +54,7 @@ $ mpirun -hostfile /path/to/hostfile_clients -np 30 <your_dir>/bin/ior -a POSIX 
 IOR-3.4.0+dev: MPI Coordinated Test of Parallel I/O
 Began               : Thu Apr 29 23:23:09 2021
 Command line        : ior -a POSIX -b 5G -t 1M -v -W -w -r -R -i 1 -o /tmp/daos_dfuse/testfile
-Machine             : Linux wolf-86.wolf.hpdd.intel.com
+Machine             : Linux wolf-86.wolf.example.com
 Start time skew across all tasks: 0.00 sec
 TestID              : 0
 StartTime           : Thu Apr 29 23:23:09 2021

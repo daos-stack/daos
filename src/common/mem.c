@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2233,6 +2233,7 @@ umem_cache_free(struct umem_store *store)
 	D_ASSERT(d_list_empty(&cache->ca_pgs_pinned));
 	D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED] == 0);
 	D_ASSERT(cache->ca_reserve_waiters == 0);
+	D_ASSERT(cache->ca_unpin_waiters == 0);
 
 	pinfo = (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages];
 	for (i = 0; i < cache->ca_mem_pages; i++) {
@@ -2246,6 +2247,11 @@ umem_cache_free(struct umem_store *store)
 		store->stor_ops->so_waitqueue_destroy(cache->ca_reserve_wq);
 		cache->ca_reserve_wq = NULL;
 
+	}
+
+	if (cache->ca_unpin_wq != NULL) {
+		store->stor_ops->so_waitqueue_destroy(cache->ca_unpin_wq);
+		cache->ca_unpin_wq = NULL;
 	}
 
 	if (store->cache->off2ptr)
@@ -2332,8 +2338,8 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	if (cache == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_IO, "Allocated page cache, md-pages(%u), mem-pages(%u), max-ne-pages(%u) %p\n",
-		md_pgs, mem_pgs, max_ne_pgs, cache);
+	D_INFO("Page cache: md-pgs(%u), mem-pages(%u), max-ne-pgs(%u), mode(%d)\n", md_pgs, mem_pgs,
+	       max_ne_pgs, cmode);
 
 	cache->ca_store		= store;
 	cache->ca_base		= base;
@@ -2380,6 +2386,11 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	if (cache_mode(cache) != 1) {
 		D_ASSERT(store->stor_ops->so_waitqueue_create != NULL);
 		rc = store->stor_ops->so_waitqueue_create(&cache->ca_reserve_wq);
+		if (rc)
+			goto error;
+
+		D_ASSERT(store->stor_ops->so_waitqueue_create != NULL);
+		rc = store->stor_ops->so_waitqueue_create(&cache->ca_unpin_wq);
 		if (rc)
 			goto error;
 
@@ -2443,6 +2454,7 @@ cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	verify_clean_page(pinfo, 1);
 	D_ASSERT(pinfo->pi_pg_id < cache->ca_md_pages);
 	D_ASSERT(cache->ca_pages[pinfo->pi_pg_id].pg_info == pinfo);
+	D_ASSERT(pinfo->pi_ref == 0);
 
 	cache->off2ptr[pinfo->pi_pg_id] = 0;
 	cache_idx = (pinfo - (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages]);
@@ -2486,9 +2498,13 @@ cache_add2lru(struct umem_cache *cache, struct umem_page_info *pinfo)
 	D_ASSERT(d_list_empty(&pinfo->pi_lru_link));
 	D_ASSERT(pinfo->pi_ref == 0);
 
-	if (pinfo->pi_evictable)
+	if (pinfo->pi_evictable) {
 		d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_lru[1]);
-	else
+		if (cache->ca_unpin_waiters) {
+			cache->ca_unpin_waiters--;
+			cache->ca_store->stor_ops->so_waitqueue_wakeup(cache->ca_unpin_wq, false);
+		}
+	} else
 		d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_lru[0]);
 }
 
@@ -3190,7 +3206,8 @@ cache_evict_page(struct umem_cache *cache, bool for_sys)
 		D_ERROR("No evictable page.\n");
 		return -DER_INVAL;
 	} else if (d_list_empty(pg_list)) {
-		D_ERROR("All evictable pages are pinned.\n");
+		cache->ca_unpin_waiters++;
+		cache->ca_store->stor_ops->so_waitqueue_wait(cache->ca_unpin_wq, false);
 		return -DER_BUSY;
 	}
 
@@ -3289,14 +3306,22 @@ cache_get_free_page(struct umem_cache *cache, struct umem_page_info **ret_pinfo,
 		}
 
 		/* All pinned pages are from current caller */
-		if (rc == -DER_BUSY && pinned_nr == cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]) {
-			D_ERROR("Not enough evictable pages.\n");
+		if (rc == -DER_BUSY && pinned_nr &&
+		    pinned_nr == cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]) {
+			D_ERROR("Not enough evictable pages. pinned [%u/%u]\n", pinned_nr,
+				cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]);
 			return -DER_INVAL;
 		}
 
-		D_CDEBUG(retry_cnt == 10, DLOG_ERR, DB_TRACE,
-			 "Retry get free page, %d times\n", retry_cnt);
+		if (rc == -DER_BUSY)
+			return rc;
+
 		retry_cnt++;
+		D_CDEBUG(retry_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
+			 "%u retries of get free page with %u pinned. [ne:%u,pinned:%u,free:%u]\n",
+			 retry_cnt, pinned_nr, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 	}
 
 	pinfo = cache_pop_free_page(cache);
@@ -3317,6 +3342,8 @@ cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
 	struct umem_page_info	*pinfo, *free_pinfo = NULL;
 	uint32_t		 pg_id;
 	int			 i, rc = 0;
+	int                      retry_cnt;
+	bool                     pages_evicted = false;
 
 	for (i = 0; i < page_nr; i++) {
 		pg_id = pages[i];
@@ -3325,6 +3352,7 @@ cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
 			D_ERROR("Can only map single evictable page.\n");
 			return -DER_INVAL;
 		}
+		retry_cnt = 0;
 retry:
 		pinfo = cache->ca_pages[pg_id].pg_info;
 		/* The page is already mapped */
@@ -3335,6 +3363,7 @@ retry:
 			if (free_pinfo != NULL) {
 				cache_push_free_page(cache, free_pinfo);
 				free_pinfo = NULL;
+				pages_evicted = true;
 			}
 			if (is_id_evictable(cache, pg_id) != pinfo->pi_evictable) {
 				pinfo->pi_evictable = is_id_evictable(cache, pg_id);
@@ -3351,14 +3380,21 @@ retry:
 		if (is_id_evictable(cache, pg_id)) {
 			if (free_pinfo == NULL) {
 				rc = cache_get_free_page(cache, &free_pinfo, 0, false);
-				if (rc) {
+				if (rc && rc != -DER_BUSY) {
 					DL_ERROR(rc, "Failed to get free page.");
 					break;
 				}
+				retry_cnt++;
+				D_CDEBUG(retry_cnt % 100 == 0, DLOG_ERR, DB_TRACE,
+					 "%u retries of get free page. [ne:%u,pinned:%u,free:%u]\n",
+					 retry_cnt, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+					 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
+					 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 				goto retry;
 			} else {
 				pinfo = free_pinfo;
 				free_pinfo = NULL;
+				pages_evicted = true;
 			}
 		} else {
 			pinfo = cache_pop_free_page(cache);
@@ -3374,6 +3410,10 @@ retry:
 		/* Map an empty page, doesn't need to load page */
 		pinfo->pi_loaded = 1;
 	}
+	if (rc || (pages_evicted && cache->ca_unpin_waiters)) {
+		cache->ca_unpin_waiters = 0;
+		cache->ca_store->stor_ops->so_waitqueue_wakeup(cache->ca_unpin_wq, true);
+	}
 
 	return rc;
 }
@@ -3383,10 +3423,13 @@ cache_pin_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, bool for
 {
 	struct umem_page_info	*pinfo, *free_pinfo = NULL;
 	uint32_t		 pg_id;
-	int			 i, processed = 0, pinned = 0, rc = 0;
+	int                      i, processed = 0, pinned = 0, rc = 0;
+	int                      retry_cnt;
+	bool                     pages_evicted = false;
 
 	for (i = 0; i < page_nr; i++) {
 		pg_id = pages[i];
+		retry_cnt = 0;
 retry:
 		pinfo = cache->ca_pages[pg_id].pg_info;
 		/* The page is already mapped */
@@ -3397,19 +3440,28 @@ retry:
 			if (free_pinfo != NULL) {
 				cache_push_free_page(cache, free_pinfo);
 				free_pinfo = NULL;
+				pages_evicted = true;
 			}
 			goto next;
 		}
 
 		if (free_pinfo == NULL) {
 			rc = cache_get_free_page(cache, &free_pinfo, pinned, for_sys);
-			if (rc)
+			if (rc && rc != -DER_BUSY)
 				goto error;
+			retry_cnt++;
+			D_CDEBUG(retry_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
+				 "%u retries of get free page with %u pinned. "
+				 "[ne:%u,pinned:%u,free:%u]\n",
+				 retry_cnt, pinned, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+				 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
+				 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 			/* Above cache_get_free_page() could yield, need re-check mapped status */
 			goto retry;
 		} else {
 			pinfo = free_pinfo;
 			free_pinfo = NULL;
+			pages_evicted = true;
 		}
 
 		inc_cache_stats(cache, UMEM_CACHE_STATS_MISS);
@@ -3434,6 +3486,10 @@ next:
 		pinfo->pi_sys = for_sys;
 	}
 
+	if (pages_evicted && cache->ca_unpin_waiters) {
+		cache->ca_unpin_waiters = 0;
+		cache->ca_store->stor_ops->so_waitqueue_wakeup(cache->ca_unpin_wq, true);
+	}
 	return 0;
 error:
 	for (i = 0; i < processed; i++) {
@@ -3443,6 +3499,10 @@ error:
 		D_ASSERT(pinfo != NULL);
 		cache_unpin_page(cache, pinfo);
 
+	}
+	if (cache->ca_unpin_waiters) {
+		cache->ca_unpin_waiters = 0;
+		cache->ca_store->stor_ops->so_waitqueue_wakeup(cache->ca_unpin_wq, true);
 	}
 	return rc;
 }
@@ -3678,9 +3738,12 @@ umem_cache_reserve(struct umem_store *store)
 		}
 		rc = 0;
 
-		D_CDEBUG(retry_cnt == 10, DLOG_ERR, DB_TRACE,
-			 "Retry reserve free page, %d times\n", retry_cnt);
 		retry_cnt++;
+		D_CDEBUG(retry_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
+			 "%u retries of reserve page. [ne:%u,pinned:%u,free:%u]\n", retry_cnt,
+			 cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 	}
 
 	D_ASSERT(cache->ca_reserve_waiters > 0);
