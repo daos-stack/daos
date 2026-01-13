@@ -548,6 +548,27 @@ dtx_aggr_tests(void **state)
 			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+0$");
 }
 
+static void
+csum_dump_sv_tests(void **state)
+{
+	struct dt_vos_pool_ctx  *tctx = *state;
+	struct ddb_ctx           ctx  = {0};
+	struct csum_dump_options opt  = {0};
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = "[0]/[0]/[0]/[1]";
+	opt.epoch = DAOS_EPOCH_MAX;
+
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_regex_match(dvt_fake_print_buffer, "^AKEY:[[:blank:]].+/dkey-1/akey-2$");
+	assert_regex_match(dvt_fake_print_buffer,
+			   "^Type: crc64, Length: 8, Value: 0xb4a996fbc6dd7444$");
+}
+
 /*
  * --------------------------------------------------------------
  * End test functions
@@ -592,21 +613,14 @@ int
 ddb_commands_tests_run()
 {
 	const struct CMUnitTest tests[] = {
-	    TEST(ls_cmd_tests),
-	    TEST(dump_value_cmd_tests),
-	    TEST(dump_ilog_cmd_tests),
-	    TEST(dump_superblock_cmd_tests),
-	    TEST(dump_dtx_cmd_tests),
-	    TEST(dtx_stat_tests),
-	    TEST(rm_cmd_tests),
-	    TEST(load_cmd_tests),
-	    TEST(rm_ilog_cmd_tests),
-	    TEST(process_ilog_cmd_tests),
-	    TEST(clear_cmt_dtx_cmd_tests),
-	    TEST(dtx_commit_entry_tests),
-	    TEST(dtx_act_discard_invalid_tests),
-	    TEST(dtx_abort_entry_tests),
-	    TEST(feature_cmd_tests),
+	    TEST(ls_cmd_tests),           TEST(dump_value_cmd_tests),
+	    TEST(dump_ilog_cmd_tests),    TEST(dump_superblock_cmd_tests),
+	    TEST(dump_dtx_cmd_tests),     TEST(dtx_stat_tests),
+	    TEST(csum_dump_sv_tests),     TEST(rm_cmd_tests),
+	    TEST(load_cmd_tests),         TEST(rm_ilog_cmd_tests),
+	    TEST(process_ilog_cmd_tests), TEST(clear_cmt_dtx_cmd_tests),
+	    TEST(dtx_commit_entry_tests), TEST(dtx_act_discard_invalid_tests),
+	    TEST(dtx_abort_entry_tests),  TEST(feature_cmd_tests),
 	    TEST(dtx_aggr_tests),
 	};
 
