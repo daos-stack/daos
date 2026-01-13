@@ -330,11 +330,14 @@ the path must include the extent, otherwise, it must not.`,
 		Help:      "Remove a vos pool.",
 		LongHelp:  "",
 		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.String("p", "db_path", "", "Path to the sys db")
+		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbRmPool(ctx, c.Args.String("path"))
+			return ddbRmPool(ctx, c.Args.String("path"), c.Flags.String("db_path"))
 		},
 		Completer: rmPoolCompleter,
 	})

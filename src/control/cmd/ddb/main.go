@@ -260,6 +260,10 @@ ddb "" ls --help
 		return nil
 	}
 
+	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
+		return errors.New("Cannot use both command file and a command string")
+	}
+
 	if opts.Debug {
 		log.WithLogLevel(logging.LogLevelDebug)
 		log.Debug("debug output enabled")
@@ -274,6 +278,10 @@ ddb "" ls --help
 
 	if opts.Args.VosPath != "" {
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "open") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "close") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "prov_mem") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "smd_sync") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
@@ -282,20 +290,30 @@ ddb "" ls --help
 				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
 			}
 		}
-	}
 
-	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
-		return errors.New("Cannot use both command file and a command string")
-	}
-
-	if opts.Args.VosPath != "" {
 		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
 		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
 	}
+
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
 		if opts.Args.RunCmd != "" {
-			err := runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
+			if ddbPoolIsOpen(ctx) {
+				err = runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
+			} else {
+				param := []string{}
+				skip := true
+
+				for _, v := range args {
+					if v == string(opts.Args.VosPath) && skip {
+						skip = false
+					} else if v != string(opts.Args.RunCmd) {
+						param = append(param, v)
+					}
+				}
+
+				err = runCmdStr(app, string(opts.Args.RunCmd), param...)
+			}
 			if err != nil {
 				log.Errorf("Error running command %q %s\n", string(opts.Args.RunCmd), err)
 			}
