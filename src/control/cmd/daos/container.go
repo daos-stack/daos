@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -602,20 +603,17 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	// TODO: Add API for DUNS.
 	var cleanup func()
-	cleanup, err = cmd.connectPool(daos.PoolConnectFlagReadWrite, ap)
+	cleanup, err = cmd.connectPool(daos.PoolConnectFlagReadWrite, nil)
 	if err != nil {
-		cleanup, err = cmd.connectPool(daos.PoolConnectFlagReadOnly, ap)
+		cleanup, err = cmd.connectPool(daos.PoolConnectFlagReadOnly, nil)
 		if err != nil {
 			return err
 		}
 	}
 	defer cleanup()
 
-	cPath := C.CString(cmd.Path)
-	defer freeString(cPath)
-	if err := daosError(C.duns_destroy_path(cmd.cPoolHandle, cPath)); err != nil {
+	if err := cmd.pool.DestroyContainerAtPath(cmd.MustLogCtx(), cmd.Path); err != nil {
 		return errors.Wrapf(err, "failed to destroy container %s", cmd.ContainerID())
 	}
 
@@ -1184,43 +1182,22 @@ func (cmd *containerLinkCmd) ContainerID() ui.LabelOrUUIDFlag {
 }
 
 func (cmd *containerLinkCmd) Execute(_ []string) (err error) {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
-	if err != nil {
-		return err
-	}
-	defer deallocCmdArgs()
-
-	var cleanup func()
-	cleanup, err = cmd.connectPool(C.DAOS_COO_RO, ap)
+	cleanup, err := cmd.connectPool(daos.PoolConnectFlagReadOnly, nil)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	cmd.Debugf("Creating a namespace link %s for container %s", cmd.Path, cmd.ContainerID())
-
-	cPath := C.CString(cmd.Path)
-	defer freeString(cPath)
-
-	var rc C.int
-	switch {
-	case cmd.ContainerID().HasUUID():
-		cmd.contUUID = cmd.ContainerID().UUID
-		cUUIDstr := C.CString(cmd.contUUID.String())
-		defer freeString(cUUIDstr)
-		rc = C.duns_link_cont(cmd.cPoolHandle, cUUIDstr, cPath)
-	case cmd.ContainerID().Label != "":
-		cLabel := C.CString(cmd.ContainerID().Label)
-		defer freeString(cLabel)
-		rc = C.duns_link_cont(cmd.cPoolHandle, cLabel, cPath)
-	default:
+	contID := cmd.ContainerID().String()
+	if contID == "" {
 		return errors.New("no UUID or label for container")
 	}
 
-	if err := daosError(rc); err != nil {
+	cmd.Debugf("Creating a namespace link %s for container %s", cmd.Path, contID)
+
+	if err := cmd.pool.LinkContainerAtPath(cmd.MustLogCtx(), contID, cmd.Path); err != nil {
 		return errors.Wrapf(err,
-			"failed to link container %s in the namespace",
-			cmd.ContainerID())
+			"failed to link container %s in the namespace", contID)
 	}
 
 	return nil
