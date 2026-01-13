@@ -551,6 +551,276 @@ dtx_aggr_tests(void **state)
 			   "^[[:blank:]]+- Committed DTX count:[[:blank:]]+0$");
 }
 
+static void
+csum_test_sv_path_init(char *path, size_t path_size, const daos_unit_oid_t *oid, const char *akey)
+{
+	int rc;
+
+	rc = snprintf(path, path_size, "/%s/" DF_UOID "/%s/%s", g_csum_uuid_str, DP_UOID(*oid),
+		      g_dkeys_str[0], akey);
+	if (rc < 0 || rc >= path_size)
+		fail_msg("path buffer too small");
+}
+
+static void
+csum_dump_error_tests(void **state)
+{
+	char                    *path_invalid = "foo";
+	struct dt_vos_pool_ctx  *tctx         = *state;
+	struct ddb_ctx           ctx          = {0};
+	struct csum_dump_options opt          = {0};
+	char                     path[128];
+	int                      rc;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+
+	rc = ddb_run_csum_dump(&ctx, &opt);
+	assert_rc_equal(-DER_INVAL, rc);
+	assert_string_contains(dvt_fake_print_buffer, "A VOS path to dump is required.");
+	dvt_fake_print_reset();
+
+	opt.path = &path_invalid[0];
+	rc       = ddb_run_csum_dump(&ctx, &opt);
+	assert_rc_equal(-DER_INVAL, rc);
+	assert_string_contains(dvt_fake_print_buffer, "Container is invalid");
+	dvt_fake_print_reset();
+
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[0]);
+	opt.path = path;
+	rc       = ddb_run_csum_dump(&ctx, &opt);
+	assert_rc_equal(-DER_INVAL, rc);
+	assert_string_contains(dvt_fake_print_buffer,
+			       "Epoch option not allowed with Single value.");
+	dvt_fake_print_reset();
+}
+
+static void
+csumbuf_dump(char *buf, uint8_t *csumbuf, size_t csumbuf_size)
+{
+	size_t i;
+
+	for (i = 0; i < csumbuf_size; i++)
+		buf += sprintf(buf, "%02" PRIx8, csumbuf[i]);
+	buf[0] = '\0';
+}
+
+static void
+print_csum_sv_tests(void **state)
+{
+	const char              *regex_prf = "0x";
+	struct dt_vos_pool_ctx  *tctx     = *state;
+	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
+	struct ddb_ctx           ctx      = {0};
+	struct csum_dump_options opt      = {0};
+	char                     path[128];
+	char                     buf[256];
+	struct dcs_csum_info    *ci;
+	int                      rc;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[0]);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	rc = snprintf(buf, sizeof(buf), "^No checksum at AKEY:[[:blank:]].+[[:blank:]]%s$", path);
+	assert_true(rc > 0 && rc < sizeof(buf));
+	assert_regex_match(dvt_fake_print_buffer, buf);
+	dvt_fake_print_reset();
+
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[0]);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	memcpy(buf, regex_prf, strlen(regex_prf));
+	ci = csum_ctx->dct_sv_ic->ic_data;
+	csumbuf_dump(buf + strlen(regex_prf), ci_idx2csum(ci, 0), ci->cs_len);
+	assert_string_contains(dvt_fake_print_buffer, buf);
+	dvt_fake_print_reset();
+}
+
+static int
+csum_sv_fake_write_file(const char *dst_path, d_iov_t *contents)
+{
+	struct dcs_csum_info *ci;
+
+	assert_string_equal(dst_path, mock_ptr_type(const char *));
+
+	ci = mock_ptr_type(struct dcs_csum_info *);
+	assert_true(contents->iov_len == ci->cs_buf_len);
+	assert_true(memcmp(contents->iov_buf, ci_idx2csum(ci, 0), ci->cs_buf_len) == 0);
+
+	return mock();
+}
+
+static void
+write_csum_sv_tests(void **state)
+{
+	char                    *path_dst = "/tmp/write_csum_sv_test_output.dat";
+	struct dt_vos_pool_ctx  *tctx     = *state;
+	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
+	struct ddb_ctx           ctx      = {0};
+	struct csum_dump_options opt      = {0};
+	char                     path[128];
+	char                     buf[256];
+	int                      rc;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_io_ft.ddb_write_file    = csum_sv_fake_write_file;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+	opt.dst   = path_dst;
+
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[0]);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	rc = snprintf(buf, sizeof(buf), "^No checksum at AKEY:[[:blank:]].+[[:blank:]]%s$", path);
+	assert_true(rc > 0 && rc < sizeof(buf));
+	assert_regex_match(dvt_fake_print_buffer, buf);
+	dvt_fake_print_reset();
+
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[0]);
+	will_return(csum_sv_fake_write_file, path_dst);
+	will_return(csum_sv_fake_write_file, csum_ctx->dct_sv_ic->ic_data);
+	will_return(csum_sv_fake_write_file, 0);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_string_contains(dvt_fake_print_buffer, "Dumping checksum");
+	dvt_fake_print_reset();
+}
+
+static void
+csum_test_recx_path_init(char *path, size_t path_size, const daos_unit_oid_t *oid, const char *akey,
+			 const daos_recx_t *recx)
+{
+	int rc;
+
+	rc = snprintf(path, path_size, "/%s/" DF_UOID "/%s/%s/{" DF_U64 "-" DF_U64 "}",
+		      g_csum_uuid_str, DP_UOID(*oid), g_dkeys_str[0], akey, recx->rx_idx,
+		      recx->rx_idx + recx->rx_nr - 1);
+	if (rc < 0 || rc >= path_size)
+		fail_msg("path buffer too small");
+}
+
+static void
+print_csum_recx_tests(void **state)
+{
+	const char              *regex_prf = "0x";
+	struct dt_vos_pool_ctx  *tctx     = *state;
+	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
+	struct ddb_ctx           ctx      = {0};
+	struct csum_dump_options opt      = {0};
+	daos_recx_t              recx     = {.rx_idx = 0, .rx_nr = csum_ctx->dct_recx_size};
+	char                     path[128];
+	char                     buf[256];
+	char                    *buf_csum;
+	int                      i;
+	int                      rc;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[1], &recx);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	rc = snprintf(buf, sizeof(buf), "^No checksum at RECX:[[:blank:]].+$");
+	assert_true(rc > 0 && rc < sizeof(buf));
+	assert_regex_match(dvt_fake_print_buffer, buf);
+	dvt_fake_print_reset();
+
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[1], &recx);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	memcpy(buf, regex_prf, strlen(regex_prf));
+	buf_csum = buf + strlen(regex_prf);
+	for (i = 0; i < DVT_FAKE_RECX_SIZE; i++) {
+		int                   csum_idx;
+		struct dcs_csum_info *ci;
+
+		ci = csum_ctx->dct_recx_ics[i]->ic_data;
+		for (csum_idx = 0; csum_idx < ci->cs_nr; ++csum_idx) {
+			csumbuf_dump(buf_csum, ci_idx2csum(ci, csum_idx), ci->cs_len);
+			assert_string_contains(dvt_fake_print_buffer, buf);
+		}
+	}
+	dvt_fake_print_reset();
+}
+
+static int
+csum_recx_fake_write_file(const char *dst_path, d_iov_t *contents)
+{
+	int      i;
+	uint8_t *buf;
+
+	assert_string_equal(dst_path, mock_ptr_type(const char *));
+
+	buf = (uint8_t *)contents->iov_buf;
+	for (i = 0; i < DVT_FAKE_RECX_SIZE; i++) {
+		int                   idx;
+		struct dcs_csum_info *ci;
+
+		ci = mock_ptr_type(struct dcs_csum_info *);
+		for (idx = 0; idx < ci->cs_nr; ++idx) {
+			assert_true(memcmp(buf, ci_idx2csum(ci, idx), ci->cs_len) == 0);
+			buf += ci->cs_len;
+		}
+	}
+	assert_true(buf - (uint8_t *)contents->iov_buf == contents->iov_len);
+
+	return mock();
+}
+
+static void
+write_csum_recx_tests(void **state)
+{
+	char                    *path_dst = "/tmp/write_csum_recx_test_output.dat";
+	struct dt_vos_pool_ctx  *tctx     = *state;
+	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
+	struct ddb_ctx           ctx      = {0};
+	struct csum_dump_options opt      = {0};
+	daos_recx_t              recx     = {.rx_idx = 0, .rx_nr = csum_ctx->dct_recx_size};
+	char                     path[128];
+	char                     buf[256];
+	int                      i;
+	int                      rc;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_io_ft.ddb_write_file    = csum_recx_fake_write_file;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+	opt.dst   = path_dst;
+
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[1], &recx);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	rc = snprintf(buf, sizeof(buf), "^No checksum at RECX:[[:blank:]].+$");
+	assert_true(rc > 0 && rc < sizeof(buf));
+	assert_regex_match(dvt_fake_print_buffer, buf);
+	dvt_fake_print_reset();
+
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[1], &recx);
+	will_return(csum_recx_fake_write_file, path_dst);
+	for (i = 0; i < DVT_FAKE_RECX_SIZE; i++)
+		will_return(csum_recx_fake_write_file, csum_ctx->dct_recx_ics[i]->ic_data);
+	will_return(csum_recx_fake_write_file, 0);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_string_contains(dvt_fake_print_buffer, "Dumping checksum");
+	dvt_fake_print_reset();
+}
+
 /*
  * --------------------------------------------------------------
  * End test functions
@@ -596,6 +866,10 @@ dcv_suit_teardown(void **state)
 }
 
 #define TEST(test) { #test, test, NULL, NULL }
+#define TEST_CSUM(test)                                                                            \
+	{                                                                                          \
+		#test, test, ddb_test_csum_setup, ddb_test_csum_teardown                           \
+	}
 
 int
 ddb_commands_tests_run()
@@ -617,6 +891,11 @@ ddb_commands_tests_run()
 	    TEST(dtx_abort_entry_tests),
 	    TEST(feature_cmd_tests),
 	    TEST(dtx_aggr_tests),
+	    TEST_CSUM(csum_dump_error_tests),
+	    TEST_CSUM(print_csum_sv_tests),
+	    TEST_CSUM(write_csum_sv_tests),
+	    TEST_CSUM(print_csum_recx_tests),
+	    TEST_CSUM(write_csum_recx_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands tests", tests,
