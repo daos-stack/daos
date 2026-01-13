@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,4 +34,5 @@ func ResetTestStubs() {
 	reset_daos_pool_stubs()
 	reset_daos_cont_stubs()
 	reset_dfs_stubs()
+	reset_duns_stubs()
 }
