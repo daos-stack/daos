@@ -650,7 +650,7 @@ pipeline {
                      description: 'Build sources on Leap 15 with Intel-C')
         booleanParam(name: 'CI_BUILD_BULLSEYE',
                      defaultValue: true,
-                     description: 'Build sources and RPMs with Bullseye Code Coverage')
+                     description: 'Build sources and RPMs with Bullseye code coverage')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -665,7 +665,10 @@ pipeline {
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_UNIT_TEST_BULLSEYE',
                      defaultValue: true,
-                     description: 'Run the Unit Test with Bullseye Code Coverage test stage')
+                     description: 'Run the Unit Test with Bullseye code coverage test stage')
+        booleanParam(name: 'CI_NLT_TEST_BULLSEYE',
+                     defaultValue: true,
+                     description: 'Run the NLT test with Bullseye code coverage test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
@@ -986,7 +989,7 @@ pipeline {
                                             ' COMPILER=covc'
                             ],
                             artifacts: "config.log-el8-covc",
-                            uploadTarget: 'el8-bullseye'
+                            uploadTarget: 'el8'
                         )
                     ) // parallel
                 } // script
@@ -1054,10 +1057,11 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages(),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages()))
+                                     with_valgrind: 'memcheck'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
@@ -1132,10 +1136,10 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck on EL 8')
-                stage('Unit Test Bullseye on EL 8.8') {
+                stage('Unit Test with Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { runStage(['CI_UNIT_TEST', 'CI_UNIT_TEST_BULLSEYE'],
+                        expression { runStage(['CI_BUILD_BULLSEYE', 'CI_UNIT_TEST_BULLSEYE'],
                                               ['Skip-unit-tests', 'Skip-unit-test-bullseye']) }
                     }
                     agent {
@@ -1143,7 +1147,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
                                      inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
@@ -1155,6 +1159,47 @@ pipeline {
                             unitTestPost artifacts: ['unit_test_bullseye_logs/'],
                                          ignore_failure: true,
                                          code_coverage: true
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('NLT with Bullseye on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { runStage(['CI_BUILD_BULLSEYE', 'CI_UNIT_TEST_BULLSEYE'],
+                                              ['Skip-unit-tests', 'Skip-nlt-bullseye']) }
+                    }
+                    agent {
+                        label params.CI_NLT_1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 120,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_tests: false,
+                                     ignore_failure: true,
+                                     coverage_stash: 'unit_test_bullseye'))
+                        stash(name:'nltr-bullseye', includes:'nltr-bullseye.json', allowEmpty: true)
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         code_coverage: true,
+                                         NLT: true
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         name: 'NLT server leaks',
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server'),
+                                         scm: 'daos-stack/daos'
                             job_status_update()
                         }
                     }
