@@ -2761,7 +2761,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	/* Currently cont->sc_ec_update_timestamp is in memory so this optimization won't be helpful
 	 * when there is no container update since restart.
 	 */
-	if (ec_agg_param->ap_filter_eph != 0 && cont->sc_ec_update_timestamp != 0 &&
+	if (ec_agg_param->ap_filter_eph != 0 &&
 	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
 		D_DEBUG(DB_EPC, DF_CONT " skip EC agg " DF_U64 ">= " DF_U64 "\n",
 			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
