@@ -301,6 +301,67 @@ String getScriptOutput(String script, String args='') {
     return sh(script: "${script} ${args}", returnStdout: true).trim()
 }
 
+/**
+ * runStage
+ *
+ * Determine if the stage should be run.
+ *
+ * @param paramNames   List of parameter names to check (must be true to run)
+ * @param pragmaNames  List of commit pragma names to check (must be false to run)
+ */
+Boolean runStage(List paramNames=[], List pragmaNames=[]) {
+    // Run stage w/o any conditionals
+    if (paramNames.isEmpty() && pragmaNames.isEmpty()) {
+        return true
+    }
+
+    String skip_pragma_msg = ''
+    if (!paramNames.isEmpty()) {
+        paramNames.each { name ->
+            if (!paramsValue(name, true)) {
+                skip_pragma_msg = "Skipping stage due to ${name} parameter"
+                break
+            }
+        }
+    }
+
+    String skip_param_msg = ''
+    if (!pragmaNames.isEmpty()) {
+        pragmaNames.each { name ->
+            if (cachedCommitPragma(name, 'false').toLowerCase() == 'true') {
+                skip_param_msg = "Skipping stage due to ${name} commit pragma"
+                break
+            }
+        }
+    }
+
+    if (startedByUser()) {
+        // Manual build: check parameters first
+        if (skip_pragma_msg) {
+            println("[${env.STAGE_NAME}] ${skip_pragma_msg}")
+            return false
+        }
+        // Manual build: check commit pragmas second
+        if (skip_param_msg) {
+            println("[${env.STAGE_NAME}] ${skip_param_msg}")
+            return false
+        }
+    } else {
+        // Normal build: check commit pragmas first
+        if (skip_param_msg) {
+            println("[${env.STAGE_NAME}] ${skip_param_msg}")
+            return false
+        }
+        // Normal build: check parameters second
+        if (skip_pragma_msg) {
+            println("[${env.STAGE_NAME}] ${skip_pragma_msg}")
+            return false
+        }
+    }
+
+    // Otherwise run the stage
+    return true
+}
 
 /**
  * scriptedBuildStage
@@ -954,7 +1015,7 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')))
                     }
                     post {
                         always {
@@ -976,7 +1037,7 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')))
                     }
                     post {
                         always {
@@ -1039,7 +1100,7 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')))
                     }
                     post {
                         always {
@@ -1064,7 +1125,7 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')))
                     }
                     post {
                         always {
@@ -1078,7 +1139,8 @@ pipeline {
                 stage('Unit Test Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { runStage(['CI_UNIT_TEST', 'CI_UNIT_TEST_BULLSEYE'],
+                                              ['Skip-unit-tests', 'Skip-unit-test-bullseye']) }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
