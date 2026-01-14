@@ -38,7 +38,7 @@ class DdbCommandBase(CommandWithParameters):
         self.single_command = BasicParameter(None, position=2)
 
         # VOS file path.
-        self.vos_path = FormattedParameter("--vos-path {}")
+        self.vos_path = FormattedParameter("--vos-path {}", position=1)
 
         # Members needed for run().
         self.verbose = verbose

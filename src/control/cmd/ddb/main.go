@@ -229,18 +229,16 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS]"
 	p.ShortDescription = "daos debug tool"
-	p.LongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
+	p.LongDescription = `
+The DAOS Debug Tool (ddb) allows a user to navigate through and modify
 a file in the VOS format. It offers both a command line and interactive
 shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
 the '-w' option must be included.
 
-If the command requires it, the VOS file provided as the first positional
-parameter will be opened before any commands are executed. See the
-command‑specific help for details. When the VOS file is not required, it is
-ignored; however, it must still be supplied, and it may be empty (""), e.g.
-
-ddb "" ls --help
+If the command requires it, the VOS file must be provided with the parameter 
+--vos-path. The VOS file will be opened before any commands are executed. See
+the command‑specific help for details.
 `
 
 	// Set the traceback level such that a crash results in
