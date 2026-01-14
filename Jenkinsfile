@@ -316,22 +316,18 @@ Boolean runStage(List paramNames=[], List pragmaNames=[]) {
     }
 
     String skip_pragma_msg = ''
-    if (!paramNames.isEmpty()) {
-        paramNames.each { name ->
-            if (!paramsValue(name, true)) {
-                skip_pragma_msg = "Skipping stage due to ${name} parameter"
-                break
-            }
+    for(name in paramNames) {
+        if (!paramsValue(name, true)) {
+            skip_pragma_msg = "Skipping stage due to ${name} parameter"
+            break
         }
     }
 
     String skip_param_msg = ''
-    if (!pragmaNames.isEmpty()) {
-        pragmaNames.each { name ->
-            if (cachedCommitPragma(name, 'false').toLowerCase() == 'true') {
-                skip_param_msg = "Skipping stage due to ${name} commit pragma"
-                break
-            }
+    for(name in pragmaNames) {
+        if (cachedCommitPragma(name, 'false').toLowerCase() == 'true') {
+            skip_param_msg = "Skipping stage due to ${name} commit pragma"
+            break
         }
     }
 
