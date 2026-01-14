@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2468,7 +2468,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 	shard_nr        = daos_oclass_grp_size(&oca) * daos_obj_id2grp_nr(md.omd_id);
-	agg_param->ap_credits += min(512, roundup(shard_nr, 32) / 32);
+	agg_param->ap_credits += roundup(shard_nr, 128) / 128;
 
 out:
 	if (map != NULL)
@@ -2761,7 +2761,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	/* Currently cont->sc_ec_update_timestamp is in memory so this optimization won't be helpful
 	 * when there is no container update since restart.
 	 */
-	if (ec_agg_param->ap_filter_eph != 0 && cont->sc_ec_update_timestamp != 0 &&
+	if (ec_agg_param->ap_filter_eph != 0 &&
 	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
 		D_DEBUG(DB_EPC, DF_CONT " skip EC agg " DF_U64 ">= " DF_U64 "\n",
 			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
