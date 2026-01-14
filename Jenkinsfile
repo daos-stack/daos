@@ -5,7 +5,7 @@
 /* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@grom72/SRE-3522') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
