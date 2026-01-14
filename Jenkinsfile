@@ -940,188 +940,350 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            steps {
-                script {
-                    parallel(
-                        'Unit Test on EL 8.8': scriptedUnitTestStage(
-                            name: 'Unit Test on EL 8.8',
-                            runCondition: params.CI_UNIT_TEST,
-                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-                            unitTestArgs: [
-                                timeout_time: 60,
-                                unstash_opt: true,
-                                inst_repos: daosRepos(),
-                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-                                testResults: 'test_results/*.xml',
-                                always_script: 'ci/unit/test_post_always.sh'
-                            ],
-                            unitTestPostArgs: [
-                                artifacts: ['unit_test_logs/']
-                            ]
-                        ),
-                        'Unit Test bdev on EL 8.8': scriptedUnitTestStage(
-                            name: 'Unit Test bdev on EL 8.8',
-                            runCondition: params.CI_UNIT_TEST,
-                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-                            unitTestArgs: [
-                                timeout_time: 60,
-                                unstash_opt: true,
-                                inst_repos: daosRepos(),
-                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-                                testResults: 'test_results/*.xml',
-                                always_script: 'ci/unit/test_post_always.sh'
-                            ],
-                            unitTestPostArgs: [
-                                artifacts: ['unit_test_bdev_logs/']
-                            ]
-                        ),
-                        'NLT on EL 8.8': scriptedUnitTestStage(
-                            name: 'NLT on EL 8.8',
-                            runCondition: params.CI_NLT_TEST,
-                            nodeLabel: params.CI_NLT_1_LABEL,
-                            unitTestArgs: [
-                                timeout_time: 60,
-                                unstash_opt: true,
-                                inst_repos: daosRepos(),
-                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-                                testResults: 'nlt-junit.xml',
-                                always_script: 'ci/unit/test_nlt_post.sh',
-                                with_valgrind: 'memcheck',
-                                valgrind_pattern: '*memcheck.xml',
-                                test_script: 'ci/unit/test_nlt.sh',
-                                unstash_tests: false
-                            ],
-                            stashArgs: [
-                                name: 'nltr',
-                                includes: 'nltr.json',
-                                allowEmpty: true
-                            ],
-                            unitTestPostArgs: [
-                                artifacts: ['nlt_logs/'],
-                                testResults: 'nlt-junit.xml',
-                                always_script: 'ci/unit/test_nlt_post.sh',
-                                with_valgrind: 'memcheck',
-                                valgrind_stash: 'el8-gcc-nlt-memcheck',
-                                NLT: true
-                            ],
-                            recordIssuesArgs: [
-                                enabledForFailure: true,
-                                failOnError: false,
-                                ignoreQualityGate: true,
-                                name: 'NLT server leaks',
-                                qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                tool: issues(pattern: 'nlt-server-leaks.json',
-                                             name: 'NLT server results',
-                                             id: 'NLT_server'),
-                                scm: 'daos-stack/daos'
-                            ]
-                        ),
-                        'Unit Test with memcheck on EL 8.8': scriptedUnitTestStage(
-                            name: 'Unit Test with memcheck on EL 8.8',
-                            runCondition: params.CI_UNIT_TEST_MEMCHECK,
-                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-                            unitTestArgs: [
-                                timeout_time: 160,
-                                unstash_opt: true,
-                                inst_repos: daosRepos(),
-                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-                                testResults: 'test_results/*.xml',
-                                always_script: 'ci/unit/test_post_always.sh',
-                                with_valgrind: 'memcheck',
-                                ignore_failure: true,
-                            ],
-                            unitTestPostArgs: [
-                                artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                            'unit_test_memcheck_logs/**/*.log'],
-                                with_valgrind: 'memcheck',
-                                valgrind_stash: 'el8-gcc-unit-memcheck'
-                            ]
-                        ),
-                        'Unit Test bdev with memcheck on EL 8.8': scriptedUnitTestStage(
-                            name: 'Unit Test bdev with memcheck on EL 8.8',
-                            runCondition: params.CI_UNIT_TEST_MEMCHECK,
-                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-                            unitTestArgs: [
-                                timeout_time: 180,
-                                unstash_opt: true,
-                                inst_repos: daosRepos(),
-                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-                                testResults: 'test_results/*.xml',
-                                always_script: 'ci/unit/test_post_always.sh',
-                                with_valgrind: 'memcheck',
-                                ignore_failure: true,
-                            ],
-                            unitTestPostArgs: [
-                                artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
-                                            'unit_test_memcheck_bdev_logs/**/*.log'],
-                                with_valgrind: 'memcheck',
-                                valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
-                            ]
-                        ),
-                        'Unit Test with Bullseye on EL 8.8': scriptedUnitTestStage(
-                            name: 'Unit Test with Bullseye on EL 8.8',
-                            runCondition: params.CI_UNIT_TEST_BULLSEYE && code_coverage_enabled(),
-                            nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-                            unitTestArgs: [
-                                timeout_time: 120,
-                                unstash_opt: true,
-                                inst_repos: daosRepos(),
-                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
-                                testResults: 'test_results/*.xml',
-                                always_script: 'ci/unit/test_post_always.sh',
-                                ignore_failure: true,
-                                coverage_stash: 'unit_test_bullseye'
-                            ],
-                            unitTestPostArgs: [
-                                artifacts: ['unit_test_bullseye_logs/'],
-                                ignore_failure: true,
-                                code_coverage: true
-                            ]
-                        ),
-                        'NLT with Bullseye on EL 8.8': scriptedUnitTestStage(
-                            name: 'NLT with Bullseye on EL 8.8',
-                            runCondition: params.CI_NLT_TEST && code_coverage_enabled(),
-                            nodeLabel: params.CI_NLT_1_LABEL,
-                            unitTestArgs: [
-                                timeout_time: 120,
-                                unstash_opt: true,
-                                inst_repos: daosRepos(),
-                                inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
-                                testResults: 'nlt-junit.xml',
-                                always_script: 'ci/unit/test_nlt_post.sh',
-                                test_script: 'ci/unit/test_nlt.sh',
-                                unstash_tests: false,
-                                ignore_failure: true,
-                                code_coverage: true,
-                                coverage_stash: 'nlt-bullseye'
-                            ],
-                            stashArgs: [
-                                name: 'nltr-bullseye',
-                                includes: 'nltr-bullseye.json',
-                                allowEmpty: true
-                            ],
-                            unitTestPostArgs: [
-                                artifacts: ['nlt_logs/'],
-                                testResults: 'nlt-junit.xml',
-                                always_script: 'ci/unit/test_nlt_post.sh',
-                                code_coverage: true,
-                                NLT: true
-                            ],
-                            recordIssuesArgs: [
-                                enabledForFailure: true,
-                                failOnError: false,
-                                ignoreQualityGate: true,
-                                name: 'NLT server leaks',
-                                qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                tool: issues(pattern: 'nlt-server-leaks.json',
-                                             name: 'NLT server results',
-                                             id: 'NLT_server'),
-                                scm: 'daos-stack/daos'
-                            ]
-                        )
-                    ) // parallel
-                } // script
-            } // steps
+            parallel {
+                stage('Unit Test on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_logs/']
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Unit Test bdev on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_bdev_logs/']
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('NLT on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { params.CI_NLT_TEST && !skipStage() }
+                    }
+                    agent {
+                        label params.CI_NLT_1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     inst_repos: daosRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages()))
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+                        //                 skipPublishingChecks: true,
+                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
+                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         name: 'NLT server leaks',
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server'),
+                                         scm: 'daos-stack/daos'
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Unit Test with memcheck on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 160,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                     'unit_test_memcheck_logs/**/*.log'],
+                                         valgrind_stash: 'el8-gcc-unit-memcheck'
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit Test with memcheck on EL 8.8')
+                stage('Unit Test bdev with memcheck on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 180,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+                                                     'unit_test_memcheck_bdev_logs/**/*.log'],
+                                         valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit Test bdev with memcheck on EL 8')
+                stage('Unit Test Bullseye on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+                                     ignore_failure: true,
+                                     coverage_stash: 'unit_test_bullseye'))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_bullseye_logs/'],
+                                         ignore_failure: true,
+                                         code_coverage: true
+                            job_status_update()
+                        }
+                    }
+                }
+            }
+            // steps {
+            //     script {
+            //         parallel(
+            //             'Unit Test on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST,
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 60,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh'
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_logs/']
+            //                 ]
+            //             ),
+            //             'Unit Test bdev on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test bdev on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST,
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 60,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh'
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_bdev_logs/']
+            //                 ]
+            //             ),
+            //             'NLT on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'NLT on EL 8.8',
+            //                 runCondition: params.CI_NLT_TEST,
+            //                 nodeLabel: params.CI_NLT_1_LABEL,
+            //                 unitTestArgs: [
+            //                     timeout_time: 60,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'nlt-junit.xml',
+            //                     always_script: 'ci/unit/test_nlt_post.sh',
+            //                     with_valgrind: 'memcheck',
+            //                     valgrind_pattern: '*memcheck.xml',
+            //                     test_script: 'ci/unit/test_nlt.sh',
+            //                     unstash_tests: false
+            //                 ],
+            //                 stashArgs: [
+            //                     name: 'nltr',
+            //                     includes: 'nltr.json',
+            //                     allowEmpty: true
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['nlt_logs/'],
+            //                     testResults: 'nlt-junit.xml',
+            //                     always_script: 'ci/unit/test_nlt_post.sh',
+            //                     with_valgrind: 'memcheck',
+            //                     valgrind_stash: 'el8-gcc-nlt-memcheck',
+            //                     NLT: true
+            //                 ],
+            //                 recordIssuesArgs: [
+            //                     enabledForFailure: true,
+            //                     failOnError: false,
+            //                     ignoreQualityGate: true,
+            //                     name: 'NLT server leaks',
+            //                     qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+            //                     tool: issues(pattern: 'nlt-server-leaks.json',
+            //                                  name: 'NLT server results',
+            //                                  id: 'NLT_server'),
+            //                     scm: 'daos-stack/daos'
+            //                 ]
+            //             ),
+            //             'Unit Test with memcheck on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test with memcheck on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST_MEMCHECK,
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 160,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh',
+            //                     with_valgrind: 'memcheck',
+            //                     ignore_failure: true,
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_memcheck_logs.tar.gz',
+            //                                 'unit_test_memcheck_logs/**/*.log'],
+            //                     with_valgrind: 'memcheck',
+            //                     valgrind_stash: 'el8-gcc-unit-memcheck'
+            //                 ]
+            //             ),
+            //             'Unit Test bdev with memcheck on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test bdev with memcheck on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST_MEMCHECK,
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 180,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh',
+            //                     with_valgrind: 'memcheck',
+            //                     ignore_failure: true,
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+            //                                 'unit_test_memcheck_bdev_logs/**/*.log'],
+            //                     with_valgrind: 'memcheck',
+            //                     valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+            //                 ]
+            //             ),
+            //             'Unit Test with Bullseye on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test with Bullseye on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST_BULLSEYE && code_coverage_enabled(),
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 120,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh',
+            //                     ignore_failure: true,
+            //                     coverage_stash: 'unit_test_bullseye'
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_bullseye_logs/'],
+            //                     ignore_failure: true,
+            //                     code_coverage: true
+            //                 ]
+            //             ),
+            //             'NLT with Bullseye on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'NLT with Bullseye on EL 8.8',
+            //                 runCondition: params.CI_NLT_TEST && code_coverage_enabled(),
+            //                 nodeLabel: params.CI_NLT_1_LABEL,
+            //                 unitTestArgs: [
+            //                     timeout_time: 120,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+            //                     testResults: 'nlt-junit.xml',
+            //                     always_script: 'ci/unit/test_nlt_post.sh',
+            //                     test_script: 'ci/unit/test_nlt.sh',
+            //                     unstash_tests: false,
+            //                     ignore_failure: true,
+            //                     code_coverage: true,
+            //                     coverage_stash: 'nlt-bullseye'
+            //                 ],
+            //                 stashArgs: [
+            //                     name: 'nltr-bullseye',
+            //                     includes: 'nltr-bullseye.json',
+            //                     allowEmpty: true
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['nlt_logs/'],
+            //                     testResults: 'nlt-junit.xml',
+            //                     always_script: 'ci/unit/test_nlt_post.sh',
+            //                     code_coverage: true,
+            //                     NLT: true
+            //                 ],
+            //                 recordIssuesArgs: [
+            //                     enabledForFailure: true,
+            //                     failOnError: false,
+            //                     ignoreQualityGate: true,
+            //                     name: 'NLT server leaks',
+            //                     qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+            //                     tool: issues(pattern: 'nlt-server-leaks.json',
+            //                                  name: 'NLT server results',
+            //                                  id: 'NLT_server'),
+            //                     scm: 'daos-stack/daos'
+            //                 ]
+            //             )
+            //         ) // parallel
+            //     } // script
+            // } // steps
         } // stage('Unit Tests')
         stage('Test') {
             when {
