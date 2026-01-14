@@ -356,7 +356,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                             job_step_update(sconsBuild(sconsBuildArgs))
                             if (buildRpms) {
                                 sh label: 'Generate RPMs',
-                                    script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release}"
+                                    script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release} ${bullseye}"
                                 // Success actions
                                 uploadNewRPMs(uploadTarget, 'success')
                             }

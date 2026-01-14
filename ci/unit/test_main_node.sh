@@ -35,8 +35,8 @@ if [[ -d "${BULLSEYE_DIR}" ]]; then
 fi
 
 cd "${SL_SRC_DIR}"
-mkdir new_dir
-sudo cp -a new_dir /opt/daos
+mkdir "new_dir_${STAGE_NAME}"
+sudo cp -a "new_dir_${STAGE_NAME}" /opt/daos/new_dir
 tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
