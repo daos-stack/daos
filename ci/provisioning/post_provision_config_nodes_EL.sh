@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2021-2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -18,6 +18,8 @@ set +e
 set -e
     # Seems to be needed to fix some issues.
     dnf -y reinstall sssd-common
+    # Remove ClamAV to avoid libcrypto version mismatch on older el9 systems (< el9.7)
+    dnf -y remove clamav-lib
 }
 
 group_repo_post() {
