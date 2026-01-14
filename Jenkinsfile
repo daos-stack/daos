@@ -415,6 +415,7 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
             if (runCondition) {
                 node(nodeLabel) {
                     try {
+                        checkoutScm(pruneStaleBranch: true)
                         // Execute the unit test
                         job_step_update(unitTest(unitTestArgs))
                         if (stashArgs) {
