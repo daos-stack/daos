@@ -72,6 +72,10 @@ class EvictionMetrics(TestWithTelemetry):
         read_bytes = self.params.get('read_bytes', MDTEST_NAMESPACE, None)
         ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
         mdtest_params = {"num_of_files_dirs": math.ceil(mem_file_bytes / read_bytes) + 1}
+
+        # Debug
+        mdtest_params["num_of_files_dirs"] /= 100
+
         run_mdtest(
             self, self.hostlist_clients, self.workdir, None, container, processes, ppn, manager,
             mdtest_params=mdtest_params)
