@@ -306,28 +306,49 @@ String getScriptOutput(String script, String args='') {
  *
  * Determine if the stage should be run.
  *
- * @param paramNames   List of parameter names to check (must be true to run)
- * @param pragmaNames  List of commit pragma names to check (must be false to run)
+ * @param           Map of parameter names and expected values to check
+ * @pragmas         Map of commit pragma names and expected values to check
+ * @otherCondition  Additional condition to consider
  */
-Boolean runStage(List paramNames=[], List pragmaNames=[]) {
+Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     // Run stage w/o any conditionals
-    if (paramNames.isEmpty() && pragmaNames.isEmpty()) {
+    if (params.isEmpty() && pragmas.isEmpty()) {
         return true
+    }
+    if (!otherCondition) {
+        println("[${env.STAGE_NAME}] Skipping stage due to otherCondition=false")
+        return false
     }
 
     String skip_pragma_msg = ''
-    for(name in paramNames) {
-        if (!paramsValue(name, true)) {
-            skip_pragma_msg = "Skipping stage due to ${name} parameter"
+    for(entry in params) {
+        if (paramsValue(entry.key, entry.value) == entry.value) {
+            skip_pragma_msg = "Skipping stage due to ${entry.key} parameter (${entry.value})"
             break
         }
     }
 
     String skip_param_msg = ''
-    for(name in pragmaNames) {
-        if (cachedCommitPragma(name, 'false').toLowerCase() == 'true') {
-            skip_param_msg = "Skipping stage due to ${name} commit pragma"
+    for(entry in pragmas) {
+        String expected = entry.value.toString().toLowerCase()
+        if (cachedCommitPragma(entry.key, expected).toLowerCase() == expected) {
+            skip_pragma_msg = "Skipping stage due to ${entry.key} parameter (${entry.value})"
             break
+        }
+    }
+
+    for(name in truePragmas) {
+        if (cachedCommitPragma(name, 'true').toLowerCase() == 'true') {
+            skip_param_msg = "Skipping stage due to ${name} commit pragma (true)"
+            break
+        }
+    }
+    if (!skip_param_msg) {
+        for(name in falsePragmas) {
+            if (cachedCommitPragma(name, 'false').toLowerCase() == 'false') {
+                skip_param_msg = "Skipping stage due to ${name} commit pragma (false)"
+                break
+            }
         }
     }
 
@@ -1139,8 +1160,13 @@ pipeline {
                 stage('Unit Test with Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { runStage(['CI_BUILD_BULLSEYE', 'CI_UNIT_TEST_BULLSEYE'],
-                                              ['Skip-unit-tests', 'Skip-unit-test-bullseye']) }
+                        expression {
+                            runStage(params: ['CI_BUILD_BULLSEYE': true,
+                                              'CI_UNIT_TEST_BULLSEYE': true,
+                                              'CI_BUILD_PACKAGES_ONLY': false],
+                                     pragmas: ['Skip-unit-tests': false,
+                                               'Skip-unit-test-bullseye': false])
+                        }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -1151,6 +1177,7 @@ pipeline {
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
                                      inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+                                     compiler: 'covc',
                                      ignore_failure: true,
                                      coverage_stash: 'unit_test_bullseye'))
                     }
@@ -1158,7 +1185,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_bullseye_logs/'],
                                          ignore_failure: true,
-                                         code_coverage: true
+                                         compiler: 'covc'
                             job_status_update()
                         }
                     }
@@ -1166,8 +1193,13 @@ pipeline {
                 stage('NLT with Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { runStage(['CI_BUILD_BULLSEYE', 'CI_UNIT_TEST_BULLSEYE'],
-                                              ['Skip-unit-tests', 'Skip-nlt-bullseye']) }
+                        expression {
+                            runStage(params: ['CI_BUILD_BULLSEYE': true,
+                                              'CI_UNIT_TEST_BULLSEYE': true,
+                                              'CI_BUILD_PACKAGES_ONLY': false],
+                                     pragmas: ['Skip-unit-tests': false,
+                                               'Skip-nlt-bullseye': false])
+                        }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -1180,6 +1212,7 @@ pipeline {
                                      inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_tests: false,
+                                     compiler: 'covc',
                                      ignore_failure: true,
                                      coverage_stash: 'unit_test_bullseye'))
                         stash(name:'nltr-bullseye', includes:'nltr-bullseye.json', allowEmpty: true)
@@ -1189,7 +1222,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         code_coverage: true,
+                                         compiler: 'covc',
                                          NLT: true
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
