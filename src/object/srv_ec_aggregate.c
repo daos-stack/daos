@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2468,7 +2468,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 	shard_nr        = daos_oclass_grp_size(&oca) * daos_obj_id2grp_nr(md.omd_id);
-	agg_param->ap_credits += min(512, roundup(shard_nr, 32) / 32);
+	agg_param->ap_credits += roundup(shard_nr, 128) / 128;
 
 out:
 	if (map != NULL)
