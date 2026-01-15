@@ -38,5 +38,5 @@ mdtest:
   api: DFS
   flags: "-C -F -G 27 -N 1 -Y -u -L"
   branching_factor: 1
-  write_bytes: 4096
-  read_bytes: 4096
+  write_bytes: 1024
+  read_bytes: 1024
