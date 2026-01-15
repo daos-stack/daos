@@ -915,7 +915,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8.8')
-                stage('Functional on EL 9') {
+                stage('Functional on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
