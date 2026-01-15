@@ -2054,6 +2054,8 @@ rebuild_task_ult(void *arg)
 	cur_ts = daos_gettime_coarse();
 	D_ASSERT(task->dst_schedule_time != (uint64_t)-1);
 	if (cur_ts < task->dst_schedule_time) {
+		/* Not expected if rebuld_ults() prevents dequeuing task until schedule time is
+		 * reached. */
 		D_INFO("rebuild task sleep " DF_U64 " second\n", task->dst_schedule_time - cur_ts);
 		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
 	}
@@ -2273,12 +2275,13 @@ rebuild_ults(void *arg)
 
 		task = d_list_entry(rebuild_gst.rg_queue_list.next, struct rebuild_task, dst_list);
 		while (&rebuild_gst.rg_queue_list != &task->dst_list) {
-			/* If a pool is already handling a rebuild operation,
-			 * wait to start the next operation until the current
-			 * one completes
+			/* If a pool is currently handling a rebuild, wait for it to finish.
+			 * Skip this pool now if its rebuild task is scheduled for later
+			 * (allow for merging of other tasks into this one in ds_rebuild_schedule().
 			 */
 			if (pool_is_rebuilding(task->dst_pool_uuid) ||
-			    task->dst_schedule_time == (uint64_t)-1) {
+			    task->dst_schedule_time == (uint64_t)-1 ||
+			    (daos_gettime_coarse() < task->dst_schedule_time)) {
 				struct rebuild_task *head_task = task;
 
 				/* jump to next pool */

@@ -7878,6 +7878,14 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
+	else if ((opc == MAP_EXCLUDE) || (opc == MAP_REINT) || (opc == MAP_DRAIN)) {
+		/* Delay during queuing rebuild(s) if we may have multiple-rank event or command
+		 * (processed as a sequence of ranks). See ds_rebuild_schedule(), rebuild_ults().
+		 */
+		D_INFO(DF_UUID ": scheduling rebuild for map opc %d with 5 second delay\n",
+		       DP_UUID(svc->ps_pool->sp_uuid), opc);
+		delay = 5;
+	}
 
 	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
