@@ -283,7 +283,7 @@ pipeline {
                description: 'Additional repository used for locating packages for the build and ' +
                             'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
-               defaultValue: '',
+               defaultValue: 'el9.7',
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
@@ -575,7 +575,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9.6') {
+                stage('Build on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -727,7 +727,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8.8') {
+                stage('Unit Test on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -749,7 +749,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8.8') {
+                stage('Unit Test bdev on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -771,7 +771,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8.8') {
+                stage('NLT on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { params.CI_NLT_TEST && !skipStage() }
@@ -811,7 +811,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test with memcheck on EL 8.8') {
+                stage('Unit Test with memcheck on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -835,8 +835,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8.8')
-                stage('Unit Test bdev with memcheck on EL 8.8') {
+                } // stage('Unit Test with memcheck on EL 9.7')
+                stage('Unit Test bdev with memcheck on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -871,7 +871,7 @@ pipeline {
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
-                stage('Functional on EL 8.8 with Valgrind') {
+                stage('Functional on EL 9.7 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -892,7 +892,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8.8 with Valgrind')
+                } // stage('Functional on EL 9.7 with Valgrind')
                 stage('Functional on EL 8.8') {
                     when {
                         beforeAgent true
@@ -982,7 +982,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8.8') {
+                stage('Fault injection testing on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1037,7 +1037,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing on EL 8.8')
+                } // stage('Fault injection testing on EL 9.7')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
