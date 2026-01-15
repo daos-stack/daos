@@ -1035,7 +1035,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     compiler: 'gcc'))
                     }
                     post {
                         always {
@@ -1057,7 +1058,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     compiler: 'gcc'))
                     }
                     post {
                         always {
@@ -1079,6 +1081,7 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitPackages(),
+                                     compiler: 'gcc',
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
@@ -1121,7 +1124,8 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     compiler: 'gcc'))
                     }
                     post {
                         always {
@@ -1146,7 +1150,8 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8')))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     compiler: 'gcc'))
                     }
                     post {
                         always {
@@ -1210,9 +1215,9 @@ pipeline {
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
                                      inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+                                     compiler: 'covc',
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_tests: false,
-                                     compiler: 'covc',
                                      ignore_failure: true,
                                      coverage_stash: 'unit_test_bullseye'))
                         stash(name:'nltr-bullseye', includes:'nltr-bullseye.json', allowEmpty: true)
