@@ -39,7 +39,20 @@ class VerifyDTX(TestWithTelemetry):
         expected_ranges = self.telemetry.collect_data(dtx_metrics)
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
-                expected_ranges[metric][label] = [0, 0]
+                expected_ranges[metric][label] = [0, 0]             # 0 only
+                if pool.mem_ratio.value is None:
+                    if metric.endswith('_dtx_committed_max'):
+                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
+                    elif metric.endswith('_dtx_committed_mean'):
+                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
+                    elif metric.endswith('_dtx_committed_samples'):
+                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
+                    elif metric.endswith('_dtx_committed_stddev'):
+                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
+                    elif metric.endswith('_dtx_committed_sum'):
+                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
+                    elif metric.endswith('_dtx_committed_sumsquares'):
+                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
         self.log.debug('%s expected_ranges: %s', pool, expected_ranges)
 
         self.log_step('Verify DTX metrics after pool creation')
@@ -61,10 +74,26 @@ class VerifyDTX(TestWithTelemetry):
         expected_ranges = self.telemetry.collect_data(dtx_metrics)
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
-                if pool.mem_ratio.value is None:
-                    expected_ranges[metric][label] = [0, 0]
+                if metric.endswith('_dtx_committed'):
+                    expected_ranges[metric][label] = [0]            # 0 or greater
+                elif metric.endswith('_dtx_committed_max'):
+                    expected_ranges[metric][label] = [100]          # 100 or greater
+                elif metric.endswith('_dtx_committed_mean'):
+                    expected_ranges[metric][label] = [50]           # 50 or greater
+                elif metric.endswith('_dtx_committed_min'):
+                    expected_ranges[metric][label] = [0]            # 0 or greater
+                elif metric.endswith('_dtx_committed_sum'):
+                    expected_ranges[metric][label] = [1000]         # 1000 or greater
+                elif metric.endswith('_dtx_committed_sumsquares'):
+                    expected_ranges[metric][label] = [100000]       # 100,000 or greater
+                elif metric.endswith('_vos_cache_page_evict'):
+                    if pool.mem_ratio.value is None:
+                        expected_ranges[metric][label] = [0, 0]     # 0 only (phase 1)
+                    else:
+                        expected_ranges[metric][label] = [1]        # 1 or greater (phase 2)
                 else:
-                    expected_ranges[metric][label] = [1]
+                    # e.g. *_dtx_committed_samples, *_dtx_committed_stddev
+                    expected_ranges[metric][label] = [1]            # 1 or greater
         self.log.debug('%s expected_ranges: %s', pool, expected_ranges)
 
         self.log_step('Verify DTX metrics after writing data')
