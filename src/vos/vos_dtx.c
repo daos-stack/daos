@@ -2242,17 +2242,16 @@ again:
 		rc = vos_dtx_commit_one(cont, &dtis[i], epoch, cmt_time, keep_act, &dces[i],
 					daes != NULL ? &daes[i] : NULL,
 					rm_cos != NULL ? &rm_cos[i] : NULL);
-		if (rc == 0 && (daes == NULL || daes[i] != NULL))
-			committed++;
-
 		if (rc == -DER_ALREADY || rc == -DER_NONEXIST)
 			rc = 0;
 
 		if (rc != 0)
 			goto out;
 
-		if (dces[i] != NULL)
+		if (dces[i] != NULL) {
+			committed++;
 			j++;
+		}
 	}
 
 	if (j > dbd->dbd_count) {
@@ -2333,6 +2332,11 @@ new_blob:
 	goto again;
 
 out:
+	if (committed > 0) {
+		cont->vc_dtx_committed_count += committed;
+		cont->vc_pool->vp_dtx_committed_count += committed;
+	}
+
 	return rc < 0 ? rc : committed;
 }
 
@@ -2342,9 +2346,11 @@ vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_cmt_ent **dces,
 		    int count, bool abort, bool rollback, bool keep_act)
 {
-	d_iov_t		kiov;
-	int		rc;
-	int		i;
+	struct vos_tls *tls = vos_tls_get(false);
+	d_iov_t         kiov;
+	int             rc;
+	int             i;
+	int             j;
 
 	D_ASSERT(daes != NULL);
 
@@ -2359,7 +2365,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 		if (dces == NULL)
 			return;
 
-		for (i = 0; i < count; i++) {
+		for (i = 0, j = 0; i < count; i++) {
 			if (dces[i] == NULL)
 				continue;
 
@@ -2367,32 +2373,39 @@ vos_dtx_post_handle(struct vos_container *cont,
 				  sizeof(DCE_XID(dces[i])));
 			rc = dbtree_delete(cont->vc_dtx_committed_hdl,
 					   BTR_PROBE_EQ, &kiov, NULL);
-			if (rc != 0 && rc != -DER_NONEXIST) {
+			if (rc != 0) {
 				D_WARN("Failed to rollback cmt DTX entry "
 				       DF_DTI": "DF_RC"\n",
 				       DP_DTI(&DCE_XID(dces[i])), DP_RC(rc));
 				dces[i]->dce_invalid = 1;
+			} else {
+				j++;
 			}
+		}
+
+		if (j > 0) {
+			D_ASSERTF(
+			    cont->vc_dtx_committed_count >= j,
+			    "Unexpected committed DTX entries count when rollback for " DF_UUID
+			    ": %u vs %u\n",
+			    DP_UUID(cont->vc_id), cont->vc_dtx_committed_count, j);
+
+			cont->vc_dtx_committed_count -= j;
+			cont->vc_pool->vp_dtx_committed_count -= j;
+			d_tm_dec_gauge(tls->vtl_committed, j);
 		}
 
 		return;
 	}
 
 	if (!abort && dces != NULL) {
-		struct vos_tls		*tls = vos_tls_get(false);
-		int			 j = 0;
-
-		D_ASSERT(cont->vc_pool->vp_sysdb == false);
-		for (i = 0; i < count; i++) {
+		for (i = 0, j = 0; i < count; i++) {
 			if (dces[i] != NULL)
 				j++;
 		}
 
-		if (j > 0) {
-			cont->vc_dtx_committed_count += j;
-			cont->vc_pool->vp_dtx_committed_count += j;
+		if (j > 0)
 			d_tm_inc_gauge(tls->vtl_committed, j);
-		}
 	}
 
 	for (i = 0; i < count; i++) {
@@ -3152,6 +3165,16 @@ dtx_blob_aggregate(struct umem_instance *umm, struct vos_tls *tls, struct vos_co
 	}
 
 out_tx_end:
+	if (cached_count > 0) {
+		D_ASSERTF(cont->vc_dtx_committed_count >= cached_count,
+			  "Unexpected committed DTX entries count during aggregation for " DF_UUID
+			  ": %u vs %u\n",
+			  DP_UUID(cont->vc_id), cont->vc_dtx_committed_count, cached_count);
+
+		cont->vc_dtx_committed_count -= cached_count;
+		cont->vc_pool->vp_dtx_committed_count -= cached_count;
+	}
+
 	rc = umem_tx_end(umm, rc);
 	if (likely(rc != 0)) {
 		DL_ERROR(rc,
@@ -3159,16 +3182,6 @@ out_tx_end:
 			 ") of cont " DF_UUID,
 			 dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 		goto out;
-	}
-
-	if (cached_count > 0) {
-		D_ASSERTF(cont->vc_dtx_committed_count >= cached_count,
-			  "Unexpected committed DTX entries count during aggregation: %u vs %u\n",
-			  cont->vc_dtx_committed_count, cached_count);
-
-		cont->vc_dtx_committed_count -= cached_count;
-		cont->vc_pool->vp_dtx_committed_count -= cached_count;
-		d_tm_dec_gauge(tls->vtl_committed, cached_count);
 	}
 
 	D_DEBUG(DB_TRACE,
@@ -3184,6 +3197,9 @@ out_tx_end:
 	}
 
 out:
+	if (cached_count > 0)
+		d_tm_dec_gauge(tls->vtl_committed, cached_count);
+
 	return rc;
 }
 
@@ -3203,6 +3219,9 @@ vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool->vp_sysdb == false);
+
+	if (unlikely(cont->vc_dtx_reset == 1))
+		return 0;
 
 	umm     = vos_cont2umm(cont);
 	cont_df = cont->vc_cont_df;
@@ -3927,25 +3946,31 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 
 cmt:
 	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
-		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
-		if (rc != 0) {
-			D_ERROR("Failed to destroy committed DTX tree for "DF_UUID": "DF_RC"\n",
-				DP_UUID(cont->vc_id), DP_RC(rc));
-			return rc;
-		}
+		uint32_t count = cont->vc_dtx_committed_count;
 
-		D_ASSERTF(cont->vc_pool->vp_dtx_committed_count >= cont->vc_dtx_committed_count,
-			  "Unexpected committed DTX entries count: %u vs %u\n",
-			  cont->vc_pool->vp_dtx_committed_count, cont->vc_dtx_committed_count);
+		cont->vc_dtx_reset = 1;
+		rc                 = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+		/*
+		 * If dbtree_destroy() failed, then the count of DTX entries in the committed index
+		 * tree may not match cont->vc_dtx_committed_count any more and not easy to recover.
+		 * Let's assert here.
+		 */
+		D_ASSERTF(rc == 0,
+			  "Failed to destroy committed DTX tree for " DF_UUID ": " DF_RC "\n",
+			  DP_UUID(cont->vc_id), DP_RC(rc));
 
-		cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
 		D_ASSERT(cont->vc_pool->vp_sysdb == false);
-		d_tm_dec_gauge(vos_tls_get(false)->vtl_committed, cont->vc_dtx_committed_count);
+		D_ASSERTF(cont->vc_pool->vp_dtx_committed_count >= count,
+			  "Unexpected committed DTX entries count for " DF_UUID ": %u vs %u\n",
+			  DP_UUID(cont->vc_id), cont->vc_pool->vp_dtx_committed_count, count);
 
-		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
+		cont->vc_dtx_committed_hdl   = DAOS_HDL_INVAL;
 		cont->vc_dtx_committed_count = 0;
-		cont->vc_cmt_dtx_indexed = 0;
+		cont->vc_cmt_dtx_indexed     = 0;
 		cont->vc_cmt_dtx_reindex_pos = cont->vc_cont_df->cd_dtx_committed_head;
+		cont->vc_dtx_reset           = 0;
+		cont->vc_pool->vp_dtx_committed_count -= count;
+		d_tm_dec_gauge(vos_tls_get(false)->vtl_committed, count);
 	}
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0, DTX_BTREE_ORDER, &uma,
