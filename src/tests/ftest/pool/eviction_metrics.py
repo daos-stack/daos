@@ -32,17 +32,49 @@ class EvictionMetrics(TestWithTelemetry):
         :avocado: tags=pool
         :avocado: tags=EvictionMetrics,test_eviction_metrics
         """
+        write_bytes = self.params.get('write_bytes', MDTEST_NAMESPACE, None)
+        processes = self.params.get('processes', MDTEST_NAMESPACE, None)
+        ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
+
         evict_metrics = list(self.telemetry.ENGINE_POOL_VOS_CACHE_METRICS)
 
         self.log_step('Creating a pool (dmg pool create)')
         pool = self.get_pool(connect=False)
         try:
             _result = json.loads(pool.dmg.result.stdout)
+            tier_bytes_scm = int(_result["response"]["tier_bytes"][0])
             mem_file_bytes = int(_result["response"]["mem_file_bytes"])
         except Exception as error:      # pylint: disable=broad-except
-            self.fail(f"Error extracting mem_file_bytes for dmg pool create output: {error}")
-        self.log.debug("%s mem_file_bytes:  %s", pool, mem_file_bytes)
-        self.log.debug("%s mem_ratio.value: %s", pool, pool.mem_ratio.value)
+            self.fail(f"Error extracting data for dmg pool create output: {error}")
+
+        # Calculate the mdtest files_per_process based upon the scm size and other mdtest params
+        _write_processes = processes
+        if ppn is not None:
+            _write_processes = ppn * len(self.host_info.clients.hosts)
+        files_per_process = math.floor(mem_file_bytes / (write_bytes * _write_processes))
+        if tier_bytes_scm > mem_file_bytes:
+            # Write more files to exceed mem_file_bytes and cause eviction
+            mdtest_params = {"num_of_files_dirs": math.ceil(files_per_process * 1.10)}
+        else:
+            # Write less files to avoid out of space errors
+            mdtest_params = {"num_of_files_dirs": math.ceil(files_per_process * 0.9)}
+
+        self.log.debug("-" * 60)
+        self.log.debug("Pool %s create data:", pool)
+        self.log.debug("  tier_bytes_scm:     %s", tier_bytes_scm)
+        self.log.debug("  mem_file_bytes:     %s", mem_file_bytes)
+        self.log.debug("  mem_ratio.value:    %s", pool.mem_ratio.value)
+        self.log.debug("Mdtest write parameters:")
+        self.log.debug("  write_bytes:        %s", write_bytes)
+        if ppn is not None:
+            self.log.debug("  ppn / nodes:        %s / %s", ppn, len(self.host_info.clients.hosts))
+        else:
+            self.log.debug("  processes:          %s", processes)
+        self.log.debug("  files_per_process:  %s", files_per_process)
+        self.log.debug("  num_of_files_dirs:  %s", mdtest_params["num_of_files_dirs"])
+        self.log.debug("  expected to write:  %s",
+                       _write_processes * write_bytes * mdtest_params["num_of_files_dirs"])
+        self.log.debug("-" * 60)
 
         self.log_step('Creating a container (dmg container create)')
         container = self.get_container(pool)
@@ -68,10 +100,6 @@ class EvictionMetrics(TestWithTelemetry):
 
         self.log_step('Writing data to the pool (mdtest -a DFS)')
         manager = get_job_manager(self, subprocess=False, timeout=None)
-        processes = self.params.get('processes', MDTEST_NAMESPACE, None)
-        write_bytes = self.params.get('write_bytes', MDTEST_NAMESPACE, None)
-        ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
-        mdtest_params = {"num_of_files_dirs": math.ceil(mem_file_bytes / write_bytes) + 1}
         run_mdtest(
             self, self.hostlist_clients, self.workdir, None, container, processes, ppn, manager,
             mdtest_params=mdtest_params)
