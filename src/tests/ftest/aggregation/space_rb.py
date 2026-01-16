@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -96,7 +97,11 @@ class SpaceRb(IorTestBase):
         # 2. Call dmg pool get-prop and verify that Rebuild space ratio (space_rb) is 50%.
         self.log_step(
             "Call dmg pool get-prop and verify that Rebuild space ratio (space_rb) is 50%.")
-        expected_space_rb = int(self.params.get("properties", '/run/pool/*').split(":")[1])
+        expected_space_rb = 0
+        for pool_property in self.params.get("properties", "/run/pool/*", "").split(","):
+            if pool_property.startswith("space_rb:"):
+                expected_space_rb = int(pool_property.split(":")[1])
+                break
         self.verify_space_rb_property(pool=pool_1, expected_space_rb=expected_space_rb)
 
         # 3. Run IOR to fill 50% of SCM.
