@@ -62,7 +62,7 @@ bool                bio_vmd_enabled;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* SPDK NVMe power management value */
-unsigned int        bio_spdk_power_mgmt_val = UINT32_MAX; /* usually 0-4 */
+unsigned int        bio_spdk_power_mgmt_val = UINT32_MAX; /* bits 0-4 for pwr mgmt */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
@@ -1470,6 +1470,12 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 			D_ERROR("Invalid SMD state:%d\n", dev_state);
 			return -DER_INVAL;
 		}
+
+		/* Apply NVMe power management settings */
+		rc = bio_set_power_mgmt(d_bdev->bb_name);
+		if (rc != 0 && rc != -DER_NOTSUPPORTED)
+			D_WARN("Failed to set power management for device %s: " DF_RC "\n",
+			       d_bdev->bb_name, DP_RC(rc));
 
 		/* Initialize health monitor */
 		rc = bio_init_health_monitoring(bbs, d_bdev->bb_name);
