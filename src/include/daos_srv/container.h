@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2015-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -133,13 +133,7 @@ struct ds_cont_child {
 	 * from all local VOS.
 	 */
 	uint64_t		*sc_query_ec_agg_eph;
-	uint64_t		*sc_query_stable_eph;
-	/**
-	 * Timestamp of last EC update, which is used by aggregation to check
-	 * if it needs to do EC aggregate.
-	 */
-	uint64_t		sc_ec_update_timestamp;
-
+	uint64_t                *sc_query_stable_eph;
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
@@ -293,8 +287,6 @@ int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 int
      ds_cont_eph_report(struct ds_pool *pool);
 void ds_cont_track_eph_free(struct ds_pool *pool);
-
-void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 
 typedef int(*cont_rdb_iter_cb_t)(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg);
 int ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg);
