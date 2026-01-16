@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1066,4 +1066,105 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 
 	return led_manage(xs_ctxt, pci_addr, (Ctl__LedAction)action, (Ctl__LedState *)state,
 			  duration);
+}
+
+static void
+bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev, void *event_ctx)
+{
+	D_ERROR("Unsupported bdev event: type %d\n", type);
+}
+
+struct power_mgmt_context_t {
+	struct spdk_bdev_desc  *bdev_desc;
+	struct spdk_io_channel *bdev_io_channel;
+	const char             *bdev_name;
+};
+
+static void
+set_power_mgmt_completion(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
+{
+	struct power_mgmt_context_t *pm_ctx = cb_arg;
+	int              sc;
+	int              sct;
+	uint32_t         cdw0;
+
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
+	if (sc) {
+		D_ERROR("Set power management failed for device %s, NVMe status code/type: %d/%d\n",
+			pm_ctx->bdev_name, sc, sct);
+	} else {
+		D_INFO("Power management value set on device %s\n", pm_ctx->bdev_name);
+	}
+
+	spdk_bdev_free_io(bdev_io);
+	spdk_put_io_channel(pm_ctx->bdev_io_channel);
+	spdk_bdev_close(pm_ctx->bdev_desc);
+}
+
+int
+bio_set_power_mgmt(const char *bdev_name)
+{
+	struct power_mgmt_context_t pm_ctx = {};
+	struct spdk_bdev    *bdev;
+	struct spdk_nvme_cmd cmd;
+	int                         rc = 0;
+
+	/* If default has not been overwritten, skip setting the value */
+	if (bio_spdk_power_mgmt_val == UINT32_MAX)
+		goto out;
+
+	D_ASSERT(bdev_name != NULL);
+	pm_ctx.bdev_name = bdev_name;
+
+	/* Writable descriptor required for applying power management settings */
+	rc = spdk_bdev_open_ext(bdev_name, true, bdev_event_cb, NULL, &pm_ctx.bdev_desc);
+	if (rc != 0) {
+		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
+		rc = daos_errno2der(-rc);
+		goto out;
+	}
+
+	bdev = spdk_bdev_desc_get_bdev(pm_ctx.bdev_desc);
+	if (bdev == NULL) {
+		D_ERROR("No bdev associated with device descriptor for %s\n", bdev_name);
+		rc = -DER_INVAL;
+		goto out_bdev;
+	}
+
+	pm_ctx.bdev_io_channel = spdk_bdev_get_io_channel(pm_ctx.bdev_desc);
+	D_ASSERT(pm_ctx.bdev_io_channel != NULL);
+
+	if (get_bdev_type(bdev) != BDEV_CLASS_NVME) {
+		D_DEBUG(DB_MGMT, "Device %s is not NVMe, skipping power management\n", bdev_name);
+		rc = -DER_NOTSUPPORTED;
+		goto out_chan;
+	}
+
+	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
+		D_ERROR("Bdev NVMe admin passthru not supported for %s\n", bdev_name);
+		rc = -DER_NOTSUPPORTED;
+		goto out_chan;
+	}
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opc   = SPDK_NVME_OPC_SET_FEATURES;
+	cmd.cdw10 = SPDK_NVME_FEAT_POWER_MANAGEMENT;
+	cmd.cdw11 = bio_spdk_power_mgmt_val;
+
+	rc = spdk_bdev_nvme_admin_passthru(pm_ctx.bdev_desc, pm_ctx.bdev_io_channel, &cmd, NULL, 0,
+					   set_power_mgmt_completion, &pm_ctx);
+	if (rc != 0) {
+		D_ERROR("Failed to submit power management command for %s, rc:%d\n", bdev_name, rc);
+		rc = daos_errno2der(-rc);
+		goto out_chan;
+	}
+
+	return 0;
+
+out_chan:
+	spdk_put_io_channel(pm_ctx.bdev_io_channel);
+out_bdev:
+	spdk_bdev_close(pm_ctx.bdev_desc);
+out:
+	return rc;
 }
