@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -666,7 +666,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	crt_setup_log_fac();
 
-	D_INFO("libcart (%s) v%s initializing\n", server ? "server" : "client", CART_VERSION);
+	D_INFO("custom libcart (%s) v%s initializing\n", server ? "server" : "client",
+	       CART_VERSION);
 	crt_env_init();
 
 	if (opt)
