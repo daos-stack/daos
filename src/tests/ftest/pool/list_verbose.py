@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -82,7 +82,8 @@ class ListVerboseTest(IorTestBase):
                 "state": rebuild_state,
                 "objects": 0,
                 "records": 0,
-                "total_objects": 0
+                "total_objects": 0,
+                'degraded': False
             },
             "self_heal_policy": "",
             # NB: tests should not expect min/max/mean values

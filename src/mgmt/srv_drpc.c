@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1764,6 +1764,8 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
 	else
 		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
+
+	rebuild->degraded = !!(info->rs_flags & DAOS_RSF_DEGRADED);
 }
 
 static void
