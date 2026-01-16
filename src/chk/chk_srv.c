@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -307,6 +307,14 @@ ds_chk_init(void)
 		goto out;
 
 	rc = chk_iv_init();
+	if (rc != 0)
+		goto out;
+
+	rc = chk_leader_init();
+	if (rc != 0)
+		goto out;
+
+	rc = chk_engine_init();
 
 out:
 	return rc;
@@ -315,6 +323,9 @@ out:
 static int
 ds_chk_fini(void)
 {
+	chk_engine_fini();
+	chk_leader_fini();
+
 	return chk_iv_fini();
 }
 
@@ -323,14 +334,14 @@ ds_chk_setup(void)
 {
 	int	rc;
 
-	/* Do NOT move chk_vos_init into ds_chk_init, because sys_db is not ready at that time. */
-	chk_vos_init();
+	/* Do NOT move chk_vos_setup into ds_chk_init, because sys_db is not ready at that time. */
+	chk_vos_setup();
 
-	rc = chk_leader_init();
+	rc = chk_leader_setup();
 	if (rc != 0)
 		goto out_vos;
 
-	rc = chk_engine_init();
+	rc = chk_engine_setup();
 	if (rc != 0)
 		goto out_leader;
 
@@ -347,9 +358,9 @@ ds_chk_setup(void)
 	goto out_done;
 
 out_leader:
-	chk_leader_fini();
+	chk_leader_cleanup();
 out_vos:
-	chk_vos_fini();
+	chk_vos_cleanup();
 out_done:
 	return rc;
 }
@@ -357,11 +368,9 @@ out_done:
 static int
 ds_chk_cleanup(void)
 {
-	chk_engine_pause();
-	chk_leader_pause();
-	chk_engine_fini();
-	chk_leader_fini();
-	chk_vos_fini();
+	chk_engine_cleanup();
+	chk_leader_cleanup();
+	chk_vos_cleanup();
 
 	return 0;
 }
