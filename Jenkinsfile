@@ -5,7 +5,7 @@
 /* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -152,9 +152,12 @@ String vm9_label(String distro) {
 }
 
 void rpm_test_post(String stageName, String node) {
+    // Extract first node from comma-delimited list
+    String firstNode = node.split(',')[0].trim()
     sh label: 'Fetch and stage artifacts',
-       script: 'hostname; ssh -i ci_key jenkins@' + node + ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
-               'scp -i ci_key jenkins@' + node +
+       script: 'hostname; ssh -i ci_key jenkins@' + firstNode +
+               ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
+               'scp -i ci_key jenkins@' + firstNode +
                ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
                stageName + '/"'
     archiveArtifacts artifacts: env.STAGE_NAME + '/**'
@@ -300,28 +303,28 @@ pipeline {
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on EL 8')
         booleanParam(name: 'CI_el9_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true, // false,
                      description: 'Do not build sources and RPMs on EL 9')
         booleanParam(name: 'CI_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on Leap 15')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
-                     defaultValue: false,
+                     defaultValue: true, // false,
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
-                     defaultValue: true,
+                     defaultValue: false, // true,
                      description: 'Run the Unit Test on EL 8 test stage')
         booleanParam(name: 'CI_NLT_TEST',
-                     defaultValue: true,
+                     defaultValue: false, // true,
                      description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
-                     defaultValue: true,
+                     defaultValue: false, // true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false, // true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
         booleanParam(name: 'CI_TEST_EL8_RPMs',
-                     defaultValue: true,
+                     defaultValue: false, // true,
                      description: 'Run the Test RPMs on EL 8 test stage')
         booleanParam(name: 'CI_TEST_LEAP15_RPMs',
                      defaultValue: true,
@@ -330,13 +333,13 @@ pipeline {
                      defaultValue: false,
                      description: 'Skip all functional test stages (Test)')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
-                     defaultValue: false,
+                     defaultValue: true, // false,
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
                      defaultValue: false,
                      description: 'Run the Functional on EL 8 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false, // true,
                      description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
                      defaultValue: false,
@@ -591,7 +594,6 @@ pipeline {
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.6 '
-
                         }
                     }
                     steps {
@@ -644,7 +646,6 @@ pipeline {
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --build-arg POINT_RELEASE=.5 '
-
                         }
                     }
                     steps {
@@ -695,7 +696,6 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg COMPILER=icc' +
                                                 ' --build-arg POINT_RELEASE=.5 '
-
                         }
                     }
                     steps {

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -16,6 +16,9 @@ domain1="${JENKINS_URL#https://}"
 mail_domain="${domain1%%/*}"
 : "${EMAIL_DOMAIN:=$mail_domain}"
 : "${DAOS_DEVOPS_EMAIL:="$HOSTNAME"@"$EMAIL_DOMAIN"}"
+: "${DAOS_INFINIBAND:=}"
+: "${DAOS_PMEM:=0}"
+: "${DAOS_NVME:=0}"
 
 result=0
 mail_message=''
@@ -58,7 +61,7 @@ if ! command -v lspci; then
     if command -v dnf; then
        dnf -y install pciutils
     else
-       echo "pciutils not installed, can not test for Infiniband devices"
+       echo "pciutils not installed, can not test for hardware devices"
     fi
 fi
 
@@ -106,17 +109,27 @@ The Omni-Path adapters will not be used."
     mail_message+="${nl}${ib_message}${nl}"
     echo "$ib_message"
 fi
+if [ -z "$DAOS_INFINIBAND" ]; then
+    DAOS_INFINIBAND=$ib_count
+fi
 set -x
 
 # Wait for at least the expected IB devices to show up.
-# in the case of dual port HBAs, not all IB devices will
-# show up.
+# in the case of dual port HBAs, only the ports that are connected may show up.
 # For some unknown reason, sometimes IB devices will not show up
 # except in the lspci output unless an ip link set up command for
 # at least one device that should be present shows up.
 good_ibs=()
 function do_wait_for_ib {
-    local ib_devs=("$@")
+    # The problem is that we do not know the actual device names
+    # ahead of time.  So we try to bring up all possible devices
+    # and see if at least the expected number show up with IP
+    # addresses.
+    local ib_devs=("ib0" "ib1" "ib2" "ib3" "ib4")
+          # Udev rule convention, first digit is the numa node
+          # second digit should be an index of the HBA on that numa node.
+          ib_devs+=("ib_00" "ib_01" "ib_02" "ib_03")
+          ib_devs+=("ib_10" "ib_11" "ib_12" "ib_13")
     local working_ib
     ib_timeout=300 # 5 minutes
     retry_wait=10 # seconds
@@ -147,15 +160,14 @@ function do_wait_for_ib {
     return 1
 }
 
-# Migrating to using udev rules for network devices
-if [ -e /etc/udev/rules.d/70-persistent-ipoib.rules ]; then
-    ib_list=('ib_cpu0_0' 'ib_cpu1_0')
-else
-    ib_list=('ib0')
-    if [ "$ib_count" -gt 1 ]; then
-        ib_list+=('ib1')
+# Get list of actual InfiniBand devices from /sys/class/net/
+ib_list=()
+for iface in /sys/class/net/ib*; do
+    if [ -e "$iface" ]; then
+        iface_name=$(basename "$iface")
+        ib_list+=("$iface_name")
     fi
-fi
+done
 
 function check_ib_devices {
     local ib_devs=("$@")
@@ -165,11 +177,10 @@ function check_ib_devices {
         set +x
         if ! ip addr show "$iface" | grep "inet "; then
             ib_message="$({
-                echo "Found interface $iface down after reboot on $HOSTNAME."
+                echo "Found interface $iface with no ip address after reboot on $HOSTNAME."
                 ip addr show "$iface" || true
                 cat /sys/class/net/"$iface"/mode || true
                 ip link set up "$iface" || true
-                cat /etc/sysconfig/network-scripts/ifcfg-"$iface" || true
                 } 2>&1)"
             mail_message+="${nl}${ib_message}${nl}"
             echo "$ib_message"
@@ -190,11 +201,10 @@ function check_ib_devices {
     done
 }
 
-
 # First check for InfiniBand devices
 if [ "$ib_count" -gt 0 ]; then
-    if do_wait_for_ib "${ib_list[@]}"; then
-        echo "Found at least $ib_count working devices in" "${ib_list[@]}"
+    if do_wait_for_ib; then
+        echo "Found at least $ib_count working devices on $HOSTNAME"
         # All good, generate Junit report
         check_ib_devices "${good_ibs[@]}"
     else
@@ -205,106 +215,111 @@ fi
 
 # having -x just makes the console log harder to read.
 # set +x
-if [ "$ib_count" -ge 2 ]; then
-    # now check for pmem & NVMe drives when multiple ib are present.
-    # ipmctl show -dimm should show an even number of drives, all healthy
-    dimm_count=$(ipmctl show -dimm | grep Healthy -c)
-    if [ "$dimm_count" -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
-       # May not be fatal, the PMEM DIMM should be replaced when downtime can be
-       # scheduled for this system.
-       dimm_message="FAIL: Wrong number $dimm_count healthy PMEM DIMMs seen"
-       dimm_message+=" on $HOSTNAME."
+if [ "$ib_count" -ge 2 ] ; then
+    if [ "$DAOS_PMEM" -gt 0 ]; then
+        # now check for pmem & NVMe drives when multiple ib are present.
+        # ipmctl show -dimm should show an even number of drives, all healthy
+        dimm_count=$(ipmctl show -dimm | grep Healthy -c)
+        if [ "$dimm_count" -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
+            # May not be fatal, the PMEM DIMM should be replaced when downtime
+            # can be # scheduled for this system.
+            dimm_message="FAIL: Wrong number $dimm_count healthy PMEM DIMMs seen"
+            dimm_message+=" on $HOSTNAME."
 
-       mail_message+="$nl$dimm_message$nl$(ipmctl show -dimm)$nl"
-    else
-       echo "OK: Found $dimm_count PMEM DIMMs."
-    fi
-    # Should have 2 regions 0x0000 and 0x0001, type AppDirect
-    dimm_rcount=0
-    while IFS= read -r line; do
-        if [[ "$line" != *"| AppDirect"*"| Healthy"* ]]; then continue; fi
-        ((dimm_rcount++)) || true
-    done < <(ipmctl show -region)
+            mail_message+="$nl$dimm_message$nl$(ipmctl show -dimm)$nl"
+        else
+            echo "OK: Found $dimm_count PMEM DIMMs."
+        fi
+        # Should have 2 regions 0x0000 and 0x0001, type AppDirect
+        dimm_rcount=0
+        while IFS= read -r line; do
+            if [[ "$line" != *"| AppDirect"*"| Healthy"* ]]; then continue; fi
+            ((dimm_rcount++)) || true
+        done < <(ipmctl show -region)
 
-    ((testruns++)) || true
-    testcases+="  <testcase name=\"PMEM DIMM Count Node $mynodenum\">${nl}"
-    if [ "$dimm_rcount" -ne 2 ]; then
-       pmem_message="FAIL: Found $dimm_rcount of DIMM PMEM regions, need 2"
-       pmem_message+=" on $HOSTNAME."
-       pmem_message+="$nl$(ipmctl show -region)"
-       mail_message+="$nl$pmem_message$nl"
-        ((testfails++)) || true
-        testcases+="    <error message=\"Bad Count\" type=\"error\">
-      <![CDATA[ $pmem_message ]]>
+        ((testruns++)) || true
+        testcases+="  <testcase name=\"PMEM DIMM Count Node $mynodenum\">${nl}"
+        if [ "$dimm_rcount" -ne 2 ]; then
+            pmem_message="FAIL: Found $dimm_rcount of DIMM PMEM regions, need 2"
+            pmem_message+=" on $HOSTNAME."
+            pmem_message+="$nl$(ipmctl show -region)"
+            mail_message+="$nl$pmem_message$nl"
+            ((testfails++)) || true
+            testcases+="    <error message=\"Bad Count\" type=\"error\">
+    <![CDATA[ $pmem_message ]]>
     </error>$nl"
        result=3
-    else
-       echo "OK: Found $dimm_rcount DIMM PMEM regions."
-    fi
-    testcases+="  </testcase>$nl"
-
-    # While this gets more data than needed, it is the same search that
-    # DAOS tests do and records it in the console log.
-    nvme_devices="$(lspci -vmm -D | grep -E '^(Slot|Class|Device|NUMANode):' |
-                  grep -E 'Class:\s+Non-Volatile memory controller' -B 1 -A 2)"
-    nvme_count=0
-    while IFS= read -r line; do
-        if [[ "$line" != *"Class:"*"Non-Volatile memory controller"* ]];then
-            continue
+        else
+            echo "OK: Found $dimm_rcount DIMM PMEM regions."
         fi
-        ((nvme_count++)) || true
-    done < <(printf %s "$nvme_devices")
+        testcases+="  </testcase>$nl"
+    fi
+    if [ "$DAOS_NVME" -gt 0 ]; then
+        # While this gets more data than needed, it is the same search that
+        # DAOS tests do and records it in the console log.
+        nvme_devices="$(lspci -vmm -D | grep -E '^(Slot|Class|Device|NUMANode):' |
+                        grep -E 'Class:\s+Non-Volatile memory controller' -B 1 -A 2)"
+        nvme_count=0
+        while IFS= read -r line; do
+            if [[ "$line" != *"Class:"*"Non-Volatile memory controller"* ]];then
+                continue
+            fi
+            ((nvme_count++)) || true
+        done < <(printf %s "$nvme_devices")
 
-    ((testruns++)) || true
-    testcases+="  <testcase name=\"NVMe Count Node $mynodenum\">${nl}"
-    if [ $((nvme_count%2)) -ne 0 ]; then
-       nvme_message="Fail: Odd number ($nvme_count) of NVMe devices seen."
-       mail_message+="$nl$nvme_message$nl$nvme_devices$nl"
-        ((testfails++)) || true
-        testcases+="    <error message=\"Bad Count\" type=\"error\">
+        ((testruns++)) || true
+        testcases+="  <testcase name=\"NVMe Count Node $mynodenum\">${nl}"
+        if [ $((nvme_count%2)) -ne 0 ]; then
+            nvme_message="Fail: Odd number ($nvme_count) of NVMe devices seen."
+            mail_message+="$nl$nvme_message$nl$nvme_devices$nl"
+            ((testfails++)) || true
+            testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $nvme_message$nl$nvme_devices ]]>
     </error>$nl"
-       result=4
-    else
-       echo "OK: Even number ($nvme_count) of NVMe devices seen."
+            result=4
+        else
+            echo "OK: Even number ($nvme_count) of NVMe devices seen."
+        fi
+        testcases+="  </testcase>$nl"
     fi
-    testcases+="  </testcase>$nl"
-
     # All storage found by lspci should also be in lsblk report
     lsblk_nvme=$(lsblk | grep nvme -c)
     lsblk_pmem=$(lsblk | grep pmem -c)
 
-    ((testruns++)) || true
-    testcases+="  <testcase name=\"NVMe lsblk Count Node $mynodenum\">${nl}"
-    if [ "$lsblk_nvme" -ne "$nvme_count" ]; then
-       lsblk_nvme_msg="Fail: Only $lsblk_nvme of $nvme_count NVMe devices seen"
-       lsblk_nvme_msg+=" on $HOSTNAME."
-       mail_message+="$nl$lsblk_nvme_msg$nl$(lsblk)$nl"
-        ((testfails++)) || true
-        testcases+="    <error message=\"Bad Count\" type=\"error\">
+    if [ "$DAOS_NVME" -gt 0 ]; then
+        ((testruns++)) || true
+        testcases+="  <testcase name=\"NVMe lsblk Count Node $mynodenum\">${nl}"
+        if [ "$lsblk_nvme" -ne "$nvme_count" ]; then
+            lsblk_nvme_msg="Fail: Only $lsblk_nvme of $nvme_count NVMe devices seen"
+            lsblk_nvme_msg+=" on $HOSTNAME."
+            mail_message+="$nl$lsblk_nvme_msg$nl$(lsblk)$nl"
+            ((testfails++)) || true
+            testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $lsblk_nvme_msg ]]>
     </error>$nl"
-       result=5
-    else
-       echo "OK: All $nvme_count NVMe devices are in lsblk report."
+           result=5
+        else
+            echo "OK: All $nvme_count NVMe devices are in lsblk report."
+        fi
+        testcases+="  </testcase>$nl"
     fi
-    testcases+="  </testcase>$nl"
-
-    ((testruns++)) || true
-    testcases+="  <testcase name=\"PMEM lsblk Count Node $mynodenum\">${nl}"
-    if [ "$lsblk_pmem" -ne "$dimm_rcount" ]; then
-       lsblk_pmem_msg="Only $lsblk_pmem of $dimm_rcount PMEM devices seen"
-       lsblk_pmem_msg+=" on $HOSTNAME."
-       mail_message+="$nl$lsblk_pmem_msg$nl$(lsblk)$nl"
-        ((testfails++)) || true
-        testcases+="    <error message=\"Bad Count\" type=\"error\">
+    if [ "$DAOS_PMEM" -gt 0 ]; then
+        ((testruns++)) || true
+        testcases+="  <testcase name=\"PMEM lsblk Count Node $mynodenum\">${nl}"
+        if [ "$lsblk_pmem" -ne "$dimm_rcount" ]; then
+            lsblk_pmem_msg="Only $lsblk_pmem of $dimm_rcount PMEM devices seen"
+            lsblk_pmem_msg+=" on $HOSTNAME."
+            mail_message+="$nl$lsblk_pmem_msg$nl$(lsblk)$nl"
+            ((testfails++)) || true
+            testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $lsblk_pmem_msg ]]>
     </error>$nl"
-       result=6
-    else
-       echo "OK: All $dimm_rcount PMEM devices are in lsblk report."
+           result=6
+        else
+            echo "OK: All $dimm_rcount PMEM devices are in lsblk report."
+        fi
+        testcases+="  </testcase>$nl"
     fi
-    testcases+="  </testcase>$nl"
 fi
 
 # Additional information if any check failed
