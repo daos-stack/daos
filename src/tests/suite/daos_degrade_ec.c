@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -497,11 +498,13 @@ degrade_ec_partial_update_agg(void **state)
 			     data, EC_CELL_SIZE, &req);
 	}
 
-	/* Kill one parity shard, which is the aggregate leader to verify
-	 * aggregate works in degraded mode.
+	/* Kill one parity shard, the aggregate leader to verify aggregate works in degraded mode.
+	 * Kill/restart engine for exclude only (due to self_heal setting).
 	 */
 	rank = get_rank_by_oid_shard(arg, oid, 4);
-	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+	arg->no_rebuild = 1;
+	rebuild_pools_ranks(&arg, 1, &rank, 1, true /* kill */);
+	dmg_system_start_rank(dmg_config_file, rank);
 
 	/* Trigger aggregation */
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
