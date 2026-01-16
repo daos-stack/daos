@@ -38,6 +38,8 @@ umempobj_pgsz(int backend);
 /* umem persistent object property flags */
 #define	UMEMPOBJ_ENABLE_STATS	0x1
 
+#define UMEM_FILE_MODE_DEFAULT  0660
+
 #ifdef DAOS_PMEM_BUILD
 
 /* The backend type is stored in meta blob header, don't change the value */
