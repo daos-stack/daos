@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -120,6 +121,8 @@ const (
 	MercuryFatalError Status = -C.DER_HG_FATAL
 	// NoService indicates the pool service is not up and didn't process the pool request
 	NoService Status = -C.DER_NO_SERVICE
+	// OpCanceled indicates that an operation was cancelled (non-crt).
+	OpCanceled = -C.DER_OP_CANCELED
 )
 
 const (
