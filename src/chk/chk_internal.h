@@ -76,6 +76,7 @@ struct chk_pool_mbs {
 	uint32_t	*cpm_tgt_status;
 };
 
+/* clang-format off */
 /*
  * CHK_START:
  * From check leader to check engine to start the check instance on specified pool(s) or all pools.
@@ -83,7 +84,7 @@ struct chk_pool_mbs {
 #define DAOS_ISEQ_CHK_START							\
 	((uint64_t)		(csi_gen)		CRT_VAR)		\
 	((uint32_t)		(csi_flags)		CRT_VAR)		\
-	((int32_t)		(csi_phase)		CRT_VAR)		\
+	((int32_t)		(csi_ns_ver)		CRT_VAR)		\
 	((d_rank_t)		(csi_leader_rank)	CRT_VAR)		\
 	((uint32_t)		(csi_api_flags)		CRT_VAR)		\
 	((uuid_t)		(csi_iv_uuid)		CRT_VAR)		\
@@ -272,11 +273,13 @@ CRT_RPC_DECLARE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 #define DAOS_OSEQ_CHK_REJOIN							\
 	((int32_t)		(cro_status)		CRT_VAR)		\
 	((uint32_t)		(cro_flags)		CRT_VAR)		\
+	((uint32_t)		(cro_ns_ver)		CRT_VAR)		\
+	((uint32_t)		(cro_padding)		CRT_VAR)		\
+	((d_rank_t)		(cro_ranks)		CRT_ARRAY)		\
 	((uuid_t)		(cro_pools)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
-/* clang-format off */
 /*
  * CHK_SET_POLICY:
  * From check leader to check engine to set policy during check instance running.
@@ -501,16 +504,12 @@ struct chk_bookmark {
  * 'reset' for all pools.
  */
 struct chk_property {
-	d_rank_t			cp_leader;
-	Chk__CheckFlag			cp_flags;
-	Chk__CheckInconsistAction	cp_policies[CHK_POLICY_MAX];
-	/*
-	 * NOTE: Preserve for supporting to continue the check until the specified phase in the
-	 *	 future. -1 means to check all phases.
-	 */
-	int32_t				cp_phase;
+	d_rank_t                  cp_leader;
+	Chk__CheckFlag            cp_flags;
+	Chk__CheckInconsistAction cp_policies[CHK_POLICY_MAX];
+	uint32_t                  cp_padding;
 	/* How many ranks (ever or should) take part in the check instance. */
-	uint32_t			cp_rank_nr;
+	uint32_t                  cp_rank_nr;
 };
 
 /*
@@ -576,6 +575,7 @@ struct chk_instance {
 				 ci_rejoining:1,
 				 ci_implicated:1;
 	uint32_t		 ci_start_flags;
+	uint32_t                 ci_ns_ver;
 };
 
 struct chk_iv {
@@ -762,9 +762,8 @@ void chk_pending_destroy(struct chk_pending_rec *cpr);
 
 int chk_policy_refresh(uint32_t policy_nr, struct chk_policy *policies, struct chk_property *prop);
 
-int chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
-		     uint32_t policy_nr, struct chk_policy *policies,
-		     d_rank_list_t *ranks, struct chk_property *prop);
+int chk_prop_prepare(d_rank_t leader, uint32_t flags, uint32_t policy_nr,
+		     struct chk_policy *policies, d_rank_list_t *ranks, struct chk_property *prop);
 
 uint32_t chk_pool_merge_status(uint32_t status_a, uint32_t status_b);
 
@@ -781,7 +780,7 @@ void chk_ins_fini(struct chk_instance **p_ins);
 
 int chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		     uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		     uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader,
+		     uuid_t pools[], uint32_t api_flags, uint32_t ns_ver, d_rank_t leader,
 		     uint32_t flags, uuid_t iv_uuid, struct ds_pool_clues *clues);
 
 int chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags);
@@ -818,6 +817,12 @@ void chk_engine_fini(void);
 
 /* chk_iv.c */
 
+void chk_iv_ns_destroy(struct chk_instance *ins);
+
+int chk_iv_ns_create(struct chk_instance *ins, uuid_t uuid, d_rank_t leader, uint32_t ns_ver);
+
+int chk_iv_ns_update(struct chk_instance *ins, uint32_t ns_ver);
+
 int chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode, bool retry);
 
 int chk_iv_init(void);
@@ -834,8 +839,8 @@ int chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 
 int chk_leader_notify(struct chk_iv *iv);
 
-int chk_leader_rejoin(uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags, int *pool_nr,
-		      uuid_t **pools);
+int chk_leader_rejoin(uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags,
+		      uint32_t *ns_ver, int *pool_nr, uuid_t **pools, d_rank_list_t **ranks);
 
 int chk_leader_setup(void);
 
@@ -849,8 +854,8 @@ void chk_leader_fini(void);
 
 int chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		     uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		     uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader, uint32_t flags,
-		     uuid_t iv_uuid, chk_co_rpc_cb_t start_cb, void *args);
+		     uuid_t pools[], uint32_t api_flags, uint32_t ns_ver, d_rank_t leader,
+		     uint32_t flags, uuid_t iv_uuid, chk_co_rpc_cb_t start_cb, void *args);
 
 int chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
 		    chk_co_rpc_cb_t stop_cb, void *args);
@@ -879,7 +884,7 @@ int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act,
 		      uint32_t detail_nr, d_sg_list_t *details, uint64_t seq);
 
 int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags,
-		      uint32_t *pool_nr, uuid_t **pools);
+		      uint32_t *ns_ver, uint32_t *pool_nr, uuid_t **pools, d_rank_list_t **ranks);
 
 int chk_set_policy_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t policy_nr,
 			  struct chk_policy *policies);
@@ -1029,17 +1034,6 @@ chk_query_free(struct chk_query_pool_shard *shards, uint32_t shard_nr)
 			D_FREE(shards[i].cqps_targets);
 
 		D_FREE(shards);
-	}
-}
-
-static inline void
-chk_iv_ns_cleanup(struct ds_iv_ns **ns)
-{
-	if (*ns != NULL) {
-		if ((*ns)->iv_refcount == 1)
-			ds_iv_ns_cleanup(*ns);
-		ds_iv_ns_put(*ns);
-		*ns = NULL;
 	}
 }
 
@@ -1249,7 +1243,7 @@ chk_ins_can_start(struct chk_instance *ins)
 	if (ins->ci_starting)
 		return -DER_INPROGRESS;
 
-	if (ins->ci_stopping || ins->ci_sched_exiting)
+	if (ins->ci_stopping || ins->ci_sched_exiting || ins->ci_rejoining)
 		return -DER_BUSY;
 
 	if (ins->ci_sched_running)
