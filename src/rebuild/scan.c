@@ -586,7 +586,7 @@ rebuild_obj_ult(void *data)
 	struct rebuild_obj_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
-	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
+	ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
 			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
@@ -616,7 +616,7 @@ rebuild_object_local(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 	arg->tgt_index = tgt_index;
 	arg->shard = shard;
 
-	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_VOS, tgt_index, 0, NULL);
 	if (rc) {
 		D_FREE(arg);
 		rpt_put(rpt);
@@ -892,11 +892,12 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	while (cont_child->sc_ec_agg_active &&
 	       rpt->rt_rebuild_op != RB_OP_RECLAIM &&
 	       rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
-		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
-			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
+		D_ASSERTF(atomic_load(&rpt->rt_pool->sp_rebuilding) >= 0,
+			  DF_UUID " rebuilding %d\n", DP_UUID(rpt->rt_pool_uuid),
+			  atomic_load(&rpt->rt_pool->sp_rebuilding));
 		/* Wait for EC aggregation to abort before discard the object */
-		D_INFO(DF_UUID" wait for ec agg abort, rebuilding %d.\n",
-		       DP_UUID(entry->ie_couuid), rpt->rt_pool->sp_rebuilding);
+		D_INFO(DF_UUID " wait for ec agg abort, rebuilding %d.\n",
+		       DP_UUID(entry->ie_couuid), atomic_load(&rpt->rt_pool->sp_rebuilding));
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
@@ -1281,7 +1282,7 @@ tls_lookup:
 		D_GOTO(out, rc);
 	}
 
-	rpt->rt_pool->sp_rebuilding++; /* reset in rebuild_tgt_fini */
+	atomic_fetch_add(&rpt->rt_pool->sp_rebuilding, 1); /* reset in rebuild_tgt_fini */
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
