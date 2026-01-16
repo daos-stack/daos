@@ -2244,8 +2244,6 @@ obj_ioc_fini(struct obj_io_context *ioc, int err)
 	}
 
 	if (ioc->ioc_coc != NULL) {
-		if (ioc->ioc_update_ec_ts && err == 0)
-			ds_cont_ec_timestamp_update(ioc->ioc_coc);
 		ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
 	}
@@ -2423,7 +2421,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 }
 
 static int
-obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid, bool for_modify)
+obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 	uint32_t                 nr_grps;
@@ -2438,8 +2436,6 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid, bool for_modify)
 	if (daos_oclass_is_ec(oca)) {
 		ioc->ioc_oca.u.ec.e_len = ioc->ioc_coc->sc_props.dcp_ec_cell_sz;
 		D_ASSERT(ioc->ioc_oca.u.ec.e_len != 0);
-		if (for_modify)
-			ioc->ioc_update_ec_ts = 1;
 	}
 
 	return 0;
@@ -2514,7 +2510,7 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		goto failed;
 
-	rc = obj_ioc_init_oca(ioc, oid, obj_is_modification_opc(opc));
+	rc = obj_ioc_init_oca(ioc, oid);
 	if (rc != 0)
 		goto failed;
 	return 0;
@@ -4723,7 +4719,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		/* There is no object associated with this ioc while
 		 * initializing, we have to do it at here.
 		 */
-		rc = obj_ioc_init_oca(ioc, dcsr->dcsr_oid.id_pub, true);
+		rc = obj_ioc_init_oca(ioc, dcsr->dcsr_oid.id_pub);
 		if (rc)
 			D_GOTO(out, rc);
 
