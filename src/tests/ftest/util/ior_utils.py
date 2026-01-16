@@ -1,5 +1,6 @@
 """
 (C) Copyright 2018-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -58,8 +59,7 @@ def run_ior(test, manager, log, hosts, path, slots, pool, container, processes, 
         ppn (int, optional): number of processes per node to run.  If specified it will override
             the processes input. Defaults to None.
         intercept (str, optional): path to interception library. Defaults to None.
-        plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
-            working directory which is needed to run vol connector for DAOS. Default is None.
+        plugin_path (str, optional): HDF5 vol connector library path. Default is None.
         dfuse (Dfuse, optional): DAOS test dfuse object required when specifying a plugin_path.
             Defaults to None.
         display_space (bool, optional): Whether to display the pool space. Defaults to True.
@@ -104,8 +104,7 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
         ppn (int, optional): number of processes per node to run.  If specified it will override
             the processes input. Defaults to None.
         intercept (str, optional): path to interception library. Defaults to None.
-        plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
-            working directory which is needed to run vol connector for DAOS. Default is None.
+        plugin_path (str, optional): HDF5 vol connector library path. Default is None.
         dfuse (Dfuse, optional): DAOS test dfuse object required when specifying a plugin_path.
             Defaults to None.
         display_space (bool, optional): Whether to display the pool space. Defaults to True.
@@ -584,8 +583,7 @@ class Ior:
             ppn (int, optional): number of processes per node to run.  If specified it will override
                 the processes input. Defaults to None.
             intercept (str, optional): path to interception library. Defaults to None.
-            plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
-                working directory which is needed to run vol connector for DAOS. Default is None.
+            plugin_path (str, optional): HDF5 vol connector library path. Default is None.
             dfuse (Dfuse, optional): DAOS test dfuse object required when specifying a plugin_path.
                 Defaults to None.
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
@@ -618,16 +616,16 @@ class Ior:
         if plugin_path:
             self.env["HDF5_VOL_CONNECTOR"] = "daos"
             self.env["HDF5_PLUGIN_PATH"] = str(plugin_path)
-            if dfuse:
-                self.manager.working_dir.value = dfuse.mount_dir.value
-            else:
-                raise CommandFailure("Undefined 'dfuse' argument; required for 'plugin_path'")
 
         if not self.manager.job.test_file.value:
             # Provide a default test_file if not specified
-            if dfuse and (self.manager.job.api.value == "POSIX" or plugin_path):
+            if dfuse and self.manager.job.value == "POSIX":
                 test_file = self.manager.job.test_file.value or 'testfile'
                 self.manager.job.test_file.update(os.path.join(dfuse.mount_dir.value, test_file))
+            elif self.manager.job.value == "HDF5" and plugin_path:
+                # UNS path for file
+                test_file = format_path(
+                    self.manager.job.dfs_pool.value, self.manager.job.dfs_cont.value, "testfile")
             elif self.manager.job.api.value == "DFS":
                 self.manager.job.test_file.update(
                     os.path.join(os.sep, self.label_generator.get_label("testfile")))
