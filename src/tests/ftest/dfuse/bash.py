@@ -132,13 +132,13 @@ class DfuseBashCmd(TestWithServers):
             f"chmod u-r {fuse_root_dir}/lib.a.bz2",
             f"sed -i 's/abcd/bbcd/g' {fuse_root_dir}/src.c",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
-            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=0'
+            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=0 '
             "--group_reporting --exitall_on_error --continue_on_error=none",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
-            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=1'
+            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=1 '
             "--group_reporting --exitall_on_error --continue_on_error=none",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
-            f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
+            f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16 '
             '--group_reporting --exitall_on_error --continue_on_error=none',
         ]
 
