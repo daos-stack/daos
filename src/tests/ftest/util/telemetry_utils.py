@@ -1,6 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Google LLC
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -159,6 +159,12 @@ class TelemetryUtils():
         "engine_pool_vos_wal_replay_size",
         "engine_pool_vos_wal_replay_time",
         "engine_pool_vos_wal_replay_transactions"]
+    ENGINE_POOL_VOS_CACHE_METRICS = [
+        "engine_pool_vos_cache_page_evict",
+        "engine_pool_vos_cache_page_flush",
+        "engine_pool_vos_cache_page_hit",
+        "engine_pool_vos_cache_page_miss",
+        "engine_pool_vos_cache_page_ne"]
     ENGINE_POOL_SVC_METRICS = [
         "engine_pool_svc_degraded_ranks",
         "engine_pool_svc_disabled_targets",
@@ -179,6 +185,7 @@ class TelemetryUtils():
         ENGINE_POOL_VOS_SPACE_METRICS + \
         ENGINE_POOL_VOS_WAL_METRICS + \
         ENGINE_POOL_VOS_WAL_REPLAY_METRICS +\
+        ENGINE_POOL_VOS_CACHE_METRICS +\
         ENGINE_POOL_SVC_METRICS
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",

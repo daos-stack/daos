@@ -1,0 +1,65 @@
+launch:
+  !filter-only : /run/pool/default    # yamllint disable-line rule:colons
+
+hosts:
+  test_servers: 5
+  test_clients: 3
+
+timeout: 16000
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 0
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 0
+      log_file: daos_server1.log
+      storage: auto
+
+pool: !mux
+  default:
+    size: 100%
+  md_on_ssd_p2:
+    size: 100%
+    mem_ratio: 25
+
+container:
+  type: POSIX
+
+mdtest:
+  dfs_destroy: False
+  manager: "MPICH"
+  ppn: 32
+  num_of_files_dirs: 100
+  test_dir: "/"
+  api: DFS
+  flags: "-C -F -G 27 -N 1 -Y -u -L"
+  branching_factor: 1
+  write_bytes: 1024
+  read_bytes: 1024
+
+object_classes:
+  - "EC_2P1G1"
+  - "EC_2P1G8"
+  - "EC_2P1GX"
+  - "EC_2P2G1"
+  - "EC_2P2G8"
+  - "EC_2P2GX"
+  - "EC_4P1G1"
+  - "EC_4P1G8"
+  - "EC_4P1GX"
+  - "EC_4P2G1"
+  - "EC_4P2G8"
+  - "EC_4P2GX"
+  - "EC_4P3G1"
+  - "EC_4P3G8"
+  - "EC_4P3GX"
+  - "EC_8P2G1"
+  - "EC_8P2G8"
+  - "EC_8P2GX"
