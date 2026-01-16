@@ -82,7 +82,8 @@ class ListVerboseTest(IorTestBase):
                 "state": rebuild_state,
                 "objects": 0,
                 "records": 0,
-                "total_objects": 0
+                "total_objects": 0,
+                'degraded': False
             },
             "self_heal_policy": "",
             # NB: tests should not expect min/max/mean values
