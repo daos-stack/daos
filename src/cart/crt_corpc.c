@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -790,8 +790,13 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	opc_info = rpc_priv->crp_opc_info;
 	co_ops = opc_info->coi_co_ops;
 
-	if (rpc_priv->crp_fail_hlc)
-		D_GOTO(forward_done, rc = -DER_HLC_SYNC);
+	if (rpc_priv->crp_fail_hlc) {
+		rc = -DER_HLC_SYNC;
+		RPC_ERROR(rpc_priv, "crp_fail_hlc (group %s) failed: " DF_RC "\n",
+			  co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
+		crt_corpc_fail_parent_rpc(rpc_priv, rc);
+		D_GOTO(forward_done, rc);
+	}
 
 	/* Invoke pre-forward callback first if it is registered */
 	if (co_ops && co_ops->co_pre_forward) {
@@ -908,20 +913,28 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 forward_done:
-	if (rc != 0 && rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT)
-		co_failout = true;
+	if (rc != 0) {
+		/* reset rc to 0 as it already failed the parent/child RPC and
+		 * will be replied/completed by crt_corpc_complete().
+		 */
+		rc = 0;
+		if (rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT)
+			co_failout = true;
+	}
 
-	/* NOOP bcast (no child and root excluded) */
-	if (co_info->co_child_num == 0 && (co_info->co_root_excluded || co_failout))
-		crt_corpc_complete(rpc_priv);
+	/* need not call local RPC handler */
+	if (co_info->co_root_excluded || co_failout) {
+		/* NOOP bcast (no child and root excluded) */
+		if (co_info->co_child_num == 0)
+			crt_corpc_complete(rpc_priv);
 
-	if (co_info->co_root_excluded == 1 || co_failout) {
-		if (co_info->co_grp_priv->gp_self == co_info->co_root) {
-			/* don't return error for root to avoid RPC_DECREF in
-			 * fail case in crt_req_send.
-			 */
-			rc = 0;
-		}
+		/* Corresponding the initial ref 1 in crt_rpc_handler_common() ->
+		 * crt_rpc_priv_init(rpc_priv, crt_ctx, true).
+		 * That ref commonly will be released by crt_rpc_common_hdlr() -> crt_handle_rpc(),
+		 * here as will not call crt_rpc_common_hdlr() so drop it explicitly.
+		 */
+		if (rpc_priv->crp_srv)
+			RPC_DECREF(rpc_priv);
 		D_GOTO(out, rc);
 	}
 
