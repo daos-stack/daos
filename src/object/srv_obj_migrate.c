@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2784,9 +2784,11 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
 		p_csum = NULL;
-		/* EC rotate needs to fetch from all shards */
+		/* EC rotate needs to fetch from all shards, at least with data_tgt_nr alive,
+		 * at least one shard should get 2 KDs.
+		 */
 		if (obj_ec_parity_rotate_enabled_by_version(arg->oid.id_layout_ver))
-			minimum_nr = obj_ec_tgt_nr(&unpack_arg.oc_attr);
+			minimum_nr = obj_ec_data_tgt_nr(&unpack_arg.oc_attr) + 1;
 		else
 			minimum_nr = 2;
 		enum_flags |= DIOF_RECX_REVERSE;
@@ -2914,7 +2916,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		}
 
 		/* Each object enumeration RPC will at least one OID */
-		if (num <= minimum_nr && (enum_flags & DIOF_TO_SPEC_GROUP)) {
+		if (num < minimum_nr && (enum_flags & DIOF_TO_SPEC_GROUP)) {
 			D_DEBUG(DB_REBUILD, "enumeration buffer %u empty"
 				DF_UOID"\n", num, DP_UOID(arg->oid));
 			break;
