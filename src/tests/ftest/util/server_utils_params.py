@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -141,6 +141,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_server_helper.log")
         self.telemetry_port = BasicParameter(None, 9191)
+        self.control_iface = BasicParameter(None)
         self.client_env_vars = BasicParameter(None)
 
         # access_points was changed to mgmt_svc_replicas in 2.7

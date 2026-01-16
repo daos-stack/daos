@@ -171,3 +171,13 @@ server_config_val: !mux
       - "targets"
       - -1
       - "FAIL"
+  control_iface_invalid:
+    config_val:
+      - "control_iface"
+      - "nonexistent_interface_12345"
+      - "FAIL"
+  control_iface_lo:
+    config_val:
+      - "control_iface"
+      - "lo"
+      - "PASS"
