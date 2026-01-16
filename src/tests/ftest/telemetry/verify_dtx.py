@@ -40,7 +40,7 @@ class VerifyDTX(TestWithTelemetry):
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
                 expected_ranges[metric][label] = [0, 0]             # 0 only
-                if pool.mem_ratio.value is None:
+                if pool.mem_ratio.value is not None:
                     if metric.endswith('_dtx_committed_max'):
                         expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
                     elif metric.endswith('_dtx_committed_mean'):
