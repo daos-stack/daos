@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright 2022-2024 Intel Corporation.
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -25,4 +25,8 @@ fi
 
 echo "Formatting C files"
 
-git-clang-format --staged src
+# Get staged C/C++ files, excluding vendored dependencies
+c_files=$(_git_diff_cached_files "*.c *.h *.cpp *.cc" | grep -v -E '^src/control/vendor/' || true)
+if [ -n "$c_files" ]; then
+    echo "$c_files" | xargs git-clang-format --staged
+fi
