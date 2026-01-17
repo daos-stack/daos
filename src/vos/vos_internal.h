@@ -263,7 +263,7 @@ struct vos_cache_metrics {
 	struct d_tm_node_t	*vcm_obj_hit;
 };
 
-void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrcis, const char *path, int tgt_id);
+void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrics, const char *path, int tgt_id);
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
