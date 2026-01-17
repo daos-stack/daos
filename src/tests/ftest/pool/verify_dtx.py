@@ -3,6 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import json
+import math
+
 from job_manager_utils import get_job_manager
 from mdtest_utils import MDTEST_NAMESPACE, run_mdtest
 from telemetry_test_base import TestWithTelemetry
@@ -29,11 +32,54 @@ class VerifyDTX(TestWithTelemetry):
         :avocado: tags=pool
         :avocado: tags=VerifyDTX,test_verify_dtx
         """
+        write_bytes = self.params.get('write_bytes', MDTEST_NAMESPACE, None)
+        processes = self.params.get('processes', MDTEST_NAMESPACE, None)
+        ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
+        object_classes = self.params.get('object_classes', '/run/*')
+
         dtx_metrics = list(self.telemetry.ENGINE_POOL_VOS_CACHE_METRICS[:1])
         dtx_metrics += list(self.telemetry.ENGINE_IO_DTX_COMMITTED_METRICS)
 
         self.log_step('Creating a pool (dmg pool create)')
         pool = self.get_pool(connect=False)
+        try:
+            _result = json.loads(pool.dmg.result.stdout)
+            tier_bytes_scm = int(_result['response']['tier_bytes'][0])
+            mem_file_bytes = int(_result['response']['mem_file_bytes'])
+        except Exception as error:      # pylint: disable=broad-except
+            self.fail(f'Error extracting data for dmg pool create output: {error}')
+
+        # Calculate the mdtest files_per_process based upon the scm size and other mdtest params
+        _write_procs = processes
+        _mdtest_cmds = len(object_classes)
+        if ppn is not None:
+            _write_procs = ppn * len(self.host_info.clients.hosts)
+        files_per_process = math.floor(mem_file_bytes / (write_bytes * _write_procs * _mdtest_cmds))
+        if tier_bytes_scm > mem_file_bytes:
+            # Write more (125%) files to exceed mem_file_bytes and cause eviction
+            num_of_files_dirs = math.ceil(files_per_process * 1.25)
+        else:
+            # Write less (75%) files to avoid out of space errors
+            num_of_files_dirs = math.floor(files_per_process * 0.75)
+
+        self.log.debug("-" * 60)
+        self.log.debug("Pool %s create data:", pool)
+        self.log.debug("  tier_bytes_scm:                %s", tier_bytes_scm)
+        self.log.debug("  mem_file_bytes:                %s", mem_file_bytes)
+        self.log.debug("  mem_ratio.value:               %s", pool.mem_ratio.value)
+        self.log.debug("Mdtest write parameters:")
+        self.log.debug("  write_bytes per mdtest:        %s", write_bytes)
+        if ppn is not None:
+            self.log.debug("  ppn / nodes:                   %s / %s",
+                           ppn, len(self.host_info.clients.hosts))
+        else:
+            self.log.debug("  processes:                     %s", processes)
+        self.log.debug("  files_per_process per mtest:  %s", files_per_process)
+        self.log.debug("  Number of mdtest commands:    %s", _mdtest_cmds)
+        self.log.debug("  num_of_files_dirs per mdtest: %s", num_of_files_dirs)
+        self.log.debug("  total expected to write:      %s",
+                       _mdtest_cmds * _write_procs * write_bytes * num_of_files_dirs)
+        self.log.debug("-" * 60)
 
         self.log_step('Collect DTX metrics after creating a pool (dmg telemetry metrics query)')
         expected_ranges = self.telemetry.collect_data(dtx_metrics)
@@ -59,7 +105,6 @@ class VerifyDTX(TestWithTelemetry):
         if not self.telemetry.verify_data(expected_ranges):
             self.fail('DTX metrics verification failed after pool creation')
 
-        object_classes = self.params.get('object_classes', '/run/*')
         manager = get_job_manager(self, subprocess=False, timeout=None)
         processes = self.params.get('processes', MDTEST_NAMESPACE, None)
         ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
@@ -68,7 +113,8 @@ class VerifyDTX(TestWithTelemetry):
             container = self.get_container(pool, oclass=oclass, dir_oclass=oclass)
             run_mdtest(
                 self, self.hostlist_clients, self.workdir, None, container, processes, ppn, manager,
-                mdtest_params={'dfs_oclass': oclass, 'dfs_dir_oclass': oclass})
+                mdtest_params={'dfs_oclass': oclass, 'dfs_dir_oclass': oclass,
+                               'num_of_files_dirs': num_of_files_dirs})
 
         self.log_step('Collect DTX metrics after writing data (dmg telemetry metrics query)')
         expected_ranges = self.telemetry.collect_data(dtx_metrics)
