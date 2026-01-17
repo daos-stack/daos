@@ -16,6 +16,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@grom72/SRE-3522') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -122,7 +123,7 @@ pipeline {
                description: 'Additional repository used for locating packages for the build and ' +
                             'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
-               defaultValue: '',
+               defaultValue: 'EL9.7',
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
