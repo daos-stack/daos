@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 option go_package = "github.com/Jille/raft-grpc-transport/proto";
+
 import "google/protobuf/timestamp.proto";
 
 service RaftTransport {
@@ -15,10 +16,14 @@ service RaftTransport {
   rpc TimeoutNow(TimeoutNowRequest) returns (TimeoutNowResponse) {}
   // InstallSnapshot is the command sent to a Raft peer to bootstrap its log (and state machine) from a snapshot on another peer.
   rpc InstallSnapshot(stream InstallSnapshotRequest) returns (InstallSnapshotResponse) {}
+  // RequestPreVote is the command used by a candidate to ask a Raft peer for a vote in an election.
+  rpc RequestPreVote(RequestPreVoteRequest) returns (RequestPreVoteResponse) {}
 }
 
 message RPCHeader {
 	int64 protocol_version = 1;
+	bytes id = 2;
+	bytes addr = 3;
 }
 
 message Log {
@@ -101,4 +106,17 @@ message InstallSnapshotResponse {
 	RPCHeader rpc_header = 1;
 	uint64 term = 2;
 	bool success = 3;
+}
+
+message RequestPreVoteRequest {
+	RPCHeader rpc_header = 1;
+	uint64 term = 2;
+	uint64 last_log_index = 3;
+	uint64 last_log_term = 4;
+}
+
+message RequestPreVoteResponse {
+	RPCHeader rpc_header = 1;
+	uint64 term = 2;
+	bool granted = 3;
 }

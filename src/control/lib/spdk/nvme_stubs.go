@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,10 @@
 package spdk
 
 import (
+	"os"
+
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -31,5 +35,9 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 
 // Clean removes SPDK lockfiles.
 func (n *NvmeImpl) Clean(log logging.Logger, pciAddrChecker LockfileAddrCheckFn) ([]string, error) {
-	return []string{}, nil
+	if n == nil {
+		return nil, errors.New("nil NvmeImpl")
+	}
+
+	return cleanLockfiles(log, n.LocksDir, pciAddrChecker, os.Remove)
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright 2023-2024 Intel Corporation.
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -11,7 +11,8 @@ set -ue
 
 _print_githook_header "isort"
 
-py_files=$(_git_diff_cached_files "*.py SConstruct */SConscript")
+# Get staged Python files, excluding vendored dependencies
+py_files=$(_git_diff_cached_files "*.py SConstruct */SConscript" | grep -v -E '^src/control/vendor/' || true)
 
 if [ -z "$py_files" ]; then
     echo "No python changes. Skipping"
