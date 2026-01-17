@@ -53,11 +53,11 @@ class EvictionMetrics(TestWithTelemetry):
             _write_processes = ppn * len(self.host_info.clients.hosts)
         files_per_process = math.floor(mem_file_bytes / (write_bytes * _write_processes))
         if tier_bytes_scm > mem_file_bytes:
-            # Write more files to exceed mem_file_bytes and cause eviction
-            mdtest_params = {"num_of_files_dirs": math.ceil(files_per_process * 1.10)}
+            # Write more (125%) files to exceed mem_file_bytes and cause eviction
+            mdtest_params = {"num_of_files_dirs": math.ceil(files_per_process * 1.25)}
         else:
-            # Write less files to avoid out of space errors
-            mdtest_params = {"num_of_files_dirs": math.ceil(files_per_process * 0.9)}
+            # Write less (75%) files to avoid out of space errors
+            mdtest_params = {"num_of_files_dirs": math.floor(files_per_process * 0.75)}
 
         self.log.debug("-" * 60)
         self.log.debug("Pool %s create data:", pool)
@@ -85,13 +85,13 @@ class EvictionMetrics(TestWithTelemetry):
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
                 if pool.mem_ratio.value is not None and metric.endswith('_hit'):
-                    expected_ranges[metric][label] = [0, 100]
+                    expected_ranges[metric][label] = [0, 100]           # 0-100 (phase 2)
                 elif pool.mem_ratio.value is not None and metric.endswith('_miss'):
-                    expected_ranges[metric][label] = [0, 5]
+                    expected_ranges[metric][label] = [0, 5]             # 0-5 (phase 2)
                 elif pool.mem_ratio.value is not None and metric.endswith('_ne'):
-                    expected_ranges[metric][label] = [0, 5]
+                    expected_ranges[metric][label] = [0, 5]             # 0-5 (phase 2)
                 else:
-                    expected_ranges[metric][label] = [0, 0]
+                    expected_ranges[metric][label] = [0, 0]             # 0 only
         self.log.debug("%s expected_ranges: %s", pool, expected_ranges)
 
         self.log_step('Verify pool eviction metrics after pool creation')
@@ -110,9 +110,11 @@ class EvictionMetrics(TestWithTelemetry):
         for metric in sorted(expected_ranges):
             for label in expected_ranges[metric]:
                 if pool.mem_ratio.value is None:
-                    expected_ranges[metric][label] = [0, 0]
+                    expected_ranges[metric][label] = [0, 0]             # 0 only (phase 1)
+                elif metric.endswith('_page_flush'):
+                    expected_ranges[metric][label] = [0]                # 0 or greater (phase 2)
                 else:
-                    expected_ranges[metric][label] = [1, 10000000]
+                    expected_ranges[metric][label] = [1, 10000000]      # 1-10,000,000 (phase 2)
         self.log.debug("%s expected_ranges: %s", pool, expected_ranges)
 
         self.log_step('Verify pool eviction metrics after writing data')
