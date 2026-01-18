@@ -942,13 +942,18 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	 * Hold the SPDK bdev by an open descriptor, otherwise, the bdev
 	 * could be deconstructed by SPDK on device hot remove.
 	 */
-	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
-				d_bdev, &d_bdev->bb_desc);
+	rc = spdk_bdev_open_ext(d_bdev->bb_name, true, bio_bdev_event_cb, d_bdev, &d_bdev->bb_desc);
 	if (rc != 0) {
 		D_ERROR("Failed to hold bdev %s, %d\n", d_bdev->bb_name, rc);
 		rc = daos_errno2der(-rc);
 		goto error;
 	}
+
+	/* Apply NVMe power management settings */
+	rc = bio_set_power_mgmt(d_bdev->bb_name, d_bdev->bb_desc);
+	if (rc != 0 && rc != -DER_NOTSUPPORTED)
+		D_WARN("Failed to set power management for device %s: " DF_RC "\n", d_bdev->bb_name,
+		       DP_RC(rc));
 
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	/* Try to load blobstore without specifying 'bstype' first */
@@ -1470,12 +1475,6 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 			D_ERROR("Invalid SMD state:%d\n", dev_state);
 			return -DER_INVAL;
 		}
-
-		/* Apply NVMe power management settings */
-		rc = bio_set_power_mgmt(d_bdev->bb_name);
-		if (rc != 0 && rc != -DER_NOTSUPPORTED)
-			D_WARN("Failed to set power management for device %s: " DF_RC "\n",
-			       d_bdev->bb_name, DP_RC(rc));
 
 		/* Initialize health monitor */
 		rc = bio_init_health_monitoring(bbs, d_bdev->bb_name);
