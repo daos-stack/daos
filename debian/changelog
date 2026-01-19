@@ -1,3 +1,15 @@
+daos (2.6.4-15) unstable; urgency=medium
+  [ Dalton Bohning ]
+  * Bump version
+
+ -- Dalton Bohning <dalton.bohning@hpe.com>  Fri, 16 Jan 2025 08:30:00 -0800
+
+daos (2.6.4-13) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Bump version
+
+ -- Phillip Henderson <phillip.henderson@hpe.com>  Thu, 8 Jan 2026 12:57:00 -0500
+
 daos (2.6.4-11) unstable; urgency=medium
   [ Phillip Henderson ]
   * Bump version

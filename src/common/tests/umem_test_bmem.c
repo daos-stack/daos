@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2023 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2023-2025 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1193,7 +1193,8 @@ test_tx_reserve_publish_cancel(void **state)
 	assert_int_equal(memcmp(rsrv_ptr1, local_buf, 980), 0);
 	assert_int_equal(memcmp(rsrv_ptr2, local_buf, 128), 0);
 	umem_cancel(umm, rsrvd_act);
-	validate_persist_activity(1, 0);
+	/* umem_cacnel() internally started tx, which increased one additional resrv_cnt */
+	validate_persist_activity(2, 0);
 	utest_get_scm_used_space(arg->ta_utx, &cur_mem_used);
 	assert_true(cur_mem_used >= initial_mem_used);
 	umoff = umem_atomic_alloc(umm, 980, UMEM_TYPE_ANY);
