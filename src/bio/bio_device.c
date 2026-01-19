@@ -1108,6 +1108,7 @@ bio_set_power_mgmt(const char *bdev_name, struct spdk_bdev *bdev)
 {
 	struct power_mgmt_context_t pm_ctx = {0};
 	struct spdk_nvme_cmd cmd;
+	union spdk_nvme_feat_power_management feat = {0};
 	int                         rc = 0;
 
 	D_INFO("Power management 1\n");
@@ -1115,6 +1116,11 @@ bio_set_power_mgmt(const char *bdev_name, struct spdk_bdev *bdev)
 	/* If default has not been overwritten, skip setting the value */
 	if (bio_spdk_power_mgmt_val == UINT32_MAX)
 		goto out;
+	if (bio_spdk_power_mgmt_val > 0x1F) {
+		D_ERROR("bio_spdk_power_mgmt_val larger than 5 bit value allowed");
+		rc = -DER_INVAL;
+		goto out;
+	}
 
 	D_ASSERT(bdev_name != NULL);
 	pm_ctx.bdev_name = bdev_name;
@@ -1142,10 +1148,13 @@ bio_set_power_mgmt(const char *bdev_name, struct spdk_bdev *bdev)
 	pm_ctx.bdev_io_channel = spdk_bdev_get_io_channel(pm_ctx.bdev_desc);
 	D_ASSERT(pm_ctx.bdev_io_channel != NULL);
 
+	// Set the target Power State (bits 04:00)
+	feat.bits.ps = bio_spdk_power_mgmt_val;
+
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opc   = SPDK_NVME_OPC_SET_FEATURES;
 	cmd.cdw10 = SPDK_NVME_FEAT_POWER_MANAGEMENT;
-	cmd.cdw11 = bio_spdk_power_mgmt_val;
+	cmd.cdw11 = feat.raw;
 
 	D_INFO("Power management 2\n");
 	rc = ABT_eventual_create(0, &pm_ctx.eventual);
