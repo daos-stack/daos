@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1981,7 +1981,7 @@ chk_engine_sched(void *args)
 			D_GOTO(out, rc);
 		}
 
-		if (ins_phase > cbk->cb_phase) {
+		if (ins_phase != CHK_INVAL_PHASE && ins_phase > cbk->cb_phase) {
 			D_INFO(DF_ENGINE" on rank %u moves from phase %u to phase %u\n",
 			       DP_ENGINE(ins), myrank, cbk->cb_phase, ins_phase);
 
@@ -2345,6 +2345,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	if (rc != 0)
 		goto out_stop;
 
+	ins->ci_pause         = 0;
 	ins->ci_sched_running = 1;
 
 	rc = dss_ult_create(chk_engine_sched, ins, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ,
@@ -2406,6 +2407,8 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 	int			 rc = 0;
 	int			 i;
 	int			 active = false;
+
+	CHK_IS_READY(ins);
 
 	if (gen != 0 && gen != cbk->cb_gen)
 		D_GOTO(log, rc = -DER_NOTAPPLICABLE);
@@ -2596,6 +2599,8 @@ chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *ins_status
 	int				 rc = 0;
 	int				 i;
 
+	CHK_IS_READY(ins);
+
 	/*
 	 * We will support to check query from new check leader under the case of old leader
 	 * crashed, that may have different check generation. So do not check "cb_gen" here,
@@ -2647,6 +2652,8 @@ chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version)
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	d_rank_list_t		*rank_list = NULL;
 	int			 rc = 0;
+
+	CHK_IS_READY(ins);
 
 	if (cbk->cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
@@ -2744,6 +2751,8 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t act)
 {
 	struct chk_instance *ins = chk_engine;
 	int                  rc;
+
+	CHK_IS_READY(ins);
 
 	if (ins->ci_bk.cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
@@ -2874,6 +2883,8 @@ chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *c
 	int				 i = 0;
 	int				 rc = 0;
 
+	CHK_IS_READY(ins);
+
 	if (cbk->cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
@@ -2928,6 +2939,8 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 	d_iov_t			 riov;
 	d_iov_t			 kiov;
 	int			 rc;
+
+	CHK_IS_READY(ins);
 
 	if (ins->ci_bk.cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
@@ -3047,6 +3060,8 @@ chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label
 	int				 rc;
 	int				 i;
 
+	CHK_IS_READY(ins);
+
 	if (ins->ci_bk.cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 
@@ -3157,6 +3172,8 @@ chk_engine_set_policy(uint64_t gen, uint32_t policy_nr, struct chk_policy *polic
 	struct chk_bookmark *cbk  = &ins->ci_bk;
 	struct chk_property *prop = &ins->ci_prop;
 	int                  rc   = 0;
+
+	CHK_IS_READY(ins);
 
 	/* Do nothing if no (engine) check instance is running. */
 	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE || cbk->cb_gen != gen ||
@@ -3294,6 +3311,8 @@ chk_engine_notify(struct chk_iv *iv)
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	struct chk_pool_rec	*cpr;
 	int			 rc = 0;
+
+	CHK_IS_READY(ins);
 
 	if (cbk->cb_gen != iv->ci_gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
@@ -3512,31 +3531,16 @@ out_log:
 			 DF_ENGINE" rejoin on rank %u with iv "DF_UUIDF": "DF_RC"\n",
 			 DP_ENGINE(ins), myrank, DP_UUID(cbk->cb_iv_uuid), DP_RC(rc));
 	ins->ci_rejoining = 0;
-	ins->ci_starting = 0;
-	ins->ci_inited = 1;
-}
-
-void
-chk_engine_pause(void)
-{
-	struct chk_instance	*ins = chk_engine;
-
-	chk_stop_sched(ins);
-	D_ASSERT(d_list_empty(&ins->ci_pool_list));
+	ins->ci_starting  = 0;
 }
 
 int
-chk_engine_init(void)
+chk_engine_setup(void)
 {
-	struct chk_traverse_pools_args	 ctpa = { 0 };
-	struct chk_bookmark		*cbk;
-	int				 rc;
-
-	rc = chk_ins_init(&chk_engine);
-	if (rc != 0)
-		goto fini;
-
-	chk_report_seq_init(chk_engine);
+	struct chk_instance           *ins  = chk_engine;
+	struct chk_bookmark           *cbk  = &ins->ci_bk;
+	struct chk_traverse_pools_args ctpa = {0};
+	int                            rc;
 
 	/*
 	 * DAOS global consistency check depends on all related engines' local
@@ -3545,7 +3549,6 @@ chk_engine_init(void)
 	 * related local inconsistency firstly.
 	 */
 
-	cbk = &chk_engine->ci_bk;
 	rc = chk_bk_fetch_engine(cbk);
 	if (rc == -DER_NONEXIST)
 		goto prop;
@@ -3569,37 +3572,46 @@ chk_engine_init(void)
 		cbk->cb_time.ct_stop_time = time(NULL);
 		rc = chk_bk_update_engine(cbk);
 		if (rc != 0) {
-			D_ERROR(DF_ENGINE" failed to reset status as 'PAUSED': "DF_RC"\n",
-				DP_ENGINE(chk_engine), DP_RC(rc));
+			D_ERROR(DF_ENGINE " failed to reset status as 'PAUSED': " DF_RC "\n",
+				DP_ENGINE(ins), DP_RC(rc));
 			goto fini;
 		}
 
 		ctpa.ctpa_gen = cbk->cb_gen;
-		ctpa.ctpa_ins = chk_engine;
+		ctpa.ctpa_ins = ins;
 		rc            = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
 		/*
 		 * Failed to reset pool status will not affect next check start, so it is not fatal,
 		 * but related check query result may be confused for user.
 		 */
 		if (rc != 0)
-			D_WARN(DF_ENGINE" failed to reset pools status as 'PAUSED': "DF_RC"\n",
-			       DP_ENGINE(chk_engine), DP_RC(rc));
+			D_WARN(DF_ENGINE " failed to reset pools status as 'PAUSED': " DF_RC "\n",
+			       DP_ENGINE(ins), DP_RC(rc));
 	}
 
 prop:
-	rc = chk_prop_fetch(&chk_engine->ci_prop, &chk_engine->ci_ranks);
+	rc = chk_prop_fetch(&ins->ci_prop, &ins->ci_ranks);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 fini:
-	if (rc != 0)
-		chk_ins_fini(&chk_engine);
+	if (rc != 0) {
+		chk_ins_fini(&ins);
+	} else {
+		chk_report_seq_init(ins);
+		ins->ci_inited = 1;
+		ins->ci_pause  = 0;
+	}
+
 	return rc;
 }
 
 void
-chk_engine_fini(void)
+chk_engine_cleanup(void)
 {
-	chk_ins_fini(&chk_engine);
+	struct chk_instance *ins = chk_engine;
+
+	chk_ins_cleanup(ins);
+	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 }
 
 int
@@ -3608,6 +3620,8 @@ chk_engine_pool_stop(uuid_t pool_uuid, bool destroy)
 	uint32_t	status;
 	uint32_t	phase;
 	int		rc = 0;
+
+	CHK_IS_READY(chk_engine);
 
 	if (destroy) {
 		status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
@@ -3623,4 +3637,16 @@ chk_engine_pool_stop(uuid_t pool_uuid, bool destroy)
 	       DP_UUID(pool_uuid), destroy ? "destroy" : "non-destroy", DP_RC(rc));
 
 	return rc;
+}
+
+int
+chk_engine_init(void)
+{
+	return chk_ins_init(&chk_engine);
+}
+
+void
+chk_engine_fini(void)
+{
+	chk_ins_fini(&chk_engine);
 }

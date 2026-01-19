@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -226,9 +226,10 @@ static void
 chk_leader_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_status,
 		uint32_t pool_status, bool bcast)
 {
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_iv		 iv = { 0 };
-	int			 rc = 0;
+	struct chk_dead_rank *cdr;
+	struct chk_bookmark  *cbk = &ins->ci_bk;
+	struct chk_iv         iv  = {0};
+	int                   rc  = 0;
 
 	ins->ci_sched_exiting = 1;
 
@@ -237,8 +238,7 @@ chk_leader_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 	chk_pool_stop_all(ins, pool_status, NULL);
 
 	if ((bcast && ins_status == CHK__CHECK_INST_STATUS__CIS_FAILED) ||
-	    ins_status == CHK__CHECK_INST_STATUS__CIS_IMPLICATED ||
-	    unlikely(ins_status == CHK__CHECK_INST_STATUS__CIS_COMPLETED && !ins->ci_orphan_done)) {
+	    ins_status == CHK__CHECK_INST_STATUS__CIS_IMPLICATED || !ins->ci_orphan_done) {
 		iv.ci_gen = cbk->cb_gen;
 		iv.ci_phase = ins_phase != CHK_INVAL_PHASE ? ins_phase : cbk->cb_phase;
 		iv.ci_ins_status = ins_status;
@@ -263,6 +263,10 @@ chk_leader_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 			D_ERROR(DF_LEADER" exit with status %u: "DF_RC"\n",
 				DP_LEADER(ins), ins_status, DP_RC(rc));
 	}
+
+	while ((cdr = d_list_pop_entry(&ins->ci_dead_ranks, struct chk_dead_rank, cdr_link)) !=
+	       NULL)
+		D_FREE(cdr);
 
 	ins->ci_sched_exiting = 0;
 }
@@ -305,31 +309,24 @@ chk_leader_post_repair(struct chk_instance *ins, struct chk_pool_rec *cpr,
 			       DP_UUID(cpr->cpr_uuid), rc);
 	}
 
-	/*
-	 * If the operation failed and 'failout' is set, then do nothing here.
-	 * chk_leader_exit will handle all the IV and bookmark related things.
-	 */
-	if (*result == 0 || !(ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)) {
-		if (notify) {
-			iv.ci_gen = cbk->cb_gen;
-			uuid_copy(iv.ci_uuid, cpr->cpr_uuid);
-			iv.ci_ins_status = ins->ci_bk.cb_ins_status;
-			iv.ci_phase = cbk->cb_phase;
-			iv.ci_pool_status = cbk->cb_pool_status;
+	if (notify) {
+		uuid_copy(iv.ci_uuid, cpr->cpr_uuid);
+		iv.ci_gen         = cbk->cb_gen;
+		iv.ci_ins_status  = ins->ci_bk.cb_ins_status;
+		iv.ci_phase       = cbk->cb_phase;
+		iv.ci_pool_status = cbk->cb_pool_status;
 
-			/* Synchronously notify the engines that check on the pool got failure. */
-			rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
-					   CRT_IV_SYNC_EAGER, true);
-			D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-				 DF_LEADER" notify the engines that the check for pool "
-				 DF_UUIDF" is done with status %u: rc = %d\n",
-				 DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), iv.ci_pool_status, rc);
-			if (rc == 0)
-				cpr->cpr_notified_exit = 1;
-		}
-
-		*result = 0;
+		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER,
+				   true);
+		DL_CDEBUG(rc != 0, DLOG_WARN, DLOG_INFO, rc,
+			  DF_LEADER " notify engines that check pool " DF_UUIDF " done, status %u",
+			  DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), iv.ci_pool_status);
+		if (rc == 0)
+			cpr->cpr_notified_exit = 1;
 	}
+
+	if (!(ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
+		*result = 0;
 
 	if (update) {
 		rc = chk_bk_update_leader(&ins->ci_bk);
@@ -2284,7 +2281,8 @@ check_dead:
 
 		ins_phase = chk_pools_find_slowest(ins, &done);
 
-		if (ins_phase >= CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS && !ins->ci_orphan_done &&
+		if (ins_phase != CHK_INVAL_PHASE &&
+		    ins_phase >= CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS && !ins->ci_orphan_done &&
 		    !DAOS_FAIL_CHECK(DAOS_CHK_SYNC_ORPHAN_PROCESS)) {
 			iv.ci_gen = cbk->cb_gen;
 			iv.ci_phase = ins_phase;
@@ -2316,7 +2314,7 @@ check_dead:
 			D_GOTO(out, rc);
 		}
 
-		if (cbk->cb_phase == CHK_INVAL_PHASE || cbk->cb_phase < ins_phase) {
+		if (ins_phase != CHK_INVAL_PHASE && ins_phase > cbk->cb_phase) {
 			D_INFO(DF_LEADER" moves from phase %u to phase %u\n",
 			       DP_LEADER(ins), cbk->cb_phase, ins_phase);
 
@@ -3015,6 +3013,7 @@ remote:
 	if (rc != 0)
 		goto out_stop_remote;
 
+	ins->ci_pause         = 0;
 	ins->ci_sched_running = 1;
 
 	rc = dss_ult_create(chk_leader_sched, ins, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ,
@@ -3115,6 +3114,8 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	int			 rc = 0;
 	int			 i;
+
+	CHK_IS_READY(ins);
 
 	if (ins->ci_starting)
 		D_GOTO(log, rc = -DER_BUSY);
@@ -3331,6 +3332,8 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 	int                          i;
 	bool                         skip;
 
+	CHK_IS_READY(ins);
+
 	/*
 	 * NOTE: Similar as stop case, we need the ability to query check information from
 	 *	 new leader if the old one dead. But the information from new leader may be
@@ -3475,6 +3478,8 @@ chk_leader_prop(chk_prop_cb_t prop_cb, void *buf)
 {
 	struct chk_property	*prop = &chk_leader->ci_prop;
 
+	CHK_IS_READY(chk_leader);
+
 	return prop_cb(buf, prop->cp_policies, CHK_POLICY_MAX - 1, prop->cp_flags);
 }
 
@@ -3533,6 +3538,8 @@ chk_leader_act(uint64_t seq, uint32_t act)
 	struct chk_bookmark *cbk = &ins->ci_bk;
 	int                  rc;
 
+	CHK_IS_READY(ins);
+
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
 
@@ -3565,6 +3572,8 @@ chk_leader_set_policy(uint32_t policy_nr, struct chk_policy *policies)
 	struct chk_pending_rec *pending;
 	struct chk_pending_rec *tmp;
 	int                     rc;
+
+	CHK_IS_READY(ins);
 
 	/* Do nothing if no (leader) check instance is running. */
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER ||
@@ -3613,6 +3622,8 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	int			 rc;
+
+	CHK_IS_READY(ins);
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
@@ -3741,6 +3752,8 @@ chk_leader_notify(struct chk_iv *iv)
 	d_iov_t			 riov;
 	int			 rc = 0;
 
+	CHK_IS_READY(ins);
+
 	/* Ignore the notification that is not applicable to current rank. */
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
@@ -3820,6 +3833,8 @@ chk_leader_rejoin(uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags, 
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	int			 rc = 0;
 
+	CHK_IS_READY(ins);
+
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
 
@@ -3847,15 +3862,6 @@ out:
 		 DP_LEADER(ins), cbk->cb_ins_status, rank, gen, DP_UUID(iv_uuid), DP_RC(rc));
 
 	return rc;
-}
-
-void
-chk_leader_pause(void)
-{
-	struct chk_instance	*ins = chk_leader;
-
-	chk_stop_sched(ins);
-	D_ASSERT(d_list_empty(&ins->ci_rank_list));
 }
 
 static void
@@ -3912,18 +3918,12 @@ out:
 }
 
 int
-chk_leader_init(void)
+chk_leader_setup(void)
 {
-	struct chk_traverse_pools_args	 ctpa = { 0 };
-	struct chk_bookmark		*cbk;
-	int				 rc;
-
-	rc = chk_ins_init(&chk_leader);
-	if (rc != 0)
-		goto fini;
-
-	chk_leader->ci_is_leader = 1;
-	chk_report_seq_init(chk_leader);
+	struct chk_instance           *ins  = chk_leader;
+	struct chk_bookmark           *cbk  = &ins->ci_bk;
+	struct chk_traverse_pools_args ctpa = {0};
+	int                            rc;
 
 	/*
 	 * DAOS global consistency check depends on all related engines' local
@@ -3932,7 +3932,6 @@ chk_leader_init(void)
 	 * related local inconsistency firstly.
 	 */
 
-	cbk = &chk_leader->ci_bk;
 	rc = chk_bk_fetch_leader(cbk);
 	if (rc == -DER_NONEXIST)
 		goto prop;
@@ -3967,32 +3966,57 @@ chk_leader_init(void)
 		cbk->cb_time.ct_stop_time = time(NULL);
 		rc = chk_bk_update_leader(cbk);
 		if (rc != 0) {
-			D_ERROR(DF_LEADER" failed to reset ins status as 'PAUSED': "DF_RC"\n",
-				DP_LEADER(chk_leader), DP_RC(rc));
+			D_ERROR(DF_LEADER " failed to reset ins status as 'PAUSED': " DF_RC "\n",
+				DP_LEADER(ins), DP_RC(rc));
 			goto fini;
 		}
 
 		ctpa.ctpa_gen = cbk->cb_gen;
-		ctpa.ctpa_ins = chk_leader;
+		ctpa.ctpa_ins = ins;
 		rc            = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
 		/*
 		 * Failed to reset pool status will not affect next check start, so it is not fatal,
 		 * but related check query result may be confused for user.
 		 */
 		if (rc != 0)
-			D_WARN(DF_LEADER" failed to reset pools status as 'PAUSED': "DF_RC"\n",
-				DP_LEADER(chk_leader), DP_RC(rc));
+			D_WARN(DF_LEADER " failed to reset pools status as 'PAUSED': " DF_RC "\n",
+			       DP_LEADER(ins), DP_RC(rc));
 	}
 
 prop:
-	rc = chk_prop_fetch(&chk_leader->ci_prop, &chk_leader->ci_ranks);
+	rc = chk_prop_fetch(&ins->ci_prop, &ins->ci_ranks);
 	if (rc == 0 || rc == -DER_NONEXIST)
 		rc = crt_register_event_cb(chk_rank_event_cb, NULL);
 fini:
-	if (rc != 0)
-		chk_ins_fini(&chk_leader);
-	else
-		chk_leader->ci_inited = 1;
+	if (rc != 0) {
+		chk_ins_fini(&ins);
+	} else {
+		chk_report_seq_init(ins);
+		ins->ci_inited = 1;
+		ins->ci_pause  = 0;
+	}
+
+	return rc;
+}
+
+void
+chk_leader_cleanup(void)
+{
+	struct chk_instance *ins = chk_leader;
+
+	chk_ins_cleanup(ins);
+	D_ASSERT(d_list_empty(&ins->ci_rank_list));
+}
+
+int
+chk_leader_init(void)
+{
+	int rc;
+
+	rc = chk_ins_init(&chk_leader);
+	if (rc == 0)
+		chk_leader->ci_is_leader = 1;
+
 	return rc;
 }
 
