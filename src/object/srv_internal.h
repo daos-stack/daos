@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,6 +25,8 @@
 #include "obj_ec.h"
 
 extern struct dss_module_key obj_module_key;
+
+struct migr_res_manager;
 
 /* Per pool attached to the migrate tls(per xstream) */
 struct migrate_pool_tls {
@@ -75,18 +77,13 @@ struct migrate_pool_tls {
 	 */
 	uint32_t                 mpt_tgt_obj_ult_cnt;
 	uint32_t                 mpt_tgt_dkey_ult_cnt;
+	/* The current in-flight data size */
+	uint64_t                 mpt_inflight_size;
+
+	struct migr_res_manager *mpt_rmg;
 
 	/* reference count for the structure */
-	uint64_t		mpt_refcount;
-
-	/* The current in-flight iod, mainly used for controlling
-	 * rebuild in-flight rate to avoid the DMA buffer overflow.
-	 */
-	uint64_t		mpt_inflight_size;
-	uint64_t		mpt_inflight_max_size;
-	ABT_cond		mpt_inflight_cond;
-	ABT_mutex		mpt_inflight_mutex;
-	uint32_t		mpt_inflight_max_ult;
+	uint64_t                 mpt_refcount;
 	uint32_t		mpt_opc;
 
 	/* The new layout version for upgrade job */
@@ -145,6 +142,10 @@ struct obj_tgt_punch_args {
 
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
+int
+obj_migrate_init(void);
+void
+obj_migrate_fini(void);
 
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
