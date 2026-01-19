@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1119,6 +1119,12 @@ daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		   const char *value)
 {
 	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
+}
+
+int
+daos_pool_get_prop(const uuid_t pool_uuid, const char *name, char **value_out)
+{
+	return dmg_pool_get_prop(dmg_config_file, NULL, pool_uuid, name, value_out);
 }
 
 void
