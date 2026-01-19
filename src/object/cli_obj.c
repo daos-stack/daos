@@ -1,8 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -286,6 +285,34 @@ dc_obj_hdl2pdom(daos_handle_t oh)
 	pdom = dc_obj_get_pdom(obj);
 	obj_decref(obj);
 	return pdom;
+}
+
+uint32_t
+dc_obj_hdl2map_ver(daos_handle_t oh)
+{
+	struct dc_object *obj;
+	uint32_t          ver;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	ver = obj->cob_version;
+	obj_decref(obj);
+
+	return ver;
+}
+
+uint32_t
+dc_obj_hdl2grp_size(daos_handle_t oh)
+{
+	struct dc_object *obj;
+	uint32_t          ver;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	ver = obj->cob_grp_size;
+	obj_decref(obj);
+
+	return ver;
 }
 
 static int

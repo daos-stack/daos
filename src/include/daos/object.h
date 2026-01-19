@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -550,6 +550,7 @@ daos_unit_oid_compare(daos_unit_oid_t a, daos_unit_oid_t b)
 	return 0;
 }
 
+/* clang-format off */
 int daos_obj_layout_free(struct daos_obj_layout *layout);
 int daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr,
 			  uint32_t grp_size);
@@ -598,6 +599,8 @@ int dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid);
 uint32_t dc_obj_hdl2redun_lvl(daos_handle_t oh);
 uint32_t dc_obj_hdl2pda(daos_handle_t oh);
 uint32_t dc_obj_hdl2pdom(daos_handle_t oh);
+uint32_t dc_obj_hdl2map_ver(daos_handle_t oh);
+uint32_t dc_obj_hdl2grp_size(daos_handle_t oh);
 
 int dc_tx_open(tse_task_t *task);
 int dc_tx_commit(tse_task_t *task);
@@ -609,6 +612,7 @@ int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
 		     uint32_t flags, daos_handle_t *th);
 int dc_tx_local_close(daos_handle_t th);
 int dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
+/* clang-format on */
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t

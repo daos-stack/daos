@@ -2880,6 +2880,8 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	uint32_t		 minimum_nr;
 	uint32_t		 enum_flags;
 	uint32_t		 num;
+	uint32_t                  grp_size = 0;
+	uint32_t                  new_grp_size;
 	int                       waited = 0;
 	int			 rc = 0;
 
@@ -2953,6 +2955,18 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 
 		daos_anchor_set_flags(&dkey_anchor, enum_flags);
 		num = KDS_NUM;
+		new_grp_size = dc_obj_hdl2grp_size(arg->ioa_oh);
+		if (grp_size == 0) {
+			grp_size = new_grp_size;
+		} else if (grp_size != new_grp_size) {
+			/* The anchor's ssa_shard possibly changed when grp_size changed,
+			 * just fail current rebuild to avoid possible assertion/issue.
+			 */
+			rc = -DER_STALE;
+			DL_INFO(rc, DF_RB ": migrate obj " DF_UOID " grp_size %u -> %u",
+				DP_RB_MPT(tls), DP_UOID(arg->oid), grp_size, new_grp_size);
+			break;
+		}
 		rc  = dsc_obj_list_obj(arg->ioa_oh, epr, NULL, NULL, NULL, &num, kds, &sgl, &anchor,
 				       &dkey_anchor, &akey_anchor, p_csum);
 
