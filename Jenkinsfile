@@ -127,7 +127,7 @@ pipeline {
                description: 'Additional repository used for locating packages for the build and ' +
                             'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
-               defaultValue: 'EL9.7',
+               defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
