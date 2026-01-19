@@ -1,9 +1,18 @@
 %changelog
 * Mon Jan 19 2026  Oksana Salyk <oksana.salyk@intel.com> - 2.1.3-1
-- Update to release 2.1.3
+- Update to release 2.1.3:
+  - Expand the sds.at_create CTL to cover disabling the bad block checking feature to avoid a stack overflow caused by NDCTL use (DAOS-18296).
+  - Fix an issue in the PMEMOBJ allocator with a potential to corrupt the allocator's metadata (DAOS-18195).
 
 * Wed Nov 05 2025  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.1.2-1
-- Update to release 2.1.2
+- Update to release 2.1.2:
+  - Expanded the sds.at_create CTL to also cover pmemobj_open() (DAOS-17449)
+	  - Previously, this CTL affected only pmemobj_create().
+	  - Now, it affects both pmemobj_create() and pmemobj_open().
+	  - pmemobj_open() won't be able to open a pool with SDS enabled if the feature is currently
+	  force-disabled.
+	  - Conversely, pmemobj_open() does not issue a warning when attempting to open a pool with SDS disabled
+	  while the feature is force-disabled.
 
 * Fri Oct 31 2025  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.1.0-7
 - Restore the RPM changelog, which has not been available since version 2.1.0-4.
