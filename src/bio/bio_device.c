@@ -1012,15 +1012,20 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 	}
 
 	rc = fill_in_traddr(&b_info, d_bdev->bb_name);
-	if (rc || b_info.bdi_traddr == NULL) {
-		D_DEBUG(DB_MGMT, "Unable to get traddr for device %s\n", d_bdev->bb_name);
+	if (rc) {
+		D_ERROR("Unable to get traddr for device %s\n", d_bdev->bb_name);
 		return -DER_INVAL;
+	}
+	if (b_info.bdi_traddr == NULL) {
+		D_DEBUG(DB_MGMT, "Skipping get traddr for device %s (not NVMe?)\n",
+			d_bdev->bb_name);
+		return 0;
 	}
 
 	rc = spdk_pci_addr_parse(pci_addr, b_info.bdi_traddr);
 	if (rc != 0) {
-		D_DEBUG(DB_MGMT, "Unable to parse PCI address for device %s (%s)\n",
-			b_info.bdi_traddr, spdk_strerror(-rc));
+		D_ERROR("Unable to parse PCI address for device %s (%s)\n", b_info.bdi_traddr,
+			spdk_strerror(-rc));
 		rc = -DER_INVAL;
 	}
 
@@ -1053,10 +1058,9 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	if (addr_len == 0) {
 		rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
 		if (rc != 0) {
-			DL_WARN(rc, "Failed to read PCI addr from device" DF_UUID " (is it AIO?)",
-				DP_UUID(dev_uuid));
-			/* Return zero in the case of simulated devices */
-			return 0;
+			DL_ERROR(rc, "Failed to read PCI addr from device " DF_UUID,
+				 DP_UUID(dev_uuid));
+			return rc;
 		}
 
 		if (tr_addr != NULL) {
