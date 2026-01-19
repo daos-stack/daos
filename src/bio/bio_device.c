@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,13 +48,10 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	d_bdev->bb_trigger_reint = 1;
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
-	/**
-	 * Reset the LED of the VMD device once revived, a DER_NOTSUPPORTED indicates that VMD-LED
-	 * control is not enabled on device.
-	 */
+	/* Reset the LED of the VMD device once revived */
 	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__RESET,
 			    NULL, 0);
-	if ((rc != 0) && (rc != -DER_NOTSUPPORTED))
+	if (rc != 0)
 		DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed", DP_UUID(d_bdev->bb_uuid));
 
 	return 0;
@@ -695,11 +692,12 @@ static void
 led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 {
 	struct led_opts		*opts = ctx;
-	enum spdk_vmd_led_state	 cur_led_state;
-	Ctl__LedState            d_led_state;
+	enum spdk_vmd_led_state  cur_led_state = SPDK_VMD_LED_STATE_UNKNOWN;
+	Ctl__LedState            d_led_state   = CTL__LED_STATE__NA;
 	const char		*pci_dev_type = NULL;
 	char			 addr_buf[ADDR_STR_MAX_LEN + 1];
 	int			 rc;
+	bool                     vmd_on;
 
 	if (opts->status != 0)
 		return;
@@ -726,41 +724,45 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	if (strncmp(pci_dev_type, NVME_PCI_DEV_TYPE_VMD, strlen(NVME_PCI_DEV_TYPE_VMD)) != 0) {
-		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s:%s), can't manage LED\n",
-			pci_dev_type, addr_buf);
-		opts->status = -DER_NOTSUPPORTED;
-		return;
+	vmd_on = strncmp(pci_dev_type, NVME_PCI_DEV_TYPE_VMD, strlen(NVME_PCI_DEV_TYPE_VMD)) == 0;
+
+	D_DEBUG(DB_MGMT, "led_device_action addr:%s, action:%s", addr_buf,
+		LED_ACTION_NAME(opts->action));
+
+	if (vmd_on) {
+		/* First check the current state of the VMD LED */
+		rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
+		if (spdk_unlikely(rc != 0)) {
+			D_ERROR("Failed to retrieve the state of the LED on %s (%s)\n", addr_buf,
+				spdk_strerror(-rc));
+			opts->status = -DER_NOSYS;
+			return;
+		}
+
+		/* Convert state to Ctl__LedState from SPDK led_state */
+		d_led_state = led_state_spdk2daos(cur_led_state);
+
+		D_DEBUG(DB_MGMT, "vmd led on dev %s has state: %s (action: %s, new state: %s)\n",
+			addr_buf, LED_STATE_NAME(d_led_state), LED_ACTION_NAME(opts->action),
+			LED_STATE_NAME(opts->led_state));
 	}
-
-	/* First check the current state of the VMD LED */
-	rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
-	if (spdk_unlikely(rc != 0)) {
-		D_ERROR("Failed to retrieve the state of the LED on %s (%s)\n", addr_buf,
-			spdk_strerror(-rc));
-		opts->status = -DER_NOSYS;
-		return;
-	}
-
-	/* Convert state to Ctl__LedState from SPDK led_state */
-	d_led_state = led_state_spdk2daos(cur_led_state);
-
-	D_DEBUG(DB_MGMT, "led on dev %s has state: %s (action: %s, new state: %s)\n", addr_buf,
-		LED_STATE_NAME(d_led_state), LED_ACTION_NAME(opts->action),
-		LED_STATE_NAME(opts->led_state));
 
 	switch (opts->action) {
 	case CTL__LED_ACTION__GET:
-		/* Return early with current device state set */
-		opts->led_state = d_led_state;
+		if (vmd_on)
+			/* Return early with current device state set */
+			opts->led_state = d_led_state;
+		else
+			/* Leave state as NA */
+			D_ERROR("LED state GET not supported for non-VMD device (type %s:%s)\n",
+				pci_dev_type, addr_buf);
 		return;
 	case CTL__LED_ACTION__SET:
 		break;
 	case CTL__LED_ACTION__RESET:
 		/* Reset intercepted earlier in call-stack and converted to set */
-		D_ERROR("Reset action is not supported\n");
-		opts->status = -DER_INVAL;
-		return;
+		D_ERROR("Reset action unsupported in this code path\n");
+		D_ASSERT(false);
 	default:
 		D_ERROR("Unrecognized LED action requested\n");
 		opts->status = -DER_INVAL;
@@ -773,30 +775,44 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	/* Set the LED to the new state */
-	rc = spdk_vmd_set_led_state(pci_device, led_state_daos2spdk(opts->led_state));
-	if (spdk_unlikely(rc != 0)) {
-		D_ERROR("Failed to set the VMD LED state on %s (%s)\n", addr_buf,
-			spdk_strerror(-rc));
-		opts->status = -DER_NOSYS;
-		return;
-	}
+	if (vmd_on) {
+		/* Set the LED to the new state */
+		rc = spdk_vmd_set_led_state(pci_device, led_state_daos2spdk(opts->led_state));
+		if (spdk_unlikely(rc != 0)) {
+			D_ERROR("Failed to set the VMD LED state on %s (%s)\n", addr_buf,
+				spdk_strerror(-rc));
+			opts->status = -DER_NOSYS;
+			return;
+		}
 
-	rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
-	if (rc != 0) {
-		D_ERROR("Failed to get the VMD LED state on %s (%s)\n", addr_buf,
-			spdk_strerror(-rc));
-		opts->status = -DER_NOSYS;
-		return;
+		rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
+		if (rc != 0) {
+			D_ERROR("Failed to get the VMD LED state on %s (%s)\n", addr_buf,
+				spdk_strerror(-rc));
+			opts->status = -DER_NOSYS;
+			return;
+		}
+		d_led_state = led_state_spdk2daos(cur_led_state);
+	} else {
+		/* Set current state to expected if no VMD */
+		d_led_state = opts->led_state;
 	}
-	d_led_state = led_state_spdk2daos(cur_led_state);
 
 	/* Verify the correct state is set */
 	if (d_led_state != opts->led_state) {
 		D_ERROR("Unexpected LED state on %s, want %s got %s\n", addr_buf,
 			LED_STATE_NAME(opts->led_state), LED_STATE_NAME(d_led_state));
-		opts->status = -DER_INVAL;
+		opts->status = -DER_MISC;
+		return;
 	}
+
+	/**
+	 * Print RAS event for LED change. If no VMD, the RAS events may be used to trigger LED
+	 * control mechanisms outside of SPDK and/or DAOS.
+	 */
+	ras_notify_eventf(RAS_DEVICE_LED_SET, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, NULL, "LED on device %s set to state %s",
+			  addr_buf, LED_STATE_NAME(opts->led_state));
 }
 
 static int
@@ -893,7 +909,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	case CTL__LED_ACTION__SET:
 		opts.action = action;
 		if (state == NULL) {
-			D_ERROR("LED state not set for SET action\n");
+			D_ERROR("LED state not set, missing state field\n");
 			return -DER_INVAL;
 		}
 		opts.led_state = *state;
@@ -920,15 +936,12 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	spdk_pci_for_each_device(&opts, led_device_action);
 
 	if (opts.status != 0) {
-		if (opts.status != -DER_NOTSUPPORTED) {
-			if (state != NULL)
-				D_ERROR("LED %s failed (target state: %s): %s\n",
-					LED_ACTION_NAME(action), LED_STATE_NAME(*state),
-					spdk_strerror(opts.status));
-			else
-				D_ERROR("LED %s failed: %s\n", LED_ACTION_NAME(action),
-					spdk_strerror(opts.status));
-		}
+		if (state != NULL)
+			D_ERROR("LED %s failed (target state: %s): %s\n", LED_ACTION_NAME(action),
+				LED_STATE_NAME(*state), spdk_strerror(opts.status));
+		else
+			D_ERROR("LED %s failed: %s\n", LED_ACTION_NAME(action),
+				spdk_strerror(opts.status));
 		return opts.status;
 	}
 
@@ -1023,10 +1036,6 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	int                     addr_len = 0;
 	int			rc;
 
-	/* LED management on NVMe devices currently only supported when VMD is enabled. */
-	if (!bio_vmd_enabled)
-		return -DER_NOTSUPPORTED;
-
 	/**
 	 * If tr_addr is already provided, convert to a PCI address. If tr_addr is NULL or empty,
 	 * derive PCI address from the provided UUID and if tr_addr is an empty string buffer then
@@ -1035,15 +1044,19 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 
 	if (tr_addr != NULL) {
 		addr_len = strnlen(tr_addr, SPDK_NVMF_TRADDR_MAX_LEN + 1);
-		if (addr_len == SPDK_NVMF_TRADDR_MAX_LEN + 1)
+		if (addr_len == SPDK_NVMF_TRADDR_MAX_LEN + 1) {
+			D_ERROR("Address string too long");
 			return -DER_INVAL;
+		}
 	}
 
 	if (addr_len == 0) {
 		rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
 		if (rc != 0) {
-			DL_ERROR(rc, "Failed to read PCI addr from dev UUID");
-			return rc;
+			DL_WARN(rc, "Failed to read PCI addr from device" DF_UUID " (is it AIO?)",
+				DP_UUID(dev_uuid));
+			/* Return zero in the case of simulated devices */
+			return 0;
 		}
 
 		if (tr_addr != NULL) {
