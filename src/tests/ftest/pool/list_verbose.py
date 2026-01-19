@@ -25,7 +25,7 @@ class ListVerboseTest(IorTestBase):
     def create_expected(self, pool, scm_free, nvme_free, scm_imbalance,
                         nvme_imbalance, targets_disabled=0, scm_size=None,
                         nvme_size=None, state=None, rebuild_state=None,
-                        ranks_disabled=None):
+                        ranks_disabled=None, rebuild_degraded=False):
         # pylint: disable=too-many-arguments
         """Create expected dmg pool list output to compare against the actual.
 
@@ -42,6 +42,8 @@ class ListVerboseTest(IorTestBase):
             state (str, optional): Expected pool state. Defaults to None.
             rebuild_state (str, optional): Expected pool rebuild state. Defaults to None.
             ranks_disabled (list, optional): List of disabled ranks. Defaults to None.
+            rebuild_degraded (bool, optional): Whether rebuild status flag `degraded` is set.
+                Defaults to False.
 
         Returns:
             dict: Expected in the same format of actual.
@@ -83,7 +85,7 @@ class ListVerboseTest(IorTestBase):
                 "objects": 0,
                 "records": 0,
                 "total_objects": 0,
-                'degraded': False
+                'degraded': rebuild_degraded
             },
             "self_heal_policy": "",
             # NB: tests should not expect min/max/mean values
@@ -186,7 +188,7 @@ class ListVerboseTest(IorTestBase):
         self.assertTrue(diff < threshold, msg)
 
     def verify_pool_lists(self, targets_disabled, scm_size, nvme_size, state, rebuild_state,
-                          ranks_disabled):
+                          ranks_disabled, rebuild_degraded):
         """Call dmg pool list and verify.
 
         self.pool should be a list. The elements of the inputs should
@@ -199,6 +201,7 @@ class ListVerboseTest(IorTestBase):
             state (list): List of pool state for pools.
             rebuild_state (list): List of pool rebuild state for pools.
             ranks_disabled (list): List of disabled ranks for pools.
+            rebuild_degraded (list): List of rebuild status flag `degraded` for pools.
 
         Returns:
             list: a list of dictionaries containing information for each pool from the dmg
@@ -245,7 +248,8 @@ class ListVerboseTest(IorTestBase):
                     nvme_size=nvme_size[index],
                     state=state[index],
                     rebuild_state=rebuild_state[index],
-                    ranks_disabled=ranks_disabled[index]))
+                    ranks_disabled=ranks_disabled[index],
+                    rebuild_degraded=rebuild_degraded[index]))
 
         # Sort pools by UUID.
         actual_pools.sort(key=lambda item: item.get("uuid"))
@@ -312,9 +316,11 @@ class ListVerboseTest(IorTestBase):
         state = ["Ready"]
         rebuild_state = ["idle"]
         ranks_disabled = [[]]
+        rebuild_degraded = [False]
         self.verify_pool_lists(
             targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
-            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled)
+            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled,
+            rebuild_degraded=rebuild_degraded)
 
         # 3. Create second pool.
         self.log_step("Create second pool")
@@ -329,9 +335,11 @@ class ListVerboseTest(IorTestBase):
         state.append("Ready")
         rebuild_state.append("idle")
         ranks_disabled.append([])
+        rebuild_degraded.append(False)
         self.verify_pool_lists(
             targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
-            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled)
+            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled,
+            rebuild_degraded=rebuild_degraded)
 
         # 5. Exclude target 7 in rank 1 of pool 1.
         self.log_step("Exclude target 7 in rank 1 of pool 1")
@@ -349,10 +357,12 @@ class ListVerboseTest(IorTestBase):
         nvme_size[0] = reduced_nvme_size
         state[0] = "TargetsExcluded"
         rebuild_state[0] = "busy"
+        rebuild_degraded[0] = True
 
         self.verify_pool_lists(
             targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
-            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled)
+            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled,
+            rebuild_degraded=rebuild_degraded)
 
         # 7-11. Destroy and verify until the pools are gone.
         while self.pool:
@@ -365,10 +375,12 @@ class ListVerboseTest(IorTestBase):
             scm_size.pop()
             nvme_size.pop()
             ranks_disabled.pop()
+            rebuild_degraded.pop()
 
             self.verify_pool_lists(
                 targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
-                state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled)
+                state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled,
+                rebuild_degraded=rebuild_degraded)
 
     def verify_used_imbalance(self, storage):
         """Verification steps for test_used_imbalance.
@@ -396,9 +408,11 @@ class ListVerboseTest(IorTestBase):
         state = ["Ready"]
         rebuild_state = ["idle"]
         ranks_disabled = [[]]
+        rebuild_degraded = [False]
         actual_pools_before = self.verify_pool_lists(
             targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
-            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled)
+            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled,
+            rebuild_degraded=rebuild_degraded)
 
         # 3. Store free.
         free_before, _ = self.get_free_imbalance(actual_pools_before[0], storage)
@@ -416,7 +430,8 @@ class ListVerboseTest(IorTestBase):
         # obtained from actual.
         actual_pools_after = self.verify_pool_lists(
             targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
-            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled)
+            state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled,
+            rebuild_degraded=rebuild_degraded)
 
         # Obtain the new free and imbalance.
         free_after, imbalance_after = self.get_free_imbalance(
