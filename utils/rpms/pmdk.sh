@@ -1,5 +1,6 @@
 #!/bin/bash
 # (C) Copyright 2025 Google LLC
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
@@ -15,7 +16,7 @@ LICENSE="BSD-3-Clause"
 ARCH=${isa}
 DESCRIPTION="The Persistent Memory Development Kit is a collection of libraries for
 using memory-mapped persistence, optimized specifically for persistent memory."
-URL="https://github.com/pmem/pmdk"
+URL="https://github.com/daos-stack/pmdk"
 RPM_CHANGELOG="pmdk.changelog"
 
 files=()
