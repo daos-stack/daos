@@ -1550,6 +1550,7 @@ class DFuse():
         # implementation of fstat which isn't yet intercepted.  This allows testing to progress in
         # the absence of this feature.
         # if not os.path.exists("/etc/redhat-release"):
+        check_read = False
         check_fstat = False
 
         my_env = get_base_env()
