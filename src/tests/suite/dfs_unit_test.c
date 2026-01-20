@@ -2843,7 +2843,6 @@ dfs_test_checker(void **state)
 	get_nr_oids(arg->pool.poh, cname, &nr_oids);
 	/** should be 300 + SB + root object */
 	assert_int_equal((int)nr_oids, 302);
-
 	rc = dfs_cont_check(arg->pool.poh, cname,
 			    DFS_CHECK_PRINT | DFS_CHECK_REMOVE | DFS_CHECK_VERIFY, NULL);
 	assert_int_equal(rc, 0);
@@ -3511,63 +3510,376 @@ dfs_test_pipeline_find(void **state)
 	test_pipeline_find(state, OC_RP_3GX);
 }
 
+/* Helper to compare timespec (returns true if equal) */
+static inline bool
+timespec_eq(struct timespec a, struct timespec b)
+{
+	return a.tv_sec == b.tv_sec && a.tv_nsec == b.tv_nsec;
+}
+
+struct snap_time_test_ctx {
+	dfs_t       *snap_dfs;
+	daos_epoch_t snap_epoch;
+	char         file_name[32];
+	char         dir_name[32];
+};
+
+static void
+snap_time_test_setup(test_arg_t *arg, struct snap_time_test_ctx *ctx)
+{
+	dfs_obj_t  *obj;
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	char        buf[] = "test content";
+	int         rc;
+
+	static int  test_id;
+
+	snprintf(ctx->file_name, sizeof(ctx->file_name), "snap_file_%d", test_id);
+	snprintf(ctx->dir_name, sizeof(ctx->dir_name), "snap_dir_%d", test_id);
+	test_id++;
+
+	rc = dfs_open(dfs_mt, NULL, ctx->file_name, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	d_iov_set(&iov, buf, strlen(buf));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	dfs_release(obj);
+
+	rc = dfs_mkdir(dfs_mt, NULL, ctx->dir_name, S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_create_snap(co_hdl, &ctx->snap_epoch, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_mount_snap(arg->pool.poh, co_hdl, O_RDONLY, ctx->snap_epoch, NULL, &ctx->snap_dfs);
+	assert_int_equal(rc, 0);
+}
+
+static void
+snap_stat_file(struct snap_time_test_ctx *ctx, test_arg_t *arg, struct stat *stbuf)
+{
+	dfs_obj_t   *obj;
+	daos_event_t ev, *evp;
+	int          rc;
+
+	rc = dfs_open(ctx->snap_dfs, NULL, ctx->file_name, S_IFREG, O_RDONLY, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_ostatx(ctx->snap_dfs, obj, stbuf, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_int_equal(evp->ev_error, 0);
+		daos_event_fini(&ev);
+	} else {
+		rc = dfs_ostat(ctx->snap_dfs, obj, stbuf);
+		assert_int_equal(rc, 0);
+	}
+	dfs_release(obj);
+}
+
+static void
+snap_stat_dir(struct snap_time_test_ctx *ctx, test_arg_t *arg, struct stat *stbuf)
+{
+	dfs_obj_t   *obj;
+	daos_event_t ev, *evp;
+	int          rc;
+
+	rc = dfs_open(ctx->snap_dfs, NULL, ctx->dir_name, S_IFDIR, O_RDONLY, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_ostatx(ctx->snap_dfs, obj, stbuf, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_int_equal(evp->ev_error, 0);
+		daos_event_fini(&ev);
+	} else {
+		rc = dfs_ostat(ctx->snap_dfs, obj, stbuf);
+		assert_int_equal(rc, 0);
+	}
+	dfs_release(obj);
+}
+
+static void
+snap_lookup_file(struct snap_time_test_ctx *ctx, struct stat *stbuf)
+{
+	dfs_obj_t *obj;
+	mode_t     mode;
+	char       path[64];
+	int        rc;
+
+	snprintf(path, sizeof(path), "/%s", ctx->file_name);
+	rc = dfs_lookup(ctx->snap_dfs, path, O_RDONLY, &obj, &mode, stbuf);
+	assert_int_equal(rc, 0);
+	dfs_release(obj);
+}
+
+static void
+snap_lookup_dir(struct snap_time_test_ctx *ctx, struct stat *stbuf)
+{
+	dfs_obj_t *obj;
+	mode_t     mode;
+	char       path[64];
+	int        rc;
+
+	snprintf(path, sizeof(path), "/%s", ctx->dir_name);
+	rc = dfs_lookup(ctx->snap_dfs, path, O_RDONLY, &obj, &mode, stbuf);
+	assert_int_equal(rc, 0);
+	dfs_release(obj);
+}
+
+static void
+snap_lookup_root(struct snap_time_test_ctx *ctx, struct stat *stbuf)
+{
+	dfs_obj_t *obj;
+	mode_t     mode;
+	int        rc;
+
+	rc = dfs_lookup(ctx->snap_dfs, "/", O_RDONLY, &obj, &mode, stbuf);
+	assert_int_equal(rc, 0);
+	dfs_release(obj);
+}
+
+/*
+ * Post-snapshot modification: modify file and dir on LIVE container.
+ * This triggers the mtime bug - daos_array_stat returns st_max_epoch
+ * which is NOT bounded by snapshot epoch.
+ */
+static void
+snap_time_do_modification(struct snap_time_test_ctx *ctx)
+{
+	dfs_obj_t  *obj, *dir_obj;
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	char        buf[] = "modified content";
+	int         rc;
+
+	/* Ensure time differs from snapshot */
+	usleep(10000);
+
+	/* Modify file */
+	rc = dfs_open(dfs_mt, NULL, ctx->file_name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL,
+		      &obj);
+	assert_int_equal(rc, 0);
+	d_iov_set(&iov, buf, strlen(buf));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	dfs_release(obj);
+
+	/* Modify dir by creating a file inside it */
+	rc = dfs_open(dfs_mt, NULL, ctx->dir_name, S_IFDIR, O_RDWR, 0, 0, NULL, &dir_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir_obj, "trigger_mtime", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	dfs_release(obj);
+	dfs_release(dir_obj);
+}
+
+static void
+snap_time_test_teardown(struct snap_time_test_ctx *ctx)
+{
+	daos_epoch_range_t epr;
+	int                rc;
+
+	rc = dfs_umount(ctx->snap_dfs);
+	assert_int_equal(rc, 0);
+
+	epr.epr_lo = ctx->snap_epoch;
+	epr.epr_hi = ctx->snap_epoch;
+	rc         = daos_cont_destroy_snap(co_hdl, epr, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, ctx->file_name, 0, NULL);
+	assert_int_equal(rc, 0);
+	/* Remove trigger file before removing directory */
+	{
+		dfs_obj_t *dir_obj;
+
+		rc = dfs_open(dfs_mt, NULL, ctx->dir_name, S_IFDIR, O_RDWR, 0, 0, NULL, &dir_obj);
+		assert_int_equal(rc, 0);
+		rc = dfs_remove(dfs_mt, dir_obj, "trigger_mtime", 0, NULL);
+		assert_int_equal(rc, 0);
+		dfs_release(dir_obj);
+	}
+	rc = dfs_remove(dfs_mt, NULL, ctx->dir_name, 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_snap_file_stat(void **state)
+{
+	test_arg_t               *arg = *state;
+	struct snap_time_test_ctx ctx;
+	struct stat               stbuf_before, stbuf_after;
+
+	if (arg->myrank != 0)
+		return;
+
+	snap_time_test_setup(arg, &ctx);
+	snap_stat_file(&ctx, arg, &stbuf_before);
+	snap_time_do_modification(&ctx);
+	snap_stat_file(&ctx, arg, &stbuf_after);
+
+	assert_true(timespec_eq(stbuf_after.st_mtim, stbuf_before.st_mtim));
+	assert_true(timespec_eq(stbuf_after.st_ctim, stbuf_before.st_ctim));
+
+	snap_time_test_teardown(&ctx);
+}
+
+static void
+dfs_test_snap_dir_stat(void **state)
+{
+	test_arg_t               *arg = *state;
+	struct snap_time_test_ctx ctx;
+	struct stat               stbuf_before, stbuf_after;
+
+	if (arg->myrank != 0)
+		return;
+
+	snap_time_test_setup(arg, &ctx);
+	snap_stat_dir(&ctx, arg, &stbuf_before);
+	snap_time_do_modification(&ctx);
+	snap_stat_dir(&ctx, arg, &stbuf_after);
+
+	assert_true(timespec_eq(stbuf_after.st_mtim, stbuf_before.st_mtim));
+	assert_true(timespec_eq(stbuf_after.st_ctim, stbuf_before.st_ctim));
+
+	snap_time_test_teardown(&ctx);
+}
+
+static void
+dfs_test_snap_lookup_file(void **state)
+{
+	test_arg_t               *arg = *state;
+	struct snap_time_test_ctx ctx;
+	struct stat               stbuf_before, stbuf_after;
+
+	if (arg->myrank != 0)
+		return;
+
+	snap_time_test_setup(arg, &ctx);
+	snap_lookup_file(&ctx, &stbuf_before);
+	snap_time_do_modification(&ctx);
+	snap_lookup_file(&ctx, &stbuf_after);
+
+	assert_true(timespec_eq(stbuf_after.st_mtim, stbuf_before.st_mtim));
+	assert_true(timespec_eq(stbuf_after.st_ctim, stbuf_before.st_ctim));
+
+	snap_time_test_teardown(&ctx);
+}
+
+static void
+dfs_test_snap_lookup_dir(void **state)
+{
+	test_arg_t               *arg = *state;
+	struct snap_time_test_ctx ctx;
+	struct stat               stbuf_before, stbuf_after;
+
+	if (arg->myrank != 0)
+		return;
+
+	snap_time_test_setup(arg, &ctx);
+	snap_lookup_dir(&ctx, &stbuf_before);
+	snap_time_do_modification(&ctx);
+	snap_lookup_dir(&ctx, &stbuf_after);
+
+	assert_true(timespec_eq(stbuf_after.st_mtim, stbuf_before.st_mtim));
+	assert_true(timespec_eq(stbuf_after.st_ctim, stbuf_before.st_ctim));
+
+	snap_time_test_teardown(&ctx);
+}
+
+static void
+dfs_test_snap_lookup_root(void **state)
+{
+	test_arg_t               *arg = *state;
+	struct snap_time_test_ctx ctx;
+	struct stat               stbuf_before, stbuf_after;
+
+	if (arg->myrank != 0)
+		return;
+
+	snap_time_test_setup(arg, &ctx);
+	snap_lookup_root(&ctx, &stbuf_before);
+	assert_true(stbuf_before.st_mtim.tv_sec > 0);
+	snap_time_do_modification(&ctx);
+	snap_lookup_root(&ctx, &stbuf_after);
+
+	assert_true(timespec_eq(stbuf_after.st_mtim, stbuf_before.st_mtim));
+	assert_true(timespec_eq(stbuf_after.st_ctim, stbuf_before.st_ctim));
+
+	snap_time_test_teardown(&ctx);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: DFS container modes",
-	  dfs_test_modes, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
-	  dfs_test_lookup, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST4: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
-	  dfs_test_syml_follow, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST6: multi-threads read shared file",
-	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: DFS lookupx",
-	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: DFS IO sync error code",
-	  dfs_test_io_error_code, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST9: DFS IO async error code",
-	  dfs_test_io_error_code, async_enable, test_case_teardown},
-	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
-	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST11: Simple rename",
-	  dfs_test_rename, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST12: DFS API compat",
-	  dfs_test_compat, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
-	  dfs_test_handles, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
-	  dfs_test_mt_connect, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST15: DFS chown",
-	  dfs_test_chown, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST16: DFS stat mtime",
-	  dfs_test_mtime, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST17: multi-threads async IO",
-	  dfs_test_async_io_th, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST18: async IO",
-	  dfs_test_async_io, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST19: DFS readdir",
-	  dfs_test_readdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST20: dfs oclass hints",
-	  dfs_test_oclass_hints, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST21: dfs multiple pools",
-	  dfs_test_multiple_pools, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST22: dfs extended attributes",
-	  dfs_test_xattrs, test_case_teardown},
-	{ "DFS_UNIT_TEST23: dfs MWC container checker",
-	  dfs_test_checker, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST24: dfs MWC SB fix",
-	  dfs_test_fix_sb, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST25: dfs MWC root fix",
-	  dfs_test_relink_root, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
-	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST27: dfs pipeline find",
-	  dfs_test_pipeline_find, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
-	  dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST3: DFS lookup / lookup_rel", dfs_test_lookup, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST4: Simple Symlinks", dfs_test_syml, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW", dfs_test_syml_follow, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST6: multi-threads read shared file", dfs_test_read_shared_file, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST7: DFS lookupx", dfs_test_lookupx, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST8: DFS IO sync error code", dfs_test_io_error_code, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST9: DFS IO async error code", dfs_test_io_error_code, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST10: multi-threads mkdir same dir", dfs_test_mt_mkdir, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST11: Simple rename", dfs_test_rename, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST12: DFS API compat", dfs_test_compat, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST13: DFS l2g/g2l_all", dfs_test_handles, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST14: multi-threads connect to same container", dfs_test_mt_connect, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST15: DFS chown", dfs_test_chown, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST16: DFS stat mtime", dfs_test_mtime, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST17: multi-threads async IO", dfs_test_async_io_th, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST18: async IO", dfs_test_async_io, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST19: DFS readdir", dfs_test_readdir, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST20: dfs oclass hints", dfs_test_oclass_hints, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST21: dfs multiple pools", dfs_test_multiple_pools, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST22: dfs extended attributes", dfs_test_xattrs, test_case_teardown},
+    {"DFS_UNIT_TEST23: dfs MWC container checker", dfs_test_checker, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST24: dfs MWC SB fix", dfs_test_fix_sb, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST25: dfs MWC root fix", dfs_test_relink_root, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST26: dfs MWC chunk size fix", dfs_test_fix_chunk_size, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST29: snapshot file stat (sync)", dfs_test_snap_file_stat, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST30: snapshot file stat (async)", dfs_test_snap_file_stat, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST31: snapshot dir stat (sync)", dfs_test_snap_dir_stat, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST32: snapshot dir stat (async)", dfs_test_snap_dir_stat, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST33: snapshot lookup file", dfs_test_snap_lookup_file, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST34: snapshot lookup dir", dfs_test_snap_lookup_dir, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST35: snapshot lookup root", dfs_test_snap_lookup_root, async_disable,
+     test_case_teardown},
 };
 
 static int

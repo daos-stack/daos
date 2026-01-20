@@ -856,7 +856,7 @@ ostatx_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc = -DER_ENOENT);
 
 	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf,
-				NULL);
+				NULL, args->dfs->th_epoch);
 	if (rc)
 		D_GOTO(out, rc = daos_errno2der(rc));
 

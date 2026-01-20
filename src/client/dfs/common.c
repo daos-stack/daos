@@ -431,12 +431,27 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr, bool check_emp
 	return 0;
 }
 
+void
+update_stbuf_times_snapshot(struct dfs_entry entry, struct stat *stbuf)
+{
+	stbuf->st_ctim.tv_sec  = entry.ctime;
+	stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+	stbuf->st_mtim.tv_sec  = entry.mtime;
+	stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+}
+
 int
 update_stbuf_times(struct dfs_entry entry, daos_epoch_t max_epoch, struct stat *stbuf,
-		   uint64_t *obj_hlc)
+		   uint64_t *obj_hlc, daos_epoch_t th_epoch)
 {
 	struct timespec obj_mtime, entry_mtime;
 	int             rc;
+
+	/* For snapshots, use entry times directly - max_epoch is not bounded by snapshot */
+	if (th_epoch != DAOS_EPOCH_MAX) {
+		update_stbuf_times_snapshot(entry, stbuf);
+		return 0;
+	}
 
 	/** the file/dir have not been touched, so the entry times are accurate */
 	if (max_epoch == 0) {
@@ -524,6 +539,12 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 		size = sizeof(entry);
 
+		/* For snapshots, use entry times directly - skip RPC */
+		if (dfs->th_epoch != DAOS_EPOCH_MAX) {
+			update_stbuf_times_snapshot(entry, stbuf);
+			break;
+		}
+
 		/** check if dir is empty */
 		rc = daos_obj_open(dfs->coh, entry.oid, DAOS_OO_RO, &dir_oh, NULL);
 		if (rc) {
@@ -542,7 +563,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 			return daos_der2errno(rc);
 
 		/** object was updated since creation */
-		rc = update_stbuf_times(entry, ep, stbuf, obj_hlc);
+		rc = update_stbuf_times(entry, ep, stbuf, obj_hlc, dfs->th_epoch);
 		if (rc)
 			return rc;
 		break;
@@ -552,14 +573,17 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
 
-		/** don't stat the array and use the entry mtime */
+		/** if size not needed, use entry times directly */
 		if (!get_size) {
 			stbuf->st_mtim.tv_sec  = entry.mtime;
 			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+			stbuf->st_ctim.tv_sec  = entry.ctime;
+			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
 			size                   = 0;
 			break;
 		}
 
+		/** get file size */
 		if (obj) {
 			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
 			if (rc)
@@ -589,15 +613,16 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		}
 
 		size = array_stbuf.st_size;
-		rc   = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf, obj_hlc);
-		if (rc)
-			return rc;
-
 		/*
 		 * TODO - this is not accurate since it does not account for sparse files or file
 		 * metadata or xattributes.
 		 */
 		stbuf->st_blocks = (size + (1 << 9) - 1) >> 9;
+
+		rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf, obj_hlc,
+					dfs->th_epoch);
+		if (rc)
+			return rc;
 		break;
 	}
 	case S_IFLNK:

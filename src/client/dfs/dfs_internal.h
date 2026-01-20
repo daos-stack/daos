@@ -423,9 +423,11 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 	   struct dfs_obj *obj, bool get_size, struct stat *stbuf, uint64_t *obj_hlc);
 int
 get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr, bool check_empty);
+void
+update_stbuf_times_snapshot(struct dfs_entry entry, struct stat *stbuf);
 int
 update_stbuf_times(struct dfs_entry entry, daos_epoch_t max_epoch, struct stat *stbuf,
-		   uint64_t *obj_hlc);
+		   uint64_t *obj_hlc, daos_epoch_t th_epoch);
 int
 lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
 		mode_t *mode, struct stat *stbuf, size_t depth);

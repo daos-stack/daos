@@ -172,7 +172,7 @@ lookup_rel_path_loop:
 				stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 
 				rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf,
-							NULL);
+							NULL, dfs->th_epoch);
 				if (rc) {
 					daos_array_close(obj->oh, NULL);
 					D_GOTO(err_obj, rc);
@@ -278,18 +278,22 @@ lookup_rel_path_loop:
 		parent.mode = entry.mode;
 
 		if (stbuf) {
-			daos_epoch_t ep;
+			if (dfs->th_epoch != DAOS_EPOCH_MAX) {
+				update_stbuf_times_snapshot(entry, stbuf);
+			} else {
+				daos_epoch_t ep;
 
-			rc = daos_obj_query_max_epoch(obj->oh, dfs->th, &ep, NULL);
-			if (rc) {
-				daos_obj_close(obj->oh, NULL);
-				D_GOTO(err_obj, rc = daos_der2errno(rc));
-			}
+				rc = daos_obj_query_max_epoch(obj->oh, dfs->th, &ep, NULL);
+				if (rc) {
+					daos_obj_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
+				}
 
-			rc = update_stbuf_times(entry, ep, stbuf, NULL);
-			if (rc) {
-				daos_obj_close(obj->oh, NULL);
-				D_GOTO(err_obj, rc = daos_der2errno(rc));
+				rc = update_stbuf_times(entry, ep, stbuf, NULL, dfs->th_epoch);
+				if (rc) {
+					daos_obj_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
+				}
 			}
 			stbuf->st_size = sizeof(entry);
 		}
@@ -322,14 +326,19 @@ lookup_rel_path_loop:
 			dfs->root_stbuf.st_uid  = entry.uid;
 			dfs->root_stbuf.st_gid  = entry.gid;
 
-			rc = daos_obj_query_max_epoch(dfs->root.oh, dfs->th, &ep, NULL);
-			if (rc)
-				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			if (dfs->th_epoch != DAOS_EPOCH_MAX) {
+				update_stbuf_times_snapshot(entry, &dfs->root_stbuf);
+			} else {
+				rc = daos_obj_query_max_epoch(dfs->root.oh, dfs->th, &ep, NULL);
+				if (rc)
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
 
-			/** object was updated since creation */
-			rc = update_stbuf_times(entry, ep, &dfs->root_stbuf, NULL);
-			if (rc)
-				D_GOTO(err_obj, rc);
+				/** object was updated since creation */
+				rc = update_stbuf_times(entry, ep, &dfs->root_stbuf, NULL,
+							dfs->th_epoch);
+				if (rc)
+					D_GOTO(err_obj, rc);
+			}
 			if (tspec_gt(dfs->root_stbuf.st_ctim, dfs->root_stbuf.st_mtim)) {
 				dfs->root_stbuf.st_atim.tv_sec  = entry.ctime;
 				dfs->root_stbuf.st_atim.tv_nsec = entry.ctime_nano;
@@ -475,7 +484,8 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 			stbuf->st_size   = array_stbuf.st_size;
 			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 
-			rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf, NULL);
+			rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf, NULL,
+						dfs->th_epoch);
 			if (rc) {
 				daos_array_close(obj->oh, NULL);
 				D_GOTO(err_obj, rc);
@@ -530,18 +540,22 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 		obj->d.oclass     = entry.oclass;
 
 		if (stbuf) {
-			daos_epoch_t ep;
+			if (dfs->th_epoch != DAOS_EPOCH_MAX) {
+				update_stbuf_times_snapshot(entry, stbuf);
+			} else {
+				daos_epoch_t ep;
 
-			rc = daos_obj_query_max_epoch(obj->oh, dfs->th, &ep, NULL);
-			if (rc) {
-				daos_obj_close(obj->oh, NULL);
-				D_GOTO(err_obj, rc = daos_der2errno(rc));
-			}
+				rc = daos_obj_query_max_epoch(obj->oh, dfs->th, &ep, NULL);
+				if (rc) {
+					daos_obj_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
+				}
 
-			rc = update_stbuf_times(entry, ep, stbuf, NULL);
-			if (rc) {
-				daos_obj_close(obj->oh, NULL);
-				D_GOTO(err_obj, rc = daos_der2errno(rc));
+				rc = update_stbuf_times(entry, ep, stbuf, NULL, dfs->th_epoch);
+				if (rc) {
+					daos_obj_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
+				}
 			}
 			stbuf->st_size = sizeof(entry);
 		}
