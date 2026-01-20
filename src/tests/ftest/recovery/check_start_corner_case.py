@@ -233,7 +233,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         # Wait for the checker to detect the inconsistent container label.
         query_reports = None
         for _ in range(8):
-            check_query_out = dmg_command.check_query()
+            check_query_out = dmg_command.check_query(pool=pool_3.identifier)
             # Status becomes RUNNING immediately, but it may take a while to detect the
             # inconsistency. If detected, "reports" field is filled.
             if check_query_out["response"]["status"] == "RUNNING":
