@@ -53,11 +53,11 @@ class EvictionMetrics(TestWithTelemetry):
             _write_processes = ppn * len(self.host_info.clients.hosts)
         files_per_process = math.floor(mem_file_bytes / (write_bytes * _write_processes))
         if tier_bytes_scm > mem_file_bytes:
-            # Write more (125%) files to exceed mem_file_bytes and cause eviction
-            mdtest_params = {"num_of_files_dirs": math.ceil(files_per_process * 1.25)}
+            # Write more (110%) files to exceed mem_file_bytes and cause eviction
+            mdtest_params = {"num_of_files_dirs": math.ceil(files_per_process * 1.10)}
         else:
-            # Write less (75%) files to avoid out of space errors
-            mdtest_params = {"num_of_files_dirs": math.floor(files_per_process * 0.75)}
+            # Write less (60%) files to avoid out of space errors
+            mdtest_params = {"num_of_files_dirs": math.floor(files_per_process * 0.60)}
 
         self.log.debug("-" * 60)
         self.log.debug("Pool %s create data:", pool)
