@@ -2540,7 +2540,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
+	rc = VOS_CONT_OPEN(iter_param->ip_hdl, entry->ie_couuid, &coh);
 	if (rc != 0) {
 		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
@@ -2569,7 +2569,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	} while (1);
 
 	d_backoff_seq_fini(&backoff_seq);
-	vos_cont_close(coh);
+	VOS_CONT_CLOSE(coh);
 	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
 		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
 		DP_RC(rc));
