@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+/* Only for test */
+
 #define D_LOGFAC	DD_FAC(chk)
 
 #include <time.h>

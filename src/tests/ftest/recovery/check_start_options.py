@@ -86,7 +86,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # 7. Verify that the action entry is still there.
         self.log_step("Verify that the old action entry is still there.")
-        check_query_out = dmg_command.check_query()
+        check_query_out = dmg_command.check_query(pool=pool_3.identifier)
         query_reports = check_query_out["response"]["reports"]
         if not query_reports:
             self.fail("Checker didn't detect any inconsistency!")
